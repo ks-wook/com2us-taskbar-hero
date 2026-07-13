@@ -1,0 +1,86 @@
+# Define standard .gitignore content for .NET / ASP.NET Core with Visual Studio Code
+gitignore_content = """# =========================================================================
+# Standard Gitignore for .NET Core and VS Code Projects
+# =========================================================================
+
+# --- Core Build Outputs ---
+[Dd]ebug/
+[Release]/
+x64/
+x86/
+[Bb]in/
+[Oo]bj/
+
+# --- .NET Tools & Temporary Files ---
+.dotnet/
+.tools/
+*.json.user
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# --- Visual Studio Code Specific ---
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/code-workspace
+.history/
+.ionide/
+
+# --- Secrets & Environment Configurations ---
+# Never commit sensitive secrets to source control
+appsettings*.json
+!appsettings.json
+!appsettings.Development.json
+secrets.json
+.env
+.env.*
+
+# --- Package Management ---
+# Paket CLI
+.paket/
+paket.references
+# NuGet Packages
+*.nupkg
+**/packages/
+project.lock.json
+project.fragment.lock.json
+
+# --- Testing & Code Coverage ---
+TestResults/
+*.debugger
+*.attachments
+AreaTestReport.xml
+@CoveredBuffers
+CoverageReport/
+*.trx
+*.coverage
+
+# --- Operating System Files ---
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# --- Front-end Dependencies (if using SPA templates) ---
+node_modules/
+/wwwroot/lib/
+.npm/
+bower_components/
+"""
+
+# Write to .gitignore file
+filename = ".gitignore"
+with open(filename, "w", encoding="utf-8") as f:
+    f.write(gitignore_content)
+
+print(f"Successfully generated {filename}")
