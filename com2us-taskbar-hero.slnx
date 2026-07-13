@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AccountServer/AccountServer.csproj" />
+  <Project Path="GameServer/GameServer.csproj" />
+</Solution>
