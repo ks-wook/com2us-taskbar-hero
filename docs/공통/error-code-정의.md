@@ -44,7 +44,7 @@
 | 이름 | 값 | 의미 |
 |---|---|---|
 | SaveNotFound | 2001 | 세이브 데이터 없음 |
-| InvalidSaveData | 2002 | 저장 값 검증 실패(불가능한 값 등) |
+| InvalidSaveData | 2002 | 액션 요청 값 검증 실패(불가능한 값·비정상 데이터) |
 | SaveVersionMismatch | 2003 | 세이브 스키마 버전 불일치 |
 | PlayerAlreadyExists | 2004 | 캐릭터 슬롯 3개가 모두 차 더 생성 불가 |
 | InvalidClassCode | 2005 | 존재하지 않는 직업 코드 |

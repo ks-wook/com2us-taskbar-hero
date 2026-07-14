@@ -52,9 +52,10 @@ erDiagram
     game_player      ||--o{ player_character : has
     game_player      ||--o{ player_currency  : owns
     game_player      ||--o{ player_inventory : owns
+    game_player      ||--o{ player_rune      : has
     game_player      ||--|| player_cube      : has
     player_character ||--o{ player_equipment : equips
-    player_character ||--o{ player_growth    : has
+    player_character ||--o{ player_skill     : has
 
     game_player {
         bigint  user_id PK "계정 user_id"
@@ -101,13 +102,18 @@ erDiagram
         bigint  inventory_id FK "장착 아이템(계정 공용 인벤토리)"
     }
 
-    player_growth {
+    player_skill {
         bigint  user_id FK
-        int     character_id "스킬:캐릭터(1~3) / 룬:0(계정 공용)"
-        int     growth_type "1:스킬 2:룬 3:펫"
-        int     code "항목 코드"
-        int     level
-        int     equipped "액티브 스킬 장착 여부(0/1), 스킬만"
+        int     character_id "캐릭터 슬롯(1~3)"
+        int     skill_code "스킬 ID(skill_master)"
+        int     level "스킬 레벨"
+        int     equipped "액티브 장착 여부(0/1), 캐릭터당 최대 2개"
+    }
+
+    player_rune {
+        bigint  user_id FK
+        int     rune_code "룬 ID(rune_master)"
+        int     level "룬 레벨"
     }
 
     player_cube {
@@ -126,7 +132,8 @@ erDiagram
 | `player_currency` | `(user_id, currency_type)` | 계정 공유 |
 | `player_inventory` | `inventory_id` PK, `(user_id, slot)` 유니크 | 계정 공유 |
 | `player_equipment` | `(user_id, character_id, slot)` | 캐릭터별 |
-| `player_growth` | `(user_id, character_id, growth_type, code)` | 스킬=캐릭터별 / 룬=계정 공유(`character_id=0`) |
+| `player_skill` | `(user_id, character_id, skill_code)` | 캐릭터별 |
+| `player_rune` | `(user_id, rune_code)` | 계정 공유 |
 | `player_cube` | `user_id` | 계정 공유 |
 
 ## 4. 마스터 데이터 (정적 · 읽기 전용)
@@ -141,9 +148,9 @@ erDiagram
 | `item_master` | `item_code` | `player_inventory.item_code` |
 | `enhance_master` | `enhance_level` | `player_inventory.enhance_level` |
 | `currency_master` | `currency_type` | `player_currency.currency_type` |
-| `skill_master` | `skill_code` | `player_growth.code` (`growth_type=1`) |
-| `rune_master` | `rune_code` | `player_growth.code` (`growth_type=2`) |
-| `pet_master` | `pet_code` | `player_growth.code` (`growth_type=3`) |
+| `skill_master` | `skill_code` | `player_skill.skill_code` |
+| `rune_master` | `rune_code` | `player_rune.rune_code` |
+| `pet_master` | `pet_code` | (펫 시스템 미작성 · 저장 테이블 미정) |
 | `monster_master` | `monster_code` | (전투/드롭 계산) |
 | `stage_master` | `stage_id` | `game_player.act`/`stage`/`difficulty` |
 | `drop_table_master` | `(drop_table_code, entry_no)` | 몬스터/스테이지 드롭 |
@@ -154,7 +161,7 @@ erDiagram
 ## 5. 출처 문서
 
 - [계정/로그인 기획서](../세부/account-login-기획서.md) — `users`·`user_auth_token`, Redis 토큰
-- [세이브 데이터 기획서](../세부/save-data-기획서.md) — `game_player`·`player_character`·`player_currency`·`player_inventory`·`player_equipment`·`player_growth`·`player_cube`
+- [세이브 데이터 기획서](../세부/save-data-기획서.md) — `game_player`·`player_character`·`player_currency`·`player_inventory`·`player_equipment`·`player_skill`·`player_rune`·`player_cube`
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 인벤토리·장비·큐브 세부 규칙
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 캐릭터·스킬·룬 세부 규칙
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) — 경험치·골드 지급(세이브 테이블 사용)

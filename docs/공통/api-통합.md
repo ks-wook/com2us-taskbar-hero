@@ -13,11 +13,11 @@
 
 > 출처: [계정/로그인 기획서](../세부/account-login-기획서.md) 5장
 
-| 경로 | 인증 | 요청 `data`(또는 body) | 응답 주요 | 주요 에러 |
-|---|---|---|---|---|
-| `POST /api/auth/signup` | 무인증 | `{ email, password, nickname }` | `userId` | `DuplicateEmail(1003)`, `InvalidRequest(1006)` |
-| `POST /api/auth/login` | 무인증 | `{ email, password }` | `userId`, `token` | `UserNotFound(1001)`, `InvalidPassword(1002)` |
-| `POST /api/auth/logout` | 인증 | `{}` | — | `InvalidToken(1004)`, `ExpiredToken(1005)` |
+| 경로 | 기능 | 인증 | 요청 `data`(또는 body) | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|---|
+| `POST /api/auth/signup` | 계정 생성(회원가입) | 무인증 | `{ email, password, nickname }` | `userId` | `DuplicateEmail(1003)`, `InvalidRequest(1006)` |
+| `POST /api/auth/login` | 로그인·인증 토큰 발급 | 무인증 | `{ email, password }` | `userId`, `token` | `UserNotFound(1001)`, `InvalidPassword(1002)` |
+| `POST /api/auth/logout` | 로그아웃(토큰 무효화) | 인증 | `{}` | — | `InvalidToken(1004)`, `ExpiredToken(1005)` |
 
 - 로그인은 단일 세션(토큰 UPSERT + Redis 덮어쓰기 → 기존 기기 자동 무효).
 
@@ -27,12 +27,11 @@
 
 > 출처: [세이브 데이터 기획서](../세부/save-data-기획서.md) 5장
 
-| 경로 | 요청 `data` | 응답 주요 | 주요 에러 |
-|---|---|---|---|
-| `POST /api/game/load` | `{}` | `player`, `characters[]`, `currencies[]`, `inventory[]`, `equipment[]`, `growth[]`, `cube`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
-| `POST /api/game/save` | 변경분(`player`, `characters[]`, `currencies[]` …) | `savedAt`, `dataVersion` | `InvalidSaveData(2002)` |
-| `POST /api/game/create-character` | `{ nickname, classCode }` | `characterId`, `classCode`, `level` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `PlayerAlreadyExists(2004)` |
-| `POST /api/game/heartbeat` | `{}` | `lastActiveAt` | — |
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/game/load` | 접속 시 전체 세이브 스냅샷 로드 | `{}` | `player`, `characters[]`, `currencies[]`, `inventory[]`, `equipment[]`, `skills[]`, `runes[]`, `cube`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
+| `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정) | `{ nickname, classCode }` | `characterId`, `classCode`, `level` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `PlayerAlreadyExists(2004)` |
+| `POST /api/game/heartbeat` | 접속 시각 갱신(오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
 
 - 캐릭터는 **한 번에 1개씩** 생성(`create-character`), 계정당 최대 3개·**직업 중복 불가**. `nickname`은 최초 생성 시에만 사용. 조회는 별도 API 없이 `load` 스냅샷 사용.
 
@@ -40,9 +39,9 @@
 
 > 출처: [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) 5장
 
-| 경로 | 요청 `data` | 응답 주요 | 주요 에러 |
-|---|---|---|---|
-| `POST /api/game/offline/claim` | `{}` | `offlineElapsedSec`, `effectiveSec`, `capped`, `rewards{gold,exp}`, `characters[]`, `lastActiveAt` | `NoOfflineReward(3001)`, `OfflineRewardAlreadyClaimed(3002)` |
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/game/offline/claim` | 오프라인 경과 보상(골드·경험치) 정산·지급 | `{}` | `offlineElapsedSec`, `effectiveSec`, `capped`, `rewards{gold,exp}`, `characters[]`, `lastActiveAt` | `NoOfflineReward(3001)`, `OfflineRewardAlreadyClaimed(3002)` |
 
 - 경험치는 **3캐릭터 모두에게 동일** 지급, 골드는 계정. 아이템 미지급.
 
@@ -50,17 +49,17 @@
 
 > 출처: [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 5장
 
-| 경로 | 요청 `data` | 응답 주요 | 주요 에러 |
-|---|---|---|---|
-| `POST /api/game/inventory/equip` | `{ characterId, inventoryId }` | `equipped`, `unequipped` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `ItemEquipped(4007)`, `InvalidCharacterId(2006)` |
-| `POST /api/game/inventory/unequip` | `{ characterId, slot }` | `slot`, `inventoryId` | `ItemNotFound(4001)`, `InvalidCharacterId(2006)` |
-| `POST /api/game/inventory/enhance` | `{ inventoryId }` | `enhanceLevel`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
-| `POST /api/game/inventory/use` | `{ inventoryId, count }` | `consumed`, `gained` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `InventoryFull(4002)` |
-| `POST /api/game/inventory/expand` | `{ count }` | `inventoryCapacity`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InventoryCapacityMax(4008)` |
-| `POST /api/game/inventory/move` | `{ inventoryId, toSlot }` | `moved`, `swapped` | `ItemNotFound(4001)`, `InvalidInventorySlot(4009)` |
-| `POST /api/game/cube/combine` | `{ inventoryIds[] }` | `consumed`, `result`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `ItemNotFound(4001)` |
-| `POST /api/game/cube/dismantle` | `{ items:[{inventoryId,count}] }` | `gold`, `cubeExp` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
-| `POST /api/game/cube/craft` ⚠️보류 | `{ recipeCode }` | `consumed`, `gained`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)` |
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/game/inventory/equip` | 지정 캐릭터에 장비 장착(스왑) | `{ characterId, inventoryId }` | `equipped`, `unequipped` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `ItemEquipped(4007)`, `InvalidCharacterId(2006)` |
+| `POST /api/game/inventory/unequip` | 지정 슬롯 장비 해제 | `{ characterId, slot }` | `slot`, `inventoryId` | `ItemNotFound(4001)`, `InvalidCharacterId(2006)` |
+| `POST /api/game/inventory/enhance` | 장비 강화 단계 +1(재화 소모) | `{ inventoryId }` | `enhanceLevel`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
+| `POST /api/game/inventory/use` | 소모품 사용·상자 개봉(서버 산출 지급) | `{ inventoryId, count }` | `consumed`, `gained` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `InventoryFull(4002)` |
+| `POST /api/game/inventory/expand` | 인벤토리 용량 확장(골드 소모) | `{ count }` | `inventoryCapacity`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InventoryCapacityMax(4008)` |
+| `POST /api/game/inventory/move` | 인벤토리 배치 이동/교환(드래그 저장) | `{ inventoryId, toSlot }` | `moved`, `swapped` | `ItemNotFound(4001)`, `InvalidInventorySlot(4009)` |
+| `POST /api/game/cube/combine` | 큐브 합성(동급 아이템→상위 등급) | `{ inventoryIds[] }` | `consumed`, `result`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `ItemNotFound(4001)` |
+| `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{inventoryId,count}] }` | `gold`, `cubeExp` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
+| `POST /api/game/cube/craft` ⚠️보류 | 큐브 제작(레시피로 아이템 생성) | `{ recipeCode }` | `consumed`, `gained`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)` |
 
 - 장비는 **캐릭터별**(장착 시 `characterId` 필수), 인벤토리·골드·큐브는 계정 공유. `cube/craft`는 우선순위 낮아 **보류**(도입 확정 시 명세 확정).
 
@@ -68,12 +67,12 @@
 
 > 출처: [성장 시스템 기획서](../세부/growth-기획서.md) 5장
 
-| 경로 | 요청 `data` | 응답 주요 | 주요 에러 |
-|---|---|---|---|
-| `POST /api/game/growth/skill/levelup` | `{ characterId, skillCode }` | `skillCode`, `level`, `cost`, `skillPoint` | `InvalidGrowthTarget(5001)`, `SkillClassMismatch(5004)`, `SkillMaxLevel(5002)`, `InsufficientSkillPoint(5003)`, `InvalidCharacterId(2006)` |
-| `POST /api/game/growth/skill/reset` | `{ characterId }` | `resetSkillCount`, `skillPoint` | `InvalidCharacterId(2006)` |
-| `POST /api/game/growth/skill/equip` | `{ characterId, skillCodes[] }`(0~2) | `equipped[]` | `SkillNotActive(5005)`, `SkillNotLearned(5006)`, `ActiveSkillLimitExceeded(5007)`, `SkillClassMismatch(5004)`, `InvalidGrowthTarget(5001)`, `InvalidCharacterId(2006)` |
-| `POST /api/game/growth/rune/upgrade` | `{ runeCode }` | `runeCode`, `level`, `cost`, `balance` | `InvalidGrowthTarget(5001)`, `RunePrereqNotMet(5010)`, `RuneMaxLevel(5011)`, `InsufficientCurrency(4005)` |
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/game/growth/skill/levelup` | 스킬 레벨 +1(스킬 포인트 소모) | `{ characterId, skillCode }` | `skillCode`, `level`, `cost`, `skillPoint` | `InvalidGrowthTarget(5001)`, `SkillClassMismatch(5004)`, `SkillMaxLevel(5002)`, `InsufficientSkillPoint(5003)`, `InvalidCharacterId(2006)` |
+| `POST /api/game/growth/skill/reset` | 스킬 초기화(무료, 포인트 회수) | `{ characterId }` | `resetSkillCount`, `skillPoint` | `InvalidCharacterId(2006)` |
+| `POST /api/game/growth/skill/equip` | 액티브 스킬 장착(최대 2개 설정) | `{ characterId, skillCodes[] }`(0~2) | `equipped[]` | `SkillNotActive(5005)`, `SkillNotLearned(5006)`, `ActiveSkillLimitExceeded(5007)`, `SkillClassMismatch(5004)`, `InvalidGrowthTarget(5001)`, `InvalidCharacterId(2006)` |
+| `POST /api/game/growth/rune/upgrade` | 룬 레벨 +1(골드 소모, 계정 공용) | `{ runeCode }` | `runeCode`, `level`, `cost`, `balance` | `InvalidGrowthTarget(5001)`, `RunePrereqNotMet(5010)`, `RuneMaxLevel(5011)`, `InsufficientCurrency(4005)` |
 
 - 스킬 레벨업 1레벨당 1포인트, 스킬 초기화 무료, 액티브 스킬 캐릭터당 2개 장착. 룬은 계정 공용·1레벨씩·레벨 비례 골드.
 
@@ -81,9 +80,9 @@
 
 > 출처: [마스터 데이터 기획서](../세부/master-data-기획서.md) 8장
 
-| 경로 | 요청 `data` | 응답 주요 | 주요 에러 |
-|---|---|---|---|
-| `POST /api/master/download` | `{ clientVersion, tables?[] }` | `version`, `upToDate`, `tables{}` | `MasterDataNotLoaded(11001)`, `InvalidMasterRequest(11005)` |
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/master/download` | 마스터 데이터 다운로드(버전 상이 시만) | `{ clientVersion, tables?[] }` | `version`, `upToDate`, `tables{}` | `MasterDataNotLoaded(11001)`, `InvalidMasterRequest(11005)` |
 
 - **이 API만 무인증**이다(GameServer의 다른 게임 API는 모두 인증 필요, 1장 규약). 로그인 이전 패치 단계에도 받아야 하기 때문.
 - 클라이언트 캐시 버전과 서버 `master_data_version`이 **다를 때만** 데이터 반환(같으면 `upToDate:true`).

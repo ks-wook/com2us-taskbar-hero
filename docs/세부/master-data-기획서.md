@@ -14,7 +14,7 @@
 ## 2. 마스터 데이터의 성격과 범위
 
 - **읽기 전용**: 런타임에 유저 요청으로 변경되지 않는다. 오직 기획/빌드 배포로만 갱신된다.
-- **서버 권위 검증의 근거**: 세이브 저장 시 서버는 `item_code`·`class_code` 등이 **마스터에 존재하는 유효한 코드인지** 검증한다. 존재하지 않는 코드는 거부한다(치트·구버전 데이터 방지).
+- **서버 권위 검증의 근거**: 각 액션 저장 시 서버는 `item_code`·`class_code` 등이 **마스터에 존재하는 유효한 코드인지** 검증한다. 존재하지 않는 코드는 거부한다(치트·구버전 데이터 방지).
 - **버전 계약**: 클라이언트와 서버는 같은 `master_data_version`을 참조해야 한다. 버전이 어긋나면 수치/드롭/효과 계산이 서로 달라져 정합성이 깨진다.
 - **`data_version`과의 구분**: 세이브의 `game_player.data_version`은 *세이브 스키마* 버전이고, 본 문서의 `master_data_version`은 *마스터(기획) 데이터* 버전이다. 두 값은 독립적으로 증가한다.
 
@@ -31,9 +31,9 @@
 | `player_inventory` | `item_code` | `item_master` | 아이템 정의 |
 | `player_inventory` | `enhance_level` | `enhance_master` | 강화 단계별 규칙·비용 |
 | `player_equipment` | `slot` | `equip_slot_master` | 장착 슬롯 정의 |
-| `player_growth` (`growth_type=1`) | `code` | `skill_master` | 스킬 |
-| `player_growth` (`growth_type=2`) | `code` | `rune_master` | 룬(Rune Tree) |
-| `player_growth` (`growth_type=3`) | `code` | `pet_master` | 펫 |
+| `player_skill` | `skill_code` | `skill_master` | 스킬(캐릭터별) |
+| `player_rune` | `rune_code` | `rune_master` | 룬(Rune Tree, 계정 공용) |
+| (미정) | — | `pet_master` | 펫(저장 테이블 미작성) |
 | `player_cube` | `cube_level` | `cube_master` | 큐브 레벨별 규칙·합성/제작 레시피 |
 | (전투/드롭 계산) | — | `monster_master`, `drop_table_master` | 몬스터 스탯·전리품 테이블 |
 
@@ -190,11 +190,11 @@ erDiagram
 |---|---|---|
 | 1 | 골드 | 0 |
 
-> 골드 외 추가 재화는 재화/상점 기획서와 연계해 확정([[save-data-기획서]] 7장 미결 참고).
+> 골드 외 추가 재화 도입 여부는 향후 재화 정책에서 확정([[save-data-기획서]] 미결 참고).
 
 ### 5.6 `skill_master` — 스킬
 
-`player_growth`의 `growth_type=1`, `code`가 참조하는 스킬 정의. 직업별로 보유하는 스킬이 다르다.
+`player_skill.skill_code`가 참조하는 스킬 정의. 직업별로 보유하는 스킬이 다르다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -218,7 +218,7 @@ erDiagram
 
 ### 5.7 `rune_master` — 룬(Rune Tree)
 
-`player_growth`의 `growth_type=2`, `code`가 참조. 골드로 구매하는 장기 성장 축이며, 선행 룬을 요구하는 **트리 구조**를 가진다. 업그레이드는 **1회 1레벨**씩 진행하고, **골드 비용은 현재 룬 레벨에 비례해 증가**한다([성장 시스템 기획서](growth-기획서.md) 5.4).
+`player_rune.rune_code`가 참조. 골드로 구매하는 장기 성장 축이며, 선행 룬을 요구하는 **트리 구조**를 가진다. 업그레이드는 **1회 1레벨**씩 진행하고, **골드 비용은 현재 룬 레벨에 비례해 증가**한다([성장 시스템 기획서](growth-기획서.md) 5.4).
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -239,7 +239,7 @@ erDiagram
 
 ### 5.8 `pet_master` — 펫
 
-`player_growth`의 `growth_type=3`, `code`가 참조. 특정 몬스터 처치로 해금되며 패시브 보너스를 준다.
+펫 정의. 특정 몬스터 처치로 해금되며 패시브 보너스를 준다. **펫 시스템의 저장 테이블은 아직 없으며(성장 기획서 범위 밖), 도입 시 참조 컬럼을 확정한다.**
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -364,7 +364,7 @@ erDiagram
 ### 공통 규칙
 
 - **키 규칙**: `stage_master`는 `(act, difficulty, stage)` 조합을 유일 키로 갖거나 이를 인코딩한 `stage_id`를 PK로 쓴다. `drop_table_master`는 `(drop_table_code, entry_no)` 복합 PK.
-- **enum 공유**: `item_type`·`currency_type`·`growth_type`·`unlock_type`·`reward_type` 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상).
+- **enum 공유**: `item_type`·`currency_type`·`unlock_type`·`reward_type` 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상).
 - **JSON 필드**: `base_stats`·`effect` 등 가변 구조는 JSON으로 담되, 키 스키마는 각 도메인 기획서에서 확정한다.
 
 ## 6. 원천 데이터 형식과 저장 방식
@@ -378,7 +378,7 @@ erDiagram
 
 - **서버 기동 시**: 원천 데이터 로드 → 무결성 검증(중복 PK, FK 참조 무결성, 필수 필드 누락) → 인메모리 캐시 구성 → `master_data_version` 확정. 검증 실패 시 기동 중단(운영 사고 예방).
 - **클라이언트 접속 시(버전 비교)**: 클라이언트가 보유한 캐시 버전과 서버 `master_data_version`을 비교 → **다르면** 최신 마스터 데이터를 갱신 후 로컬 캐시 교체, **같으면** 캐시 재사용. (6장 클라이언트 배포/캐싱)
-- **세이브 저장 검증 시**([[save-data-기획서]] 4장): 저장 요청의 `item_code`·`class_code`·성장 `code`·`currency_type` 등을 마스터 캐시에서 조회해 **존재 여부·제약(예: 최대 강화 단계, 슬롯-아이템 타입 정합성)**을 확인한 뒤 반영. 미존재 코드는 거부.
+- **각 액션 저장 검증 시**([[save-data-기획서]] 4장): 액션 요청의 `item_code`·`class_code`·성장 `code`·`currency_type` 등을 마스터 캐시에서 조회해 **존재 여부·제약(예: 최대 강화 단계, 슬롯-아이템 타입 정합성)**을 확인한 뒤 반영. 미존재 코드는 거부.
 - **드롭/보상 계산 시**: 스테이지·몬스터·드롭 테이블 마스터를 참조해 서버가 전리품을 산출(서버 권위).
 
 **엣지 케이스**
