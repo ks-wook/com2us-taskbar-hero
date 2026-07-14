@@ -24,7 +24,8 @@
 
 | 세이브 위치 (참조 주체) | 참조 컬럼 | 마스터 테이블 | 의미 |
 |---|---|---|---|
-| `game_player` | `class_code` | `class_master` | 직업 정의 |
+| `player_character` | `class_code` | `class_master` | 직업 정의 |
+| `player_character` | `level` | `level_master` | 레벨별 요구 경험치·스탯·스킬 포인트 |
 | `game_player` | `act` / `stage` / `difficulty` | `stage_master` | 스테이지 정의 |
 | `player_currency` | `currency_type` | `currency_master` | 재화 종류 |
 | `player_inventory` | `item_code` | `item_master` | 아이템 정의 |
@@ -51,6 +52,7 @@ erDiagram
     currency_master  ||--o{ enhance_master     : "소모 재화"
 
     class_master { int class_code PK }
+    level_master { int level PK }
     item_master { int item_code PK }
     equip_slot_master { int slot PK }
     enhance_master { int enhance_level PK }
@@ -67,6 +69,7 @@ erDiagram
 | 테이블 | 역할 | 대략 규모(원작 기준) |
 |---|---|---|
 | `class_master` | 직업(클래스) 정의 | 원작 6종 / 모작 현재 3종(추후 추가 예정) |
+| `level_master` | 레벨별 요구 경험치·스탯·스킬 포인트 | 최대 레벨 수만큼 |
 | `item_master` | 아이템(장비·재료·소모품·상자) 정의 | 500종 이상 |
 | `equip_slot_master` | 장비 장착 슬롯 정의 | 6~8종 |
 | `enhance_master` | 강화 단계별 비용·효과 | 단계 수만큼 |
@@ -85,7 +88,7 @@ erDiagram
 
 ### 5.1 `class_master` — 직업
 
-플레이어가 캐릭터 생성 시 고르는 직업의 정의. `game_player.class_code`가 이 테이블을 참조한다.
+플레이어가 캐릭터 생성 시 고르는 직업의 정의. `player_character.class_code`가 이 테이블을 참조한다(계정당 캐릭터 3인, [세이브 데이터 기획서](save-data-기획서.md) 3장).
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -198,27 +201,31 @@ erDiagram
 | `skill_code` | int PK | 스킬 코드 |
 | `class_code` | int FK | 소속 직업(`class_master`) |
 | `name` | varchar | 스킬 이름 |
+| `skill_type` | int | **1:액티브 2:패시브**. 액티브는 캐릭터당 2개까지 장착([성장 시스템 기획서](growth-기획서.md) 5.3), 패시브는 상시 적용 |
 | `max_level` | int | 최대 레벨 |
 | `effect_per_level` | json | 레벨별 효과 |
 
 **담기는 데이터 예시**
 
-| skill_code | class_code | name | max_level | effect_per_level |
-|---|---|---|---|---|
-| 101 | 1 | 방패 강타 | 10 | `[ { "dmg": 120 }, { "dmg": 150 } ]` |
-| 102 | 1 | 도발 | 5 | `[ { "aggro": 2.0 } ]` |
-| 201 | 2 | 정조준 사격 | 10 | `[ { "dmg": 180 } ]` |
+| skill_code | class_code | name | skill_type | max_level | effect_per_level |
+|---|---|---|---|---|---|
+| 101 | 1 | 방패 강타 | 1 | 10 | `[ { "dmg": 120 }, { "dmg": 150 } ]` |
+| 102 | 1 | 도발 | 1 | 5 | `[ { "aggro": 2.0 } ]` |
+| 110 | 1 | 강철 피부 | 2 | 5 | `[ { "defPct": 0.05 } ]` |
+| 201 | 2 | 정조준 사격 | 1 | 10 | `[ { "dmg": 180 } ]` |
+
+> `skill_type=2`(패시브, 예: 강철 피부)는 장착 슬롯을 차지하지 않고 배운 즉시 상시 적용된다. `skill_type=1`(액티브)만 캐릭터당 2개 장착 제한을 받는다.
 
 ### 5.7 `rune_master` — 룬(Rune Tree)
 
-`player_growth`의 `growth_type=2`, `code`가 참조. 골드로 구매하는 장기 성장 축이며, 선행 룬을 요구하는 **트리 구조**를 가진다.
+`player_growth`의 `growth_type=2`, `code`가 참조. 골드로 구매하는 장기 성장 축이며, 선행 룬을 요구하는 **트리 구조**를 가진다. 업그레이드는 **1회 1레벨**씩 진행하고, **골드 비용은 현재 룬 레벨에 비례해 증가**한다([성장 시스템 기획서](growth-기획서.md) 5.4).
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `rune_code` | int PK | 룬 코드 |
 | `name` | varchar | 룬 이름 |
 | `prereq_code` | int | 선행 룬 코드(루트면 0) |
-| `cost` | bigint | 골드 비용 |
+| `cost` | bigint | 레벨업 1회 골드 비용의 기준값. **실제 비용 = 현재 레벨에 비례한 증가값**(레벨별 비용을 이 값으로부터 산출) |
 | `max_level` | int | 최대 레벨 |
 | `effect` | json | 효과 |
 
@@ -332,6 +339,27 @@ erDiagram
 | 2 | 3000 | `{ "combine_grade_up": true, "gold_per_scrap": 150 }` |
 
 > 큐브 합성/제작 상세 규칙은 인벤토리/큐브 기획서에서 확정.
+
+### 5.13 `level_master` — 캐릭터 레벨
+
+`player_character.level`이 참조. 캐릭터 레벨별 요구 경험치·스탯 보너스·사용 가능 스킬 포인트를 정의한다(경험치→레벨 산정은 [성장 시스템 기획서](growth-기획서.md) 6.3).
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `level` | int PK | 캐릭터 레벨 |
+| `required_exp` | bigint | 이 레벨에서 다음 레벨로 가기 위한 요구 경험치 |
+| `skill_points` | int | 이 레벨에서 사용 가능한 **누적 스킬 포인트 총량**(스킬 포인트 파생 근거) |
+| `stat_bonus` | json | 레벨 도달 시 적용되는 기본 스탯 보너스 |
+
+**담기는 데이터 예시**
+
+| level | required_exp | skill_points | stat_bonus |
+|---|---|---|---|
+| 1 | 100 | 1 | `{ "hp": 10, "atk": 2 }` |
+| 2 | 250 | 2 | `{ "hp": 20, "atk": 4 }` |
+| 3 | 500 | 3 | `{ "hp": 30, "atk": 6 }` |
+
+> `skill_points`는 해당 레벨에서 쓸 수 있는 총 포인트다. **실제 사용 가능 포인트 = `skill_points` − 그 캐릭터가 이미 투자한 스킬 레벨 합**(스킬 1레벨당 1포인트). 스킬 포인트 잔량은 저장하지 않고 이 값으로 파생한다([성장 시스템 기획서](growth-기획서.md) 4장). 예시 값은 구조 설명용이며 실제 곡선은 밸런스에서 확정.
 
 ### 공통 규칙
 

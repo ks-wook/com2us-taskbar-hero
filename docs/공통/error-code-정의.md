@@ -16,6 +16,7 @@
 | 2000번대 | 세이브 데이터 | [세이브 데이터 기획서](../세부/save-data-기획서.md) 6장 | 사용 중 |
 | 3000번대 | 오프라인 보상 정산 | [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) 7장 | 사용 중 |
 | 4000번대 | 인벤토리 / 아이템 / 큐브 | [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 7장 | 사용 중 |
+| 5000번대 | 성장(직업 / 스킬 / 룬) | [성장 시스템 기획서](../세부/growth-기획서.md) 7장 | 사용 중 |
 | 11000번대 | 마스터 데이터 | [마스터 데이터 기획서](../세부/master-data-기획서.md) 8.3 | 사용 중 |
 | 그 외 | 성장·스테이지·재화·거래소·메일·출석 등 | (미작성) | 예약 |
 
@@ -45,8 +46,9 @@
 | SaveNotFound | 2001 | 세이브 데이터 없음 |
 | InvalidSaveData | 2002 | 저장 값 검증 실패(불가능한 값 등) |
 | SaveVersionMismatch | 2003 | 세이브 스키마 버전 불일치 |
-| PlayerAlreadyExists | 2004 | 이미 캐릭터가 존재(중복 생성) |
+| PlayerAlreadyExists | 2004 | 캐릭터 슬롯 3개가 모두 차 더 생성 불가 |
 | InvalidClassCode | 2005 | 존재하지 않는 직업 코드 |
+| InvalidCharacterId | 2006 | 잘못된 캐릭터 슬롯(존재하지 않는 characterId·슬롯 개수 오류·직업 중복) |
 
 ### 2.4 오프라인 보상 정산 (3000번대)
 
@@ -71,7 +73,21 @@
 | CubeRecipeNotMet | 4010 | 큐브 합성/제작 조건(등급·개수·재료) 미충족 |
 | CubeLevelInsufficient | 4011 | 큐브 레벨이 해당 연산 요구치 미만 |
 
-### 2.6 마스터 데이터 (11000번대)
+### 2.6 성장 (5000번대)
+
+| 이름 | 값 | 의미 |
+|---|---|---|
+| InvalidGrowthTarget | 5001 | 존재하지 않는 스킬/룬 코드 |
+| SkillMaxLevel | 5002 | 스킬이 최대 레벨에 도달 |
+| InsufficientSkillPoint | 5003 | 스킬 포인트 부족 |
+| SkillClassMismatch | 5004 | 해당 스킬이 대상 캐릭터 직업 소속이 아님 |
+| SkillNotActive | 5005 | 액티브 스킬이 아님(패시브를 장착 시도) |
+| SkillNotLearned | 5006 | 미습득(레벨 0) 스킬을 장착 시도 |
+| ActiveSkillLimitExceeded | 5007 | 액티브 스킬 장착 한도(2개) 초과 |
+| RunePrereqNotMet | 5010 | 선행 룬이 해금되지 않음 |
+| RuneMaxLevel | 5011 | 룬이 최대 레벨에 도달 |
+
+### 2.7 마스터 데이터 (11000번대)
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -107,6 +123,7 @@ namespace TaskbarHero.Common
         SaveVersionMismatch = 2003,
         PlayerAlreadyExists = 2004,
         InvalidClassCode = 2005,
+        InvalidCharacterId = 2006,
 
         // 오프라인 보상 정산 (3000번대)
         NoOfflineReward = 3001,
@@ -125,6 +142,17 @@ namespace TaskbarHero.Common
         CubeRecipeNotMet = 4010,
         CubeLevelInsufficient = 4011,
 
+        // 성장 (5000번대)
+        InvalidGrowthTarget = 5001,
+        SkillMaxLevel = 5002,
+        InsufficientSkillPoint = 5003,
+        SkillClassMismatch = 5004,
+        SkillNotActive = 5005,
+        SkillNotLearned = 5006,
+        ActiveSkillLimitExceeded = 5007,
+        RunePrereqNotMet = 5010,
+        RuneMaxLevel = 5011,
+
         // 마스터 데이터 (11000번대)
         MasterDataNotLoaded = 11001,
         MasterDataVersionMismatch = 11002,
@@ -139,4 +167,5 @@ namespace TaskbarHero.Common
 - [세이브 데이터 기획서](../세부/save-data-기획서.md) — 6장 에러 코드 (2000번대)
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) — 7장 에러 코드 (3000번대)
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 7장 에러 코드 (4000번대)
+- [성장 시스템 기획서](../세부/growth-기획서.md) — 7장 에러 코드 (5000번대)
 - [마스터 데이터 기획서](../세부/master-data-기획서.md) — 8.3 에러 코드 (11000번대)

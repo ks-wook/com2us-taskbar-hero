@@ -44,17 +44,19 @@
 
 | 테이블 | 역할 | 참조 마스터 |
 |---|---|---|
-| `player_inventory`(`inventory_id` PK, `user_id`, `slot`, `item_code`, `quantity`, `enhance_level`, `acquired_at`) | 보유 아이템 개체/스택 | `item_master`, `enhance_master` |
-| `player_equipment`(`(user_id, slot)` PK, `inventory_id`) | 슬롯별 장착 상태 | `equip_slot_master` |
-| `player_cube`(`user_id` PK, `cube_level`, `cube_exp`) | 큐브 성장 상태 | `cube_master` |
-| `player_currency`(`(user_id, currency_type)` PK, `amount`) | 강화/제작 비용 차감·분해 골드 적립·용량 확장 비용 차감 | `currency_master` |
-| `game_player`(`inventory_capacity` 신규 컬럼) | 플레이어별 인벤토리 최대 용량(골드로 확장) | — |
+| `player_inventory`(`inventory_id` PK, `user_id`, `slot`, `item_code`, `quantity`, `enhance_level`, `acquired_at`) | 보유 아이템 개체/스택 (**계정 공유**) | `item_master`, `enhance_master` |
+| `player_equipment`(`(user_id, character_id, slot)` PK, `inventory_id`) | **캐릭터별** 슬롯 장착 상태 | `equip_slot_master` |
+| `player_cube`(`user_id` PK, `cube_level`, `cube_exp`) | 큐브 성장 상태 (**계정 공유**) | `cube_master` |
+| `player_currency`(`(user_id, currency_type)` PK, `amount`) | 강화/제작 비용 차감·분해 골드 적립·용량 확장 비용 차감 (**계정 공유**) | `currency_master` |
+| `game_player`(`inventory_capacity` 신규 컬럼) | 계정 인벤토리 최대 용량(골드로 확장) | — |
+
+- **캐릭터별/계정 공유**: 계정은 캐릭터 슬롯 3개(3인 파티, [성장 시스템 기획서](growth-기획서.md))를 가진다. **인벤토리·골드·큐브는 계정 공유**(위 표 `user_id` 단위)이고, **장비 장착(`player_equipment`)만 캐릭터별**이다(`character_id` 1~3). 한 인벤토리 아이템(`inventory_id`)은 계정 공용이지만 **동시에 한 캐릭터·한 슬롯에만 장착**된다.
 
 **보관/스택 규칙 (확정)**
 - **배치 위치(`slot`)**: 각 행은 인벤토리 UI의 특정 칸(`slot`, 0-based)에 놓인다. `(user_id, slot)`은 유니크하며 한 칸에는 한 행만 존재한다. 재접속 시 [세이브 로드](save-data-기획서.md)가 `slot`을 함께 내려 **마지막 접속과 동일한 배치를 복원**한다. 획득 시 서버는 빈 `slot`에 배치하고, 빈 칸이 없으면(용량 초과) `InventoryFull(4002)`. `player_equipment.slot`(장착 슬롯)과는 별개 개념이다.
 - **장비(`item_type=1`)**: `stack_max=1`. 개체마다 `enhance_level`이 다를 수 있으므로 **1개당 1 행(row)**으로 저장하며 겹치지 않는다. `inventory_id`가 개체 식별자다.
 - **비장비(`item_type=2/3/4`)**: 동일 `item_code`는 `stack_max`까지 한 행에 `quantity`로 누적한다. 초과분은 새 행으로 분할한다.
-- **장착 중 아이템**: `player_equipment.slot`이 가리키는 `inventory_id`는 인벤토리에 그대로 존재하되 "장착 중" 상태다. 장착 중 아이템은 분해·거래 대상에서 제외한다(해제 후 가능).
+- **장착 중 아이템**: 어느 캐릭터의 `player_equipment`가 가리키는 `inventory_id`는 인벤토리(계정 공용)에 그대로 존재하되 "장착 중" 상태다. 장착 중 아이템은 분해·거래 대상에서 제외한다(해제 후 가능). 같은 아이템을 둘 이상의 캐릭터가 동시에 장착할 수 없다.
 
 **공유 enum / DTO (TaskbarHero.Common)**
 - `item_type`(1:장비 2:재료 3:소모품 4:상자), `reward_type`(1:골드 2:아이템 3:재료 4:상자), `equip_slot` 등 분류 코드는 [마스터 데이터 기획서](master-data-기획서.md) 5장 공통 규칙에 따라 `TaskbarHero.Common`에 enum으로 고정한다(값 변경 금지).
@@ -71,12 +73,14 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 5.1 장착 — `POST /api/game/inventory/equip`
 
-지정한 인벤토리 아이템을 해당 장비 슬롯에 장착한다. 슬롯은 아이템의 `item_master.equip_slot`에서 파생하며, 이미 장착된 장비가 있으면 스왑한다. 장비의 **클래스 제한**(`item_master.class_req`, `0`은 전 클래스 공용)이 플레이어 클래스(`game_player.class_code`, 기사/레인저/마법사)와 일치해야 하고, 플레이어 `level`이 **요구 레벨**(`item_master.level_req`, **5레벨 단위**, `0`은 제한 없음) 이상이어야 하며, 어느 하나라도 위반하면 `ItemNotEquippable(4003)`로 거부한다.
+지정 캐릭터에게 인벤토리 아이템을 장착한다. 슬롯은 아이템의 `item_master.equip_slot`에서 파생하며, 그 캐릭터의 같은 슬롯에 이미 장착된 장비가 있으면 스왑한다. 장비의 **클래스 제한**(`item_master.class_req`, `0`은 전 클래스 공용)이 **대상 캐릭터의 직업**(`player_character.class_code`, 기사/레인저/마법사)과 일치해야 하고, 그 캐릭터 `level`이 **요구 레벨**(`item_master.level_req`, **5레벨 단위**, `0`은 제한 없음) 이상이어야 하며, 어느 하나라도 위반하면 `ItemNotEquippable(4003)`로 거부한다.
 
 **Request**
 ```json
-{ "userId": 1, "token": "...", "data": { "inventoryId": 5001 } }
+{ "userId": 1, "token": "...", "data": { "characterId": 1, "inventoryId": 5001 } }
 ```
+
+- `characterId`: 장착할 캐릭터 슬롯(1~3).
 
 **Response (성공, 200 OK)**
 ```json
@@ -85,6 +89,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "errorCode": 0,
   "message": "Equipped",
   "data": {
+    "characterId": 1,
     "equipped": { "slot": 1, "inventoryId": 5001 },
     "unequipped": { "slot": 1, "inventoryId": 4900 }
   }
@@ -92,23 +97,23 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 ```
 
 - `unequipped`: 스왑으로 인벤토리에 되돌아온 기존 장비(없으면 `null`).
-- 오류: `ItemNotFound(4001)`(인벤토리에 없음), `ItemNotEquippable(4003)`(장비가 아니거나 슬롯·클래스·레벨 부적합).
+- 오류: `ItemNotFound(4001)`(인벤토리에 없음), `ItemNotEquippable(4003)`(장비가 아니거나 슬롯·클래스·레벨 부적합), `ItemEquipped(4007)`(다른 캐릭터가 이미 장착 중), `InvalidCharacterId(2006)`(잘못된 `characterId`).
 
 ### 5.2 장착 해제 — `POST /api/game/inventory/unequip`
 
-지정 슬롯의 장비를 해제해 인벤토리 보관 상태로 되돌린다.
+지정 캐릭터의 지정 슬롯 장비를 해제해 인벤토리 보관 상태로 되돌린다.
 
 **Request**
 ```json
-{ "userId": 1, "token": "...", "data": { "slot": 1 } }
+{ "userId": 1, "token": "...", "data": { "characterId": 1, "slot": 1 } }
 ```
 
 **Response (성공, 200 OK)**
 ```json
-{ "success": true, "errorCode": 0, "message": "Unequipped", "data": { "slot": 1, "inventoryId": 5001 } }
+{ "success": true, "errorCode": 0, "message": "Unequipped", "data": { "characterId": 1, "slot": 1, "inventoryId": 5001 } }
 ```
 
-- 슬롯이 비어 있으면 `ItemNotFound(4001)`.
+- 해당 캐릭터의 슬롯이 비어 있으면 `ItemNotFound(4001)`, 잘못된 `characterId`는 `InvalidCharacterId(2006)`.
 
 ### 5.3 강화 — `POST /api/game/inventory/enhance`
 
@@ -329,15 +334,18 @@ COMMIT → 변경된 상태를 응답 data로 반환
 ### 6.2 장착 스왑 순서
 
 ```
-equip(inventoryId):
+equip(characterId, inventoryId):
+  char = player_character[user_id, characterId]     # 없으면 InvalidCharacterId(2006)
   item = inventory[inventoryId]
   if item 없음: ItemNotFound(4001)
-  if item.item_type != 장비 or 슬롯 부적합 or 클래스 불일치 or 레벨 미달: ItemNotEquippable(4003)
+  if item이 다른 캐릭터/슬롯에서 장착 중: ItemEquipped(4007)
+  if item.item_type != 장비 or 슬롯 부적합
+     or (class_req≠0 and class_req≠char.class_code) or char.level < level_req: ItemNotEquippable(4003)
   slot = item_master[item.item_code].equip_slot
-  prev = equipment[slot]              # 있으면 스왑 대상
-  equipment[slot] = inventoryId       # 장착
+  prev = equipment[characterId][slot]      # 있으면 스왑 대상
+  equipment[characterId][slot] = inventoryId
   # prev는 인벤토리 보관 상태로 복귀(별도 이동 없음: equipment에서만 해제)
-  return { equipped: {slot, inventoryId}, unequipped: prev }
+  return { characterId, equipped: {slot, inventoryId}, unequipped: prev }
 ```
 
 ### 6.3 예외 / 엣지 케이스
@@ -376,8 +384,8 @@ equip(inventoryId):
 - **강화 성공 확률**: 현행은 비용 지불 시 확정 상승으로 가정. 실패/하락/파괴 확률 도입 시 `enhance_master`에 확률 필드 추가 및 본 문서 5.3 갱신.
 - **큐브 합성 상세 규칙**: 합성 소모 개수·등급 상승 결과 선정·확률, 큐브 연산당 `cube_exp` 획득량과 `cube_level` 효과. → [마스터 데이터 기획서](master-data-기획서.md) 9장(큐브 레시피 미결)과 함께 확정.
 - **큐브 제작(craft) — 우선순위 낮음(보류)**: 현재 구현 우선순위가 낮아 보류하며, **추후 제작 기능 추가 여부를 검토**한다. 5.9의 제작 API·레시피(`recipeCode`) 구성·소모 재료·비용은 도입이 확정될 때 함께 정한다.
-- **장비 클래스 제한 (확정)**: 장비는 착용 가능한 **클래스 제한**을 가진다. 현재 클래스는 **기사·레인저·마법사 3종으로 확정**([마스터 데이터 기획서](master-data-기획서.md) 5.1 `class_master`)이며, **추후 확인 후 클래스를 추가할 예정**이다. 각 장비가 어느 클래스용인지는 `item_master.class_req`로 정의한다(`0`이면 전 클래스 공용, [마스터 데이터 기획서](master-data-기획서.md) 5.3에 반영 완료). 장착(5.1) 시 서버가 `class_req`(≠0)을 플레이어 클래스(`game_player.class_code`)와 대조해 불일치면 `ItemNotEquippable(4003)`로 거부한다.
-- **장비 레벨 제한 (확정)**: 장비는 착용 요구 레벨을 가지며, **레벨 단위는 5레벨(5의 배수)** 로 확정한다(예: 15, 40). `item_master.level_req`로 정의하고(`0`이면 제한 없음, [마스터 데이터 기획서](master-data-기획서.md) 5.3에 반영 완료), 장착(5.1) 시 플레이어 `level`이 `level_req` 미만이면 `ItemNotEquippable(4003)`로 거부한다. 요구 레벨별 스탯 곡선 등 밸런스 수치는 아이템/직업 기획서에서 확정.
+- **장비 클래스 제한 (확정)**: 장비는 착용 가능한 **클래스 제한**을 가진다. 현재 클래스는 **기사·레인저·마법사 3종으로 확정**([마스터 데이터 기획서](master-data-기획서.md) 5.1 `class_master`)이며, **추후 확인 후 클래스를 추가할 예정**이다. 각 장비가 어느 클래스용인지는 `item_master.class_req`로 정의한다(`0`이면 전 클래스 공용, [마스터 데이터 기획서](master-data-기획서.md) 5.3에 반영 완료). 장착(5.1) 시 서버가 `class_req`(≠0)을 **대상 캐릭터 클래스**(`player_character.class_code`)와 대조해 불일치면 `ItemNotEquippable(4003)`로 거부한다.
+- **장비 레벨 제한 (확정)**: 장비는 착용 요구 레벨을 가지며, **레벨 단위는 5레벨(5의 배수)** 로 확정한다(예: 15, 40). `item_master.level_req`로 정의하고(`0`이면 제한 없음, [마스터 데이터 기획서](master-data-기획서.md) 5.3에 반영 완료), 장착(5.1) 시 **대상 캐릭터의 `level`**이 `level_req` 미만이면 `ItemNotEquippable(4003)`로 거부한다. 요구 레벨별 스탯 곡선 등 밸런스 수치는 아이템/직업 기획서에서 확정.
 
 ## 9. 참고
 

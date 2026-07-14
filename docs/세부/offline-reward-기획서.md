@@ -40,7 +40,7 @@
 | 입력(기준 시각) | `game_player.last_active_at` | 오프라인 시작점 |
 | 입력(파밍 기준) | `game_player.max_stage_cleared` / `stage`·`act`·`difficulty` | 산출율 결정 |
 | 산출 근거(정적) | `stage_master`(reward_gold/reward_exp), `monster_master` | 시간당 골드·경험치 산출량 |
-| 출력(지급) | `player_currency`(골드 증가), `game_player.exp`/`level`(경험치·레벨) | 정산 반영 |
+| 출력(지급) | `player_currency`(골드 증가, 계정), **3캐릭터 각각의 `player_character.exp`/`level`**(모든 캐릭터에 **동일 경험치** 지급) | 정산 반영 |
 | 기준 시각 리셋 | `game_player.last_active_at = now` | 중복 정산 방지 |
 
 - **아이템 미지급(확정)**: 오프라인 보상은 `player_inventory`를 건드리지 않는다. 드롭 테이블(`drop_table_master`)은 온라인 전투에서만 사용한다.
@@ -82,7 +82,11 @@ Base URL(개발): `http://localhost:5247` (GameServer). 인증 요청 공통 형
       "gold": 8640000,
       "exp": 216000
     },
-    "player": { "level": 43, "exp": 12000 },
+    "characters": [
+      { "characterId": 1, "level": 43, "exp": 12000 },
+      { "characterId": 2, "level": 41, "exp": 5000 },
+      { "characterId": 3, "level": 39, "exp": 30000 }
+    ],
     "lastActiveAt": 1752350000
   }
 }
@@ -93,8 +97,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 인증 요청 공통 형
 | `offlineElapsedSec` | 실제 경과 시간(`now - last_active_at`) |
 | `effectiveSec` | 상한(cap) 적용 후 보상 산정에 쓴 시간 |
 | `capped` | 상한에 걸렸는지 여부 |
-| `rewards.gold` / `rewards.exp` | 지급된 골드·경험치 (아이템은 지급하지 않으므로 없음) |
-| `player.level` / `player.exp` | 경험치 반영 후 갱신된 레벨·잔여 경험치 |
+| `rewards.gold` / `rewards.exp` | 지급된 골드(계정) · 경험치(**3캐릭터 각각에 동일하게** 지급, 아이템은 없음) |
+| `characters[]` | 경험치 반영 후 각 캐릭터의 갱신된 레벨·잔여 경험치(`characterId`별). 같은 경험치를 받아도 시작 레벨이 달라 결과는 캐릭터마다 다르다 |
 | `lastActiveAt` | 정산 기준 시각을 현재 서버 시각으로 리셋한 값 |
 
 **Response (정산할 오프라인 없음 — 경과 시간이 최소 기준 미만, 200 OK)**
@@ -142,12 +146,13 @@ exp           = floor(effective * expPerSec  * OFFLINE_EFFICIENCY)
 # 아이템은 지급하지 않음 (골드·경험치만)
 
 # 트랜잭션 (user_id 단위)
-  player_currency[골드] += gold
-  game_player.exp       += exp → 레벨 곡선으로 level 재계산
+  player_currency[골드] += gold                       # 계정 공유
+  for c in player_character[user_id] (3인):           # 모든 캐릭터에 동일 exp
+      c.exp += exp → 레벨 곡선으로 c.level 재계산
   game_player.last_active_at = now                   # 중복 정산 방지
 # 커밋
 
-return { elapsed, effective, gold, exp, level, ... }
+return { elapsed, effective, gold, exp, characters[], ... }
 ```
 
 - `OFFLINE_CAP_SEC=43200`(12시간), `MIN_REWARD_SEC=600`(10분), `OFFLINE_EFFICIENCY=0.5`(50%)는 **확정**. `stageGoldRate/stageExpRate`(스테이지별 산출율)만 8장 미결이다.
@@ -196,9 +201,10 @@ return { elapsed, effective, gold, exp, level, ... }
 | `rewards` | `OfflineRewardAmount` | O | 이번 정산으로 **지급된** 골드·경험치. |
 | `rewards.gold` | `long` | O | 지급 골드(`floor(effective × goldPerSec × 0.5)`). |
 | `rewards.exp` | `long` | O | 지급 경험치(`floor(effective × expPerSec × 0.5)`). |
-| `player` | `OfflinePlayerState` | O | 경험치 반영 **후** 최종 플레이어 상태. |
-| `player.level` | `int` | O | 반영 후 레벨(여러 레벨 동시 상승 가능, 6.3). |
-| `player.exp` | `long` | O | 반영 후 현재 레벨의 **잔여 경험치**(누적 총량 아님). |
+| `characters` | `OfflineCharacterState[]` | O | 경험치 반영 **후** 3캐릭터 각각의 상태(모두 같은 `exp`를 받음). |
+| `characters[].characterId` | `int` | O | 캐릭터 슬롯(1~3). |
+| `characters[].level` | `int` | O | 반영 후 레벨(여러 레벨 동시 상승 가능, 6.3). |
+| `characters[].exp` | `long` | O | 반영 후 현재 레벨의 **잔여 경험치**(누적 총량 아님). |
 | `lastActiveAt` | `long` | O | 중복 정산 방지를 위해 현재 서버 시각으로 리셋한 기준 시각(Unix ts, 초). |
 
 - **아이템 필드 없음(확정)**: 오프라인 보상은 골드·경험치만 지급하므로(2장) `rewards`에 아이템/전리품 필드를 두지 않는다.
@@ -217,8 +223,8 @@ namespace TaskbarHero.Common
         public long OfflineElapsedSec { get; set; } // 실제 경과 시간(초), 상한 미적용
         public long EffectiveSec { get; set; }      // 상한 적용 후 보상 산정 시간(초)
         public bool Capped { get; set; }            // 12시간 상한 적용 여부
-        public OfflineRewardAmount Rewards { get; set; } // 지급 골드·경험치
-        public OfflinePlayerState Player { get; set; }   // 반영 후 레벨·잔여 경험치
+        public OfflineRewardAmount Rewards { get; set; } // 지급 골드·경험치(경험치는 3캐릭터 공통)
+        public OfflineCharacterState[] Characters { get; set; } // 반영 후 3캐릭터 각각의 레벨·잔여 경험치
         public long LastActiveAt { get; set; }      // 현재 서버 시각으로 리셋한 기준 시각(Unix ts)
     }
 
@@ -228,8 +234,9 @@ namespace TaskbarHero.Common
         public long Exp { get; set; }
     }
 
-    public class OfflinePlayerState
+    public class OfflineCharacterState
     {
+        public int CharacterId { get; set; } // 캐릭터 슬롯(1~3)
         public int Level { get; set; }
         public long Exp { get; set; } // 현재 레벨의 잔여 경험치
     }

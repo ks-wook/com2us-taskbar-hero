@@ -25,24 +25,22 @@ GameServer
 
 ## 3. 데이터 모델 (ERD)
 
-`GameServer` 전용 MySQL 데이터베이스. 모든 테이블의 `user_id`는 계정(`AccountServer`의 `users.user_id`)과 동일한 식별자를 사용한다(서버 간 공유 키).
+`GameServer` 전용 MySQL 데이터베이스. 모든 테이블의 `user_id`는 계정(`AccountServer`의 `users.user_id`)과 동일한 식별자를 사용한다(서버 간 공유 키). 계정은 **캐릭터 슬롯 3개**를 가지며(3인 파티가 함께 전투, [성장 시스템 기획서](growth-기획서.md)), **직업·레벨·경험치·스킬·장비는 캐릭터별**, **인벤토리·골드·큐브는 계정 공유**다.
 
 ```mermaid
 erDiagram
-    game_player     ||--o{ player_currency  : owns
-    game_player     ||--o{ player_inventory : owns
-    game_player     ||--o{ player_equipment : equips
-    game_player     ||--o{ player_growth    : has
-    game_player     ||--|| player_cube      : has
+    game_player      ||--o{ player_character : has
+    game_player      ||--o{ player_currency  : owns
+    game_player      ||--o{ player_inventory : owns
+    game_player      ||--|| player_cube      : has
+    player_character ||--o{ player_equipment : equips
+    player_character ||--o{ player_growth    : has
 
     game_player {
         bigint  user_id PK "계정 user_id"
         varchar nickname
-        int     class_code "직업"
-        int     level
-        bigint  exp
-        int     act "현재 Act"
-        int     stage "현재 스테이지"
+        int     act "현재 Act(파티 공용)"
+        int     stage "현재 스테이지(파티 공용)"
         int     difficulty "난이도 티어"
         int     max_stage_cleared "최고 클리어 스테이지"
         int     inventory_capacity "인벤토리 최대 용량(slot 수), 골드로 확장"
@@ -50,6 +48,14 @@ erDiagram
         int     data_version "세이브 스키마 버전"
         bigint  created_at
         bigint  updated_at
+    }
+
+    player_character {
+        bigint  user_id FK
+        int     character_id "캐릭터 슬롯(1~3)"
+        int     class_code "직업"
+        int     level
+        bigint  exp
     }
 
     player_currency {
@@ -70,15 +76,18 @@ erDiagram
 
     player_equipment {
         bigint  user_id FK
+        int     character_id "장착 캐릭터 슬롯(1~3)"
         int     slot "장착 슬롯"
-        bigint  inventory_id FK "장착된 아이템"
+        bigint  inventory_id FK "장착된 아이템(계정 공용 인벤토리)"
     }
 
     player_growth {
         bigint  user_id FK
+        int     character_id "스킬:캐릭터(1~3) / 룬:0(계정 공용)"
         int     growth_type "1:스킬 2:룬 3:펫"
         int     code "해당 타입의 항목 코드"
         int     level "레벨/해금 상태"
+        int     equipped "액티브 스킬 장착 여부(0/1), 스킬만 사용"
     }
 
     player_cube {
@@ -89,13 +98,15 @@ erDiagram
 ```
 
 - **PK/유니크**:
+  - `player_character`: `(user_id, character_id)` 복합 PK. `character_id`는 1~3.
   - `player_currency`: `(user_id, currency_type)` 복합 PK
-  - `player_equipment`: `(user_id, slot)` 복합 PK
-  - `player_growth`: `(user_id, growth_type, code)` 복합 PK
+  - `player_equipment`: `(user_id, character_id, slot)` 복합 PK — 캐릭터마다 슬롯별 장착을 따로 가진다.
+  - `player_growth`: `(user_id, character_id, growth_type, code)` 복합 PK. 스킬(`growth_type=1`)은 `character_id`=1~3, **룬(`growth_type=2`)은 계정 공용이므로 `character_id`=0**으로 저장한다.
   - `player_inventory`: `(user_id, slot)` 유니크 — 한 인벤토리 칸(slot)에는 아이템(스택) 한 행만 존재한다.
+- **캐릭터별 vs 계정 공유**: `player_character`·`player_equipment`·`player_growth`(스킬)는 **캐릭터별**, `player_currency`(골드)·`player_inventory`·`player_cube`·`player_growth`(룬)는 **계정 공유**다. 장비는 캐릭터별로 착용하지만 그 대상 아이템(`inventory_id`)은 계정 공용 인벤토리의 행이므로, 한 아이템은 최대 한 캐릭터·한 슬롯에만 장착된다.
 - **인벤토리 배치 위치(`player_inventory.slot`)**: 아이템(스택)이 인벤토리 UI의 몇 번 칸에 있는지를 나타내는 위치 값(0-based)이다. 클라이언트 재접속 시 로드 스냅샷의 `slot`으로 **마지막 접속과 동일한 배치**를 복원한다. 플레이어가 드래그로 칸을 옮기면 그 변경은 배치 변경 API로 반영한다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.6). `player_equipment.slot`(장착 슬롯)과는 다른 개념이다. 배치는 UI 레이아웃 값이므로 서버 권위 검증 대상은 아니나, 용량(`game_player.inventory_capacity`) 범위 안이고 칸이 중복되지 않는지는 검증한다.
 - **아이템/스킬/룬/펫 등의 코드 값**은 마스터(기획) 데이터를 참조한다([마스터 데이터 기획서](master-data-기획서.md), 도메인 4.11). 각 코드 컬럼이 어느 마스터 테이블을 참조하는지는 해당 문서 4.1의 매핑 표를 참고한다.
-- `player_inventory`/`player_equipment`/`player_growth`/`player_cube`의 **세부 필드·규칙**은 각 시스템 기획서에서 확장한다. 본 ERD는 저장 골격이다.
+- `player_character`/`player_inventory`/`player_equipment`/`player_growth`/`player_cube`의 **세부 필드·규칙**은 각 시스템 기획서(성장·인벤토리 등)에서 확장한다. 본 ERD는 저장 골격이다.
 
 ## 4. 저장 정책
 
@@ -136,16 +147,19 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "data": {
     "player": {
       "nickname": "hero",
-      "classCode": 1,
-      "level": 42,
-      "exp": 128500,
       "act": 2,
       "stage": 15,
       "difficulty": 1,
       "maxStageCleared": 214,
+      "inventoryCapacity": 100,
       "lastActiveAt": 1752300000,
       "dataVersion": 1
     },
+    "characters": [
+      { "characterId": 1, "classCode": 1, "level": 42, "exp": 128500 },
+      { "characterId": 2, "classCode": 2, "level": 40, "exp": 90000 },
+      { "characterId": 3, "classCode": 3, "level": 38, "exp": 60000 }
+    ],
     "currencies": [
       { "currencyType": 1, "amount": 9875421 }
     ],
@@ -153,11 +167,11 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
       { "inventoryId": 5001, "slot": 0, "itemCode": 30012, "quantity": 1, "enhanceLevel": 3 }
     ],
     "equipment": [
-      { "slot": 1, "inventoryId": 5001 }
+      { "characterId": 1, "slot": 1, "inventoryId": 5001 }
     ],
     "growth": [
-      { "growthType": 1, "code": 101, "level": 5 },
-      { "growthType": 2, "code": 205, "level": 3 }
+      { "characterId": 1, "growthType": 1, "code": 101, "level": 5, "equipped": 1 },
+      { "characterId": 0, "growthType": 2, "code": 205, "level": 3 }
     ],
     "cube": { "cubeLevel": 4, "cubeExp": 1200 },
     "offlineElapsedSec": 43200
@@ -165,6 +179,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
+- `player`는 계정/파티 공용 값, `characters`는 3인 파티 각 캐릭터의 직업·레벨·경험치다. `equipment`·스킬 `growth`(`growthType=1`)는 `characterId`로 소속 캐릭터를 표시하며(스킬 행의 `equipped=1`은 액티브 장착, 캐릭터당 최대 2개), 룬 `growth`(`growthType=2`)는 계정 공용이라 `characterId=0`이다. `currencies`·`inventory`·`cube`는 계정 공유.
 - `offlineElapsedSec`: `현재 서버 시각 - lastActiveAt`. 오프라인 보상 계산의 입력값(정산 규칙은 [오프라인 보상 정산 기획서](offline-reward-기획서.md)).
 
 **Response (세이브 없음 — 최초 접속, 200 OK)**
@@ -189,7 +204,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "userId": 1,
   "token": "MToxNzAwMDAwMDAwOmFCM2RFNmZHOWhKMWtM...",
   "data": {
-    "player": { "act": 2, "stage": 16, "level": 42, "exp": 130000 },
+    "player": { "act": 2, "stage": 16 },
+    "characters": [ { "characterId": 1, "level": 42, "exp": 130000 } ],
     "currencies": [ { "currencyType": 1, "amount": 9900000 } ],
     "clientTime": 1752343200
   }
@@ -218,9 +234,9 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ---
 
-### 5.3 캐릭터 생성 (최초 접속) — `POST /api/game/create`
+### 5.3 캐릭터 생성 — `POST /api/game/create-character`
 
-최초 접속 시 직업 선택 후 세이브 초기화.
+캐릭터를 **한 번에 1개** 생성한다. 계정당 최대 3개(3인 파티)이며 **직업은 서로 중복될 수 없다**. 최초 호출 시 계정 세이브(`game_player`)가 함께 초기화되고, 서버가 **빈 슬롯에 `characterId`(1~3)를 배정**한다.
 
 **Request**
 ```json
@@ -231,15 +247,21 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
+- `nickname`: **최초 캐릭터 생성(계정 초기화) 시에만** 사용하며, 이후 호출에서는 무시한다.
+- `classCode`: 생성할 캐릭터의 직업. **이미 보유한 캐릭터의 직업과 중복될 수 없다.**
+
 **Response (성공, 200 OK)**
 ```json
 {
   "success": true,
   "errorCode": 0,
-  "message": "Create successful",
-  "data": { "userId": 1, "classCode": 1, "level": 1 }
+  "message": "Character created",
+  "data": { "userId": 1, "characterId": 1, "classCode": 1, "level": 1 }
 }
 ```
+
+- `characterId`: 서버가 배정한 슬롯(1~3).
+- 오류: `InvalidClassCode(2005)`(존재하지 않는 직업), `InvalidCharacterId(2006)`(이미 보유한 직업과 중복), `PlayerAlreadyExists(2004)`(슬롯 3개가 모두 차 더 이상 생성 불가).
 
 ---
 
@@ -279,8 +301,9 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | SaveNotFound | 2001 | 세이브 데이터 없음 |
 | InvalidSaveData | 2002 | 저장 값 검증 실패(불가능한 값 등) |
 | SaveVersionMismatch | 2003 | 세이브 스키마 버전 불일치 |
-| PlayerAlreadyExists | 2004 | 이미 캐릭터가 존재(중복 생성) |
+| PlayerAlreadyExists | 2004 | 캐릭터 슬롯 3개가 모두 차 더 생성 불가 |
 | InvalidClassCode | 2005 | 존재하지 않는 직업 코드 |
+| InvalidCharacterId | 2006 | 잘못된 캐릭터 슬롯(존재하지 않는 `characterId`, 생성 시 슬롯 개수 오류 또는 직업 중복) |
 
 ## 7. 미결 사항 / TODO
 
