@@ -7,7 +7,7 @@
 ## 1. 개요
 
 - **목적**: 플레이어의 게임 진행 상태(직업·레벨·재화·인벤토리·성장)를 서버에 영속 저장하고, 접속 시 로드한다. 방치형 게임 특성상 **마지막 접속(활동) 시각**이 오프라인 보상 계산의 기준점이 되므로 세이브 구조의 핵심 요소로 다룬다.
-- **대상 서버**: `GameServer`(진행 데이터 저장/로드), `Game.Common`(공유 DTO/에러 코드). 인증은 AccountServer가 발급한 토큰을 GameServer 미들웨어가 검증(Redis 대조).
+- **대상 서버**: `GameServer`(진행 데이터 저장/로드), `TaskbarHero.Common`(공유 DTO/에러 코드). 인증은 AccountServer가 발급한 토큰을 GameServer 미들웨어가 검증(Redis 대조).
 - **서버 권위 원칙**: 재화·성장·아이템 등 이득이 되는 값은 서버가 최종 확정한다. 클라이언트가 보고한 값을 그대로 저장하지 않는다(치트 방지).
 - **범위 경계**: 인벤토리/아이템·성장(직업·스킬·룬·펫)·큐브의 **세부 규칙**은 각 도메인 기획서에서 다룬다. 본 문서는 이들을 담는 **저장 구조와 저장 정책**에 집중한다.
 
@@ -45,6 +45,7 @@ erDiagram
         int     stage "현재 스테이지"
         int     difficulty "난이도 티어"
         int     max_stage_cleared "최고 클리어 스테이지"
+        int     inventory_capacity "인벤토리 최대 용량(slot 수), 골드로 확장"
         bigint  last_active_at "Unix ts, 5분 주기 갱신, 오프라인 보상 기준"
         int     data_version "세이브 스키마 버전"
         bigint  created_at
@@ -60,6 +61,7 @@ erDiagram
     player_inventory {
         bigint  inventory_id PK
         bigint  user_id FK
+        int     slot "인벤토리 배치 위치(재접속 시 복원용)"
         int     item_code "마스터 데이터 참조"
         int     quantity
         int     enhance_level "강화/각인 등"
@@ -90,6 +92,8 @@ erDiagram
   - `player_currency`: `(user_id, currency_type)` 복합 PK
   - `player_equipment`: `(user_id, slot)` 복합 PK
   - `player_growth`: `(user_id, growth_type, code)` 복합 PK
+  - `player_inventory`: `(user_id, slot)` 유니크 — 한 인벤토리 칸(slot)에는 아이템(스택) 한 행만 존재한다.
+- **인벤토리 배치 위치(`player_inventory.slot`)**: 아이템(스택)이 인벤토리 UI의 몇 번 칸에 있는지를 나타내는 위치 값(0-based)이다. 클라이언트 재접속 시 로드 스냅샷의 `slot`으로 **마지막 접속과 동일한 배치**를 복원한다. 플레이어가 드래그로 칸을 옮기면 그 변경은 배치 변경 API로 반영한다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.6). `player_equipment.slot`(장착 슬롯)과는 다른 개념이다. 배치는 UI 레이아웃 값이므로 서버 권위 검증 대상은 아니나, 용량(`game_player.inventory_capacity`) 범위 안이고 칸이 중복되지 않는지는 검증한다.
 - **아이템/스킬/룬/펫 등의 코드 값**은 마스터(기획) 데이터를 참조한다([마스터 데이터 기획서](master-data-기획서.md), 도메인 4.11). 각 코드 컬럼이 어느 마스터 테이블을 참조하는지는 해당 문서 4.1의 매핑 표를 참고한다.
 - `player_inventory`/`player_equipment`/`player_growth`/`player_cube`의 **세부 필드·규칙**은 각 시스템 기획서에서 확장한다. 본 ERD는 저장 골격이다.
 
@@ -106,7 +110,7 @@ erDiagram
 
 ## 5. API 명세
 
-Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`를 사용한다(토큰은 body, [계정/로그인 기획서](account-login-기획서.md) 5장 참고). 응답은 `{ success, errorCode, message, data }` 형식이며, `errorCode`는 `Game.Common`의 `GameErrorCode`(6장) 값이고 `success`는 `errorCode == 0`과 동치다(계정·마스터 기획서와 동일한 응답 규약).
+Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`를 사용한다(토큰은 body, [계정/로그인 기획서](account-login-기획서.md) 5장 참고). 응답은 `{ success, errorCode, message, data }` 형식이며, `errorCode`는 `TaskbarHero.Common`의 `GameErrorCode`(6장) 값이고 `success`는 `errorCode == 0`과 동치다(계정·마스터 기획서와 동일한 응답 규약).
 
 ---
 
@@ -146,7 +150,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
       { "currencyType": 1, "amount": 9875421 }
     ],
     "inventory": [
-      { "inventoryId": 5001, "itemCode": 30012, "quantity": 1, "enhanceLevel": 3 }
+      { "inventoryId": 5001, "slot": 0, "itemCode": 30012, "quantity": 1, "enhanceLevel": 3 }
     ],
     "equipment": [
       { "slot": 1, "inventoryId": 5001 }
@@ -268,7 +272,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ## 6. 에러 코드 (신규 제안)
 
-`Game.Common/ErrorCode.cs`의 `GameErrorCode`에 추가 제안. 계정 도메인(1001~1006, [계정/로그인 기획서](account-login-기획서.md) 6장)과 중복되지 않도록 **세이브 도메인은 2000번대**를 사용한다.
+`TaskbarHero.Common/ErrorCode.cs`의 `GameErrorCode`에 추가 제안. 계정 도메인(1001~1006, [계정/로그인 기획서](account-login-기획서.md) 6장)과 중복되지 않도록 **세이브 도메인은 2000번대**를 사용한다.
 
 | 이름 | 값 | 의미 |
 |---|---|---|

@@ -7,7 +7,7 @@
 ## 1. 개요
 
 - **목적**: 플레이어의 계정 로그인·인증을 제공하고, 로그인 성공 시 인증 토큰을 발급한다. 이 토큰으로 `GameServer` 접근을 인가한다.
-- **대상 서버**: `AccountServer`(인증/토큰 발급), `Game.Common`(공유 에러 코드/DTO). 토큰 검증은 `GameServer`의 인증 미들웨어에서도 수행.
+- **대상 서버**: `AccountServer`(인증/토큰 발급), `TaskbarHero.Common`(공유 에러 코드/DTO). 토큰 검증은 `GameServer`의 인증 미들웨어에서도 수행.
 - **인증 방식**: 기준 문서에 따라 **이메일 + 비밀번호** 로그인을 사용한다.
 - **토큰 방식**: JWT가 아닌 **커스텀 HMAC-SHA256 토큰**을 사용한다. `SecretKey`로 서명하여 위변조를 방지하고, 서명 검증만으로 무결성을 확인할 수 있다.
 - **세션 정책**: 사용자당 토큰 1개만 유지한다(단일 세션). **다중 기기 로그인은 허용하지 않는다** — 새 로그인이 감지되면 기존에 로그인되어 있던 세션을 무효화한다. 구현상 로그인 시 `user_auth_token`을 UPSERT하고 Redis 토큰값을 새 토큰으로 덮어쓰면, 이전 기기가 갖고 있던 토큰은 Redis 대조에서 불일치하여 자동으로 무효가 된다(다음 요청부터 401).
@@ -43,7 +43,7 @@ TokenGenerator (HMAC-SHA256 토큰 생성/검증)
 | CloudStructures | Redis 클라이언트 |
 | BCrypt.Net-Next | 비밀번호 해싱 |
 
-> 참고: 본 프로젝트 서버는 `.NET 10`(기준 문서는 .NET 9 이상)이며, `Game.Common`은 Unity 호환을 위해 `netstandard2.0`을 유지한다.
+> 참고: 본 프로젝트 서버는 `.NET 10`(기준 문서는 .NET 9 이상)이며, `TaskbarHero.Common`은 Unity 호환을 위해 `netstandard2.0`을 유지한다.
 
 ## 3. 데이터 모델 (ERD)
 
@@ -142,7 +142,7 @@ Base64 디코딩 → 필드 분리(userId:timestamp:salt:hash)
 
 Base URL(개발): `http://localhost:5160` (AccountServer)
 
-모든 API는 **POST** 방식이며, 응답에는 **`errorCode`를 포함**한다(`success`, `errorCode`, `userId`/`token` 등, `message`). `errorCode`는 `Game.Common`의 `GameErrorCode`(6장) 값이고 `success`는 `errorCode == 0`과 동치이며, `message`는 해당 코드의 설명 문구다. (세이브·마스터 기획서와 동일한 응답 규약)
+모든 API는 **POST** 방식이며, 응답에는 **`errorCode`를 포함**한다(`success`, `errorCode`, `userId`/`token` 등, `message`). `errorCode`는 `TaskbarHero.Common`의 `GameErrorCode`(6장) 값이고 `success`는 `errorCode == 0`과 동치이며, `message`는 해당 코드의 설명 문구다. (세이브·마스터 기획서와 동일한 응답 규약)
 
 #### 인증 방식 — HTTP Body(JSON)로 토큰 전달 ⭐
 
@@ -307,7 +307,7 @@ POST 요청 body(JSON): { userId, token, data }
 
 ## 6. 에러 코드 (신규 제안)
 
-`Game.Common/ErrorCode.cs`의 `GameErrorCode`에 추가 제안. 기존 값(`Success=0`, `UserNotFound=1001`, `InvalidPassword=1002`)과 중복되지 않게 한다. API 응답의 `message`는 아래 코드에 매핑한다.
+`TaskbarHero.Common/ErrorCode.cs`의 `GameErrorCode`에 추가 제안. 기존 값(`Success=0`, `UserNotFound=1001`, `InvalidPassword=1002`)과 중복되지 않게 한다. API 응답의 `message`는 아래 코드에 매핑한다.
 
 | 이름 | 값 | 의미 | 매핑 message 예시 |
 |---|---|---|---|

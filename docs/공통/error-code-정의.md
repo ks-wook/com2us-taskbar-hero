@@ -2,7 +2,7 @@
 
 > 상위 문서: [서버 시스템 전체 개요](서버-시스템-전체-개요.md)
 >
-> 현재까지 작성된 기획서들에 등장한 **에러 코드를 한곳에 모은 참조 문서**다. 각 코드의 상세 맥락은 원 기획서를 따르며(아래 "출처"), 본 문서는 `Game.Common`의 `GameErrorCode` enum에 반영할 **단일 목록**을 제공한다. 서버-클라이언트가 공유하는 계약이므로 **숫자 값은 변경하지 않는다.**
+> 현재까지 작성된 기획서들에 등장한 **에러 코드를 한곳에 모은 참조 문서**다. 각 코드의 상세 맥락은 원 기획서를 따르며(아래 "출처"), 본 문서는 `TaskbarHero.Common`의 `GameErrorCode` enum에 반영할 **단일 목록**을 제공한다. 서버-클라이언트가 공유하는 계약이므로 **숫자 값은 변경하지 않는다.**
 
 ## 1. 규약
 
@@ -15,8 +15,9 @@
 | 1000번대 | 계정 / 인증 | [계정/로그인 기획서](../세부/account-login-기획서.md) 6장 | 사용 중 |
 | 2000번대 | 세이브 데이터 | [세이브 데이터 기획서](../세부/save-data-기획서.md) 6장 | 사용 중 |
 | 3000번대 | 오프라인 보상 정산 | [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) 7장 | 사용 중 |
+| 4000번대 | 인벤토리 / 아이템 / 큐브 | [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 7장 | 사용 중 |
 | 11000번대 | 마스터 데이터 | [마스터 데이터 기획서](../세부/master-data-기획서.md) 8.3 | 사용 중 |
-| 그 외 | 인벤토리·성장·스테이지·재화·거래소·메일·출석 등 | (미작성) | 예약 |
+| 그 외 | 성장·스테이지·재화·거래소·메일·출석 등 | (미작성) | 예약 |
 
 ## 2. 전체 코드 목록
 
@@ -54,7 +55,23 @@
 | NoOfflineReward | 3001 | 정산할 오프라인 경과가 최소 기준 미만 |
 | OfflineRewardAlreadyClaimed | 3002 | 이미 정산됨(동시 중복 요청) |
 
-### 2.5 마스터 데이터 (11000번대)
+### 2.5 인벤토리 / 아이템 / 큐브 (4000번대)
+
+| 이름 | 값 | 의미 |
+|---|---|---|
+| ItemNotFound | 4001 | 대상 아이템이 인벤토리/슬롯에 없음 |
+| InventoryFull | 4002 | 인벤토리 용량 초과 |
+| ItemNotEquippable | 4003 | 장비가 아니거나 슬롯·클래스·레벨 부적합 |
+| MaxEnhanceReached | 4004 | 최대 강화 단계 도달(다음 단계 없음) |
+| InsufficientCurrency | 4005 | 비용 재화 부족(강화/제작) |
+| InsufficientQuantity | 4006 | 소모/재료 수량 부족 |
+| ItemEquipped | 4007 | 장착 중이라 분해 불가 |
+| InventoryCapacityMax | 4008 | 인벤토리 용량이 최대치에 도달(확장 불가) |
+| InvalidInventorySlot | 4009 | 인벤토리 칸(slot) 번호가 잘못됨(용량 범위 밖 등) |
+| CubeRecipeNotMet | 4010 | 큐브 합성/제작 조건(등급·개수·재료) 미충족 |
+| CubeLevelInsufficient | 4011 | 큐브 레벨이 해당 연산 요구치 미만 |
+
+### 2.6 마스터 데이터 (11000번대)
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -62,13 +79,13 @@
 | MasterDataVersionMismatch | 11002 | 게임 진행 요청 중 클라이언트-서버 마스터 버전 불일치 감지(즉시 로그아웃) |
 | InvalidMasterRequest | 11005 | 잘못된 마스터 요청(존재하지 않는 테이블명·형식 오류) |
 
-## 3. `Game.Common/ErrorCode.cs` 반영안
+## 3. `TaskbarHero.Common/ErrorCode.cs` 반영안
 
 현재 파일에는 `Success=0`, `UserNotFound=1001`, `InvalidPassword=1002`만 정의되어 있다. 위 목록을 반영하면 다음과 같다. (`netstandard2.0` 타깃 유지, 서버-클라이언트 공유)
 
 ```csharp
-// game-common/Game.Common/GameErrorCode.cs
-namespace Game.Common
+// TaskbarHero.Common/GameErrorCode.cs
+namespace TaskbarHero.Common
 {
     // 서버-클라이언트 공통 에러 코드
     // 숫자 값은 클라이언트와의 계약이므로 변경 금지
@@ -95,6 +112,19 @@ namespace Game.Common
         NoOfflineReward = 3001,
         OfflineRewardAlreadyClaimed = 3002,
 
+        // 인벤토리 / 아이템 / 큐브 (4000번대)
+        ItemNotFound = 4001,
+        InventoryFull = 4002,
+        ItemNotEquippable = 4003,
+        MaxEnhanceReached = 4004,
+        InsufficientCurrency = 4005,
+        InsufficientQuantity = 4006,
+        ItemEquipped = 4007,
+        InventoryCapacityMax = 4008,
+        InvalidInventorySlot = 4009,
+        CubeRecipeNotMet = 4010,
+        CubeLevelInsufficient = 4011,
+
         // 마스터 데이터 (11000번대)
         MasterDataNotLoaded = 11001,
         MasterDataVersionMismatch = 11002,
@@ -108,4 +138,5 @@ namespace Game.Common
 - [계정/로그인 기획서](../세부/account-login-기획서.md) — 6장 에러 코드 (1000번대)
 - [세이브 데이터 기획서](../세부/save-data-기획서.md) — 6장 에러 코드 (2000번대)
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) — 7장 에러 코드 (3000번대)
+- [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 7장 에러 코드 (4000번대)
 - [마스터 데이터 기획서](../세부/master-data-기획서.md) — 8.3 에러 코드 (11000번대)

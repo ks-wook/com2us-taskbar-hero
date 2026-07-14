@@ -7,7 +7,7 @@
 ## 1. 개요
 
 - **목적**: 아이템·직업·스킬·룬·펫·몬스터·스테이지·재화 등 게임의 **정적 정의 데이터**를 한 곳에서 관리한다. 세이브 테이블은 실제 정의를 저장하지 않고 **코드(숫자 키)만 저장**하며, 그 코드의 의미(이름·수치·효과)는 전적으로 마스터 데이터가 제공한다.
-- **대상 서버**: `GameServer`(마스터 데이터 로드·검증), `Game.Common`(코드 타입 enum·버전 상수 공유).
+- **대상 서버**: `GameServer`(마스터 데이터 로드·검증), `TaskbarHero.Common`(코드 타입 enum·버전 상수 공유).
 - **핵심 구분**: **마스터 데이터 = 정적·읽기 전용·전 유저 공통 계약**, **세이브 데이터 = 동적·유저별 진행 상태**. 세이브는 마스터를 *참조*할 뿐, 마스터를 변경하지 않는다.
 - **관련 기획서**: [[save-data-기획서]] (참조 주체), [[서버-시스템-전체-개요]] (도메인 4.11)
 
@@ -66,7 +66,7 @@ erDiagram
 
 | 테이블 | 역할 | 대략 규모(원작 기준) |
 |---|---|---|
-| `class_master` | 직업(클래스) 정의 | 6종 |
+| `class_master` | 직업(클래스) 정의 | 원작 6종 / 모작 현재 3종(추후 추가 예정) |
 | `item_master` | 아이템(장비·재료·소모품·상자) 정의 | 500종 이상 |
 | `equip_slot_master` | 장비 장착 슬롯 정의 | 6~8종 |
 | `enhance_master` | 강화 단계별 비용·효과 | 단계 수만큼 |
@@ -100,9 +100,9 @@ erDiagram
 |---|---|---|---|
 | 1 | Knight | 0 | `{ "hp": 120, "atk": 10 }` |
 | 2 | Ranger | 0 | `{ "hp": 90, "atk": 14 }` |
-| 3 | Priest | 1 | `{ "hp": 100, "atk": 11 }` |
+| 3 | Mage | 0 | `{ "hp": 85, "atk": 16 }` |
 
-> 원작은 6개 직업이며 일부는 해금/유료. 나머지 직업 정의는 직업 기획서에서 확정.
+> **모작은 현재 기사(Knight)·레인저(Ranger)·마법사(Mage) 3종으로 확정**하며, 3종 모두 캐릭터 생성 시 기본 선택 가능(`unlock_type=0`)하다. **추후 확인 후 클래스를 추가할 예정**이다(해금/유료 직업 포함 가능). 원작은 6개 직업이며 일부는 해금/유료다. 세부 스탯·밸런스는 직업 기획서에서 확정한다.
 
 ### 5.2 `equip_slot_master` — 장착 슬롯
 
@@ -135,20 +135,22 @@ erDiagram
 | `item_type` | int | 1:장비 2:재료 3:소모품 4:상자 |
 | `grade` | int | 등급/희귀도(숫자가 클수록 고등급) |
 | `equip_slot` | int | 장비일 때 장착 슬롯(FK `equip_slot_master`), 비장비는 0 |
+| `class_req` | int | 착용 가능 클래스(FK `class_master`). **0이면 제한 없음(전 클래스 착용 가능)**, 비장비는 0 |
+| `level_req` | int | 착용 요구 레벨. **5레벨 단위(5의 배수)**, 0이면 제한 없음. 플레이어 `level`이 이 값 이상이어야 장착 가능. 비장비는 0 |
 | `stack_max` | int | 최대 겹침 수량(장비는 1) |
 | `base_stats` | json | 장비 기본 옵션 |
 | `sellable` | int | 거래소 판매 가능 여부(0/1) |
 
 **담기는 데이터 예시**
 
-| item_code | name | item_type | grade | equip_slot | stack_max | base_stats | sellable |
-|---|---|---|---|---|---|---|---|
-| 30012 | 강철 대검 | 1 | 3 | 1 | 1 | `{ "atk": 45 }` | 1 |
-| 30105 | 코스믹 투구 | 1 | 6 | 2 | 1 | `{ "hp": 220, "def": 30 }` | 1 |
-| 41001 | 강화석 | 2 | 2 | 0 | 999 | `null` | 1 |
-| 50001 | 골드 상자 | 4 | 1 | 0 | 99 | `null` | 0 |
+| item_code | name | item_type | grade | equip_slot | class_req | level_req | stack_max | base_stats | sellable |
+|---|---|---|---|---|---|---|---|---|---|
+| 30012 | 강철 대검 | 1 | 3 | 1 | 1 | 15 | 1 | `{ "atk": 45 }` | 1 |
+| 30105 | 코스믹 투구 | 1 | 6 | 2 | 0 | 40 | 1 | `{ "hp": 220, "def": 30 }` | 1 |
+| 41001 | 강화석 | 2 | 2 | 0 | 0 | 0 | 999 | `null` | 1 |
+| 50001 | 골드 상자 | 4 | 1 | 0 | 0 | 0 | 99 | `null` | 0 |
 
-> 원작 기준 500종 이상. 등급은 Cosmic 등 고등급 존재.
+> 원작 기준 500종 이상. 등급은 Cosmic 등 고등급 존재. `class_req`는 클래스 전용 장비를 나타내며(예: 강철 대검=기사 전용), `0`은 전 클래스 공용(예: 코스믹 투구)이다. `level_req`는 **5레벨 단위**의 착용 요구 레벨(예: 15, 40)이며 `0`은 제한 없음이다. 장착 시 검증 규칙은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.1을 따른다.
 
 ### 5.4 `enhance_master` — 강화 규칙
 
@@ -334,7 +336,7 @@ erDiagram
 ### 공통 규칙
 
 - **키 규칙**: `stage_master`는 `(act, difficulty, stage)` 조합을 유일 키로 갖거나 이를 인코딩한 `stage_id`를 PK로 쓴다. `drop_table_master`는 `(drop_table_code, entry_no)` 복합 PK.
-- **enum 공유**: `item_type`·`currency_type`·`growth_type`·`unlock_type`·`reward_type` 등 클라이언트와 공유하는 분류 코드는 `Game.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상).
+- **enum 공유**: `item_type`·`currency_type`·`growth_type`·`unlock_type`·`reward_type` 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상).
 - **JSON 필드**: `base_stats`·`effect` 등 가변 구조는 JSON으로 담되, 키 스키마는 각 도메인 기획서에서 확정한다.
 
 ## 6. 원천 데이터 형식과 저장 방식
@@ -356,7 +358,7 @@ erDiagram
 
 ## 8. 마스터 다운로드 API 명세
 
-Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 응답은 `{ success, errorCode, message, data }` 형식이다. `errorCode`는 `Game.Common`의 `GameErrorCode`(8.3) 값이며, `success`는 `errorCode == 0`과 동치다.
+Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 응답은 `{ success, errorCode, message, data }` 형식이다. `errorCode`는 `TaskbarHero.Common`의 `GameErrorCode`(8.3) 값이며, `success`는 `errorCode == 0`과 동치다.
 
 마스터 데이터는 전 유저 공통의 정적 데이터이고 로그인 이전(최초 패치 단계)에도 받아야 할 수 있으므로, 본 API는 **인증(토큰)을 요구하지 않는다**. (게임 진행 요청 중 버전 불일치가 감지되는 경우의 즉시 로그아웃은 7장 엣지 케이스 참고)
 
@@ -390,7 +392,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
     "upToDate": false,
     "tables": {
       "class_master": [ { "classCode": 1, "name": "Knight", "unlockType": 0, "baseStats": { "hp": 120, "atk": 10 } } ],
-      "item_master": [ { "itemCode": 30012, "name": "강철 대검", "itemType": 1, "grade": 3, "equipSlot": 1, "stackMax": 1, "baseStats": { "atk": 45 }, "sellable": 1 } ]
+      "item_master": [ { "itemCode": 30012, "name": "강철 대검", "itemType": 1, "grade": 3, "equipSlot": 1, "classReq": 1, "levelReq": 15, "stackMax": 1, "baseStats": { "atk": 45 }, "sellable": 1 } ]
     }
   }
 }
@@ -432,7 +434,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 8.3 에러 코드 (신규 제안)
 
-`Game.Common/ErrorCode.cs`의 `GameErrorCode`에 추가 제안. 기존 값(계정 1000번대, 세이브 2000번대)과 겹치지 않도록 **마스터 데이터 도메인은 11000번대**를 사용한다.
+`TaskbarHero.Common/ErrorCode.cs`의 `GameErrorCode`에 추가 제안. 기존 값(계정 1000번대, 세이브 2000번대)과 겹치지 않도록 **마스터 데이터 도메인은 11000번대**를 사용한다.
 
 | 이름 | 값 | 의미 | 사용처 |
 |---|---|---|---|
