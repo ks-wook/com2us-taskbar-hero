@@ -76,7 +76,30 @@
 
 - 스킬 레벨업 1레벨당 1포인트, 스킬 초기화 무료, 액티브 스킬 캐릭터당 2개 장착. 룬은 계정 공용·1레벨씩·레벨 비례 골드.
 
-### 3.5 마스터 데이터
+### 3.5 스테이지 / 전투
+
+> 출처: [스테이지/전투 결과 기획서](../세부/stage-battle-기획서.md) 5장
+
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/game/stage/enter` | 스테이지 진입(진행 가능 검증) | `{ act, difficulty, stage }` | `stageId`, `monsters[]`, `boss`, `enteredAt` | `StageNotFound(6001)`, `StageLocked(6002)` |
+| `POST /api/game/stage/clear` | 스테이지 클리어 → 보상 지급·진행도 갱신 | `{ act, difficulty, stage }` | `rewards`, `characters[]`(각 `isLevelUp`), `balance`, `progress` | `StageNotEntered(6003)`, `StageClearTooFast(6004)`, `InventoryFull(4002)` |
+
+- 진입 응답은 스테이지의 **몬스터 구성(`monsters`)·보스(`boss`)** 를 포함. 클리어 보상(골드·경험치·전리품)은 서버가 마스터로 산출, 경험치는 3캐릭터 동일 지급(캐릭터별 **`isLevelUp`**), 골드는 계정. 이미 클리어한 스테이지는 재파밍 가능.
+
+### 3.6 메일(보상)
+
+> 출처: [메일 기획서](../세부/mail-기획서.md) 5장
+
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/game/mail/list` | 우편함 목록 조회 | `{}` | `mails[]`(첨부·읽음·수령·만료 포함) | — |
+| `POST /api/game/mail/claim` | 단건 메일 첨부 수령 | `{ mailId }` | `gained`, `balance` | `MailNotFound(9001)`, `MailAlreadyClaimed(9002)`, `MailExpired(9003)`, `InventoryFull(4002)` |
+| `POST /api/game/mail/claim-all` | 수령 가능한 메일 일괄 수령 | `{}` | `claimedMailIds[]`, `gained`, `balance` | `InventoryFull(4002)` |
+
+- 첨부(재화·아이템)는 서버가 지급하며 중복 수령 불가(수령 플래그+행 잠금). 만료 메일은 수령 거부. 발급은 거래소(4.8)·출석부(4.10)·운영이 담당.
+
+### 3.7 마스터 데이터
 
 > 출처: [마스터 데이터 기획서](../세부/master-data-기획서.md) 8장
 

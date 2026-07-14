@@ -290,6 +290,8 @@ erDiagram
 | `reward_gold` | bigint | 기본 골드 보상 |
 | `reward_exp` | bigint | 기본 경험치 보상 |
 | `drop_table_code` | int FK | 드롭 테이블(`drop_table_master`) |
+| `spawns` | json | 등장 **일반 몬스터 스폰 목록** `[{ monster_code, count }]`(`monster_master` 참조) |
+| `boss_monster_code` | int | **스테이지 보스 몬스터**(`monster_master`). 보스가 없으면 0 |
 
 **담기는 데이터 예시**
 
@@ -299,6 +301,8 @@ erDiagram
 | 1010002 | 1 | 1 | 2 | 120 | 60 | 7001 |
 | 1020001 | 1 | 2 | 1 | 300 | 150 | 7002 |
 
+> 스폰 예시: `spawns` = `[{ "monsterCode": 9001, "count": 8 }, { "monsterCode": 9010, "count": 3 }]`, `boss_monster_code` = `9099`(보스 스테이지, 없으면 0). 스테이지 진입 응답이 이 스폰·보스 정보를 그대로 내려준다([스테이지/전투 결과 기획서](stage-battle-기획서.md) 5.1).
+>
 > 벽에 막히면 이전 스테이지를 재파밍할 수 있다(하드월 없음, 개요 3장).
 
 ### 5.11 `drop_table_master` — 드롭 테이블

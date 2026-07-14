@@ -54,8 +54,10 @@ erDiagram
     game_player      ||--o{ player_inventory : owns
     game_player      ||--o{ player_rune      : has
     game_player      ||--|| player_cube      : has
+    game_player      ||--o{ player_mail      : receives
     player_character ||--o{ player_equipment : equips
     player_character ||--o{ player_skill     : has
+    player_mail      ||--o{ player_mail_reward : has
 
     game_player {
         bigint  user_id PK "계정 user_id"
@@ -121,6 +123,27 @@ erDiagram
         int     cube_level
         bigint  cube_exp
     }
+
+    player_mail {
+        bigint  mail_id PK
+        bigint  user_id FK
+        int     category "1:운영 2:거래 3:출석 4:시스템"
+        varchar title
+        varchar body
+        int     is_read "0/1"
+        int     claimed "0/1 첨부 수령"
+        bigint  created_at
+        bigint  expires_at "0이면 무기한"
+        bigint  claimed_at
+    }
+
+    player_mail_reward {
+        bigint  mail_id FK
+        int     seq
+        int     reward_type "1:골드 2:아이템 3:재료 4:상자"
+        int     reward_code "골드면 0"
+        int     quantity
+    }
 ```
 
 **PK / 유니크**
@@ -135,6 +158,8 @@ erDiagram
 | `player_skill` | `(user_id, character_id, skill_code)` | 캐릭터별 |
 | `player_rune` | `(user_id, rune_code)` | 계정 공유 |
 | `player_cube` | `user_id` | 계정 공유 |
+| `player_mail` | `mail_id` PK, `user_id` 인덱스 | 계정 우편함 |
+| `player_mail_reward` | `(mail_id, seq)` | 메일 첨부 |
 
 ## 4. 마스터 데이터 (정적 · 읽기 전용)
 
@@ -161,7 +186,8 @@ erDiagram
 ## 5. 출처 문서
 
 - [계정/로그인 기획서](../세부/account-login-기획서.md) — `users`·`user_auth_token`, Redis 토큰
-- [세이브 데이터 기획서](../세부/save-data-기획서.md) — `game_player`·`player_character`·`player_currency`·`player_inventory`·`player_equipment`·`player_skill`·`player_rune`·`player_cube`
+- [세이브 데이터 기획서](../세부/save-data-기획서.md) — `game_player`·`player_character`·`player_currency`·`player_inventory`·`player_equipment`·`player_skill`·`player_rune`·`player_cube`·`player_mail`·`player_mail_reward`
+- [메일 기획서](../세부/mail-기획서.md) — `player_mail`·`player_mail_reward` 우편함·첨부
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 인벤토리·장비·큐브 세부 규칙
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 캐릭터·스킬·룬 세부 규칙
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) — 경험치·골드 지급(세이브 테이블 사용)

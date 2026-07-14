@@ -39,6 +39,8 @@ erDiagram
     game_player      ||--|| player_cube      : has
     player_character ||--o{ player_equipment : equips
     player_character ||--o{ player_skill     : has
+    game_player      ||--o{ player_mail      : receives
+    player_mail      ||--o{ player_mail_reward : has
 
     game_player {
         bigint  user_id PK "계정 user_id"
@@ -104,6 +106,27 @@ erDiagram
         int     cube_level
         bigint  cube_exp
     }
+
+    player_mail {
+        bigint  mail_id PK
+        bigint  user_id FK
+        int     category "1:운영 2:거래 3:출석 4:시스템"
+        varchar title
+        varchar body
+        int     is_read "0/1"
+        int     claimed "0/1 첨부 수령 여부"
+        bigint  created_at
+        bigint  expires_at "0이면 무기한"
+        bigint  claimed_at "미수령 0"
+    }
+
+    player_mail_reward {
+        bigint  mail_id FK
+        int     seq "메일 내 첨부 번호"
+        int     reward_type "1:골드 2:아이템 3:재료 4:상자"
+        int     reward_code "골드면 0"
+        int     quantity
+    }
 ```
 
 - **PK/유니크**:
@@ -112,11 +135,13 @@ erDiagram
   - `player_equipment`: `(user_id, character_id, slot)` 복합 PK — 캐릭터마다 슬롯별 장착을 따로 가진다.
   - `player_skill`: `(user_id, character_id, skill_code)` 복합 PK. 캐릭터별 스킬 레벨·액티브 장착.
   - `player_rune`: `(user_id, rune_code)` 복합 PK. 룬은 **계정 공용**이라 `character_id`를 두지 않는다.
+  - `player_mail`: `mail_id` PK, `user_id` 조회 인덱스. 계정 우편함.
+  - `player_mail_reward`: `(mail_id, seq)` 복합 PK. 메일 첨부(0~N).
   - `player_inventory`: `(user_id, slot)` 유니크 — 한 인벤토리 칸(slot)에는 아이템(스택) 한 행만 존재한다.
 - **캐릭터별 vs 계정 공유**: `player_character`·`player_equipment`·`player_skill`은 **캐릭터별**, `player_currency`(골드)·`player_inventory`·`player_cube`·`player_rune`은 **계정 공유**다. 스킬은 캐릭터마다 다르게 찍고 룬은 계정 전체에 적용되므로 테이블을 분리한다. 장비는 캐릭터별로 착용하지만 그 대상 아이템(`inventory_id`)은 계정 공용 인벤토리의 행이므로, 한 아이템은 최대 한 캐릭터·한 슬롯에만 장착된다.
 - **인벤토리 배치 위치(`player_inventory.slot`)**: 아이템(스택)이 인벤토리 UI의 몇 번 칸에 있는지를 나타내는 위치 값(0-based)이다. 클라이언트 재접속 시 로드 스냅샷의 `slot`으로 **마지막 접속과 동일한 배치**를 복원한다. 플레이어가 드래그로 칸을 옮기면 그 변경은 배치 변경 API로 반영한다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.6). `player_equipment.slot`(장착 슬롯)과는 다른 개념이다. 배치는 UI 레이아웃 값이므로 서버 권위 검증 대상은 아니나, 용량(`game_player.inventory_capacity`) 범위 안이고 칸이 중복되지 않는지는 검증한다.
 - **아이템/스킬/룬/펫 등의 코드 값**은 마스터(기획) 데이터를 참조한다([마스터 데이터 기획서](master-data-기획서.md), 도메인 4.11). 각 코드 컬럼이 어느 마스터 테이블을 참조하는지는 해당 문서 4.1의 매핑 표를 참고한다.
-- `player_character`/`player_inventory`/`player_equipment`/`player_skill`/`player_rune`/`player_cube`의 **세부 필드·규칙**은 각 시스템 기획서(성장·인벤토리 등)에서 확장한다. 본 ERD는 저장 골격이다. (펫은 아직 저장 테이블이 없다 — 성장 기획서 범위 밖)
+- `player_character`/`player_inventory`/`player_equipment`/`player_skill`/`player_rune`/`player_cube`/`player_mail`의 **세부 필드·규칙**은 각 시스템 기획서(성장·인벤토리·[메일](mail-기획서.md) 등)에서 확장한다. 본 ERD는 저장 골격이다. (펫은 아직 저장 테이블이 없다 — 성장 기획서 범위 밖)
 
 ## 4. 저장 정책
 
