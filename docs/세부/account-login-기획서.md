@@ -1,6 +1,6 @@
 # 계정 / 로그인 기획서
 
-> 상위 문서: [서버 시스템 전체 개요](서버-시스템-전체-개요.md) · 관련 도메인 4.1
+> 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.1
 >
 > **개발 기준 문서**: 본 로그인 시스템은 [jacking75 — ASP.NET Core API 게임서버 실습 09장](https://github.com/jacking75/programming-books-with-ai/blob/main/ASPNETCore-API_%EA%B2%8C%EC%9E%84%EC%84%9C%EB%B2%84_%EC%8B%A4%EC%8A%B5/09.md)의 구조를 기준으로 개발한다. 아래 명세는 해당 문서의 아키텍처(MySQL + Redis, 계층형 구조, 커스텀 HMAC 토큰)를 본 프로젝트에 맞게 반영한 것이다.
 
@@ -142,7 +142,7 @@ Base64 디코딩 → 필드 분리(userId:timestamp:salt:hash)
 
 Base URL(개발): `http://localhost:5160` (AccountServer)
 
-모든 API는 **POST** 방식이며, 응답 형식은 기준 문서를 따른다(`success`, `userId`, `token`, `message`). `message`/결과는 `Game.Common`의 `GameErrorCode`(6장)에 매핑한다.
+모든 API는 **POST** 방식이며, 응답에는 **`errorCode`를 포함**한다(`success`, `errorCode`, `userId`/`token` 등, `message`). `errorCode`는 `Game.Common`의 `GameErrorCode`(6장) 값이고 `success`는 `errorCode == 0`과 동치이며, `message`는 해당 코드의 설명 문구다. (세이브·마스터 기획서와 동일한 응답 규약)
 
 #### 인증 방식 — HTTP Body(JSON)로 토큰 전달 ⭐
 
@@ -176,6 +176,7 @@ Base URL(개발): `http://localhost:5160` (AccountServer)
 ```json
 {
   "success": true,
+  "errorCode": 0,
   "userId": 1,
   "message": "Signup successful"
 }
@@ -185,6 +186,7 @@ Base URL(개발): `http://localhost:5160` (AccountServer)
 ```json
 {
   "success": false,
+  "errorCode": 1003,
   "userId": 0,
   "message": "Duplicate email"
 }
@@ -208,6 +210,7 @@ Base URL(개발): `http://localhost:5160` (AccountServer)
 ```json
 {
   "success": true,
+  "errorCode": 0,
   "userId": 1,
   "token": "MToxNzAwMDAwMDAwOmFCM2RFNmZHOWhKMWtM...",
   "message": "Login successful"
@@ -218,6 +221,7 @@ Base URL(개발): `http://localhost:5160` (AccountServer)
 ```json
 {
   "success": false,
+  "errorCode": 1002,
   "userId": 0,
   "token": "",
   "message": "Invalid password"
@@ -228,6 +232,7 @@ Base URL(개발): `http://localhost:5160` (AccountServer)
 ```json
 {
   "success": false,
+  "errorCode": 1001,
   "userId": 0,
   "token": "",
   "message": "User not found"
@@ -273,6 +278,7 @@ Base URL(개발): `http://localhost:5160` (AccountServer)
 ```json
 {
   "success": true,
+  "errorCode": 0,
   "message": "Logout successful"
 }
 ```
