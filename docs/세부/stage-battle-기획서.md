@@ -43,8 +43,8 @@
 |---|---|---|
 | `game_player`(`act`, `stage`, `difficulty`, `max_stage_cleared`) | 파티 현재 진행도·최고 도달 스테이지 | `stage_master` |
 | `player_character`(`exp`, `level`) | 클리어 경험치 반영(3캐릭터 동일) | `level_master` |
-| `player_currency`(`amount`) | 클리어 골드 반영(계정 공유) | `currency_master` |
-| `player_inventory` | 전리품(아이템·재료) 적재(계정 공유) | `item_master`·`drop_table_master` |
+| `player_item`(재화 행 `row_type=2`) | 클리어 골드 반영(`quantity` UPDATE, 계정 공유) | `currency_master` |
+| `player_item` | 전리품(아이템·재료) 적재(계정 공유) | `item_master`·`drop_table_master` |
 
 - **현재 진입 스테이지**: 별도 컬럼을 두지 않고 `game_player.act`/`stage`/`difficulty`가 **현재 진입(진행 중) 스테이지**를 나타낸다. 진입 요청이 이 값을 설정하고, 클리어 요청이 이 값을 기준으로 검증·전진한다.
 - **진입 시각(플레이 검증용, 제안·미결)**: 진입~클리어 최소 소요 시간을 검증하려면 진입 시각이 필요하다. `game_player.stage_entered_at`(bigint) 추가를 **제안**한다(검증 도입 확정 시 [세이브 데이터 기획서](save-data-기획서.md) ERD 반영). 8장 미결.
@@ -157,9 +157,9 @@ COMMIT → { act, difficulty, stage, stageId, enteredAt }
   3) st = stage_master[현재 스테이지]
      gold = st.reward_gold; exp = st.reward_exp
      items = rollDropTable(st.drop_table_code)       # 서버 RNG 추첨
-  4) 지급: player_currency += gold
+  4) 지급: player_item(재화, code=골드).quantity += gold
            for c in player_character(3인): c.exp += exp → level 재계산   # 3캐릭터 동일
-           items를 player_inventory에 적재(스택/용량 규칙; 초과 시 InventoryFull(4002))
+           items를 player_item에 적재(스택/용량 규칙; 초과 시 InventoryFull(4002))
   5) 진행도: 프런티어 클리어면 stage 전진(act/difficulty 롤오버) + max_stage_cleared 갱신
              재파밍이면 보상만, 진행도 유지
 COMMIT → { cleared, rewards, characters, balance, progress }

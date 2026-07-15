@@ -29,7 +29,7 @@
 
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
-| `POST /api/game/load` | 접속 시 전체 세이브 스냅샷 로드 | `{}` | `player`, `characters[]`, `currencies[]`, `inventory[]`, `equipment[]`, `skills[]`, `runes[]`, `cube`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
+| `POST /api/game/load` | 접속 시 전체 세이브 스냅샷 로드 | `{}` | `player`, `characters[]`, `currencies[]`, `inventory[]`(장착 상태 포함), `skills[]`, `runes[]`, `cube`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
 | `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정) | `{ nickname, classCode }` | `characterId`, `classCode`, `level` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `PlayerAlreadyExists(2004)` |
 | `POST /api/game/heartbeat` | 접속 시각 갱신(오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
 
@@ -51,14 +51,14 @@
 
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
-| `POST /api/game/inventory/equip` | 지정 캐릭터에 장비 장착(스왑) | `{ characterId, inventoryId }` | `equipped`, `unequipped` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `ItemEquipped(4007)`, `InvalidCharacterId(2006)` |
-| `POST /api/game/inventory/unequip` | 지정 슬롯 장비 해제 | `{ characterId, slot }` | `slot`, `inventoryId` | `ItemNotFound(4001)`, `InvalidCharacterId(2006)` |
-| `POST /api/game/inventory/enhance` | 장비 강화 단계 +1(재화 소모) | `{ inventoryId }` | `enhanceLevel`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
-| `POST /api/game/inventory/use` | 소모품 사용(서버 산출 지급) | `{ inventoryId, count }` | `consumed`, `gained` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `InventoryFull(4002)` |
+| `POST /api/game/inventory/equip` | 지정 캐릭터에 장비 장착(스왑) | `{ characterId, itemId }` | `equipped`, `unequipped` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `ItemEquipped(4007)`, `InvalidCharacterId(2006)` |
+| `POST /api/game/inventory/unequip` | 지정 슬롯 장비 해제 | `{ characterId, slot }` | `slot`, `itemId` | `ItemNotFound(4001)`, `InvalidCharacterId(2006)` |
+| `POST /api/game/inventory/enhance` | 장비 강화 단계 +1(재화 소모) | `{ itemId }` | `enhanceLevel`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
+| `POST /api/game/inventory/use` | 소모품 사용(서버 산출 지급) | `{ itemId, count }` | `consumed`, `gained` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `InventoryFull(4002)` |
 | `POST /api/game/inventory/expand` | 인벤토리 용량 확장(골드 소모) | `{ count }` | `inventoryCapacity`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InventoryCapacityMax(4008)` |
-| `POST /api/game/inventory/move` | 인벤토리 배치 이동/교환(드래그 저장) | `{ inventoryId, toSlot }` | `moved`, `swapped` | `ItemNotFound(4001)`, `InvalidInventorySlot(4009)` |
-| `POST /api/game/cube/combine` | 큐브 합성(동급 아이템→상위 등급) | `{ inventoryIds[] }` | `consumed`, `result`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `ItemNotFound(4001)` |
-| `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{inventoryId,count}] }` | `gold`, `cubeExp` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
+| `POST /api/game/inventory/move` | 인벤토리 배치 이동/교환(드래그 저장) | `{ itemId, toSlot }` | `moved`, `swapped` | `ItemNotFound(4001)`, `InvalidInventorySlot(4009)` |
+| `POST /api/game/cube/combine` | 큐브 합성(동급 아이템→상위 등급) | `{ itemIds[] }` | `consumed`, `result`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `ItemNotFound(4001)` |
+| `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{itemId,count}] }` | `gold`, `cubeExp` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
 | `POST /api/game/cube/craft` ⚠️보류 | 큐브 제작(레시피로 아이템 생성) | `{ recipeCode }` | `consumed`, `gained`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)` |
 | `POST /api/game/box/open` | 랜덤 상자 열기(골드 가챠, 등급 확률 추첨→랜덤 아이템 지급). 현재 단발(`count`=1)만 처리, 다연속 예정 | `{ boxCode, count? }` | `rewards`, `gained`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InvalidSaveData(2002)`, `InventoryFull(4002)`, `MasterDataNotLoaded(11001)` |
 
@@ -100,7 +100,18 @@
 
 - 첨부(재화·아이템)는 서버가 지급하며 중복 수령 불가(수령 플래그+행 잠금). 만료 메일은 수령 거부. 발급은 거래소(4.8)·출석부(4.10)·운영이 담당.
 
-### 3.7 마스터 데이터
+### 3.7 출석부 보상
+
+> 출처: [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) 5장
+
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/game/attendance/status` | 이번달 출석 현황 조회(읽기 전용) | `{}` | `yearMonth`, `today`, `todayClaimed`, `days[]` | `MasterDataNotLoaded(11001)` |
+| `POST /api/game/attendance/claim` | 오늘자 출석 보상 획득(보상 **메일 발급**) | `{}` | `attendDate`, `day`, `reward`, `mailId` | `AttendanceAlreadyClaimed(10001)`, `MasterDataNotLoaded(11001)` |
+
+- 날짜 경계는 서버 KST 자정, 하루 1회(`(user_id, attend_date)` 유니크). 획득 보상은 즉시 지급이 아니라 **메일(3.6)로 발급**되어 우편함 수령 시 계정 반영.
+
+### 3.8 마스터 데이터
 
 > 출처: [마스터 데이터 기획서](../세부/master-data-기획서.md) 8장
 
@@ -122,5 +133,7 @@
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md)
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md)
 - [성장 시스템 기획서](../세부/growth-기획서.md)
+- [메일 기획서](../세부/mail-기획서.md)
+- [출석부 보상 시스템 기획서](../세부/attendance-기획서.md)
 - [마스터 데이터 기획서](../세부/master-data-기획서.md)
 - [GameErrorCode 통합 정의](error-code-정의.md)

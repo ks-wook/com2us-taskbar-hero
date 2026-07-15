@@ -2,7 +2,7 @@
 
 > 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.9
 >
-> 본 문서는 운영·보상·거래 결과 등을 **우편함(메일)** 으로 지급하고 플레이어가 **첨부(재화·아이템)를 수령**하는 규칙을 서버 권위로 다룬다. 재화·아이템 반영은 [세이브 데이터 기획서](save-data-기획서.md)(`player_currency`·`player_inventory`)와 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 규칙을 따른다.
+> 본 문서는 운영·보상·거래 결과 등을 **우편함(메일)** 으로 지급하고 플레이어가 **첨부(재화·아이템)를 수령**하는 규칙을 서버 권위로 다룬다. 재화·아이템 반영은 [세이브 데이터 기획서](save-data-기획서.md)(`player_item` — 아이템·재화 통합)와 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 규칙을 따른다.
 
 ## 1. 개요
 
@@ -74,7 +74,7 @@ erDiagram
   - `reward_type=2`(아이템)·`3`(재료): `reward_code`는 `item_master.item_code`를 가리키는 아이템/재료 코드이며, `quantity`는 개수(스택형은 스택 수)다.
 - **첨부 없는 메일**: `player_mail_reward` 행이 없으면 첨부 없는 안내 메일이다. 이 경우 "수령"은 읽음 처리에 가깝고 지급이 없다.
 - **수령/읽음 구분**: `is_read`는 열람 여부, `claimed`는 첨부 수령 여부다. 첨부가 있는 메일은 수령 시 `claimed=1`·`claimed_at` 기록.
-- **계정 단위**: 메일은 계정(`user_id`) 소속이다. 첨부 재화·아이템은 계정 공유 `player_currency`·`player_inventory`에 지급된다(캐릭터 지정 없음).
+- **계정 단위**: 메일은 계정(`user_id`) 소속이다. 첨부 재화·아이템은 계정 공유 `player_item`(재화 행/아이템 행)에 지급된다(캐릭터 지정 없음).
 
 **공유 enum / DTO (TaskbarHero.Common)**
 - `reward_type`(1:골드 2:아이템 3:재료)은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md)·[마스터 데이터 기획서](master-data-기획서.md)의 공유 enum과 동일 값으로 고정(값 변경 금지)한다.
@@ -191,7 +191,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   3) if mail.expires_at != 0 and now > mail.expires_at: MailExpired(9003)
   4) rewards = player_mail_reward[mailId]
      지급 결과가 인벤토리 용량 초과 시: InventoryFull(4002)
-  5) 지급: 골드→player_currency, 아이템/재료→player_inventory(스택/용량 규칙)
+  5) 지급: 골드→player_item(재화 행 quantity), 아이템/재료→player_item(아이템 행, 스택/용량 규칙)
   6) mail.claimed = 1; mail.claimed_at = now; mail.is_read = 1
 COMMIT → { mailId, gained, balance }
 ```

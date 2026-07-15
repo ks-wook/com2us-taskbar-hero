@@ -19,8 +19,9 @@
 | 5000번대 | 성장(직업 / 스킬 / 룬) | [성장 시스템 기획서](../세부/growth-기획서.md) 7장 | 사용 중 |
 | 6000번대 | 스테이지 / 전투 결과 | [스테이지/전투 결과 기획서](../세부/stage-battle-기획서.md) 7장 | 사용 중 |
 | 9000번대 | 메일(보상) | [메일 기획서](../세부/mail-기획서.md) 7장 | 사용 중 |
+| 10000번대 | 출석부 보상 | [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) 7장 | 사용 중 |
 | 11000번대 | 마스터 데이터 | [마스터 데이터 기획서](../세부/master-data-기획서.md) 8.3 | 사용 중 |
-| 그 외 | 성장·스테이지·재화·거래소·메일·출석 등 | (미작성) | 예약 |
+| 그 외 | 재화·거래소 등 | (미작성) | 예약 |
 
 ## 2. 전체 코드 목록
 
@@ -47,10 +48,11 @@
 |---|---|---|
 | SaveNotFound | 2001 | 세이브 데이터 없음 |
 | InvalidSaveData | 2002 | 액션 요청 값 검증 실패(불가능한 값·비정상 데이터) |
-| SaveVersionMismatch | 2003 | 세이브 스키마 버전 불일치 |
 | PlayerAlreadyExists | 2004 | 캐릭터 슬롯 3개가 모두 차 더 생성 불가 |
 | InvalidClassCode | 2005 | 존재하지 않는 직업 코드 |
 | InvalidCharacterId | 2006 | 잘못된 캐릭터 슬롯(존재하지 않는 characterId·슬롯 개수 오류·직업 중복) |
+
+- `2003`(구 `SaveVersionMismatch`)은 세이브 스키마 버전(`data_version`) 제거로 폐기했다. 결번으로 두고 재사용하지 않는다.
 
 ### 2.4 오프라인 보상 정산 (3000번대)
 
@@ -110,7 +112,15 @@
 
 - 첨부 아이템 인벤토리 초과는 신규 코드 없이 `InventoryFull(4002)`를 재사용한다.
 
-### 2.9 마스터 데이터 (11000번대)
+### 2.9 출석부 보상 (10000번대)
+
+| 이름 | 값 | 의미 |
+|---|---|---|
+| AttendanceAlreadyClaimed | 10001 | 오늘자 출석 보상을 이미 수령함 |
+
+- 마스터 미로드/미정의는 신규 코드 없이 `MasterDataNotLoaded(11001)`를 재사용한다.
+
+### 2.10 마스터 데이터 (11000번대)
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -143,7 +153,7 @@ namespace TaskbarHero.Common
         // 세이브 데이터 (2000번대)
         SaveNotFound = 2001,
         InvalidSaveData = 2002,
-        SaveVersionMismatch = 2003,
+        // 2003: 구 SaveVersionMismatch — data_version 제거로 폐기(결번, 재사용 금지)
         PlayerAlreadyExists = 2004,
         InvalidClassCode = 2005,
         InvalidCharacterId = 2006,
@@ -187,6 +197,9 @@ namespace TaskbarHero.Common
         MailAlreadyClaimed = 9002,
         MailExpired = 9003,
 
+        // 출석부 보상 (10000번대)
+        AttendanceAlreadyClaimed = 10001,
+
         // 마스터 데이터 (11000번대)
         MasterDataNotLoaded = 11001,
         MasterDataVersionMismatch = 11002,
@@ -204,4 +217,5 @@ namespace TaskbarHero.Common
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 7장 에러 코드 (5000번대)
 - [스테이지/전투 결과 기획서](../세부/stage-battle-기획서.md) — 7장 에러 코드 (6000번대)
 - [메일 기획서](../세부/mail-기획서.md) — 7장 에러 코드 (9000번대)
+- [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — 7장 에러 코드 (10000번대)
 - [마스터 데이터 기획서](../세부/master-data-기획서.md) — 8.3 에러 코드 (11000번대)

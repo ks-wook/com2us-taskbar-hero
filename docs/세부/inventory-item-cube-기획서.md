@@ -2,7 +2,7 @@
 
 > 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.4
 >
-> 본 문서는 플레이어가 보유한 **아이템의 저장·장착·강화·소모**와 **큐브(Hero-dric Cube)의 합성/분해/제작**을 서버 권위로 처리하는 규칙을 다룬다. 저장 골격은 [세이브 데이터 기획서](save-data-기획서.md)(`player_inventory`·`player_equipment`·`player_cube`), 아이템·강화·큐브의 정적 정의는 [마스터 데이터 기획서](master-data-기획서.md)(`item_master`·`enhance_master`·`cube_master`·`drop_table_master`)를 참고한다.
+> 본 문서는 플레이어가 보유한 **아이템의 저장·장착·강화·소모**와 **큐브(Hero-dric Cube)의 합성/분해/제작**을 서버 권위로 처리하는 규칙을 다룬다. 저장 골격은 [세이브 데이터 기획서](save-data-기획서.md)(`player_item`·`player_cube`), 아이템·강화·큐브의 정적 정의는 [마스터 데이터 기획서](master-data-기획서.md)(`item_master`·`enhance_master`·`cube_master`·`drop_table_master`)를 참고한다.
 
 ## 1. 개요
 
@@ -37,7 +37,7 @@
 **비기능 요구사항**
 - **서버 권위**: 수량·등급·강화 단계·개봉 결과는 서버가 마스터 데이터로 계산·검증한다. 클라이언트가 보낸 결과값은 신뢰하지 않는다.
 - **원자성**: "재화 차감 + 아이템 증감(+장비/큐브 상태 변경)"은 하나의 `user_id` 단위 트랜잭션으로 처리한다. 중도 실패 시 전체 롤백하여 재화만 빠지거나 아이템만 생기는 상태를 막는다.
-- **동시성/멱등성**: 단일 세션 정책([계정/로그인 기획서](account-login-기획서.md))으로 경합은 제한적이나, 대상 행(`inventory_id`/`user_id`)에 잠금을 걸어 같은 아이템에 대한 중복 강화·중복 소모를 막는다. 개별 액션은 서버가 대상 상태를 확인 후 반영하므로 동일 요청 재전송 시 이미 소모/장착된 상태면 해당 에러 코드로 거부된다.
+- **동시성/멱등성**: 단일 세션 정책([계정/로그인 기획서](account-login-기획서.md))으로 경합은 제한적이나, 대상 행(`item_id`/`user_id`)에 잠금을 걸어 같은 아이템에 대한 중복 강화·중복 소모를 막는다. 개별 액션은 서버가 대상 상태를 확인 후 반영하므로 동일 요청 재전송 시 이미 소모/장착된 상태면 해당 에러 코드로 거부된다.
 
 ## 4. 데이터 모델
 
@@ -45,19 +45,21 @@
 
 | 테이블 | 역할 | 참조 마스터 |
 |---|---|---|
-| `player_inventory`(`inventory_id` PK, `user_id`, `slot`, `item_code`, `quantity`, `enhance_level`, `acquired_at`) | 보유 아이템 개체/스택 (**계정 공유**) | `item_master`, `enhance_master` |
-| `player_equipment`(`(user_id, character_id, slot)` PK, `inventory_id`) | **캐릭터별** 슬롯 장착 상태 | `equip_slot_master` |
+| `player_item`(`item_id` PK, `user_id`, `row_type`, `code`, `quantity`, `slot`, `enhance_level`, `equipped_character_id`, `equipped_slot`, `acquired_at`) | 보유 **아이템·재화 통합** 테이블 (**계정 공유**). `row_type`(1:아이템 2:재화)로 구분, `code`는 `item_code`/`currency_type`, `quantity`는 수량/재화 금액(`bigint`). 장착 상태는 `equipped_character_id`/`equipped_slot`(NULL=미장착)로 아이템 행에 직접 표기 | `item_master`, `enhance_master`, `equip_slot_master`, `currency_master` |
 | `player_cube`(`user_id` PK, `cube_level`, `cube_exp`) | 큐브 성장 상태 (**계정 공유**) | `cube_master` |
-| `player_currency`(`(user_id, currency_type)` PK, `amount`) | 강화/제작 비용 차감·분해 골드 적립·용량 확장 비용 차감 (**계정 공유**) | `currency_master` |
 | `game_player`(`inventory_capacity` 신규 컬럼) | 계정 인벤토리 최대 용량(골드로 확장) | — |
 
-- **캐릭터별/계정 공유**: 계정은 캐릭터 슬롯 3개(3인 파티, [성장 시스템 기획서](growth-기획서.md))를 가진다. **인벤토리·골드·큐브는 계정 공유**(위 표 `user_id` 단위)이고, **장비 장착(`player_equipment`)만 캐릭터별**이다(`character_id` 1~3). 한 인벤토리 아이템(`inventory_id`)은 계정 공용이지만 **동시에 한 캐릭터·한 슬롯에만 장착**된다.
+> **장착을 별도 테이블(`player_equipment`)로 두지 않는다.** 장착은 저빈도 동작인데 별도 매핑 테이블은 로드 시 조인을 강요하고 장착/해제마다 매핑 행 INSERT/DELETE를 유발한다. 대신 아이템 행 자체에 `equipped_character_id`/`equipped_slot`을 두어 장착/해제를 **해당 행 UPDATE**로 처리하고, `(user_id, equipped_character_id, equipped_slot)` 유니크 인덱스로 "한 캐릭터-슬롯당 아이템 하나"를 보장한다(미장착은 NULL이라 무제한 공존, [세이브 데이터 기획서](save-data-기획서.md) 3장).
+
+> **재화(골드 등)도 `player_item`에 통합한다(별도 `player_currency` 테이블 없음).** 재화는 `row_type=2` 행으로 저장하고 `code`=`currency_type`, `quantity`=재화 금액이다. 강화/제작 비용 차감, 분해 골드 적립, 용량 확장·상자 오픈 비용 차감 등 **재화 증감은 해당 재화 행의 `quantity` UPDATE**로 처리한다. 재화 행은 `slot`이 NULL이라 인벤토리 용량 집계에서 제외되며, 계정당 재화 종류당 1행 유일성은 서버가 보장한다([세이브 데이터 기획서](save-data-기획서.md) 3장). API 응답의 `cost`/`balance`/`currencies`는 이 재화 행에서 파생한다.
+
+- **캐릭터별/계정 공유**: 계정은 캐릭터 슬롯 3개(3인 파티, [성장 시스템 기획서](growth-기획서.md))를 가진다. **인벤토리·골드·큐브는 계정 공유**(위 표 `user_id` 단위)이고, **장비 장착만 캐릭터별**이다(`equipped_character_id` 1~3). 한 아이템 행(`item_id`)은 계정 공용이지만 **동시에 한 캐릭터·한 슬롯에만 장착**된다.
 
 **보관/스택 규칙 (확정)**
-- **배치 위치(`slot`)**: 각 행은 인벤토리 UI의 특정 칸(`slot`, 0-based)에 놓인다. `(user_id, slot)`은 유니크하며 한 칸에는 한 행만 존재한다. 재접속 시 [세이브 로드](save-data-기획서.md)가 `slot`을 함께 내려 **마지막 접속과 동일한 배치를 복원**한다. 획득 시 서버는 빈 `slot`에 배치하고, 빈 칸이 없으면(용량 초과) `InventoryFull(4002)`. `player_equipment.slot`(장착 슬롯)과는 별개 개념이다.
-- **장비(`item_type=1`)**: `stack_max=1`. 개체마다 `enhance_level`이 다를 수 있으므로 **1개당 1 행(row)**으로 저장하며 겹치지 않는다. `inventory_id`가 개체 식별자다.
-- **비장비(`item_type=2/3`)**: 동일 `item_code`는 `stack_max`까지 한 행에 `quantity`로 누적한다. 초과분은 새 행으로 분할한다.
-- **장착 중 아이템**: 어느 캐릭터의 `player_equipment`가 가리키는 `inventory_id`는 인벤토리(계정 공용)에 그대로 존재하되 "장착 중" 상태다. 장착 중 아이템은 분해·거래 대상에서 제외한다(해제 후 가능). 같은 아이템을 둘 이상의 캐릭터가 동시에 장착할 수 없다.
+- **배치 위치(`slot`)**: 각 행은 인벤토리 UI의 특정 칸(`slot`, 0-based)에 놓인다. `(user_id, slot)`은 유니크하며 한 칸에는 한 행만 존재한다. 재접속 시 [세이브 로드](save-data-기획서.md)가 `slot`을 함께 내려 **마지막 접속과 동일한 배치를 복원**한다. 획득 시 서버는 빈 `slot`에 배치하고, 빈 칸이 없으면(용량 초과) `InventoryFull(4002)`. `equipped_slot`(장착 슬롯)과는 별개 개념이다.
+- **장비(`item_type=1`)**: `stack_max=1`. 개체마다 `enhance_level`이 다를 수 있으므로 **1개당 1 행(row)**으로 저장하며 겹치지 않는다. `item_id`가 개체 식별자다.
+- **비장비(`item_type=2/3`)**: 동일 `code`(같은 `item_code`)는 `stack_max`까지 한 행에 `quantity`로 누적한다. 초과분은 새 행으로 분할한다.
+- **장착 중 아이템**: `equipped_character_id`가 채워진(NULL이 아닌) 아이템 행이 "장착 중"이다. 장착 중 아이템은 인벤토리(계정 공용)에 그대로 존재하되 분해·거래 대상에서 제외한다(해제 후 가능). 한 행은 `equipped_character_id`가 하나뿐이므로 같은 아이템을 둘 이상의 캐릭터가 동시에 장착할 수 없다.
 
 **공유 enum / DTO (TaskbarHero.Common)**
 - `item_type`(1:장비 2:재료 3:소모품), `reward_type`(1:골드 2:아이템 3:재료), `equip_slot` 등 분류 코드는 [마스터 데이터 기획서](master-data-기획서.md) 5장 공통 규칙에 따라 `TaskbarHero.Common`에 enum으로 고정한다(값 변경 금지).
@@ -74,14 +76,14 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 5.1 장착 — `POST /api/game/inventory/equip`
 
-지정 캐릭터에게 인벤토리 아이템을 장착한다. 슬롯은 아이템의 `item_master.equip_slot`에서 파생하며, 그 캐릭터의 같은 슬롯에 이미 장착된 장비가 있으면 스왑한다. 장비의 **클래스 제한**(`item_master.class_req`, `0`은 전 클래스 공용)이 **대상 캐릭터의 직업**(`player_character.class_code`, 기사/레인저/마법사)과 일치해야 하고, 그 캐릭터 `level`이 **요구 레벨**(`item_master.level_req`, **5레벨 단위**, `0`은 제한 없음) 이상이어야 하며, 어느 하나라도 위반하면 `ItemNotEquippable(4003)`로 거부한다.
+지정 캐릭터에게 아이템을 장착한다. 장착 슬롯은 아이템의 `item_master.equip_slot`에서 파생하며, 서버는 대상 아이템 행의 `equipped_character_id`/`equipped_slot`을 설정한다. 그 캐릭터의 같은 슬롯에 이미 장착된 장비가 있으면 그 행의 `equipped_*`를 NULL로 되돌려 스왑한다. 장비의 **클래스 제한**(`item_master.class_req`, `0`은 전 클래스 공용)이 **대상 캐릭터의 직업**(`player_character.class_code`, 기사/레인저/마법사)과 일치해야 하고, 그 캐릭터 `level`이 **요구 레벨**(`item_master.level_req`, **5레벨 단위**, `0`은 제한 없음) 이상이어야 하며, 어느 하나라도 위반하면 `ItemNotEquippable(4003)`로 거부한다.
 
 **Request**
 ```json
-{ "userId": 1, "token": "...", "data": { "characterId": 1, "inventoryId": 5001 } }
+{ "userId": 1, "token": "...", "data": { "characterId": 1, "itemId": 5001 } }
 ```
 
-- `characterId`: 장착할 캐릭터 슬롯(1~3).
+- `characterId`: 장착할 캐릭터 슬롯(1~3). `itemId`: 장착할 아이템(`player_item.item_id`).
 
 **Response (성공, 200 OK)**
 ```json
@@ -91,27 +93,29 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "message": "Equipped",
   "data": {
     "characterId": 1,
-    "equipped": { "slot": 1, "inventoryId": 5001 },
-    "unequipped": { "slot": 1, "inventoryId": 4900 }
+    "equipped": { "slot": 1, "itemId": 5001 },
+    "unequipped": { "slot": 1, "itemId": 4900 }
   }
 }
 ```
 
-- `unequipped`: 스왑으로 인벤토리에 되돌아온 기존 장비(없으면 `null`).
+- `unequipped`: 스왑으로 미장착 상태로 되돌아온 기존 장비(없으면 `null`).
 - 오류: `ItemNotFound(4001)`(인벤토리에 없음), `ItemNotEquippable(4003)`(장비가 아니거나 슬롯·클래스·레벨 부적합), `ItemEquipped(4007)`(다른 캐릭터가 이미 장착 중), `InvalidCharacterId(2006)`(잘못된 `characterId`).
 
 ### 5.2 장착 해제 — `POST /api/game/inventory/unequip`
 
-지정 캐릭터의 지정 슬롯 장비를 해제해 인벤토리 보관 상태로 되돌린다.
+지정 캐릭터의 지정 장착 슬롯 장비를 해제해 미장착 상태로 되돌린다(대상 행의 `equipped_character_id`/`equipped_slot`을 NULL로).
 
 **Request**
 ```json
 { "userId": 1, "token": "...", "data": { "characterId": 1, "slot": 1 } }
 ```
 
+- `slot`: 해제할 **장착 슬롯**(`equipped_slot`, 예: 무기=1).
+
 **Response (성공, 200 OK)**
 ```json
-{ "success": true, "errorCode": 0, "message": "Unequipped", "data": { "characterId": 1, "slot": 1, "inventoryId": 5001 } }
+{ "success": true, "errorCode": 0, "message": "Unequipped", "data": { "characterId": 1, "slot": 1, "itemId": 5001 } }
 ```
 
 - 해당 캐릭터의 슬롯이 비어 있으면 `ItemNotFound(4001)`, 잘못된 `characterId`는 `InvalidCharacterId(2006)`.
@@ -122,7 +126,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 **Request**
 ```json
-{ "userId": 1, "token": "...", "data": { "inventoryId": 5001 } }
+{ "userId": 1, "token": "...", "data": { "itemId": 5001 } }
 ```
 
 **Response (성공, 200 OK)**
@@ -132,7 +136,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "errorCode": 0,
   "message": "Enhanced",
   "data": {
-    "inventoryId": 5001,
+    "itemId": 5001,
     "enhanceLevel": 4,
     "cost": { "currencyType": 1, "amount": 8000 },
     "balance": [ { "currencyType": 1, "amount": 9867421 } ]
@@ -149,7 +153,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 **Request**
 ```json
-{ "userId": 1, "token": "...", "data": { "inventoryId": 5100, "count": 1 } }
+{ "userId": 1, "token": "...", "data": { "itemId": 5100, "count": 1 } }
 ```
 
 **Response (성공, 200 OK)**
@@ -159,7 +163,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "errorCode": 0,
   "message": "Used",
   "data": {
-    "consumed": { "inventoryId": 5100, "count": 1, "remaining": 4 },
+    "consumed": { "itemId": 5100, "count": 1, "remaining": 4 },
     "gained": {
       "currencies": [ { "currencyType": 1, "amount": 5000 } ],
       "items": [ { "itemCode": 41001, "quantity": 3 } ]
@@ -206,10 +210,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 **Request**
 ```json
-{ "userId": 1, "token": "...", "data": { "inventoryId": 5001, "toSlot": 7 } }
+{ "userId": 1, "token": "...", "data": { "itemId": 5001, "toSlot": 7 } }
 ```
 
-- `inventoryId`: 옮길 아이템(행), `toSlot`: 이동 목표 칸(0-based, 용량 범위 내).
+- `itemId`: 옮길 아이템(행), `toSlot`: 이동 목표 칸(0-based, 용량 범위 내).
 
 **Response (성공, 200 OK)**
 ```json
@@ -218,8 +222,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "errorCode": 0,
   "message": "Moved",
   "data": {
-    "moved": { "inventoryId": 5001, "slot": 7 },
-    "swapped": { "inventoryId": 4950, "slot": 0 }
+    "moved": { "itemId": 5001, "slot": 7 },
+    "swapped": { "itemId": 4950, "slot": 0 }
   }
 }
 ```
@@ -234,7 +238,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 **Request**
 ```json
-{ "userId": 1, "token": "...", "data": { "inventoryIds": [4801, 4802, 4803] } }
+{ "userId": 1, "token": "...", "data": { "itemIds": [4801, 4802, 4803] } }
 ```
 
 **Response (성공, 200 OK)**
@@ -245,7 +249,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "message": "Combined",
   "data": {
     "consumed": [4801, 4802, 4803],
-    "result": { "inventoryId": 5300, "itemCode": 30120, "grade": 4 },
+    "result": { "itemId": 5300, "itemCode": 30120, "grade": 4 },
     "cube": { "cubeLevel": 4, "cubeExp": 1350 }
   }
 }
@@ -260,7 +264,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 **Request**
 ```json
-{ "userId": 1, "token": "...", "data": { "items": [ { "inventoryId": 4700, "count": 1 } ] } }
+{ "userId": 1, "token": "...", "data": { "items": [ { "itemId": 4700, "count": 1 } ] } }
 ```
 
 **Response (성공, 200 OK)**
@@ -352,7 +356,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 ```
 요청 수신 → 토큰 검증(미들웨어)
 트랜잭션(BEGIN, user_id 잠금)
-  1) 대상 조회: inventory_id / slot / 재화 잔액 로드 (행 잠금)
+  1) 대상 조회: item_id / slot / 재화 잔액 로드 (행 잠금)
   2) 마스터 검증: item_master·enhance_master·cube_master 제약 확인
   3) 규칙 판정: 슬롯 정합성 / 다음 강화 단계 존재 / 합성 조건 / 수량·비용 충족
      └ 위반 시 ROLLBACK + 해당 GameErrorCode 반환
@@ -366,18 +370,18 @@ COMMIT → 변경된 상태를 응답 data로 반환
 ### 6.2 장착 스왑 순서
 
 ```
-equip(characterId, inventoryId):
+equip(characterId, itemId):
   char = player_character[user_id, characterId]     # 없으면 InvalidCharacterId(2006)
-  item = inventory[inventoryId]
+  item = player_item[itemId]
   if item 없음: ItemNotFound(4001)
-  if item이 다른 캐릭터/슬롯에서 장착 중: ItemEquipped(4007)
+  if item.equipped_character_id != NULL: ItemEquipped(4007)   # 이미 어딘가에 장착 중
   if item.item_type != 장비 or 슬롯 부적합
      or (class_req≠0 and class_req≠char.class_code) or char.level < level_req: ItemNotEquippable(4003)
   slot = item_master[item.item_code].equip_slot
-  prev = equipment[characterId][slot]      # 있으면 스왑 대상
-  equipment[characterId][slot] = inventoryId
-  # prev는 인벤토리 보관 상태로 복귀(별도 이동 없음: equipment에서만 해제)
-  return { characterId, equipped: {slot, inventoryId}, unequipped: prev }
+  prev = player_item[user_id, equipped_character_id=characterId, equipped_slot=slot]   # 있으면 스왑 대상
+  if prev: prev.equipped_character_id = NULL; prev.equipped_slot = NULL   # 미장착으로 복귀(UPDATE)
+  item.equipped_character_id = characterId; item.equipped_slot = slot     # 장착(UPDATE)
+  return { characterId, equipped: {slot, itemId}, unequipped: prev }
 ```
 
 ### 6.3 예외 / 엣지 케이스
@@ -386,7 +390,7 @@ equip(characterId, inventoryId):
 - **스택 초과 획득**: 지급 시 `stack_max`까지 채우고 초과분은 새 행으로 분할. 인벤토리 용량(`game_player.inventory_capacity`)을 초과하면 `InventoryFull(4002)`. 용량은 골드로 확장할 수 있다(5.5).
 - **최대 강화 초과**: 다음 `enhance_level`이 `enhance_master`에 없으면 `MaxEnhanceReached(4004)`.
 - **재화/재료 부족**: 비용 재화 부족은 `InsufficientCurrency(4005)`, 소모/재료 수량 부족은 `InsufficientQuantity(4006)`. 검증은 반영 전에 수행하고 부족 시 롤백.
-- **동시 중복 요청**: 같은 `inventory_id`에 대한 강화/소모/분해가 겹치면 행 잠금으로 직렬화하여 이중 소모를 방지한다.
+- **동시 중복 요청**: 같은 `item_id`에 대한 강화/소모/분해가 겹치면 행 잠금으로 직렬화하여 이중 소모를 방지한다.
 - **큐브 조건 미충족**: 합성/제작의 등급·개수·재료·큐브 레벨 조건 위반은 `CubeRecipeNotMet(4010)`/`CubeLevelInsufficient(4011)`.
 
 ### 6.4 랜덤 상자 열기 (골드 가챠, 의사코드)
@@ -397,13 +401,13 @@ count = 요청.count ?? 1        # 현재는 1만 처리(다연속은 예정)
 트랜잭션(BEGIN, user_id 잠금)
   1) box = box_master[boxCode]                       # 없으면 InvalidSaveData(2002)
   2) cost = box.open_cost × count
-     if player_currency[골드] < cost: InsufficientCurrency(4005)
-  3) 골드 차감: player_currency -= cost
+     if player_item(재화, code=골드).quantity < cost: InsufficientCurrency(4005)
+  3) 골드 차감: player_item(재화, code=골드).quantity -= cost
   4) for _ in 1..count:                              # 현재 count=1
        grade = 가중치 추첨(box.grade_weights)         # 서버 RNG
        item  = 무작위 선택(item_master where grade == grade [, 상자 지급 풀])  # 서버 RNG
        rewards += { grade, itemCode, quantity }
-  5) 지급: player_inventory 적재(스택/용량 규칙); 용량 초과 시 InventoryFull(4002)
+  5) 지급: player_item 적재(스택/용량 규칙); 용량 초과 시 InventoryFull(4002)
 COMMIT → { boxCode, rewards, gained, cost, balance }
 ```
 
@@ -435,7 +439,7 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 
 ## 8. 미결 사항 / TODO
 
-- **인벤토리 용량 정책 (확정)**: 플레이어 단위 컬럼(`game_player.inventory_capacity`)에 저장하고 **골드 소모로 확장**한다(API 5.5). 용량은 **점유 slot(=`player_inventory` 행) 수** 기준이며, 스택은 수량과 무관하게 1 slot을 차지한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`에 반영 완료. 남은 상세 — 기본 용량 값, 확장 단위(1회당 slot 수)·단계별 골드 비용·최대 상한 — 는 [마스터 데이터 기획서](master-data-기획서.md)에서 정의한다.
+- **인벤토리 용량 정책 (확정)**: 플레이어 단위 컬럼(`game_player.inventory_capacity`)에 저장하고 **골드 소모로 확장**한다(API 5.5). 용량은 **점유 slot(=`player_item` 행) 수** 기준이며, 스택은 수량과 무관하게 1 slot을 차지한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`에 반영 완료. 남은 상세 — 기본 용량 값, 확장 단위(1회당 slot 수)·단계별 골드 비용·최대 상한 — 는 [마스터 데이터 기획서](master-data-기획서.md)에서 정의한다.
 - **강화 성공 확률**: 현행은 비용 지불 시 확정 상승으로 가정. 실패/하락/파괴 확률 도입 시 `enhance_master`에 확률 필드 추가 및 본 문서 5.3 갱신.
 - **큐브 합성 상세 규칙**: 합성 소모 개수·등급 상승 결과 선정·확률, 큐브 연산당 `cube_exp` 획득량과 `cube_level` 효과. → [마스터 데이터 기획서](master-data-기획서.md) 9장(큐브 레시피 미결)과 함께 확정.
 - **큐브 제작(craft) — 우선순위 낮음(보류)**: 현재 구현 우선순위가 낮아 보류하며, **추후 제작 기능 추가 여부를 검토**한다. 5.9의 제작 API·레시피(`recipeCode`) 구성·소모 재료·비용은 도입이 확정될 때 함께 정한다.
@@ -448,7 +452,7 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 ## 9. 참고
 
 - [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) — 도메인 4.4(인벤토리/아이템), 4.6(전투 결과=아이템 획득 산출), 4.8(거래소)
-- [세이브 데이터 기획서](save-data-기획서.md) — `player_inventory`·`player_equipment`·`player_cube` 저장 골격, 로드 스냅샷
+- [세이브 데이터 기획서](save-data-기획서.md) — `player_item`·`player_cube` 저장 골격, 로드 스냅샷
 - [마스터 데이터 기획서](master-data-기획서.md) — `item_master`·`equip_slot_master`·`enhance_master`·`cube_master`·`drop_table_master`·`box_master`(랜덤 상자)
 - [오프라인 보상 정산 기획서](offline-reward-기획서.md) — 오프라인 아이템 미지급
 - [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(4000번대 인벤토리/아이템/큐브)

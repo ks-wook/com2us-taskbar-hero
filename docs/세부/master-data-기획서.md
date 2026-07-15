@@ -15,8 +15,7 @@
 
 - **읽기 전용**: 런타임에 유저 요청으로 변경되지 않는다. 오직 기획/빌드 배포로만 갱신된다.
 - **서버 권위 검증의 근거**: 각 액션 저장 시 서버는 `item_code`·`class_code` 등이 **마스터에 존재하는 유효한 코드인지** 검증한다. 존재하지 않는 코드는 거부한다(치트·구버전 데이터 방지).
-- **버전 계약**: 클라이언트와 서버는 같은 `master_data_version`을 참조해야 한다. 버전이 어긋나면 수치/드롭/효과 계산이 서로 달라져 정합성이 깨진다.
-- **`data_version`과의 구분**: 세이브의 `game_player.data_version`은 *세이브 스키마* 버전이고, 본 문서의 `master_data_version`은 *마스터(기획) 데이터* 버전이다. 두 값은 독립적으로 증가한다.
+- **버전 계약**: 클라이언트와 서버는 같은 `master_data_version`을 참조해야 한다. 버전이 어긋나면 수치/드롭/효과 계산이 서로 달라져 정합성이 깨진다. `master_data_version`은 *마스터(기획) 데이터* 버전이며, 세이브 데이터에는 별도 스키마 버전 컬럼을 두지 않는다(초기 버전 단순화, [세이브 데이터 기획서](save-data-기획서.md)).
 
 ## 3. 세이브 → 마스터 참조 매핑
 
@@ -27,10 +26,10 @@
 | `player_character` | `class_code` | `class_master` | 직업 정의 |
 | `player_character` | `level` | `level_master` | 레벨별 요구 경험치·스탯·스킬 포인트 |
 | `game_player` | `act` / `stage` / `difficulty` | `stage_master` | 스테이지 정의 |
-| `player_currency` | `currency_type` | `currency_master` | 재화 종류 |
-| `player_inventory` | `item_code` | `item_master` | 아이템 정의 |
-| `player_inventory` | `enhance_level` | `enhance_master` | 강화 단계별 규칙·비용 |
-| `player_equipment` | `slot` | `equip_slot_master` | 장착 슬롯 정의 |
+| `player_item`(재화 행 `row_type=2`) | `code` | `currency_master` | 재화 종류 |
+| `player_item`(아이템 행 `row_type=1`) | `code` | `item_master` | 아이템 정의 |
+| `player_item` | `enhance_level` | `enhance_master` | 강화 단계별 규칙·비용 |
+| `player_item` | `equipped_slot` | `equip_slot_master` | 장착 슬롯 정의 |
 | `player_skill` | `skill_code` | `skill_master` | 스킬(캐릭터별) |
 | `player_rune` | `rune_code` | `rune_master` | 룬(Rune Tree, 계정 공용) |
 | (미정) | — | `pet_master` | 펫(저장 테이블 미작성) |
@@ -49,6 +48,7 @@ erDiagram
     monster_master   ||--o{ pet_master         : "처치 해금"
     item_master      ||--o{ drop_table_master  : "드롭 항목"
     item_master      ||--o{ box_master         : "지급 아이템 풀(등급)"
+    item_master      ||--o{ attendance_master  : "일자별 보상"
     equip_slot_master||--o{ item_master        : "장착 슬롯"
     currency_master  ||--o{ enhance_master     : "소모 재화"
     currency_master  ||--o{ box_master         : "오픈 비용"
@@ -67,6 +67,7 @@ erDiagram
     drop_table_master { int drop_table_code PK }
     cube_master { int cube_level PK }
     box_master { int box_code PK }
+    attendance_master { int day PK }
 ```
 
 | 테이블 | 역할 | 대략 규모(원작 기준) |
@@ -85,6 +86,7 @@ erDiagram
 | `drop_table_master` | 전리품 확률 테이블 | 드롭 그룹 수 |
 | `cube_master` | 큐브 레벨별 규칙·레시피 | 레벨 수만큼 |
 | `box_master` | 랜덤 상자별 등급 확률·지급 아이템 풀 | 상자 종류 수만큼 |
+| `attendance_master` | 출석부 일자별(day-of-month) 보상 정의 | 최대 31 |
 
 ## 5. 테이블별 상세 (필드 + 담기는 데이터)
 
@@ -113,7 +115,7 @@ erDiagram
 
 ### 5.2 `equip_slot_master` — 장착 슬롯
 
-장비를 장착하는 슬롯의 정의. `player_equipment.slot`과 `item_master.equip_slot`이 참조한다.
+장비를 장착하는 슬롯의 정의. `player_item.equipped_slot`과 `item_master.equip_slot`이 참조한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -133,7 +135,7 @@ erDiagram
 
 ### 5.3 `item_master` — 아이템
 
-인벤토리/장비/드롭이 참조하는 아이템 정의. `player_inventory.item_code`가 이 테이블을 참조한다.
+인벤토리/장비/드롭이 참조하는 아이템 정의. `player_item.item_code`가 이 테이블을 참조한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -160,7 +162,7 @@ erDiagram
 
 ### 5.4 `enhance_master` — 강화 규칙
 
-`player_inventory.enhance_level`(강화/각인 단계)별 요구 비용과 효과 배율. 강화 성공 시 적용될 스탯 배율을 정의한다.
+`player_item.enhance_level`(강화/각인 단계)별 요구 비용과 효과 배율. 강화 성공 시 적용될 스탯 배율을 정의한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -179,7 +181,7 @@ erDiagram
 
 ### 5.5 `currency_master` — 재화
 
-`player_currency.currency_type`이 참조하는 재화 정의.
+`player_item` 재화 행(`row_type=2`)의 `code`가 참조하는 재화 정의.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -389,6 +391,27 @@ erDiagram
 | 60002 | 고급 상자 | 50000 | 1 | `{ "4": 60, "5": 30, "6": 10 }` | `null` |
 
 > 오픈 비용·다연속 오픈 정책, 등급 추첨 후 아이템 선택이 균등인지 가중치인지, 지급 아이템 풀을 전체 `item_master.grade` 필터로 할지 상자별 화이트리스트로 할지, 수량 규칙 등 세부는 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 8장 미결과 함께 확정한다. 예시 값은 구조 설명용 샘플이다.
+
+### 5.15 `attendance_master` — 출석부 일자별 보상
+
+출석부([출석부 보상 시스템 기획서](attendance-기획서.md))가 참조하는 **이달 일자별(day-of-month) 보상 정의**. 서버는 출석 획득 시 오늘의 `day`(1~31)로 이 테이블을 조회해 보상을 확정하고 메일로 발급한다. `reward_type`/`reward_code` 규약은 메일 첨부(`player_mail_reward`)와 동일하다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `day` | int PK | 이달 며칠차(1~31) |
+| `reward_type` | int | 1:골드 2:아이템 3:재료 |
+| `reward_code` | int | 아이템/재료 코드(골드면 0) |
+| `quantity` | int | 지급 수량 |
+
+**담기는 데이터 예시**
+
+| day | reward_type | reward_code | quantity |
+|---|---|---|---|
+| 1 | 1 | 0 | 1000 |
+| 7 | 2 | 41001 | 5 |
+| 15 | 2 | 41001 | 5 |
+
+> 일자별 보상 값·마일스톤(7·14·21·28일 등) 강화 여부는 [출석부 보상 시스템 기획서](attendance-기획서.md) 8장 미결과 함께 밸런스에서 확정한다. 예시 값은 구조 설명용 샘플이다.
 
 ### 공통 규칙
 

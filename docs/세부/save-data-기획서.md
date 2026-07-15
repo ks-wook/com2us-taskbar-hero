@@ -33,13 +33,13 @@ GameServer
 ```mermaid
 erDiagram
     game_player      ||--o{ player_character : has
-    game_player      ||--o{ player_currency  : owns
-    game_player      ||--o{ player_inventory : owns
+    game_player      ||--o{ player_item      : owns
     game_player      ||--o{ player_rune      : has
     game_player      ||--|| player_cube      : has
-    player_character ||--o{ player_equipment : equips
+    player_character ||--o{ player_item      : equips
     player_character ||--o{ player_skill     : has
     game_player      ||--o{ player_mail      : receives
+    game_player      ||--o{ player_attendance : checks_in
     player_mail      ||--o{ player_mail_reward : has
 
     game_player {
@@ -51,7 +51,6 @@ erDiagram
         int     max_stage_cleared "최고 클리어 스테이지"
         int     inventory_capacity "인벤토리 최대 용량(slot 수), 골드로 확장"
         bigint  last_active_at "Unix ts, 5분 주기 갱신, 오프라인 보상 기준"
-        int     data_version "세이브 스키마 버전"
         bigint  created_at
         bigint  updated_at
     }
@@ -64,27 +63,17 @@ erDiagram
         bigint  exp
     }
 
-    player_currency {
+    player_item {
+        bigint  item_id PK
         bigint  user_id FK
-        int     currency_type "1:골드 등"
-        bigint  amount
-    }
-
-    player_inventory {
-        bigint  inventory_id PK
-        bigint  user_id FK
-        int     slot "인벤토리 배치 위치(재접속 시 복원용)"
-        int     item_code "마스터 데이터 참조"
-        int     quantity
-        int     enhance_level "강화/각인 등"
+        int     row_type "1:아이템 2:재화"
+        int     code "아이템이면 item_code, 재화면 currency_type"
+        bigint  quantity "수량/재화 금액(재화가 커 bigint)"
+        int     slot "인벤토리 배치(0-based). 재화는 NULL(용량 미집계)"
+        int     enhance_level "장비 강화/각인 단계. 재화/비장비는 0"
+        int     equipped_character_id "장착 캐릭터(1~3), NULL=미장착/재화"
+        int     equipped_slot "장착 슬롯(equip_slot_master), NULL=미장착/재화"
         bigint  acquired_at
-    }
-
-    player_equipment {
-        bigint  user_id FK
-        int     character_id "장착 캐릭터 슬롯(1~3)"
-        int     slot "장착 슬롯"
-        bigint  inventory_id FK "장착된 아이템(계정 공용 인벤토리)"
     }
 
     player_skill {
@@ -127,21 +116,27 @@ erDiagram
         int     reward_code "골드면 0"
         int     quantity
     }
+
+    player_attendance {
+        bigint  user_id FK
+        int     attend_date "출석 일자 YYYYMMDD(KST 기준)"
+        bigint  claimed_at "출석/보상 메일 발급 시각(Unix ts)"
+    }
 ```
 
 - **PK/유니크**:
   - `player_character`: `(user_id, character_id)` 복합 PK. `character_id`는 1~3.
-  - `player_currency`: `(user_id, currency_type)` 복합 PK
-  - `player_equipment`: `(user_id, character_id, slot)` 복합 PK — 캐릭터마다 슬롯별 장착을 따로 가진다.
   - `player_skill`: `(user_id, character_id, skill_code)` 복합 PK. 캐릭터별 스킬 레벨·액티브 장착.
   - `player_rune`: `(user_id, rune_code)` 복합 PK. 룬은 **계정 공용**이라 `character_id`를 두지 않는다.
   - `player_mail`: `mail_id` PK, `user_id` 조회 인덱스. 계정 우편함.
   - `player_mail_reward`: `(mail_id, seq)` 복합 PK. 메일 첨부(0~N).
-  - `player_inventory`: `(user_id, slot)` 유니크 — 한 인벤토리 칸(slot)에는 아이템(스택) 한 행만 존재한다.
-- **캐릭터별 vs 계정 공유**: `player_character`·`player_equipment`·`player_skill`은 **캐릭터별**, `player_currency`(골드)·`player_inventory`·`player_cube`·`player_rune`은 **계정 공유**다. 스킬은 캐릭터마다 다르게 찍고 룬은 계정 전체에 적용되므로 테이블을 분리한다. 장비는 캐릭터별로 착용하지만 그 대상 아이템(`inventory_id`)은 계정 공용 인벤토리의 행이므로, 한 아이템은 최대 한 캐릭터·한 슬롯에만 장착된다.
-- **인벤토리 배치 위치(`player_inventory.slot`)**: 아이템(스택)이 인벤토리 UI의 몇 번 칸에 있는지를 나타내는 위치 값(0-based)이다. 클라이언트 재접속 시 로드 스냅샷의 `slot`으로 **마지막 접속과 동일한 배치**를 복원한다. 플레이어가 드래그로 칸을 옮기면 그 변경은 배치 변경 API로 반영한다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.6). `player_equipment.slot`(장착 슬롯)과는 다른 개념이다. 배치는 UI 레이아웃 값이므로 서버 권위 검증 대상은 아니나, 용량(`game_player.inventory_capacity`) 범위 안이고 칸이 중복되지 않는지는 검증한다.
+  - `player_attendance`: `(user_id, attend_date)` 복합 PK. 출석한 일자당 1행([출석부 보상 시스템 기획서](attendance-기획서.md)).
+  - `player_item`: `item_id` PK. `(user_id, slot)` 유니크 — 한 인벤토리 칸(slot)에는 아이템(스택) 한 행만 존재한다(재화 행은 `slot`이 NULL이라 무제한 공존). `(user_id, equipped_character_id, equipped_slot)` 유니크 — **한 캐릭터-장착슬롯에 아이템 하나**를 보장한다. 미장착·재화 행은 `equipped_character_id`/`equipped_slot`이 **NULL**이며, MySQL 유니크 인덱스는 NULL을 서로 다른 값으로 취급하므로 무제한 공존한다.
+- **아이템·재화 통합(`row_type`)**: `player_item`은 `row_type`(1:아이템 2:재화)으로 아이템과 재화(골드 등)를 **한 테이블에** 담는다. `code`는 아이템이면 `item_code`(`item_master`), 재화면 `currency_type`(`currency_master`)이고, `quantity`가 수량/재화 금액(재화가 커 `bigint`)이다. **재화 행은 계정에 재화 종류당 1행**이어야 하므로 `(user_id, row_type=2, code)` 유일성을 **서버가 보장**한다(MySQL 부분 유니크 인덱스 미지원. 아이템 행은 스택 분할로 `(user_id, code)`가 중복될 수 있어 전역 유니크를 걸 수 없다). 재화 행은 `slot`/`enhance_level`/`equipped_*`를 쓰지 않으며 **인벤토리 용량 집계에서 제외**한다.
+- **캐릭터별 vs 계정 공유**: `player_character`·`player_skill`은 **캐릭터별**, `player_item`(아이템·재화)·`player_cube`·`player_rune`은 **계정 공유**다. 스킬은 캐릭터마다 다르게 찍고 룬은 계정 전체에 적용되므로 테이블을 분리한다. 아이템은 계정 공용 행(`player_item`)이되 장착만 캐릭터별이다 — `equipped_character_id`/`equipped_slot`으로 **어느 캐릭터의 어느 슬롯에 장착됐는지**를 그 행에 직접 표기하며, 한 아이템은 최대 한 캐릭터·한 슬롯에만 장착된다(별도 장착 테이블 없음).
+- **인벤토리 배치 위치(`player_item.slot`)**: 아이템(스택)이 인벤토리 UI의 몇 번 칸에 있는지를 나타내는 위치 값(0-based)이다. 클라이언트 재접속 시 로드 스냅샷의 `slot`으로 **마지막 접속과 동일한 배치**를 복원한다. 플레이어가 드래그로 칸을 옮기면 그 변경은 배치 변경 API로 반영한다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.6). `player_item.equipped_slot`(장착 슬롯)과는 다른 개념이다. 배치는 UI 레이아웃 값이므로 서버 권위 검증 대상은 아니나, 용량(`game_player.inventory_capacity`) 범위 안이고 칸이 중복되지 않는지는 검증한다.
 - **아이템/스킬/룬/펫 등의 코드 값**은 마스터(기획) 데이터를 참조한다([마스터 데이터 기획서](master-data-기획서.md), 도메인 4.11). 각 코드 컬럼이 어느 마스터 테이블을 참조하는지는 해당 문서 4.1의 매핑 표를 참고한다.
-- `player_character`/`player_inventory`/`player_equipment`/`player_skill`/`player_rune`/`player_cube`/`player_mail`의 **세부 필드·규칙**은 각 시스템 기획서(성장·인벤토리·[메일](mail-기획서.md) 등)에서 확장한다. 본 ERD는 저장 골격이다. (펫은 아직 저장 테이블이 없다 — 성장 기획서 범위 밖)
+- `player_character`/`player_item`/`player_skill`/`player_rune`/`player_cube`/`player_mail`/`player_attendance`의 **세부 필드·규칙**은 각 시스템 기획서(성장·인벤토리·[메일](mail-기획서.md)·[출석부](attendance-기획서.md) 등)에서 확장한다. 본 ERD는 저장 골격이다. (펫은 아직 저장 테이블이 없다 — 성장 기획서 범위 밖)
 
 ## 4. 저장 정책
 
@@ -152,7 +147,6 @@ erDiagram
   - **마지막 접속 시각 주기 갱신(확정)**: 종료 시 로그아웃 요청으로 시각을 남기는 방식은 쓰지 않는다. 대신 클라이언트가 접속 후 **자동으로 5분 간격**으로 접속 시각 갱신 요청(`/api/game/heartbeat`)을 보내고, 서버는 `last_active_at`을 현재 서버 시각으로 갱신한다. 접속이 끊기면 마지막으로 갱신된 시각이 오프라인 경과 계산의 기준이 되며, 최대 오차는 갱신 주기(5분) 이내로 한정된다.
 - **오프라인 기준 시각**: `last_active_at`(마지막 접속 시각)이 오프라인 보상 정산의 기준. 오프라인 보상 계산 규칙은 [오프라인 보상 정산 기획서](offline-reward-기획서.md) 참고.
 - **서버 권위 검증**: 각 액션의 값은 서버 규칙·마스터 데이터로 재계산/검증 후 반영한다. 불가능한 증가폭·음수 재화 등은 거부한다(클라이언트 보고 불신).
-- **스키마 버전(`data_version`)**: 세이브 구조 변경 시 마이그레이션 기준. 로드 시 구버전 데이터는 최신 버전으로 승격.
 - **동시성**: 동일 계정 단일 세션 정책([계정/로그인 기획서](account-login-기획서.md))에 따라 세이브 경합은 제한적이나, 각 액션 저장은 `user_id` 단위 트랜잭션으로 처리한다.
 
 ## 5. API 명세
@@ -188,8 +182,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
       "difficulty": 1,
       "maxStageCleared": 214,
       "inventoryCapacity": 100,
-      "lastActiveAt": 1752300000,
-      "dataVersion": 1
+      "lastActiveAt": 1752300000
     },
     "characters": [
       { "characterId": 1, "classCode": 1, "level": 42, "exp": 128500 },
@@ -200,10 +193,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
       { "currencyType": 1, "amount": 9875421 }
     ],
     "inventory": [
-      { "inventoryId": 5001, "slot": 0, "itemCode": 30012, "quantity": 1, "enhanceLevel": 3 }
-    ],
-    "equipment": [
-      { "characterId": 1, "slot": 1, "inventoryId": 5001 }
+      { "itemId": 5001, "slot": 0, "itemCode": 30012, "quantity": 1, "enhanceLevel": 3, "equippedCharacterId": 1, "equippedSlot": 1 }
     ],
     "skills": [
       { "characterId": 1, "skillCode": 101, "level": 5, "equipped": 1 }
@@ -217,7 +207,9 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- `player`는 계정/파티 공용 값, `characters`는 3인 파티 각 캐릭터의 직업·레벨·경험치다. `equipment`·`skills`는 `characterId`로 소속 캐릭터를 표시하며(스킬 행의 `equipped=1`은 액티브 장착, 캐릭터당 최대 2개), `runes`는 계정 공용이다. `currencies`·`inventory`·`cube`도 계정 공유.
+- `player`는 계정/파티 공용 값, `characters`는 3인 파티 각 캐릭터의 직업·레벨·경험치다. `skills`는 `characterId`로 소속 캐릭터를 표시하며(스킬 행의 `equipped=1`은 액티브 장착, 캐릭터당 최대 2개), `runes`는 계정 공용이다. `currencies`·`inventory`·`cube`도 계정 공유.
+- **`currencies`·`inventory`의 저장 출처**: 둘 다 하나의 `player_item` 테이블에서 나온 **투영(projection)**이다. `currencies`는 `row_type=2`(재화) 행을 `{currencyType(=code), amount(=quantity)}`로, `inventory`는 `row_type=1`(아이템) 행을 매핑한 결과다. 저장은 통합돼 있으나 응답은 클라이언트 편의를 위해 두 배열로 나눠 내려준다.
+- **장착 상태**: 별도 `equipment` 배열을 두지 않는다. `inventory`의 각 아이템 행이 `equippedCharacterId`/`equippedSlot`(미장착이면 `null`)을 직접 가지므로, 클라이언트는 `equippedCharacterId`가 채워진 아이템을 캐릭터별 장착 장비로 렌더링한다.
 - `offlineElapsedSec`: `현재 서버 시각 - lastActiveAt`. 오프라인 보상 계산의 입력값(정산 규칙은 [오프라인 보상 정산 기획서](offline-reward-기획서.md)).
 
 **Response (세이브 없음 — 최초 접속, 200 OK)**
@@ -298,10 +290,11 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 |---|---|---|
 | SaveNotFound | 2001 | 세이브 데이터 없음 |
 | InvalidSaveData | 2002 | 액션 요청 값 검증 실패(불가능한 값·비정상 데이터) |
-| SaveVersionMismatch | 2003 | 세이브 스키마 버전 불일치 |
 | PlayerAlreadyExists | 2004 | 캐릭터 슬롯 3개가 모두 차 더 생성 불가 |
 | InvalidClassCode | 2005 | 존재하지 않는 직업 코드 |
 | InvalidCharacterId | 2006 | 잘못된 캐릭터 슬롯(존재하지 않는 `characterId`, 생성 시 슬롯 개수 오류 또는 직업 중복) |
+
+> `2003`(구 `SaveVersionMismatch`)은 세이브 스키마 버전(`data_version`) 제거로 폐기했다. 값 혼선을 막기 위해 재사용하지 않고 **결번**으로 둔다.
 
 ## 7. 미결 사항 / TODO
 
