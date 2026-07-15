@@ -43,7 +43,7 @@
 |---|---|---|
 | `game_player`(`act`, `stage`, `difficulty`, `max_stage_cleared`) | 파티 현재 진행도·최고 도달 스테이지 | `stage_master` |
 | `player_character`(`exp`, `level`) | 클리어 경험치 반영(3캐릭터 동일) | `level_master` |
-| `player_item`(재화 행 `row_type=2`) | 클리어 골드 반영(`quantity` UPDATE, 계정 공유) | `currency_master` |
+| `player_item`(재화 행 `row_type=2`) | 클리어 골드 반영(`quantity` UPDATE, 계정 공유) | `item_master`(재화 `item_type=4`) |
 | `player_item` | 전리품(아이템·재료) 적재(계정 공유) | `item_master`·`drop_table_master` |
 
 - **현재 진입 스테이지**: 별도 컬럼을 두지 않고 `game_player.act`/`stage`/`difficulty`가 **현재 진입(진행 중) 스테이지**를 나타낸다. 진입 요청이 이 값을 설정하고, 클리어 요청이 이 값을 기준으로 검증·전진한다.

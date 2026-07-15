@@ -43,7 +43,7 @@
 | `player_character`(`(user_id, character_id)` PK, `class_code`, `level`, `exp`) | 직업·레벨·경험치(스킬 포인트 총량의 파생 근거) | **캐릭터별** | `class_master` |
 | `player_skill`(`(user_id, character_id, skill_code)` PK, `level`, `equipped`) | 스킬 레벨·액티브 장착 여부 | **캐릭터별** | `skill_master` |
 | `player_rune`(`(user_id, rune_code)` PK, `level`) | 룬 레벨 | **계정 공유** | `rune_master` |
-| `player_item`(재화 행 `row_type=2`, `code`=골드) | 룬 업그레이드 골드 차감(`quantity` UPDATE) | 계정 공유 | `currency_master` |
+| `player_item`(재화 행 `row_type=2`, `code`=골드 `item_code` 1) | 룬 업그레이드 골드 차감(`quantity` UPDATE) | 계정 공유 | `item_master`(재화 `item_type=4`) |
 
 **성장 상태 규칙 (확정)**
 - **직업(`player_character.class_code`, 캐릭터별)**: 각 캐릭터 생성 시 확정되며 이후 바뀌지 않는다(**전직 미지원**). `skill_master`에서 `class_code`가 일치하는 스킬만 해당 캐릭터의 보유 스킬이다.

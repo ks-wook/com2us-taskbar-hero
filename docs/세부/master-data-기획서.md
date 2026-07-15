@@ -2,14 +2,14 @@
 
 > 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.11
 >
-> 본 문서는 세이브 데이터가 코드 값(`item_code`, `class_code`, `currency_type`, 성장 `code` 등)으로 참조하는 **정적 게임 데이터(마스터 데이터)**의 구조와 각 테이블에 담기는 내용을 다룬다. 세이브(동적 진행 데이터)는 [세이브 데이터 기획서](save-data-기획서.md)를 참고한다.
+> 본 문서는 세이브 데이터가 코드 값(`item_code`, `class_code`, 성장 `code` 등)으로 참조하는 **정적 게임 데이터(마스터 데이터)**의 구조와 각 테이블에 담기는 내용을 다룬다. 세이브(동적 진행 데이터)는 [세이브 데이터 기획서](save-data-기획서.md)를 참고한다.
 
 ## 1. 개요
 
 - **목적**: 아이템·직업·스킬·룬·펫·몬스터·스테이지·재화 등 게임의 **정적 정의 데이터**를 한 곳에서 관리한다. 세이브 테이블은 실제 정의를 저장하지 않고 **코드(숫자 키)만 저장**하며, 그 코드의 의미(이름·수치·효과)는 전적으로 마스터 데이터가 제공한다.
 - **대상 서버**: `GameServer`(마스터 데이터 로드·검증), `TaskbarHero.Common`(코드 타입 enum·버전 상수 공유).
 - **핵심 구분**: **마스터 데이터 = 정적·읽기 전용·전 유저 공통 계약**, **세이브 데이터 = 동적·유저별 진행 상태**. 세이브는 마스터를 *참조*할 뿐, 마스터를 변경하지 않는다.
-- **관련 기획서**: [[save-data-기획서]] (참조 주체), [[서버-시스템-전체-개요]] (도메인 4.11)
+- **관련 기획서**: [[save-data-기획서]] (참조 주체), [[client-data-기획서]] (클라이언트가 보유·소비하는 데이터 범위·Unity 연동 코드), [[서버-시스템-전체-개요]] (도메인 4.11)
 
 ## 2. 마스터 데이터의 성격과 범위
 
@@ -26,8 +26,8 @@
 | `player_character` | `class_code` | `class_master` | 직업 정의 |
 | `player_character` | `level` | `level_master` | 레벨별 요구 경험치·스탯·스킬 포인트 |
 | `game_player` | `act` / `stage` / `difficulty` | `stage_master` | 스테이지 정의 |
-| `player_item`(재화 행 `row_type=2`) | `code` | `currency_master` | 재화 종류 |
-| `player_item`(아이템 행 `row_type=1`) | `code` | `item_master` | 아이템 정의 |
+| `player_item`(아이템 행 `row_type=1`) | `code` | `item_master` | 아이템 정의(`item_type` 1~3) |
+| `player_item`(재화 행 `row_type=2`) | `code` | `item_master` | 재화 정의(`item_type=4`, 골드=`item_code` 1) |
 | `player_item` | `enhance_level` | `enhance_master` | 강화 단계별 규칙·비용 |
 | `player_item` | `equipped_slot` | `equip_slot_master` | 장착 슬롯 정의 |
 | `player_skill` | `skill_code` | `skill_master` | 스킬(캐릭터별) |
@@ -50,15 +50,14 @@ erDiagram
     item_master      ||--o{ box_master         : "지급 아이템 풀(등급)"
     item_master      ||--o{ attendance_master  : "일자별 보상"
     equip_slot_master||--o{ item_master        : "장착 슬롯"
-    currency_master  ||--o{ enhance_master     : "소모 재화"
-    currency_master  ||--o{ box_master         : "오픈 비용"
+    item_master      ||--o{ enhance_master     : "소모 재화(골드)"
+    item_master      ||--o{ box_master         : "오픈 비용(골드)"
 
     class_master { int class_code PK }
     level_master { int level PK }
     item_master { int item_code PK }
     equip_slot_master { int slot PK }
     enhance_master { int enhance_level PK }
-    currency_master { int currency_type PK }
     skill_master { int skill_code PK }
     rune_master { int rune_code PK }
     pet_master { int pet_code PK }
@@ -77,7 +76,6 @@ erDiagram
 | `item_master` | 아이템(장비·재료·소모품) 정의 | 500종 이상 |
 | `equip_slot_master` | 장비 장착 슬롯 정의 | 6~8종 |
 | `enhance_master` | 강화 단계별 비용·효과 | 단계 수만큼 |
-| `currency_master` | 재화 종류 정의 | 소수(골드 등) |
 | `skill_master` | 직업별 스킬 정의 | 직업 × 스킬 |
 | `rune_master` | 룬(Rune Tree) 정의 | 트리 노드 수 |
 | `pet_master` | 펫 정의·해금 조건 | 몬스터 연동 |
@@ -141,7 +139,7 @@ erDiagram
 |---|---|---|
 | `item_code` | int PK | 아이템 코드 |
 | `name` | varchar | 아이템 이름 |
-| `item_type` | int | 1:장비 2:재료 3:소모품 |
+| `item_type` | int | 1:장비 2:재료 3:소모품 4:재화(골드 등) |
 | `grade` | int | 등급/희귀도(숫자가 클수록 고등급) |
 | `equip_slot` | int | 장비일 때 장착 슬롯(FK `equip_slot_master`), 비장비는 0 |
 | `class_req` | int | 착용 가능 클래스(FK `class_master`). **0이면 제한 없음(전 클래스 착용 가능)**, 비장비는 0 |
@@ -157,8 +155,10 @@ erDiagram
 | 30012 | 강철 대검 | 1 | 3 | 1 | 1 | 15 | 1 | `{ "atk": 45 }` | 1 |
 | 30105 | 코스믹 투구 | 1 | 6 | 2 | 0 | 40 | 1 | `{ "hp": 220, "def": 30 }` | 1 |
 | 41001 | 강화석 | 2 | 2 | 0 | 0 | 0 | 999 | `null` | 1 |
+| 1 | 골드 | 4 | 1 | 0 | 0 | 0 | 0 | `null` | 0 |
 
 > 원작 기준 500종 이상. 등급은 Cosmic 등 고등급 존재. `class_req`는 클래스 전용 장비를 나타내며(예: 강철 대검=기사 전용), `0`은 전 클래스 공용(예: 코스믹 투구)이다. `level_req`는 **5레벨 단위**의 착용 요구 레벨(예: 15, 40)이며 `0`은 제한 없음이다. 장착 시 검증 규칙은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.1을 따른다.
+> **재화(`item_type=4`)**: 골드 등 소비 재화도 `item_master`로 정의한다(별도 `currency_master` 없음, 5.5). 골드는 `item_code=1`로 고정한다. 재화는 장착·스택 개념이 없어 `equip_slot`/`class_req`/`level_req`/`stack_max`는 0이며, 보유 잔액은 세이브 `player_item` 재화 행(`row_type=2`)의 `quantity`(bigint)에 저장한다. 재화의 코드 값(골드=1)은 클라이언트와 공유하는 계약이므로 변경하지 않는다.
 
 ### 5.4 `enhance_master` — 강화 규칙
 
@@ -168,7 +168,7 @@ erDiagram
 |---|---|---|
 | `enhance_level` | int PK | 강화 단계 |
 | `cost` | bigint | 요구 재화량 |
-| `currency_type` | int | 소모 재화 종류(FK `currency_master`) |
+| `currency_type` | int | 소모 재화 `item_code`(FK `item_master` 재화, 골드=1) |
 | `stat_multiplier` | json | 해당 단계에서의 스탯 배율 |
 
 **담기는 데이터 예시**
@@ -179,23 +179,13 @@ erDiagram
 | 2 | 3000 | 1 | `{ "atk": 1.10 }` |
 | 3 | 8000 | 1 | `{ "atk": 1.18 }` |
 
-### 5.5 `currency_master` — 재화
+### 5.5 재화 — `item_master`로 통합(별도 `currency_master` 없음)
 
-`player_item` 재화 행(`row_type=2`)의 `code`가 참조하는 재화 정의.
+골드 등 소비 재화는 별도 테이블을 두지 않고 **`item_master`에 `item_type=4`(재화)로 정의**한다(5.3). 골드는 `item_code=1`로 고정한다. 보유 잔액은 세이브 `player_item` 재화 행(`row_type=2`)의 `quantity`(bigint)에 저장한다([세이브 데이터 기획서](save-data-기획서.md) 3장).
 
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `currency_type` | int PK | 재화 코드 |
-| `name` | varchar | 재화 이름 |
-| `cap` | bigint | 보유 상한(무제한이면 0) |
-
-**담기는 데이터 예시**
-
-| currency_type | name | cap |
-|---|---|---|
-| 1 | 골드 | 0 |
-
-> 골드 외 추가 재화 도입 여부는 향후 재화 정책에서 확정([[save-data-기획서]] 미결 참고).
+- `enhance_master`·`box_master` 등의 `currency_type` 필드는 이제 **소모 재화의 `item_code`**를 가리킨다(골드=1).
+- 재화 코드 값(골드=1)은 클라이언트와 공유하는 계약이므로 변경하지 않는다.
+- 재화 보유 상한, 골드 외 추가 재화 도입 여부는 향후 재화 정책에서 확정([[save-data-기획서]] 미결 참고).
 
 ### 5.6 `skill_master` — 스킬
 
@@ -379,7 +369,7 @@ erDiagram
 | `box_code` | int PK | 상자 코드 |
 | `name` | varchar | 상자 이름 |
 | `open_cost` | bigint | 1회 오픈 비용 |
-| `currency_type` | int | 오픈 비용 재화 종류(FK `currency_master`, 기본 1:골드) |
+| `currency_type` | int | 오픈 비용 재화 `item_code`(FK `item_master` 재화, 기본 1:골드) |
 | `grade_weights` | json | 등급별 추첨 가중치(확률은 가중치 합 대비 비율) |
 | `item_pool` | json | (선택) 등급별 지급 아이템 화이트리스트. 생략 시 해당 등급의 전체 `item_master` 아이템에서 선택 |
 
@@ -416,7 +406,7 @@ erDiagram
 ### 공통 규칙
 
 - **키 규칙**: `stage_master`는 `(act, difficulty, stage)` 조합을 유일 키로 갖거나 이를 인코딩한 `stage_id`를 PK로 쓴다. `drop_table_master`는 `(drop_table_code, entry_no)` 복합 PK.
-- **enum 공유**: `item_type`·`currency_type`·`unlock_type`·`reward_type` 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상).
+- **enum 공유**: `item_type`(1:장비 2:재료 3:소모품 4:재화)·`unlock_type`·`reward_type` 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상). 재화는 별도 `currency_type` enum 없이 `item_master`(item_type=4)의 `item_code`로 식별한다(골드=1).
 - **JSON 필드**: `base_stats`·`effect` 등 가변 구조는 JSON으로 담되, 키 스키마는 각 도메인 기획서에서 확정한다.
 
 ## 6. 원천 데이터 형식과 저장 방식
@@ -430,7 +420,7 @@ erDiagram
 
 - **서버 기동 시**: 원천 데이터 로드 → 무결성 검증(중복 PK, FK 참조 무결성, 필수 필드 누락) → 인메모리 캐시 구성 → `master_data_version` 확정. 검증 실패 시 기동 중단(운영 사고 예방).
 - **클라이언트 접속 시(버전 비교)**: 클라이언트가 보유한 캐시 버전과 서버 `master_data_version`을 비교 → **다르면** 최신 마스터 데이터를 갱신 후 로컬 캐시 교체, **같으면** 캐시 재사용. (6장 클라이언트 배포/캐싱)
-- **각 액션 저장 검증 시**([[save-data-기획서]] 4장): 액션 요청의 `item_code`·`class_code`·성장 `code`·`currency_type` 등을 마스터 캐시에서 조회해 **존재 여부·제약(예: 최대 강화 단계, 슬롯-아이템 타입 정합성)**을 확인한 뒤 반영. 미존재 코드는 거부.
+- **각 액션 저장 검증 시**([[save-data-기획서]] 4장): 액션 요청의 `item_code`(재화 포함)·`class_code`·성장 `code` 등을 마스터 캐시에서 조회해 **존재 여부·제약(예: 최대 강화 단계, 슬롯-아이템 타입 정합성)**을 확인한 뒤 반영. 미존재 코드는 거부.
 - **드롭/보상 계산 시**: 스테이지·몬스터·드롭 테이블 마스터를 참조해 서버가 전리품을 산출(서버 권위).
 
 **엣지 케이스**

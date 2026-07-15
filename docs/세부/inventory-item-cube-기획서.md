@@ -45,13 +45,13 @@
 
 | 테이블 | 역할 | 참조 마스터 |
 |---|---|---|
-| `player_item`(`item_id` PK, `user_id`, `row_type`, `code`, `quantity`, `slot`, `enhance_level`, `equipped_character_id`, `equipped_slot`, `acquired_at`) | 보유 **아이템·재화 통합** 테이블 (**계정 공유**). `row_type`(1:아이템 2:재화)로 구분, `code`는 `item_code`/`currency_type`, `quantity`는 수량/재화 금액(`bigint`). 장착 상태는 `equipped_character_id`/`equipped_slot`(NULL=미장착)로 아이템 행에 직접 표기 | `item_master`, `enhance_master`, `equip_slot_master`, `currency_master` |
+| `player_item`(`item_id` PK, `user_id`, `row_type`, `code`, `quantity`, `slot`, `enhance_level`, `equipped_character_id`, `equipped_slot`, `acquired_at`) | 보유 **아이템·재화 통합** 테이블 (**계정 공유**). `row_type`(1:아이템 2:재화)로 구분, `code`는 **모든 행이 `item_master.item_code`**(재화는 `item_type=4`, 골드=1), `quantity`는 수량/재화 금액(`bigint`). 장착 상태는 `equipped_character_id`/`equipped_slot`(NULL=미장착)로 아이템 행에 직접 표기 | `item_master`, `enhance_master`, `equip_slot_master` |
 | `player_cube`(`user_id` PK, `cube_level`, `cube_exp`) | 큐브 성장 상태 (**계정 공유**) | `cube_master` |
 | `game_player`(`inventory_capacity` 신규 컬럼) | 계정 인벤토리 최대 용량(골드로 확장) | — |
 
 > **장착을 별도 테이블(`player_equipment`)로 두지 않는다.** 장착은 저빈도 동작인데 별도 매핑 테이블은 로드 시 조인을 강요하고 장착/해제마다 매핑 행 INSERT/DELETE를 유발한다. 대신 아이템 행 자체에 `equipped_character_id`/`equipped_slot`을 두어 장착/해제를 **해당 행 UPDATE**로 처리하고, `(user_id, equipped_character_id, equipped_slot)` 유니크 인덱스로 "한 캐릭터-슬롯당 아이템 하나"를 보장한다(미장착은 NULL이라 무제한 공존, [세이브 데이터 기획서](save-data-기획서.md) 3장).
 
-> **재화(골드 등)도 `player_item`에 통합한다(별도 `player_currency` 테이블 없음).** 재화는 `row_type=2` 행으로 저장하고 `code`=`currency_type`, `quantity`=재화 금액이다. 강화/제작 비용 차감, 분해 골드 적립, 용량 확장·상자 오픈 비용 차감 등 **재화 증감은 해당 재화 행의 `quantity` UPDATE**로 처리한다. 재화 행은 `slot`이 NULL이라 인벤토리 용량 집계에서 제외되며, 계정당 재화 종류당 1행 유일성은 서버가 보장한다([세이브 데이터 기획서](save-data-기획서.md) 3장). API 응답의 `cost`/`balance`/`currencies`는 이 재화 행에서 파생한다.
+> **재화(골드 등)도 `player_item`에 통합한다(별도 `player_currency`·`currency_master` 없음).** 재화는 `row_type=2` 행으로 저장하고 `code`=재화의 `item_code`(`item_master` `item_type=4`, 골드=1), `quantity`=재화 금액이다. 강화/제작 비용 차감, 분해 골드 적립, 용량 확장·상자 오픈 비용 차감 등 **재화 증감은 해당 재화 행의 `quantity` UPDATE**로 처리한다. 재화 행은 `slot`이 NULL이라 인벤토리 용량 집계에서 제외되며, 계정당 재화 종류당 1행 유일성은 서버가 보장한다([세이브 데이터 기획서](save-data-기획서.md) 3장). API 응답의 `cost`/`balance`/`currencies`는 이 재화 행에서 파생한다.
 
 - **캐릭터별/계정 공유**: 계정은 캐릭터 슬롯 3개(3인 파티, [성장 시스템 기획서](growth-기획서.md))를 가진다. **인벤토리·골드·큐브는 계정 공유**(위 표 `user_id` 단위)이고, **장비 장착만 캐릭터별**이다(`equipped_character_id` 1~3). 한 아이템 행(`item_id`)은 계정 공용이지만 **동시에 한 캐릭터·한 슬롯에만 장착**된다.
 
@@ -62,7 +62,7 @@
 - **장착 중 아이템**: `equipped_character_id`가 채워진(NULL이 아닌) 아이템 행이 "장착 중"이다. 장착 중 아이템은 인벤토리(계정 공용)에 그대로 존재하되 분해·거래 대상에서 제외한다(해제 후 가능). 한 행은 `equipped_character_id`가 하나뿐이므로 같은 아이템을 둘 이상의 캐릭터가 동시에 장착할 수 없다.
 
 **공유 enum / DTO (TaskbarHero.Common)**
-- `item_type`(1:장비 2:재료 3:소모품), `reward_type`(1:골드 2:아이템 3:재료), `equip_slot` 등 분류 코드는 [마스터 데이터 기획서](master-data-기획서.md) 5장 공통 규칙에 따라 `TaskbarHero.Common`에 enum으로 고정한다(값 변경 금지).
+- `item_type`(1:장비 2:재료 3:소모품 4:재화), `reward_type`(1:골드 2:아이템 3:재료), `equip_slot` 등 분류 코드는 [마스터 데이터 기획서](master-data-기획서.md) 5장 공통 규칙에 따라 `TaskbarHero.Common`에 enum으로 고정한다(값 변경 금지).
 - 액션 결과 DTO(장착 결과·강화 결과·큐브 결과 등, 5장 응답 `data` 구조)는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다. 구체 필드는 5장 응답 스키마를 따르며, 클라이언트 UI 갱신에 사용한다.
 
 **확정 필드 — 세이브 데이터 기획서 ERD 반영 필요:**

@@ -84,7 +84,7 @@ erDiagram
         bigint  item_id PK
         bigint  user_id FK
         int     row_type "1:아이템 2:재화"
-        int     code "아이템=item_code, 재화=currency_type"
+        int     code "item_master.item_code (재화 item_type=4 포함, 골드=1)"
         bigint  quantity "수량/재화 금액(bigint)"
         int     slot "인벤토리 배치(0-based). 재화는 NULL(용량 미집계)"
         int     enhance_level "장비 강화 단계. 재화/비장비는 0"
@@ -164,9 +164,8 @@ erDiagram
 | `class_master` | `class_code` | `player_character.class_code` |
 | `level_master` | `level` | `player_character.level` |
 | `equip_slot_master` | `slot` | `player_item.equipped_slot` / `item_master.equip_slot` |
-| `item_master` | `item_code` | `player_item.code`(row_type=1) |
+| `item_master` | `item_code` | `player_item.code`(아이템 `item_type`1~3 및 재화 `item_type`4, 골드=1) |
 | `enhance_master` | `enhance_level` | `player_item.enhance_level` |
-| `currency_master` | `currency_type` | `player_item.code`(row_type=2) |
 | `skill_master` | `skill_code` | `player_skill.skill_code` |
 | `rune_master` | `rune_code` | `player_rune.rune_code` |
 | `pet_master` | `pet_code` | (펫 시스템 미작성 · 저장 테이블 미정) |
