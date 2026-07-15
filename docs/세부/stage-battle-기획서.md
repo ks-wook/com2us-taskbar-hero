@@ -80,6 +80,12 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 지정 스테이지에 진입해 자동 전투를 시작한다. 진입 가능 여부(도달·해금)를 서버가 검증하고, 진행 중 스테이지를 그 값으로 설정한다. **보상은 없다.**
 
+클라이언트는 포탈(스테이지 이동) 메뉴에서 이동할 Act·난이도·스테이지를 선택해 진입 요청을 보낸다.
+
+![포탈(스테이지 이동) 메뉴](../images/stage-battle-포탈메뉴.png)
+
+![포탈(스테이지 선택) 화면](../images/stage-battle-포탈화면.png)
+
 **Request**
 ```json
 { "userId": 1, "token": "...", "data": { "act": 2, "difficulty": 1, "stage": 15 } }
@@ -110,6 +116,11 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 - `stageId`: `stage_master` 키.
 - `monsters`: 이 스테이지에 등장하는 **일반 몬스터와 등장 수량** 목록(`monsterCode`·`count`). `boss`: **스테이지 보스 몬스터**(보스가 없는 스테이지면 `null`).
+
+![스테이지 일반 몬스터](../images/stage-battle-일반몬스터.png)
+
+![스테이지 보스 몬스터](../images/stage-battle-보스.png)
+
 - 스폰 구성(어떤 몬스터가 몇 마리, 보스는 누구인지)은 `stage_master`가 정의하고, 각 몬스터의 스탯은 `monster_master`를 참조한다([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master` 5.9·`monster_master` 5.8).
 - 오류: `StageNotFound(6001)`(마스터에 없는 스테이지), `StageLocked(6002)`(아직 도달 못 한 스테이지 스킵).
 

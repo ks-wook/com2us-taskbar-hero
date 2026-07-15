@@ -36,9 +36,16 @@
   - **아이템의 플레이어 간 거래**는 [거래소/교역선](../서버-시스템-전체-개요.md)(도메인 4.7)에서 다룬다. 본 문서의 "분해"는 큐브를 통한 **골드 전환**이며 거래소 판매와 다르다.
 - **관련 기획서**: [[save-data-기획서]] (저장 골격·서버 검증), [[master-data-기획서]] (아이템·강화·큐브 정적 정의), [[offline-reward-기획서]] (아이템 미지급), [[서버-시스템-전체-개요]] (도메인 4.4)
 
+![인벤토리 전체 화면 — 획득한 아이템이 칸(slot)에 배치된 모습](../images/inventory-item-cube-인벤토리_전체.png)
+
 ## 2. 기능 설명
 
 - **인벤토리 보관**: 획득한 아이템은 인벤토리에 쌓인다. 장비(`item_type=1`)는 개별 슬롯(강화 단계가 개체별로 다르므로 겹치지 않음), 재료(`item_type=2`)는 `stack_max`까지 **겹쳐서(stack)** 보관한다.
+
+![장비 아이템 — 개체별 슬롯에 개별 저장되는 장비](../images/inventory-item-cube-장비아이템.png)
+
+![재료 아이템 — stack_max까지 한 칸에 겹쳐 쌓이는 재료](../images/inventory-item-cube-재료아이템.png)
+
 - **장착 / 해제**: 장비 아이템을 슬롯(무기·보조무기·투구·갑옷·장갑·신발, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.2)에 장착/해제한다. 이미 장착된 슬롯에 새 장비를 끼우면 기존 장비는 인벤토리로 되돌아온다(스왑).
 - **강화**: 장비를 재화(골드 등)를 소모해 강화 단계(`enhance_level`)를 올린다. 단계별 비용·스탯 배율은 `enhance_master`가 정의한다.
 - **랜덤 상자 열기(골드 가챠)**: 플레이어가 원할 때 **골드를 소모**해 상자를 연다(가챠). 서버가 골드를 차감한 뒤 상자 정의(`box_master`)의 **등급 확률**로 등급을 추첨하고 그 등급의 아이템 중 하나를 무작위로 뽑아 **랜덤 등급의 랜덤 아이템**을 지급한다. 상자는 인벤토리에 적재되는 아이템(`item_type`)이 아니라, **골드를 소비해 즉시 보상을 산출**하는 방식이다. (원작은 몬스터 처치 시 확률로 오픈 기회를 얻는 방식이나, 본 프로젝트는 골드 소모형 가챠로 대체한다.)
@@ -73,6 +80,8 @@
 > **장착을 별도 테이블(`player_equipment`)로 두지 않는다.** 장착은 저빈도 동작인데 별도 매핑 테이블은 로드 시 조인을 강요하고 장착/해제마다 매핑 행 INSERT/DELETE를 유발한다. 대신 아이템 행 자체에 `equipped_character_id`/`equipped_slot`을 두어 장착/해제를 **해당 행 UPDATE**로 처리하고, `(user_id, equipped_character_id, equipped_slot)` 유니크 인덱스로 "한 캐릭터-슬롯당 아이템 하나"를 보장한다(미장착은 NULL이라 무제한 공존, [세이브 데이터 기획서](save-data-기획서.md) 3장).
 
 > **재화(골드 등)도 `player_item`에 통합한다(별도 `player_currency`·`currency_master` 없음).** 재화는 `row_type=2` 행으로 저장하고 `code`=재화의 `item_code`(`item_master` `item_type=3`, 골드=1), `quantity`=재화 금액이다. 강화/제작 비용 차감, 분해 골드 적립, 용량 확장·상자 오픈 비용 차감 등 **재화 증감은 해당 재화 행의 `quantity` UPDATE**로 처리한다. 재화 행은 `slot`이 NULL이라 인벤토리 용량 집계에서 제외되며, 계정당 재화 종류당 1행 유일성은 서버가 보장한다([세이브 데이터 기획서](save-data-기획서.md) 3장). API 응답의 `cost`/`balance`/`currencies`는 이 재화 행에서 파생한다.
+
+![골드(재화) 표시 — player_item에 통합 저장되는 골드](../images/inventory-item-cube-골드.png)
 
 - **캐릭터별/계정 공유**: 계정은 캐릭터 슬롯 3개(3인 파티, [성장 시스템 기획서](growth-기획서.md))를 가진다. **인벤토리·골드·큐브는 계정 공유**(위 표 `user_id` 단위)이고, **장비 장착만 캐릭터별**이다(`equipped_character_id` 1~3). 한 아이템 행(`item_id`)은 계정 공용이지만 **동시에 한 캐릭터·한 슬롯에만 장착**된다.
 
@@ -186,6 +195,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 골드를 소모해 인벤토리 최대 용량(`game_player.inventory_capacity`)을 늘린다. 확장 단위(1회당 늘어나는 슬롯 수)·단계별 골드 비용·최대 상한은 마스터 데이터가 정의하며, 서버가 산출한다(클라이언트 입력 불신).
 
+![인벤토리 용량 확장 화면 — 골드로 최대 슬롯 수를 늘리는 UI](../images/inventory-item-cube-인벤토리_확장.png)
+
 **Request**
 ```json
 { "userId": 1, "token": "...", "data": { "count": 1 } }
@@ -243,6 +254,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 같은 등급·조건의 아이템 여러 개를 소모해 한 등급 높은 아이템을 만든다.
 
+![큐브 합성 화면 — 같은 등급 아이템을 소모해 상위 등급을 생성](../images/inventory-item-cube-큐브합성.png)
+
 **Request**
 ```json
 { "userId": 1, "token": "...", "data": { "itemIds": [4801, 4802, 4803] } }
@@ -268,6 +281,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 ### 5.7 큐브 분해 — `POST /api/game/cube/dismantle`
 
 아이템을 분해해 골드로 전환한다(`cube_master.gold_per_scrap` 기준, 서버 산출).
+
+![큐브 분해(연금술) 화면 — 아이템을 골드로 전환](../images/inventory-item-cube-큐브판매%28연금술%29.png)
 
 **Request**
 ```json
@@ -301,6 +316,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 레시피에 따라 재료를 소모해 지정 아이템을 만든다.
 
+![큐브 제작 화면 1 — 레시피 선택 및 재료 확인](../images/inventory-item-cube-큐브제작1.png)
+
+![큐브 제작 화면 2 — 제작 결과 및 소모 재료](../images/inventory-item-cube-큐브제작2.png)
+
 **Request**
 ```json
 { "userId": 1, "token": "...", "data": { "recipeCode": 8001 } }
@@ -326,6 +345,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 ### 5.9 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`
 
 플레이어가 **골드를 소모**해 원할 때 상자를 연다(가챠). 서버는 상자 정의(`box_master`)의 오픈 비용(골드)을 차감한 뒤, `grade_weights`로 등급을 추첨하고 뽑힌 등급에 속한 `item_master` 아이템 중 하나를 무작위로 선택해 **랜덤 등급의 랜덤 아이템**을 지급한다. 비용 차감·등급/아이템 추첨·지급은 하나의 트랜잭션으로 처리하며 전적으로 **서버가 산출**한다(클라이언트 입력 불신). 요청의 `count`로 오픈 횟수를 받도록 스키마를 **미리 정의**해 두었으며, **현재는 단발(`count`=1)만 처리**하고 다연속 오픈(10연차 등)은 예정 사항이다(8장).
+
+![랜덤 상자 열기(골드 가챠) 화면 — 골드를 소모해 랜덤 등급의 아이템을 획득](../images/inventory-item-cube-랜덤가챠기능.png)
 
 **Request**
 ```json

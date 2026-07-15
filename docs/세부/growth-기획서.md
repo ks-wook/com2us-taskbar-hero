@@ -87,6 +87,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 지정 캐릭터의 스킬 레벨을 1 올린다(그 캐릭터의 스킬 포인트 소모). 대상 스킬은 해당 캐릭터의 직업 소속이어야 한다.
 
+![스킬 레벨업이 가능한 상태의 스킬 화면](../images/growth-스킬레벨업가능.png)
+
+![캐릭터 레벨에서 파생되는 스킬 포인트 화면](../images/growth-스킬포인트.png)
+
 **Request**
 ```json
 { "userId": 1, "token": "...", "data": { "characterId": 1, "skillCode": 101 } }
@@ -144,6 +148,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 지정 캐릭터의 **액티브 스킬 장착 목록(최대 2개)** 을 설정한다. `skillCodes`로 장착할 액티브 스킬을 지정하면 서버가 그 캐릭터의 액티브 장착을 통째로 교체한다(패시브는 장착 개념이 없어 대상 아님, 배운 즉시 상시 적용).
 
+![액티브 스킬을 장착하는 슬롯 화면](../images/growth-액티브스킬_슬롯.png)
+
 **Request**
 ```json
 { "userId": 1, "token": "...", "data": { "characterId": 1, "skillCodes": [101, 102] } }
@@ -171,6 +177,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 ### 5.4 룬 업그레이드 — `POST /api/game/growth/rune/upgrade`
 
 골드를 소모해 지정 룬의 레벨을 1 올린다(0→1은 해금). 선행 룬(`prereq_code`)이 해금(레벨 ≥ 1)되어 있어야 한다.
+
+![선행 관계로 이어진 룬 트리 시스템 화면](../images/growth-룬시스템.png)
 
 **Request**
 ```json
