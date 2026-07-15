@@ -11,6 +11,16 @@
 - [3. 요구사항](#3-요구사항)
 - [4. 데이터 모델](#4-데이터-모델)
 - [5. API 명세](#5-api-명세)
+  - [5.1 장착 — `POST /api/game/inventory/equip`](#51-장착--post-apigameinventoryequip)
+  - [5.2 장착 해제 — `POST /api/game/inventory/unequip`](#52-장착-해제--post-apigameinventoryunequip)
+  - [5.3 강화 — `POST /api/game/inventory/enhance`](#53-강화--post-apigameinventoryenhance)
+  - [5.4 소모품 사용 — `POST /api/game/inventory/use`](#54-소모품-사용--post-apigameinventoryuse)
+  - [5.5 인벤토리 용량 확장 — `POST /api/game/inventory/expand`](#55-인벤토리-용량-확장--post-apigameinventoryexpand)
+  - [5.6 인벤토리 배치 변경(이동/교환) — `POST /api/game/inventory/move`](#56-인벤토리-배치-변경이동교환--post-apigameinventorymove)
+  - [5.7 큐브 합성 — `POST /api/game/cube/combine`](#57-큐브-합성--post-apigamecubecombine)
+  - [5.8 큐브 분해 — `POST /api/game/cube/dismantle`](#58-큐브-분해--post-apigamecubedismantle)
+  - [5.9 큐브 제작 — `POST /api/game/cube/craft`](#59-큐브-제작--post-apigamecubecraft)
+  - [5.10 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`](#510-랜덤-상자-열기-골드-가챠--post-apigameboxopen)
 - [6. 처리 흐름](#6-처리-흐름)
 - [7. 에러 코드](#7-에러-코드)
 - [8. 미결 사항 / TODO](#8-미결-사항--todo)
@@ -82,6 +92,19 @@
 - **인벤토리 용량(`game_player.inventory_capacity`, int)**: 플레이어별 인벤토리 최대 슬롯 수. 기본값에서 시작해 **골드 소모로 확장**한다(5.5). 확장분이 플레이어마다 달라지므로 상수가 아닌 플레이어 단위 컬럼으로 저장한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`로 반영 완료.
 
 ## 5. API 명세
+
+**API 목록**
+
+- [5.1 장착 — `POST /api/game/inventory/equip`](#51-장착--post-apigameinventoryequip)
+- [5.2 장착 해제 — `POST /api/game/inventory/unequip`](#52-장착-해제--post-apigameinventoryunequip)
+- [5.3 강화 — `POST /api/game/inventory/enhance`](#53-강화--post-apigameinventoryenhance)
+- [5.4 소모품 사용 — `POST /api/game/inventory/use`](#54-소모품-사용--post-apigameinventoryuse)
+- [5.5 인벤토리 용량 확장 — `POST /api/game/inventory/expand`](#55-인벤토리-용량-확장--post-apigameinventoryexpand)
+- [5.6 인벤토리 배치 변경(이동/교환) — `POST /api/game/inventory/move`](#56-인벤토리-배치-변경이동교환--post-apigameinventorymove)
+- [5.7 큐브 합성 — `POST /api/game/cube/combine`](#57-큐브-합성--post-apigamecubecombine)
+- [5.8 큐브 분해 — `POST /api/game/cube/dismantle`](#58-큐브-분해--post-apigamecubedismantle)
+- [5.9 큐브 제작 — `POST /api/game/cube/craft`](#59-큐브-제작--post-apigamecubecraft)
+- [5.10 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`](#510-랜덤-상자-열기-골드-가챠--post-apigameboxopen)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약, `success`는 `errorCode == 0`과 동치). 아래 엔드포인트는 모두 **상태 변경 액션**이며, 조회는 `POST /api/game/load`를 사용한다.
 

@@ -11,6 +11,10 @@
 - [3. 데이터 모델 (ERD)](#3-데이터-모델-erd)
 - [4. 토큰 생성 / 검증 방식](#4-토큰-생성--검증-방식)
 - [5. API 명세](#5-api-명세)
+  - [5.1 회원가입 — `POST /api/auth/signup`](#51-회원가입--post-apiauthsignup)
+  - [5.2 로그인 — `POST /api/auth/login`](#52-로그인--post-apiauthlogin)
+  - [5.3 로그아웃 — `POST /api/auth/logout`](#53-로그아웃--post-apiauthlogout)
+  - [5.4 토큰 검증 (인증 미들웨어)](#54-토큰-검증-인증-미들웨어)
 - [6. 에러 코드 (신규 제안)](#6-에러-코드-신규-제안)
 - [7. 미결 사항 / TODO](#7-미결-사항--todo)
 - [8. 참고](#8-참고)
@@ -151,6 +155,13 @@ Base64 디코딩 → 필드 분리(userId:timestamp:salt:hash)
 - 만료 시각: `expired_at = created_at + TokenExpirationHours * 3600` (기본 24시간, 잠정값).
 
 ## 5. API 명세
+
+**API 목록**
+
+- [5.1 회원가입 — `POST /api/auth/signup`](#51-회원가입--post-apiauthsignup)
+- [5.2 로그인 — `POST /api/auth/login`](#52-로그인--post-apiauthlogin)
+- [5.3 로그아웃 — `POST /api/auth/logout`](#53-로그아웃--post-apiauthlogout)
+- [5.4 토큰 검증 (인증 미들웨어)](#54-토큰-검증-인증-미들웨어)
 
 Base URL(개발): `http://localhost:5160` (AccountServer)
 

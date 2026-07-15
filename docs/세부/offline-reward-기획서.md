@@ -11,6 +11,7 @@
 - [3. 요구사항](#3-요구사항)
 - [4. 데이터 모델](#4-데이터-모델)
 - [5. API 명세](#5-api-명세)
+  - [5.1 오프라인 보상 정산 — `POST /api/game/offline/claim`](#51-오프라인-보상-정산--post-apigameofflineclaim)
 - [6. 처리 흐름](#6-처리-흐름)
 - [7. 에러 코드](#7-에러-코드)
 - [8. 공유 DTO 정의 — `OfflineRewardResult` (확정)](#8-공유-dto-정의--offlinerewardresult-확정)
@@ -62,6 +63,10 @@
 - **감사 로그**: 정산 이력(재화·경험치 지급 원장) 관리는 현재 범위에서 별도로 두지 않는다. 재화 원장/감사 로그는 **향후 도입 시 정의**한다(현재 미도입).
 
 ## 5. API 명세
+
+**API 목록**
+
+- [5.1 오프라인 보상 정산 — `POST /api/game/offline/claim`](#51-오프라인-보상-정산--post-apigameofflineclaim)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }` ([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약).
 

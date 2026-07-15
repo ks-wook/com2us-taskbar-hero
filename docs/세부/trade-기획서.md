@@ -11,6 +11,10 @@
 - [3. 요구사항](#3-요구사항)
 - [4. 데이터 모델](#4-데이터-모델)
 - [5. API 명세](#5-api-명세)
+  - [5.1 거래소 목록 조회 — `POST /api/game/trade/list`](#51-거래소-목록-조회--post-apigametradelist)
+  - [5.2 판매 등록 — `POST /api/game/trade/register`](#52-판매-등록--post-apigametraderegister)
+  - [5.3 구매 — `POST /api/game/trade/buy`](#53-구매--post-apigametradebuy)
+  - [5.4 판매 취소 — `POST /api/game/trade/cancel`](#54-판매-취소--post-apigametradecancel)
 - [6. 처리 흐름](#6-처리-흐름)
 - [7. 에러 코드](#7-에러-코드)
 - [8. 미결 사항 / TODO](#8-미결-사항--todo)
@@ -93,6 +97,13 @@ erDiagram
 - 거래 목록·결과 DTO는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다(5장 응답 스키마).
 
 ## 5. API 명세
+
+**API 목록**
+
+- [5.1 거래소 목록 조회 — `POST /api/game/trade/list`](#51-거래소-목록-조회--post-apigametradelist)
+- [5.2 판매 등록 — `POST /api/game/trade/register`](#52-판매-등록--post-apigametraderegister)
+- [5.3 구매 — `POST /api/game/trade/buy`](#53-구매--post-apigametradebuy)
+- [5.4 판매 취소 — `POST /api/game/trade/cancel`](#54-판매-취소--post-apigametradecancel)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약).
 

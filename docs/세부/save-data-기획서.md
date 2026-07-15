@@ -11,6 +11,9 @@
 - [3. 데이터 모델 (ERD)](#3-데이터-모델-erd)
 - [4. 저장 정책](#4-저장-정책)
 - [5. API 명세](#5-api-명세)
+  - [5.1 세이브 로드 — `POST /api/game/load`](#51-세이브-로드--post-apigameload)
+  - [5.2 캐릭터 생성 — `POST /api/game/create-character`](#52-캐릭터-생성--post-apigamecreate-character)
+  - [5.3 접속 시각 갱신(heartbeat) — `POST /api/game/heartbeat`](#53-접속-시각-갱신heartbeat--post-apigameheartbeat)
 - [6. 에러 코드 (신규 제안)](#6-에러-코드-신규-제안)
 - [7. 미결 사항 / TODO](#7-미결-사항--todo)
 - [8. 참고](#8-참고)
@@ -178,6 +181,12 @@ erDiagram
 - **동시성**: 동일 계정 단일 세션 정책([계정/로그인 기획서](account-login-기획서.md))에 따라 세이브 경합은 제한적이나, 각 액션 저장은 `user_id` 단위 트랜잭션으로 처리한다.
 
 ## 5. API 명세
+
+**API 목록**
+
+- [5.1 세이브 로드 — `POST /api/game/load`](#51-세이브-로드--post-apigameload)
+- [5.2 캐릭터 생성 — `POST /api/game/create-character`](#52-캐릭터-생성--post-apigamecreate-character)
+- [5.3 접속 시각 갱신(heartbeat) — `POST /api/game/heartbeat`](#53-접속-시각-갱신heartbeat--post-apigameheartbeat)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`를 사용한다(토큰은 body, [계정/로그인 기획서](account-login-기획서.md) 5장 참고). 응답은 `{ success, errorCode, message, data }` 형식이며, `errorCode`는 `TaskbarHero.Common`의 `GameErrorCode`(6장) 값이고 `success`는 `errorCode == 0`과 동치다(계정·마스터 기획서와 동일한 응답 규약).
 

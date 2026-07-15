@@ -11,6 +11,9 @@
 - [3. 요구사항](#3-요구사항)
 - [4. 데이터 모델](#4-데이터-모델)
 - [5. API 명세](#5-api-명세)
+  - [5.1 우편함 조회 — `POST /api/game/mail/list`](#51-우편함-조회--post-apigamemaillist)
+  - [5.2 메일 첨부 수령 — `POST /api/game/mail/claim`](#52-메일-첨부-수령--post-apigamemailclaim)
+  - [5.3 일괄 수령 — `POST /api/game/mail/claim-all`](#53-일괄-수령--post-apigamemailclaim-all)
 - [6. 처리 흐름](#6-처리-흐름)
 - [7. 에러 코드](#7-에러-코드)
 - [8. 미결 사항 / TODO](#8-미결-사항--todo)
@@ -94,6 +97,12 @@ erDiagram
 - 메일·수령 결과 DTO는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다(5장 응답 스키마).
 
 ## 5. API 명세
+
+**API 목록**
+
+- [5.1 우편함 조회 — `POST /api/game/mail/list`](#51-우편함-조회--post-apigamemaillist)
+- [5.2 메일 첨부 수령 — `POST /api/game/mail/claim`](#52-메일-첨부-수령--post-apigamemailclaim)
+- [5.3 일괄 수령 — `POST /api/game/mail/claim-all`](#53-일괄-수령--post-apigamemailclaim-all)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약).
 

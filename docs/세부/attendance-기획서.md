@@ -11,6 +11,8 @@
 - [3. 요구사항](#3-요구사항)
 - [4. 데이터 모델](#4-데이터-모델)
 - [5. API 명세](#5-api-명세)
+  - [5.1 이번달 출석 현황 조회 — `POST /api/game/attendance/status`](#51-이번달-출석-현황-조회--post-apigameattendancestatus)
+  - [5.2 출석 보상 획득 — `POST /api/game/attendance/claim`](#52-출석-보상-획득--post-apigameattendanceclaim)
 - [6. 처리 흐름](#6-처리-흐름)
 - [7. 에러 코드](#7-에러-코드)
 - [8. 미결 사항 / TODO](#8-미결-사항--todo)
@@ -76,6 +78,11 @@ erDiagram
 - 출석 현황·획득 결과 DTO는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다(5장 응답 스키마).
 
 ## 5. API 명세
+
+**API 목록**
+
+- [5.1 이번달 출석 현황 조회 — `POST /api/game/attendance/status`](#51-이번달-출석-현황-조회--post-apigameattendancestatus)
+- [5.2 출석 보상 획득 — `POST /api/game/attendance/claim`](#52-출석-보상-획득--post-apigameattendanceclaim)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약).
 

@@ -11,6 +11,8 @@
 - [3. 요구사항](#3-요구사항)
 - [4. 데이터 모델](#4-데이터-모델)
 - [5. API 명세](#5-api-명세)
+  - [5.1 스테이지 진입 — `POST /api/game/stage/enter`](#51-스테이지-진입--post-apigamestageenter)
+  - [5.2 스테이지 클리어 — `POST /api/game/stage/clear`](#52-스테이지-클리어--post-apigamestageclear)
 - [6. 처리 흐름](#6-처리-흐름)
 - [7. 에러 코드](#7-에러-코드)
 - [8. 미결 사항 / TODO](#8-미결-사항--todo)
@@ -66,6 +68,11 @@
 - 클리어 결과 DTO(획득 골드·경험치·전리품·갱신 진행도)는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다. 필드는 5.2 응답 스키마를 따른다.
 
 ## 5. API 명세
+
+**API 목록**
+
+- [5.1 스테이지 진입 — `POST /api/game/stage/enter`](#51-스테이지-진입--post-apigamestageenter)
+- [5.2 스테이지 클리어 — `POST /api/game/stage/clear`](#52-스테이지-클리어--post-apigamestageclear)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약). 조회(현재 진행도)는 `POST /api/game/load` 스냅샷을 사용한다.
 

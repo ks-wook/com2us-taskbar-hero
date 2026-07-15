@@ -11,6 +11,10 @@
 - [3. 요구사항](#3-요구사항)
 - [4. 데이터 모델](#4-데이터-모델)
 - [5. API 명세](#5-api-명세)
+  - [5.1 스킬 레벨업 — `POST /api/game/growth/skill/levelup`](#51-스킬-레벨업--post-apigamegrowthskilllevelup)
+  - [5.2 스킬 초기화 — `POST /api/game/growth/skill/reset`](#52-스킬-초기화--post-apigamegrowthskillreset)
+  - [5.3 액티브 스킬 장착 — `POST /api/game/growth/skill/equip`](#53-액티브-스킬-장착--post-apigamegrowthskillequip)
+  - [5.4 룬 업그레이드 — `POST /api/game/growth/rune/upgrade`](#54-룬-업그레이드--post-apigamegrowthruneupgrade)
 - [6. 처리 흐름](#6-처리-흐름)
 - [7. 에러 코드](#7-에러-코드)
 - [8. 미결 사항 / TODO](#8-미결-사항--todo)
@@ -69,6 +73,13 @@
 - 성장 액션 결과 DTO(스킬/룬 레벨업 결과, 5장 응답 `data`)는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다.
 
 ## 5. API 명세
+
+**API 목록**
+
+- [5.1 스킬 레벨업 — `POST /api/game/growth/skill/levelup`](#51-스킬-레벨업--post-apigamegrowthskilllevelup)
+- [5.2 스킬 초기화 — `POST /api/game/growth/skill/reset`](#52-스킬-초기화--post-apigamegrowthskillreset)
+- [5.3 액티브 스킬 장착 — `POST /api/game/growth/skill/equip`](#53-액티브-스킬-장착--post-apigamegrowthskillequip)
+- [5.4 룬 업그레이드 — `POST /api/game/growth/rune/upgrade`](#54-룬-업그레이드--post-apigamegrowthruneupgrade)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약, `success`는 `errorCode == 0`과 동치). 아래 엔드포인트는 모두 **상태 변경 액션**이며, 조회는 `POST /api/game/load`를 사용한다.
 
