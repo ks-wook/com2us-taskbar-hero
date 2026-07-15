@@ -111,7 +111,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- 아이템의 이름·스탯·등급은 클라이언트가 `item_code`로 마스터 데이터에서 조회해 표시한다([클라이언트 보유 기획 데이터](client-data-기획서.md)).
+- 아이템의 이름·스탯·등급은 클라이언트가 `item_code`로 마스터 데이터에서 조회해 표시한다([마스터 데이터 기획서](master-data-기획서.md)).
 
 ### 5.2 판매 등록 — `POST /api/game/trade/register`
 
@@ -243,5 +243,5 @@ COMMIT → { listingId, gained, cost, balance }
 - [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — `player_item` 소유·`sellable`·`InventoryFull(4002)`·`ItemEquipped(4007)`
 - [메일 기획서](mail-기획서.md) — 판매 대금 메일 발급·수령(`category=2` 거래)
 - [세이브 데이터 기획서](save-data-기획서.md) — `trade_listing` 저장 골격
-- [클라이언트 보유 기획 데이터](client-data-기획서.md) — 목록의 `item_code`로 아이템 이름·스탯 표시
+- [마스터 데이터 기획서](master-data-기획서.md) — 목록의 `item_code`로 아이템 이름·스탯 표시(클라 연동 포함)
 - [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(8000번대 거래소)

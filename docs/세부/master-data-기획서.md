@@ -1,21 +1,22 @@
-# 마스터(기획) 데이터 관리 기획서
+# 마스터(기획) 데이터 & 클라이언트 연동 기획서
 
 > 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.11
 >
-> 본 문서는 세이브 데이터가 코드 값(`item_code`, `class_code`, 성장 `code` 등)으로 참조하는 **정적 게임 데이터(마스터 데이터)**의 구조와 각 테이블에 담기는 내용을 다룬다. 세이브(동적 진행 데이터)는 [세이브 데이터 기획서](save-data-기획서.md)를 참고한다.
+> 본 문서는 (1) 세이브 데이터가 코드 값(`item_code`, `class_code`, 성장 `code` 등)으로 참조하는 **정적 게임 데이터(마스터 데이터)** 의 구조·내용과, (2) 이를 **Unity 클라이언트가 보유·소비하는 방식**(범위·스키마·연동 코드)을 함께 다룬다. 마스터 데이터는 **클라이언트 빌드에 번들**되고 서버도 같은 원천을 기동 시 자체 로드한다(런타임 다운로드·버전 협상 없음). 세이브(동적 진행 데이터)는 [세이브 데이터 기획서](save-data-기획서.md)를 참고한다.
 
 ## 1. 개요
 
-- **목적**: 아이템·직업·스킬·룬·펫·몬스터·스테이지·재화 등 게임의 **정적 정의 데이터**를 한 곳에서 관리한다. 세이브 테이블은 실제 정의를 저장하지 않고 **코드(숫자 키)만 저장**하며, 그 코드의 의미(이름·수치·효과)는 전적으로 마스터 데이터가 제공한다.
-- **대상 서버**: `GameServer`(마스터 데이터 로드·검증), `TaskbarHero.Common`(코드 타입 enum·버전 상수 공유).
+- **목적**: 아이템·직업·스킬·룬·몬스터·스테이지·재화 등 게임의 **정적 정의 데이터**를 한 곳에서 관리한다. 세이브 테이블은 실제 정의를 저장하지 않고 **코드(숫자 키)만 저장**하며, 그 코드의 의미(이름·수치·효과)는 전적으로 마스터 데이터가 제공한다. 또한 방치형 특성상 클라이언트는 **자동 전투 연출·전투력 계산·UI 표시**를 로컬에서 수행하므로, 이 데이터를 빌드에 번들로 보유한다.
+- **대상**: `GameServer`(마스터 데이터 로드·검증), **Unity 클라이언트**(번들 데이터 로딩·전투 시뮬레이션·UI), `TaskbarHero.Common`(서버-클라 공유 데이터 클래스·enum, `netstandard2.0`).
 - **핵심 구분**: **마스터 데이터 = 정적·읽기 전용·전 유저 공통 계약**, **세이브 데이터 = 동적·유저별 진행 상태**. 세이브는 마스터를 *참조*할 뿐, 마스터를 변경하지 않는다.
-- **관련 기획서**: [[save-data-기획서]] (참조 주체), [[client-data-기획서]] (클라이언트가 보유·소비하는 데이터 범위·Unity 연동 코드), [[서버-시스템-전체-개요]] (도메인 4.11)
+- **서버 권위 원칙(중요)**: 클라이언트가 이 데이터로 하는 계산은 **연출·예측용**이다. 오프라인 보상·스테이지 클리어 보상·성장 결과 등 **이득이 되는 값의 최종 확정은 서버가 동일 마스터 데이터로 재계산**한다([서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) 5장, [스테이지/전투 결과 기획서](stage-battle-기획서.md)). 클라이언트 번들과 서버 로드는 **같은 원천**을 쓴다.
+- **관련 기획서**: [[save-data-기획서]] (참조 주체·동적 세이브), [[inventory-item-cube-기획서]] (아이템·강화·큐브), [[growth-기획서]] (스킬·룬), [[stage-battle-기획서]] (전투 결과 검증), [[trade-기획서]] (거래소 기준가), [[서버-시스템-전체-개요]] (도메인 4.11)
 
 ## 2. 마스터 데이터의 성격과 범위
 
 - **읽기 전용**: 런타임에 유저 요청으로 변경되지 않는다. 오직 기획/빌드 배포로만 갱신된다.
 - **서버 권위 검증의 근거**: 각 액션 저장 시 서버는 `item_code`·`class_code` 등이 **마스터에 존재하는 유효한 코드인지** 검증한다. 존재하지 않는 코드는 거부한다(치트·구버전 데이터 방지).
-- **동일 원천 사용**: 클라이언트와 서버는 **같은 마스터 데이터 원천**을 사용한다. 본 프로젝트(학습 목적)는 마스터 데이터를 **클라이언트 빌드에 번들로 포함**하고 서버도 같은 원천을 기동 시 자체 로드한다 — **런타임 다운로드·버전 협상 API는 두지 않는다**(6·8장). 세이브 데이터에도 별도 스키마 버전 컬럼을 두지 않는다(초기 버전 단순화, [세이브 데이터 기획서](save-data-기획서.md)).
+- **동일 원천 사용**: 클라이언트와 서버는 **같은 마스터 데이터 원천**을 사용한다. 본 프로젝트(학습 목적)는 마스터 데이터를 **클라이언트 빌드에 번들로 포함**하고 서버도 같은 원천을 기동 시 자체 로드한다 — **런타임 다운로드·버전 협상 API는 두지 않는다**(8장). 세이브 데이터에도 별도 스키마 버전 컬럼을 두지 않는다(초기 버전 단순화, [세이브 데이터 기획서](save-data-기획서.md)).
 
 ## 3. 세이브 → 마스터 참조 매핑
 
@@ -32,7 +33,6 @@
 | `player_item` | `equipped_slot` | `equip_slot_master` | 장착 슬롯 정의 |
 | `player_skill` | `skill_code` | `skill_master` | 스킬(캐릭터별) |
 | `player_rune` | `rune_code` | `rune_master` | 룬(Rune Tree, 계정 공용) |
-| (미정) | — | `pet_master` | 펫(저장 테이블 미작성) |
 | `player_cube` | `cube_level` | `cube_master` | 큐브 레벨별 규칙·합성/제작 레시피 |
 | (전투/드롭 계산) | — | `monster_master`, `drop_table_master` | 몬스터 스탯·전리품 테이블 |
 
@@ -45,7 +45,6 @@ erDiagram
     class_master     ||--o{ skill_master      : "직업별 스킬"
     stage_master     ||--o{ monster_master     : "스폰"
     stage_master     ||--o{ drop_table_master  : "드롭"
-    monster_master   ||--o{ pet_master         : "처치 해금"
     item_master      ||--o{ drop_table_master  : "드롭 항목"
     item_master      ||--o{ box_master         : "지급 아이템 풀(등급)"
     item_master      ||--o{ attendance_master  : "일자별 보상"
@@ -60,7 +59,6 @@ erDiagram
     enhance_master { int enhance_level PK }
     skill_master { int skill_code PK }
     rune_master { int rune_code PK }
-    pet_master { int pet_code PK }
     monster_master { int monster_code PK }
     stage_master { int stage_id PK }
     drop_table_master { int drop_table_code PK }
@@ -73,12 +71,11 @@ erDiagram
 |---|---|---|
 | `class_master` | 직업(클래스) 정의 | 원작 6종 / 모작 현재 3종(추후 추가 예정) |
 | `level_master` | 레벨별 요구 경험치·스탯·스킬 포인트 | 최대 레벨 수만큼 |
-| `item_master` | 아이템(장비·재료·소모품) 정의 | 500종 이상 |
+| `item_master` | 아이템(장비·재료·소모품)·재화 정의 | 500종 이상 |
 | `equip_slot_master` | 장비 장착 슬롯 정의 | 6~8종 |
 | `enhance_master` | 강화 단계별 비용·효과 | 단계 수만큼 |
 | `skill_master` | 직업별 스킬 정의 | 직업 × 스킬 |
 | `rune_master` | 룬(Rune Tree) 정의 | 트리 노드 수 |
-| `pet_master` | 펫 정의·해금 조건 | 몬스터 연동 |
 | `monster_master` | 몬스터 스탯·드롭 | 50종 이상 |
 | `stage_master` | 스테이지 구성·보상 | 3 Act × 4 난이도 × N |
 | `drop_table_master` | 전리품 확률 테이블 | 드롭 그룹 수 |
@@ -99,17 +96,18 @@ erDiagram
 | `class_code` | int PK | 직업 코드 |
 | `name` | varchar | 직업 이름 |
 | `unlock_type` | int | 0:기본 1:해금 2:유료 |
-| `base_stats` | json | 기본 스탯(HP/공격력 등) |
+| `base_stats` | json | 기본 캐릭터 스탯(아래 "캐릭터 스탯 구성") |
 
 **담기는 데이터 예시**
 
 | class_code | name | unlock_type | base_stats |
 |---|---|---|---|
-| 1 | Knight | 0 | `{ "hp": 120, "atk": 10 }` |
-| 2 | Ranger | 0 | `{ "hp": 90, "atk": 14 }` |
-| 3 | Mage | 0 | `{ "hp": 85, "atk": 16 }` |
+| 1 | Knight | 0 | `{ "hp": 120, "atk": 10, "def": 8, "moveSpeed": 3.0, "critChance": 0.05, "critDamage": 1.5, "cooldown": 1.2 }` |
+| 2 | Ranger | 0 | `{ "hp": 90, "atk": 14, "def": 5, "moveSpeed": 4.0, "critChance": 0.10, "critDamage": 1.5, "cooldown": 0.9 }` |
+| 3 | Mage | 0 | `{ "hp": 85, "atk": 16, "def": 4, "moveSpeed": 3.2, "critChance": 0.08, "critDamage": 1.7, "cooldown": 1.5 }` |
 
-> **모작은 현재 기사(Knight)·레인저(Ranger)·마법사(Mage) 3종으로 확정**하며, 3종 모두 캐릭터 생성 시 기본 선택 가능(`unlock_type=0`)하다. **추후 확인 후 클래스를 추가할 예정**이다(해금/유료 직업 포함 가능). 원작은 6개 직업이며 일부는 해금/유료다. 세부 스탯·밸런스는 직업 기획서에서 확정한다.
+- **캐릭터 스탯 구성(확정)**: 캐릭터 스탯은 `hp`(체력)·`atk`(공격)·`def`(방어)·`moveSpeed`(이동속도)·`critChance`(치명확률, 0~1)·`critDamage`(치명데미지 배율, `1.5`=150%)·`cooldown`(재사용 대기시간, 초)으로 구성한다. `class_master.base_stats`(기본값), `level_master.stat_bonus`(레벨 보너스), `item_master.base_stats`(장비 옵션)가 모두 이 스탯 구조를 공유하며, 없는 필드는 0이다.
+- **모작은 현재 기사(Knight)·레인저(Ranger)·마법사(Mage) 3종으로 확정**하며, 3종 모두 캐릭터 생성 시 기본 선택 가능(`unlock_type=0`)하다. **추후 확인 후 클래스를 추가할 예정**이다(해금/유료 직업 포함 가능). 세부 스탯·밸런스는 직업 기획서에서 확정한다.
 
 ### 5.2 `equip_slot_master` — 장착 슬롯
 
@@ -131,9 +129,9 @@ erDiagram
 | 5 | 신발 |
 | 6 | 반지 |
 
-### 5.3 `item_master` — 아이템
+### 5.3 `item_master` — 아이템·재화
 
-인벤토리/장비/드롭이 참조하는 아이템 정의. `player_item.item_code`가 이 테이블을 참조한다.
+인벤토리/장비/드롭이 참조하는 아이템 정의이자, **재화(골드)의 정의**도 겸한다. `player_item.code`가 이 테이블을 참조한다(아이템·재화 통합).
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -142,10 +140,10 @@ erDiagram
 | `item_type` | int | 1:장비 2:재료 3:소모품 4:재화(골드 등) |
 | `grade` | int | 등급/희귀도(숫자가 클수록 고등급) |
 | `equip_slot` | int | 장비일 때 장착 슬롯(FK `equip_slot_master`), 비장비는 0 |
-| `class_req` | int | 착용 가능 클래스(FK `class_master`). **0이면 제한 없음(전 클래스 착용 가능)**, 비장비는 0 |
-| `level_req` | int | 착용 요구 레벨. **5레벨 단위(5의 배수)**, 0이면 제한 없음. 플레이어 `level`이 이 값 이상이어야 장착 가능. 비장비는 0 |
+| `class_req` | int | 착용 가능 클래스(FK `class_master`). **0이면 제한 없음**, 비장비는 0 |
+| `level_req` | int | 착용 요구 레벨. **5레벨 단위(5의 배수)**, 0이면 제한 없음. 비장비는 0 |
 | `stack_max` | int | 최대 겹침 수량(장비는 1) |
-| `base_stats` | json | 장비 기본 옵션 |
+| `base_stats` | json | 장비 기본 옵션(캐릭터 스탯 구조, 5.1) |
 | `sellable` | int | 거래소 판매 가능 여부(0/1) |
 | `base_price` | bigint | 거래소 **기준가**(골드). 등록 가격은 이 값의 ±20% 범위([거래소 기획서](trade-기획서.md)). `0`이면 거래 대상 아님 |
 
@@ -153,13 +151,14 @@ erDiagram
 
 | item_code | name | item_type | grade | equip_slot | class_req | level_req | stack_max | base_stats | sellable | base_price |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 30012 | 강철 대검 | 1 | 3 | 1 | 1 | 15 | 1 | `{ "atk": 45 }` | 1 | 50000 |
-| 30105 | 코스믹 투구 | 1 | 6 | 2 | 0 | 40 | 1 | `{ "hp": 220, "def": 30 }` | 1 | 200000 |
-| 41001 | 강화석 | 2 | 2 | 0 | 0 | 0 | 999 | `null` | 1 | 1000 |
 | 1 | 골드 | 4 | 1 | 0 | 0 | 0 | 0 | `null` | 0 | 0 |
+| 30012 | 강철 대검 | 1 | 3 | 1 | 1 | 15 | 1 | `{ "atk": 45, "cooldown": -0.1 }` | 1 | 50000 |
+| 30105 | 코스믹 투구 | 1 | 6 | 2 | 0 | 40 | 1 | `{ "hp": 220, "def": 30 }` | 1 | 200000 |
+| 30240 | 예리한 반지 | 1 | 4 | 6 | 0 | 20 | 1 | `{ "critChance": 0.05, "critDamage": 0.2 }` | 1 | 80000 |
+| 41001 | 강화석 | 2 | 2 | 0 | 0 | 0 | 999 | `null` | 1 | 1000 |
 
-> 원작 기준 500종 이상. 등급은 Cosmic 등 고등급 존재. `class_req`는 클래스 전용 장비를 나타내며(예: 강철 대검=기사 전용), `0`은 전 클래스 공용(예: 코스믹 투구)이다. `level_req`는 **5레벨 단위**의 착용 요구 레벨(예: 15, 40)이며 `0`은 제한 없음이다. 장착 시 검증 규칙은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.1을 따른다.
-> **재화(`item_type=4`)**: 골드 등 소비 재화도 `item_master`로 정의한다(별도 `currency_master` 없음, 5.5). 골드는 `item_code=1`로 고정한다. 재화는 장착·스택 개념이 없어 `equip_slot`/`class_req`/`level_req`/`stack_max`는 0이며, 보유 잔액은 세이브 `player_item` 재화 행(`row_type=2`)의 `quantity`(bigint)에 저장한다. 재화의 코드 값(골드=1)은 클라이언트와 공유하는 계약이므로 변경하지 않는다.
+- `class_req`는 클래스 전용 장비를 나타내며(예: 강철 대검=기사 전용), `0`은 전 클래스 공용이다. `level_req`는 **5레벨 단위** 착용 요구 레벨이다. 장비는 캐릭터 스탯 구조를 공유하므로 공격력·쿨다운 감소·치명확률 등 어떤 스탯이든 옵션으로 가질 수 있다(예: `cooldown: -0.1`은 재사용 대기시간 0.1초 감소). 장착 검증 규칙은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.1을 따른다.
+- **재화(`item_type=4`)**: 골드 등 소비 재화도 `item_master`로 정의한다(별도 `currency_master` 없음, 5.5). 골드는 `item_code=1`로 고정한다. 재화는 장착·스택 개념이 없어 `equip_slot`/`class_req`/`level_req`/`stack_max`는 0이며, 보유 잔액은 세이브 `player_item` 재화 행(`row_type=2`)의 `quantity`(bigint)에 저장한다. 재화 코드 값(골드=1)은 클라이언트와 공유하는 계약이므로 변경하지 않는다.
 
 ### 5.4 `enhance_master` — 강화 규칙
 
@@ -184,8 +183,7 @@ erDiagram
 
 골드 등 소비 재화는 별도 테이블을 두지 않고 **`item_master`에 `item_type=4`(재화)로 정의**한다(5.3). 골드는 `item_code=1`로 고정한다. 보유 잔액은 세이브 `player_item` 재화 행(`row_type=2`)의 `quantity`(bigint)에 저장한다([세이브 데이터 기획서](save-data-기획서.md) 3장).
 
-- `enhance_master`·`box_master` 등의 `currency_type` 필드는 이제 **소모 재화의 `item_code`**를 가리킨다(골드=1).
-- 재화 코드 값(골드=1)은 클라이언트와 공유하는 계약이므로 변경하지 않는다.
+- `enhance_master`·`box_master` 등의 `currency_type` 필드는 **소모 재화의 `item_code`**를 가리킨다(골드=1).
 - 재화 보유 상한, 골드 외 추가 재화 도입 여부는 향후 재화 정책에서 확정([[save-data-기획서]] 미결 참고).
 
 ### 5.6 `skill_master` — 스킬
@@ -199,7 +197,7 @@ erDiagram
 | `name` | varchar | 스킬 이름 |
 | `skill_type` | int | **1:액티브 2:패시브**. 액티브는 캐릭터당 2개까지 장착([성장 시스템 기획서](growth-기획서.md) 5.3), 패시브는 상시 적용 |
 | `max_level` | int | 최대 레벨 |
-| `effect_per_level` | json | 레벨별 효과 |
+| `effect_per_level` | json | 레벨별 효과(데미지 스킬은 `dmg`=공격력 대비 %) |
 
 **담기는 데이터 예시**
 
@@ -210,7 +208,7 @@ erDiagram
 | 110 | 1 | 강철 피부 | 2 | 5 | `[ { "defPct": 0.05 } ]` |
 | 201 | 2 | 정조준 사격 | 1 | 10 | `[ { "dmg": 180 } ]` |
 
-> `skill_type=2`(패시브, 예: 강철 피부)는 장착 슬롯을 차지하지 않고 배운 즉시 상시 적용된다. `skill_type=1`(액티브)만 캐릭터당 2개 장착 제한을 받는다.
+> `skill_type=2`(패시브)는 장착 슬롯을 차지하지 않고 배운 즉시 상시 적용된다. `skill_type=1`(액티브)만 캐릭터당 2개 장착 제한을 받는다. `effect_per_level[레벨-1]`이 그 레벨의 효과이며, 데미지 스킬의 `dmg`는 공격력 대비 %(예: 120=120%)다.
 
 ### 5.7 `rune_master` — 룬(Rune Tree)
 
@@ -221,37 +219,19 @@ erDiagram
 | `rune_code` | int PK | 룬 코드 |
 | `name` | varchar | 룬 이름 |
 | `prereq_code` | int | 선행 룬 코드(루트면 0) |
-| `cost` | bigint | 레벨업 1회 골드 비용의 기준값. **실제 비용 = 현재 레벨에 비례한 증가값**(레벨별 비용을 이 값으로부터 산출) |
+| `cost` | bigint | 레벨업 1회 골드 비용의 기준값. **실제 비용 = 현재 레벨에 비례한 증가값** |
 | `max_level` | int | 최대 레벨 |
-| `effect` | json | 효과 |
+| `effect` | json | 효과(레벨당 누적 %) |
 
 **담기는 데이터 예시**
 
 | rune_code | name | prereq_code | cost | max_level | effect |
 |---|---|---|---|---|---|
-| 205 | 공격력 I | 0 | 5000 | 20 | `{ "atk_pct": 0.02 }` |
-| 206 | 공격력 II | 205 | 20000 | 20 | `{ "atk_pct": 0.03 }` |
-| 210 | 치명타 | 205 | 15000 | 10 | `{ "crit_pct": 0.01 }` |
+| 205 | 공격력 I | 0 | 5000 | 20 | `{ "atkPct": 0.02 }` |
+| 206 | 공격력 II | 205 | 20000 | 20 | `{ "atkPct": 0.03 }` |
+| 210 | 치명타 | 205 | 15000 | 10 | `{ "critPct": 0.01 }` |
 
-### 5.8 `pet_master` — 펫
-
-펫 정의. 특정 몬스터 처치로 해금되며 패시브 보너스를 준다. **펫 시스템의 저장 테이블은 아직 없으며(성장 기획서 범위 밖), 도입 시 참조 컬럼을 확정한다.**
-
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `pet_code` | int PK | 펫 코드 |
-| `name` | varchar | 펫 이름 |
-| `unlock_monster_code` | int FK | 해금 조건 몬스터(`monster_master`) |
-| `passive_bonus` | json | 패시브 효과 |
-
-**담기는 데이터 예시**
-
-| pet_code | name | unlock_monster_code | passive_bonus |
-|---|---|---|---|
-| 301 | 슬라임 | 9001 | `{ "gold_pct": 0.05 }` |
-| 302 | 늑대 | 9010 | `{ "atk_pct": 0.03 }` |
-
-### 5.9 `monster_master` — 몬스터
+### 5.8 `monster_master` — 몬스터
 
 전투/드롭 계산의 근거. 스테이지에 스폰되며 처치 시 드롭 테이블을 사용한다.
 
@@ -271,9 +251,7 @@ erDiagram
 | 9010 | 늑대 | 1200 | 55 | 7002 |
 | 9099 | Act1 보스 | 25000 | 180 | 7050 |
 
-> 원작 기준 몬스터 50종 이상.
-
-### 5.10 `stage_master` — 스테이지
+### 5.9 `stage_master` — 스테이지
 
 `game_player`의 `act`/`stage`/`difficulty`가 참조. 3 Act × 4 난이도 구성이며 스테이지별 기본 보상과 드롭 테이블을 정의한다.
 
@@ -286,8 +264,8 @@ erDiagram
 | `reward_gold` | bigint | 기본 골드 보상 |
 | `reward_exp` | bigint | 기본 경험치 보상 |
 | `drop_table_code` | int FK | 드롭 테이블(`drop_table_master`) |
-| `spawns` | json | 등장 **일반 몬스터 스폰 목록** `[{ monster_code, count }]`(`monster_master` 참조) |
-| `boss_monster_code` | int | **스테이지 보스 몬스터**(`monster_master`). 보스가 없으면 0 |
+| `spawns` | json | 등장 **일반 몬스터 스폰 목록** `[{ monsterCode, count }]`(`monster_master` 참조) |
+| `boss_monster_code` | int | **스테이지 보스 몬스터**(`monster_master`). 없으면 0 |
 
 **담기는 데이터 예시**
 
@@ -297,11 +275,9 @@ erDiagram
 | 1010002 | 1 | 1 | 2 | 120 | 60 | 7001 |
 | 1020001 | 1 | 2 | 1 | 300 | 150 | 7002 |
 
-> 스폰 예시: `spawns` = `[{ "monsterCode": 9001, "count": 8 }, { "monsterCode": 9010, "count": 3 }]`, `boss_monster_code` = `9099`(보스 스테이지, 없으면 0). 스테이지 진입 응답이 이 스폰·보스 정보를 그대로 내려준다([스테이지/전투 결과 기획서](stage-battle-기획서.md) 5.1).
->
-> 벽에 막히면 이전 스테이지를 재파밍할 수 있다(하드월 없음, 개요 3장).
+> 스폰 예시: `spawns` = `[{ "monsterCode": 9001, "count": 8 }, { "monsterCode": 9010, "count": 3 }]`, `boss_monster_code` = `9099`(없으면 0). 스테이지 진입 응답이 이 스폰·보스 정보를 그대로 내려준다([스테이지/전투 결과 기획서](stage-battle-기획서.md) 5.1). 벽에 막히면 이전 스테이지를 재파밍할 수 있다(하드월 없음).
 
-### 5.11 `drop_table_master` — 드롭 테이블
+### 5.10 `drop_table_master` — 드롭 테이블
 
 몬스터/스테이지가 참조하는 전리품 확률 테이블. `(drop_table_code, entry_no)` 복합 PK로 한 테이블에 여러 항목을 담는다.
 
@@ -321,7 +297,7 @@ erDiagram
 | 7001 | 2 | 3 | 41001 | 25 |
 | 7001 | 3 | 2 | 30012 | 5 |
 
-### 5.12 `cube_master` — 큐브(Hero-dric Cube)
+### 5.11 `cube_master` — 큐브(Hero-dric Cube)
 
 `player_cube.cube_level`이 참조. 큐브 레벨별 요구 경험치와 합성/분해/제작 규칙을 정의한다.
 
@@ -338,9 +314,9 @@ erDiagram
 | 1 | 1000 | `{ "combine_grade_up": true, "gold_per_scrap": 100 }` |
 | 2 | 3000 | `{ "combine_grade_up": true, "gold_per_scrap": 150 }` |
 
-> 큐브 합성/제작 상세 규칙은 인벤토리/큐브 기획서에서 확정.
+> 큐브 합성/제작 상세 규칙은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md)에서 확정.
 
-### 5.13 `level_master` — 캐릭터 레벨
+### 5.12 `level_master` — 캐릭터 레벨
 
 `player_character.level`이 참조. 캐릭터 레벨별 요구 경험치·스탯 보너스·사용 가능 스킬 포인트를 정의한다(경험치→레벨 산정은 [성장 시스템 기획서](growth-기획서.md) 6.3).
 
@@ -348,22 +324,22 @@ erDiagram
 |---|---|---|
 | `level` | int PK | 캐릭터 레벨 |
 | `required_exp` | bigint | 이 레벨에서 다음 레벨로 가기 위한 요구 경험치 |
-| `skill_points` | int | 이 레벨에서 사용 가능한 **누적 스킬 포인트 총량**(스킬 포인트 파생 근거) |
-| `stat_bonus` | json | 레벨 도달 시 적용되는 기본 스탯 보너스 |
+| `skill_points` | int | 이 레벨에서 사용 가능한 **누적 스킬 포인트 총량** |
+| `stat_bonus` | json | 레벨 도달 시 적용되는 기본 스탯 보너스(캐릭터 스탯 구조, 5.1) |
 
 **담기는 데이터 예시**
 
 | level | required_exp | skill_points | stat_bonus |
 |---|---|---|---|
-| 1 | 100 | 1 | `{ "hp": 10, "atk": 2 }` |
-| 2 | 250 | 2 | `{ "hp": 20, "atk": 4 }` |
-| 3 | 500 | 3 | `{ "hp": 30, "atk": 6 }` |
+| 1 | 100 | 1 | `{ "hp": 10, "atk": 2, "def": 1 }` |
+| 2 | 250 | 2 | `{ "hp": 20, "atk": 4, "def": 2 }` |
+| 3 | 500 | 3 | `{ "hp": 30, "atk": 6, "def": 3 }` |
 
-> `skill_points`는 해당 레벨에서 쓸 수 있는 총 포인트다. **실제 사용 가능 포인트 = `skill_points` − 그 캐릭터가 이미 투자한 스킬 레벨 합**(스킬 1레벨당 1포인트). 스킬 포인트 잔량은 저장하지 않고 이 값으로 파생한다([성장 시스템 기획서](growth-기획서.md) 4장). 예시 값은 구조 설명용이며 실제 곡선은 밸런스에서 확정.
+> `skill_points`는 해당 레벨에서 쓸 수 있는 총 포인트다. **실제 사용 가능 포인트 = `skill_points` − 그 캐릭터가 이미 투자한 스킬 레벨 합**(스킬 1레벨당 1포인트). 스킬 포인트 잔량은 저장하지 않고 이 값으로 파생한다([성장 시스템 기획서](growth-기획서.md) 4장).
 
-### 5.14 `box_master` — 랜덤 상자
+### 5.13 `box_master` — 랜덤 상자
 
-랜덤 상자 열기([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.10)가 참조하는 상자 정의. 플레이어가 **골드를 소모**해 여는 가챠이며, 서버는 오픈 요청 시 `open_cost`(골드)를 차감한 뒤 `grade_weights`로 등급을 추첨하고 그 등급에 속한 `item_master` 아이템 중 하나를 무작위로 선택해 지급한다. 상자는 인벤토리에 적재되는 아이템이 아니므로 `item_master`에는 존재하지 않는다.
+랜덤 상자 열기([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.10)가 참조하는 상자 정의. 플레이어가 **골드를 소모**해 여는 가챠이며, 서버는 오픈 시 `open_cost`(골드)를 차감한 뒤 `grade_weights`로 등급을 추첨하고 그 등급의 `item_master` 아이템 중 하나를 무작위로 지급한다. 상자는 인벤토리에 적재되는 아이템이 아니다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -381,11 +357,11 @@ erDiagram
 | 60001 | 일반 상자 | 10000 | 1 | `{ "3": 70, "4": 25, "5": 5 }` | `null` |
 | 60002 | 고급 상자 | 50000 | 1 | `{ "4": 60, "5": 30, "6": 10 }` | `null` |
 
-> 오픈 비용·다연속 오픈 정책, 등급 추첨 후 아이템 선택이 균등인지 가중치인지, 지급 아이템 풀을 전체 `item_master.grade` 필터로 할지 상자별 화이트리스트로 할지, 수량 규칙 등 세부는 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 8장 미결과 함께 확정한다. 예시 값은 구조 설명용 샘플이다.
+> 오픈 비용·다연속 오픈 정책, 등급 추첨 후 아이템 선택 방식, 지급 아이템 풀 범위 등 세부는 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 8장 미결과 함께 확정한다.
 
-### 5.15 `attendance_master` — 출석부 일자별 보상
+### 5.14 `attendance_master` — 출석부 일자별 보상
 
-출석부([출석부 보상 시스템 기획서](attendance-기획서.md))가 참조하는 **이달 일자별(day-of-month) 보상 정의**. 서버는 출석 획득 시 오늘의 `day`(1~31)로 이 테이블을 조회해 보상을 확정하고 메일로 발급한다. `reward_type`/`reward_code` 규약은 메일 첨부(`player_mail_reward`)와 동일하다.
+출석부([출석부 보상 시스템 기획서](attendance-기획서.md))가 참조하는 **이달 일자별(day-of-month) 보상 정의**. 서버는 출석 획득 시 오늘의 `day`(1~31)로 이 테이블을 조회해 보상을 확정하고 메일로 발급한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -402,49 +378,364 @@ erDiagram
 | 7 | 2 | 41001 | 5 |
 | 15 | 2 | 41001 | 5 |
 
-> 일자별 보상 값·마일스톤(7·14·21·28일 등) 강화 여부는 [출석부 보상 시스템 기획서](attendance-기획서.md) 8장 미결과 함께 밸런스에서 확정한다. 예시 값은 구조 설명용 샘플이다.
-
 ### 공통 규칙
 
-- **키 규칙**: `stage_master`는 `(act, difficulty, stage)` 조합을 유일 키로 갖거나 이를 인코딩한 `stage_id`를 PK로 쓴다. `drop_table_master`는 `(drop_table_code, entry_no)` 복합 PK.
+- **키 규칙**: `stage_master`는 `(act, difficulty, stage)`를 인코딩한 `stage_id`를 PK로 쓴다. `drop_table_master`는 `(drop_table_code, entry_no)` 복합 PK.
 - **enum 공유**: `item_type`(1:장비 2:재료 3:소모품 4:재화)·`unlock_type`·`reward_type` 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상). 재화는 별도 `currency_type` enum 없이 `item_master`(item_type=4)의 `item_code`로 식별한다(골드=1).
 - **JSON 필드**: `base_stats`·`effect` 등 가변 구조는 JSON으로 담되, 키 스키마는 각 도메인 기획서에서 확정한다.
 
-## 6. 원천 데이터 형식과 저장 방식
+## 6. 클라이언트가 보유하는 데이터 범위
 
-- **원천(source of truth)**: 기획 데이터는 사람이 편집 가능한 형식(예: CSV/JSON, 또는 스프레드시트 export)으로 저장소에서 버전 관리한다. 원천 형식은 9장에서 확정.
-- **서버 적재**: 서버 기동 시 원천을 읽어 **인메모리 캐시**(코드→정의 딕셔너리)로 적재한다. 필요 시 읽기 전용 MySQL 테이블로도 적재할 수 있으나, 조회는 메모리 캐시를 우선한다.
-- **클라이언트 배포(확정)**: 본 프로젝트는 학습 목적이므로 마스터 데이터를 **클라이언트 빌드에 번들로 포함**한다(앱 리소스로 동봉). 별도 다운로드·캐시 갱신 절차가 없으며, 클라이언트는 시작 시 번들된 데이터를 로드해 사용한다([클라이언트 보유 기획 데이터 기획서](client-data-기획서.md)).
-- **다운로드 API 없음(확정)**: 마스터 데이터 배포용 서버 API(`/api/master/download`)와 런타임 버전 협상은 두지 않는다. 클라이언트 번들과 서버 로드가 **같은 원천**을 쓰므로 배포 시점에 동기화한다.
+클라이언트는 마스터 데이터를 **빌드에 번들**해 시작 시 로드한다(런타임 다운로드·버전 협상 없음, 8장). 아래는 마스터 테이블별 **클라이언트 보유 목적** 분류다.
 
-## 7. 처리 흐름
+| 마스터 테이블 | 클라 보유 목적 | 분류 |
+|---|---|---|
+| `class_master` | 클래스 기본 스탯(체력·공격·방어·이동속도·치명확률·치명데미지·쿨다운) | 🔴 전투 필수 |
+| `level_master` | 레벨별 스탯 보너스·요구 경험치 | 🔴 전투 필수 |
+| `item_master` | 장비 기본 옵션 + 재화(골드) 정의 | 🔴 전투 필수 |
+| `enhance_master` | 강화 단계별 스탯 배율 | 🔴 전투 필수 |
+| `skill_master` | 스킬 계수(레벨별 효과) | 🔴 전투 필수 |
+| `rune_master` | 룬 효과(% 보너스) | 🔴 전투 필수 |
+| `monster_master` | 몬스터 스탯(HP·공격력) | 🔴 전투 필수 |
+| `stage_master` | 스테이지 스폰·보스·기본 보상 | 🔴 전투 필수 |
+| `drop_table_master` | 드롭 항목(표시·예측용, 확정은 서버) | 🟡 표시용 |
+| `cube_master` | 큐브 합성/분해/제작 규칙 표시 | 🟡 표시용 |
+| `equip_slot_master` | 슬롯 이름 표시 | 🟡 표시용 |
+| `box_master` | 상자 등급 확률 안내 표시 | 🟡 표시용 |
+| `attendance_master` | 출석 달력 보상 표시 | 🟡 표시용 |
 
-- **서버 기동 시**: 원천 데이터 로드 → 무결성 검증(중복 PK, FK 참조 무결성, 필수 필드 누락) → 인메모리 캐시 구성. 검증 실패 시 기동 중단(운영 사고 예방). 로드 실패 상태에서 관련 요청이 오면 `MasterDataNotLoaded(11001)`.
-- **클라이언트 시작 시**: 빌드에 번들된 마스터 데이터를 로드해 사용한다(다운로드·버전 비교 없음, 6장).
-- **각 액션 저장 검증 시**([[save-data-기획서]] 4장): 액션 요청의 `item_code`(재화 포함)·`class_code`·성장 `code` 등을 마스터 캐시에서 조회해 **존재 여부·제약(예: 최대 강화 단계, 슬롯-아이템 타입 정합성)**을 확인한 뒤 반영. 미존재 코드는 거부.
+- 🔴 **전투 필수**: 자동 전투 연출·전투력/데미지 계산에 직접 쓰인다.
+- 🟡 **표시용**: UI 안내·미리보기용. 실제 결과(드롭·상자·큐브 RNG)는 서버가 확정한다.
+- **동적 데이터(플레이어 세이브)는 여기 포함되지 않는다**: 캐릭터 레벨·장착·인벤토리·재화 등은 `POST /api/game/load` 스냅샷으로 받는다([세이브 데이터 기획서](save-data-기획서.md) 5장). 클라 전투 계산은 "마스터 데이터(정적) + 세이브(동적)"를 결합한다.
+
+## 7. 클라이언트(Unity) 연동
+
+번들 JSON은 5장 필드를 **camelCase**로 표기한 **테이블별 배열**이다(공유 DTO 직렬화 규약). 예:
+
+```json
+// class_master.json
+[ { "classCode": 1, "name": "Knight", "unlockType": 0,
+    "baseStats": { "hp": 120, "atk": 10, "def": 8, "moveSpeed": 3.0, "critChance": 0.05, "critDamage": 1.5, "cooldown": 1.2 } } ]
+// item_master.json
+[ { "itemCode": 1, "name": "골드", "itemType": 4, "grade": 1, "equipSlot": 0, "classReq": 0, "levelReq": 0, "stackMax": 0, "baseStats": {}, "sellable": 0, "basePrice": 0 },
+  { "itemCode": 30012, "name": "강철 대검", "itemType": 1, "grade": 3, "equipSlot": 1, "classReq": 1, "levelReq": 15, "stackMax": 1, "baseStats": { "atk": 45, "cooldown": -0.1 }, "sellable": 1, "basePrice": 50000 } ]
+```
+
+**설계 원칙**
+- **데이터 클래스(POCO)는 `TaskbarHero.Common`(`netstandard2.0`)에 둔다** — 서버-클라 공유, Unity 의존성 없음. `[System.Serializable]` + **public 필드**(Unity `JsonUtility` 요구사항)로 정의한다.
+- **로더(`JsonUtility` 사용)는 Unity 클라이언트 측**에 둔다. `JsonUtility`는 최상위 배열·`Dictionary`를 직접 파싱하지 못하므로 **배열 래핑 헬퍼**로 파싱한 뒤 코드→객체 `Dictionary`로 인덱싱한다.
+- 외부 패키지 없이 동작한다. 임의 구조(가변 effect 등)가 필요하면 Newtonsoft(`com.unity.nuget.newtonsoft-json`)로 대체할 수 있다.
+
+### 7.1 공유 데이터 클래스 (`TaskbarHero.Common`)
+
+```csharp
+using System;
+
+namespace TaskbarHero.Common.MasterData
+{
+    // 공통 캐릭터 스탯 (base_stats / stat_bonus). 없는 필드는 0으로 채워진다.
+    [Serializable]
+    public struct Stats
+    {
+        public long  hp;          // 체력
+        public long  atk;         // 공격
+        public long  def;         // 방어
+        public float moveSpeed;   // 이동속도
+        public float critChance;  // 치명확률 (0~1, 예: 0.15 = 15%)
+        public float critDamage;  // 치명데미지 배율 (예: 1.5 = 150%)
+        public float cooldown;    // 재사용 대기시간(공격/스킬 주기, 초)
+    }
+
+    [Serializable]
+    public class ClassMaster
+    {
+        public int classCode;
+        public string name;
+        public int unlockType;   // 0:기본 1:해금 2:유료
+        public Stats baseStats;
+    }
+
+    [Serializable]
+    public class LevelMaster
+    {
+        public int level;
+        public long requiredExp;
+        public int skillPoints;
+        public Stats statBonus;   // 해당 레벨 누적 스탯 보너스
+    }
+
+    [Serializable]
+    public class ItemMaster
+    {
+        public int itemCode;
+        public string name;
+        public int itemType;      // 1:장비 2:재료 3:소모품 4:재화(골드 등)
+        public int grade;
+        public int equipSlot;
+        public int classReq;      // 0=전 클래스
+        public int levelReq;      // 5레벨 단위, 0=제한 없음
+        public int stackMax;
+        public Stats baseStats;
+        public int sellable;      // 0/1
+        public long basePrice;    // 거래소 기준가(±20% 등록), 0=거래 불가
+    }
+
+    [Serializable] public struct StatMultiplier { public float hp; public float atk; public float def; }
+
+    [Serializable]
+    public class EnhanceMaster
+    {
+        public int enhanceLevel;
+        public long cost;
+        public int currencyType;  // 소모 재화 item_code(골드=1)
+        public StatMultiplier statMultiplier;
+    }
+
+    // 스킬 레벨별 효과. 스킬마다 쓰는 키가 다르므로 선택 필드로 모은다(없으면 0).
+    [Serializable]
+    public struct SkillEffect
+    {
+        public float dmg;      // 데미지 스킬: 공격력 대비 %(예: 120 = 120%)
+        public float defPct;   // 방어 패시브 등
+        public float aggro;    // 도발 계수 등
+        public float critPct;
+    }
+
+    [Serializable]
+    public class SkillMaster
+    {
+        public int skillCode;
+        public int classCode;
+        public string name;
+        public int skillType;             // 1:액티브 2:패시브
+        public int maxLevel;
+        public SkillEffect[] effectPerLevel;   // index 0 = 1레벨
+    }
+
+    [Serializable] public struct RuneEffect { public float atkPct; public float critPct; }
+
+    [Serializable]
+    public class RuneMaster
+    {
+        public int runeCode;
+        public string name;
+        public int prereqCode;   // 0=루트
+        public long cost;
+        public int maxLevel;
+        public RuneEffect effect;   // 레벨당 누적 %
+    }
+
+    [Serializable]
+    public class MonsterMaster
+    {
+        public int monsterCode;
+        public string name;
+        public long hp;
+        public long attack;
+        public int dropTableCode;
+    }
+
+    [Serializable] public struct Spawn { public int monsterCode; public int count; }
+
+    [Serializable]
+    public class StageMaster
+    {
+        public int stageId;
+        public int act;
+        public int difficulty;
+        public int stage;
+        public long rewardGold;
+        public long rewardExp;
+        public int dropTableCode;
+        public Spawn[] spawns;
+        public int bossMonsterCode;   // 0=보스 없음
+    }
+}
+```
+
+### 7.2 JSON 배열 파싱 헬퍼 (Unity)
+
+```csharp
+using UnityEngine;
+
+// JsonUtility는 최상위 배열("[ ... ]")을 파싱하지 못하므로 객체로 감싸 파싱한다.
+public static class JsonHelper
+{
+    [System.Serializable] private class Wrapper<T> { public T[] items; }
+
+    public static T[] FromJsonArray<T>(string arrayJson)
+    {
+        string wrapped = "{\"items\":" + arrayJson + "}";
+        return JsonUtility.FromJson<Wrapper<T>>(wrapped).items;
+    }
+}
+```
+
+### 7.3 마스터 DB 로더 (Unity)
+
+```csharp
+using System;
+using System.Collections.Generic;
+using TaskbarHero.Common.MasterData;
+
+// 빌드에 번들된 테이블별 JSON 배열을 코드→객체 Dictionary로 인덱싱해 보관한다.
+public class MasterDatabase
+{
+    public readonly Dictionary<int, ClassMaster>   Classes  = new Dictionary<int, ClassMaster>();
+    public readonly Dictionary<int, LevelMaster>   Levels   = new Dictionary<int, LevelMaster>();
+    public readonly Dictionary<int, ItemMaster>    Items    = new Dictionary<int, ItemMaster>();
+    public readonly Dictionary<int, EnhanceMaster> Enhances = new Dictionary<int, EnhanceMaster>();
+    public readonly Dictionary<int, SkillMaster>   Skills   = new Dictionary<int, SkillMaster>();
+    public readonly Dictionary<int, RuneMaster>    Runes    = new Dictionary<int, RuneMaster>();
+    public readonly Dictionary<int, MonsterMaster> Monsters = new Dictionary<int, MonsterMaster>();
+    public readonly Dictionary<int, StageMaster>   Stages   = new Dictionary<int, StageMaster>();
+
+    // 각 인자는 번들 리소스(TextAsset 등)에서 읽은 테이블별 JSON 배열 문자열
+    public void Load(string classesJson, string levelsJson, string itemsJson, string enhancesJson,
+                     string skillsJson, string runesJson, string monstersJson, string stagesJson)
+    {
+        Fill(Classes,  JsonHelper.FromJsonArray<ClassMaster>(classesJson),   c => c.classCode);
+        Fill(Levels,   JsonHelper.FromJsonArray<LevelMaster>(levelsJson),    l => l.level);
+        Fill(Items,    JsonHelper.FromJsonArray<ItemMaster>(itemsJson),      i => i.itemCode);
+        Fill(Enhances, JsonHelper.FromJsonArray<EnhanceMaster>(enhancesJson),e => e.enhanceLevel);
+        Fill(Skills,   JsonHelper.FromJsonArray<SkillMaster>(skillsJson),    s => s.skillCode);
+        Fill(Runes,    JsonHelper.FromJsonArray<RuneMaster>(runesJson),      r => r.runeCode);
+        Fill(Monsters, JsonHelper.FromJsonArray<MonsterMaster>(monstersJson),m => m.monsterCode);
+        Fill(Stages,   JsonHelper.FromJsonArray<StageMaster>(stagesJson),    s => s.stageId);
+    }
+
+    private static void Fill<T>(Dictionary<int, T> dict, T[] rows, Func<T, int> keySelector)
+    {
+        dict.Clear();
+        if (rows == null) return;
+        foreach (var row in rows) dict[keySelector(row)] = row;
+    }
+}
+```
+
+> 마스터 데이터는 빌드에 번들되므로 런타임 다운로드·버전 비교가 없다. 클라이언트는 시작 시 번들 리소스(예: `Resources`/`StreamingAssets`의 JSON)를 읽어 `Load(...)`를 1회 호출한다.
+
+### 7.4 사용 예시 — 전투력·스킬 데미지 계산
+
+> 아래 계산식은 **구조 설명용 예시**다. 실제 밸런스 공식(스탯 합산 순서, 방어 감산, 치명타 등)은 전투 기획에서 확정한다(9장 미결). 서버도 동일 공식으로 재계산해 보상을 확정한다.
+
+```csharp
+using System.Collections.Generic;
+using TaskbarHero.Common.MasterData;
+
+// 세이브 스냅샷(/api/game/load)에서 오는 동적 데이터의 최소 형태
+public struct EquippedItem { public int itemCode; public int enhanceLevel; }
+public struct OwnedRune    { public int runeCode; public int level; }
+
+public class CombatCalculator
+{
+    private readonly MasterDatabase db;
+    public CombatCalculator(MasterDatabase database) { db = database; }
+
+    // 캐릭터 종합 스탯 = 클래스 기본 + 레벨 보너스 + 장비(공격력에 강화 배율) + 룬 %
+    public Stats AggregateStats(int classCode, int level, IEnumerable<EquippedItem> equips, IEnumerable<OwnedRune> runes)
+    {
+        Stats s = db.Classes[classCode].baseStats;                      // 클래스 기본 스탯
+
+        if (db.Levels.TryGetValue(level, out var lv))                   // 레벨 누적 보너스
+        {
+            s.hp += lv.statBonus.hp; s.atk += lv.statBonus.atk; s.def += lv.statBonus.def;
+            s.moveSpeed += lv.statBonus.moveSpeed; s.critChance += lv.statBonus.critChance;
+            s.critDamage += lv.statBonus.critDamage; s.cooldown += lv.statBonus.cooldown;
+        }
+
+        foreach (var e in equips)                                       // 장비 합(공격력에 강화 배율 적용)
+        {
+            if (!db.Items.TryGetValue(e.itemCode, out var im)) continue;
+            float atkMult = 1f;
+            if (db.Enhances.TryGetValue(e.enhanceLevel, out var en) && en.statMultiplier.atk > 0f)
+                atkMult = en.statMultiplier.atk;
+            s.hp += im.baseStats.hp; s.atk += (long)(im.baseStats.atk * atkMult); s.def += im.baseStats.def;
+            s.moveSpeed += im.baseStats.moveSpeed; s.critChance += im.baseStats.critChance;
+            s.critDamage += im.baseStats.critDamage; s.cooldown += im.baseStats.cooldown;
+        }
+
+        float atkPct = 0f;                                              // 룬 공격력 % 합
+        foreach (var r in runes)
+            if (db.Runes.TryGetValue(r.runeCode, out var rm))
+                atkPct += rm.effect.atkPct * r.level;
+        s.atk = (long)(s.atk * (1f + atkPct));
+
+        return s;
+    }
+
+    // 액티브 스킬 1히트 기본 데미지 = 공격력 × (레벨 계수 / 100)
+    public long SkillDamage(long attack, int skillCode, int skillLevel)
+    {
+        var sk = db.Skills[skillCode];
+        int idx = skillLevel - 1;
+        if (idx < 0) idx = 0;
+        if (idx >= sk.effectPerLevel.Length) idx = sk.effectPerLevel.Length - 1;
+        return (long)(attack * sk.effectPerLevel[idx].dmg / 100f);      // 120 → 1.2배
+    }
+
+    // 치명타 기대 데미지 = 기본 × (1 + 치명확률 × (치명데미지 - 1))
+    public long ExpectedSkillDamage(Stats attacker, int skillCode, int skillLevel)
+    {
+        long baseDmg = SkillDamage(attacker.atk, skillCode, skillLevel);
+        float p = attacker.critChance; if (p < 0f) p = 0f; if (p > 1f) p = 1f;
+        float critMul = attacker.critDamage <= 0f ? 1f : attacker.critDamage;
+        return (long)(baseDmg * (1f + p * (critMul - 1f)));
+    }
+
+    // 초당 데미지(연출/예측용) = 기대 데미지 / 재사용 대기시간(초)
+    public double SkillDps(Stats attacker, int skillCode, int skillLevel)
+    {
+        float cd = attacker.cooldown <= 0f ? 1f : attacker.cooldown;    // cooldown은 공격/스킬 주기(초)
+        return ExpectedSkillDamage(attacker, skillCode, skillLevel) / (double)cd;
+    }
+
+    // 몬스터를 처치하는 데 필요한 타격 수(연출용 예측)
+    public int HitsToKill(long damagePerHit, int monsterCode)
+    {
+        long hp = db.Monsters[monsterCode].hp;
+        if (damagePerHit <= 0) return int.MaxValue;
+        return (int)((hp + damagePerHit - 1) / damagePerHit);
+    }
+}
+```
+
+**사용 흐름 요약**
+1. 앱 시작 → 번들된 마스터 JSON 로드 → `MasterDatabase.Load(...)`(다운로드 없음).
+2. `POST /api/game/load`로 세이브 스냅샷(캐릭터 레벨·장착·룬 등) 수신.
+3. 마스터 + 세이브를 결합해 `CombatCalculator`로 전투력·데미지·처치 시간을 산출 → 자동 전투 연출.
+4. 서버는 클리어·오프라인 보상 등을 **자체 재계산**으로 확정한다(클라 계산은 신뢰하지 않음).
+
+## 8. 원천 데이터·배포·처리 흐름 & 에러 코드
+
+- **원천(source of truth)**: 기획 데이터는 사람이 편집 가능한 형식(예: CSV/JSON, 스프레드시트 export)으로 저장소에서 버전 관리한다. 원천 형식은 9장에서 확정.
+- **서버 적재**: 서버 기동 시 원천을 읽어 **인메모리 캐시**(코드→정의 딕셔너리)로 적재한다. 무결성 검증(중복 PK, FK 참조 무결성, 필수 필드 누락) 실패 시 기동 중단. 로드 실패 상태에서 관련 요청이 오면 `MasterDataNotLoaded(11001)`.
+- **클라이언트 배포(확정)**: 마스터 데이터를 **클라이언트 빌드에 번들**로 포함한다(앱 리소스로 동봉). 시작 시 번들 데이터를 로드(7장)하며, **다운로드·캐시 갱신·버전 협상 API는 없다**. 클라이언트 번들과 서버 로드가 **같은 원천**을 쓰므로 배포 시점에 동기화한다.
+- **각 액션 저장 검증 시**([[save-data-기획서]] 4장): 액션 요청의 `item_code`(재화 포함)·`class_code`·성장 `code` 등을 마스터 캐시에서 조회해 **존재 여부·제약**을 확인한 뒤 반영. 미존재 코드는 거부.
 - **드롭/보상 계산 시**: 스테이지·몬스터·드롭 테이블 마스터를 참조해 서버가 전리품을 산출(서버 권위).
 
-## 8. 배포 방식 & 에러 코드
+**에러 코드** — 마스터 데이터 도메인은 **11000번대**([통합 정의](../공통/error-code-정의.md)).
 
-**배포 방식(확정)**: 마스터 데이터 배포용 서버 API는 **두지 않는다**. 본 프로젝트는 학습 목적이므로 마스터 데이터를 **클라이언트 빌드에 번들로 포함**하고, 서버는 기동 시 **같은 원천**을 자체 로드한다(6·7장). 따라서 런타임 다운로드·버전 협상·`master_data_version` 조회 API가 없다. 클라이언트 소비 방식·로더 코드는 [클라이언트 보유 기획 데이터 기획서](client-data-기획서.md) 참고.
+| 이름 | 값 | 의미 |
+|---|---|---|
+| MasterDataNotLoaded | 11001 | 서버 기동 시 마스터 데이터가 로드되지 않음(자체 로드 실패). 관련 요청 시 반환 |
 
-### 8.1 에러 코드
-
-`TaskbarHero.Common/ErrorCode.cs`의 `GameErrorCode`에 추가 제안. **마스터 데이터 도메인은 11000번대**를 사용한다.
-
-| 이름 | 값 | 의미 | 사용처 |
-|---|---|---|---|
-| MasterDataNotLoaded | 11001 | 서버 기동 시 마스터 데이터가 로드되지 않음 | 서버 자체 로드 실패(7장). 관련 요청 시 반환 |
-
-> 구 `MasterDataVersionMismatch(11002)`·`InvalidMasterRequest(11005)`는 다운로드 API·런타임 버전 협상 제거로 **폐기(결번)**한다([통합 정의](../공통/error-code-정의.md)).
+> 구 `MasterDataVersionMismatch(11002)`·`InvalidMasterRequest(11005)`는 다운로드 API·런타임 버전 협상 제거로 **폐기(결번)**한다.
 
 ## 9. 미결 사항 / TODO
 
 - **원천 데이터 형식**: CSV / JSON / 스프레드시트 export 중 확정. 편집 편의 vs 파싱 편의.
 - **각 마스터 테이블 세부 필드·수치·밸런스**: 직업·아이템·성장·스테이지 등 도메인 기획서에서 확정(본 문서는 골격과 예시 위주).
 - **큐브 합성/제작 레시피(`cube_master`) 상세**: 인벤토리/큐브 기획서와 연계.
+- **전투 공식 확정**: 스탯 합산 순서, 방어(`def`) 감산식, 치명타(`critChance`/`critDamage`) 적용, 이동속도·재사용 대기시간의 전투 반영 등 정확한 규칙은 전투 기획에서 확정(7.4 코드는 예시).
+- **비공격 스탯 강화·룬**: 현재 강화는 공격력 배율, 룬은 공격력 %만 반영. 방어·치명·이동속도·쿨다운 강화/룬 효과 도입 여부.
+- **스킬/룬 effect 스키마**: `SkillEffect`/`RuneEffect` 선택 필드 키 집합 확정(가변적이면 Newtonsoft 파싱 검토).
 
 ## 10. 참고
 
-- [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) — 도메인 4.11(정적 게임 데이터 제공)
-- [세이브 데이터 기획서](save-data-기획서.md) — 마스터 데이터를 코드로 참조하는 주체(3장 ERD, 4장 서버 검증)
+- [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) — 도메인 4.11, 서버 권위 원칙
+- [세이브 데이터 기획서](save-data-기획서.md) — 마스터를 코드로 참조하는 주체(동적 데이터)
+- [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 아이템·강화·큐브·상자
+- [성장 시스템 기획서](growth-기획서.md) — 스킬·룬 성장
+- [스테이지/전투 결과 기획서](stage-battle-기획서.md) — 전투 결과 서버 검증(클라 계산은 예측)
+- [거래소 / 교역선 기획서](trade-기획서.md) — `item_master.base_price` 기준가

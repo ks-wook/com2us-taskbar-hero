@@ -2,7 +2,7 @@
 
 > 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.5
 >
-> 본 문서는 플레이어 캐릭터의 **성장 축 중 직업(클래스)·스킬·룬**을 서버 권위로 관리·검증하는 규칙을 다룬다. 저장 골격은 [세이브 데이터 기획서](save-data-기획서.md)(`game_player`·`player_character`·`player_skill`·`player_rune`), 정적 정의는 [마스터 데이터 기획서](master-data-기획서.md)(`class_master`·`skill_master`·`rune_master`)를 참고한다. 펫·장비 강화는 본 문서 범위 밖이다(장비 강화는 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.3).
+> 본 문서는 플레이어 캐릭터의 **성장 축 중 직업(클래스)·스킬·룬**을 서버 권위로 관리·검증하는 규칙을 다룬다. 저장 골격은 [세이브 데이터 기획서](save-data-기획서.md)(`game_player`·`player_character`·`player_skill`·`player_rune`), 정적 정의는 [마스터 데이터 기획서](master-data-기획서.md)(`class_master`·`skill_master`·`rune_master`)를 참고한다. 장비 강화는 본 문서 범위 밖이다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.3).
 
 ## 1. 개요
 
@@ -52,7 +52,7 @@
 - **룬 레벨(`player_rune`, `(user_id, rune_code)`, 계정 공유)**: 0(미해금)부터 `rune_master.max_level`까지. 골드로 올리며, 선행 룬(`prereq_code`)이 **레벨 1 이상**이어야 해금(0→1) 가능하다. **룬 초기화는 지원하지 않는다.**
 
 **공유 enum / DTO (TaskbarHero.Common)**
-- 스킬(`player_skill`)과 룬(`player_rune`)은 별도 테이블로 저장하므로 성장 종류 구분용 `growth_type` 컬럼·enum은 두지 않는다. 펫은 본 문서 범위 밖이며 저장 테이블도 아직 없다.
+- 스킬(`player_skill`)과 룬(`player_rune`)은 별도 테이블로 저장하므로 성장 종류 구분용 `growth_type` 컬럼·enum은 두지 않는다.
 - 성장 액션 결과 DTO(스킬/룬 레벨업 결과, 5장 응답 `data`)는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다.
 
 ## 5. API 명세
@@ -243,7 +243,7 @@ COMMIT → { runeCode, level, cost, balance }
 
 ## 8. 미결 사항 / TODO
 
-- **마스터 데이터 반영 완료 · 밸런스 수치만 대기**: `level_master`(레벨별 요구 경험치·스탯·누적 스킬 포인트)와 `skill_master.skill_type`(1:액티브 2:패시브)를 [마스터 데이터 기획서](master-data-기획서.md)(5.6·5.13)에 **테이블/필드로 반영 완료**. 남은 것은 **밸런스 수치**(레벨 곡선·레벨당 스킬 포인트·룬 레벨별 골드 비용) 확정뿐이다.
+- **마스터 데이터 반영 완료 · 밸런스 수치만 대기**: `level_master`(레벨별 요구 경험치·스탯·누적 스킬 포인트)와 `skill_master.skill_type`(1:액티브 2:패시브)를 [마스터 데이터 기획서](master-data-기획서.md)(`skill_master` 5.6·`level_master` 5.12)에 **테이블/필드로 반영 완료**. 남은 것은 **밸런스 수치**(레벨 곡선·레벨당 스킬 포인트·룬 레벨별 골드 비용) 확정뿐이다.
 - **액티브 스킬 장착 (확정 · 반영 완료)**: 액티브 스킬은 **캐릭터당 최대 2개**만 장착·사용(패시브는 제한 없이 상시 적용). 장착은 API 5.3(`skill/equip`)으로 설정하고 `player_skill.equipped`(0/1)에 저장한다. 남은 미결: 액티브 스킬의 **전투 시 발동 순서·쿨다운 등 사용 규칙**은 전투 도메인(4.6)과 함께 정의.
 
 ## 9. 참고
