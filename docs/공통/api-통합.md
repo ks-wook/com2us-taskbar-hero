@@ -2,10 +2,26 @@
 
 > 지금까지 작성된 세부 기획서들의 **API 엔드포인트를 한곳에 모은 참조 문서**다. 요청/응답의 상세 스키마와 처리 규칙은 원 기획서(각 행의 "출처")가 **정본**이며, 본 문서는 전체 목록을 빠르게 보기 위한 집약본이다.
 
+## 목차
+
+- [1. 공통 규약](#1-공통-규약)
+- [2. AccountServer API](#2-accountserver-api-5160)
+- [3. GameServer API](#3-gameserver-api-5247)
+  - [3.1 세이브 / 진행](#31-세이브--진행)
+  - [3.2 오프라인 보상](#32-오프라인-보상)
+  - [3.3 인벤토리 / 아이템 / 큐브](#33-인벤토리--아이템--큐브)
+  - [3.4 성장 (직업 / 스킬 / 룬)](#34-성장-직업--스킬--룬)
+  - [3.5 스테이지 / 전투](#35-스테이지--전투)
+  - [3.6 거래소 / 교역선](#36-거래소--교역선)
+  - [3.7 메일(보상)](#37-메일보상)
+  - [3.8 출석부 보상](#38-출석부-보상)
+- [4. 에러 코드](#4-에러-코드)
+- [5. 출처 문서](#5-출처-문서)
+
 ## 1. 공통 규약
 
 - 모든 API는 **POST**. 응답은 `{ success, errorCode, message, data }` 형식이며 `success`는 `errorCode == 0`(`Success`)과 동치다.
-- **인증**: 로그인 이후 요청은 body에 `{ userId, token, data }`를 담는다(헤더 미사용). 미들웨어가 `token`을 Redis `auth:token:{userId}`와 대조. **GameServer의 게임 API는 모두 인증이 필요**하므로 아래 GameServer 표(3장)에는 인증 칼럼을 두지 않는다. **무인증 예외**: AccountServer의 회원가입·로그인, 그리고 마스터 다운로드(`POST /api/master/download`, 로그인 이전 패치 단계에도 받아야 하므로).
+- **인증**: 로그인 이후 요청은 body에 `{ userId, token, data }`를 담는다(헤더 미사용). 미들웨어가 `token`을 Redis `auth:token:{userId}`와 대조. **GameServer의 게임 API는 모두 인증이 필요**하므로 아래 GameServer 표(3장)에는 인증 칼럼을 두지 않는다. **무인증 예외**: AccountServer의 회원가입·로그인뿐이다(마스터 데이터는 클라이언트 번들이라 다운로드 API가 없다).
 - `errorCode`는 `TaskbarHero.Common`의 `GameErrorCode`이며 값 목록은 [GameErrorCode 통합 정의](error-code-정의.md) 참고.
 - **Base URL(개발)**: AccountServer `http://localhost:5160`, GameServer `http://localhost:5247`.
 
@@ -124,16 +140,7 @@
 
 - 날짜 경계는 서버 KST 자정, 하루 1회(`(user_id, attend_date)` 유니크). 획득 보상은 즉시 지급이 아니라 **메일(3.6)로 발급**되어 우편함 수령 시 계정 반영.
 
-### 3.9 마스터 데이터
-
-> 출처: [마스터 데이터 기획서](../세부/master-data-기획서.md) 8장
-
-| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
-|---|---|---|---|---|
-| `POST /api/master/download` | 마스터 데이터 다운로드(버전 상이 시만) | `{ clientVersion, tables?[] }` | `version`, `upToDate`, `tables{}` | `MasterDataNotLoaded(11001)`, `InvalidMasterRequest(11005)` |
-
-- **이 API만 무인증**이다(GameServer의 다른 게임 API는 모두 인증 필요, 1장 규약). 로그인 이전 패치 단계에도 받아야 하기 때문.
-- 클라이언트 캐시 버전과 서버 `master_data_version`이 **다를 때만** 데이터 반환(같으면 `upToDate:true`).
+> **마스터(기획) 데이터 다운로드 API는 두지 않는다.** 본 프로젝트는 학습 목적이므로 마스터 데이터는 **클라이언트에 번들로 포함**되고, 서버도 같은 원천을 기동 시 자체 로드한다(런타임 배포·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data-기획서.md)).
 
 ## 4. 에러 코드
 

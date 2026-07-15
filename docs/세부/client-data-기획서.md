@@ -6,14 +6,14 @@
 
 ## 1. 개요
 
-- **목적**: 방치형 게임 특성상 클라이언트는 **자동 전투 연출·전투력 계산·UI 표시**를 로컬에서 수행해야 한다. 이를 위해 클라이언트는 몬스터 스탯, 클래스 기본 공격력, 스킬 계수, 레벨 곡선, 아이템/강화 배율 등 **기획 데이터를 로컬 캐시로 보유**한다. 본 문서는 그 데이터의 목록·스키마·예제와 Unity 연동 코드를 제공해, 클라이언트 구현이 서버 마스터 데이터와 어긋나지 않게 한다.
-- **대상**: **Unity 클라이언트**(데이터 로딩·전투 시뮬레이션·UI), `TaskbarHero.Common`(서버-클라 공유 데이터 클래스·enum, `netstandard2.0`), `GameServer`(마스터 데이터 원천·배포).
-- **서버 권위 원칙(중요)**: 클라이언트가 이 데이터로 하는 계산은 **연출·예측용**이다. 오프라인 보상·스테이지 클리어 보상·성장 결과 등 **이득이 되는 값의 최종 확정은 서버가 동일 마스터 데이터로 재계산**한다([서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) 5장, [스테이지/전투 결과 기획서](stage-battle-기획서.md)). 따라서 클라이언트 데이터는 **서버와 동일 버전**이어야 한다(3장 버전 일치).
-- **관련 기획서**: [[master-data-기획서]] (마스터 데이터 정본·다운로드 API), [[stage-battle-기획서]] (전투 결과 검증), [[growth-기획서]] (스킬·룬 성장), [[save-data-기획서]] (플레이어 세이브 = 동적 데이터), [[서버-시스템-전체-개요]] (도메인 4.11)
+- **목적**: 방치형 게임 특성상 클라이언트는 **자동 전투 연출·전투력 계산·UI 표시**를 로컬에서 수행해야 한다. 이를 위해 클라이언트는 몬스터 스탯, 클래스 기본 공격력, 스킬 계수, 레벨 곡선, 아이템/강화 배율 등 **기획 데이터를 빌드에 번들로 포함**해 보유한다. 본 문서는 그 데이터의 목록·스키마·예제와 Unity 연동 코드를 제공해, 클라이언트 구현이 서버 마스터 데이터와 어긋나지 않게 한다.
+- **대상**: **Unity 클라이언트**(데이터 로딩·전투 시뮬레이션·UI), `TaskbarHero.Common`(서버-클라 공유 데이터 클래스·enum, `netstandard2.0`), `GameServer`(같은 원천을 기동 시 자체 로드).
+- **서버 권위 원칙(중요)**: 클라이언트가 이 데이터로 하는 계산은 **연출·예측용**이다. 오프라인 보상·스테이지 클리어 보상·성장 결과 등 **이득이 되는 값의 최종 확정은 서버가 동일 마스터 데이터로 재계산**한다([서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) 5장, [스테이지/전투 결과 기획서](stage-battle-기획서.md)). 클라이언트 번들과 서버 로드는 **같은 원천**을 쓰므로 배포 시점에 동기화한다(런타임 버전 협상 없음).
+- **관련 기획서**: [[master-data-기획서]] (마스터 데이터 정본·배포 방식), [[stage-battle-기획서]] (전투 결과 검증), [[growth-기획서]] (스킬·룬 성장), [[save-data-기획서]] (플레이어 세이브 = 동적 데이터), [[서버-시스템-전체-개요]] (도메인 4.11)
 
 ## 2. 클라이언트가 보유하는 데이터 범위
 
-클라이언트는 접속 시 `POST /api/master/download`로 마스터 데이터를 받아 **로컬 캐시**에 저장하고, 보유 `master_data_version`이 서버와 **다를 때만** 재다운로드한다([마스터 데이터 기획서](master-data-기획서.md) 6·8장). 아래는 마스터 테이블별 **클라이언트 보유 목적** 분류다.
+클라이언트는 마스터 데이터를 **빌드에 번들로 포함**해 시작 시 로드한다(런타임 다운로드·버전 협상 없음, [마스터 데이터 기획서](master-data-기획서.md) 6·8장). 서버도 같은 원천을 기동 시 자체 로드한다. 아래는 마스터 테이블별 **클라이언트 보유 목적** 분류다.
 
 | 마스터 테이블 | 클라 보유 목적 | 분류 |
 |---|---|---|
@@ -38,7 +38,7 @@
 
 ## 3. 전투/성장 핵심 데이터 스키마 & 예제
 
-클라이언트가 받는 JSON은 `POST /api/master/download` 응답 규약을 따른다(필드명 **camelCase**, [마스터 데이터 기획서](master-data-기획서.md) 8장). 각 테이블의 필드 정의는 정본(마스터 데이터 기획서 5장)을 따르며, 아래는 클라이언트 소비 관점의 요약과 예제 payload다.
+클라이언트가 번들하는 JSON은 필드명을 **camelCase**로 둔다(공유 DTO 직렬화 규약). 각 테이블의 필드 정의는 정본(마스터 데이터 기획서 5장)을 따르며, 아래는 클라이언트 소비 관점의 요약과 예제 payload다.
 
 ### 3.1 `class_master` — 클래스 기본 스탯
 ```json
@@ -283,11 +283,9 @@ using System;
 using System.Collections.Generic;
 using TaskbarHero.Common.MasterData;
 
-// 다운로드된 테이블별 JSON 배열을 코드→객체 Dictionary로 인덱싱해 보관한다.
+// 빌드에 번들된 테이블별 JSON 배열을 코드→객체 Dictionary로 인덱싱해 보관한다.
 public class MasterDatabase
 {
-    public int version;   // master_data_version
-
     public readonly Dictionary<int, ClassMaster>   Classes  = new Dictionary<int, ClassMaster>();
     public readonly Dictionary<int, LevelMaster>   Levels   = new Dictionary<int, LevelMaster>();
     public readonly Dictionary<int, ItemMaster>    Items    = new Dictionary<int, ItemMaster>();
@@ -297,11 +295,10 @@ public class MasterDatabase
     public readonly Dictionary<int, MonsterMaster> Monsters = new Dictionary<int, MonsterMaster>();
     public readonly Dictionary<int, StageMaster>   Stages   = new Dictionary<int, StageMaster>();
 
-    // 각 인자는 /api/master/download 응답의 테이블별 JSON 배열 문자열
+    // 각 인자는 번들 리소스(TextAsset 등)에서 읽은 테이블별 JSON 배열 문자열
     public void Load(string classesJson, string levelsJson, string itemsJson, string enhancesJson,
-                     string skillsJson, string runesJson, string monstersJson, string stagesJson, int dataVersion)
+                     string skillsJson, string runesJson, string monstersJson, string stagesJson)
     {
-        version = dataVersion;
         Fill(Classes,  JsonHelper.FromJsonArray<ClassMaster>(classesJson),   c => c.classCode);
         Fill(Levels,   JsonHelper.FromJsonArray<LevelMaster>(levelsJson),    l => l.level);
         Fill(Items,    JsonHelper.FromJsonArray<ItemMaster>(itemsJson),      i => i.itemCode);
@@ -321,7 +318,7 @@ public class MasterDatabase
 }
 ```
 
-> 다운로드/버전 비교/로컬 캐시 저장 흐름은 [마스터 데이터 기획서](master-data-기획서.md) 6·8장을 따른다. 서버 `master_data_version`과 로컬 `version`이 다르면 재다운로드 후 `Load(...)`를 다시 호출한다.
+> 마스터 데이터는 빌드에 번들되므로 런타임 다운로드·버전 비교가 없다. 클라이언트는 시작 시 번들 리소스(예: `Resources`/`StreamingAssets`의 JSON)를 읽어 `Load(...)`를 1회 호출한다([마스터 데이터 기획서](master-data-기획서.md) 6·8장).
 
 ## 5. 사용 예시 — 전투력·스킬 데미지 계산 (클라이언트)
 
@@ -409,7 +406,7 @@ public class CombatCalculator
 ```
 
 **사용 흐름 요약**
-1. 접속 → `POST /api/master/download`로 마스터 JSON 수신 → `MasterDatabase.Load(...)`.
+1. 앱 시작 → 번들된 마스터 JSON 로드 → `MasterDatabase.Load(...)`(다운로드 없음).
 2. `POST /api/game/load`로 세이브 스냅샷(캐릭터 레벨·장착·룬 등) 수신.
 3. 마스터 + 세이브를 결합해 `CombatCalculator`로 전투력·데미지·처치 시간을 산출 → 자동 전투 연출.
 4. 서버는 클리어·오프라인 보상 등을 **자체 재계산**으로 확정한다(클라 계산은 신뢰하지 않음).
@@ -419,13 +416,13 @@ public class CombatCalculator
 - **전투 공식 확정**: 스탯 합산 순서, 방어(`def`) 감산식, 치명타(`critChance`/`critDamage`) 적용, 이동속도(`moveSpeed`)·재사용 대기시간(`cooldown`)의 전투 반영(공격 주기·연출), 스킬 대상 판정 등 정확한 전투 규칙은 전투 기획에서 확정한다. 5장 코드는 예시.
 - **비공격 스탯 강화·룬**: 현재 예시에서 강화(`enhance_master.statMultiplier`)는 공격력 배율만, 룬은 공격력 %만 반영한다. 방어·치명·이동속도·쿨다운에 대한 강화/룬 효과를 도입할지, 스탯별 배율/가산 규칙을 확정한다.
 - **스킬/룬 effect 스키마 확정**: 스킬 `effectPerLevel`·룬 `effect`의 키 집합(데미지·방어·도발·치명타 외)을 확정하고, `SkillEffect`/`RuneEffect` 선택 필드를 그에 맞춘다. 키가 크게 가변적이면 Newtonsoft 기반 파싱으로 전환 검토.
-- **JSON 필드명 규약 고정**: 다운로드 payload는 camelCase 기준(마스터 데이터 기획서 8장). 원천(CSV/JSON) 키가 snake_case인 경우 서버 직렬화 시 camelCase로 정규화하는 규칙을 마스터 데이터 배포에서 확정한다.
+- **JSON 필드명 규약 고정**: 번들 JSON은 camelCase 기준. 원천(CSV/JSON) 키가 snake_case인 경우 번들 빌드 시 camelCase로 정규화하는 규칙을 확정한다.
 - **데이터 클래스 배치 확정**: 4.1 POCO를 `TaskbarHero.Common`에 둘지(서버 공용) 클라 전용으로 둘지 — 현재는 공용(`netstandard2.0`) 권장. 서버가 자체 마스터 로딩에 같은 클래스를 재사용할지 확정.
 - **표시용(🟡) 데이터의 클라 보유 범위**: `drop_table_master` 등은 미리보기만 하고 확정은 서버다. 클라에 확률 원본을 노출할지(치트/역설계 우려) 여부 검토.
 
 ## 7. 참고
 
-- [마스터 데이터 기획서](master-data-기획서.md) — 마스터 테이블 정본 정의·다운로드 API(`/api/master/download`)·버전 관리
+- [마스터 데이터 기획서](master-data-기획서.md) — 마스터 테이블 정본 정의·배포 방식(클라 번들, 다운로드 API 없음)
 - [스테이지/전투 결과 기획서](stage-battle-기획서.md) — 전투 결과 서버 검증(클라 계산은 예측)
 - [성장 시스템 기획서](growth-기획서.md) — 스킬·룬 성장 규칙
 - [세이브 데이터 기획서](save-data-기획서.md) — 동적 데이터(`/api/game/load` 스냅샷)

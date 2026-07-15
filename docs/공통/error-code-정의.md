@@ -21,7 +21,7 @@
 | 8000번대 | 거래소 / 교역선 | [거래소 / 교역선 기획서](../세부/trade-기획서.md) 7장 | 사용 중 |
 | 9000번대 | 메일(보상) | [메일 기획서](../세부/mail-기획서.md) 7장 | 사용 중 |
 | 10000번대 | 출석부 보상 | [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) 7장 | 사용 중 |
-| 11000번대 | 마스터 데이터 | [마스터 데이터 기획서](../세부/master-data-기획서.md) 8.3 | 사용 중 |
+| 11000번대 | 마스터 데이터 | [마스터 데이터 기획서](../세부/master-data-기획서.md) 8.1 | 사용 중 |
 | 7000번대 | 재화·상점(예약) | (미작성) | 예약 |
 
 ## 2. 전체 코드 목록
@@ -139,9 +139,9 @@
 
 | 이름 | 값 | 의미 |
 |---|---|---|
-| MasterDataNotLoaded | 11001 | 서버에 마스터 데이터가 로드되지 않음 |
-| MasterDataVersionMismatch | 11002 | 게임 진행 요청 중 클라이언트-서버 마스터 버전 불일치 감지(즉시 로그아웃) |
-| InvalidMasterRequest | 11005 | 잘못된 마스터 요청(존재하지 않는 테이블명·형식 오류) |
+| MasterDataNotLoaded | 11001 | 서버 기동 시 마스터 데이터가 로드되지 않음(자체 로드 실패) |
+
+- `11002`(구 `MasterDataVersionMismatch`)·`11005`(구 `InvalidMasterRequest`)는 마스터 데이터를 **클라이언트 번들**로 전환하며 다운로드 API·런타임 버전 협상을 제거함에 따라 **폐기**했다. 결번으로 두고 재사용하지 않는다.
 
 ## 3. `TaskbarHero.Common/ErrorCode.cs` 반영안
 
@@ -226,8 +226,7 @@ namespace TaskbarHero.Common
 
         // 마스터 데이터 (11000번대)
         MasterDataNotLoaded = 11001,
-        MasterDataVersionMismatch = 11002,
-        InvalidMasterRequest = 11005,
+        // 11002(구 MasterDataVersionMismatch)·11005(구 InvalidMasterRequest): 마스터 클라 번들 전환으로 폐기(결번)
     }
 }
 ```
@@ -243,4 +242,4 @@ namespace TaskbarHero.Common
 - [거래소 / 교역선 기획서](../세부/trade-기획서.md) — 7장 에러 코드 (8000번대)
 - [메일 기획서](../세부/mail-기획서.md) — 7장 에러 코드 (9000번대)
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — 7장 에러 코드 (10000번대)
-- [마스터 데이터 기획서](../세부/master-data-기획서.md) — 8.3 에러 코드 (11000번대)
+- [마스터 데이터 기획서](../세부/master-data-기획서.md) — 8.1 에러 코드 (11000번대)
