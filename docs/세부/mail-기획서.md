@@ -93,7 +93,7 @@ erDiagram
 - **계정 단위**: 메일은 계정(`user_id`) 소속이다. 첨부 재화·아이템은 계정 공유 `player_item`(재화 행/아이템 행)에 지급된다(캐릭터 지정 없음).
 
 **공유 enum / DTO (TaskbarHero.Common)**
-- `reward_type`(1:골드 2:아이템 3:재료)은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md)·[마스터 데이터 기획서](master-data-기획서.md)의 공유 enum과 동일 값으로 고정(값 변경 금지)한다.
+- `reward_type`(1:골드 2:아이템 3:재료)은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md)·[마스터 데이터 기획서](master-data/master-data-기획서.md)의 공유 enum과 동일 값으로 고정(값 변경 금지)한다.
 - 메일·수령 결과 DTO는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다(5장 응답 스키마).
 
 ## 5. API 명세

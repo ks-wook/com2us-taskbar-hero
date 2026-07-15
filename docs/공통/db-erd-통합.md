@@ -96,7 +96,7 @@ erDiagram
         bigint  item_id PK
         bigint  user_id FK
         int     row_type "1:아이템 2:재화"
-        int     code "item_master.item_code (재화 item_type=4 포함, 골드=1)"
+        int     code "item_master.item_code (재화 item_type=3 포함, 골드=1)"
         bigint  quantity "수량/재화 금액(bigint)"
         int     slot "인벤토리 배치(0-based). 재화는 NULL(용량 미집계)"
         int     enhance_level "장비 강화 단계. 재화/비장비는 0"
@@ -184,14 +184,14 @@ erDiagram
 
 ## 4. 마스터 데이터 (정적 · 읽기 전용)
 
-> 출처: [마스터 데이터 기획서](../세부/master-data-기획서.md) 5장. 관계형 영속 테이블이 아니라 원천(CSV/JSON)에서 로드하는 인메모리 정의이며, 세이브 테이블이 코드로 참조한다.
+> 출처: [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 5장. 관계형 영속 테이블이 아니라 원천(CSV/JSON)에서 로드하는 인메모리 정의이며, 세이브 테이블이 코드로 참조한다.
 
 | 마스터 테이블 | PK | 참조하는 세이브 컬럼 |
 |---|---|---|
 | `class_master` | `class_code` | `player_character.class_code` |
 | `level_master` | `level` | `player_character.level` |
 | `equip_slot_master` | `slot` | `player_item.equipped_slot` / `item_master.equip_slot` |
-| `item_master` | `item_code` | `player_item.code`(아이템 `item_type`1~3 및 재화 `item_type`4, 골드=1) |
+| `item_master` | `item_code` | `player_item.code`(아이템 `item_type` 1~2 및 재화 `item_type` 3, 골드=1) |
 | `enhance_master` | `enhance_level` | `player_item.enhance_level` |
 | `skill_master` | `skill_code` | `player_skill.skill_code` |
 | `rune_master` | `rune_code` | `player_rune.rune_code` |
@@ -202,7 +202,7 @@ erDiagram
 | `box_master` | `box_code` | (골드 가챠 상자 열기 API 입력 · 골드 차감·지급 모두 `player_item`, 상자 자체는 저장 안 함) |
 | `attendance_master` | `day` | (출석부 일자별 보상 정의 · 지급은 메일 발급, `player_attendance`는 수령 일자 기록) |
 
-- 마스터 데이터는 **클라이언트 빌드에 번들**되고 서버도 같은 원천을 기동 시 자체 로드한다(런타임 다운로드·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data-기획서.md) 6·8장).
+- 마스터 데이터는 **클라이언트 빌드에 번들**되고 서버도 같은 원천을 기동 시 자체 로드한다(런타임 다운로드·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 6·8장).
 
 ## 5. 출처 문서
 
@@ -214,4 +214,4 @@ erDiagram
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 인벤토리·장비·큐브 세부 규칙
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 캐릭터·스킬·룬 세부 규칙
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) — 경험치·골드 지급(세이브 테이블 사용)
-- [마스터 데이터 기획서](../세부/master-data-기획서.md) — 마스터 테이블 정의
+- [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) — 마스터 테이블 정의

@@ -2,7 +2,7 @@
 
 > 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.6
 >
-> 본 문서는 플레이어의 **스테이지 진입·클리어**와 **클리어 보상 지급**을 서버 권위로 처리하는 규칙을 다룬다. 진행도 저장은 [세이브 데이터 기획서](save-data-기획서.md)(`game_player`·`player_character`), 스테이지·몬스터·드롭 정적 정의는 [마스터 데이터 기획서](master-data-기획서.md)(`stage_master`·`monster_master`·`drop_table_master`)를 참고한다. 아이템 적재·재화 반영은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md)의 규칙을 따른다.
+> 본 문서는 플레이어의 **스테이지 진입·클리어**와 **클리어 보상 지급**을 서버 권위로 처리하는 규칙을 다룬다. 진행도 저장은 [세이브 데이터 기획서](save-data-기획서.md)(`game_player`·`player_character`), 스테이지·몬스터·드롭 정적 정의는 [마스터 데이터 기획서](master-data/master-data-기획서.md)(`stage_master`·`monster_master`·`drop_table_master`)를 참고한다. 아이템 적재·재화 반영은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md)의 규칙을 따른다.
 
 ## 목차
 
@@ -31,7 +31,7 @@
 
 ## 2. 기능 설명
 
-- **스테이지 구조**: 3 Act × 4 난이도 × N 스테이지([마스터 데이터 기획서](master-data-기획서.md) `stage_master`). 파티(3인)가 함께 하나의 스테이지를 진행한다. 진행도(현재 act/stage/difficulty)는 **계정/파티 단위**다.
+- **스테이지 구조**: 3 Act × 4 난이도 × N 스테이지([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master`). 파티(3인)가 함께 하나의 스테이지를 진행한다. 진행도(현재 act/stage/difficulty)는 **계정/파티 단위**다.
 - **스테이지 진입**: 플레이어가 특정 스테이지에 진입해 자동 전투를 시작한다. 아직 도달하지 못한 스테이지(앞 스테이지 미클리어)로는 **건너뛸 수 없다**. 이미 클리어한 스테이지는 **재파밍**을 위해 다시 진입할 수 있다(하드월 없음, [개요](../공통/서버-시스템-전체-개요.md) 3장).
 - **스테이지 클리어**: 자동 전투로 스테이지를 클리어하면 클라이언트가 서버에 클리어를 알린다. 서버는 타당성을 검증하고 **해당 스테이지의 보상(골드·경험치·드롭)을 산출·지급**하며, 최고 도달 스테이지(`max_stage_cleared`)와 현재 진행도를 갱신한다.
 - **보상**: `stage_master`가 정의한 **기본 골드·경험치**와 `drop_table_master`가 정의한 **전리품(골드·아이템·재료)** 을 서버가 산출한다. 경험치는 오프라인 보상과 동일하게 **3캐릭터 모두에게 같은 값**으로 지급한다([오프라인 보상 정산 기획서](offline-reward-기획서.md)와 동일 원칙).
@@ -58,7 +58,7 @@
 |---|---|---|
 | `game_player`(`act`, `stage`, `difficulty`, `max_stage_cleared`) | 파티 현재 진행도·최고 도달 스테이지 | `stage_master` |
 | `player_character`(`exp`, `level`) | 클리어 경험치 반영(3캐릭터 동일) | `level_master` |
-| `player_item`(재화 행 `row_type=2`) | 클리어 골드 반영(`quantity` UPDATE, 계정 공유) | `item_master`(재화 `item_type=4`) |
+| `player_item`(재화 행 `row_type=2`) | 클리어 골드 반영(`quantity` UPDATE, 계정 공유) | `item_master`(재화 `item_type=3`) |
 | `player_item` | 전리품(아이템·재료) 적재(계정 공유) | `item_master`·`drop_table_master` |
 
 - **현재 진입 스테이지**: 별도 컬럼을 두지 않고 `game_player.act`/`stage`/`difficulty`가 **현재 진입(진행 중) 스테이지**를 나타낸다. 진입 요청이 이 값을 설정하고, 클리어 요청이 이 값을 기준으로 검증·전진한다.
@@ -110,7 +110,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 - `stageId`: `stage_master` 키.
 - `monsters`: 이 스테이지에 등장하는 **일반 몬스터와 등장 수량** 목록(`monsterCode`·`count`). `boss`: **스테이지 보스 몬스터**(보스가 없는 스테이지면 `null`).
-- 스폰 구성(어떤 몬스터가 몇 마리, 보스는 누구인지)은 `stage_master`가 정의하고, 각 몬스터의 스탯은 `monster_master`를 참조한다([마스터 데이터 기획서](master-data-기획서.md) `stage_master` 5.9·`monster_master` 5.8).
+- 스폰 구성(어떤 몬스터가 몇 마리, 보스는 누구인지)은 `stage_master`가 정의하고, 각 몬스터의 스탯은 `monster_master`를 참조한다([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master` 5.9·`monster_master` 5.8).
 - 오류: `StageNotFound(6001)`(마스터에 없는 스테이지), `StageLocked(6002)`(아직 도달 못 한 스테이지 스킵).
 
 ### 5.2 스테이지 클리어 — `POST /api/game/stage/clear`
@@ -211,7 +211,7 @@ COMMIT → { cleared, rewards, characters, balance, progress }
 - **플레이 타당성 검증**: 진입~클리어 최소 소요 시간(`MIN_CLEAR_SEC`) 도입 여부·값, 진입 시각 저장(`game_player.stage_entered_at` 제안)의 확정 및 세이브 ERD 반영.
 - **진행도 전진 규칙**: 한 스테이지의 "클리어 판정" 정의(몬스터 전멸 vs 보스 처치), Act·난이도 롤오버(마지막 스테이지 → 다음 Act/난이도) 규칙.
 - **재파밍 보상 차등**: 이미 클리어한 스테이지 재파밍 시 보상(골드·드롭)을 프런티어와 동일하게 줄지 감산할지.
-- **보상 수치·드롭 확률**: `stage_master.reward_gold/reward_exp`, `drop_table_master` 가중치 실제 값(밸런스). → [마스터 데이터 기획서](master-data-기획서.md).
+- **보상 수치·드롭 확률**: `stage_master.reward_gold/reward_exp`, `drop_table_master` 가중치 실제 값(밸런스). → [마스터 데이터 기획서](master-data/master-data-기획서.md).
 - **전리품 용량 초과 처리**: 인벤토리가 가득 찼을 때 초과 전리품 폐기/메일 지급 여부(메일 도메인 4.8와 연계).
 - **경험치 곡선 연계**: 레벨업·스킬 포인트 파생은 [성장 시스템 기획서](growth-기획서.md)·`level_master`를 따른다.
 
@@ -219,7 +219,7 @@ COMMIT → { cleared, rewards, characters, balance, progress }
 
 - [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) — 도메인 4.6(스테이지/전투), 4.3(오프라인)
 - [세이브 데이터 기획서](save-data-기획서.md) — `game_player`(진행도)·`player_character`(경험치) 저장, 액션 단위 저장
-- [마스터 데이터 기획서](master-data-기획서.md) — `stage_master`·`monster_master`·`drop_table_master`·`level_master`
+- [마스터 데이터 기획서](master-data/master-data-기획서.md) — `stage_master`·`monster_master`·`drop_table_master`·`level_master`
 - [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 전리품 적재·`InventoryFull(4002)`
 - [오프라인 보상 정산 기획서](offline-reward-기획서.md) — 오프라인 진행(경험치 3캐릭터 동일 지급 원칙 공유)
 - [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(6000번대 스테이지/전투)

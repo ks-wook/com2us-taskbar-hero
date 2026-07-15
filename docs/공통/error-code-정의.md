@@ -29,7 +29,7 @@
 | 7000번대 | 거래소 / 교역선 | [거래소 / 교역선 기획서](../세부/trade-기획서.md) 7장 | 사용 중 |
 | 8000번대 | 메일(보상) | [메일 기획서](../세부/mail-기획서.md) 7장 | 사용 중 |
 | 9000번대 | 출석부 보상 | [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) 7장 | 사용 중 |
-| 10000번대 | 마스터 데이터 | [마스터 데이터 기획서](../세부/master-data-기획서.md) 8 | 사용 중 |
+| 10000번대 | 마스터 데이터 | [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 8 | 사용 중 |
 
 ## 2. 전체 코드 목록
 
@@ -78,7 +78,7 @@
 | ItemNotEquippable | 4003 | 장비가 아니거나 슬롯·클래스·레벨 부적합 |
 | MaxEnhanceReached | 4004 | 최대 강화 단계 도달(다음 단계 없음) |
 | InsufficientCurrency | 4005 | 비용 재화 부족(강화/제작) |
-| InsufficientQuantity | 4006 | 소모/재료 수량 부족 |
+| InsufficientQuantity | 4006 | 아이템/재료 수량 부족 |
 | ItemEquipped | 4007 | 장착 중이라 분해 불가 |
 | InventoryCapacityMax | 4008 | 인벤토리 용량이 최대치에 도달(확장 불가) |
 | InvalidInventorySlot | 4009 | 인벤토리 칸(slot) 번호가 잘못됨(용량 범위 밖 등) |
@@ -249,4 +249,4 @@ namespace TaskbarHero.Common
 - [거래소 / 교역선 기획서](../세부/trade-기획서.md) — 7장 에러 코드 (7000번대)
 - [메일 기획서](../세부/mail-기획서.md) — 7장 에러 코드 (8000번대)
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — 7장 에러 코드 (9000번대)
-- [마스터 데이터 기획서](../세부/master-data-기획서.md) — 8장 에러 코드 (10000번대)
+- [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) — 8장 에러 코드 (10000번대)

@@ -2,7 +2,7 @@
 
 > 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.4
 >
-> 본 문서는 플레이어가 보유한 **아이템의 저장·장착·강화·소모**와 **큐브(Hero-dric Cube)의 합성/분해/제작**을 서버 권위로 처리하는 규칙을 다룬다. 저장 골격은 [세이브 데이터 기획서](save-data-기획서.md)(`player_item`·`player_cube`), 아이템·강화·큐브의 정적 정의는 [마스터 데이터 기획서](master-data-기획서.md)(`item_master`·`enhance_master`·`cube_master`·`drop_table_master`)를 참고한다.
+> 본 문서는 플레이어가 보유한 **아이템의 저장·장착·강화·소모**와 **큐브(Hero-dric Cube)의 합성/분해/제작**을 서버 권위로 처리하는 규칙을 다룬다. 저장 골격은 [세이브 데이터 기획서](save-data-기획서.md)(`player_item`·`player_cube`), 아이템·강화·큐브의 정적 정의는 [마스터 데이터 기획서](master-data/master-data-기획서.md)(`item_master`·`enhance_master`·`cube_master`·`drop_table_master`)를 참고한다.
 
 ## 목차
 
@@ -14,13 +14,12 @@
   - [5.1 장착 — `POST /api/game/inventory/equip`](#51-장착--post-apigameinventoryequip)
   - [5.2 장착 해제 — `POST /api/game/inventory/unequip`](#52-장착-해제--post-apigameinventoryunequip)
   - [5.3 강화 — `POST /api/game/inventory/enhance`](#53-강화--post-apigameinventoryenhance)
-  - [5.4 소모품 사용 — `POST /api/game/inventory/use`](#54-소모품-사용--post-apigameinventoryuse)
-  - [5.5 인벤토리 용량 확장 — `POST /api/game/inventory/expand`](#55-인벤토리-용량-확장--post-apigameinventoryexpand)
-  - [5.6 인벤토리 배치 변경(이동/교환) — `POST /api/game/inventory/move`](#56-인벤토리-배치-변경이동교환--post-apigameinventorymove)
-  - [5.7 큐브 합성 — `POST /api/game/cube/combine`](#57-큐브-합성--post-apigamecubecombine)
-  - [5.8 큐브 분해 — `POST /api/game/cube/dismantle`](#58-큐브-분해--post-apigamecubedismantle)
-  - [5.9 큐브 제작 — `POST /api/game/cube/craft`](#59-큐브-제작--post-apigamecubecraft)
-  - [5.10 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`](#510-랜덤-상자-열기-골드-가챠--post-apigameboxopen)
+  - [5.4 인벤토리 용량 확장 — `POST /api/game/inventory/expand`](#54-인벤토리-용량-확장--post-apigameinventoryexpand)
+  - [5.5 인벤토리 배치 변경(이동/교환) — `POST /api/game/inventory/move`](#55-인벤토리-배치-변경이동교환--post-apigameinventorymove)
+  - [5.6 큐브 합성 — `POST /api/game/cube/combine`](#56-큐브-합성--post-apigamecubecombine)
+  - [5.7 큐브 분해 — `POST /api/game/cube/dismantle`](#57-큐브-분해--post-apigamecubedismantle)
+  - [5.8 큐브 제작 — `POST /api/game/cube/craft`](#58-큐브-제작--post-apigamecubecraft)
+  - [5.9 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`](#59-랜덤-상자-열기-골드-가챠--post-apigameboxopen)
 - [6. 처리 흐름](#6-처리-흐름)
 - [7. 에러 코드](#7-에러-코드)
 - [8. 미결 사항 / TODO](#8-미결-사항--todo)
@@ -29,7 +28,7 @@
 
 ## 1. 개요
 
-- **목적**: 방치형 전투로 획득한 장비·재료·소모품을 **인벤토리에 보관·정리**하고, 장비를 **장착/강화**해 전투력을 올리며, **큐브**로 아이템을 합성(등급 상승)·분해(골드 전환)·제작하는 성장 순환을 서버 권위로 검증·반영한다. 아이템은 실질적 가치(거래소 판매·전투력)를 가지므로 모든 수량·등급·강화 결과는 **서버가 최종 확정**한다(클라이언트 보고 불신).
+- **목적**: 방치형 전투로 획득한 장비·재료를 **인벤토리에 보관·정리**하고, 장비를 **장착/강화**해 전투력을 올리며, **큐브**로 아이템을 합성(등급 상승)·분해(골드 전환)·제작하는 성장 순환을 서버 권위로 검증·반영한다. 아이템은 실질적 가치(거래소 판매·전투력)를 가지므로 모든 수량·등급·강화 결과는 **서버가 최종 확정**한다(클라이언트 보고 불신).
 - **대상 서버**: `GameServer`(인벤토리/장비/큐브 상태 관리·검증·반영), `TaskbarHero.Common`(분류 enum·결과 DTO 공유). 인증은 AccountServer 발급 토큰을 GameServer 미들웨어가 검증.
 - **범위 경계**:
   - **아이템 *획득*(드롭)의 확정은 본 문서 밖**이다. 온라인 자동 전투의 전리품 산출은 [스테이지/전투 결과 검증](../공통/서버-시스템-전체-개요.md)(도메인 4.6)이 서버 권위로 계산하며, 그 결과가 본 문서의 인벤토리에 적재된다. 오프라인 보상은 **아이템을 지급하지 않는다**([오프라인 보상 정산 기획서](offline-reward-기획서.md) 2장).
@@ -39,10 +38,9 @@
 
 ## 2. 기능 설명
 
-- **인벤토리 보관**: 획득한 아이템은 인벤토리에 쌓인다. 장비(`item_type=1`)는 개별 슬롯(강화 단계가 개체별로 다르므로 겹치지 않음), 재료·소모품(`item_type=2/3`)는 `stack_max`까지 **겹쳐서(stack)** 보관한다.
-- **장착 / 해제**: 장비 아이템을 슬롯(무기·투구·갑옷·장갑·신발·반지, [마스터 데이터 기획서](master-data-기획서.md) 5.2)에 장착/해제한다. 이미 장착된 슬롯에 새 장비를 끼우면 기존 장비는 인벤토리로 되돌아온다(스왑).
+- **인벤토리 보관**: 획득한 아이템은 인벤토리에 쌓인다. 장비(`item_type=1`)는 개별 슬롯(강화 단계가 개체별로 다르므로 겹치지 않음), 재료(`item_type=2`)는 `stack_max`까지 **겹쳐서(stack)** 보관한다.
+- **장착 / 해제**: 장비 아이템을 슬롯(무기·보조무기·투구·갑옷·장갑·신발, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.2)에 장착/해제한다. 이미 장착된 슬롯에 새 장비를 끼우면 기존 장비는 인벤토리로 되돌아온다(스왑).
 - **강화**: 장비를 재화(골드 등)를 소모해 강화 단계(`enhance_level`)를 올린다. 단계별 비용·스탯 배율은 `enhance_master`가 정의한다.
-- **소모품 사용**: 소모품(`item_type=3`)은 사용해 **서버가 확정한** 효과를 얻는다.
 - **랜덤 상자 열기(골드 가챠)**: 플레이어가 원할 때 **골드를 소모**해 상자를 연다(가챠). 서버가 골드를 차감한 뒤 상자 정의(`box_master`)의 **등급 확률**로 등급을 추첨하고 그 등급의 아이템 중 하나를 무작위로 뽑아 **랜덤 등급의 랜덤 아이템**을 지급한다. 상자는 인벤토리에 적재되는 아이템(`item_type`)이 아니라, **골드를 소비해 즉시 보상을 산출**하는 방식이다. (원작은 몬스터 처치 시 확률로 오픈 기회를 얻는 방식이나, 본 프로젝트는 골드 소모형 가챠로 대체한다.)
 - **큐브(Hero-dric Cube)**: 원작의 성장형 큐브. 사용할수록 큐브 자신이 성장(`cube_level`)한다. 필요 없는 아이템은 **분해**로 골드로 전환한다(별도 폐기 기능은 두지 않음).
   - **합성(combine)**: 같은 조건의 아이템 여러 개를 소모해 **한 등급 높은** 아이템을 만든다(`synthesis_rule.combine_grade_up`).
@@ -53,7 +51,7 @@
 
 **기능 요구사항**
 - 인벤토리 조회는 별도 API를 두지 않고 [세이브 로드](save-data-기획서.md)(`POST /api/game/load`)가 전체 인벤토리·장비·큐브 스냅샷을 반환한다. 본 문서는 **상태를 바꾸는 액션**만 전용 엔드포인트로 제공한다.
-- 장착/해제, 강화, 사용/개봉, 큐브 합성/분해/제작을 각각 처리하고, 결과(변경된 인벤토리·재화·큐브 상태)를 응답한다.
+- 장착/해제, 강화, 상자 개봉, 큐브 합성/분해/제작을 각각 처리하고, 결과(변경된 인벤토리·재화·큐브 상태)를 응답한다.
 - 큐브 합성 등 **결과가 확률/규칙에 따라 결정되는 연산은 서버가 산출**하고 클라이언트는 결과만 받는다.
 - 모든 재화 소모·아이템 증감은 마스터 데이터 제약(존재 여부, `stack_max`, 최대 강화 단계, 슬롯-아이템 타입 정합성, 장비 클래스·레벨 제한)을 서버가 검증한 뒤 반영한다.
 
@@ -64,32 +62,32 @@
 
 ## 4. 데이터 모델
 
-본 시스템은 [세이브 데이터 기획서](save-data-기획서.md) 3장의 기존 테이블을 사용하며, **새 영속 테이블을 요구하지 않는다.** 다만 인벤토리 용량 확장(5.5)을 위해 `game_player`에 컬럼 1개(`inventory_capacity`)를 추가한다. 아래는 본 도메인 관점에서 각 테이블의 역할과 이 문서에서 확정/제안하는 세부 규칙이다.
+본 시스템은 [세이브 데이터 기획서](save-data-기획서.md) 3장의 기존 테이블을 사용하며, **새 영속 테이블을 요구하지 않는다.** 다만 인벤토리 용량 확장(5.4)을 위해 `game_player`에 컬럼 1개(`inventory_capacity`)를 추가한다. 아래는 본 도메인 관점에서 각 테이블의 역할과 이 문서에서 확정/제안하는 세부 규칙이다.
 
 | 테이블 | 역할 | 참조 마스터 |
 |---|---|---|
-| `player_item`(`item_id` PK, `user_id`, `row_type`, `code`, `quantity`, `slot`, `enhance_level`, `equipped_character_id`, `equipped_slot`, `acquired_at`) | 보유 **아이템·재화 통합** 테이블 (**계정 공유**). `row_type`(1:아이템 2:재화)로 구분, `code`는 **모든 행이 `item_master.item_code`**(재화는 `item_type=4`, 골드=1), `quantity`는 수량/재화 금액(`bigint`). 장착 상태는 `equipped_character_id`/`equipped_slot`(NULL=미장착)로 아이템 행에 직접 표기 | `item_master`, `enhance_master`, `equip_slot_master` |
+| `player_item`(`item_id` PK, `user_id`, `row_type`, `code`, `quantity`, `slot`, `enhance_level`, `equipped_character_id`, `equipped_slot`, `acquired_at`) | 보유 **아이템·재화 통합** 테이블 (**계정 공유**). `row_type`(1:아이템 2:재화)로 구분, `code`는 **모든 행이 `item_master.item_code`**(재화는 `item_type=3`, 골드=1), `quantity`는 수량/재화 금액(`bigint`). 장착 상태는 `equipped_character_id`/`equipped_slot`(NULL=미장착)로 아이템 행에 직접 표기 | `item_master`, `enhance_master`, `equip_slot_master` |
 | `player_cube`(`user_id` PK, `cube_level`, `cube_exp`) | 큐브 성장 상태 (**계정 공유**) | `cube_master` |
 | `game_player`(`inventory_capacity` 신규 컬럼) | 계정 인벤토리 최대 용량(골드로 확장) | — |
 
 > **장착을 별도 테이블(`player_equipment`)로 두지 않는다.** 장착은 저빈도 동작인데 별도 매핑 테이블은 로드 시 조인을 강요하고 장착/해제마다 매핑 행 INSERT/DELETE를 유발한다. 대신 아이템 행 자체에 `equipped_character_id`/`equipped_slot`을 두어 장착/해제를 **해당 행 UPDATE**로 처리하고, `(user_id, equipped_character_id, equipped_slot)` 유니크 인덱스로 "한 캐릭터-슬롯당 아이템 하나"를 보장한다(미장착은 NULL이라 무제한 공존, [세이브 데이터 기획서](save-data-기획서.md) 3장).
 
-> **재화(골드 등)도 `player_item`에 통합한다(별도 `player_currency`·`currency_master` 없음).** 재화는 `row_type=2` 행으로 저장하고 `code`=재화의 `item_code`(`item_master` `item_type=4`, 골드=1), `quantity`=재화 금액이다. 강화/제작 비용 차감, 분해 골드 적립, 용량 확장·상자 오픈 비용 차감 등 **재화 증감은 해당 재화 행의 `quantity` UPDATE**로 처리한다. 재화 행은 `slot`이 NULL이라 인벤토리 용량 집계에서 제외되며, 계정당 재화 종류당 1행 유일성은 서버가 보장한다([세이브 데이터 기획서](save-data-기획서.md) 3장). API 응답의 `cost`/`balance`/`currencies`는 이 재화 행에서 파생한다.
+> **재화(골드 등)도 `player_item`에 통합한다(별도 `player_currency`·`currency_master` 없음).** 재화는 `row_type=2` 행으로 저장하고 `code`=재화의 `item_code`(`item_master` `item_type=3`, 골드=1), `quantity`=재화 금액이다. 강화/제작 비용 차감, 분해 골드 적립, 용량 확장·상자 오픈 비용 차감 등 **재화 증감은 해당 재화 행의 `quantity` UPDATE**로 처리한다. 재화 행은 `slot`이 NULL이라 인벤토리 용량 집계에서 제외되며, 계정당 재화 종류당 1행 유일성은 서버가 보장한다([세이브 데이터 기획서](save-data-기획서.md) 3장). API 응답의 `cost`/`balance`/`currencies`는 이 재화 행에서 파생한다.
 
 - **캐릭터별/계정 공유**: 계정은 캐릭터 슬롯 3개(3인 파티, [성장 시스템 기획서](growth-기획서.md))를 가진다. **인벤토리·골드·큐브는 계정 공유**(위 표 `user_id` 단위)이고, **장비 장착만 캐릭터별**이다(`equipped_character_id` 1~3). 한 아이템 행(`item_id`)은 계정 공용이지만 **동시에 한 캐릭터·한 슬롯에만 장착**된다.
 
 **보관/스택 규칙 (확정)**
 - **배치 위치(`slot`)**: 각 행은 인벤토리 UI의 특정 칸(`slot`, 0-based)에 놓인다. `(user_id, slot)`은 유니크하며 한 칸에는 한 행만 존재한다. 재접속 시 [세이브 로드](save-data-기획서.md)가 `slot`을 함께 내려 **마지막 접속과 동일한 배치를 복원**한다. 획득 시 서버는 빈 `slot`에 배치하고, 빈 칸이 없으면(용량 초과) `InventoryFull(4002)`. `equipped_slot`(장착 슬롯)과는 별개 개념이다.
 - **장비(`item_type=1`)**: `stack_max=1`. 개체마다 `enhance_level`이 다를 수 있으므로 **1개당 1 행(row)**으로 저장하며 겹치지 않는다. `item_id`가 개체 식별자다.
-- **비장비(`item_type=2/3`)**: 동일 `code`(같은 `item_code`)는 `stack_max`까지 한 행에 `quantity`로 누적한다. 초과분은 새 행으로 분할한다.
+- **비장비(`item_type=2`)**: 동일 `code`(같은 `item_code`)는 `stack_max`까지 한 행에 `quantity`로 누적한다. 초과분은 새 행으로 분할한다.
 - **장착 중 아이템**: `equipped_character_id`가 채워진(NULL이 아닌) 아이템 행이 "장착 중"이다. 장착 중 아이템은 인벤토리(계정 공용)에 그대로 존재하되 분해·거래 대상에서 제외한다(해제 후 가능). 한 행은 `equipped_character_id`가 하나뿐이므로 같은 아이템을 둘 이상의 캐릭터가 동시에 장착할 수 없다.
 
 **공유 enum / DTO (TaskbarHero.Common)**
-- `item_type`(1:장비 2:재료 3:소모품 4:재화), `reward_type`(1:골드 2:아이템 3:재료), `equip_slot` 등 분류 코드는 [마스터 데이터 기획서](master-data-기획서.md) 5장 공통 규칙에 따라 `TaskbarHero.Common`에 enum으로 고정한다(값 변경 금지).
+- `item_type`(1:장비 2:재료 3:재화), `reward_type`(1:골드 2:아이템 3:재료), `equip_slot` 등 분류 코드는 [마스터 데이터 기획서](master-data/master-data-기획서.md) 5장 공통 규칙에 따라 `TaskbarHero.Common`에 enum으로 고정한다(값 변경 금지).
 - 액션 결과 DTO(장착 결과·강화 결과·큐브 결과 등, 5장 응답 `data` 구조)는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다. 구체 필드는 5장 응답 스키마를 따르며, 클라이언트 UI 갱신에 사용한다.
 
 **확정 필드 — 세이브 데이터 기획서 ERD 반영 필요:**
-- **인벤토리 용량(`game_player.inventory_capacity`, int)**: 플레이어별 인벤토리 최대 슬롯 수. 기본값에서 시작해 **골드 소모로 확장**한다(5.5). 확장분이 플레이어마다 달라지므로 상수가 아닌 플레이어 단위 컬럼으로 저장한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`로 반영 완료.
+- **인벤토리 용량(`game_player.inventory_capacity`, int)**: 플레이어별 인벤토리 최대 슬롯 수. 기본값에서 시작해 **골드 소모로 확장**한다(5.4). 확장분이 플레이어마다 달라지므로 상수가 아닌 플레이어 단위 컬럼으로 저장한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`로 반영 완료.
 
 ## 5. API 명세
 
@@ -98,13 +96,12 @@
 - [5.1 장착 — `POST /api/game/inventory/equip`](#51-장착--post-apigameinventoryequip)
 - [5.2 장착 해제 — `POST /api/game/inventory/unequip`](#52-장착-해제--post-apigameinventoryunequip)
 - [5.3 강화 — `POST /api/game/inventory/enhance`](#53-강화--post-apigameinventoryenhance)
-- [5.4 소모품 사용 — `POST /api/game/inventory/use`](#54-소모품-사용--post-apigameinventoryuse)
-- [5.5 인벤토리 용량 확장 — `POST /api/game/inventory/expand`](#55-인벤토리-용량-확장--post-apigameinventoryexpand)
-- [5.6 인벤토리 배치 변경(이동/교환) — `POST /api/game/inventory/move`](#56-인벤토리-배치-변경이동교환--post-apigameinventorymove)
-- [5.7 큐브 합성 — `POST /api/game/cube/combine`](#57-큐브-합성--post-apigamecubecombine)
-- [5.8 큐브 분해 — `POST /api/game/cube/dismantle`](#58-큐브-분해--post-apigamecubedismantle)
-- [5.9 큐브 제작 — `POST /api/game/cube/craft`](#59-큐브-제작--post-apigamecubecraft)
-- [5.10 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`](#510-랜덤-상자-열기-골드-가챠--post-apigameboxopen)
+- [5.4 인벤토리 용량 확장 — `POST /api/game/inventory/expand`](#54-인벤토리-용량-확장--post-apigameinventoryexpand)
+- [5.5 인벤토리 배치 변경(이동/교환) — `POST /api/game/inventory/move`](#55-인벤토리-배치-변경이동교환--post-apigameinventorymove)
+- [5.6 큐브 합성 — `POST /api/game/cube/combine`](#56-큐브-합성--post-apigamecubecombine)
+- [5.7 큐브 분해 — `POST /api/game/cube/dismantle`](#57-큐브-분해--post-apigamecubedismantle)
+- [5.8 큐브 제작 — `POST /api/game/cube/craft`](#58-큐브-제작--post-apigamecubecraft)
+- [5.9 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`](#59-랜덤-상자-열기-골드-가챠--post-apigameboxopen)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약, `success`는 `errorCode == 0`과 동치). 아래 엔드포인트는 모두 **상태 변경 액션**이며, 조회는 `POST /api/game/load`를 사용한다.
 
@@ -183,35 +180,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - 트랜잭션: 재화 차감 → `enhance_level += 1`. 강화 성공/실패 확률 도입 여부는 8장 미결(현행은 비용 지불 시 **확정 상승**으로 가정).
 - 오류: `ItemNotFound(4001)`, `ItemNotEquippable(4003)`(장비만 강화 가능), `MaxEnhanceReached(4004)`(다음 단계가 `enhance_master`에 없음), `InsufficientCurrency(4005)`.
 
-### 5.4 소모품 사용 — `POST /api/game/inventory/use`
-
-소모품(`item_type=3`)을 사용한다. 사용 효과와 그 결과(재화·아이템 지급 등)는 서버가 마스터 데이터로 **산출**해 반영한다(클라이언트 입력 없음).
-
-**Request**
-```json
-{ "userId": 1, "token": "...", "data": { "itemId": 5100, "count": 1 } }
-```
-
-**Response (성공, 200 OK)**
-```json
-{
-  "success": true,
-  "errorCode": 0,
-  "message": "Used",
-  "data": {
-    "consumed": { "itemId": 5100, "count": 1, "remaining": 4 },
-    "gained": {
-      "currencies": [ { "currencyType": 1, "amount": 5000 } ],
-      "items": [ { "itemCode": 41001, "quantity": 3 } ]
-    }
-  }
-}
-```
-
-- `gained`는 서버가 확정한 소모품 사용 결과다(클라이언트 입력 없음). 효과가 재화·아이템 지급이 아닌 소모품은 해당 형식에 맞춰 결과를 반환한다.
-- 오류: `ItemNotFound(4001)`, `InsufficientQuantity(4006)`(보유 수량 부족), 지급 결과가 인벤토리 용량을 초과하면 `InventoryFull(4002)`.
-
-### 5.5 인벤토리 용량 확장 — `POST /api/game/inventory/expand`
+### 5.4 인벤토리 용량 확장 — `POST /api/game/inventory/expand`
 
 골드를 소모해 인벤토리 최대 용량(`game_player.inventory_capacity`)을 늘린다. 확장 단위(1회당 늘어나는 슬롯 수)·단계별 골드 비용·최대 상한은 마스터 데이터가 정의하며, 서버가 산출한다(클라이언트 입력 불신).
 
@@ -240,7 +209,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - `inventoryCapacity`는 확장 후 최종 용량, `cost`는 이번에 차감된 골드 합계다.
 - 오류: `InsufficientCurrency(4005)`(골드 부족), `InventoryCapacityMax(4008)`(이미 상한에 도달해 더 이상 확장 불가).
 
-### 5.6 인벤토리 배치 변경(이동/교환) — `POST /api/game/inventory/move`
+### 5.5 인벤토리 배치 변경(이동/교환) — `POST /api/game/inventory/move`
 
 플레이어가 인벤토리에서 아이템을 **드래그해 다른 칸으로 옮긴** 결과를 서버에 저장한다. 목표 칸이 비어 있으면 이동, 다른 아이템이 있으면 두 칸을 **교환(swap)**한다. 배치는 UI 레이아웃 값이라 RNG·비용이 없으므로 범용 저장과 성격이 다르지만, 소유·용량 범위·칸 유효성을 서버가 검증해야 하므로 전용 액션 엔드포인트로 둔다.
 
@@ -268,7 +237,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - 트랜잭션: 두 행의 `slot` 갱신을 하나의 트랜잭션으로 처리해 `(user_id, slot)` 유니크 위반이 생기지 않게 한다.
 - 오류: `ItemNotFound(4001)`(대상 아이템이 인벤토리에 없음), `InvalidInventorySlot(4009)`(`toSlot`이 용량 범위 밖이거나 잘못된 값).
 
-### 5.7 큐브 합성 — `POST /api/game/cube/combine`
+### 5.6 큐브 합성 — `POST /api/game/cube/combine`
 
 같은 등급·조건의 아이템 여러 개를 소모해 한 등급 높은 아이템을 만든다.
 
@@ -294,7 +263,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - 소모 개수·등급 상승 결과 아이템 선정·확률 개입 여부는 `cube_master.synthesis_rule`과 8장 미결에 따른다.
 - 오류: `CubeRecipeNotMet(4010)`(등급/조건 불일치·개수 부족), `CubeLevelInsufficient(4011)`(큐브 레벨 요구치 미만), `ItemNotFound(4001)`.
 
-### 5.8 큐브 분해 — `POST /api/game/cube/dismantle`
+### 5.7 큐브 분해 — `POST /api/game/cube/dismantle`
 
 아이템을 분해해 골드로 전환한다(`synthesis_rule.gold_per_scrap` 기준, 서버 산출).
 
@@ -324,7 +293,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - 소모된 아이템·재화 잔액·큐브 누적 상태는 응답에 담지 않는다. 클라이언트는 획득분만 표시하고, 최신 인벤토리/큐브 스냅샷이 필요하면 `POST /api/game/load`로 재조회한다.
 - 오류: `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)`.
 
-### 5.9 큐브 제작 — `POST /api/game/cube/craft`
+### 5.8 큐브 제작 — `POST /api/game/cube/craft`
 
 > **상태: 보류(우선순위 낮음).** 제작 기능은 현재 구현 우선순위가 낮으며 추후 추가 여부를 검토한다(8장). 아래 명세는 도입이 확정될 경우의 기준안이다.
 
@@ -352,7 +321,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - 레시피 식별(`recipeCode`)·소모 재료 구성은 `cube_master`(합성/제작 규칙)와 연계하며 상세는 8장 미결.
 - 오류: `CubeRecipeNotMet(4010)`(재료 부족·잘못된 레시피), `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)`(비용 재화가 필요한 레시피인 경우).
 
-### 5.10 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`
+### 5.9 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`
 
 플레이어가 **골드를 소모**해 원할 때 상자를 연다(가챠). 서버는 상자 정의(`box_master`)의 오픈 비용(골드)을 차감한 뒤, `grade_weights`로 등급을 추첨하고 뽑힌 등급에 속한 `item_master` 아이템 중 하나를 무작위로 선택해 **랜덤 등급의 랜덤 아이템**을 지급한다. 비용 차감·등급/아이템 추첨·지급은 하나의 트랜잭션으로 처리하며 전적으로 **서버가 산출**한다(클라이언트 입력 불신). 요청의 `count`로 오픈 횟수를 받도록 스키마를 **미리 정의**해 두었으며, **현재는 단발(`count`=1)만 처리**하고 다연속 오픈(10연차 등)은 예정 사항이다(8장).
 
@@ -423,9 +392,9 @@ equip(characterId, itemId):
 ### 6.3 예외 / 엣지 케이스
 
 - **장착 중 아이템 분해/거래 시도**: `ItemEquipped(4007)`로 거부. 해제 후 처리한다.
-- **스택 초과 획득**: 지급 시 `stack_max`까지 채우고 초과분은 새 행으로 분할. 인벤토리 용량(`game_player.inventory_capacity`)을 초과하면 `InventoryFull(4002)`. 용량은 골드로 확장할 수 있다(5.5).
+- **스택 초과 획득**: 지급 시 `stack_max`까지 채우고 초과분은 새 행으로 분할. 인벤토리 용량(`game_player.inventory_capacity`)을 초과하면 `InventoryFull(4002)`. 용량은 골드로 확장할 수 있다(5.4).
 - **최대 강화 초과**: 다음 `enhance_level`이 `enhance_master`에 없으면 `MaxEnhanceReached(4004)`.
-- **재화/재료 부족**: 비용 재화 부족은 `InsufficientCurrency(4005)`, 소모/재료 수량 부족은 `InsufficientQuantity(4006)`. 검증은 반영 전에 수행하고 부족 시 롤백.
+- **재화/재료 부족**: 비용 재화 부족은 `InsufficientCurrency(4005)`, 아이템/재료 수량 부족은 `InsufficientQuantity(4006)`. 검증은 반영 전에 수행하고 부족 시 롤백.
 - **동시 중복 요청**: 같은 `item_id`에 대한 강화/소모/분해가 겹치면 행 잠금으로 직렬화하여 이중 소모를 방지한다.
 - **큐브 조건 미충족**: 합성/제작의 등급·개수·재료·큐브 레벨 조건 위반은 `CubeRecipeNotMet(4010)`/`CubeLevelInsufficient(4011)`.
 
@@ -462,7 +431,7 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 | ItemNotEquippable | 4003 | 장비가 아니거나 슬롯·클래스·레벨 부적합 |
 | MaxEnhanceReached | 4004 | 최대 강화 단계 도달(다음 단계 없음) |
 | InsufficientCurrency | 4005 | 비용 재화 부족(강화/제작) |
-| InsufficientQuantity | 4006 | 소모/재료 수량 부족 |
+| InsufficientQuantity | 4006 | 아이템/재료 수량 부족 |
 | ItemEquipped | 4007 | 장착 중이라 분해 불가 |
 | InventoryCapacityMax | 4008 | 인벤토리 용량이 최대치에 도달(확장 불가) |
 | InvalidInventorySlot | 4009 | 인벤토리 칸(slot) 번호가 잘못됨(용량 범위 밖 등) |
@@ -471,24 +440,24 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 
 - `4001~4009`는 인벤토리/아이템, `4010~4019`는 큐브에 할당한다.
 - `InsufficientCurrency(4005)`는 재화 부족을 처음 다루는 도메인으로서 본 블록에 정의한다. 재화 부족이 필요한 다른 도메인(예: 성장의 룬 업그레이드)은 이 코드를 **재정의하지 않고 그대로 재사용**한다(코드 값은 계약이므로 이동 금지).
-- **랜덤 상자 열기(5.10)**는 신규 에러 코드를 추가하지 않고 `InsufficientCurrency(4005)`(골드 부족)·`InvalidSaveData(2002)`(잘못된 `boxCode`)·`InventoryFull(4002)`·`MasterDataNotLoaded(10001)`를 재사용한다.
+- **랜덤 상자 열기(5.9)**는 신규 에러 코드를 추가하지 않고 `InsufficientCurrency(4005)`(골드 부족)·`InvalidSaveData(2002)`(잘못된 `boxCode`)·`InventoryFull(4002)`·`MasterDataNotLoaded(10001)`를 재사용한다.
 
 ## 8. 미결 사항 / TODO
 
-- **인벤토리 용량 정책 (확정)**: 플레이어 단위 컬럼(`game_player.inventory_capacity`)에 저장하고 **골드 소모로 확장**한다(API 5.5). 용량은 **점유 slot(=`player_item` 행) 수** 기준이며, 스택은 수량과 무관하게 1 slot을 차지한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`에 반영 완료. 남은 상세 — 기본 용량 값, 확장 단위(1회당 slot 수)·단계별 골드 비용·최대 상한 — 는 [마스터 데이터 기획서](master-data-기획서.md)에서 정의한다.
+- **인벤토리 용량 정책 (확정)**: 플레이어 단위 컬럼(`game_player.inventory_capacity`)에 저장하고 **골드 소모로 확장**한다(API 5.4). 용량은 **점유 slot(=`player_item` 행) 수** 기준이며, 스택은 수량과 무관하게 1 slot을 차지한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`에 반영 완료. 남은 상세 — 기본 용량 값, 확장 단위(1회당 slot 수)·단계별 골드 비용·최대 상한 — 는 [마스터 데이터 기획서](master-data/master-data-기획서.md)에서 정의한다.
 - **강화 성공 확률**: 현행은 비용 지불 시 확정 상승으로 가정. 실패/하락/파괴 확률 도입 시 `enhance_master`에 확률 필드 추가 및 본 문서 5.3 갱신.
-- **큐브 합성 상세 규칙**: 합성 소모 개수·등급 상승 결과 선정·확률, 큐브 연산당 `cube_exp` 획득량과 `cube_level` 효과. → [마스터 데이터 기획서](master-data-기획서.md) 9장(큐브 레시피 미결)과 함께 확정.
-- **큐브 제작(craft) — 우선순위 낮음(보류)**: 현재 구현 우선순위가 낮아 보류하며, **추후 제작 기능 추가 여부를 검토**한다. 5.9의 제작 API·레시피(`recipeCode`) 구성·소모 재료·비용은 도입이 확정될 때 함께 정한다.
-- **장비 클래스 제한 (확정)**: 장비는 착용 가능한 **클래스 제한**을 가진다. 현재 클래스는 **기사·레인저·마법사 3종으로 확정**([마스터 데이터 기획서](master-data-기획서.md) 5.1 `class_master`)이며, **추후 확인 후 클래스를 추가할 예정**이다. 각 장비가 어느 클래스용인지는 `item_master.class_req`로 정의한다(`0`이면 전 클래스 공용, [마스터 데이터 기획서](master-data-기획서.md) 5.3에 반영 완료). 장착(5.1) 시 서버가 `class_req`(≠0)을 **대상 캐릭터 클래스**(`player_character.class_code`)와 대조해 불일치면 `ItemNotEquippable(4003)`로 거부한다.
-- **다연속 오픈(10연차) — 예정**: 요청 `count`와 응답 `rewards` 배열은 **다연속 확장을 위해 계약에 미리 반영**했다(5.10). 현재 서버 로직은 `count`=1(단발)만 처리하며, 추후 10연차 등 다연속 오픈 로직을 구현할 때 `count`>1 처리(비용 `오픈 비용 × count`)와 묶음 할인·등급 보장(천장) 여부를 함께 확정한다.
-- **상자 오픈 비용·등급 확률·지급 아이템 풀 (`box_master`)**: 오픈 비용(`open_cost`, 골드), `grade_weights`(등급별 추첨 가중치), 지급 대상 아이템 풀 — 전체 `item_master.grade` 필터로 할지 상자별 화이트리스트로 할지, 등급 내 아이템 선택이 균등인지 가중치인지 — 및 수량 규칙은 [마스터 데이터 기획서](master-data-기획서.md)에서 확정한다.
+- **큐브 합성 상세 규칙**: 합성 소모 개수·등급 상승 결과 선정·확률, 큐브 연산당 `cube_exp` 획득량과 `cube_level` 효과. → [마스터 데이터 기획서](master-data/master-data-기획서.md) 9장(큐브 레시피 미결)과 함께 확정.
+- **큐브 제작(craft) — 우선순위 낮음(보류)**: 현재 구현 우선순위가 낮아 보류하며, **추후 제작 기능 추가 여부를 검토**한다. 5.8의 제작 API·레시피(`recipeCode`) 구성·소모 재료·비용은 도입이 확정될 때 함께 정한다.
+- **장비 클래스 제한 (확정)**: 장비는 착용 가능한 **클래스 제한**을 가진다. 현재 클래스는 **기사·레인저·마법사 3종으로 확정**([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.1 `class_master`)이며, **추후 확인 후 클래스를 추가할 예정**이다. 각 장비가 어느 클래스용인지는 `item_master.class_req`로 정의한다(`0`이면 전 클래스 공용, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.3에 반영 완료). 장착(5.1) 시 서버가 `class_req`(≠0)을 **대상 캐릭터 클래스**(`player_character.class_code`)와 대조해 불일치면 `ItemNotEquippable(4003)`로 거부한다.
+- **다연속 오픈(10연차) — 예정**: 요청 `count`와 응답 `rewards` 배열은 **다연속 확장을 위해 계약에 미리 반영**했다(5.9). 현재 서버 로직은 `count`=1(단발)만 처리하며, 추후 10연차 등 다연속 오픈 로직을 구현할 때 `count`>1 처리(비용 `오픈 비용 × count`)와 묶음 할인·등급 보장(천장) 여부를 함께 확정한다.
+- **상자 오픈 비용·등급 확률·지급 아이템 풀 (`box_master`)**: 오픈 비용(`open_cost`, 골드), `grade_weights`(등급별 추첨 가중치), 지급 대상 아이템 풀 — 전체 `item_master.grade` 필터로 할지 상자별 화이트리스트로 할지, 등급 내 아이템 선택이 균등인지 가중치인지 — 및 수량 규칙은 [마스터 데이터 기획서](master-data/master-data-기획서.md)에서 확정한다.
 - **오픈 상자 종류의 노출 방식**: 어떤 상자(`box_code`)를 어디서(상점/특정 UI) 열 수 있는지, 상자별 해금 조건이 있는지.
-- **장비 레벨 제한 (확정)**: 장비는 착용 요구 레벨을 가지며, **레벨 단위는 5레벨(5의 배수)** 로 확정한다(예: 15, 40). `item_master.level_req`로 정의하고(`0`이면 제한 없음, [마스터 데이터 기획서](master-data-기획서.md) 5.3에 반영 완료), 장착(5.1) 시 **대상 캐릭터의 `level`**이 `level_req` 미만이면 `ItemNotEquippable(4003)`로 거부한다. 요구 레벨별 스탯 곡선 등 밸런스 수치는 아이템/직업 기획서에서 확정.
+- **장비 레벨 제한 (확정)**: 장비는 착용 요구 레벨을 가지며, **레벨 단위는 5레벨(5의 배수)** 로 확정한다(예: 15, 40). `item_master.level_req`로 정의하고(`0`이면 제한 없음, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.3에 반영 완료), 장착(5.1) 시 **대상 캐릭터의 `level`**이 `level_req` 미만이면 `ItemNotEquippable(4003)`로 거부한다. 요구 레벨별 스탯 곡선 등 밸런스 수치는 아이템/직업 기획서에서 확정.
 
 ## 9. 참고
 
 - [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) — 도메인 4.4(인벤토리/아이템), 4.6(전투 결과=아이템 획득 산출), 4.7(거래소)
 - [세이브 데이터 기획서](save-data-기획서.md) — `player_item`·`player_cube` 저장 골격, 로드 스냅샷
-- [마스터 데이터 기획서](master-data-기획서.md) — `item_master`·`equip_slot_master`·`enhance_master`·`cube_master`·`drop_table_master`·`box_master`(랜덤 상자)
+- [마스터 데이터 기획서](master-data/master-data-기획서.md) — `item_master`·`equip_slot_master`·`enhance_master`·`cube_master`·`drop_table_master`·`box_master`(랜덤 상자)
 - [오프라인 보상 정산 기획서](offline-reward-기획서.md) — 오프라인 아이템 미지급
 - [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(4000번대 인벤토리/아이템/큐브)

@@ -135,7 +135,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- 아이템의 이름·스탯·등급은 클라이언트가 `item_code`로 마스터 데이터에서 조회해 표시한다([마스터 데이터 기획서](master-data-기획서.md)).
+- 아이템의 이름·스탯·등급은 클라이언트가 `item_code`로 마스터 데이터에서 조회해 표시한다([마스터 데이터 기획서](master-data/master-data-기획서.md)).
 
 ### 5.2 판매 등록 — `POST /api/game/trade/register`
 
@@ -258,7 +258,7 @@ COMMIT → { listingId, gained, cost, balance }
 
 ## 8. 미결 사항 / TODO
 
-- 현재 거래소 기획에서 별도로 남은 미결 항목은 없다(정책은 아래 확정 사항 참고). 아이템별 `base_price` 실제 수치는 [마스터 데이터 기획서](master-data-기획서.md) 밸런스에서 채운다.
+- 현재 거래소 기획에서 별도로 남은 미결 항목은 없다(정책은 아래 확정 사항 참고). 아이템별 `base_price` 실제 수치는 [마스터 데이터 기획서](master-data/master-data-기획서.md) 밸런스에서 채운다.
 
 > **확정 사항**: 거래 수수료 **20%**(판매자 수령 80%) · 등록 가격 **기준가 ±20%** · 등록 유효기간 **3일**(만료 시 메일 반송) · **스택형은 전체 판매만** · 판매 대금·반송 메일 만료 **7일** · **계정당 동시 등록 최대 10개** · 검색은 **아이템 코드**(클라이언트가 이름→코드 변환) + **서버 페이징**(기본 가격 오름차순, 정렬 옵션 없음) · 이력(판매완료·취소/만료)은 **정리하지 않고 보관** · 거래 로그·감사는 **범위에서 제외**.
 
@@ -267,5 +267,5 @@ COMMIT → { listingId, gained, cost, balance }
 - [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — `player_item` 소유·`sellable`·`InventoryFull(4002)`·`ItemEquipped(4007)`
 - [메일 기획서](mail-기획서.md) — 판매 대금 메일 발급·수령(`category=2` 거래)
 - [세이브 데이터 기획서](save-data-기획서.md) — `trade_listing` 저장 골격
-- [마스터 데이터 기획서](master-data-기획서.md) — 목록의 `item_code`로 아이템 이름·스탯 표시(클라 연동 포함)
+- [마스터 데이터 기획서](master-data/master-data-기획서.md) — 목록의 `item_code`로 아이템 이름·스탯 표시(클라 연동 포함)
 - [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(7000번대 거래소)

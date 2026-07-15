@@ -2,7 +2,7 @@
 
 > 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.5
 >
-> 본 문서는 플레이어 캐릭터의 **성장 축 중 직업(클래스)·스킬·룬**을 서버 권위로 관리·검증하는 규칙을 다룬다. 저장 골격은 [세이브 데이터 기획서](save-data-기획서.md)(`game_player`·`player_character`·`player_skill`·`player_rune`), 정적 정의는 [마스터 데이터 기획서](master-data-기획서.md)(`class_master`·`skill_master`·`rune_master`)를 참고한다. 장비 강화는 본 문서 범위 밖이다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.3).
+> 본 문서는 플레이어 캐릭터의 **성장 축 중 직업(클래스)·스킬·룬**을 서버 권위로 관리·검증하는 규칙을 다룬다. 저장 골격은 [세이브 데이터 기획서](save-data-기획서.md)(`game_player`·`player_character`·`player_skill`·`player_rune`), 정적 정의는 [마스터 데이터 기획서](master-data/master-data-기획서.md)(`class_master`·`skill_master`·`rune_master`)를 참고한다. 장비 강화는 본 문서 범위 밖이다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.3).
 
 ## 목차
 
@@ -34,8 +34,8 @@
 ## 2. 기능 설명
 
 - **캐릭터(3인 파티)**: 계정은 원작과 동일하게 **캐릭터 슬롯 3개**를 가지며, 3명의 캐릭터가 **함께 전투**한다. **직업·레벨·경험치·스킬·장비는 캐릭터별로 개별** 관리되며, 세 캐릭터의 **직업은 서로 중복될 수 없어**(생성 시 확정) 3종(기사·레인저·마법사)을 각 슬롯에 하나씩 둔다. API·저장 시 대상 캐릭터를 `characterId`(슬롯 1~3)로 지정한다. 반면 **인벤토리·골드·큐브·룬은 계정 단위로 공유**한다([세이브 데이터 기획서](save-data-기획서.md) 3장).
-- **직업(클래스)**: 각 캐릭터 생성 시 **기사·레인저·마법사 3종**([마스터 데이터 기획서](master-data-기획서.md) 5.1 `class_master`) 중 하나를 고른다. 직업은 기본 스탯(`base_stats`)과 **보유 스킬 목록**(`skill_master.class_code`), 장비 클래스 제한([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.1)을 결정한다. 캐릭터는 전투 경험치로 **레벨(`level`)** 이 오르며, **사용 가능한 스킬 포인트 총량은 레벨에 비례**한다(별도 저장 없이 레벨에서 파생). **전직(직업 변경)은 지원하지 않는다.**
-- **스킬**: 직업별로 보유하는 능력으로 **액티브/패시브**로 나뉜다(구분은 `skill_master`). **스킬 포인트를 소모**해 해당 캐릭터의 스킬 레벨(`player_skill.level`)을 올리며, 레벨별 효과는 `skill_master.effect_per_level`이 정의한다. 캐릭터는 자기 직업 소속 스킬만 올릴 수 있다. **액티브 스킬은 캐릭터당 최대 2개까지만 장착·사용**할 수 있고(패시브는 개수 제한 없이 상시 적용), **스킬 초기화(리셋)는 무료로 지원**한다(5.2).
+- **직업(클래스)**: 각 캐릭터 생성 시 **기사·레인저·마법사 3종**([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.1 `class_master`) 중 하나를 고른다. 직업은 기본 스탯(`base_stats`)과 **보유 스킬 목록**(`skill_master.class_code`), 장비 클래스 제한([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.1)을 결정한다. 캐릭터는 전투 경험치로 **레벨(`level`)** 이 오르며, **사용 가능한 스킬 포인트 총량은 레벨에 비례**한다(별도 저장 없이 레벨에서 파생). **전직(직업 변경)은 지원하지 않는다.**
+- **스킬**: 직업별로 보유하는 능력으로 **액티브/패시브**로 나뉜다(구분은 `skill_master`). **스킬 포인트를 소모**해 해당 캐릭터의 스킬 레벨(`player_skill.level`)을 올리며, 스킬의 성격(공격/버프/디버프)과 효과 크기는 `skill_master`의 `category`·`skill_coef`(및 `buff_duration`/`debuff_duration`)가 정의한다. 레벨 `L`의 실제 계수는 `coef(L) = skill_coef + coef_growth × (L−1)`(선형)이다([마스터 데이터 값](master-data/master-data-값.md) §4). 캐릭터는 자기 직업 소속 스킬만 올릴 수 있다. **액티브 스킬은 캐릭터당 최대 2개까지만 장착·사용**할 수 있고(패시브는 개수 제한 없이 상시 적용), **스킬 초기화(리셋)는 무료로 지원**한다(5.2).
 - **룬(Rune Tree)**: **골드를 소모**해 올리는 장기 성장 축. 선행 룬을 해금해야 다음 룬을 열 수 있는 **트리 구조**(`rune_master.prereq_code`)이며, 각 룬은 레벨을 가진다. 직업과 무관한 **계정 공용**이다. **룬 초기화는 지원하지 않는다.**
 
 ## 3. 요구사항
@@ -60,7 +60,7 @@
 | `player_character`(`(user_id, character_id)` PK, `class_code`, `level`, `exp`) | 직업·레벨·경험치(스킬 포인트 총량의 파생 근거) | **캐릭터별** | `class_master` |
 | `player_skill`(`(user_id, character_id, skill_code)` PK, `level`, `equipped`) | 스킬 레벨·액티브 장착 여부 | **캐릭터별** | `skill_master` |
 | `player_rune`(`(user_id, rune_code)` PK, `level`) | 룬 레벨 | **계정 공유** | `rune_master` |
-| `player_item`(재화 행 `row_type=2`, `code`=골드 `item_code` 1) | 룬 업그레이드 골드 차감(`quantity` UPDATE) | 계정 공유 | `item_master`(재화 `item_type=4`) |
+| `player_item`(재화 행 `row_type=2`, `code`=골드 `item_code` 1) | 룬 업그레이드 골드 차감(`quantity` UPDATE) | 계정 공유 | `item_master`(재화 `item_type=3`) |
 
 **성장 상태 규칙 (확정)**
 - **직업(`player_character.class_code`, 캐릭터별)**: 각 캐릭터 생성 시 확정되며 이후 바뀌지 않는다(**전직 미지원**). `skill_master`에서 `class_code`가 일치하는 스킬만 해당 캐릭터의 보유 스킬이다.
@@ -267,13 +267,13 @@ COMMIT → { runeCode, level, cost, balance }
 
 ## 8. 미결 사항 / TODO
 
-- **마스터 데이터 반영 완료 · 밸런스 수치만 대기**: `level_master`(레벨별 요구 경험치·스탯·누적 스킬 포인트)와 `skill_master.skill_type`(1:액티브 2:패시브)를 [마스터 데이터 기획서](master-data-기획서.md)(`skill_master` 5.6·`level_master` 5.12)에 **테이블/필드로 반영 완료**. 남은 것은 **밸런스 수치**(레벨 곡선·레벨당 스킬 포인트·룬 레벨별 골드 비용) 확정뿐이다.
+- **마스터 데이터 반영 완료 · 밸런스 수치만 대기**: `level_master`(레벨별 요구 경험치·스탯·누적 스킬 포인트)와 `skill_master.skill_type`(1:액티브 2:패시브)를 [마스터 데이터 기획서](master-data/master-data-기획서.md)(`skill_master` 5.6·`level_master` 5.12)에 **테이블/필드로 반영 완료**. 남은 것은 **밸런스 수치**(레벨 곡선·레벨당 스킬 포인트·룬 레벨별 골드 비용) 확정뿐이다.
 - **액티브 스킬 장착 (확정 · 반영 완료)**: 액티브 스킬은 **캐릭터당 최대 2개**만 장착·사용(패시브는 제한 없이 상시 적용). 장착은 API 5.3(`skill/equip`)으로 설정하고 `player_skill.equipped`(0/1)에 저장한다. 남은 미결: 액티브 스킬의 **전투 시 발동 순서·쿨다운 등 사용 규칙**은 전투 도메인(4.6)과 함께 정의.
 
 ## 9. 참고
 
 - [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) — 도메인 4.5(성장), 4.6(전투=경험치 획득)
 - [세이브 데이터 기획서](save-data-기획서.md) — `game_player`·`player_character`·`player_skill`·`player_rune` 저장 골격, 로드 스냅샷
-- [마스터 데이터 기획서](master-data-기획서.md) — `class_master`·`skill_master`·`rune_master`
+- [마스터 데이터 기획서](master-data/master-data-기획서.md) — `class_master`·`skill_master`·`rune_master`
 - [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 장비 강화·장비 클래스/레벨 제한
 - [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(5000번대 성장)

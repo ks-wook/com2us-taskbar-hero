@@ -70,7 +70,6 @@
 | `POST /api/game/inventory/equip` | 지정 캐릭터에 장비 장착(스왑) | `{ characterId, itemId }` | `equipped`, `unequipped` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `ItemEquipped(4007)`, `InvalidCharacterId(2006)` |
 | `POST /api/game/inventory/unequip` | 지정 슬롯 장비 해제 | `{ characterId, slot }` | `slot`, `itemId` | `ItemNotFound(4001)`, `InvalidCharacterId(2006)` |
 | `POST /api/game/inventory/enhance` | 장비 강화 단계 +1(재화 소모) | `{ itemId }` | `enhanceLevel`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
-| `POST /api/game/inventory/use` | 소모품 사용(서버 산출 지급) | `{ itemId, count }` | `consumed`, `gained` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `InventoryFull(4002)` |
 | `POST /api/game/inventory/expand` | 인벤토리 용량 확장(골드 소모) | `{ count }` | `inventoryCapacity`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InventoryCapacityMax(4008)` |
 | `POST /api/game/inventory/move` | 인벤토리 배치 이동/교환(드래그 저장) | `{ itemId, toSlot }` | `moved`, `swapped` | `ItemNotFound(4001)`, `InvalidInventorySlot(4009)` |
 | `POST /api/game/cube/combine` | 큐브 합성(동급 아이템→상위 등급) | `{ itemIds[] }` | `consumed`, `result`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `ItemNotFound(4001)` |
@@ -140,7 +139,7 @@
 
 - 날짜 경계는 서버 KST 자정, 하루 1회(`(user_id, attend_date)` 유니크). 획득 보상은 즉시 지급이 아니라 **메일(3.6)로 발급**되어 우편함 수령 시 계정 반영.
 
-> **마스터(기획) 데이터 다운로드 API는 두지 않는다.** 본 프로젝트는 학습 목적이므로 마스터 데이터는 **클라이언트에 번들로 포함**되고, 서버도 같은 원천을 기동 시 자체 로드한다(런타임 배포·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data-기획서.md)).
+> **마스터(기획) 데이터 다운로드 API는 두지 않는다.** 본 프로젝트는 학습 목적이므로 마스터 데이터는 **클라이언트에 번들로 포함**되고, 서버도 같은 원천을 기동 시 자체 로드한다(런타임 배포·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md)).
 
 ## 4. 에러 코드
 
@@ -156,5 +155,5 @@
 - [거래소 / 교역선 기획서](../세부/trade-기획서.md)
 - [메일 기획서](../세부/mail-기획서.md)
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md)
-- [마스터 데이터 기획서](../세부/master-data-기획서.md)
+- [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md)
 - [GameErrorCode 통합 정의](error-code-정의.md)

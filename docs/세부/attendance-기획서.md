@@ -25,7 +25,7 @@
 - **대상 서버**: `GameServer`(출석 상태 관리·검증, 보상 메일 발급), `TaskbarHero.Common`(출석 현황·결과 DTO·에러 코드 공유). 인증은 AccountServer 발급 토큰을 GameServer 미들웨어가 검증.
 - **범위 경계**:
   - **보상의 실제 지급(재화·아이템 계정 반영)은 본 문서 밖**이다. 출석 보상은 **메일 발급**으로 위임하며([메일 기획서](mail-기획서.md)), 플레이어가 우편함에서 첨부를 수령할 때 계정에 반영된다. 본 문서는 "출석 판정 + 보상 메일 발급"까지 책임진다.
-  - **일자별 보상 내용(무엇을 얼마나)**은 마스터 데이터(`attendance_master`)가 정의한다([마스터 데이터 기획서](master-data-기획서.md)).
+  - **일자별 보상 내용(무엇을 얼마나)**은 마스터 데이터(`attendance_master`)가 정의한다([마스터 데이터 기획서](master-data/master-data-기획서.md)).
 - **관련 기획서**: [[mail-기획서]] (보상 메일 발급·수령), [[save-data-기획서]] (출석 기록 저장), [[master-data-기획서]] (`attendance_master`), [[서버-시스템-전체-개요]] (도메인 4.9)
 
 ## 2. 기능 설명
@@ -183,7 +183,7 @@ COMMIT → { attendDate: today, day, reward, mailId }
 |---|---|---|
 | AttendanceAlreadyClaimed | 9001 | 오늘자 출석 보상을 이미 수령함 |
 
-- 마스터 데이터 미로드/미정의는 신규 코드 없이 `MasterDataNotLoaded(10001)`([마스터 데이터 기획서](master-data-기획서.md))를 재사용한다.
+- 마스터 데이터 미로드/미정의는 신규 코드 없이 `MasterDataNotLoaded(10001)`([마스터 데이터 기획서](master-data/master-data-기획서.md))를 재사용한다.
 
 ## 8. 미결 사항 / TODO
 
@@ -197,5 +197,5 @@ COMMIT → { attendDate: today, day, reward, mailId }
 - [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) — 도메인 4.9(출석부), 4.8(메일)
 - [메일 기획서](mail-기획서.md) — 보상 메일 발급·수령(`player_mail`·`player_mail_reward`, `category=3`)
 - [세이브 데이터 기획서](save-data-기획서.md) — `player_attendance` 저장 골격
-- [마스터 데이터 기획서](master-data-기획서.md) — `attendance_master` 일자별 보상 정의
+- [마스터 데이터 기획서](master-data/master-data-기획서.md) — `attendance_master` 일자별 보상 정의
 - [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(9000번대 출석부)

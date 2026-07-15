@@ -119,7 +119,7 @@ CREATE TABLE player_item (
     item_id               BIGINT NOT NULL AUTO_INCREMENT COMMENT '아이템 행 고유 ID(개체 식별자)',
     user_id               BIGINT NOT NULL          COMMENT '계정 user_id',
     row_type              TINYINT NOT NULL          COMMENT '1:아이템 2:재화',
-    code                  INT    NOT NULL          COMMENT 'item_master.item_code(재화 item_type=4 포함, 골드=1)',
+    code                  INT    NOT NULL          COMMENT 'item_master.item_code(재화 item_type=3 포함, 골드=1)',
     quantity              BIGINT NOT NULL DEFAULT 1 COMMENT '수량(아이템) / 잔액(재화). 재화가 커 BIGINT',
     slot                  INT    NULL              COMMENT '인벤토리 배치 칸(0-based). 재화는 NULL(용량 미집계)',
     enhance_level         INT    NOT NULL DEFAULT 0 COMMENT '장비 강화 단계. 재화/비장비는 0',
