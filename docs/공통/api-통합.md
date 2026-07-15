@@ -47,7 +47,7 @@
 |---|---|---|---|---|
 | `POST /api/game/load` | 접속 시 전체 세이브 스냅샷 로드 | `{}` | `player`, `characters[]`, `currencies[]`, `inventory[]`(장착 상태 포함), `skills[]`, `runes[]`, `cube`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
 | `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정) | `{ nickname, classCode }` | `characterId`, `classCode`, `level` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `PlayerAlreadyExists(2004)` |
-| `POST /api/game/heartbeat` | 접속 시각 갱신(오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
+| `POST /api/game/update-last-active` | 접속 시각 갱신(heartbeat, 오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
 
 - 캐릭터는 **한 번에 1개씩** 생성(`create-character`), 계정당 최대 3개·**직업 중복 불가**. `nickname`은 최초 생성 시에만 사용. 조회는 별도 API 없이 `load` 스냅샷 사용.
 
@@ -69,7 +69,7 @@
 |---|---|---|---|---|
 | `POST /api/game/inventory/equip` | 지정 캐릭터에 장비 장착(스왑) | `{ characterId, itemId }` | `equipped`, `unequipped` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `ItemEquipped(4007)`, `InvalidCharacterId(2006)` |
 | `POST /api/game/inventory/unequip` | 지정 슬롯 장비 해제 | `{ characterId, slot }` | `slot`, `itemId` | `ItemNotFound(4001)`, `InvalidCharacterId(2006)` |
-| `POST /api/game/inventory/enhance` | 장비 강화 단계 +1(재화 소모) | `{ itemId }` | `enhanceLevel`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
+| `POST /api/game/inventory/enhance` ⚠️보류 | 장비 강화 단계 +1(재화 소모) | `{ itemId }` | `enhanceLevel`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
 | `POST /api/game/inventory/expand` | 인벤토리 용량 확장(골드 소모) | `{ count }` | `inventoryCapacity`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InventoryCapacityMax(4008)` |
 | `POST /api/game/inventory/move` | 인벤토리 배치 이동/교환(드래그 저장) | `{ itemId, toSlot }` | `moved`, `swapped` | `ItemNotFound(4001)`, `InvalidInventorySlot(4009)` |
 | `POST /api/game/cube/combine` | 큐브 합성(동급 아이템→상위 등급) | `{ itemIds[] }` | `consumed`, `result`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `ItemNotFound(4001)` |
@@ -77,7 +77,7 @@
 | `POST /api/game/cube/craft` ⚠️보류 | 큐브 제작(레시피로 아이템 생성) | `{ recipeCode }` | `consumed`, `gained`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)` |
 | `POST /api/game/box/open` | 랜덤 상자 열기(골드 가챠, 등급 확률 추첨→랜덤 아이템 지급). 현재 단발(`count`=1)만 처리, 다연속 예정 | `{ boxCode, count? }` | `rewards`, `gained`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InvalidSaveData(2002)`, `InventoryFull(4002)`, `MasterDataNotLoaded(10001)` |
 
-- 장비는 **캐릭터별**(장착 시 `characterId` 필수), 인벤토리·골드·큐브는 계정 공유. `cube/craft`는 우선순위 낮아 **보류**(도입 확정 시 명세 확정).
+- 장비는 **캐릭터별**(장착 시 `characterId` 필수), 인벤토리·골드·큐브는 계정 공유. `inventory/enhance`(장비 강화)와 `cube/craft`(큐브 제작)는 **보류**(도입 확정 시 명세 확정).
 
 ### 3.4 성장 (직업 / 스킬 / 룬)
 

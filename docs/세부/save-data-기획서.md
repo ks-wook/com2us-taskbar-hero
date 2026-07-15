@@ -13,7 +13,7 @@
 - [5. API 명세](#5-api-명세)
   - [5.1 세이브 로드 — `POST /api/game/load`](#51-세이브-로드--post-apigameload)
   - [5.2 캐릭터 생성 — `POST /api/game/create-character`](#52-캐릭터-생성--post-apigamecreate-character)
-  - [5.3 접속 시각 갱신(heartbeat) — `POST /api/game/heartbeat`](#53-접속-시각-갱신heartbeat--post-apigameheartbeat)
+  - [5.3 접속 시각 갱신(heartbeat) — `POST /api/game/update-last-active`](#53-접속-시각-갱신heartbeat--post-apigameupdate-last-active)
 - [6. 에러 코드 (신규 제안)](#6-에러-코드-신규-제안)
 - [7. 미결 사항 / TODO](#7-미결-사항--todo)
 - [8. 참고](#8-참고)
@@ -175,7 +175,7 @@ erDiagram
   - **범용 일괄 저장 API 없음**: 진행 상태를 모아 저장하는 `/api/game/save` 같은 엔드포인트는 두지 않는다. 대신 **상태를 바꾸는 각 기능 API**(캐릭터 생성, 장비 장착/강화, 인벤토리 배치, 스킬 레벨업/초기화/장착, 룬 업그레이드, 큐브 합성/분해 등)가 처리 시점에 **자기 변경분을 그 요청 트랜잭션에서 DB에 반영**한다.
   - **서버 자동 저장 없음**: 서버는 주기적 자동 저장(autosave)을 하지 않는다. 저장은 위 액션이 일어날 때만 발생한다.
   - **스테이지 진행·경험치**: 자동 전투로 생기는 진행도(act/stage/max_stage_cleared)와 경험치·레벨은 **전투 결과 검증(도메인 4.6, 미작성)** 이 서버 권위로 산출·반영한다. 클라이언트가 임의 값을 올려 저장하지 않는다.
-  - **마지막 접속 시각 주기 갱신(확정)**: 종료 시 로그아웃 요청으로 시각을 남기는 방식은 쓰지 않는다. 대신 클라이언트가 접속 후 **자동으로 5분 간격**으로 접속 시각 갱신 요청(`/api/game/heartbeat`)을 보내고, 서버는 `last_active_at`을 현재 서버 시각으로 갱신한다. 접속이 끊기면 마지막으로 갱신된 시각이 오프라인 경과 계산의 기준이 되며, 최대 오차는 갱신 주기(5분) 이내로 한정된다.
+  - **마지막 접속 시각 주기 갱신(확정)**: 종료 시 로그아웃 요청으로 시각을 남기는 방식은 쓰지 않는다. 대신 클라이언트가 접속 후 **자동으로 5분 간격**으로 접속 시각 갱신 요청(`/api/game/update-last-active`)을 보내고, 서버는 `last_active_at`을 현재 서버 시각으로 갱신한다. 접속이 끊기면 마지막으로 갱신된 시각이 오프라인 경과 계산의 기준이 되며, 최대 오차는 갱신 주기(5분) 이내로 한정된다.
 - **오프라인 기준 시각**: `last_active_at`(마지막 접속 시각)이 오프라인 보상 정산의 기준. 오프라인 보상 계산 규칙은 [오프라인 보상 정산 기획서](offline-reward-기획서.md) 참고.
 - **서버 권위 검증**: 각 액션의 값은 서버 규칙·마스터 데이터로 재계산/검증 후 반영한다. 불가능한 증가폭·음수 재화 등은 거부한다(클라이언트 보고 불신).
 - **동시성**: 동일 계정 단일 세션 정책([계정/로그인 기획서](account-login-기획서.md))에 따라 세이브 경합은 제한적이나, 각 액션 저장은 `user_id` 단위 트랜잭션으로 처리한다.
@@ -186,7 +186,7 @@ erDiagram
 
 - [5.1 세이브 로드 — `POST /api/game/load`](#51-세이브-로드--post-apigameload)
 - [5.2 캐릭터 생성 — `POST /api/game/create-character`](#52-캐릭터-생성--post-apigamecreate-character)
-- [5.3 접속 시각 갱신(heartbeat) — `POST /api/game/heartbeat`](#53-접속-시각-갱신heartbeat--post-apigameheartbeat)
+- [5.3 접속 시각 갱신(heartbeat) — `POST /api/game/update-last-active`](#53-접속-시각-갱신heartbeat--post-apigameupdate-last-active)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`를 사용한다(토큰은 body, [계정/로그인 기획서](account-login-기획서.md) 5장 참고). 응답은 `{ success, errorCode, message, data }` 형식이며, `errorCode`는 `TaskbarHero.Common`의 `GameErrorCode`(6장) 값이고 `success`는 `errorCode == 0`과 동치다(계정·마스터 기획서와 동일한 응답 규약).
 
@@ -292,7 +292,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ---
 
-### 5.3 접속 시각 갱신(heartbeat) — `POST /api/game/heartbeat`
+### 5.3 접속 시각 갱신(heartbeat) — `POST /api/game/update-last-active`
 
 클라이언트가 접속 후 **5분 간격으로 자동 호출**한다. 서버는 `last_active_at`을 현재 서버 시각으로 갱신한다. 접속이 끊기면 마지막으로 갱신된 값이 오프라인 경과 시간 계산의 기준이 된다.
 

@@ -155,6 +155,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 5.3 강화 — `POST /api/game/inventory/enhance`
 
+> **상태: 보류.** 장비 강화는 `enhance_master`(강화 단계별 비용·배율) 값이 아직 확정되지 않아 현재 **보류**한다([마스터 데이터 값](master-data/master-data-값.md) §7 미작성). 아래 명세는 도입이 확정될 경우의 기준안이다.
+
 장비의 강화 단계를 1 올린다. 비용·배율은 `enhance_master`의 다음 단계 정의를 따른다.
 
 **Request**
@@ -446,7 +448,7 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 
 - **인벤토리 용량 정책 (확정)**: 플레이어 단위 컬럼(`game_player.inventory_capacity`)에 저장하고 **골드 소모로 확장**한다(API 5.4). 용량은 **점유 slot(=`player_item` 행) 수** 기준이며, 스택은 수량과 무관하게 1 slot을 차지한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`에 반영 완료. 남은 상세 — 기본 용량 값, 확장 단위(1회당 slot 수)·단계별 골드 비용·최대 상한 — 는 [마스터 데이터 기획서](master-data/master-data-기획서.md)에서 정의한다.
 - **강화 성공 확률**: 현행은 비용 지불 시 확정 상승으로 가정. 실패/하락/파괴 확률 도입 시 `enhance_master`에 확률 필드 추가 및 본 문서 5.3 갱신.
-- **큐브 합성 상세 규칙**: 합성 소모 개수·등급 상승 결과 선정·확률, 큐브 연산당 `cube_exp` 획득량과 `cube_level` 효과. → [마스터 데이터 기획서](master-data/master-data-기획서.md) 9장(큐브 레시피 미결)과 함께 확정.
+- **큐브 합성 상세 규칙**: 합성 소모 개수(`combine_count`)·등급 상승 규칙·분해 골드 계수와 제작 레시피(`cube_recipe`/`cube_recipe_ingredient`)는 **확정**([마스터 데이터 값](master-data/master-data-값.md) §8). 남은 상세 — 등급 상승 결과 아이템 선정·확률 개입 여부, 큐브 연산당 `cube_exp` 획득량과 `cube_level` 효과 — 는 추후 확정.
 - **큐브 제작(craft) — 우선순위 낮음(보류)**: 현재 구현 우선순위가 낮아 보류하며, **추후 제작 기능 추가 여부를 검토**한다. 5.8의 제작 API·레시피(`recipeCode`) 구성·소모 재료·비용은 도입이 확정될 때 함께 정한다.
 - **장비 클래스 제한 (확정)**: 장비는 착용 가능한 **클래스 제한**을 가진다. 현재 클래스는 **기사·레인저·마법사 3종으로 확정**([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.1 `class_master`)이며, **추후 확인 후 클래스를 추가할 예정**이다. 각 장비가 어느 클래스용인지는 `item_master.class_req`로 정의한다(`0`이면 전 클래스 공용, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.3에 반영 완료). 장착(5.1) 시 서버가 `class_req`(≠0)을 **대상 캐릭터 클래스**(`player_character.class_code`)와 대조해 불일치면 `ItemNotEquippable(4003)`로 거부한다.
 - **다연속 오픈(10연차) — 예정**: 요청 `count`와 응답 `rewards` 배열은 **다연속 확장을 위해 계약에 미리 반영**했다(5.9). 현재 서버 로직은 `count`=1(단발)만 처리하며, 추후 10연차 등 다연속 오픈 로직을 구현할 때 `count`>1 처리(비용 `오픈 비용 × count`)와 묶음 할인·등급 보장(천장) 여부를 함께 확정한다.
