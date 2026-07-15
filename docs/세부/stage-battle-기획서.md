@@ -1,8 +1,8 @@
 # 스테이지 진행 / 전투 결과 검증 기획서
 
-> 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.6
+> 상위 문서: [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) · 관련 도메인 4.6
 >
-> 본 문서는 플레이어의 **스테이지 진입·클리어**와 **클리어 보상 지급**을 서버 권위로 처리하는 규칙을 다룬다. 진행도 저장은 [세이브 데이터 기획서](save-data-기획서.md)(`game_player`·`player_character`), 스테이지·몬스터·드롭 정적 정의는 [마스터 데이터 기획서](master-data/master-data-기획서.md)(`stage_master`·`monster_master`·`drop_table_master`)를 참고한다. 아이템 적재·재화 반영은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md)의 규칙을 따른다.
+> 본 문서는 플레이어의 **스테이지 진입·클리어**와 **클리어 보상 지급**을 서버 권위로 처리하는 규칙을 다룬다. 진행도 저장은 [세이브 데이터 기획서](save-data-기획서.md)(`game_player`·`player_character`), 스테이지·보상·몬스터 정적 정의는 [마스터 데이터 기획서](master-data/master-data-기획서.md)(`stage_master`·`stage_reward`·`monster_master`)를 참고한다. 아이템 적재·재화 반영은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md)의 규칙을 따른다.
 
 ## 목차
 
@@ -31,16 +31,16 @@
 
 ## 2. 기능 설명
 
-- **스테이지 구조**: 3 Act × 4 난이도 × N 스테이지([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master`). 파티(3인)가 함께 하나의 스테이지를 진행한다. 진행도(현재 act/stage/difficulty)는 **계정/파티 단위**다.
-- **스테이지 진입**: 플레이어가 특정 스테이지에 진입해 자동 전투를 시작한다. 아직 도달하지 못한 스테이지(앞 스테이지 미클리어)로는 **건너뛸 수 없다**. 이미 클리어한 스테이지는 **재파밍**을 위해 다시 진입할 수 있다(하드월 없음, [개요](../공통/서버-시스템-전체-개요.md) 3장).
+- **스테이지 구조**: 3 Act × 2 난이도 × 3 스테이지(=18)([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master`). 파티(3인)가 함께 하나의 스테이지를 진행한다. 진행도(현재 act/stage/difficulty)는 **계정/파티 단위**다.
+- **스테이지 진입**: 플레이어가 특정 스테이지에 진입해 자동 전투를 시작한다. 아직 도달하지 못한 스테이지(앞 스테이지 미클리어)로는 **건너뛸 수 없다**. 이미 클리어한 스테이지는 **재파밍**을 위해 다시 진입할 수 있다(하드월 없음, [개요](../서버-시스템-전체-개요.md) 3장).
 - **스테이지 클리어**: 자동 전투로 스테이지를 클리어하면 클라이언트가 서버에 클리어를 알린다. 서버는 타당성을 검증하고 **해당 스테이지의 보상(골드·경험치·드롭)을 산출·지급**하며, 최고 도달 스테이지(`max_stage_cleared`)와 현재 진행도를 갱신한다.
-- **보상**: `stage_master`가 정의한 **기본 골드·경험치**와 `drop_table_master`가 정의한 **전리품(골드·아이템·재료)** 을 서버가 산출한다. 경험치는 오프라인 보상과 동일하게 **3캐릭터 모두에게 같은 값**으로 지급한다([오프라인 보상 정산 기획서](offline-reward-기획서.md)와 동일 원칙).
+- **보상**: `stage_reward`가 정의한 **골드·경험치**와 **등급별 아이템 드롭 확률**로 서버가 보상을 산출한다(스테이지 단위 일원화, 몬스터 개별 드롭 없음). 경험치는 오프라인 보상과 동일하게 **3캐릭터 모두에게 같은 값**으로 지급한다([오프라인 보상 정산 기획서](offline-reward-기획서.md)와 동일 원칙).
 
 ## 3. 요구사항
 
 **기능 요구사항**
 - 스테이지 진입 요청과 클리어 요청을 각각 처리한다. 진입은 진행 가능 여부를 검증하고, 클리어는 보상을 산출·지급한다.
-- 클리어 보상(골드·경험치·전리품)은 전적으로 **서버가 마스터 데이터로 산출**한다(클라이언트 보고 불신). 드롭은 `drop_table_master` 가중치로 서버가 추첨한다.
+- 클리어 보상(골드·경험치·전리품)은 전적으로 **서버가 마스터 데이터로 산출**한다(클라이언트 보고 불신). 드롭은 `stage_reward`의 **등급별 확률**로 서버가 추첨한다.
 - 진행도(`act`/`stage`/`difficulty`/`max_stage_cleared`)와 경험치·레벨·재화·인벤토리 변경을 그 클리어 요청의 트랜잭션에서 반영한다(별도 일괄 저장 없음, [세이브 데이터 기획서](save-data-기획서.md) 4장).
 - 아직 도달 못 한 스테이지 진입·클리어(스킵)를 거부한다.
 
@@ -59,7 +59,7 @@
 | `game_player`(`act`, `stage`, `difficulty`, `max_stage_cleared`) | 파티 현재 진행도·최고 도달 스테이지 | `stage_master` |
 | `player_character`(`exp`, `level`) | 클리어 경험치 반영(3캐릭터 동일) | `level_master` |
 | `player_item`(재화 행 `row_type=2`) | 클리어 골드 반영(`quantity` UPDATE, 계정 공유) | `item_master`(재화 `item_type=3`) |
-| `player_item` | 전리품(아이템·재료) 적재(계정 공유) | `item_master`·`drop_table_master` |
+| `player_item` | 전리품(아이템·재료) 적재(계정 공유) | `item_master`·`stage_reward` |
 
 - **현재 진입 스테이지**: 별도 컬럼을 두지 않고 `game_player.act`/`stage`/`difficulty`가 **현재 진입(진행 중) 스테이지**를 나타낸다. 진입 요청이 이 값을 설정하고, 클리어 요청이 이 값을 기준으로 검증·전진한다.
 - **진입 시각(플레이 검증용, 제안·미결)**: 진입~클리어 최소 소요 시간을 검증하려면 진입 시각이 필요하다. `game_player.stage_entered_at`(bigint) 추가를 **제안**한다(검증 도입 확정 시 [세이브 데이터 기획서](save-data-기획서.md) ERD 반영). 8장 미결.
@@ -148,7 +148,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- `rewards.gold`/`exp`는 `stage_master` 기본 보상, `rewards.items`는 `drop_table_master` 가중치로 **서버가 추첨한** 전리품이다. `exp`는 **3캐릭터 모두에게 동일** 적용되어 `characters`에 반영 후 값이 담긴다.
+- `rewards.gold`/`exp`는 `stage_reward`의 골드·경험치, `rewards.items`는 `stage_reward`의 **등급별 확률로 서버가 추첨한** 전리품이다. `exp`는 **3캐릭터 모두에게 동일** 적용되어 `characters`에 반영 후 값이 담긴다.
 - `characters[].isLevelUp`: 이번 클리어 경험치로 **그 캐릭터가 레벨업 했는지** 여부(`true`/`false`). 같은 `exp`를 받아도 캐릭터마다 시작 레벨·잔여 경험치가 달라 일부만 레벨업할 수 있다.
 - `progress`: 갱신된 진행도. 프런티어(최고 도달) 스테이지를 클리어했으면 `stage`가 다음으로 전진하고 `maxStageCleared`가 증가한다. **재파밍**(이미 클리어한 스테이지)일 경우 보상만 지급되고 `maxStageCleared`는 그대로다.
 - 오류: `StageNotEntered(6003)`(진입하지 않았거나 현재 진입 스테이지와 불일치), `StageClearTooFast(6004)`(최소 소요 시간 미충족, 임계값 8장 미결), 전리품이 인벤토리 용량을 초과하면 `InventoryFull(4002)`.
@@ -174,9 +174,9 @@ COMMIT → { act, difficulty, stage, stageId, enteredAt }
 트랜잭션(BEGIN, user_id 잠금)
   1) 요청 스테이지가 game_player 현재 진입 스테이지와 일치?  아니면 StageNotEntered(6003)
   2) (플레이 검증) now - stage_entered_at >= MIN_CLEAR_SEC ?  아니면 StageClearTooFast(6004)  # 임계값 미결
-  3) st = stage_master[현재 스테이지]
-     gold = st.reward_gold; exp = st.reward_exp
-     items = rollDropTable(st.drop_table_code)       # 서버 RNG 추첨
+  3) sr = stage_reward[현재 stage_id]
+     gold = sr.reward_gold; exp = sr.reward_exp
+     items = rollGradeDrop(sr.grade1_prob..grade6_prob)   # 등급 추첨 → 해당 등급 item_master 아이템 1개(서버 RNG)
   4) 지급: player_item(재화, code=골드).quantity += gold
            for c in player_character(3인): c.exp += exp → level 재계산   # 3캐릭터 동일
            items를 player_item에 적재(스택/용량 규칙; 초과 시 InventoryFull(4002))
@@ -211,15 +211,15 @@ COMMIT → { cleared, rewards, characters, balance, progress }
 - **플레이 타당성 검증**: 진입~클리어 최소 소요 시간(`MIN_CLEAR_SEC`) 도입 여부·값, 진입 시각 저장(`game_player.stage_entered_at` 제안)의 확정 및 세이브 ERD 반영.
 - **진행도 전진 규칙**: 한 스테이지의 "클리어 판정" 정의(몬스터 전멸 vs 보스 처치), Act·난이도 롤오버(마지막 스테이지 → 다음 Act/난이도) 규칙.
 - **재파밍 보상 차등**: 이미 클리어한 스테이지 재파밍 시 보상(골드·드롭)을 프런티어와 동일하게 줄지 감산할지.
-- **보상 수치·드롭 확률**: `stage_master.reward_gold/reward_exp`, `drop_table_master` 가중치 실제 값(밸런스). → [마스터 데이터 기획서](master-data/master-data-기획서.md).
+- **보상 수치·드롭 확률**: `stage_reward`의 `reward_gold`/`reward_exp`·등급별 확률 실제 값(밸런스). → [마스터 데이터 값](master-data/master-data-값.md) §10.
 - **전리품 용량 초과 처리**: 인벤토리가 가득 찼을 때 초과 전리품 폐기/메일 지급 여부(메일 도메인 4.8와 연계).
 - **경험치 곡선 연계**: 레벨업·스킬 포인트 파생은 [성장 시스템 기획서](growth-기획서.md)·`level_master`를 따른다.
 
 ## 9. 참고
 
-- [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) — 도메인 4.6(스테이지/전투), 4.3(오프라인)
+- [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) — 도메인 4.6(스테이지/전투), 4.3(오프라인)
 - [세이브 데이터 기획서](save-data-기획서.md) — `game_player`(진행도)·`player_character`(경험치) 저장, 액션 단위 저장
-- [마스터 데이터 기획서](master-data/master-data-기획서.md) — `stage_master`·`monster_master`·`drop_table_master`·`level_master`
+- [마스터 데이터 기획서](master-data/master-data-기획서.md) — `stage_master`·`stage_reward`·`monster_master`·`level_master`
 - [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 전리품 적재·`InventoryFull(4002)`
 - [오프라인 보상 정산 기획서](offline-reward-기획서.md) — 오프라인 진행(경험치 3캐릭터 동일 지급 원칙 공유)
 - [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(6000번대 스테이지/전투)

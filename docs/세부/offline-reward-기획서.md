@@ -1,6 +1,6 @@
 # 오프라인(방치) 보상 정산 기획서
 
-> 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.3
+> 상위 문서: [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) · 관련 도메인 4.3
 >
 > 본 문서는 플레이어가 미접속(오프라인)한 동안의 자동 진행분을 재접속 시 **서버 권위로 정산**하는 규칙을 다룬다. 기준 시각·저장 구조는 [세이브 데이터 기획서](save-data-기획서.md), 산출에 쓰는 정적 수치는 [마스터 데이터 기획서](master-data/master-data-기획서.md)를 참고한다.
 
@@ -54,11 +54,11 @@
 |---|---|---|
 | 입력(기준 시각) | `game_player.last_active_at` | 오프라인 시작점 |
 | 입력(파밍 기준) | `game_player.max_stage_cleared` / `stage`·`act`·`difficulty` | 산출율 결정 |
-| 산출 근거(정적) | `stage_master`(reward_gold/reward_exp), `monster_master` | 시간당 골드·경험치 산출량 |
+| 산출 근거(정적) | `stage_reward`(reward_gold/reward_exp), `monster_master` | 시간당 골드·경험치 산출량 |
 | 출력(지급) | `player_item`(재화 행 골드 증가, 계정), **3캐릭터 각각의 `player_character.exp`/`level`**(모든 캐릭터에 **동일 경험치** 지급) | 정산 반영 |
 | 기준 시각 리셋 | `game_player.last_active_at = now` | 중복 정산 방지 |
 
-- **아이템 미지급(확정)**: 오프라인 보상은 `player_item`를 건드리지 않는다. 드롭 테이블(`drop_table_master`)은 온라인 전투에서만 사용한다.
+- **아이템 미지급(확정)**: 오프라인 보상은 `player_item`를 건드리지 않는다. `stage_reward`의 **아이템 드롭(등급별 확률)** 은 온라인 전투에서만 적용하고, 오프라인은 골드·경험치만 산출한다.
 - **공유 DTO(확정)**: 정산 결과는 `TaskbarHero.Common`에 `OfflineRewardResult` DTO로 정의해 서버-클라이언트가 공유한다(경과 시간·지급 골드/경험치). 필드 정의는 8장.
 - **감사 로그**: 정산 이력(재화·경험치 지급 원장) 관리는 현재 범위에서 별도로 두지 않는다. 재화 원장/감사 로그는 **향후 도입 시 정의**한다(현재 미도입).
 
@@ -272,7 +272,7 @@ namespace TaskbarHero.Common
 
 ## 10. 참고
 
-- [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) — 도메인 4.3(방치형 보상 정산)
+- [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) — 도메인 4.3(방치형 보상 정산)
 - [세이브 데이터 기획서](save-data-기획서.md) — `last_active_at` 기준 시각, 로드 응답 `offlineElapsedSec`
-- [마스터 데이터 기획서](master-data/master-data-기획서.md) — 스테이지·몬스터·드롭 테이블(산출 근거)
+- [마스터 데이터 기획서](master-data/master-data-기획서.md) — 스테이지·스테이지 보상·몬스터(산출 근거)
 - [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약

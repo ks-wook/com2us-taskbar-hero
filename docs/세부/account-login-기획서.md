@@ -1,6 +1,6 @@
 # 계정 / 로그인 기획서
 
-> 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.1
+> 상위 문서: [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) · 관련 도메인 4.1
 >
 > **개발 기준 문서**: 본 로그인 시스템은 [jacking75 — ASP.NET Core API 게임서버 실습 09장](https://github.com/jacking75/programming-books-with-ai/blob/main/ASPNETCore-API_%EA%B2%8C%EC%9E%84%EC%84%9C%EB%B2%84_%EC%8B%A4%EC%8A%B5/09.md)의 구조를 기준으로 개발한다. 아래 명세는 해당 문서의 아키텍처(MySQL + Redis, 계층형 구조, 커스텀 HMAC 토큰)를 본 프로젝트에 맞게 반영한 것이다.
 
