@@ -84,7 +84,7 @@ CREATE TABLE game_player (
     nickname           VARCHAR(50) NOT NULL     COMMENT '표시 닉네임(계정 생성 시 확정)',
     act                INT    NOT NULL DEFAULT 1 COMMENT '현재 Act(파티 공용)',
     stage              INT    NOT NULL DEFAULT 1 COMMENT '현재 스테이지(파티 공용)',
-    difficulty         INT    NOT NULL DEFAULT 1 COMMENT '난이도 티어(1~4)',
+    difficulty         INT    NOT NULL DEFAULT 1 COMMENT '난이도 티어(1~2)',
     max_stage_cleared  INT    NOT NULL DEFAULT 0 COMMENT '최고 클리어 스테이지',
     inventory_capacity INT    NOT NULL          COMMENT '인벤토리 최대 용량(점유 slot 수). 골드로 확장',
     last_active_at     BIGINT NOT NULL          COMMENT '마지막 활동 시각(Unix ts). 5분 주기 갱신, 오프라인 보상 기준',

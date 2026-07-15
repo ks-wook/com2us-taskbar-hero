@@ -4,10 +4,12 @@
 -- 정본(single source of truth): docs/세부/master-data/master-data-값.md (실제 값) 및
 --   docs/세부/master-data/master-data-기획서.md (테이블 구조·필드·enum).  불일치 시 그 문서를 따른다.
 --
--- 범위: master-data-값.md의 1~6번 테이블만 담는다.
+-- 범위: master-data-값.md에서 값이 확정된 테이블(1~6번 및 8·9·10·11·13번)을 담는다.
 --   1) equip_slot_master  2) class_master  3) level_master  4) skill_master  5) rune_master
---   6) item_master
---   (enhance/cube/monster/drop_table/stage/box/attendance는 값 미확정이라 제외)
+--   6) item_master  8) cube_master  8b) cube_recipe  8c) cube_recipe_ingredient
+--   9) monster_master  10) stage_reward  11) stage_master  11b) stage_spawn
+--   13) attendance_master
+--   (7 enhance/12 box는 값 미확정이라 제외)
 --
 -- 성격 안내(중요)
 --   * 마스터 데이터는 런타임에 "클라이언트 번들 + 서버 인메모리 로드"로 쓰이므로
@@ -19,9 +21,11 @@
 --    실행하면 기존 마스터 테이블 데이터가 모두 삭제된다. 초기화 용도로만 쓸 것.
 --
 -- 공통 규약
---   * 스탯 등 고정 스키마 값은 개별 컬럼으로 둔다(JSON 문자열 컬럼 미사용). 클라 번들 JSON은
---     이 컬럼들을 baseStats/statBonus 객체로 묶어 직렬화한다(기획서 5.1·7장). 가변 구조(spawns·
---     item_pool 등)를 쓰는 6~13번 테이블은 추가 시 컬럼/자식 테이블 설계를 별도 결정한다.
+--   * JSON 문자열 컬럼을 쓰지 않는다(설계 규칙). 고정 스키마 값은 개별 컬럼으로, 배열·중첩 등
+--     반복 구조는 무조건 별도(자식) 테이블로 분리한다(예: stage_master 스폰 → stage_spawn).
+--     클라 번들 JSON은 이 컬럼/자식 행들을 baseStats·spawns 등 객체/배열로 묶어 직렬화한다(기획서 5.1·7장).
+--     cube의 제작 레시피도 자식 테이블(cube_recipe/cube_recipe_ingredient)로 분리했고,
+--     앞으로 추가할 box(grade_weights/item_pool) 등도 같은 방식으로 설계한다.
 --   * skill_type: 1=액티브, 2=패시브.  unlock_type: 0=기본 선택(생성 시 선택 가능).
 --   * class_code는 class_master를, skill_master.class_code가 이를 참조한다(같은 DB이므로 FK를 건다).
 -- =====================================================================
@@ -324,8 +328,299 @@ INSERT INTO item_master (item_code, name, item_type, grade, equip_slot, class_re
     (41020, '용의 비늘',     2, 5, 0, 0, 0,  99,  0,  0,  0, 0.0, 0.00, 0.0, 0.0, 1,  40000);
 
 
+-- =====================================================================
+-- 8. cube_master — 큐브(Hero-dric Cube) 레벨별 규칙 (값 문서 §8-A)
+--    출처: master-data-값.md §8, 기획서 5.11
+--    기획서의 synthesis_rule(JSON)은 폐기(JSON 컬럼 금지 규칙). 레벨별 고정 규칙은 개별 컬럼,
+--    제작 레시피(재료 배열)는 자식 테이블(cube_recipe/cube_recipe_ingredient)로 분리한다.
+--    combine_grade_up: 합성 등급 상승 허용(0/1). combine_count: 합성 소모 개수.
+--    gold_per_scrap: 분해 골드 계수(전환 골드 = gold_per_scrap * 아이템 등급, 서버 산출).
+-- =====================================================================
+DROP TABLE IF EXISTS cube_master;
+CREATE TABLE cube_master (
+    cube_level        INT     NOT NULL COMMENT '큐브 레벨',
+    required_exp      BIGINT  NOT NULL COMMENT '다음 레벨 요구 경험치(최대 레벨은 0)',
+    combine_grade_up  TINYINT NOT NULL DEFAULT 1 COMMENT '합성 등급 상승 허용(0/1)',
+    combine_count     INT     NOT NULL COMMENT '합성 소모 개수(같은 등급 N개 → 1등급 상승 1개)',
+    gold_per_scrap    BIGINT  NOT NULL COMMENT '분해 골드 계수(전환 골드=gold_per_scrap*아이템 등급)',
+    PRIMARY KEY (cube_level)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='큐브 레벨별 합성/분해 규칙';
+
+INSERT INTO cube_master (cube_level, required_exp, combine_grade_up, combine_count, gold_per_scrap) VALUES
+    (1, 1000,  1, 3, 100),
+    (2, 3000,  1, 3, 150),
+    (3, 6000,  1, 3, 220),
+    (4, 12000, 1, 3, 320),
+    (5, 0,     1, 3, 450);
+
+
+-- =====================================================================
+-- 8b. cube_recipe — 큐브 제작 레시피 헤더 (값 문서 §8-B)
+--    출처: master-data-값.md §8, 기획서 5.11 / 인벤토리·큐브 기획서 5.8
+--    제작(craft)은 기획서상 보류(우선순위 낮음)이나 레시피 데이터는 미리 채워 둔다.
+--    result_item_code는 item_master(제작 결과 아이템)를 참조.
+-- =====================================================================
+DROP TABLE IF EXISTS cube_recipe;
+CREATE TABLE cube_recipe (
+    recipe_code       INT    NOT NULL COMMENT '레시피 코드',
+    result_item_code  INT    NOT NULL COMMENT '제작 결과 아이템(item_master.item_code)',
+    result_quantity   INT    NOT NULL DEFAULT 1 COMMENT '제작 결과 수량',
+    req_cube_level    INT    NOT NULL COMMENT '요구 큐브 레벨(cube_master.cube_level)',
+    cost_gold         BIGINT NOT NULL DEFAULT 0 COMMENT '제작 비용 골드',
+    PRIMARY KEY (recipe_code),
+    KEY idx_cube_recipe_result (result_item_code),
+    CONSTRAINT fk_cube_recipe_result FOREIGN KEY (result_item_code)
+        REFERENCES item_master (item_code) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='큐브 제작 레시피 헤더';
+
+INSERT INTO cube_recipe (recipe_code, result_item_code, result_quantity, req_cube_level, cost_gold) VALUES
+    (8001, 30012, 1, 2,  10000),
+    (8002, 30120, 1, 2,  12000),
+    (8003, 30160, 1, 3,  20000),
+    (8004, 30105, 1, 5, 100000);
+
+
+-- =====================================================================
+-- 8c. cube_recipe_ingredient — 큐브 제작 레시피 소모 재료 (cube_recipe 자식, 값 문서 §8-C)
+--    출처: master-data-값.md §8. 소모 재료는 전부 item_master의 재료(item_type=2).
+--    (recipe_code, material_code) 복합 PK. material_code→item_master 참조.
+-- =====================================================================
+DROP TABLE IF EXISTS cube_recipe_ingredient;
+CREATE TABLE cube_recipe_ingredient (
+    recipe_code    INT NOT NULL COMMENT '레시피(cube_recipe.recipe_code)',
+    material_code  INT NOT NULL COMMENT '소모 재료(item_master.item_code, item_type=2 재료)',
+    quantity       INT NOT NULL COMMENT '소모 수량',
+    PRIMARY KEY (recipe_code, material_code),
+    KEY idx_cube_ingredient_material (material_code),
+    CONSTRAINT fk_cube_ingredient_recipe FOREIGN KEY (recipe_code)
+        REFERENCES cube_recipe (recipe_code) ON DELETE CASCADE,
+    CONSTRAINT fk_cube_ingredient_material FOREIGN KEY (material_code)
+        REFERENCES item_master (item_code) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='큐브 제작 레시피 소모 재료(자식)';
+
+INSERT INTO cube_recipe_ingredient (recipe_code, material_code, quantity) VALUES
+    (8001, 41001, 5),
+    (8001, 41002, 2),
+    (8002, 41001, 5),
+    (8002, 41002, 2),
+    (8003, 41002, 3),
+    (8003, 41010, 1),
+    (8004, 41010, 5),
+    (8004, 41020, 2);
+
+
+-- =====================================================================
+-- 9. monster_master — 몬스터 전투 스탯 (값 문서 §9)
+--    출처: master-data-값.md §9, 기획서 5.8
+--    코드 규약: Act1 90xx / Act2 91xx / Act3 92xx, 각 Act 보스는 xx99.
+--    보상은 스테이지 단위(stage_reward)로 일원화되어 몬스터 개별 드롭 컬럼은 없다.
+-- =====================================================================
+DROP TABLE IF EXISTS monster_master;
+CREATE TABLE monster_master (
+    monster_code     INT         NOT NULL COMMENT '몬스터 코드(Act1 90xx/Act2 91xx/Act3 92xx, 보스 xx99)',
+    name             VARCHAR(40) NOT NULL COMMENT '몬스터 이름',
+    hp               BIGINT      NOT NULL COMMENT '체력',
+    attack           BIGINT      NOT NULL COMMENT '공격력',
+    PRIMARY KEY (monster_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='몬스터 전투 스탯';
+
+INSERT INTO monster_master (monster_code, name, hp, attack) VALUES
+    (9001, '슬라임',              500,   20),
+    (9002, '고블린',              800,   35),
+    (9003, '늑대',                1200,  55),
+    (9099, '오크 군주 (Act1 보스)', 25000, 180),
+    (9101, '스켈레톤',            3000,  120),
+    (9102, '가고일',              4500,  170),
+    (9103, '리치 견습',           6000,  240),
+    (9199, '본 드래곤 (Act2 보스)', 120000, 600),
+    (9201, '데몬',                15000, 500),
+    (9299, '마왕 (Act3 보스)',     500000, 1500);
+
+
+-- =====================================================================
+-- 11. stage_master — 스테이지 구성(보스) (값 문서 §11)
+--    출처: master-data-값.md §11, 기획서 5.9
+--    stage_id = act*1000000 + difficulty*10000 + stage.
+--    보상은 분리되어 stage_reward가 담당한다(구 reward_gold/reward_exp/drop_table_code 제거).
+--    스폰(등장 일반 몬스터)은 JSON 컬럼을 쓰지 않고 stage_spawn 자식 테이블로 분리한다(설계 규칙).
+--    3 Act × 2 난이도 × 3 스테이지 = 18종. 각 Act 스테이지 3이 보스(boss_monster_code), 나머지 0.
+-- =====================================================================
+DROP TABLE IF EXISTS stage_master;
+CREATE TABLE stage_master (
+    stage_id           INT     NOT NULL COMMENT '스테이지 키(act*1000000+difficulty*10000+stage)',
+    act                TINYINT NOT NULL COMMENT 'Act(1~3)',
+    difficulty         TINYINT NOT NULL COMMENT '난이도(1~2)',
+    stage              INT     NOT NULL COMMENT '스테이지 번호',
+    boss_monster_code  INT     NOT NULL DEFAULT 0 COMMENT '보스 몬스터(monster_master), 없으면 0',
+    PRIMARY KEY (stage_id),
+    KEY idx_stage_ads (act, difficulty, stage)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='스테이지 구성(보스). 스폰은 stage_spawn, 보상은 stage_reward';
+
+INSERT INTO stage_master (stage_id, act, difficulty, stage, boss_monster_code) VALUES
+    (1010001, 1, 1, 1, 0),
+    (1010002, 1, 1, 2, 0),
+    (1010003, 1, 1, 3, 9099),
+    (1020001, 1, 2, 1, 0),
+    (1020002, 1, 2, 2, 0),
+    (1020003, 1, 2, 3, 9099),
+    (2010001, 2, 1, 1, 0),
+    (2010002, 2, 1, 2, 0),
+    (2010003, 2, 1, 3, 9199),
+    (2020001, 2, 2, 1, 0),
+    (2020002, 2, 2, 2, 0),
+    (2020003, 2, 2, 3, 9199),
+    (3010001, 3, 1, 1, 0),
+    (3010002, 3, 1, 2, 0),
+    (3010003, 3, 1, 3, 9299),
+    (3020001, 3, 2, 1, 0),
+    (3020002, 3, 2, 2, 0),
+    (3020003, 3, 2, 3, 9299);
+
+
+-- =====================================================================
+-- 11b. stage_spawn — 스테이지별 등장 일반 몬스터 (stage_master 자식, 값 문서 §11-B)
+--    구 stage_master.spawns(JSON 배열)를 대체하는 자식 테이블(JSON 컬럼 미사용 규칙).
+--    (stage_id, monster_code) 복합 PK. 보스는 여기 넣지 않고 stage_master.boss_monster_code로 둔다.
+-- =====================================================================
+DROP TABLE IF EXISTS stage_spawn;
+CREATE TABLE stage_spawn (
+    stage_id      INT NOT NULL COMMENT '스테이지(stage_master.stage_id)',
+    monster_code  INT NOT NULL COMMENT '등장 일반 몬스터(monster_master.monster_code)',
+    spawn_count   INT NOT NULL COMMENT '등장 마리 수',
+    PRIMARY KEY (stage_id, monster_code),
+    KEY idx_stage_spawn_monster (monster_code),
+    CONSTRAINT fk_stage_spawn_stage FOREIGN KEY (stage_id)
+        REFERENCES stage_master (stage_id) ON DELETE CASCADE,
+    CONSTRAINT fk_stage_spawn_monster FOREIGN KEY (monster_code)
+        REFERENCES monster_master (monster_code) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='스테이지별 등장 일반 몬스터(스폰)';
+
+INSERT INTO stage_spawn (stage_id, monster_code, spawn_count) VALUES
+    (1010001, 9001, 8),
+    (1010001, 9002, 4),
+    (1010002, 9002, 6),
+    (1010002, 9003, 3),
+    (1010003, 9003, 5),
+    (1020001, 9001, 8),
+    (1020001, 9002, 4),
+    (1020002, 9002, 6),
+    (1020002, 9003, 3),
+    (1020003, 9003, 5),
+    (2010001, 9101, 8),
+    (2010001, 9102, 4),
+    (2010002, 9102, 6),
+    (2010002, 9103, 3),
+    (2010003, 9103, 5),
+    (2020001, 9101, 8),
+    (2020001, 9102, 4),
+    (2020002, 9102, 6),
+    (2020002, 9103, 3),
+    (2020003, 9103, 5),
+    (3010001, 9201, 10),
+    (3010002, 9201, 8),
+    (3010003, 9201, 6),
+    (3020001, 9201, 10),
+    (3020002, 9201, 8),
+    (3020003, 9201, 6);
+
+
+-- =====================================================================
+-- 10. stage_reward — 스테이지 클리어 보상 (값 문서 §10, 구 drop_table_master)
+--    출처: master-data-값.md §10, 기획서 5.10
+--    스테이지 1개당 1행. reward_gold/reward_exp + 등급 1~6 아이템 드롭 확률(0~1).
+--    클리어 시 등급을 추첨해 그 등급의 item_master 아이템 하나 지급, 확률 합<1이면 미드롭.
+--    stage_id는 stage_master를 참조(FK).
+-- =====================================================================
+DROP TABLE IF EXISTS stage_reward;
+CREATE TABLE stage_reward (
+    stage_id     INT          NOT NULL COMMENT '참조 스테이지(stage_master.stage_id)',
+    reward_gold  BIGINT       NOT NULL COMMENT '클리어 획득 골드',
+    reward_exp   BIGINT       NOT NULL COMMENT '클리어 획득 경험치(3캐릭터 공통)',
+    grade1_prob  DECIMAL(5,4) NOT NULL DEFAULT 0 COMMENT '등급1 아이템 드롭 확률(0~1)',
+    grade2_prob  DECIMAL(5,4) NOT NULL DEFAULT 0 COMMENT '등급2 아이템 드롭 확률(0~1)',
+    grade3_prob  DECIMAL(5,4) NOT NULL DEFAULT 0 COMMENT '등급3 아이템 드롭 확률(0~1)',
+    grade4_prob  DECIMAL(5,4) NOT NULL DEFAULT 0 COMMENT '등급4 아이템 드롭 확률(0~1)',
+    grade5_prob  DECIMAL(5,4) NOT NULL DEFAULT 0 COMMENT '등급5 아이템 드롭 확률(0~1)',
+    grade6_prob  DECIMAL(5,4) NOT NULL DEFAULT 0 COMMENT '등급6 아이템 드롭 확률(0~1)',
+    PRIMARY KEY (stage_id),
+    CONSTRAINT fk_stage_reward_stage FOREIGN KEY (stage_id)
+        REFERENCES stage_master (stage_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='스테이지 클리어 보상(골드·경험치·등급별 드롭 확률)';
+
+INSERT INTO stage_reward (stage_id, reward_gold, reward_exp, grade1_prob, grade2_prob, grade3_prob, grade4_prob, grade5_prob, grade6_prob) VALUES
+    (1010001, 100, 50, 0.30, 0.10, 0.02, 0.00, 0.00, 0.00),
+    (1010002, 120, 60, 0.30, 0.12, 0.03, 0.00, 0.00, 0.00),
+    (1010003, 500, 250, 0.20, 0.25, 0.10, 0.03, 0.00, 0.00),
+    (1020001, 250, 125, 0.25, 0.15, 0.05, 0.00, 0.00, 0.00),
+    (1020002, 300, 150, 0.25, 0.15, 0.06, 0.00, 0.00, 0.00),
+    (1020003, 1200, 600, 0.00, 0.25, 0.15, 0.05, 0.00, 0.00),
+    (2010001, 800, 400, 0.00, 0.20, 0.10, 0.03, 0.00, 0.00),
+    (2010002, 1000, 500, 0.00, 0.20, 0.12, 0.05, 0.00, 0.00),
+    (2010003, 4000, 2000, 0.00, 0.00, 0.20, 0.12, 0.05, 0.01),
+    (2020001, 2000, 1000, 0.00, 0.15, 0.15, 0.05, 0.00, 0.00),
+    (2020002, 2500, 1250, 0.00, 0.00, 0.20, 0.10, 0.03, 0.00),
+    (2020003, 10000, 5000, 0.00, 0.00, 0.15, 0.15, 0.08, 0.02),
+    (3010001, 6000, 3000, 0.00, 0.00, 0.15, 0.15, 0.05, 0.00),
+    (3010002, 7000, 3500, 0.00, 0.00, 0.15, 0.15, 0.06, 0.00),
+    (3010003, 30000, 15000, 0.00, 0.00, 0.00, 0.20, 0.12, 0.05),
+    (3020001, 15000, 7500, 0.00, 0.00, 0.00, 0.15, 0.10, 0.02),
+    (3020002, 17000, 8500, 0.00, 0.00, 0.00, 0.15, 0.12, 0.03),
+    (3020003, 70000, 35000, 0.00, 0.00, 0.00, 0.15, 0.15, 0.08);
+
+
+-- =====================================================================
+-- 13. attendance_master — 출석부 일자별(day-of-month) 보상 (값 문서 §13)
+--    출처: master-data-값.md §13, 기획서 5.14
+--    reward_type: 1=골드 2=아이템 3=재료 (item_master.item_type와 별개의 enum).
+--    골드는 reward_code=0(수량이 골드량), 아이템·재료는 reward_code가 item_master.item_code.
+--      reward_code는 0 센티널(골드)이 섞이므로 FK를 걸지 않고 애플리케이션에서 검증한다.
+--    day 1~31 전부 정의. 주간 마일스톤(7·14·21·28)과 15·31일에 고가치 보상 배치.
+-- =====================================================================
+DROP TABLE IF EXISTS attendance_master;
+CREATE TABLE attendance_master (
+    day          TINYINT NOT NULL COMMENT '이달 며칠차(1~31)',
+    reward_type  TINYINT NOT NULL COMMENT '보상 종류(1=골드 2=아이템 3=재료)',
+    reward_code  INT     NOT NULL DEFAULT 0 COMMENT '아이템/재료 코드(item_master.item_code, 골드면 0)',
+    quantity     BIGINT  NOT NULL COMMENT '지급 수량(골드면 골드량)',
+    PRIMARY KEY (day)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='출석부 일자별 보상 정의';
+
+INSERT INTO attendance_master (day, reward_type, reward_code, quantity) VALUES
+    (1,  1, 0,     1000),
+    (2,  1, 0,     1500),
+    (3,  3, 41001, 3),
+    (4,  1, 0,     2000),
+    (5,  1, 0,     2500),
+    (6,  3, 41001, 5),
+    (7,  3, 41002, 3),
+    (8,  1, 0,     3000),
+    (9,  1, 0,     3500),
+    (10, 3, 41001, 5),
+    (11, 1, 0,     4000),
+    (12, 1, 0,     4500),
+    (13, 3, 41002, 3),
+    (14, 3, 41010, 2),
+    (15, 2, 30110, 1),
+    (16, 1, 0,     5000),
+    (17, 1, 0,     5500),
+    (18, 3, 41002, 5),
+    (19, 1, 0,     6000),
+    (20, 1, 0,     6500),
+    (21, 3, 41010, 3),
+    (22, 1, 0,     7000),
+    (23, 1, 0,     7500),
+    (24, 3, 41002, 5),
+    (25, 1, 0,     8000),
+    (26, 1, 0,     8500),
+    (27, 3, 41010, 3),
+    (28, 3, 41020, 1),
+    (29, 1, 0,     9000),
+    (30, 3, 41010, 5),
+    (31, 2, 30105, 1);
+
+
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- =====================================================================
--- 끝. (7~13번 테이블은 값 확정 후 본 파일에 이어서 추가한다.)
+-- 끝. (7 enhance/12 box는 값 확정 후 추가한다.)
 -- =====================================================================

@@ -1,6 +1,6 @@
 # 마스터(기획) 데이터 & 클라이언트 연동 기획서
 
-> 상위 문서: [서버 시스템 전체 개요](../../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.10
+> 상위 문서: [서버 시스템 전체 개요](../../서버-시스템-전체-개요.md) · 관련 도메인 4.10
 >
 > 본 문서는 (1) 세이브 데이터가 코드 값(`item_code`, `class_code`, 성장 `code` 등)으로 참조하는 **정적 게임 데이터(마스터 데이터)** 의 구조·내용과, (2) 이를 **Unity 클라이언트가 보유·소비하는 방식**(범위·스키마·연동 코드)을 함께 다룬다. 마스터 데이터는 **클라이언트 빌드에 번들**되고 서버도 같은 원천을 기동 시 자체 로드한다(런타임 다운로드·버전 협상 없음). 세이브(동적 진행 데이터)는 [세이브 데이터 기획서](../save-data-기획서.md)를 참고한다.
 
@@ -23,7 +23,7 @@
 - **목적**: 아이템·직업·스킬·룬·몬스터·스테이지·재화 등 게임의 **정적 정의 데이터**를 한 곳에서 관리한다. 세이브 테이블은 실제 정의를 저장하지 않고 **코드(숫자 키)만 저장**하며, 그 코드의 의미(이름·수치·효과)는 전적으로 마스터 데이터가 제공한다. 또한 방치형 특성상 클라이언트는 **자동 전투 연출·전투력 계산·UI 표시**를 로컬에서 수행하므로, 이 데이터를 빌드에 번들로 보유한다.
 - **대상**: `GameServer`(마스터 데이터 로드·검증), **Unity 클라이언트**(번들 데이터 로딩·전투 시뮬레이션·UI), `TaskbarHero.Common`(서버-클라 공유 데이터 클래스·enum, `netstandard2.0`).
 - **핵심 구분**: **마스터 데이터 = 정적·읽기 전용·전 유저 공통 계약**, **세이브 데이터 = 동적·유저별 진행 상태**. 세이브는 마스터를 *참조*할 뿐, 마스터를 변경하지 않는다.
-- **서버 권위 원칙(중요)**: 클라이언트가 이 데이터로 하는 계산은 **연출·예측용**이다. 오프라인 보상·스테이지 클리어 보상·성장 결과 등 **이득이 되는 값의 최종 확정은 서버가 동일 마스터 데이터로 재계산**한다([서버 시스템 전체 개요](../../공통/서버-시스템-전체-개요.md) 5장, [스테이지/전투 결과 기획서](../stage-battle-기획서.md)). 클라이언트 번들과 서버 로드는 **같은 원천**을 쓴다.
+- **서버 권위 원칙(중요)**: 클라이언트가 이 데이터로 하는 계산은 **연출·예측용**이다. 오프라인 보상·스테이지 클리어 보상·성장 결과 등 **이득이 되는 값의 최종 확정은 서버가 동일 마스터 데이터로 재계산**한다([서버 시스템 전체 개요](../../서버-시스템-전체-개요.md) 5장, [스테이지/전투 결과 기획서](../stage-battle-기획서.md)). 클라이언트 번들과 서버 로드는 **같은 원천**을 쓴다.
 - **관련 기획서**: [[master-data-값]] (본 기획서가 정의한 테이블들의 **실제 데이터 값** 카탈로그), [[save-data-기획서]] (참조 주체·동적 세이브), [[inventory-item-cube-기획서]] (아이템·강화·큐브), [[growth-기획서]] (스킬·룬), [[stage-battle-기획서]] (전투 결과 검증), [[trade-기획서]] (거래소 기준가), [[서버-시스템-전체-개요]] (도메인 4.10)
 
 ## 2. 마스터 데이터의 성격과 범위
@@ -40,7 +40,8 @@
 |---|---|---|---|
 | `player_character` | `class_code` | `class_master` | 직업 정의 |
 | `player_character` | `level` | `level_master` | 레벨별 요구 경험치·스탯·스킬 포인트 |
-| `game_player` | `act` / `stage` / `difficulty` | `stage_master` | 스테이지 정의 |
+| `game_player` | `act` / `stage` / `difficulty` | `stage_master` | 스테이지 구성(스폰·보스) |
+| `game_player`(클리어 보상 계산) | `stage_id` | `stage_reward` | 스테이지 클리어 골드·경험치·등급별 아이템 확률 |
 | `player_item`(아이템 행 `row_type=1`) | `code` | `item_master` | 아이템 정의(`item_type` 1~2: 장비·재료) |
 | `player_item`(재화 행 `row_type=2`) | `code` | `item_master` | 재화 정의(`item_type=3`, 골드=`item_code` 1) |
 | `player_item` | `enhance_level` | `enhance_master` | 강화 단계별 규칙·비용 |
@@ -48,7 +49,7 @@
 | `player_skill` | `skill_code` | `skill_master` | 스킬(캐릭터별) |
 | `player_rune` | `rune_code` | `rune_master` | 룬(Rune Tree, 계정 공용) |
 | `player_cube` | `cube_level` | `cube_master` | 큐브 레벨별 규칙·합성/제작 레시피 |
-| (전투/드롭 계산) | — | `monster_master`, `drop_table_master` | 몬스터 스탯·전리품 테이블 |
+| (전투 계산) | — | `monster_master` | 몬스터 전투 스탯(보상은 `stage_reward`) |
 
 ## 4. 마스터 테이블 목록
 
@@ -57,14 +58,17 @@
 ```mermaid
 erDiagram
     class_master     ||--o{ skill_master      : "직업별 스킬"
-    stage_master     ||--o{ monster_master     : "스폰"
-    stage_master     ||--o{ drop_table_master  : "드롭"
-    item_master      ||--o{ drop_table_master  : "드롭 항목"
+    stage_master     ||--o{ stage_spawn        : "스폰(자식)"
+    monster_master   ||--o{ stage_spawn        : "등장 몬스터"
+    stage_master     ||--|| stage_reward       : "클리어 보상(1:1)"
     item_master      ||--o{ box_master         : "지급 아이템 풀(등급)"
     item_master      ||--o{ attendance_master  : "일자별 보상"
     equip_slot_master||--o{ item_master        : "장착 슬롯"
     item_master      ||--o{ enhance_master     : "소모 재화(골드)"
     item_master      ||--o{ box_master         : "오픈 비용(골드)"
+    cube_recipe      ||--o{ cube_recipe_ingredient : "소모 재료(자식)"
+    item_master      ||--o{ cube_recipe        : "제작 결과 아이템"
+    item_master      ||--o{ cube_recipe_ingredient : "소모 재료(재료 아이템)"
 
     class_master { int class_code PK }
     level_master { int level PK }
@@ -75,8 +79,11 @@ erDiagram
     rune_master { int rune_code PK }
     monster_master { int monster_code PK }
     stage_master { int stage_id PK }
-    drop_table_master { int drop_table_code PK }
+    stage_spawn { int stage_id PK }
+    stage_reward { int stage_id PK }
     cube_master { int cube_level PK }
+    cube_recipe { int recipe_code PK }
+    cube_recipe_ingredient { int recipe_code PK }
     box_master { int box_code PK }
     attendance_master { int day PK }
 ```
@@ -90,9 +97,10 @@ erDiagram
 | `enhance_master` | 강화 단계별 비용·효과 | 단계 수만큼 |
 | `skill_master` | 직업별 스킬 정의 | 직업 × 스킬 |
 | `rune_master` | 룬(Rune Tree) 정의 | 트리 노드 수 |
-| `monster_master` | 몬스터 스탯·드롭 | 50종 이상 |
-| `stage_master` | 스테이지 구성·보상 | 3 Act × 4 난이도 × N |
-| `drop_table_master` | 전리품 확률 테이블 | 드롭 그룹 수 |
+| `monster_master` | 몬스터 전투 스탯 | 50종 이상 |
+| `stage_master` | 스테이지 구성(보스) | 3 Act × 2 난이도 × 3 = 18 |
+| `stage_spawn` | 스테이지별 등장 일반 몬스터(스폰, `stage_master` 자식) | 스테이지 × 몬스터 |
+| `stage_reward` | 스테이지 클리어 보상(골드·경험치·등급별 아이템 확률) | 스테이지 수만큼 |
 | `cube_master` | 큐브 레벨별 규칙·레시피 | 레벨 수만큼 |
 | `box_master` | 랜덤 상자별 등급 확률·지급 아이템 풀 | 상자 종류 수만큼 |
 | `attendance_master` | 출석부 일자별(day-of-month) 보상 정의 | 최대 31 |
@@ -273,7 +281,7 @@ erDiagram
 
 ### 5.8 `monster_master` — 몬스터
 
-전투/드롭 계산의 근거. 스테이지에 스폰되며 처치 시 드롭 테이블을 사용한다.
+전투 계산의 근거. 스테이지에 스폰된다. **보상은 스테이지 단위**(`stage_reward` 5.10)로 일원화되어 몬스터 개별 드롭 참조는 없다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -281,80 +289,89 @@ erDiagram
 | `name` | varchar | 몬스터 이름 |
 | `hp` | bigint | 체력 |
 | `attack` | bigint | 공격력 |
-| `drop_table_code` | int FK | 드롭 테이블(`drop_table_master`) |
 
-**담기는 데이터 예시**
+**담기는 데이터 예시** (전체 10종은 [마스터 데이터 값](master-data-값.md) §9 정본)
 
-| monster_code | name | hp | attack | drop_table_code |
-|---|---|---|---|---|
-| 9001 | 슬라임 | 500 | 20 | 7001 |
-| 9010 | 늑대 | 1200 | 55 | 7002 |
-| 9099 | Act1 보스 | 25000 | 180 | 7050 |
+| monster_code | name | hp | attack |
+|---|---|---|---|
+| 9001 | 슬라임 | 500 | 20 |
+| 9003 | 늑대 | 1200 | 55 |
+| 9099 | 오크 군주 (Act1 보스) | 25000 | 180 |
 
-### 5.9 `stage_master` — 스테이지
+> 코드 규약: Act1 `90xx` · Act2 `91xx` · Act3 `92xx`, 각 Act 보스는 `xx99`.
 
-`game_player`의 `act`/`stage`/`difficulty`가 참조. 3 Act × 4 난이도 구성이며 스테이지별 기본 보상과 드롭 테이블을 정의한다.
+### 5.9 `stage_master` — 스테이지 구성
+
+`game_player`의 `act`/`stage`/`difficulty`가 참조. **3 Act × 2 난이도 × 3 스테이지(=18)** 구성이며 **스폰·보스 구성**을 정의한다. **클리어 보상은 분리**되어 `stage_reward`(5.10)가 담당한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `stage_id` | int PK | `(act, difficulty, stage)`를 인코딩한 키 |
+| `stage_id` | int PK | `(act, difficulty, stage)`를 인코딩한 키(`act×1000000+difficulty×10000+stage`) |
 | `act` | int | Act 번호(1~3) |
-| `difficulty` | int | 난이도 티어(1~4) |
+| `difficulty` | int | 난이도 티어(1~2) |
 | `stage` | int | 스테이지 번호 |
-| `reward_gold` | bigint | 기본 골드 보상 |
-| `reward_exp` | bigint | 기본 경험치 보상 |
-| `drop_table_code` | int FK | 드롭 테이블(`drop_table_master`) |
-| `spawns` | json | 등장 **일반 몬스터 스폰 목록** `[{ monsterCode, count }]`(`monster_master` 참조) |
 | `boss_monster_code` | int | **스테이지 보스 몬스터**(`monster_master`). 없으면 0 |
 
-**담기는 데이터 예시**
+> **스폰 분리(변경)**: 구 `spawns`(JSON 배열) 컬럼은 폐기했다. **JSON 문자열 컬럼을 두지 않는 설계 규칙**에 따라 등장 일반 몬스터는 아래 `stage_spawn` **자식 테이블**로 분리한다. 클라 번들 JSON은 전송 편의상 이를 `spawns` 배열로 묶어 내려줄 수 있다(DB↔번들, 7장).
 
-| stage_id | act | difficulty | stage | reward_gold | reward_exp | drop_table_code |
-|---|---|---|---|---|---|---|
-| 1010001 | 1 | 1 | 1 | 100 | 50 | 7001 |
-| 1010002 | 1 | 1 | 2 | 120 | 60 | 7001 |
-| 1020001 | 1 | 2 | 1 | 300 | 150 | 7002 |
-
-> 스폰 예시: `spawns` = `[{ "monsterCode": 9001, "count": 8 }, { "monsterCode": 9010, "count": 3 }]`, `boss_monster_code` = `9099`(없으면 0). 스테이지 진입 응답이 이 스폰·보스 정보를 그대로 내려준다([스테이지/전투 결과 기획서](../stage-battle-기획서.md) 5.1). 벽에 막히면 이전 스테이지를 재파밍할 수 있다(하드월 없음).
-
-### 5.10 `drop_table_master` — 드롭 테이블
-
-몬스터/스테이지가 참조하는 전리품 확률 테이블. `(drop_table_code, entry_no)` 복합 PK로 한 테이블에 여러 항목을 담는다.
+**`stage_spawn` (stage_master 자식 테이블)**
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `drop_table_code` | int PK | 드롭 테이블 코드 |
-| `entry_no` | int PK | 테이블 내 항목 번호 |
-| `reward_type` | int | 1:골드 2:아이템 3:재료 |
-| `reward_code` | int | 아이템/재료 코드(골드면 0) |
-| `weight` | int | 드롭 가중치(확률은 테이블 내 가중치 합 대비 비율) |
+| `stage_id` | int PK/FK | 스테이지(`stage_master`) |
+| `monster_code` | int PK/FK | 등장 일반 몬스터(`monster_master`) |
+| `spawn_count` | int | 등장 마리 수 |
 
-**담기는 데이터 예시**
+**담기는 데이터 예시** (전체는 [마스터 데이터 값](master-data-값.md) §11 정본)
 
-| drop_table_code | entry_no | reward_type | reward_code | weight |
-|---|---|---|---|---|
-| 7001 | 1 | 1 | 0 | 70 |
-| 7001 | 2 | 3 | 41001 | 25 |
-| 7001 | 3 | 2 | 30012 | 5 |
+| stage_id | act | difficulty | stage | boss_monster_code |  | stage_id | monster_code | spawn_count |
+|---|---|---|---|---|---|---|---|---|
+| 1010001 | 1 | 1 | 1 | 0 |  | 1010001 | 9001 | 8 |
+| 1010003 | 1 | 1 | 3 | 9099 |  | 1010001 | 9002 | 4 |
+
+> 스테이지 진입 응답이 스폰(`stage_spawn`)·보스 정보를 그대로 내려준다([스테이지/전투 결과 기획서](../stage-battle-기획서.md) 5.1). 벽에 막히면 이전 스테이지를 재파밍할 수 있다(하드월 없음). 클리어 보상은 같은 `stage_id`로 `stage_reward`가 정의한다.
+
+### 5.10 `stage_reward` — 스테이지 클리어 보상
+
+스테이지 클리어 시 지급하는 보상 정의(구 `drop_table_master`를 대체). **스테이지 1개당 1행**이며 `stage_master`를 `stage_id`로 참조한다. 골드·경험치와 **등급별 아이템 드롭 확률**을 담는다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `stage_id` | int PK/FK | 참조 스테이지(`stage_master.stage_id`) |
+| `reward_gold` | bigint | 클리어 획득 골드 |
+| `reward_exp` | bigint | 클리어 획득 경험치(3캐릭터 공통) |
+| `grade1_prob` ~ `grade6_prob` | decimal | 등급 1~6 아이템 **드롭 확률(0~1)** |
+
+**담기는 데이터 예시** (전체는 [마스터 데이터 값](master-data-값.md) §10 정본)
+
+| stage_id | reward_gold | reward_exp | grade1_prob | grade2_prob | grade3_prob | grade4_prob |
+|---|---|---|---|---|---|---|
+| 1010001 | 100 | 50 | 0.30 | 0.10 | 0.02 | 0 |
+| 1010003 | 500 | 250 | 0.20 | 0.25 | 0.10 | 0.03 |
+
+> 클리어 시 서버가 등급을 추첨(`gradeN_prob`)해 그 등급의 `item_master` 아이템 하나를 지급하고, 확률 합이 1 미만이면 나머지는 미드롭이다(상자 가챠와 동일 방식). `grade5_prob`·`grade6_prob`은 지면상 생략했으나 실제 테이블 컬럼이다. 드롭 확정은 서버 권위([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
 
 ### 5.11 `cube_master` — 큐브(Hero-dric Cube)
 
 `player_cube.cube_level`이 참조. 큐브 레벨별 요구 경험치와 합성/분해/제작 규칙을 정의한다.
 
+**설계 규칙**: 구 `synthesis_rule`(JSON)은 **폐기**한다(JSON 문자열 컬럼 금지). 레벨별 고정 규칙은 `cube_master`의 **개별 스칼라 컬럼**으로 두고, **제작 레시피(재료 배열)** 는 반복 구조라 **별도 자식 테이블**(`cube_recipe` 헤더 + `cube_recipe_ingredient` 재료)로 분리한다. 실제 값은 [마스터 데이터 값](master-data-값.md) §8 정본.
+
+**`cube_master`**
+
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `cube_level` | int PK | 큐브 레벨 |
-| `required_exp` | bigint | 다음 레벨 요구 경험치 |
-| `synthesis_rule` | json | 합성/분해/제작 규칙 |
+| `required_exp` | bigint | 다음 레벨 요구 경험치(최대 레벨은 0) |
+| `combine_grade_up` | tinyint | 합성 시 등급 상승 허용(0/1) |
+| `combine_count` | int | 합성 소모 개수(같은 등급 N개 → 1등급 상승 1개) |
+| `gold_per_scrap` | bigint | 분해 골드 계수(전환 골드 = `gold_per_scrap` × 아이템 등급) |
 
-**담기는 데이터 예시**
+**`cube_recipe`(제작 레시피 헤더)** — `recipe_code`(PK), `result_item_code`(결과 아이템, `item_master`), `result_quantity`, `req_cube_level`(요구 큐브 레벨), `cost_gold`(제작 비용 골드).
 
-| cube_level | required_exp | synthesis_rule |
-|---|---|---|
-| 1 | 1000 | `{ "combine_grade_up": true, "gold_per_scrap": 100 }` |
-| 2 | 3000 | `{ "combine_grade_up": true, "gold_per_scrap": 150 }` |
+**`cube_recipe_ingredient`(제작 소모 재료, 자식)** — `(recipe_code, material_code)` 복합 PK, `quantity`. `material_code`는 `item_master`의 **재료 아이템(item_type=2)** 을 가리킨다.
 
-> 큐브 합성/제작 상세 규칙은 [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md)에서 확정.
+> 제작(craft)은 [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 5.8 기준 **보류(우선순위 낮음)** 이나 레시피 스키마·데이터는 미리 정의해 둔다. 큐브 합성/분해/제작 상세 규칙은 인벤토리/큐브 기획서에서 확정한다.
 
 ### 5.12 `level_master` — 캐릭터 레벨
 
@@ -420,9 +437,9 @@ erDiagram
 
 ### 공통 규칙
 
-- **키 규칙**: `stage_master`는 `(act, difficulty, stage)`를 인코딩한 `stage_id`를 PK로 쓴다. `drop_table_master`는 `(drop_table_code, entry_no)` 복합 PK.
+- **키 규칙**: `stage_master`는 `(act, difficulty, stage)`를 인코딩한 `stage_id`를 PK로 쓰고, `stage_reward`는 같은 `stage_id`를 PK/FK로 써 스테이지와 1:1 대응한다.
 - **enum 공유**: `item_type`(1:장비 2:재료 3:재화)·`unlock_type`·`reward_type`·룬 `stat_type`(1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도) 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상). 재화는 별도 `currency_type` enum 없이 `item_master`(item_type=3)의 `item_code`로 식별한다(골드=1).
-- **JSON 필드**: `base_stats`·`stat_bonus`·`synthesis_rule` 등 가변 구조는 JSON으로 담되, 키 스키마는 각 도메인 기획서에서 확정한다.
+- **JSON 컬럼 금지(설계 규칙)**: DB 테이블에는 JSON 문자열 컬럼을 두지 않는다. 고정 스키마 값은 개별 컬럼(예: 스탯 `hp`~`cooldown`)으로, 배열·중첩 등 반복 구조는 **별도 자식 테이블**(예: `stage_master` 스폰 → `stage_spawn`, 향후 `box`의 등급 가중치·아이템 풀, `cube`의 레시피도 자식 테이블)로 분리한다. 단 **클라 번들 JSON·POCO는 예외**로, 전송 편의상 이 컬럼/자식 행들을 중첩 객체·배열로 직렬화한다(DB↔번들, 5.1·7장).
 
 ## 6. 클라이언트가 보유하는 데이터 범위
 
@@ -437,8 +454,8 @@ erDiagram
 | `skill_master` | 스킬 분류(공격/버프/디버프)·계수·지속시간 | 🔴 전투 필수 |
 | `rune_master` | 룬 효과(% 보너스) | 🔴 전투 필수 |
 | `monster_master` | 몬스터 스탯(HP·공격력) | 🔴 전투 필수 |
-| `stage_master` | 스테이지 스폰·보스·기본 보상 | 🔴 전투 필수 |
-| `drop_table_master` | 드롭 항목(표시·예측용, 확정은 서버) | 🟡 표시용 |
+| `stage_master` | 스테이지 스폰·보스 구성 | 🔴 전투 필수 |
+| `stage_reward` | 클리어 골드·경험치·등급별 드롭 확률(표시·예측용, 확정은 서버) | 🟡 표시용 |
 | `cube_master` | 큐브 합성/분해/제작 규칙 표시 | 🟡 표시용 |
 | `equip_slot_master` | 슬롯 이름 표시 | 🟡 표시용 |
 | `box_master` | 상자 등급 확률 안내 표시 | 🟡 표시용 |
@@ -564,8 +581,7 @@ namespace TaskbarHero.Common.MasterData
         public int monsterCode;
         public string name;
         public long hp;
-        public long attack;
-        public int dropTableCode;
+        public long attack;          // 보상은 stage_reward가 담당(몬스터 개별 드롭 없음)
     }
 
     [Serializable] public struct Spawn { public int monsterCode; public int count; }
@@ -577,11 +593,23 @@ namespace TaskbarHero.Common.MasterData
         public int act;
         public int difficulty;
         public int stage;
+        public Spawn[] spawns;        // DB는 stage_spawn 자식 테이블. 번들 JSON은 배열로 직렬화(전송 편의)
+        public int bossMonsterCode;   // 0=보스 없음
+    }
+
+    // 스테이지 클리어 보상(구 drop_table_master 대체). stageId로 StageMaster와 1:1.
+    [Serializable]
+    public class StageReward
+    {
+        public int stageId;
         public long rewardGold;
         public long rewardExp;
-        public int dropTableCode;
-        public Spawn[] spawns;
-        public int bossMonsterCode;   // 0=보스 없음
+        public float grade1Prob;   // 등급 1~6 아이템 드롭 확률(0~1). 합<1이면 미드롭
+        public float grade2Prob;
+        public float grade3Prob;
+        public float grade4Prob;
+        public float grade5Prob;
+        public float grade6Prob;
     }
 }
 ```
@@ -622,10 +650,12 @@ public class MasterDatabase
     public readonly Dictionary<int, RuneMaster>    Runes    = new Dictionary<int, RuneMaster>();
     public readonly Dictionary<int, MonsterMaster> Monsters = new Dictionary<int, MonsterMaster>();
     public readonly Dictionary<int, StageMaster>   Stages   = new Dictionary<int, StageMaster>();
+    public readonly Dictionary<int, StageReward>   StageRewards = new Dictionary<int, StageReward>();
 
     // 각 인자는 번들 리소스(TextAsset 등)에서 읽은 테이블별 JSON 배열 문자열
     public void Load(string classesJson, string levelsJson, string itemsJson, string enhancesJson,
-                     string skillsJson, string runesJson, string monstersJson, string stagesJson)
+                     string skillsJson, string runesJson, string monstersJson, string stagesJson,
+                     string stageRewardsJson)
     {
         Fill(Classes,  JsonHelper.FromJsonArray<ClassMaster>(classesJson),   c => c.classCode);
         Fill(Levels,   JsonHelper.FromJsonArray<LevelMaster>(levelsJson),    l => l.level);
@@ -635,6 +665,7 @@ public class MasterDatabase
         Fill(Runes,    JsonHelper.FromJsonArray<RuneMaster>(runesJson),      r => r.runeCode);
         Fill(Monsters, JsonHelper.FromJsonArray<MonsterMaster>(monstersJson),m => m.monsterCode);
         Fill(Stages,   JsonHelper.FromJsonArray<StageMaster>(stagesJson),    s => s.stageId);
+        Fill(StageRewards, JsonHelper.FromJsonArray<StageReward>(stageRewardsJson), r => r.stageId);
     }
 
     private static void Fill<T>(Dictionary<int, T> dict, T[] rows, Func<T, int> keySelector)
@@ -751,7 +782,7 @@ public class CombatCalculator
 - **서버 적재**: 서버 기동 시 원천을 읽어 **인메모리 캐시**(코드→정의 딕셔너리)로 적재한다. 무결성 검증(중복 PK, FK 참조 무결성, 필수 필드 누락) 실패 시 기동 중단. 로드 실패 상태에서 관련 요청이 오면 `MasterDataNotLoaded(10001)`.
 - **클라이언트 배포(확정)**: 마스터 데이터를 **클라이언트 빌드에 번들**로 포함한다(앱 리소스로 동봉). 시작 시 번들 데이터를 로드(7장)하며, **다운로드·캐시 갱신·버전 협상 API는 없다**. 클라이언트 번들과 서버 로드가 **같은 원천**을 쓰므로 배포 시점에 동기화한다.
 - **각 액션 저장 검증 시**([[save-data-기획서]] 4장): 액션 요청의 `item_code`(재화 포함)·`class_code`·성장 `code` 등을 마스터 캐시에서 조회해 **존재 여부·제약**을 확인한 뒤 반영. 미존재 코드는 거부.
-- **드롭/보상 계산 시**: 스테이지·몬스터·드롭 테이블 마스터를 참조해 서버가 전리품을 산출(서버 권위).
+- **클리어 보상 계산 시**: `stage_master`(스폰·보스)와 `stage_reward`(골드·경험치·등급별 확률)를 참조해 서버가 보상을 산출(서버 권위).
 
 **에러 코드** — 마스터 데이터 도메인은 **10000번대**([통합 정의](../../공통/error-code-정의.md)).
 
@@ -773,7 +804,7 @@ public class CombatCalculator
 
 ## 10. 참고
 
-- [서버 시스템 전체 개요](../../공통/서버-시스템-전체-개요.md) — 도메인 4.10, 서버 권위 원칙
+- [서버 시스템 전체 개요](../../서버-시스템-전체-개요.md) — 도메인 4.10, 서버 권위 원칙
 - [세이브 데이터 기획서](../save-data-기획서.md) — 마스터를 코드로 참조하는 주체(동적 데이터)
 - [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) — 아이템·강화·큐브·상자
 - [성장 시스템 기획서](../growth-기획서.md) — 스킬·룬 성장
