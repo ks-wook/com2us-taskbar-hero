@@ -4,6 +4,15 @@
 >
 > 📄 **실제 생성 DDL**: [db-schema.sql](db-schema.sql) — 아래 관계형 테이블(Account DB·Game DB)의 MySQL `CREATE TABLE` 스크립트. 마스터 데이터(4장)는 관계형 테이블이 아니므로 DDL에 포함되지 않는다.
 
+## 목차
+
+- [1. 저장소 구성](#1-저장소-구성)
+- [2. AccountServer — 계정/인증 MySQL](#2-accountserver--계정인증-mysql)
+- [3. GameServer — 세이브 데이터 MySQL](#3-gameserver--세이브-데이터-mysql)
+- [4. 마스터 데이터 (정적 · 읽기 전용)](#4-마스터-데이터-정적--읽기-전용)
+- [5. 출처 문서](#5-출처-문서)
+
+
 ## 1. 저장소 구성
 
 | 저장소 | 서버 | 용도 |

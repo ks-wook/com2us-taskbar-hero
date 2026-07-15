@@ -76,7 +76,7 @@
 | `POST /api/game/cube/combine` | 큐브 합성(동급 아이템→상위 등급) | `{ itemIds[] }` | `consumed`, `result`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `ItemNotFound(4001)` |
 | `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{itemId,count}] }` | `gold`, `cubeExp` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
 | `POST /api/game/cube/craft` ⚠️보류 | 큐브 제작(레시피로 아이템 생성) | `{ recipeCode }` | `consumed`, `gained`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)` |
-| `POST /api/game/box/open` | 랜덤 상자 열기(골드 가챠, 등급 확률 추첨→랜덤 아이템 지급). 현재 단발(`count`=1)만 처리, 다연속 예정 | `{ boxCode, count? }` | `rewards`, `gained`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InvalidSaveData(2002)`, `InventoryFull(4002)`, `MasterDataNotLoaded(11001)` |
+| `POST /api/game/box/open` | 랜덤 상자 열기(골드 가챠, 등급 확률 추첨→랜덤 아이템 지급). 현재 단발(`count`=1)만 처리, 다연속 예정 | `{ boxCode, count? }` | `rewards`, `gained`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InvalidSaveData(2002)`, `InventoryFull(4002)`, `MasterDataNotLoaded(10001)` |
 
 - 장비는 **캐릭터별**(장착 시 `characterId` 필수), 인벤토리·골드·큐브는 계정 공유. `cube/craft`는 우선순위 낮아 **보류**(도입 확정 시 명세 확정).
 
@@ -111,9 +111,9 @@
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
 | `POST /api/game/trade/list` | 거래소 목록 조회(판매중, 아이템 코드 검색) | `{ itemCode?, page?, pageSize? }` | `listings[]`, `page`, `hasMore` | — |
-| `POST /api/game/trade/register` | 판매 등록(에스크로) | `{ itemId, price }` | `listingId`, `itemCode`, `price` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `TradeNotSellable(8002)`, `TradePriceOutOfRange(8006)`, `TradeListingLimitExceeded(8007)`, `InvalidSaveData(2002)` |
-| `POST /api/game/trade/buy` | 구매(골드→아이템, 대금 메일) | `{ listingId }` | `gained`, `cost`, `balance` | `TradeListingNotFound(8001)`, `TradeAlreadyClosed(8005)`, `TradeSelfPurchase(8004)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)` |
-| `POST /api/game/trade/cancel` | 판매 취소(아이템 복귀) | `{ listingId }` | `restored` | `TradeListingNotFound(8001)`, `TradeNotOwner(8003)`, `TradeAlreadyClosed(8005)`, `InventoryFull(4002)` |
+| `POST /api/game/trade/register` | 판매 등록(에스크로) | `{ itemId, price }` | `listingId`, `itemCode`, `price` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `TradeNotSellable(7002)`, `TradePriceOutOfRange(7006)`, `TradeListingLimitExceeded(7007)`, `InvalidSaveData(2002)` |
+| `POST /api/game/trade/buy` | 구매(골드→아이템, 대금 메일) | `{ listingId }` | `gained`, `cost`, `balance` | `TradeListingNotFound(7001)`, `TradeAlreadyClosed(7005)`, `TradeSelfPurchase(7004)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)` |
+| `POST /api/game/trade/cancel` | 판매 취소(아이템 복귀) | `{ listingId }` | `restored` | `TradeListingNotFound(7001)`, `TradeNotOwner(7003)`, `TradeAlreadyClosed(7005)`, `InventoryFull(4002)` |
 
 - 등록은 아이템을 인벤토리에서 거래소 보관(에스크로)으로 이동. 구매 시 아이템은 구매자 인벤토리로 즉시, **판매 대금(수수료 차감)은 판매자에게 메일(3.7, `category=2` 거래)로** 지급. 동시 구매 경합은 `listing_id` 행 잠금으로 직렬화(복제·이중 판매 불가).
 
@@ -124,10 +124,10 @@
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
 | `POST /api/game/mail/list` | 우편함 목록 조회 | `{}` | `mails[]`(첨부·읽음·수령·만료 포함) | — |
-| `POST /api/game/mail/claim` | 단건 메일 첨부 수령 | `{ mailId }` | `gained`, `balance` | `MailNotFound(9001)`, `MailAlreadyClaimed(9002)`, `MailExpired(9003)`, `InventoryFull(4002)` |
+| `POST /api/game/mail/claim` | 단건 메일 첨부 수령 | `{ mailId }` | `gained`, `balance` | `MailNotFound(8001)`, `MailAlreadyClaimed(8002)`, `MailExpired(8003)`, `InventoryFull(4002)` |
 | `POST /api/game/mail/claim-all` | 수령 가능한 메일 일괄 수령 | `{}` | `claimedMailIds[]`, `gained`, `balance` | `InventoryFull(4002)` |
 
-- 첨부(재화·아이템)는 서버가 지급하며 중복 수령 불가(수령 플래그+행 잠금). 만료 메일은 수령 거부. 발급은 거래소(4.8)·출석부(4.10)·운영이 담당.
+- 첨부(재화·아이템)는 서버가 지급하며 중복 수령 불가(수령 플래그+행 잠금). 만료 메일은 수령 거부. 발급은 거래소(4.7)·출석부(4.9)·운영이 담당.
 
 ### 3.8 출석부 보상
 
@@ -135,8 +135,8 @@
 
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
-| `POST /api/game/attendance/status` | 이번달 출석 현황 조회(읽기 전용) | `{}` | `yearMonth`, `today`, `todayClaimed`, `days[]` | `MasterDataNotLoaded(11001)` |
-| `POST /api/game/attendance/claim` | 오늘자 출석 보상 획득(보상 **메일 발급**) | `{}` | `attendDate`, `day`, `reward`, `mailId` | `AttendanceAlreadyClaimed(10001)`, `MasterDataNotLoaded(11001)` |
+| `POST /api/game/attendance/status` | 이번달 출석 현황 조회(읽기 전용) | `{}` | `yearMonth`, `today`, `todayClaimed`, `days[]` | `MasterDataNotLoaded(10001)` |
+| `POST /api/game/attendance/claim` | 오늘자 출석 보상 획득(보상 **메일 발급**) | `{}` | `attendDate`, `day`, `reward`, `mailId` | `AttendanceAlreadyClaimed(9001)`, `MasterDataNotLoaded(10001)` |
 
 - 날짜 경계는 서버 KST 자정, 하루 1회(`(user_id, attend_date)` 유니크). 획득 보상은 즉시 지급이 아니라 **메일(3.6)로 발급**되어 우편함 수령 시 계정 반영.
 

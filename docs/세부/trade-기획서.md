@@ -1,8 +1,21 @@
 # 거래소 / 교역선(Trade Ship) 기획서
 
-> 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.8(필수)
+> 상위 문서: [서버 시스템 전체 개요](../공통/서버-시스템-전체-개요.md) · 관련 도메인 4.7(필수)
 >
-> 본 문서는 원작의 스팀 마켓을 대체하는 **플레이어 간 아이템 거래소**를 서버 권위로 다룬다. 아이템을 팔면 그 대가가 **게임 머니(골드)** 로 판매자에게 들어온다(실물 화폐 연동 없음). 판매 대금은 [메일(4.9)](mail-기획서.md)로 지급한다.
+> 본 문서는 원작의 스팀 마켓을 대체하는 **플레이어 간 아이템 거래소**를 서버 권위로 다룬다. 아이템을 팔면 그 대가가 **게임 머니(골드)** 로 판매자에게 들어온다(실물 화폐 연동 없음). 판매 대금은 [메일(4.8)](mail-기획서.md)로 지급한다.
+
+## 목차
+
+- [1. 개요](#1-개요)
+- [2. 기능 설명](#2-기능-설명)
+- [3. 요구사항](#3-요구사항)
+- [4. 데이터 모델](#4-데이터-모델)
+- [5. API 명세](#5-api-명세)
+- [6. 처리 흐름](#6-처리-흐름)
+- [7. 에러 코드](#7-에러-코드)
+- [8. 미결 사항 / TODO](#8-미결-사항--todo)
+- [9. 참고](#9-참고)
+
 
 ## 1. 개요
 
@@ -10,9 +23,9 @@
 - **대상 서버**: `GameServer`(거래소 등록·조회·구매·취소, 정산), `TaskbarHero.Common`(거래 목록·결과 DTO·에러 코드 공유). 인증은 AccountServer 발급 토큰을 GameServer 미들웨어가 검증.
 - **범위 경계**:
   - **아이템의 인벤토리 적재·소유 규칙**은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md)(`player_item`)를 따른다. 본 문서는 거래소 등록↔인벤토리 간 이동을 다룬다.
-  - **판매 대금 지급**은 [메일(4.9)](mail-기획서.md) 발급으로 위임한다(판매자가 오프라인일 수 있으므로 우편함으로 지급).
+  - **판매 대금 지급**은 [메일(4.8)](mail-기획서.md) 발급으로 위임한다(판매자가 오프라인일 수 있으므로 우편함으로 지급).
   - **실물 화폐·유료 결제는 범위 밖**이다.
-- **관련 기획서**: [[inventory-item-cube-기획서]] (아이템 소유·`player_item`·`sellable`), [[mail-기획서]] (판매 대금 메일 발급), [[save-data-기획서]] (거래 등록 저장), [[서버-시스템-전체-개요]] (도메인 4.8)
+- **관련 기획서**: [[inventory-item-cube-기획서]] (아이템 소유·`player_item`·`sellable`), [[mail-기획서]] (판매 대금 메일 발급), [[save-data-기획서]] (거래 등록 저장), [[서버-시스템-전체-개요]] (도메인 4.7)
 
 ## 2. 기능 설명
 
@@ -129,7 +142,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 { "success": true, "errorCode": 0, "message": "Registered", "data": { "listingId": 88001, "itemCode": 30012, "enhanceLevel": 3, "quantity": 1, "price": 50000 } }
 ```
 
-- 오류: `ItemNotFound(4001)`(인벤토리에 없음), `ItemEquipped(4007)`(장착 중), `TradeNotSellable(8002)`(`sellable=0`), `TradePriceOutOfRange(8006)`(기준가 ±20% 범위 밖), `TradeListingLimitExceeded(8007)`(동시 등록 10개 초과), `InvalidSaveData(2002)`(형식 오류 등).
+- 오류: `ItemNotFound(4001)`(인벤토리에 없음), `ItemEquipped(4007)`(장착 중), `TradeNotSellable(7002)`(`sellable=0`), `TradePriceOutOfRange(7006)`(기준가 ±20% 범위 밖), `TradeListingLimitExceeded(7007)`(동시 등록 10개 초과), `InvalidSaveData(2002)`(형식 오류 등).
 
 ### 5.3 구매 — `POST /api/game/trade/buy`
 
@@ -156,7 +169,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 ```
 
 - `gained`는 구매자 인벤토리에 들어온 아이템, `cost`/`balance`는 차감된 골드와 잔액이다. 판매 대금(수수료 차감 후)은 **판매자에게 메일로 지급**된다(구매자 응답에는 포함되지 않음).
-- 오류: `TradeListingNotFound(8001)`(등록 없음), `TradeAlreadyClosed(8005)`(이미 판매/취소), `TradeSelfPurchase(8004)`(자기 등록), `InsufficientCurrency(4005)`(골드 부족), `InventoryFull(4002)`(구매자 인벤토리 초과).
+- 오류: `TradeListingNotFound(7001)`(등록 없음), `TradeAlreadyClosed(7005)`(이미 판매/취소), `TradeSelfPurchase(7004)`(자기 등록), `InsufficientCurrency(4005)`(골드 부족), `InventoryFull(4002)`(구매자 인벤토리 초과).
 
 ### 5.4 판매 취소 — `POST /api/game/trade/cancel`
 
@@ -172,7 +185,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 { "success": true, "errorCode": 0, "message": "Cancelled", "data": { "listingId": 88001, "restored": { "itemCode": 30012, "enhanceLevel": 3, "quantity": 1 } } }
 ```
 
-- 오류: `TradeListingNotFound(8001)`, `TradeNotOwner(8003)`(본인 등록 아님), `TradeAlreadyClosed(8005)`(이미 판매/취소), `InventoryFull(4002)`(복귀 시 인벤토리 초과).
+- 오류: `TradeListingNotFound(7001)`, `TradeNotOwner(7003)`(본인 등록 아님), `TradeAlreadyClosed(7005)`(이미 판매/취소), `InventoryFull(4002)`(복귀 시 인벤토리 초과).
 
 > 인증 오류(401) 등은 기존 미들웨어를 따른다. 등록 만료(3일) 시 자동 취소·메일 반송은 6.2 참고. "내 판매 목록" 전용 조회는 현재 미제공(목록 조회로 대체).
 
@@ -184,9 +197,9 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 요청 수신 → 토큰 검증(미들웨어)
 트랜잭션(BEGIN, listing_id 행 잠금)
   1) L = trade_listing[listingId]
-     if 없음: TradeListingNotFound(8001)
-     if L.status != 1(판매중): TradeAlreadyClosed(8005)
-  2) if L.seller_user_id == 구매자: TradeSelfPurchase(8004)
+     if 없음: TradeListingNotFound(7001)
+     if L.status != 1(판매중): TradeAlreadyClosed(7005)
+  2) if L.seller_user_id == 구매자: TradeSelfPurchase(7004)
   3) if 구매자 골드(player_item 재화 행) < L.price: InsufficientCurrency(4005)
   4) if 구매자 인벤토리 용량 초과 예상: InventoryFull(4002)
   5) 구매자 골드 -= L.price
@@ -203,31 +216,31 @@ COMMIT → { listingId, gained, cost, balance }
 
 ### 6.2 등록 / 취소 / 만료
 
-- **등록(5.2)**: `user_id` 잠금 → **동시 등록 수 확인**(판매중 등록 ≥ 10이면 `TradeListingLimitExceeded(8007)`) → 아이템 검증(존재·미장착·`sellable=1`) → **가격 검증**(`base_price×0.8 ≤ price ≤ base_price×1.2`, 위반 시 `TradePriceOutOfRange(8006)`) → `player_item`에서 제거(스택형은 전체 수량) → `trade_listing` 생성(status=1, `expires_at=now+3일`). 실패 시 전체 롤백.
+- **등록(5.2)**: `user_id` 잠금 → **동시 등록 수 확인**(판매중 등록 ≥ 10이면 `TradeListingLimitExceeded(7007)`) → 아이템 검증(존재·미장착·`sellable=1`) → **가격 검증**(`base_price×0.8 ≤ price ≤ base_price×1.2`, 위반 시 `TradePriceOutOfRange(7006)`) → `player_item`에서 제거(스택형은 전체 수량) → `trade_listing` 생성(status=1, `expires_at=now+3일`). 실패 시 전체 롤백.
 - **취소(5.4)**: `listing_id` 잠금 → 본인·판매중 확인 → `player_item`에 아이템 복원 → status=3. 인벤토리 용량 초과면 `InventoryFull(4002)`.
 - **만료(자동, 배치)**: `status=1 AND expires_at < now`인 등록을 주기적으로 처리 → status=3(취소)로 닫고, 아이템을 판매자에게 **메일로 반송**(`category=2`, 첨부=반송 아이템, 만료 7일). 판매자가 오프라인·인벤토리 가득이어도 안전하게 반송하기 위해 취소(수동)와 달리 **메일 반송**을 사용한다.
 
 ### 6.3 예외 / 엣지 케이스
 
-- **동시 구매 경합**: 같은 등록을 둘이 동시에 구매하면 `listing_id` 행 잠금으로 직렬화 → 먼저 커밋한 쪽만 성공, 나머지는 `TradeAlreadyClosed(8005)`. 아이템 복제 불가.
+- **동시 구매 경합**: 같은 등록을 둘이 동시에 구매하면 `listing_id` 행 잠금으로 직렬화 → 먼저 커밋한 쪽만 성공, 나머지는 `TradeAlreadyClosed(7005)`. 아이템 복제 불가.
 - **등록 후 원본 조작 시도**: 아이템이 이미 `player_item`에서 빠졌으므로 등록 중 아이템의 장착·분해·재등록은 대상이 없어 `ItemNotFound(4001)`.
 - **구매자 인벤토리 가득**: 구매 아이템을 받을 칸이 없으면 `InventoryFull(4002)`, 거래는 미성립(골드 미차감).
-- **자기 등록 구매**: `TradeSelfPurchase(8004)`로 거부(가격 조작·자전거래 방지).
+- **자기 등록 구매**: `TradeSelfPurchase(7004)`로 거부(가격 조작·자전거래 방지).
 - **판매 대금 메일 초과**: 대금은 골드이므로 인벤토리 용량과 무관하며, 메일 수령 시 재화 행 `quantity`에 가산된다.
 
 ## 7. 에러 코드
 
-`TaskbarHero.Common`의 `GameErrorCode`에 추가 제안. 도메인 4.8(거래소)은 **8000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
+`TaskbarHero.Common`의 `GameErrorCode`에 추가 제안. 도메인 4.7(거래소)은 **7000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
 
 | 이름 | 값 | 의미 |
 |---|---|---|
-| TradeListingNotFound | 8001 | 거래 등록이 없거나 접근 불가 |
-| TradeNotSellable | 8002 | 판매 불가 아이템(`sellable=0`) |
-| TradeNotOwner | 8003 | 본인 등록이 아님(취소 불가) |
-| TradeSelfPurchase | 8004 | 자기 등록은 구매 불가 |
-| TradeAlreadyClosed | 8005 | 이미 판매/취소된 등록 |
-| TradePriceOutOfRange | 8006 | 등록 가격이 기준가 ±20% 범위 밖 |
-| TradeListingLimitExceeded | 8007 | 계정 동시 등록 한도(10개) 초과 |
+| TradeListingNotFound | 7001 | 거래 등록이 없거나 접근 불가 |
+| TradeNotSellable | 7002 | 판매 불가 아이템(`sellable=0`) |
+| TradeNotOwner | 7003 | 본인 등록이 아님(취소 불가) |
+| TradeSelfPurchase | 7004 | 자기 등록은 구매 불가 |
+| TradeAlreadyClosed | 7005 | 이미 판매/취소된 등록 |
+| TradePriceOutOfRange | 7006 | 등록 가격이 기준가 ±20% 범위 밖 |
+| TradeListingLimitExceeded | 7007 | 계정 동시 등록 한도(10개) 초과 |
 
 - 등록 아이템 없음·장착 중은 `ItemNotFound(4001)`·`ItemEquipped(4007)`([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md))를 재사용한다.
 - 구매 골드 부족은 `InsufficientCurrency(4005)`, 아이템 지급 용량 초과는 `InventoryFull(4002)`를 재사용한다. 잘못된 가격 등 요청 값 오류는 `InvalidSaveData(2002)`.
@@ -244,4 +257,4 @@ COMMIT → { listingId, gained, cost, balance }
 - [메일 기획서](mail-기획서.md) — 판매 대금 메일 발급·수령(`category=2` 거래)
 - [세이브 데이터 기획서](save-data-기획서.md) — `trade_listing` 저장 골격
 - [마스터 데이터 기획서](master-data-기획서.md) — 목록의 `item_code`로 아이템 이름·스탯 표시(클라 연동 포함)
-- [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(8000번대 거래소)
+- [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(7000번대 거래소)
