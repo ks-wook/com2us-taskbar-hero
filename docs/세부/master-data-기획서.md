@@ -147,15 +147,16 @@ erDiagram
 | `stack_max` | int | 최대 겹침 수량(장비는 1) |
 | `base_stats` | json | 장비 기본 옵션 |
 | `sellable` | int | 거래소 판매 가능 여부(0/1) |
+| `base_price` | bigint | 거래소 **기준가**(골드). 등록 가격은 이 값의 ±20% 범위([거래소 기획서](trade-기획서.md)). `0`이면 거래 대상 아님 |
 
 **담기는 데이터 예시**
 
-| item_code | name | item_type | grade | equip_slot | class_req | level_req | stack_max | base_stats | sellable |
-|---|---|---|---|---|---|---|---|---|---|
-| 30012 | 강철 대검 | 1 | 3 | 1 | 1 | 15 | 1 | `{ "atk": 45 }` | 1 |
-| 30105 | 코스믹 투구 | 1 | 6 | 2 | 0 | 40 | 1 | `{ "hp": 220, "def": 30 }` | 1 |
-| 41001 | 강화석 | 2 | 2 | 0 | 0 | 0 | 999 | `null` | 1 |
-| 1 | 골드 | 4 | 1 | 0 | 0 | 0 | 0 | `null` | 0 |
+| item_code | name | item_type | grade | equip_slot | class_req | level_req | stack_max | base_stats | sellable | base_price |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 30012 | 강철 대검 | 1 | 3 | 1 | 1 | 15 | 1 | `{ "atk": 45 }` | 1 | 50000 |
+| 30105 | 코스믹 투구 | 1 | 6 | 2 | 0 | 40 | 1 | `{ "hp": 220, "def": 30 }` | 1 | 200000 |
+| 41001 | 강화석 | 2 | 2 | 0 | 0 | 0 | 999 | `null` | 1 | 1000 |
+| 1 | 골드 | 4 | 1 | 0 | 0 | 0 | 0 | `null` | 0 | 0 |
 
 > 원작 기준 500종 이상. 등급은 Cosmic 등 고등급 존재. `class_req`는 클래스 전용 장비를 나타내며(예: 강철 대검=기사 전용), `0`은 전 클래스 공용(예: 코스믹 투구)이다. `level_req`는 **5레벨 단위**의 착용 요구 레벨(예: 15, 40)이며 `0`은 제한 없음이다. 장착 시 검증 규칙은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.1을 따른다.
 > **재화(`item_type=4`)**: 골드 등 소비 재화도 `item_master`로 정의한다(별도 `currency_master` 없음, 5.5). 골드는 `item_code=1`로 고정한다. 재화는 장착·스택 개념이 없어 `equip_slot`/`class_req`/`level_req`/`stack_max`는 0이며, 보유 잔액은 세이브 `player_item` 재화 행(`row_type=2`)의 `quantity`(bigint)에 저장한다. 재화의 코드 값(골드=1)은 클라이언트와 공유하는 계약이므로 변경하지 않는다.

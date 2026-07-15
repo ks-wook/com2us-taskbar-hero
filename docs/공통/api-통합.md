@@ -88,7 +88,20 @@
 
 - 진입 응답은 스테이지의 **몬스터 구성(`monsters`)·보스(`boss`)** 를 포함. 클리어 보상(골드·경험치·전리품)은 서버가 마스터로 산출, 경험치는 3캐릭터 동일 지급(캐릭터별 **`isLevelUp`**), 골드는 계정. 이미 클리어한 스테이지는 재파밍 가능.
 
-### 3.6 메일(보상)
+### 3.6 거래소 / 교역선
+
+> 출처: [거래소 / 교역선 기획서](../세부/trade-기획서.md) 5장
+
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/game/trade/list` | 거래소 목록 조회(판매중, 아이템 코드 검색) | `{ itemCode?, page?, pageSize? }` | `listings[]`, `page`, `hasMore` | — |
+| `POST /api/game/trade/register` | 판매 등록(에스크로) | `{ itemId, price }` | `listingId`, `itemCode`, `price` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `TradeNotSellable(8002)`, `TradePriceOutOfRange(8006)`, `TradeListingLimitExceeded(8007)`, `InvalidSaveData(2002)` |
+| `POST /api/game/trade/buy` | 구매(골드→아이템, 대금 메일) | `{ listingId }` | `gained`, `cost`, `balance` | `TradeListingNotFound(8001)`, `TradeAlreadyClosed(8005)`, `TradeSelfPurchase(8004)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)` |
+| `POST /api/game/trade/cancel` | 판매 취소(아이템 복귀) | `{ listingId }` | `restored` | `TradeListingNotFound(8001)`, `TradeNotOwner(8003)`, `TradeAlreadyClosed(8005)`, `InventoryFull(4002)` |
+
+- 등록은 아이템을 인벤토리에서 거래소 보관(에스크로)으로 이동. 구매 시 아이템은 구매자 인벤토리로 즉시, **판매 대금(수수료 차감)은 판매자에게 메일(3.7, `category=2` 거래)로** 지급. 동시 구매 경합은 `listing_id` 행 잠금으로 직렬화(복제·이중 판매 불가).
+
+### 3.7 메일(보상)
 
 > 출처: [메일 기획서](../세부/mail-기획서.md) 5장
 
@@ -100,7 +113,7 @@
 
 - 첨부(재화·아이템)는 서버가 지급하며 중복 수령 불가(수령 플래그+행 잠금). 만료 메일은 수령 거부. 발급은 거래소(4.8)·출석부(4.10)·운영이 담당.
 
-### 3.7 출석부 보상
+### 3.8 출석부 보상
 
 > 출처: [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) 5장
 
@@ -111,7 +124,7 @@
 
 - 날짜 경계는 서버 KST 자정, 하루 1회(`(user_id, attend_date)` 유니크). 획득 보상은 즉시 지급이 아니라 **메일(3.6)로 발급**되어 우편함 수령 시 계정 반영.
 
-### 3.8 마스터 데이터
+### 3.9 마스터 데이터
 
 > 출처: [마스터 데이터 기획서](../세부/master-data-기획서.md) 8장
 
@@ -133,6 +146,7 @@
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md)
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md)
 - [성장 시스템 기획서](../세부/growth-기획서.md)
+- [거래소 / 교역선 기획서](../세부/trade-기획서.md)
 - [메일 기획서](../세부/mail-기획서.md)
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md)
 - [마스터 데이터 기획서](../세부/master-data-기획서.md)

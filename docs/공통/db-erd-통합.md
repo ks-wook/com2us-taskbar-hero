@@ -55,6 +55,7 @@ erDiagram
     game_player      ||--|| player_cube      : has
     game_player      ||--o{ player_mail      : receives
     game_player      ||--o{ player_attendance : checks_in
+    game_player      ||--o{ trade_listing    : sells
     player_character ||--o{ player_item      : equips
     player_character ||--o{ player_skill     : has
     player_mail      ||--o{ player_mail_reward : has
@@ -139,6 +140,20 @@ erDiagram
         int     attend_date "출석 일자 YYYYMMDD(KST)"
         bigint  claimed_at "출석/발급 시각(Unix ts)"
     }
+
+    trade_listing {
+        bigint  listing_id PK
+        bigint  seller_user_id FK "판매자"
+        int     item_code
+        int     enhance_level
+        int     quantity
+        bigint  price "구매가(골드)"
+        int     status "1:판매중 2:판매완료 3:취소(만료 포함)"
+        bigint  buyer_user_id "미판매 0"
+        bigint  created_at
+        bigint  expires_at "만료(= created_at + 3일)"
+        bigint  closed_at "미완료 0"
+    }
 ```
 
 **PK / 유니크**
@@ -154,6 +169,7 @@ erDiagram
 | `player_mail` | `mail_id` PK, `user_id` 인덱스 | 계정 우편함 |
 | `player_mail_reward` | `(mail_id, seq)` | 메일 첨부 |
 | `player_attendance` | `(user_id, attend_date)` | 계정 출석 기록(일자별) |
+| `trade_listing` | `listing_id` PK, `seller_user_id` 인덱스, `(status, item_code)` 조회 인덱스 | 거래소 등록(전역, 에스크로) |
 
 ## 4. 마스터 데이터 (정적 · 읽기 전용)
 
@@ -182,6 +198,7 @@ erDiagram
 
 - [계정/로그인 기획서](../세부/account-login-기획서.md) — `users`·`user_auth_token`, Redis 토큰
 - [세이브 데이터 기획서](../세부/save-data-기획서.md) — `game_player`·`player_character`·`player_item`(아이템·재화 통합)·`player_skill`·`player_rune`·`player_cube`·`player_mail`·`player_mail_reward`
+- [거래소 / 교역선 기획서](../세부/trade-기획서.md) — `trade_listing` 거래 등록(에스크로), 대금은 메일 지급
 - [메일 기획서](../세부/mail-기획서.md) — `player_mail`·`player_mail_reward` 우편함·첨부
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — `player_attendance`·`attendance_master` 출석 기록·일자별 보상
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 인벤토리·장비·큐브 세부 규칙

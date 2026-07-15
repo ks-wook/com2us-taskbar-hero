@@ -40,6 +40,7 @@ erDiagram
     player_character ||--o{ player_skill     : has
     game_player      ||--o{ player_mail      : receives
     game_player      ||--o{ player_attendance : checks_in
+    game_player      ||--o{ trade_listing    : sells
     player_mail      ||--o{ player_mail_reward : has
 
     game_player {
@@ -122,6 +123,20 @@ erDiagram
         int     attend_date "출석 일자 YYYYMMDD(KST 기준)"
         bigint  claimed_at "출석/보상 메일 발급 시각(Unix ts)"
     }
+
+    trade_listing {
+        bigint  listing_id PK
+        bigint  seller_user_id FK "판매자 user_id"
+        int     item_code "판매 아이템(item_master)"
+        int     enhance_level "장비 강화 단계 스냅샷"
+        int     quantity
+        bigint  price "구매가(골드)"
+        int     status "1:판매중 2:판매완료 3:취소(만료 포함)"
+        bigint  buyer_user_id "미판매 0"
+        bigint  created_at
+        bigint  expires_at "만료(= created_at + 3일)"
+        bigint  closed_at "미완료 0"
+    }
 ```
 
 - **PK/유니크**:
@@ -131,12 +146,13 @@ erDiagram
   - `player_mail`: `mail_id` PK, `user_id` 조회 인덱스. 계정 우편함.
   - `player_mail_reward`: `(mail_id, seq)` 복합 PK. 메일 첨부(0~N).
   - `player_attendance`: `(user_id, attend_date)` 복합 PK. 출석한 일자당 1행([출석부 보상 시스템 기획서](attendance-기획서.md)).
+  - `trade_listing`: `listing_id` PK, `seller_user_id`·`(status, item_code)` 인덱스. 전역 거래소 등록(에스크로), 등록 아이템은 `player_item`에서 빠져 여기 스냅샷으로 보관([거래소 / 교역선 기획서](trade-기획서.md)).
   - `player_item`: `item_id` PK. `(user_id, slot)` 유니크 — 한 인벤토리 칸(slot)에는 아이템(스택) 한 행만 존재한다(재화 행은 `slot`이 NULL이라 무제한 공존). `(user_id, equipped_character_id, equipped_slot)` 유니크 — **한 캐릭터-장착슬롯에 아이템 하나**를 보장한다. 미장착·재화 행은 `equipped_character_id`/`equipped_slot`이 **NULL**이며, MySQL 유니크 인덱스는 NULL을 서로 다른 값으로 취급하므로 무제한 공존한다.
 - **아이템·재화 통합(`row_type`)**: `player_item`은 `row_type`(1:아이템 2:재화)으로 아이템과 재화(골드 등)를 **한 테이블에** 담는다. `code`는 **모든 행이 `item_master.item_code`를 참조**하며(재화는 `item_master`의 `item_type=4` 항목, 골드=`item_code` 1 — 별도 `currency_master` 없음), `quantity`가 수량/재화 금액(재화가 커 `bigint`)이다. **재화 행은 계정에 재화 종류당 1행**이어야 하므로 `(user_id, row_type=2, code)` 유일성을 **서버가 보장**한다(MySQL 부분 유니크 인덱스 미지원. 아이템 행은 스택 분할로 `(user_id, code)`가 중복될 수 있어 전역 유니크를 걸 수 없다). 재화 행은 `slot`/`enhance_level`/`equipped_*`를 쓰지 않으며 **인벤토리 용량 집계에서 제외**한다.
 - **캐릭터별 vs 계정 공유**: `player_character`·`player_skill`은 **캐릭터별**, `player_item`(아이템·재화)·`player_cube`·`player_rune`은 **계정 공유**다. 스킬은 캐릭터마다 다르게 찍고 룬은 계정 전체에 적용되므로 테이블을 분리한다. 아이템은 계정 공용 행(`player_item`)이되 장착만 캐릭터별이다 — `equipped_character_id`/`equipped_slot`으로 **어느 캐릭터의 어느 슬롯에 장착됐는지**를 그 행에 직접 표기하며, 한 아이템은 최대 한 캐릭터·한 슬롯에만 장착된다(별도 장착 테이블 없음).
 - **인벤토리 배치 위치(`player_item.slot`)**: 아이템(스택)이 인벤토리 UI의 몇 번 칸에 있는지를 나타내는 위치 값(0-based)이다. 클라이언트 재접속 시 로드 스냅샷의 `slot`으로 **마지막 접속과 동일한 배치**를 복원한다. 플레이어가 드래그로 칸을 옮기면 그 변경은 배치 변경 API로 반영한다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.6). `player_item.equipped_slot`(장착 슬롯)과는 다른 개념이다. 배치는 UI 레이아웃 값이므로 서버 권위 검증 대상은 아니나, 용량(`game_player.inventory_capacity`) 범위 안이고 칸이 중복되지 않는지는 검증한다.
 - **아이템/스킬/룬/펫 등의 코드 값**은 마스터(기획) 데이터를 참조한다([마스터 데이터 기획서](master-data-기획서.md), 도메인 4.11). 각 코드 컬럼이 어느 마스터 테이블을 참조하는지는 해당 문서 4.1의 매핑 표를 참고한다.
-- `player_character`/`player_item`/`player_skill`/`player_rune`/`player_cube`/`player_mail`/`player_attendance`의 **세부 필드·규칙**은 각 시스템 기획서(성장·인벤토리·[메일](mail-기획서.md)·[출석부](attendance-기획서.md) 등)에서 확장한다. 본 ERD는 저장 골격이다. (펫은 아직 저장 테이블이 없다 — 성장 기획서 범위 밖)
+- `player_character`/`player_item`/`player_skill`/`player_rune`/`player_cube`/`player_mail`/`player_attendance`/`trade_listing`의 **세부 필드·규칙**은 각 시스템 기획서(성장·인벤토리·[메일](mail-기획서.md)·[출석부](attendance-기획서.md)·[거래소](trade-기획서.md) 등)에서 확장한다. 본 ERD는 저장 골격이다. (펫은 아직 저장 테이블이 없다 — 성장 기획서 범위 밖)
 
 ## 4. 저장 정책
 

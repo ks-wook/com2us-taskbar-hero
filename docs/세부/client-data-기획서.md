@@ -63,10 +63,10 @@
 ### 3.3 `item_master` — 아이템·재화 정의
 ```json
 [
-  { "itemCode": 1,     "name": "골드",       "itemType": 4, "grade": 1, "equipSlot": 0, "classReq": 0, "levelReq": 0,  "stackMax": 0, "baseStats": {}, "sellable": 0 },
-  { "itemCode": 30012, "name": "강철 대검",   "itemType": 1, "grade": 3, "equipSlot": 1, "classReq": 1, "levelReq": 15, "stackMax": 1, "baseStats": { "atk": 45, "cooldown": -0.1 }, "sellable": 1 },
-  { "itemCode": 30105, "name": "코스믹 투구", "itemType": 1, "grade": 6, "equipSlot": 2, "classReq": 0, "levelReq": 40, "stackMax": 1, "baseStats": { "hp": 220, "def": 30 }, "sellable": 1 },
-  { "itemCode": 30240, "name": "예리한 반지", "itemType": 1, "grade": 4, "equipSlot": 6, "classReq": 0, "levelReq": 20, "stackMax": 1, "baseStats": { "critChance": 0.05, "critDamage": 0.2 }, "sellable": 1 }
+  { "itemCode": 1,     "name": "골드",       "itemType": 4, "grade": 1, "equipSlot": 0, "classReq": 0, "levelReq": 0,  "stackMax": 0, "baseStats": {}, "sellable": 0, "basePrice": 0 },
+  { "itemCode": 30012, "name": "강철 대검",   "itemType": 1, "grade": 3, "equipSlot": 1, "classReq": 1, "levelReq": 15, "stackMax": 1, "baseStats": { "atk": 45, "cooldown": -0.1 }, "sellable": 1, "basePrice": 50000 },
+  { "itemCode": 30105, "name": "코스믹 투구", "itemType": 1, "grade": 6, "equipSlot": 2, "classReq": 0, "levelReq": 40, "stackMax": 1, "baseStats": { "hp": 220, "def": 30 }, "sellable": 1, "basePrice": 200000 },
+  { "itemCode": 30240, "name": "예리한 반지", "itemType": 1, "grade": 4, "equipSlot": 6, "classReq": 0, "levelReq": 20, "stackMax": 1, "baseStats": { "critChance": 0.05, "critDamage": 0.2 }, "sellable": 1, "basePrice": 80000 }
 ]
 ```
 - **`item_type=4`(재화)**: 골드 등 소비 재화도 `item_master`로 정의한다(별도 `currency_master` 없음). **골드는 `itemCode=1`**로 고정한다. 재화는 장착·스택 개념이 없어 관련 필드는 0이고, 보유 잔액은 세이브 `player_item` 재화 행(`row_type=2`)의 `quantity`에 담긴다. API 응답의 `currencyType`/`cost`/`balance` 값은 이 재화 `itemCode`(골드=1)를 가리킨다.
@@ -182,6 +182,7 @@ namespace TaskbarHero.Common.MasterData
         public int stackMax;
         public Stats baseStats;
         public int sellable;      // 0/1
+        public long basePrice;    // 거래소 기준가(±20% 등록), 0=거래 불가
     }
 
     [Serializable] public struct StatMultiplier { public float hp; public float atk; public float def; }

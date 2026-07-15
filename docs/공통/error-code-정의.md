@@ -18,10 +18,11 @@
 | 4000번대 | 인벤토리 / 아이템 / 큐브 | [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 7장 | 사용 중 |
 | 5000번대 | 성장(직업 / 스킬 / 룬) | [성장 시스템 기획서](../세부/growth-기획서.md) 7장 | 사용 중 |
 | 6000번대 | 스테이지 / 전투 결과 | [스테이지/전투 결과 기획서](../세부/stage-battle-기획서.md) 7장 | 사용 중 |
+| 8000번대 | 거래소 / 교역선 | [거래소 / 교역선 기획서](../세부/trade-기획서.md) 7장 | 사용 중 |
 | 9000번대 | 메일(보상) | [메일 기획서](../세부/mail-기획서.md) 7장 | 사용 중 |
 | 10000번대 | 출석부 보상 | [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) 7장 | 사용 중 |
 | 11000번대 | 마스터 데이터 | [마스터 데이터 기획서](../세부/master-data-기획서.md) 8.3 | 사용 중 |
-| 그 외 | 재화·거래소 등 | (미작성) | 예약 |
+| 7000번대 | 재화·상점(예약) | (미작성) | 예약 |
 
 ## 2. 전체 코드 목록
 
@@ -102,7 +103,21 @@
 
 - 전리품 인벤토리 초과는 신규 코드 없이 `InventoryFull(4002)`를 재사용한다.
 
-### 2.8 메일(보상) (9000번대)
+### 2.8 거래소 / 교역선 (8000번대)
+
+| 이름 | 값 | 의미 |
+|---|---|---|
+| TradeListingNotFound | 8001 | 거래 등록이 없거나 접근 불가 |
+| TradeNotSellable | 8002 | 판매 불가 아이템(`sellable=0`) |
+| TradeNotOwner | 8003 | 본인 등록이 아님(취소 불가) |
+| TradeSelfPurchase | 8004 | 자기 등록은 구매 불가 |
+| TradeAlreadyClosed | 8005 | 이미 판매/취소된 등록 |
+| TradePriceOutOfRange | 8006 | 등록 가격이 기준가 ±20% 범위 밖 |
+| TradeListingLimitExceeded | 8007 | 계정 동시 등록 한도(10개) 초과 |
+
+- 등록 아이템 없음·장착 중은 `ItemNotFound(4001)`·`ItemEquipped(4007)`, 구매 골드 부족은 `InsufficientCurrency(4005)`, 아이템 지급 용량 초과는 `InventoryFull(4002)`를 재사용한다.
+
+### 2.9 메일(보상) (9000번대)
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -112,7 +127,7 @@
 
 - 첨부 아이템 인벤토리 초과는 신규 코드 없이 `InventoryFull(4002)`를 재사용한다.
 
-### 2.9 출석부 보상 (10000번대)
+### 2.10 출석부 보상 (10000번대)
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -120,7 +135,7 @@
 
 - 마스터 미로드/미정의는 신규 코드 없이 `MasterDataNotLoaded(11001)`를 재사용한다.
 
-### 2.10 마스터 데이터 (11000번대)
+### 2.11 마스터 데이터 (11000번대)
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -192,6 +207,15 @@ namespace TaskbarHero.Common
         StageNotEntered = 6003,
         StageClearTooFast = 6004,
 
+        // 거래소 / 교역선 (8000번대)
+        TradeListingNotFound = 8001,
+        TradeNotSellable = 8002,
+        TradeNotOwner = 8003,
+        TradeSelfPurchase = 8004,
+        TradeAlreadyClosed = 8005,
+        TradePriceOutOfRange = 8006,
+        TradeListingLimitExceeded = 8007,
+
         // 메일(보상) (9000번대)
         MailNotFound = 9001,
         MailAlreadyClaimed = 9002,
@@ -216,6 +240,7 @@ namespace TaskbarHero.Common
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 7장 에러 코드 (4000번대)
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 7장 에러 코드 (5000번대)
 - [스테이지/전투 결과 기획서](../세부/stage-battle-기획서.md) — 7장 에러 코드 (6000번대)
+- [거래소 / 교역선 기획서](../세부/trade-기획서.md) — 7장 에러 코드 (8000번대)
 - [메일 기획서](../세부/mail-기획서.md) — 7장 에러 코드 (9000번대)
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — 7장 에러 코드 (10000번대)
 - [마스터 데이터 기획서](../세부/master-data-기획서.md) — 8.3 에러 코드 (11000번대)
