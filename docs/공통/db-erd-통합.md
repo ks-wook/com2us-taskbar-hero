@@ -1,6 +1,8 @@
 # DB ERD 통합 문서
 
 > 지금까지 작성된 세부 기획서들의 **데이터베이스 구조(ERD)를 한곳에 모은 참조 문서**다. 각 테이블의 상세 규칙·필드 의미는 원 기획서(아래 "출처")가 **정본(single source of truth)** 이며, 본 문서는 전체 그림을 빠르게 보기 위한 집약본이다. 불일치가 있으면 원 기획서를 따른다.
+>
+> 📄 **실제 생성 DDL**: [db-schema.sql](db-schema.sql) — 아래 관계형 테이블(Account DB·Game DB)의 MySQL `CREATE TABLE` 스크립트. 마스터 데이터(4장)는 관계형 테이블이 아니므로 DDL에 포함되지 않는다.
 
 ## 1. 저장소 구성
 
@@ -184,7 +186,6 @@ erDiagram
 | `enhance_master` | `enhance_level` | `player_item.enhance_level` |
 | `skill_master` | `skill_code` | `player_skill.skill_code` |
 | `rune_master` | `rune_code` | `player_rune.rune_code` |
-| `pet_master` | `pet_code` | (펫 시스템 미작성 · 저장 테이블 미정) |
 | `monster_master` | `monster_code` | (전투/드롭 계산) |
 | `stage_master` | `stage_id` | `game_player.act`/`stage`/`difficulty` |
 | `drop_table_master` | `(drop_table_code, entry_no)` | 몬스터/스테이지 드롭 |
