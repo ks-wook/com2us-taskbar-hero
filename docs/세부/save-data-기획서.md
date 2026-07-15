@@ -123,7 +123,7 @@ erDiagram
     player_mail_reward {
         bigint  mail_id FK
         int     seq "메일 내 첨부 번호"
-        int     reward_type "1:골드 2:아이템 3:재료 4:상자"
+        int     reward_type "1:골드 2:아이템 3:재료"
         int     reward_code "골드면 0"
         int     quantity
     }

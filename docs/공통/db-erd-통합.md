@@ -140,7 +140,7 @@ erDiagram
     player_mail_reward {
         bigint  mail_id FK
         int     seq
-        int     reward_type "1:골드 2:아이템 3:재료 4:상자"
+        int     reward_type "1:골드 2:아이템 3:재료"
         int     reward_code "골드면 0"
         int     quantity
     }
@@ -180,6 +180,7 @@ erDiagram
 | `stage_master` | `stage_id` | `game_player.act`/`stage`/`difficulty` |
 | `drop_table_master` | `(drop_table_code, entry_no)` | 몬스터/스테이지 드롭 |
 | `cube_master` | `cube_level` | `player_cube.cube_level` |
+| `box_master` | `box_code` | (골드 가챠 상자 열기 API 입력 · 골드 차감은 `player_currency`, 지급은 `player_inventory`, 상자 자체는 저장 안 함) |
 
 - 마스터 데이터에는 별도 `master_data_version`이 있으며, 클라이언트-서버 버전 비교로 갱신한다([마스터 데이터 기획서](../세부/master-data-기획서.md) 6장).
 

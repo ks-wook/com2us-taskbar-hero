@@ -48,8 +48,10 @@ erDiagram
     stage_master     ||--o{ drop_table_master  : "드롭"
     monster_master   ||--o{ pet_master         : "처치 해금"
     item_master      ||--o{ drop_table_master  : "드롭 항목"
+    item_master      ||--o{ box_master         : "지급 아이템 풀(등급)"
     equip_slot_master||--o{ item_master        : "장착 슬롯"
     currency_master  ||--o{ enhance_master     : "소모 재화"
+    currency_master  ||--o{ box_master         : "오픈 비용"
 
     class_master { int class_code PK }
     level_master { int level PK }
@@ -64,13 +66,14 @@ erDiagram
     stage_master { int stage_id PK }
     drop_table_master { int drop_table_code PK }
     cube_master { int cube_level PK }
+    box_master { int box_code PK }
 ```
 
 | 테이블 | 역할 | 대략 규모(원작 기준) |
 |---|---|---|
 | `class_master` | 직업(클래스) 정의 | 원작 6종 / 모작 현재 3종(추후 추가 예정) |
 | `level_master` | 레벨별 요구 경험치·스탯·스킬 포인트 | 최대 레벨 수만큼 |
-| `item_master` | 아이템(장비·재료·소모품·상자) 정의 | 500종 이상 |
+| `item_master` | 아이템(장비·재료·소모품) 정의 | 500종 이상 |
 | `equip_slot_master` | 장비 장착 슬롯 정의 | 6~8종 |
 | `enhance_master` | 강화 단계별 비용·효과 | 단계 수만큼 |
 | `currency_master` | 재화 종류 정의 | 소수(골드 등) |
@@ -81,6 +84,7 @@ erDiagram
 | `stage_master` | 스테이지 구성·보상 | 3 Act × 4 난이도 × N |
 | `drop_table_master` | 전리품 확률 테이블 | 드롭 그룹 수 |
 | `cube_master` | 큐브 레벨별 규칙·레시피 | 레벨 수만큼 |
+| `box_master` | 랜덤 상자별 등급 확률·지급 아이템 풀 | 상자 종류 수만큼 |
 
 ## 5. 테이블별 상세 (필드 + 담기는 데이터)
 
@@ -135,7 +139,7 @@ erDiagram
 |---|---|---|
 | `item_code` | int PK | 아이템 코드 |
 | `name` | varchar | 아이템 이름 |
-| `item_type` | int | 1:장비 2:재료 3:소모품 4:상자 |
+| `item_type` | int | 1:장비 2:재료 3:소모품 |
 | `grade` | int | 등급/희귀도(숫자가 클수록 고등급) |
 | `equip_slot` | int | 장비일 때 장착 슬롯(FK `equip_slot_master`), 비장비는 0 |
 | `class_req` | int | 착용 가능 클래스(FK `class_master`). **0이면 제한 없음(전 클래스 착용 가능)**, 비장비는 0 |
@@ -151,7 +155,6 @@ erDiagram
 | 30012 | 강철 대검 | 1 | 3 | 1 | 1 | 15 | 1 | `{ "atk": 45 }` | 1 |
 | 30105 | 코스믹 투구 | 1 | 6 | 2 | 0 | 40 | 1 | `{ "hp": 220, "def": 30 }` | 1 |
 | 41001 | 강화석 | 2 | 2 | 0 | 0 | 0 | 999 | `null` | 1 |
-| 50001 | 골드 상자 | 4 | 1 | 0 | 0 | 0 | 99 | `null` | 0 |
 
 > 원작 기준 500종 이상. 등급은 Cosmic 등 고등급 존재. `class_req`는 클래스 전용 장비를 나타내며(예: 강철 대검=기사 전용), `0`은 전 클래스 공용(예: 코스믹 투구)이다. `level_req`는 **5레벨 단위**의 착용 요구 레벨(예: 15, 40)이며 `0`은 제한 없음이다. 장착 시 검증 규칙은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.1을 따른다.
 
@@ -313,8 +316,8 @@ erDiagram
 |---|---|---|
 | `drop_table_code` | int PK | 드롭 테이블 코드 |
 | `entry_no` | int PK | 테이블 내 항목 번호 |
-| `reward_type` | int | 1:골드 2:아이템 3:재료 4:상자 |
-| `reward_code` | int | 아이템/재료/상자 코드(골드면 0) |
+| `reward_type` | int | 1:골드 2:아이템 3:재료 |
+| `reward_code` | int | 아이템/재료 코드(골드면 0) |
 | `weight` | int | 드롭 가중치(확률은 테이블 내 가중치 합 대비 비율) |
 
 **담기는 데이터 예시**
@@ -364,6 +367,28 @@ erDiagram
 | 3 | 500 | 3 | `{ "hp": 30, "atk": 6 }` |
 
 > `skill_points`는 해당 레벨에서 쓸 수 있는 총 포인트다. **실제 사용 가능 포인트 = `skill_points` − 그 캐릭터가 이미 투자한 스킬 레벨 합**(스킬 1레벨당 1포인트). 스킬 포인트 잔량은 저장하지 않고 이 값으로 파생한다([성장 시스템 기획서](growth-기획서.md) 4장). 예시 값은 구조 설명용이며 실제 곡선은 밸런스에서 확정.
+
+### 5.14 `box_master` — 랜덤 상자
+
+랜덤 상자 열기([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.10)가 참조하는 상자 정의. 플레이어가 **골드를 소모**해 여는 가챠이며, 서버는 오픈 요청 시 `open_cost`(골드)를 차감한 뒤 `grade_weights`로 등급을 추첨하고 그 등급에 속한 `item_master` 아이템 중 하나를 무작위로 선택해 지급한다. 상자는 인벤토리에 적재되는 아이템이 아니므로 `item_master`에는 존재하지 않는다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `box_code` | int PK | 상자 코드 |
+| `name` | varchar | 상자 이름 |
+| `open_cost` | bigint | 1회 오픈 비용 |
+| `currency_type` | int | 오픈 비용 재화 종류(FK `currency_master`, 기본 1:골드) |
+| `grade_weights` | json | 등급별 추첨 가중치(확률은 가중치 합 대비 비율) |
+| `item_pool` | json | (선택) 등급별 지급 아이템 화이트리스트. 생략 시 해당 등급의 전체 `item_master` 아이템에서 선택 |
+
+**담기는 데이터 예시**
+
+| box_code | name | open_cost | currency_type | grade_weights | item_pool |
+|---|---|---|---|---|---|
+| 60001 | 일반 상자 | 10000 | 1 | `{ "3": 70, "4": 25, "5": 5 }` | `null` |
+| 60002 | 고급 상자 | 50000 | 1 | `{ "4": 60, "5": 30, "6": 10 }` | `null` |
+
+> 오픈 비용·다연속 오픈 정책, 등급 추첨 후 아이템 선택이 균등인지 가중치인지, 지급 아이템 풀을 전체 `item_master.grade` 필터로 할지 상자별 화이트리스트로 할지, 수량 규칙 등 세부는 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 8장 미결과 함께 확정한다. 예시 값은 구조 설명용 샘플이다.
 
 ### 공통 규칙
 
