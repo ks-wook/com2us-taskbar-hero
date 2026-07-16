@@ -14,6 +14,7 @@
   - [game_player](#game_player)
   - [player_character](#player_character)
   - [player_item](#player_item)
+  - [player_item_equipped](#player_item_equipped)
   - [player_skill](#player_skill)
   - [player_rune](#player_rune)
   - [player_cube](#player_cube)
@@ -102,7 +103,8 @@ erDiagram
     game_player      ||--o{ player_mail      : receives
     game_player      ||--o{ player_attendance : checks_in
     game_player      ||--o{ trade_listing    : sells
-    player_character ||--o{ player_item      : equips
+    player_item      ||--o| player_item_equipped : "equipped as"
+    player_character ||--o{ player_item_equipped : equips
     player_character ||--o{ player_skill     : has
     player_mail      ||--o{ player_mail_reward : has
 
@@ -128,16 +130,23 @@ erDiagram
     }
 
     player_item {
-        bigint  item_id PK
+        bigint  player_item_id PK
         bigint  user_id FK
         int     row_type "1:아이템 2:재화"
-        int     code "item_master.item_code (재화 item_type=3 포함, 골드=1)"
+        int     item_code "item_master.item_code (재화 item_type=3 포함, 골드=1)"
         bigint  quantity "수량/재화 금액(bigint)"
         int     slot "인벤토리 배치(0-based). 재화는 NULL(용량 미집계)"
         int     enhance_level "장비 강화 단계. 재화/비장비는 0"
-        int     equipped_character_id "장착 캐릭터(1~3), NULL=미장착/재화"
-        int     equipped_slot "장착 슬롯, NULL=미장착/재화"
         bigint  acquired_at
+    }
+
+    player_item_equipped {
+        bigint  player_item_id PK "player_item.player_item_id, 장착 아이템 1개당 1행"
+        bigint  user_id FK
+        int     item_code "item_master.item_code (어떤 아이템인지)"
+        int     enhance_level "장비 강화 단계"
+        int     equipped_character_id "장착 캐릭터(1~3)"
+        int     equipped_slot "장착 슬롯(equip_slot_master)"
     }
 
     player_skill {
@@ -208,7 +217,8 @@ erDiagram
 |---|---|---|
 | `game_player` | `user_id` | 계정 공용(파티 루트) |
 | `player_character` | `(user_id, character_id)` | 캐릭터별(슬롯 1~3, 직업 중복 불가) |
-| `player_item` | `item_id` PK, `(user_id, slot)` 유니크, `(user_id, equipped_character_id, equipped_slot)` 유니크(NULL=미장착/재화). 재화 행의 `(user_id, code)` 유일성은 서버가 보장 | 계정 공유(아이템·재화 통합, 장착만 캐릭터별) |
+| `player_item` | `player_item_id` PK, `(user_id, slot)` 유니크. 재화 행의 `(user_id, item_code)` 유일성은 서버가 보장 | 계정 공유(아이템·재화 통합, 보유 상태) |
+| `player_item_equipped` | `player_item_id` PK(아이템당 최대 1행), `(user_id, equipped_character_id, equipped_slot)` 유니크 | 장착 상태(캐릭터별) |
 | `player_skill` | `(user_id, character_id, skill_code)` | 캐릭터별 |
 | `player_rune` | `(user_id, rune_code)` | 계정 공유 |
 | `player_cube` | `user_id` | 계정 공유 |
@@ -231,8 +241,13 @@ erDiagram
 
 ### player_item
 
-- **역할**: 계정이 보유한 **아이템과 재화를 통합 저장**하는 인벤토리 테이블(계정 공유). 장비는 개체별 1행, 재료는 스택으로, 재화(골드)도 하나의 행으로 둔다. 장착 상태를 별도 테이블 없이 아이템 행에 직접 표기한다.
-- **저장 데이터**: `item_id`(PK), `row_type`(1:아이템 2:재화), `code`(`item_master.item_code`), `quantity`(수량/재화 금액), `slot`(인벤토리 배치 칸, 재화는 NULL), `enhance_level`(장비 강화 단계), `equipped_character_id`/`equipped_slot`(장착 위치, NULL=미장착), `acquired_at`.
+- **역할**: 계정이 보유한 **아이템과 재화를 통합 저장**하는 인벤토리 테이블(계정 공유). 장비는 개체별 1행, 재료는 스택으로, 재화(골드)도 하나의 행으로 둔다. 보유 상태만 담고, 장착 여부·위치는 자식 테이블 `player_item_equipped`로 분리한다.
+- **저장 데이터**: `player_item_id`(PK), `row_type`(1:아이템 2:재화), `item_code`(`item_master.item_code`), `quantity`(수량/재화 금액), `slot`(인벤토리 배치 칸, 재화는 NULL), `enhance_level`(장비 강화 단계), `acquired_at`.
+
+### player_item_equipped
+
+- **역할**: **장착 중인 아이템**만 담는 테이블(`player_item`과 1:0..1). 아이템의 장착 여부·장착 위치를 `player_item` 본체에서 분리해, 행이 존재하면 곧 "장착 중"이다. 장착은 이 행 INSERT, 해제는 DELETE로 처리하므로 `player_item`에 NULL 장착 컬럼을 두지 않는다. 아이템은 계정 공유지만 장착은 특정 캐릭터·슬롯에 귀속된다.
+- **저장 데이터**: `player_item_id`(PK/FK — `player_item.player_item_id`, 아이템당 최대 1행이라 한 아이템은 동시에 한 곳에만 장착), `user_id`(FK), `item_code`(어떤 아이템인지 — `item_master.item_code`), `enhance_level`(장비 강화 단계 — `enhance_master`), `equipped_character_id`(장착 캐릭터 1~3), `equipped_slot`(장착 슬롯, `equip_slot_master`). `(user_id, equipped_character_id, equipped_slot)` 유니크로 **한 캐릭터-슬롯당 아이템 하나**를 보장한다.
 
 ### player_skill
 
@@ -277,9 +292,9 @@ erDiagram
 |---|---|---|
 | `class_master` | `class_code` | `player_character.class_code` |
 | `level_master` | `level` | `player_character.level` |
-| `equip_slot_master` | `slot` | `player_item.equipped_slot` / `item_master.equip_slot` |
-| `item_master` | `item_code` | `player_item.code`(아이템 `item_type` 1~2 및 재화 `item_type` 3, 골드=1) |
-| `enhance_master` | `enhance_level` | `player_item.enhance_level` |
+| `equip_slot_master` | `slot` | `player_item_equipped.equipped_slot` / `item_master.equip_slot` |
+| `item_master` | `item_code` | `player_item.item_code`(아이템 `item_type` 1~2 및 재화 `item_type` 3, 골드=1) / `player_item_equipped.item_code` |
+| `enhance_master` | `enhance_level` | `player_item.enhance_level` / `player_item_equipped.enhance_level` |
 | `skill_master` | `skill_code` | `player_skill.skill_code` |
 | `rune_master` | `rune_code` | `player_rune.rune_code` |
 | `monster_master` | `monster_code` | (전투 계산, 보상은 `stage_reward`) |
@@ -303,17 +318,17 @@ erDiagram
 
 ### equip_slot_master
 
-- **역할**: 장비 장착 슬롯 정의. `player_item.equipped_slot`과 `item_master.equip_slot`이 참조.
+- **역할**: 장비 장착 슬롯 정의. `player_item_equipped.equipped_slot`과 `item_master.equip_slot`이 참조.
 - **정의 데이터**: 슬롯 번호와 이름(무기·보조무기·투구·갑옷·장갑·신발 6부위).
 
 ### item_master
 
-- **역할**: **아이템(장비·재료)과 재화(골드)를 통합 정의**. `player_item.code`가 참조하는 게임 내 모든 유형 아이템의 원장.
+- **역할**: **아이템(장비·재료)과 재화(골드)를 통합 정의**. `player_item.item_code`·`player_item_equipped.item_code`가 참조하는 게임 내 모든 유형 아이템의 원장.
 - **정의 데이터**: 이름, `item_type`(1:장비 2:재료 3:재화), 등급, 장착 슬롯·클래스/레벨 제한, 스택 최대치, 장비 옵션 스탯(개별 컬럼), 거래 가능 여부·거래 기준가. 골드=`item_code` 1.
 
 ### enhance_master
 
-- **역할**: 장비 강화 단계별 규칙 정의. `player_item.enhance_level`이 참조.
+- **역할**: 장비 강화 단계별 규칙 정의. `player_item.enhance_level`·`player_item_equipped.enhance_level`이 참조.
 - **정의 데이터**: 강화 단계별 요구 비용·소모 재화·스탯 배율. (값 미확정, 작성 예정)
 
 ### skill_master
@@ -361,7 +376,7 @@ erDiagram
 ## 5. 출처 문서
 
 - [계정/로그인 기획서](../세부/account-login-기획서.md) — `users`·`user_auth_token`, Redis 토큰
-- [세이브 데이터 기획서](../세부/save-data-기획서.md) — `game_player`·`player_character`·`player_item`(아이템·재화 통합)·`player_skill`·`player_rune`·`player_cube`·`player_mail`·`player_mail_reward`
+- [세이브 데이터 기획서](../세부/save-data-기획서.md) — `game_player`·`player_character`·`player_item`(아이템·재화 통합)·`player_item_equipped`(장착 상태)·`player_skill`·`player_rune`·`player_cube`·`player_mail`·`player_mail_reward`
 - [거래소 / 교역선 기획서](../세부/trade-기획서.md) — `trade_listing` 거래 등록(에스크로), 대금은 메일 지급
 - [메일 기획서](../세부/mail-기획서.md) — `player_mail`·`player_mail_reward` 우편함·첨부
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — `player_attendance`·`attendance_master` 출석 기록·일자별 보상

@@ -15,7 +15,7 @@
 --     (Game DB 테이블의 user_id는 논리적 공유 키).
 --   * 마스터(기획) 데이터(item_master, class_master 등)는 관계형 영속 테이블이 아니라
 --     "클라이언트 번들 + 서버 인메모리 로드"이므로 DDL이 없다. 세이브 테이블의 코드 컬럼
---     (code, class_code, skill_code 등)이 마스터를 참조하지만 FK가 아닌 애플리케이션 검증으로 보장한다.
+--     (item_code, class_code, skill_code 등)이 마스터를 참조하지만 FK가 아닌 애플리케이션 검증으로 보장한다.
 --   * 0/1 플래그·소규모 enum은 TINYINT, 코드/레벨/수량은 INT, 큰 수(재화·경험치·시각)는 BIGINT.
 --   * InnoDB 사용(트랜잭션·행 잠금 기반 원자성 보장이 기획 전반의 전제).
 -- =====================================================================
@@ -110,31 +110,49 @@ CREATE TABLE player_character (
 
 
 -- 보유 아이템·재화 통합 테이블(계정 공유). row_type으로 아이템/재화를 구분한다.
---   * 장착은 별도 테이블 없이 equipped_character_id/equipped_slot로 이 행에 직접 표기한다.
---   * 재화(row_type=2)는 slot=NULL(용량 미집계), code=재화 item_code(골드=1), quantity=잔액.
---   * 재화의 (user_id, code) "계정당 종류별 1행" 유일성은 MySQL 부분 유니크 인덱스 미지원으로
---     인덱스가 아닌 애플리케이션(서버)이 보장한다. 아이템은 스택 분할로 (user_id, code) 중복 가능.
+--   * 보유 상태만 담고, 장착 여부·위치는 자식 테이블 player_item_equipped로 분리한다.
+--   * 재화(row_type=2)는 slot=NULL(용량 미집계), item_code=재화 item_code(골드=1), quantity=잔액.
+--   * 재화의 (user_id, item_code) "계정당 종류별 1행" 유일성은 MySQL 부분 유니크 인덱스 미지원으로
+--     인덱스가 아닌 애플리케이션(서버)이 보장한다. 아이템은 스택 분할로 (user_id, item_code) 중복 가능.
 DROP TABLE IF EXISTS player_item;
 CREATE TABLE player_item (
-    item_id               BIGINT NOT NULL AUTO_INCREMENT COMMENT '아이템 행 고유 ID(개체 식별자)',
+    player_item_id        BIGINT NOT NULL AUTO_INCREMENT COMMENT '아이템 행 고유 ID(개체 식별자)',
     user_id               BIGINT NOT NULL          COMMENT '계정 user_id',
     row_type              TINYINT NOT NULL          COMMENT '1:아이템 2:재화',
-    code                  INT    NOT NULL          COMMENT 'item_master.item_code(재화 item_type=3 포함, 골드=1)',
+    item_code             INT    NOT NULL          COMMENT 'item_master.item_code(재화 item_type=3 포함, 골드=1)',
     quantity              BIGINT NOT NULL DEFAULT 1 COMMENT '수량(아이템) / 잔액(재화). 재화가 커 BIGINT',
     slot                  INT    NULL              COMMENT '인벤토리 배치 칸(0-based). 재화는 NULL(용량 미집계)',
     enhance_level         INT    NOT NULL DEFAULT 0 COMMENT '장비 강화 단계. 재화/비장비는 0',
-    equipped_character_id INT    NULL              COMMENT '장착 캐릭터(1~3). NULL=미장착/재화',
-    equipped_slot         INT    NULL              COMMENT '장착 슬롯(equip_slot_master). NULL=미장착/재화',
     acquired_at           BIGINT NOT NULL          COMMENT '획득 시각(Unix ts)',
-    PRIMARY KEY (item_id),
+    PRIMARY KEY (player_item_id),
     KEY idx_item_user (user_id) COMMENT '세이브 로드 시 계정 아이템 조회',
     -- 한 인벤토리 칸에는 한 행만. slot이 NULL인 재화 행은 유니크 대상에서 제외(MySQL은 NULL 다중 허용).
     UNIQUE KEY uq_item_slot (user_id, slot),
-    -- 한 캐릭터-장착슬롯에 아이템 하나. 미장착/재화는 NULL이라 무제한 공존(MySQL NULL 다중 허용).
-    UNIQUE KEY uq_item_equip (user_id, equipped_character_id, equipped_slot),
     CONSTRAINT fk_item_player FOREIGN KEY (user_id)
         REFERENCES game_player (user_id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보유 아이템/재화(계정 공유, 장착 상태 내장)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보유 아이템/재화(계정 공유, 보유 상태)';
+
+
+-- 장착 중인 아이템만 담는 테이블(player_item과 1:0..1). 행이 존재하면 곧 "장착 중".
+--   * 장착=INSERT, 해제=DELETE. player_item에 NULL 장착 컬럼을 두지 않기 위해 분리한다.
+--   * PK가 player_item_id라 한 아이템은 동시에 한 곳에만 장착된다.
+--   * (user_id, equipped_character_id, equipped_slot) 유니크로 한 캐릭터-슬롯당 아이템 하나를 보장.
+DROP TABLE IF EXISTS player_item_equipped;
+CREATE TABLE player_item_equipped (
+    player_item_id        BIGINT NOT NULL          COMMENT '장착 아이템(player_item.player_item_id). 아이템당 최대 1행',
+    user_id               BIGINT NOT NULL          COMMENT '계정 user_id',
+    item_code             INT    NOT NULL          COMMENT 'item_master.item_code(어떤 아이템인지)',
+    enhance_level         INT    NOT NULL DEFAULT 0 COMMENT '장비 강화 단계(enhance_master)',
+    equipped_character_id INT    NOT NULL          COMMENT '장착 캐릭터(1~3)',
+    equipped_slot         INT    NOT NULL          COMMENT '장착 슬롯(equip_slot_master)',
+    PRIMARY KEY (player_item_id),
+    UNIQUE KEY uq_equip_slot (user_id, equipped_character_id, equipped_slot) COMMENT '한 캐릭터-슬롯당 아이템 하나',
+    KEY idx_equip_user (user_id) COMMENT '세이브 로드 시 계정 장착 조회',
+    CONSTRAINT fk_equip_item FOREIGN KEY (player_item_id)
+        REFERENCES player_item (player_item_id) ON DELETE CASCADE,
+    CONSTRAINT fk_equip_player FOREIGN KEY (user_id)
+        REFERENCES game_player (user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='장착 상태(아이템당 최대 1행, 캐릭터-슬롯 유니크)';
 
 
 -- 캐릭터별 스킬 레벨·액티브 장착 여부.

@@ -42,10 +42,12 @@
 | `player_character` | `level` | `level_master` | 레벨별 요구 경험치·스탯·스킬 포인트 |
 | `game_player` | `act` / `stage` / `difficulty` | `stage_master` | 스테이지 구성(스폰·보스) |
 | `game_player`(클리어 보상 계산) | `stage_id` | `stage_reward` | 스테이지 클리어 골드·경험치·등급별 아이템 확률 |
-| `player_item`(아이템 행 `row_type=1`) | `code` | `item_master` | 아이템 정의(`item_type` 1~2: 장비·재료) |
-| `player_item`(재화 행 `row_type=2`) | `code` | `item_master` | 재화 정의(`item_type=3`, 골드=`item_code` 1) |
+| `player_item`(아이템 행 `row_type=1`) | `item_code` | `item_master` | 아이템 정의(`item_type` 1~2: 장비·재료) |
+| `player_item`(재화 행 `row_type=2`) | `item_code` | `item_master` | 재화 정의(`item_type=3`, 골드=`item_code` 1) |
 | `player_item` | `enhance_level` | `enhance_master` | 강화 단계별 규칙·비용 |
-| `player_item` | `equipped_slot` | `equip_slot_master` | 장착 슬롯 정의 |
+| `player_item_equipped` | `item_code` | `item_master` | 장착 아이템 정의(어떤 아이템인지) |
+| `player_item_equipped` | `enhance_level` | `enhance_master` | 장착 장비 강화 단계 |
+| `player_item_equipped` | `equipped_slot` | `equip_slot_master` | 장착 슬롯 정의 |
 | `player_skill` | `skill_code` | `skill_master` | 스킬(캐릭터별) |
 | `player_rune` | `rune_code` | `rune_master` | 룬(Rune Tree, 계정 공용) |
 | `player_cube` | `cube_level` | `cube_master` | 큐브 레벨별 규칙·합성/제작 레시피 |
@@ -140,7 +142,7 @@ erDiagram
 
 ### 5.2 `equip_slot_master` — 장착 슬롯
 
-장비를 장착하는 슬롯의 정의. `player_item.equipped_slot`과 `item_master.equip_slot`이 참조한다.
+장비를 장착하는 슬롯의 정의. `player_item_equipped.equipped_slot`과 `item_master.equip_slot`이 참조한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -160,7 +162,7 @@ erDiagram
 
 ### 5.3 `item_master` — 아이템·재화
 
-인벤토리/장비/드롭이 참조하는 아이템 정의이자, **재화(골드)의 정의**도 겸한다. `player_item.code`가 이 테이블을 참조한다(아이템·재화 통합).
+인벤토리/장비/드롭이 참조하는 아이템 정의이자, **재화(골드)의 정의**도 겸한다. `player_item.item_code`·`player_item_equipped.item_code`가 이 테이블을 참조한다(아이템·재화 통합).
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -198,7 +200,7 @@ erDiagram
 
 ### 5.4 `enhance_master` — 강화 규칙
 
-`player_item.enhance_level`(강화/각인 단계)별 요구 비용과 효과 배율. 강화 성공 시 적용될 스탯 배율을 정의한다.
+`player_item.enhance_level`·`player_item_equipped.enhance_level`(강화/각인 단계)별 요구 비용과 효과 배율. 강화 성공 시 적용될 스탯 배율을 정의한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|

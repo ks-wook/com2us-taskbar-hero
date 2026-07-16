@@ -53,14 +53,14 @@
 
 ## 4. 데이터 모델
 
-성장 저장의 핵심은 **어떤 스킬/룬이 몇 레벨인지**이며, 스킬 포인트는 저장하지 않고 캐릭터 레벨에서 파생한다. 스킬은 캐릭터별, 룬은 계정 공용이라 **테이블을 분리**한다 — 스킬은 `player_skill`(캐릭터별), 룬은 `player_rune`(계정 공용). **3인 파티 구조상 캐릭터별 데이터는 캐릭터 단위 키(`character_id`)를 가진다** — [세이브 데이터 기획서](save-data-기획서.md)에 `player_character` 테이블 신설, `player_skill`에 `character_id`·`equipped`(액티브 장착) 반영 완료. 장비 장착은 별도 테이블 없이 `player_item.equipped_character_id`로 캐릭터에 귀속한다.
+성장 저장의 핵심은 **어떤 스킬/룬이 몇 레벨인지**이며, 스킬 포인트는 저장하지 않고 캐릭터 레벨에서 파생한다. 스킬은 캐릭터별, 룬은 계정 공용이라 **테이블을 분리**한다 — 스킬은 `player_skill`(캐릭터별), 룬은 `player_rune`(계정 공용). **3인 파티 구조상 캐릭터별 데이터는 캐릭터 단위 키(`character_id`)를 가진다** — [세이브 데이터 기획서](save-data-기획서.md)에 `player_character` 테이블 신설, `player_skill`에 `character_id`·`equipped`(액티브 장착) 반영 완료. 장비 장착은 별도 테이블 `player_item_equipped`의 `equipped_character_id`로 캐릭터에 귀속한다.
 
 | 테이블 | 역할 | 캐릭터별/공유 | 참조 마스터 |
 |---|---|---|---|
 | `player_character`(`(user_id, character_id)` PK, `class_code`, `level`, `exp`) | 직업·레벨·경험치(스킬 포인트 총량의 파생 근거) | **캐릭터별** | `class_master` |
 | `player_skill`(`(user_id, character_id, skill_code)` PK, `level`, `equipped`) | 스킬 레벨·액티브 장착 여부 | **캐릭터별** | `skill_master` |
 | `player_rune`(`(user_id, rune_code)` PK, `level`) | 룬 레벨 | **계정 공유** | `rune_master` |
-| `player_item`(재화 행 `row_type=2`, `code`=골드 `item_code` 1) | 룬 업그레이드 골드 차감(`quantity` UPDATE) | 계정 공유 | `item_master`(재화 `item_type=3`) |
+| `player_item`(재화 행 `row_type=2`, `item_code`=골드 `item_code` 1) | 룬 업그레이드 골드 차감(`quantity` UPDATE) | 계정 공유 | `item_master`(재화 `item_type=3`) |
 
 **성장 상태 규칙 (확정)**
 - **직업(`player_character.class_code`, 캐릭터별)**: 각 캐릭터 생성 시 확정되며 이후 바뀌지 않는다(**전직 미지원**). `skill_master`에서 `class_code`가 일치하는 스킬만 해당 캐릭터의 보유 스킬이다.

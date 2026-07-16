@@ -188,7 +188,7 @@ COMMIT → { act, difficulty, stage, stageId, enteredAt }
   3) sr = stage_reward[현재 stage_id]
      gold = sr.reward_gold; exp = sr.reward_exp
      items = rollGradeDrop(sr.grade1_prob..grade6_prob)   # 등급 추첨 → 해당 등급 item_master 아이템 1개(서버 RNG)
-  4) 지급: player_item(재화, code=골드).quantity += gold
+  4) 지급: player_item(재화, item_code=골드).quantity += gold
            for c in player_character(3인): c.exp += exp → level 재계산   # 3캐릭터 동일
            items를 player_item에 적재(스택/용량 규칙; 초과 시 InventoryFull(4002))
   5) 진행도: 프런티어 클리어면 stage 전진(act/difficulty 롤오버) + max_stage_cleared 갱신

@@ -167,7 +167,7 @@ exp           = floor(effective * expPerSec  * OFFLINE_EFFICIENCY)
 # 아이템은 지급하지 않음 (골드·경험치만)
 
 # 트랜잭션 (user_id 단위)
-  player_item(재화, code=골드).quantity += gold        # 계정 공유
+  player_item(재화, item_code=골드).quantity += gold        # 계정 공유
   for c in player_character[user_id] (3인):           # 모든 캐릭터에 동일 exp
       c.exp += exp → 레벨 곡선으로 c.level 재계산
   game_player.last_active_at = now                   # 중복 정산 방지
