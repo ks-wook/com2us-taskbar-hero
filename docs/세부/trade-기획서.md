@@ -247,7 +247,7 @@ COMMIT → { listingId, gained, cost, balance }
 
 ## 7. 에러 코드
 
-`TaskbarHero.Common`의 `GameErrorCode`에 추가 제안. 도메인 4.7(거래소)은 **7000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
+`TaskbarHero.Common`의 `ErrorCode`에 추가 제안. 도메인 4.7(거래소)은 **7000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -274,4 +274,4 @@ COMMIT → { listingId, gained, cost, balance }
 - [메일 기획서](mail-기획서.md) — 판매 대금 메일 발급·수령(`category=2` 거래)
 - [세이브 데이터 기획서](save-data-기획서.md) — `trade_listing` 저장 골격
 - [마스터 데이터 기획서](master-data/master-data-기획서.md) — 목록의 `item_code`로 아이템 이름·스탯 표시(클라 연동 포함)
-- [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(7000번대 거래소)
+- [ErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(7000번대 거래소)

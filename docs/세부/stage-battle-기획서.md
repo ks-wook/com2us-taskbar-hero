@@ -206,7 +206,7 @@ COMMIT → { cleared, rewards, characters, balance, progress }
 
 ## 7. 에러 코드
 
-`TaskbarHero.Common`의 `GameErrorCode`에 추가 제안. 도메인 4.6(스테이지/전투)은 **6000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
+`TaskbarHero.Common`의 `ErrorCode`에 추가 제안. 도메인 4.6(스테이지/전투)은 **6000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -233,4 +233,4 @@ COMMIT → { cleared, rewards, characters, balance, progress }
 - [마스터 데이터 기획서](master-data/master-data-기획서.md) — `stage_master`·`stage_reward`·`monster_master`·`level_master`
 - [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 전리품 적재·`InventoryFull(4002)`
 - [오프라인 보상 정산 기획서](offline-reward-기획서.md) — 오프라인 진행(경험치 3캐릭터 동일 지급 원칙 공유)
-- [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(6000번대 스테이지/전투)
+- [ErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(6000번대 스테이지/전투)

@@ -1,0 +1,10 @@
+{
+  "name": "com.com2us.taskbarhero.common",
+  "version": "1.0.0",
+  "displayName": "Taskbar Hero Common",
+  "description": "서버-클라이언트 공통 코드(에러 코드 ErrorCode, 공유 DTO 등). netstandard2.0 소스를 Unity 클라이언트와 공유한다.",
+  "unity": "6000.0",
+  "author": {
+    "name": "com2us-taskbar-hero"
+  }
+}

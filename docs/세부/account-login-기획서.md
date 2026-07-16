@@ -168,7 +168,7 @@ Base64 디코딩 → 필드 분리(userId:timestamp:salt:hash)
 
 Base URL(개발): `http://localhost:5160` (AccountServer)
 
-모든 API는 **POST** 방식이며, 응답에는 **`errorCode`를 포함**한다(`success`, `errorCode`, `userId`/`token` 등, `message`). `errorCode`는 `TaskbarHero.Common`의 `GameErrorCode`(6장) 값이고 `success`는 `errorCode == 0`과 동치이며, `message`는 해당 코드의 설명 문구다. (세이브·마스터 기획서와 동일한 응답 규약)
+모든 API는 **POST** 방식이며, 응답에는 **`errorCode`를 포함**한다(`success`, `errorCode`, `userId`/`token` 등, `message`). `errorCode`는 `TaskbarHero.Common`의 `ErrorCode`(6장) 값이고 `success`는 `errorCode == 0`과 동치이며, `message`는 해당 코드의 설명 문구다. (세이브·마스터 기획서와 동일한 응답 규약)
 
 #### 인증 방식 — HTTP Body(JSON)로 토큰 전달 ⭐
 
@@ -333,7 +333,7 @@ POST 요청 body(JSON): { userId, token, data }
 
 ## 6. 에러 코드 (신규 제안)
 
-`TaskbarHero.Common/ErrorCode.cs`의 `GameErrorCode`에 추가 제안. 기존 값(`Success=0`, `UserNotFound=1001`, `InvalidPassword=1002`)과 중복되지 않게 한다. API 응답의 `message`는 아래 코드에 매핑한다.
+`TaskbarHero.Common/ErrorCode.cs`의 `ErrorCode`에 추가 제안. 기존 값(`Success=0`, `UserNotFound=1001`, `InvalidPassword=1002`)과 중복되지 않게 한다. API 응답의 `message`는 아래 코드에 매핑한다.
 
 | 이름 | 값 | 의미 | 매핑 message 예시 |
 |---|---|---|---|

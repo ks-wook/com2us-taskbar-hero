@@ -388,7 +388,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   1) 대상 조회: player_item_id / slot / 재화 잔액 로드 (행 잠금)
   2) 마스터 검증: item_master·enhance_master·cube_master 제약 확인
   3) 규칙 판정: 슬롯 정합성 / 다음 강화 단계 존재 / 합성 조건 / 수량·비용 충족
-     └ 위반 시 ROLLBACK + 해당 GameErrorCode 반환
+     └ 위반 시 ROLLBACK + 해당 ErrorCode 반환
   4) (RNG 연산) 큐브 합성 결과를 서버가 산출
   5) 반영: 재화 차감/적립, 인벤토리 증감(스택 병합/분할), 장착·큐브 상태 갱신
 COMMIT → 변경된 상태를 응답 data로 반환
@@ -446,7 +446,7 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 
 ## 7. 에러 코드
 
-`TaskbarHero.Common`의 `GameErrorCode`에 추가 제안. 도메인 4.4(인벤토리/아이템/큐브)는 **4000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
+`TaskbarHero.Common`의 `ErrorCode`에 추가 제안. 도메인 4.4(인벤토리/아이템/큐브)는 **4000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -484,4 +484,4 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 - [세이브 데이터 기획서](save-data-기획서.md) — `player_item`·`player_cube` 저장 골격, 로드 스냅샷
 - [마스터 데이터 기획서](master-data/master-data-기획서.md) — `item_master`·`equip_slot_master`·`enhance_master`·`cube_master`·`stage_reward`(전리품 드롭)·`box_master`(랜덤 상자)
 - [오프라인 보상 정산 기획서](offline-reward-기획서.md) — 오프라인 아이템 미지급
-- [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(4000번대 인벤토리/아이템/큐브)
+- [ErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(4000번대 인벤토리/아이템/큐브)

@@ -10,6 +10,11 @@ x86/
 [Bb]in/
 [Oo]bj/
 
+# --- MSBuild 산출물 재배치 경로 ---
+# TaskbarHero.Common/Directory.Build.props가 obj/bin을 이 폴더로 재배치한다
+# (Unity가 로컬 패키지 폴더의 생성 .cs를 중복 컴파일하지 않도록 격리).
+/artifacts/
+
 # --- .NET Tools & Temporary Files ---
 .dotnet/
 .tools/
@@ -108,6 +113,7 @@ com2us-taskbar-hero-client/.consulo/
 com2us-taskbar-hero-client/*.csproj
 com2us-taskbar-hero-client/*.unityproj
 com2us-taskbar-hero-client/*.sln
+com2us-taskbar-hero-client/*.slnx
 com2us-taskbar-hero-client/*.suo
 com2us-taskbar-hero-client/*.tmp
 com2us-taskbar-hero-client/*.user

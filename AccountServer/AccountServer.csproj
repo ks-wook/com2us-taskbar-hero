@@ -11,7 +11,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\com2us-taskbar-hero-common\Game.Common\Game.Common.csproj" />
+    <ProjectReference Include="..\TaskbarHero.Common\TaskbarHero.Common.csproj" />
   </ItemGroup>
 
 </Project>

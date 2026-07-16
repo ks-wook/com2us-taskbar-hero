@@ -235,7 +235,7 @@ COMMIT → { mailId, gained, balance }
 
 ## 7. 에러 코드
 
-`TaskbarHero.Common`의 `GameErrorCode`에 추가 제안. 도메인 4.8(메일)는 **8000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
+`TaskbarHero.Common`의 `ErrorCode`에 추가 제안. 도메인 4.8(메일)는 **8000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -258,4 +258,4 @@ COMMIT → { mailId, gained, balance }
 - [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) — 도메인 4.8(메일), 4.7(거래소)·4.9(출석부) 발급원
 - [세이브 데이터 기획서](save-data-기획서.md) — `player_mail`·`player_mail_reward` 저장, 재화·인벤토리 반영
 - [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 첨부 아이템 적재·`InventoryFull(4002)`
-- [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(8000번대 메일)
+- [ErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(8000번대 메일)

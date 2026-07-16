@@ -256,7 +256,7 @@ COMMIT → { runeCode, level, cost, balance }
 
 ## 7. 에러 코드
 
-`TaskbarHero.Common`의 `GameErrorCode`에 추가 제안. 도메인 4.5(성장)는 **5000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
+`TaskbarHero.Common`의 `ErrorCode`에 추가 제안. 도메인 4.5(성장)는 **5000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -284,4 +284,4 @@ COMMIT → { runeCode, level, cost, balance }
 - [세이브 데이터 기획서](save-data-기획서.md) — `game_player`·`player_character`·`player_skill`·`player_rune` 저장 골격, 로드 스냅샷
 - [마스터 데이터 기획서](master-data/master-data-기획서.md) — `class_master`·`skill_master`·`rune_master`
 - [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 장비 강화·장비 클래스/레벨 제한
-- [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(5000번대 성장)
+- [ErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(5000번대 성장)

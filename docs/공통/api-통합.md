@@ -22,7 +22,7 @@
 
 - 모든 API는 **POST**. 응답은 `{ success, errorCode, message, data }` 형식이며 `success`는 `errorCode == 0`(`Success`)과 동치다.
 - **인증**: 로그인 이후 요청은 body에 `{ userId, token, data }`를 담는다(헤더 미사용). 미들웨어가 `token`을 Redis `auth:token:{userId}`와 대조. **GameServer의 게임 API는 모두 인증이 필요**하므로 아래 GameServer 표(3장)에는 인증 칼럼을 두지 않는다. **무인증 예외**: AccountServer의 회원가입·로그인뿐이다(마스터 데이터는 클라이언트 번들이라 다운로드 API가 없다).
-- `errorCode`는 `TaskbarHero.Common`의 `GameErrorCode`이며 값 목록은 [GameErrorCode 통합 정의](error-code-정의.md) 참고.
+- `errorCode`는 `TaskbarHero.Common`의 `ErrorCode`이며 값 목록은 [ErrorCode 통합 정의](error-code-정의.md) 참고.
 - **Base URL(개발)**: AccountServer `http://localhost:5160`, GameServer `http://localhost:5247`.
 
 ## 2. AccountServer API (`:5160`)
@@ -143,7 +143,7 @@
 
 ## 4. 에러 코드
 
-전체 코드 목록·블록 규약(도메인 4.N → N000)은 [GameErrorCode 통합 정의](error-code-정의.md) 참고. 공통 성공은 `0`, 인증 실패는 HTTP 401.
+전체 코드 목록·블록 규약(도메인 4.N → N000)은 [ErrorCode 통합 정의](error-code-정의.md) 참고. 공통 성공은 `0`, 인증 실패는 HTTP 401.
 
 ## 5. 출처 문서
 
@@ -156,4 +156,4 @@
 - [메일 기획서](../세부/mail-기획서.md)
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md)
 - [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md)
-- [GameErrorCode 통합 정의](error-code-정의.md)
+- [ErrorCode 통합 정의](error-code-정의.md)

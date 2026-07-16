@@ -201,7 +201,7 @@ return { elapsed, effective, gold, exp, characters[], ... }
 
 ## 7. 에러 코드
 
-`TaskbarHero.Common`의 `GameErrorCode`에 추가 제안. 오프라인 보상 도메인은 **3000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약). 추가 시 통합 문서도 함께 갱신한다.
+`TaskbarHero.Common`의 `ErrorCode`에 추가 제안. 오프라인 보상 도메인은 **3000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약). 추가 시 통합 문서도 함께 갱신한다.
 
 | 이름 | 값 | 의미 |
 |---|---|---|
@@ -277,4 +277,4 @@ namespace TaskbarHero.Common
 - [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) — 도메인 4.3(방치형 보상 정산)
 - [세이브 데이터 기획서](save-data-기획서.md) — `last_active_at` 기준 시각, 로드 응답 `offlineElapsedSec`
 - [마스터 데이터 기획서](master-data/master-data-기획서.md) — 스테이지·스테이지 보상·몬스터(산출 근거)
-- [GameErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약
+- [ErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약

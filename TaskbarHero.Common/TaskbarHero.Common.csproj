@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    서버-클라이언트 공통 라이브러리.
+    Unity 클라이언트(com2us-taskbar-hero-client)와 소스를 공유하기 위해 netstandard2.0을 타깃팅한다.
+    CLAUDE.md 규칙: implicit usings / nullable 비활성화, 서버 전용 의존성 추가 금지.
+    빌드 산출물(obj/bin)은 Directory.Build.props에서 폴더 밖(../artifacts)으로 재배치한다
+    (Unity가 로컬 패키지로 이 폴더의 .cs를 직접 컴파일하므로 생성 .cs 중복 컴파일 방지).
+  -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>9.0</LangVersion>
+    <RootNamespace>TaskbarHero.Common</RootNamespace>
+    <AssemblyName>TaskbarHero.Common</AssemblyName>
+    <!-- Unity 전용 파일이 .NET 컴파일에 끼어들지 않게 명시적으로 제외 -->
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+  </PropertyGroup>
+
+</Project>

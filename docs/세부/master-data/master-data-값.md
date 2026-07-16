@@ -419,4 +419,4 @@
 - [마스터(기획) 데이터 & 클라이언트 연동 기획서](master-data-기획서.md) — 테이블 구조·필드·enum·배포 방식(정본)
 - [`master-data-schema.sql`](master-data-schema.sql) — 값 확정 테이블(현재 1~6 및 8 cube_master·9 monster_master·10 stage_reward·11 stage_master·13 attendance_master)의 DDL + 시드 INSERT
 - [DB ERD 통합](../../공통/db-erd-통합.md) — 세이브 테이블이 이 마스터 코드를 참조하는 관계
-- [GameErrorCode 통합 정의](../../공통/error-code-정의.md) — `MasterDataNotLoaded(10001)` 등
+- [ErrorCode 통합 정의](../../공통/error-code-정의.md) — `MasterDataNotLoaded(10001)` 등

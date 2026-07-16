@@ -1,8 +1,8 @@
-# GameErrorCode 통합 정의
+# ErrorCode 통합 정의
 
 > 상위 문서: [서버 시스템 전체 개요](서버-시스템-전체-개요.md)
 >
-> 현재까지 작성된 기획서들에 등장한 **에러 코드를 한곳에 모은 참조 문서**다. 각 코드의 상세 맥락은 원 기획서를 따르며(아래 "출처"), 본 문서는 `TaskbarHero.Common`의 `GameErrorCode` enum에 반영할 **단일 목록**을 제공한다. 서버-클라이언트가 공유하는 계약이므로 **숫자 값은 변경하지 않는다.**
+> 현재까지 작성된 기획서들에 등장한 **에러 코드를 한곳에 모은 참조 문서**다. 각 코드의 상세 맥락은 원 기획서를 따르며(아래 "출처"), 본 문서는 `TaskbarHero.Common`의 `ErrorCode` enum에 반영할 **단일 목록**을 제공한다. 서버-클라이언트가 공유하는 계약이므로 **숫자 값은 변경하지 않는다.**
 
 ## 목차
 
@@ -14,7 +14,7 @@
 
 ## 1. 규약
 
-- 모든 API 응답은 `{ success, errorCode, message, data }` 형식이며, `errorCode`는 `GameErrorCode` 값이다. `success`는 `errorCode == 0`(Success)과 동치이고, `message`는 코드 설명 문구다.
+- 모든 API 응답은 `{ success, errorCode, message, data }` 형식이며, `errorCode`는 `ErrorCode` 값이다. `success`는 `errorCode == 0`(Success)과 동치이고, `message`는 코드 설명 문구다.
 - **도메인별 1000번 블록 할당**: 코드 충돌을 막기 위해 도메인마다 별도 번호대를 사용한다. 신규 기획서가 코드를 추가하면 본 문서를 갱신한다.
 
 | 블록 | 도메인 | 출처 기획서 | 상태 |
@@ -152,15 +152,15 @@
 
 ## 3. `TaskbarHero.Common/ErrorCode.cs` 반영안
 
-현재 파일에는 `Success=0`, `UserNotFound=1001`, `InvalidPassword=1002`만 정의되어 있다. 위 목록을 반영하면 다음과 같다. (`netstandard2.0` 타깃 유지, 서버-클라이언트 공유)
+아래 전체 목록이 `TaskbarHero.Common/ErrorCode.cs`에 구현되어 있다(`netstandard2.0`, 서버-클라이언트 공유). 코드를 추가/폐기할 때는 이 문서와 해당 파일을 함께 갱신한다.
 
 ```csharp
-// TaskbarHero.Common/GameErrorCode.cs
+// TaskbarHero.Common/ErrorCode.cs
 namespace TaskbarHero.Common
 {
     // 서버-클라이언트 공통 에러 코드
     // 숫자 값은 클라이언트와의 계약이므로 변경 금지
-    public enum GameErrorCode
+    public enum ErrorCode
     {
         Success = 0,
 
