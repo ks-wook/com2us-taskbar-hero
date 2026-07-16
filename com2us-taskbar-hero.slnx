@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="TaskbarHero.Common/TaskbarHero.Common.csproj" />
   <Project Path="AccountServer/AccountServer.csproj" />
   <Project Path="GameServer/GameServer.csproj" />
 </Solution>

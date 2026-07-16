@@ -13,8 +13,10 @@
 ## 구조
 
 - **AccountServer/** — 계정/인증 서비스 (`http://localhost:5160`, `https://localhost:7110`). `TaskbarHero.Common`을 참조한다.
-- **GameServer/** — 게임 로직 서비스 (`http://localhost:5247`, `https://localhost:7179`). 아직 `TaskbarHero.Common`을 참조하지 않음. 공통 코드가 필요해지면 `ProjectReference`를 추가한다.
-- **TaskbarHero.Common/** — 서버-클라이언트 공통 라이브러리(`netstandard2.0`). 원래 git 서브모듈(별도 저장소)이었으나 서브모듈을 해제하고 이 솔루션에 포함된 일반 프로젝트로 전환했다. Unity 클라이언트와 공유하므로 `netstandard2.0`을 유지한다. `TaskbarHero.Common/ErrorCode.cs`의 `GameErrorCode`는 클라이언트와 공유하는 에러 코드이므로, 그 숫자 값은 변경하면 안 되는 계약(contract)으로 취급한다.
+- **GameServer/** — 게임 로직 서비스 (`http://localhost:5247`, `https://localhost:7179`). `TaskbarHero.Common`을 `ProjectReference`로 참조한다.
+- **TaskbarHero.Common/** — 서버-클라이언트 공통 라이브러리(`netstandard2.0`). 원래 git 서브모듈(별도 저장소)이었으나 서브모듈을 해제하고 이 솔루션에 포함된 일반 프로젝트로 전환했다. Unity 클라이언트와 공유하므로 `netstandard2.0`을 유지한다. `TaskbarHero.Common/ErrorCode.cs`의 `ErrorCode`는 클라이언트와 공유하는 에러 코드이므로, 그 숫자 값은 변경하면 안 되는 계약(contract)으로 취급한다(정본 목록: `docs/공통/error-code-정의.md`).
+  - **소비 방식(이중)**: 서버 두 곳은 `ProjectReference`로 참조한다. **Unity 클라이언트는 이 폴더를 로컬 UPM 패키지로 소비한다** — `com2us-taskbar-hero-client/Packages/manifest.json`에 `"com.com2us.taskbarhero.common": "file:../../TaskbarHero.Common"`로 등록되어 있고, 폴더 안의 `package.json` + `TaskbarHero.Common.asmdef`로 Unity가 소스를 직접 컴파일한다(별도 빌드/DLL 복사 없음).
+  - **빌드 산출물 격리**: Unity가 이 폴더의 `.cs`를 직접 컴파일하므로, `Directory.Build.props`가 MSBuild의 `obj/bin`을 폴더 밖 `artifacts/`로 재배치한다. **이 폴더 안에 `obj/`·`bin/`을 만들지 말 것**(Unity가 생성 `.cs`를 중복 컴파일해 깨진다).
 
 `com2us-taskbar-hero.slnx`는 솔루션 파일(XML 형식의 `.slnx`)이며 AccountServer·GameServer와 공통 프로젝트 `TaskbarHero.Common`을 포함한다. 서버 프로젝트는 `TaskbarHero.Common`을 `ProjectReference`로 참조한다.
 
