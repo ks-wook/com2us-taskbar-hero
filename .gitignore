@@ -1,5 +1,4 @@
-# Define standard .gitignore content for .NET / ASP.NET Core with Visual Studio Code
-gitignore_content = """# =========================================================================
+# =========================================================================
 # Standard Gitignore for .NET Core and VS Code Projects
 # =========================================================================
 
@@ -76,11 +75,71 @@ node_modules/
 /wwwroot/lib/
 .npm/
 bower_components/
-"""
 
-# Write to .gitignore file
-filename = ".gitignore"
-with open(filename, "w", encoding="utf-8") as f:
-    f.write(gitignore_content)
+# =========================================================================
+# Unity Client (com2us-taskbar-hero-client/)
+# Unity가 생성하는 폴더/파일. 서버의 bin/obj/*.csproj/*.sln과 충돌하지 않도록
+# 모두 클라이언트 프로젝트 경로로 한정한다.
+# 참고: https://github.com/github/gitignore/blob/main/Unity.gitignore
+# =========================================================================
 
-print(f"Successfully generated {filename}")
+# --- Unity 생성 폴더 ---
+com2us-taskbar-hero-client/[Ll]ibrary/
+com2us-taskbar-hero-client/[Tt]emp/
+com2us-taskbar-hero-client/[Oo]bj/
+com2us-taskbar-hero-client/[Bb]uild/
+com2us-taskbar-hero-client/[Bb]uilds/
+com2us-taskbar-hero-client/[Ll]ogs/
+com2us-taskbar-hero-client/[Uu]ser[Ss]ettings/
+# MemoryCaptures는 용량이 크고 민감 데이터를 담을 수 있다
+com2us-taskbar-hero-client/[Mm]emoryCaptures/
+com2us-taskbar-hero-client/[Rr]ecordings/
+
+# --- Rider/JetBrains 자동 생성 플러그인 ---
+com2us-taskbar-hero-client/[Aa]ssets/Plugins/Editor/JetBrains*
+
+# --- Visual Studio / Gradle 캐시 ---
+com2us-taskbar-hero-client/.vs/
+com2us-taskbar-hero-client/.gradle/
+
+# --- Unity 자동 생성 솔루션/프로젝트 파일 ---
+com2us-taskbar-hero-client/ExportedObj/
+com2us-taskbar-hero-client/.consulo/
+com2us-taskbar-hero-client/*.csproj
+com2us-taskbar-hero-client/*.unityproj
+com2us-taskbar-hero-client/*.sln
+com2us-taskbar-hero-client/*.suo
+com2us-taskbar-hero-client/*.tmp
+com2us-taskbar-hero-client/*.user
+com2us-taskbar-hero-client/*.userprefs
+com2us-taskbar-hero-client/*.pidb
+com2us-taskbar-hero-client/*.booproj
+com2us-taskbar-hero-client/*.svd
+com2us-taskbar-hero-client/*.pdb
+com2us-taskbar-hero-client/*.mdb
+com2us-taskbar-hero-client/*.opendb
+com2us-taskbar-hero-client/*.VC.db
+
+# --- Unity 생성 meta 파일(빌드 산출물용) ---
+com2us-taskbar-hero-client/*.pidb.meta
+com2us-taskbar-hero-client/*.pdb.meta
+com2us-taskbar-hero-client/*.mdb.meta
+
+# --- 크래시 리포트 ---
+com2us-taskbar-hero-client/sysinfo.txt
+
+# --- 빌드 산출물 ---
+com2us-taskbar-hero-client/*.apk
+com2us-taskbar-hero-client/*.aab
+com2us-taskbar-hero-client/*.unitypackage
+com2us-taskbar-hero-client/*.app
+
+# --- Crashlytics ---
+com2us-taskbar-hero-client/crashlytics-build.properties
+
+# --- Addressables 패킹 결과 ---
+com2us-taskbar-hero-client/[Aa]ssets/[Aa]ddressable[Aa]ssets[Dd]ata/*/*.bin*
+
+# --- Android용 임시 자동 생성 에셋 ---
+com2us-taskbar-hero-client/[Aa]ssets/[Ss]treamingAssets/aa.meta
+com2us-taskbar-hero-client/[Aa]ssets/[Ss]treamingAssets/aa/*
