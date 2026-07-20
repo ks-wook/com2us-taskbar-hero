@@ -5,7 +5,7 @@
 --   docs/세부/master-data/master-data-기획서.md (테이블 구조·필드·enum).  불일치 시 그 문서를 따른다.
 --
 -- 범위: master-data-값.md에서 값이 확정된 테이블(1~6번 및 8·9·10·11·13번)을 담는다.
---   1) equip_slot_master  2) class_master  3) level_master  4) skill_master  5) rune_master
+--   1) equip_slot_master  2) class_master  3) level_master  4) skill_master  4b) skill_coefficient  5) rune_master
 --   6) item_master  8) cube_master  8b) cube_recipe  8c) cube_recipe_ingredient
 --   9) monster_master  10) stage_reward  11) stage_master  11b) stage_spawn
 --   13) attendance_master
@@ -204,44 +204,78 @@ INSERT INTO level_master (level, required_exp, skill_points, bonus_hp, bonus_atk
 
 
 -- =====================================================================
--- 4. skill_master — 직업별 스킬(액티브/패시브)
---    출처: master-data-값.md §4, 기획서 5.6
+-- 4. skill_master — 직업별 스킬(액티브/패시브) 정의
+--    출처: master-data-값.md §4-A, 기획서 5.6
 --    코드 규약: 기사 1xx / 레인저 2xx / 마법사 3xx (액티브 x01~, 패시브 x10~)
---    category: 1=공격, 2=버프, 3=디버프.  effect_per_level(레벨별 배열)은 폐기하고
---    성격을 category로 구분한 뒤 효과를 개별 컬럼(skill_coef/buff_duration/debuff_duration)으로 담는다.
---    skill_coef: 1레벨(습득) 기준 계수. 공격=공격력 대비 데미지 배율, 버프/디버프=대상 스탯 배율.
---    coef_growth: 레벨당 계수 변화량. 실제 계수 coef(L) = skill_coef + coef_growth*(L-1) (선형).
---      공격/버프는 >=0(레벨↑ 강해짐), 디버프는 <=0(감소 배율이 작아져 강해짐), 0이면 레벨 무관.
---    지속시간: 버프는 buff_duration(초)만, 디버프는 debuff_duration(초)만 사용(해당 없으면 0, 패시브 상시 버프도 0).
+--    스킬 정의(이름·코드·액티브/패시브·최대 레벨)만 담는다. 구 category(스킬 성격)와
+--    buff_duration/debuff_duration(지속시간)은 skill_master에서 빼서 skill_coefficient의
+--    coef_type/duration으로 이관했다. effect_per_level 및 구 skill_coef/coef_growth도 폐기.
+--    레벨·타입별 계수는 스킬마다 개수가 달라(= 타입 수 × max_level) 자식 테이블 skill_coefficient로 분리한다.
 -- =====================================================================
+DROP TABLE IF EXISTS skill_coefficient;
 DROP TABLE IF EXISTS skill_master;
 CREATE TABLE skill_master (
     skill_code       INT          NOT NULL COMMENT '스킬 코드',
     class_code       INT          NOT NULL COMMENT '보유 직업(class_master.class_code)',
     name             VARCHAR(30)  NOT NULL COMMENT '스킬 이름',
     skill_type       TINYINT      NOT NULL COMMENT '1=액티브, 2=패시브',
-    category         TINYINT      NOT NULL COMMENT '스킬 분류(1=공격, 2=버프, 3=디버프)',
-    skill_coef       DECIMAL(6,3) NOT NULL COMMENT '1레벨 기준 스킬 계수(공격=데미지 배율, 버프/디버프=대상 스탯 배율)',
-    coef_growth      DECIMAL(6,3) NOT NULL DEFAULT 0 COMMENT '레벨당 계수 변화량. coef(L)=skill_coef+coef_growth*(L-1). 디버프는 음수',
-    buff_duration    DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '버프 지속시간(초). 버프가 아니거나 패시브 상시면 0',
-    debuff_duration  DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '디버프 지속시간(초). 디버프가 아니면 0',
-    max_level        INT          NOT NULL COMMENT '최대 스킬 레벨',
+    max_level        INT          NOT NULL COMMENT '최대 스킬 레벨(= skill_coefficient의 타입별 행 수)',
     PRIMARY KEY (skill_code),
     KEY idx_skill_class (class_code),
     CONSTRAINT fk_skill_class FOREIGN KEY (class_code)
         REFERENCES class_master (class_code) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='직업별 액티브/패시브 스킬';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='직업별 액티브/패시브 스킬 정의(계수·타입·지속시간은 skill_coefficient)';
 
-INSERT INTO skill_master (skill_code, class_code, name, skill_type, category, skill_coef, coef_growth, buff_duration, debuff_duration, max_level) VALUES
-    (101, 1, '방패 강타',    1, 1, 1.200,  0.100, 0, 0.00, 10),
-    (102, 1, '도발',         1, 3, 0.800, -0.030, 0, 5.00, 5),
-    (110, 1, '강철 피부',    2, 2, 1.150,  0.030, 0, 0.00, 5),
-    (201, 2, '정조준 사격',  1, 1, 1.800,  0.100, 0, 0.00, 10),
-    (202, 2, '다중 사격',    1, 1, 0.900,  0.050, 0, 0.00, 10),
-    (210, 2, '민첩',         2, 2, 1.100,  0.020, 0, 0.00, 5),
-    (301, 3, '파이어볼',     1, 1, 2.000,  0.150, 0, 0.00, 10),
-    (302, 3, '프로스트 노바', 1, 3, 0.500, -0.020, 0, 3.00, 10),
-    (310, 3, '마력 집중',    2, 2, 1.150,  0.030, 0, 0.00, 5);
+INSERT INTO skill_master (skill_code, class_code, name, skill_type, max_level) VALUES
+    (101, 1, '방패 강타',    1, 10),
+    (102, 1, '도발',         1, 5),
+    (110, 1, '강철 피부',    2, 5),
+    (201, 2, '정조준 사격',  1, 10),
+    (202, 2, '다중 사격',    1, 10),
+    (210, 2, '민첩',         2, 5),
+    (301, 3, '파이어볼',     1, 10),
+    (302, 3, '프로스트 노바', 1, 10),
+    (310, 3, '마력 집중',    2, 5);
+
+
+-- =====================================================================
+-- 4b. skill_coefficient — 스킬 레벨·타입별 계수 (skill_master 자식, 값 문서 §4-B)
+--    출처: master-data-값.md §4, 기획서 5.6
+--    스킬마다 필요한 계수 개수가 달라(= 타입 수 × max_level) 1:N 자식 테이블로 분리한다(JSON/고정컬럼 대신).
+--    (skill_code, skill_level, coef_type) 복합 PK.
+--    coef_type: 계수 타입(1=공격 2=버프 3=디버프). 구 skill_master.category를 계수 행으로 내린 것으로,
+--      계수가 어떤 성격의 효과인지 구분한다. 한 스킬이 레벨마다 여러 타입 효과를 가질 수도 있게 확장 가능.
+--    coef: 해당 레벨·타입 계수(공격=데미지 배율, 버프/디버프=대상 스탯 배율). 현재는 구 선형식을 전개한 값.
+--    duration: 버프(2)/디버프(3) 지속시간(초). 공격(1)은 0, 패시브 상시 버프도 0(무한). 현재는 레벨 무관 동일.
+--    현재 데이터는 스킬당 1타입이라 총 70행.
+-- =====================================================================
+DROP TABLE IF EXISTS skill_coefficient;
+CREATE TABLE skill_coefficient (
+    skill_code   INT          NOT NULL COMMENT '스킬(skill_master.skill_code)',
+    skill_level  INT          NOT NULL COMMENT '스킬 레벨(1~max_level)',
+    coef_type    TINYINT      NOT NULL COMMENT '계수 타입(1=공격 2=버프 3=디버프)',
+    coef         DECIMAL(6,3) NOT NULL COMMENT '해당 레벨·타입 계수(공격=데미지 배율, 버프/디버프=대상 스탯 배율)',
+    duration     DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '버프/디버프 지속시간(초). 공격은 0, 패시브 상시 버프도 0',
+    PRIMARY KEY (skill_code, skill_level, coef_type),
+    CONSTRAINT fk_skill_coef_skill FOREIGN KEY (skill_code)
+        REFERENCES skill_master (skill_code) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='스킬 레벨·타입별 계수(skill_master 자식, 1:N)';
+
+INSERT INTO skill_coefficient (skill_code, skill_level, coef_type, coef, duration) VALUES
+    (101, 1, 1, 1.200, 0.00), (101, 2, 1, 1.300, 0.00), (101, 3, 1, 1.400, 0.00), (101, 4, 1, 1.500, 0.00), (101, 5, 1, 1.600, 0.00),
+    (101, 6, 1, 1.700, 0.00), (101, 7, 1, 1.800, 0.00), (101, 8, 1, 1.900, 0.00), (101, 9, 1, 2.000, 0.00), (101, 10, 1, 2.100, 0.00),
+    (102, 1, 3, 0.800, 5.00), (102, 2, 3, 0.770, 5.00), (102, 3, 3, 0.740, 5.00), (102, 4, 3, 0.710, 5.00), (102, 5, 3, 0.680, 5.00),
+    (110, 1, 2, 1.150, 0.00), (110, 2, 2, 1.180, 0.00), (110, 3, 2, 1.210, 0.00), (110, 4, 2, 1.240, 0.00), (110, 5, 2, 1.270, 0.00),
+    (201, 1, 1, 1.800, 0.00), (201, 2, 1, 1.900, 0.00), (201, 3, 1, 2.000, 0.00), (201, 4, 1, 2.100, 0.00), (201, 5, 1, 2.200, 0.00),
+    (201, 6, 1, 2.300, 0.00), (201, 7, 1, 2.400, 0.00), (201, 8, 1, 2.500, 0.00), (201, 9, 1, 2.600, 0.00), (201, 10, 1, 2.700, 0.00),
+    (202, 1, 1, 0.900, 0.00), (202, 2, 1, 0.950, 0.00), (202, 3, 1, 1.000, 0.00), (202, 4, 1, 1.050, 0.00), (202, 5, 1, 1.100, 0.00),
+    (202, 6, 1, 1.150, 0.00), (202, 7, 1, 1.200, 0.00), (202, 8, 1, 1.250, 0.00), (202, 9, 1, 1.300, 0.00), (202, 10, 1, 1.350, 0.00),
+    (210, 1, 2, 1.100, 0.00), (210, 2, 2, 1.120, 0.00), (210, 3, 2, 1.140, 0.00), (210, 4, 2, 1.160, 0.00), (210, 5, 2, 1.180, 0.00),
+    (301, 1, 1, 2.000, 0.00), (301, 2, 1, 2.150, 0.00), (301, 3, 1, 2.300, 0.00), (301, 4, 1, 2.450, 0.00), (301, 5, 1, 2.600, 0.00),
+    (301, 6, 1, 2.750, 0.00), (301, 7, 1, 2.900, 0.00), (301, 8, 1, 3.050, 0.00), (301, 9, 1, 3.200, 0.00), (301, 10, 1, 3.350, 0.00),
+    (302, 1, 3, 0.500, 3.00), (302, 2, 3, 0.480, 3.00), (302, 3, 3, 0.460, 3.00), (302, 4, 3, 0.440, 3.00), (302, 5, 3, 0.420, 3.00),
+    (302, 6, 3, 0.400, 3.00), (302, 7, 3, 0.380, 3.00), (302, 8, 3, 0.360, 3.00), (302, 9, 3, 0.340, 3.00), (302, 10, 3, 0.320, 3.00),
+    (310, 1, 2, 1.150, 0.00), (310, 2, 2, 1.180, 0.00), (310, 3, 2, 1.210, 0.00), (310, 4, 2, 1.240, 0.00), (310, 5, 2, 1.270, 0.00);
 
 
 -- =====================================================================

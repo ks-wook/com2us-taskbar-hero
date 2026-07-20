@@ -60,6 +60,7 @@
 ```mermaid
 erDiagram
     class_master     ||--o{ skill_master      : "직업별 스킬"
+    skill_master     ||--o{ skill_coefficient : "레벨·타입별 계수(자식)"
     stage_master     ||--o{ stage_spawn        : "스폰(자식)"
     monster_master   ||--o{ stage_spawn        : "등장 몬스터"
     stage_master     ||--|| stage_reward       : "클리어 보상(1:1)"
@@ -78,6 +79,7 @@ erDiagram
     equip_slot_master { int slot PK }
     enhance_master { int enhance_level PK }
     skill_master { int skill_code PK }
+    skill_coefficient { int skill_code PK }
     rune_master { int rune_code PK }
     monster_master { int monster_code PK }
     stage_master { int stage_id PK }
@@ -97,7 +99,8 @@ erDiagram
 | `item_master` | 아이템(장비·재료)·재화 정의 | 500종 이상 |
 | `equip_slot_master` | 장비 장착 슬롯 정의 | 6~8종 |
 | `enhance_master` | 강화 단계별 비용·효과 | 단계 수만큼 |
-| `skill_master` | 직업별 스킬 정의 | 직업 × 스킬 |
+| `skill_master` | 직업별 스킬 정의(이름·코드·액티브/패시브·최대 레벨) | 직업 × 스킬 |
+| `skill_coefficient` | 스킬별 레벨·타입별 계수·지속시간(`skill_master` 자식, 1:N) | 스킬 × 타입 × 레벨(= 타입 수 × `max_level`) |
 | `rune_master` | 룬(Rune Tree) 정의 | 트리 노드 수 |
 | `monster_master` | 몬스터 전투 스탯 | 50종 이상 |
 | `stage_master` | 스테이지 구성(보스) | 3 Act × 2 난이도 × 3 = 18 |
@@ -226,7 +229,9 @@ erDiagram
 
 ### 5.6 `skill_master` — 스킬
 
-`player_skill.skill_code`가 참조하는 스킬 정의. 직업별로 보유하는 스킬이 다르다.
+`player_skill.skill_code`가 참조하는 스킬 정의. 직업별로 보유하는 스킬이 다르다. **스킬 이름·코드 등 정의는 `skill_master`에, 레벨·타입별 계수와 지속시간은 `skill_coefficient` 자식 테이블에** 나눠 담는다(1:N). 스킬마다 최대 레벨이 달라 **필요한 계수의 개수가 다르므로**, 계수를 스킬 정의에 고정 컬럼으로 두지 않고 레벨·타입당 1행으로 분리한다. 구 `category`(스킬 성격)와 `buff_duration`·`debuff_duration`(지속시간)도 **`skill_master`에서 빼서** 이 계수 행으로 내렸다 — 계수 자체가 타입(공격/버프/디버프)을 갖기 때문이다.
+
+**`skill_master` (스킬 정의)**
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -234,27 +239,43 @@ erDiagram
 | `class_code` | int FK | 소속 직업(`class_master`) |
 | `name` | varchar | 스킬 이름 |
 | `skill_type` | int | **1:액티브 2:패시브**. 액티브는 캐릭터당 2개까지 장착([성장 시스템 기획서](../growth-기획서.md) 5.3), 패시브는 상시 적용 |
-| `category` | int | **스킬 분류 1:공격 2:버프 3:디버프** |
-| `skill_coef` | decimal | **1레벨(습득) 기준** 스킬 계수. 공격=공격력 대비 데미지 배율(1.2=120%), 버프=대상 스탯 증가 배율(1.15=+15%), 디버프=대상 스탯 감소 배율(0.8=−20%) |
-| `coef_growth` | decimal | 레벨당 계수 변화량. 실제 계수 `coef(L) = skill_coef + coef_growth × (L−1)`. 공격·버프 ≥0, 디버프 ≤0 |
-| `buff_duration` | decimal | 버프 지속시간(초). 버프가 아니거나 패시브 상시면 0 |
-| `debuff_duration` | decimal | 디버프 지속시간(초). 디버프가 아니면 0 |
-| `max_level` | int | 최대 레벨 |
+| `max_level` | int | 최대 레벨(= `skill_coefficient`의 타입별 행 수) |
 
-> **효과 모델(변경)**: 구 `effect_per_level`(레벨별 효과 배열)은 폐기했다. 대신 스킬의 성격을 `category`(공격/버프/디버프)로 구분하고, 효과 크기는 `skill_coef`, 지속시간은 `buff_duration`/`debuff_duration`(초)으로 나눠 담는다. 지속시간은 해당 분류에만 쓰고 나머지는 0이며, 패시브 상시 버프도 `buff_duration=0`(무한)으로 둔다.
+**`skill_coefficient` (skill_master 자식 테이블 · 레벨·타입별 계수, 1:N)**
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `skill_code` | int PK/FK | 스킬(`skill_master`) |
+| `skill_level` | int PK | 스킬 레벨(1~`max_level`) |
+| `coef_type` | int PK | **계수 타입 1:공격 2:버프 3:디버프**(구 `skill_master.category`를 계수 행으로 내림) |
+| `coef` | decimal | 해당 레벨·타입의 계수. 공격=공격력 대비 데미지 배율(1.2=120%), 버프=대상 스탯 증가 배율(1.15=+15%), 디버프=대상 스탯 감소 배율(0.8=−20%) |
+| `duration` | decimal | 버프/디버프 지속시간(초). 공격 타입은 0, 패시브 상시 버프도 0(무한). 현재는 레벨 무관 동일 |
+
+> **효과 모델(변경)**: 구 `effect_per_level`(레벨별 효과 배열)·`skill_coef`+`coef_growth`(선형 계수 2필드)에 이어, `skill_master`의 `category`·`buff_duration`·`debuff_duration`도 폐기(이관)했다. 이제 스킬 효과는 **`skill_coefficient`의 레벨·타입별 행**이 온전히 표현한다 — 각 행은 `coef_type`(공격/버프/디버프)으로 성격을, `coef`로 크기를, `duration`으로 지속시간을 담는다. 계수가 타입을 가지므로 한 스킬이 레벨마다 **여러 타입의 효과**(예: 공격+디버프)를 가질 수도 있다(현재 데이터는 스킬당 1타입).
 >
-> **레벨별 계수(선형)**: `skill_coef`는 1레벨 기준값이고, 스킬 레벨 `L`(1~`max_level`)의 실제 계수는 `coef(L) = skill_coef + coef_growth × (L−1)`로 계산한다. 공격·버프는 `coef_growth ≥ 0`(레벨↑ → 강해짐), 디버프는 `coef_growth ≤ 0`(감소 배율이 작아져 강해짐), `0`이면 레벨 무관 고정이다.
+> **레벨별 계수(자유 곡선)**: 계수는 더 이상 선형식으로 파생하지 않고 레벨마다 값을 직접 기입하므로 비선형 성장도 표현할 수 있다. 현재 값은 구 선형식 `coef(L)=skill_coef+coef_growth×(L−1)`을 그대로 전개해 채웠다(동작 동일). 계수 행 수 = (스킬 타입 수) × `max_level`.
 
 **담기는 데이터 예시**
 
-| skill_code | class_code | name | skill_type | category | skill_coef | coef_growth | buff_duration | debuff_duration | max_level |
-|---|---|---|---|---|---|---|---|---|---|
-| 101 | 1 | 방패 강타 | 1 | 1 (공격) | 1.2 | 0.1 | 0 | 0 | 10 |
-| 102 | 1 | 도발 | 1 | 3 (디버프) | 0.8 | -0.03 | 0 | 5.0 | 5 |
-| 110 | 1 | 강철 피부 | 2 | 2 (버프) | 1.15 | 0.03 | 0 | 0 | 5 |
-| 201 | 2 | 정조준 사격 | 1 | 1 (공격) | 1.8 | 0.1 | 0 | 0 | 10 |
+`skill_master`
 
-> `skill_type=2`(패시브)는 장착 슬롯을 차지하지 않고 배운 즉시 상시 적용된다. `skill_type=1`(액티브)만 캐릭터당 2개 장착 제한을 받는다. 예: `방패 강타`는 10레벨에서 `1.2 + 0.1×9 = 2.1`배. 실제 데이터·계수 값은 [마스터 데이터 값](master-data-값.md) §4를 정본으로 한다.
+| skill_code | class_code | name | skill_type | max_level |
+|---|---|---|---|---|
+| 101 | 1 | 방패 강타 | 1 | 10 |
+| 102 | 1 | 도발 | 1 | 5 |
+| 110 | 1 | 강철 피부 | 2 | 5 |
+
+`skill_coefficient` (스킬 `101` 공격·`102` 디버프 발췌)
+
+| skill_code | skill_level | coef_type | coef | duration |
+|---|---|---|---|---|
+| 101 | 1 | 1 (공격) | 1.2 | 0 |
+| … | … | 1 (공격) | … | 0 |
+| 101 | 10 | 1 (공격) | 2.1 | 0 |
+| 102 | 1 | 3 (디버프) | 0.8 | 5.0 |
+| 102 | 5 | 3 (디버프) | 0.68 | 5.0 |
+
+> `skill_type=2`(패시브)는 장착 슬롯을 차지하지 않고 배운 즉시 상시 적용된다. `skill_type=1`(액티브)만 캐릭터당 2개 장착 제한을 받는다. 예: `방패 강타`는 10레벨 공격 계수가 `2.1`배(`skill_coefficient`의 `(101, 10, 1)` 행). 실제 데이터·계수 값은 [마스터 데이터 값](master-data-값.md) §4를 정본으로 한다.
 
 ### 5.7 `rune_master` — 룬(Rune Tree)
 
@@ -441,7 +462,7 @@ erDiagram
 
 - **키 규칙**: `stage_master`는 `(act, difficulty, stage)`를 인코딩한 `stage_id`를 PK로 쓰고, `stage_reward`는 같은 `stage_id`를 PK/FK로 써 스테이지와 1:1 대응한다.
 - **enum 공유**: `item_type`(1:장비 2:재료 3:재화)·`unlock_type`·`reward_type`·룬 `stat_type`(1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도) 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상). 재화는 별도 `currency_type` enum 없이 `item_master`(item_type=3)의 `item_code`로 식별한다(골드=1).
-- **JSON 컬럼 금지(설계 규칙)**: DB 테이블에는 JSON 문자열 컬럼을 두지 않는다. 고정 스키마 값은 개별 컬럼(예: 스탯 `hp`~`cooldown`)으로, 배열·중첩 등 반복 구조는 **별도 자식 테이블**(예: `stage_master` 스폰 → `stage_spawn`, 향후 `box`의 등급 가중치·아이템 풀, `cube`의 레시피도 자식 테이블)로 분리한다. 단 **클라 번들 JSON·POCO는 예외**로, 전송 편의상 이 컬럼/자식 행들을 중첩 객체·배열로 직렬화한다(DB↔번들, 5.1·7장).
+- **JSON 컬럼 금지(설계 규칙)**: DB 테이블에는 JSON 문자열 컬럼을 두지 않는다. 고정 스키마 값은 개별 컬럼(예: 스탯 `hp`~`cooldown`)으로, 배열·중첩 등 반복 구조는 **별도 자식 테이블**(예: `stage_master` 스폰 → `stage_spawn`, `skill_master`의 레벨별 계수 → `skill_coefficient`, 향후 `box`의 등급 가중치·아이템 풀, `cube`의 레시피도 자식 테이블)로 분리한다. 단 **클라 번들 JSON·POCO는 예외**로, 전송 편의상 이 컬럼/자식 행들을 중첩 객체·배열로 직렬화한다(DB↔번들, 5.1·7장).
 
 ## 6. 클라이언트가 보유하는 데이터 범위
 
@@ -453,7 +474,7 @@ erDiagram
 | `level_master` | 레벨별 스탯 보너스·요구 경험치 | 🔴 전투 필수 |
 | `item_master` | 장비 기본 옵션 + 재화(골드) 정의 | 🔴 전투 필수 |
 | `enhance_master` | 강화 단계별 스탯 배율 | 🔴 전투 필수 |
-| `skill_master` | 스킬 분류(공격/버프/디버프)·계수·지속시간 | 🔴 전투 필수 |
+| `skill_master` (+`skill_coefficient`) | 스킬 정의 + 레벨·타입별(공격/버프/디버프) 계수·지속시간 | 🔴 전투 필수 |
 | `rune_master` | 룬 효과(% 보너스) | 🔴 전투 필수 |
 | `monster_master` | 몬스터 스탯(HP·공격력) | 🔴 전투 필수 |
 | `stage_master` | 스테이지 스폰·보스 구성 | 🔴 전투 필수 |
@@ -550,6 +571,16 @@ namespace TaskbarHero.Common.MasterData
         public StatMultiplier statMultiplier;
     }
 
+    // 스킬 레벨·타입별 계수 1행. DB skill_coefficient 자식 테이블에 대응(번들 JSON은 배열로 직렬화).
+    [Serializable]
+    public struct SkillCoef
+    {
+        public int   skillLevel;  // 1~maxLevel
+        public int   coefType;    // 1:공격 2:버프 3:디버프
+        public float coef;        // 해당 레벨·타입 계수(공격=데미지 배율, 버프/디버프=대상 스탯 배율)
+        public float duration;    // 버프/디버프 지속(초). 공격은 0, 패시브 상시 버프도 0
+    }
+
     [Serializable]
     public class SkillMaster
     {
@@ -557,11 +588,7 @@ namespace TaskbarHero.Common.MasterData
         public int classCode;
         public string name;
         public int skillType;         // 1:액티브 2:패시브
-        public int category;          // 1:공격 2:버프 3:디버프
-        public float skillCoef;       // 1레벨 기준 계수. 공격=데미지 배율, 버프/디버프=대상 스탯 배율
-        public float coefGrowth;      // 레벨당 계수 변화량. coef(L)=skillCoef+coefGrowth*(L-1). 디버프는 음수
-        public float buffDuration;    // 버프 지속(초). 버프가 아니거나 패시브 상시면 0
-        public float debuffDuration;  // 디버프 지속(초). 디버프가 아니면 0
+        public SkillCoef[] coefs;     // 레벨·타입별 계수 행. DB는 skill_coefficient 자식 테이블. 개수 = 타입 수 × maxLevel
         public int maxLevel;
     }
 
@@ -730,20 +757,22 @@ public class CombatCalculator
         return s;
     }
 
-    // 스킬 레벨 L의 실제 계수 = base + 레벨당 변화량 × (L-1) (선형). L은 1~maxLevel로 클램프.
-    public float SkillCoef(int skillCode, int skillLevel)
+    // 스킬 레벨 L·타입 coefType의 실제 계수 = skill_coefficient의 (skillCode, L, coefType) 행 값. 없으면 0.
+    // coefType: 1=공격 2=버프 3=디버프. L은 1~maxLevel로 클램프.
+    public float SkillCoef(int skillCode, int skillLevel, int coefType)
     {
         var sk = db.Skills[skillCode];
+        if (sk.coefs == null) return 0f;
         int L = skillLevel; if (L < 1) L = 1; if (L > sk.maxLevel) L = sk.maxLevel;
-        return sk.skillCoef + sk.coefGrowth * (L - 1);
+        foreach (var c in sk.coefs)
+            if (c.coefType == coefType && c.skillLevel == L) return c.coef;
+        return 0f;   // 해당 타입 효과가 없는 스킬
     }
 
-    // 액티브 공격 스킬 1히트 기본 데미지 = 공격력 × 스킬 계수(공격 스킬만; 그 외 0)
+    // 액티브 공격 스킬 1히트 기본 데미지 = 공격력 × 공격(coefType=1) 계수. 공격 계수 없으면 0.
     public long SkillDamage(long attack, int skillCode, int skillLevel)
     {
-        var sk = db.Skills[skillCode];
-        if (sk.category != 1) return 0;                 // 1=공격만 데미지 계산
-        return (long)(attack * SkillCoef(skillCode, skillLevel));   // 예: 10레벨 방패 강타 → 2.1배
+        return (long)(attack * SkillCoef(skillCode, skillLevel, 1));   // 예: 10레벨 방패 강타 → 2.1배
     }
 
     // 치명타 기대 데미지 = 기본 × (1 + 치명확률 × (치명데미지 - 1))
@@ -798,7 +827,7 @@ public class CombatCalculator
 
 - **각 마스터 테이블 세부 필드·수치·밸런스**: 직업·아이템·성장·스테이지 등 도메인 기획서에서 확정(본 문서는 골격과 예시 위주).
 - **비공격 스탯 강화·룬**: 현재 강화는 공격력 배율, 룬은 공격력 %만 반영. 방어·치명·이동속도·쿨다운 강화/룬 효과 도입 여부.
-- **스킬 효과 확장**: 현재 스킬 효과는 `category`(공격/버프/디버프) + `skill_coef` + 지속시간으로 단순화했다. 버프/디버프가 **어떤 스탯**에 작용하는지(공격·방어·이동속도 등)를 구분할 필드(예: `target_stat`)나 다중 효과가 필요해지면 확장한다.
+- **스킬 효과 확장**: 현재 스킬 효과는 `skill_coefficient`의 레벨·타입별 행(`coef_type` 공격/버프/디버프 + `coef` + `duration`)으로 표현한다. 계수가 타입을 가지므로 한 스킬에 여러 타입 효과를 붙일 수 있으나, 버프/디버프가 **어떤 스탯**에 작용하는지(공격·방어·이동속도 등)를 구분할 필드(예: `target_stat`)가 필요해지면 확장한다.
 - **룬 stat_type 적용 범위**: 룬 효과는 `stat_type`(int) + `stat_value`로 확정했다. 현재 예시 계산기(`CombatCalculator`)는 `stat_type=1`(공격력)만 스탯에 반영하며, 방어·치명·이동속도 등(2·3·5·6) 반영은 전투 공식 확정 시 함께 처리한다.
 
 ## 10. 참고

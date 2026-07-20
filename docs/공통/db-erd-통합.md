@@ -334,7 +334,7 @@ erDiagram
 ### skill_master
 
 - **역할**: 직업별 액티브/패시브 스킬 정의. `player_skill.skill_code`가 참조.
-- **정의 데이터**: 소속 직업, 스킬 타입(액티브/패시브)·분류(공격·버프·디버프), 계수·레벨당 성장·지속시간, 최대 스킬 레벨.
+- **정의 데이터**: 소속 직업, 스킬 타입(액티브/패시브), 최대 스킬 레벨. 계수·성격(공격/버프/디버프)·지속시간은 스킬마다 개수가 달라 자식 테이블 `skill_coefficient`(`(skill_code, skill_level, coef_type, coef, duration)`)로 1:N 분리 — `coef_type`이 계수의 타입(공격/버프/디버프)이고 `duration`이 버프/디버프 지속시간이다.
 
 ### rune_master
 
