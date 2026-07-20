@@ -1,0 +1,1430 @@
+fileFormatVersion: 2
+guid: de348f53cce8f734b99665872b8db750
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -292603383479251176
+    second: MageFireBurst_14_0
+  - first:
+      213: 4138423640956004605
+    second: MageFireBurst_14_1
+  - first:
+      213: -6890228575166289865
+    second: MageFireBurst_14_2
+  - first:
+      213: 8490182925957188497
+    second: MageFireBurst_14_3
+  - first:
+      213: 2015915973199871578
+    second: MageFireBurst_14_4
+  - first:
+      213: 7595943662874478902
+    second: MageFireBurst_14_5
+  - first:
+      213: -2304854915897522956
+    second: MageFireBurst_14_6
+  - first:
+      213: 5158529909735497788
+    second: MageFireBurst_14_7
+  - first:
+      213: -2880771520576773723
+    second: MageFireBurst_14_8
+  - first:
+      213: -7563837438878049237
+    second: MageFireBurst_14_9
+  - first:
+      213: 5019178885489661288
+    second: MageFireBurst_14_10
+  - first:
+      213: -5023368851565866780
+    second: MageFireBurst_14_11
+  - first:
+      213: 1948547315858817160
+    second: MageFireBurst_14_12
+  - first:
+      213: -577271832584147490
+    second: MageFireBurst_14_13
+  - first:
+      213: 7124502972748950452
+    second: MageFireBurst_14_14
+  - first:
+      213: -5946614503788007048
+    second: MageFireBurst_14_15
+  - first:
+      213: -4059692800485750999
+    second: MageFireBurst_14_16
+  - first:
+      213: 6041735663045622203
+    second: MageFireBurst_14_17
+  - first:
+      213: -4495841896760164284
+    second: MageFireBurst_14_18
+  - first:
+      213: 5457716813163643085
+    second: MageFireBurst_14_19
+  - first:
+      213: 2899925933682938360
+    second: MageFireBurst_14_20
+  - first:
+      213: 3265404653235187977
+    second: MageFireBurst_14_21
+  - first:
+      213: 6950069255987162666
+    second: MageFireBurst_14_22
+  - first:
+      213: -4853025377063176979
+    second: MageFireBurst_14_23
+  - first:
+      213: -7404718224788660188
+    second: MageFireBurst_14_24
+  - first:
+      213: -6475591130969854549
+    second: MageFireBurst_14_25
+  - first:
+      213: -3106160127906072876
+    second: MageFireBurst_14_26
+  - first:
+      213: -3115400827147993024
+    second: MageFireBurst_14_27
+  - first:
+      213: 2685006781979630491
+    second: MageFireBurst_14_28
+  - first:
+      213: -5446769727207787579
+    second: MageFireBurst_14_29
+  - first:
+      213: -3523144750271500983
+    second: MageFireBurst_14_30
+  - first:
+      213: 983112174798932242
+    second: MageFireBurst_14_31
+  - first:
+      213: -6842249409954520210
+    second: MageFireBurst_14_32
+  - first:
+      213: 3310163335235333148
+    second: MageFireBurst_14_33
+  - first:
+      213: 6065423341367953940
+    second: MageFireBurst_14_34
+  - first:
+      213: -4798689789102174272
+    second: MageFireBurst_14_35
+  - first:
+      213: -4796258798751034741
+    second: MageFireBurst_14_36
+  - first:
+      213: -8227962030850744625
+    second: MageFireBurst_14_37
+  - first:
+      213: 2566797527051571067
+    second: MageFireBurst_14_38
+  - first:
+      213: 8780870409086545149
+    second: MageFireBurst_14_39
+  - first:
+      213: 2002940490783807682
+    second: MageFireBurst_14_40
+  - first:
+      213: -2667597839277865176
+    second: MageFireBurst_14_41
+  - first:
+      213: 7386719349859768260
+    second: MageFireBurst_14_42
+  - first:
+      213: 5254928255053123235
+    second: MageFireBurst_14_43
+  - first:
+      213: -5752474115209788365
+    second: MageFireBurst_14_44
+  - first:
+      213: 3151672180560481224
+    second: MageFireBurst_14_45
+  - first:
+      213: -7904727206203486208
+    second: MageFireBurst_14_46
+  - first:
+      213: -8611870051248287333
+    second: MageFireBurst_14_47
+  - first:
+      213: 9158047602999304024
+    second: MageFireBurst_14_48
+  - first:
+      213: -8211736826407667421
+    second: MageFireBurst_14_49
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: MageFireBurst_14_0
+      rect:
+        serializedVersion: 2
+        x: 215
+        y: 391
+        width: 42
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 81f44a3e5c670fbf0800000000000000
+      internalID: -292603383479251176
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_1
+      rect:
+        serializedVersion: 2
+        x: 279
+        y: 423
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: df8e2490062ae6930800000000000000
+      internalID: 4138423640956004605
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_2
+      rect:
+        serializedVersion: 2
+        x: 191
+        y: 375
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 738a7fbed9df060a0800000000000000
+      internalID: -6890228575166289865
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_3
+      rect:
+        serializedVersion: 2
+        x: 303
+        y: 383
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 19bc3c3636033d570800000000000000
+      internalID: 8490182925957188497
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_4
+      rect:
+        serializedVersion: 2
+        x: 343
+        y: 391
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a5e3d9795e8f9fb10800000000000000
+      internalID: 2015915973199871578
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_5
+      rect:
+        serializedVersion: 2
+        x: 127
+        y: 335
+        width: 66
+        height: 50
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 639438f24863a6960800000000000000
+      internalID: 7595943662874478902
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_6
+      rect:
+        serializedVersion: 2
+        x: 191
+        y: 343
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4f48d176aa28300e0800000000000000
+      internalID: -2304854915897522956
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_7
+      rect:
+        serializedVersion: 2
+        x: 239
+        y: 327
+        width: 66
+        height: 58
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c3023013f97c69740800000000000000
+      internalID: 5158529909735497788
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_8
+      rect:
+        serializedVersion: 2
+        x: 319
+        y: 335
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5a1a5f4a0917508d0800000000000000
+      internalID: -2880771520576773723
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_9
+      rect:
+        serializedVersion: 2
+        x: 375
+        y: 343
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b2c9fdc9ce9d70790800000000000000
+      internalID: -7563837438878049237
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_10
+      rect:
+        serializedVersion: 2
+        x: 143
+        y: 319
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 86590c58a94b7a540800000000000000
+      internalID: 5019178885489661288
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_11
+      rect:
+        serializedVersion: 2
+        x: 199
+        y: 311
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4e097aaf4a8694ab0800000000000000
+      internalID: -5023368851565866780
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_12
+      rect:
+        serializedVersion: 2
+        x: 215
+        y: 311
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8804ecdb571aa0b10800000000000000
+      internalID: 1948547315858817160
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_13
+      rect:
+        serializedVersion: 2
+        x: 327
+        y: 311
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: eddabf7a35e1df7f0800000000000000
+      internalID: -577271832584147490
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_14
+      rect:
+        serializedVersion: 2
+        x: 359
+        y: 303
+        width: 42
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4bb6aebd4b15fd260800000000000000
+      internalID: 7124502972748950452
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_15
+      rect:
+        serializedVersion: 2
+        x: 119
+        y: 303
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 871b7858d91697da0800000000000000
+      internalID: -5946614503788007048
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_16
+      rect:
+        serializedVersion: 2
+        x: 151
+        y: 295
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 92706d938e219a7c0800000000000000
+      internalID: -4059692800485750999
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_17
+      rect:
+        serializedVersion: 2
+        x: 199
+        y: 295
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bb9b4a6339e88d350800000000000000
+      internalID: 6041735663045622203
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_18
+      rect:
+        serializedVersion: 2
+        x: 215
+        y: 231
+        width: 90
+        height: 82
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 440ca496d9f8b91c0800000000000000
+      internalID: -4495841896760164284
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_19
+      rect:
+        serializedVersion: 2
+        x: 119
+        y: 287
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: dc0cb4d7684bdbb40800000000000000
+      internalID: 5457716813163643085
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_20
+      rect:
+        serializedVersion: 2
+        x: 167
+        y: 255
+        width: 26
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8f15d10b54b9e3820800000000000000
+      internalID: 2899925933682938360
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_21
+      rect:
+        serializedVersion: 2
+        x: 199
+        y: 279
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 901bdf33b3c015d20800000000000000
+      internalID: 3265404653235187977
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_22
+      rect:
+        serializedVersion: 2
+        x: 335
+        y: 279
+        width: 18
+        height: 18
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a2e6a7f4a2b937060800000000000000
+      internalID: 6950069255987162666
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_23
+      rect:
+        serializedVersion: 2
+        x: 119
+        y: 239
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: de4713ac12796acb0800000000000000
+      internalID: -4853025377063176979
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_24
+      rect:
+        serializedVersion: 2
+        x: 151
+        y: 239
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4206c95a1082d3990800000000000000
+      internalID: -7404718224788660188
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_25
+      rect:
+        serializedVersion: 2
+        x: 183
+        y: 223
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bad2fdfec241226a0800000000000000
+      internalID: -6475591130969854549
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_26
+      rect:
+        serializedVersion: 2
+        x: 351
+        y: 247
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4d63da022d3b4e4d0800000000000000
+      internalID: -3106160127906072876
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_27
+      rect:
+        serializedVersion: 2
+        x: 367
+        y: 239
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 040c2ec247fd3c4d0800000000000000
+      internalID: -3115400827147993024
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_28
+      rect:
+        serializedVersion: 2
+        x: 383
+        y: 247
+        width: 18
+        height: 18
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b9b1963417f034520800000000000000
+      internalID: 2685006781979630491
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_29
+      rect:
+        serializedVersion: 2
+        x: 311
+        y: 231
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5c3bd649acf2964b0800000000000000
+      internalID: -5446769727207787579
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_30
+      rect:
+        serializedVersion: 2
+        x: 343
+        y: 223
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 94de8cb14864b1fc0800000000000000
+      internalID: -3523144750271500983
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_31
+      rect:
+        serializedVersion: 2
+        x: 383
+        y: 199
+        width: 26
+        height: 42
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 21980417057b4ad00800000000000000
+      internalID: 983112174798932242
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_32
+      rect:
+        serializedVersion: 2
+        x: 119
+        y: 215
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e63e807d9627b01a0800000000000000
+      internalID: -6842249409954520210
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_33
+      rect:
+        serializedVersion: 2
+        x: 135
+        y: 207
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c1c6931f30010fd20800000000000000
+      internalID: 3310163335235333148
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_34
+      rect:
+        serializedVersion: 2
+        x: 199
+        y: 207
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 41a899a9466bc2450800000000000000
+      internalID: 6065423341367953940
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_35
+      rect:
+        serializedVersion: 2
+        x: 271
+        y: 215
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0cf4545bf01a76db0800000000000000
+      internalID: -4798689789102174272
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_36
+      rect:
+        serializedVersion: 2
+        x: 159
+        y: 167
+        width: 26
+        height: 42
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b825a91c804407db0800000000000000
+      internalID: -4796258798751034741
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_37
+      rect:
+        serializedVersion: 2
+        x: 191
+        y: 159
+        width: 42
+        height: 42
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fce5db5602860dd80800000000000000
+      internalID: -8227962030850744625
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_38
+      rect:
+        serializedVersion: 2
+        x: 223
+        y: 191
+        width: 10
+        height: 18
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b7f824a50c81f9320800000000000000
+      internalID: 2566797527051571067
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_39
+      rect:
+        serializedVersion: 2
+        x: 239
+        y: 175
+        width: 26
+        height: 18
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: dfca7503d1bebd970800000000000000
+      internalID: 8780870409086545149
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_40
+      rect:
+        serializedVersion: 2
+        x: 271
+        y: 167
+        width: 50
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2c85a6ba3cfdbcb10800000000000000
+      internalID: 2002940490783807682
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_41
+      rect:
+        serializedVersion: 2
+        x: 367
+        y: 191
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8274e3216e9cafad0800000000000000
+      internalID: -2667597839277865176
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_42
+      rect:
+        serializedVersion: 2
+        x: 191
+        y: 151
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4c755e7bc16e28660800000000000000
+      internalID: 7386719349859768260
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_43
+      rect:
+        serializedVersion: 2
+        x: 231
+        y: 143
+        width: 18
+        height: 18
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3aeca9af7614de840800000000000000
+      internalID: 5254928255053123235
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_44
+      rect:
+        serializedVersion: 2
+        x: 295
+        y: 127
+        width: 66
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3348a47254b1b20b0800000000000000
+      internalID: -5752474115209788365
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_45
+      rect:
+        serializedVersion: 2
+        x: 167
+        y: 135
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8cbc9c2662dfcbb20800000000000000
+      internalID: 3151672180560481224
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_46
+      rect:
+        serializedVersion: 2
+        x: 231
+        y: 111
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 00010ebac74cc4290800000000000000
+      internalID: -7904727206203486208
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_47
+      rect:
+        serializedVersion: 2
+        x: 263
+        y: 135
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b915587e0dd7c7880800000000000000
+      internalID: -8611870051248287333
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_48
+      rect:
+        serializedVersion: 2
+        x: 271
+        y: 119
+        width: 18
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 85f14e406cbe71f70800000000000000
+      internalID: 9158047602999304024
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFireBurst_14_49
+      rect:
+        serializedVersion: 2
+        x: 303
+        y: 111
+        width: 10
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3293af03ddc0a0e80800000000000000
+      internalID: -8211736826407667421
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      MageFireBurst_14_0: -292603383479251176
+      MageFireBurst_14_1: 4138423640956004605
+      MageFireBurst_14_10: 5019178885489661288
+      MageFireBurst_14_11: -5023368851565866780
+      MageFireBurst_14_12: 1948547315858817160
+      MageFireBurst_14_13: -577271832584147490
+      MageFireBurst_14_14: 7124502972748950452
+      MageFireBurst_14_15: -5946614503788007048
+      MageFireBurst_14_16: -4059692800485750999
+      MageFireBurst_14_17: 6041735663045622203
+      MageFireBurst_14_18: -4495841896760164284
+      MageFireBurst_14_19: 5457716813163643085
+      MageFireBurst_14_2: -6890228575166289865
+      MageFireBurst_14_20: 2899925933682938360
+      MageFireBurst_14_21: 3265404653235187977
+      MageFireBurst_14_22: 6950069255987162666
+      MageFireBurst_14_23: -4853025377063176979
+      MageFireBurst_14_24: -7404718224788660188
+      MageFireBurst_14_25: -6475591130969854549
+      MageFireBurst_14_26: -3106160127906072876
+      MageFireBurst_14_27: -3115400827147993024
+      MageFireBurst_14_28: 2685006781979630491
+      MageFireBurst_14_29: -5446769727207787579
+      MageFireBurst_14_3: 8490182925957188497
+      MageFireBurst_14_30: -3523144750271500983
+      MageFireBurst_14_31: 983112174798932242
+      MageFireBurst_14_32: -6842249409954520210
+      MageFireBurst_14_33: 3310163335235333148
+      MageFireBurst_14_34: 6065423341367953940
+      MageFireBurst_14_35: -4798689789102174272
+      MageFireBurst_14_36: -4796258798751034741
+      MageFireBurst_14_37: -8227962030850744625
+      MageFireBurst_14_38: 2566797527051571067
+      MageFireBurst_14_39: 8780870409086545149
+      MageFireBurst_14_4: 2015915973199871578
+      MageFireBurst_14_40: 2002940490783807682
+      MageFireBurst_14_41: -2667597839277865176
+      MageFireBurst_14_42: 7386719349859768260
+      MageFireBurst_14_43: 5254928255053123235
+      MageFireBurst_14_44: -5752474115209788365
+      MageFireBurst_14_45: 3151672180560481224
+      MageFireBurst_14_46: -7904727206203486208
+      MageFireBurst_14_47: -8611870051248287333
+      MageFireBurst_14_48: 9158047602999304024
+      MageFireBurst_14_49: -8211736826407667421
+      MageFireBurst_14_5: 7595943662874478902
+      MageFireBurst_14_6: -2304854915897522956
+      MageFireBurst_14_7: 5158529909735497788
+      MageFireBurst_14_8: -2880771520576773723
+      MageFireBurst_14_9: -7563837438878049237
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
