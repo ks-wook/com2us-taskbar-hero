@@ -29,6 +29,10 @@ CREATE DATABASE IF NOT EXISTS taskbar_hero_account
     DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE taskbar_hero_account;
 
+-- 연결 charset을 utf8mb4로 강제한다(클라이언트 기본이 latin1이면 한글 주석/데이터가 이중 인코딩되어 깨진다).
+-- SET NAMES는 세션 전역이라 이후 USE taskbar_hero_game 구역까지 함께 적용된다.
+SET NAMES utf8mb4;
+
 -- 재실행 시 초기화(FK 무시하고 DROP → 재생성). 구역 끝에서 다시 1로 되돌린다.
 SET FOREIGN_KEY_CHECKS = 0;
 

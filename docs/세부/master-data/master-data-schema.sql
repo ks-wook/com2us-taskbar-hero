@@ -34,6 +34,10 @@ CREATE DATABASE IF NOT EXISTS taskbar_hero_master
     DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE taskbar_hero_master;
 
+-- 연결 charset을 utf8mb4로 강제한다. 클라이언트 기본이 latin1이면(이 MySQL 이미지의 기본)
+-- UTF-8 한글이 이중 인코딩되어 깨진 채 저장되므로, 실행 클라이언트와 무관하게 여기서 고정한다.
+SET NAMES utf8mb4;
+
 -- 재실행 시 초기화(FK 무시하고 DROP → 재생성). 스크립트 끝에서 다시 1로 되돌린다.
 SET FOREIGN_KEY_CHECKS = 0;
 
