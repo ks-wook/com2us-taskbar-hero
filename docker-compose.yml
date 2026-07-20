@@ -1,0 +1,39 @@
+# Taskbar Hero 모작 — 로컬 개발용 MySQL 컨테이너
+#
+# 사용법
+#   docker compose up -d        # 이미지 다운로드 + 백그라운드 실행
+#   docker compose logs -f mysql # 초기화 로그 확인
+#   docker compose down          # 중지(데이터는 볼륨에 유지)
+#   docker compose down -v       # 중지 + 데이터 볼륨까지 삭제(완전 초기화)
+#
+# 첫 기동 시 docs/의 스키마 SQL이 /docker-entrypoint-initdb.d 에서 알파벳 순으로 실행되어
+# account/game/master DB를 생성한다. (init 스크립트는 데이터 볼륨이 비어 있을 때만 동작)
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: taskbar-hero-mysql
+    restart: unless-stopped
+    # MySQL 8은 기본 utf8mb4지만 서버 기본값을 스키마와 맞춰 명시한다.
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: taskbar_hero_dev
+      TZ: Asia/Seoul
+    ports:
+      - "3306:3306"
+    volumes:
+      - taskbar-hero-mysql-data:/var/lib/mysql
+      # 첫 기동 시 스키마 자동 생성(읽기 전용 마운트). 파일명 접두 숫자로 실행 순서 고정.
+      - ./docs/공통/db-schema.sql:/docker-entrypoint-initdb.d/01-db-schema.sql:ro
+      - ./docs/세부/master-data/master-data-schema.sql:/docker-entrypoint-initdb.d/02-master-data-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  taskbar-hero-mysql-data:
