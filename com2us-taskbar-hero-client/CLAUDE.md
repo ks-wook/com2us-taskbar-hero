@@ -31,6 +31,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 규칙
 
 - **서버 통신 코드나 DTO는 `TaskbarHero.Common`의 타입을 그대로 사용한다.** 클라이언트에서 중복 정의하지 말 것. 특히 에러 코드는 `ErrorCode`(namespace `TaskbarHero.Common`)를 참조한다.
+- **API 요청/응답 DTO는 `TaskbarHero.Common/Dto`의 공유 DTO(namespace `TaskbarHero.Common.Dto`)를 그대로 사용한다.** 예: 로그인/회원가입은 `LoginRequest`·`LoginResponse`·`SignupRequest`·`SignupResponse`. 클라이언트에 별도 DTO 클래스(예: `LoginRequestDto`)를 만들지 말 것. 필요한 DTO가 없으면 클라이언트가 아니라 `TaskbarHero.Common/Dto`에 추가해 서버와 공유한다. 이 DTO들은 `[Serializable]` + public camelCase 필드라 Unity `JsonUtility`와 서버 `System.Text.Json`(IncludeFields) 양쪽에서 동일 JSON으로 직렬화된다.
 - **`TaskbarHero.Common`은 로컬 UPM 패키지로 참조한다.** `Packages/manifest.json`에 `"com.com2us.taskbarhero.common": "file:../../TaskbarHero.Common"`로 등록되어 있으며, 상위 저장소의 `TaskbarHero.Common/` 폴더 소스를 Unity가 직접 컴파일한다(어셈블리명 `TaskbarHero.Common`, `autoReferenced`라 별도 asmdef 참조 없이 사용 가능). 이 라이브러리는 서버와 공유하는 `netstandard2.0` 코드이므로 여기에 Unity 전용 의존성을 넣지 말 것.
 - 새 C# 코드를 추가할 때는 기능 단위로 `.asmdef`(Assembly Definition)를 만들어 컴파일 범위를 나눈다. 첫 스크립트 작성 시 폴더 구조와 asmdef 컨벤션을 먼저 정한다.
+- **매니저 클래스는 `Assets/Scripts/Managers`에 둔다.** 싱글턴 성격의 전역 관리자(예: `UIManager`, `SceneManager`)는 이 폴더에 정리하며, 어셈블리는 `TaskbarHero.Client.Managers`(asmdef)로 묶고 네임스페이스도 `TaskbarHero.Client.Managers`를 사용한다.
 - HTTP 통신은 Unity의 `UnityWebRequest`(manifest에 포함됨)를 사용한다.

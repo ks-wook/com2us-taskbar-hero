@@ -8,7 +8,13 @@
     (Unity가 로컬 패키지로 이 폴더의 .cs를 직접 컴파일하므로 생성 .cs 중복 컴파일 방지).
   -->
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <!--
+      멀티 타겟: netstandard2.0(Unity 클라이언트 공유 소스용) + net10.0(서버 참조용).
+      Unity는 이 폴더의 소스를 asmdef로 직접 컴파일하므로 TFM 목록과 무관하다.
+      서버(net10.0)가 동일 TFM(net10.0)의 Common 출력을 참조하게 되어, dotnet watch의
+      교차 TFM 상관 경고("일치하는 메타데이터 참조가 없는 프로젝트 참조")가 사라진다.
+    -->
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>9.0</LangVersion>

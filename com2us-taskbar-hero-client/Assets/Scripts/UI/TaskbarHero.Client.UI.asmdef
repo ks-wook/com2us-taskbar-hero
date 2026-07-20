@@ -1,0 +1,19 @@
+{
+    "name": "TaskbarHero.Client.UI",
+    "rootNamespace": "TaskbarHero.Client.UI",
+    "references": [
+        "TaskbarHero.Common",
+        "TaskbarHero.Client.Managers",
+        "Unity.InputSystem",
+        "UnityEngine.UI"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -1,0 +1,988 @@
+fileFormatVersion: 2
+guid: 95e0138a27039be47aa78c38c97aced1
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 5367367630126817892
+    second: com2us_taskbar_hero_logo_0
+  - first:
+      213: -2309460494963072309
+    second: com2us_taskbar_hero_logo_1
+  - first:
+      213: -8651350177575418800
+    second: com2us_taskbar_hero_logo_2
+  - first:
+      213: 5085055910868833082
+    second: com2us_taskbar_hero_logo_3
+  - first:
+      213: 2424122664005624263
+    second: com2us_taskbar_hero_logo_4
+  - first:
+      213: -7542410561314879652
+    second: com2us_taskbar_hero_logo_5
+  - first:
+      213: 3008166470774925086
+    second: com2us_taskbar_hero_logo_6
+  - first:
+      213: -573859558434591976
+    second: com2us_taskbar_hero_logo_7
+  - first:
+      213: -1382929221695321444
+    second: com2us_taskbar_hero_logo_8
+  - first:
+      213: -3247549787816339403
+    second: com2us_taskbar_hero_logo_9
+  - first:
+      213: 3902330516849901903
+    second: com2us_taskbar_hero_logo_10
+  - first:
+      213: 6432427958249098496
+    second: com2us_taskbar_hero_logo_11
+  - first:
+      213: -7033339154157945568
+    second: com2us_taskbar_hero_logo_12
+  - first:
+      213: -5005652782540012120
+    second: com2us_taskbar_hero_logo_13
+  - first:
+      213: -2160501980438597523
+    second: com2us_taskbar_hero_logo_14
+  - first:
+      213: -5145503397937459241
+    second: com2us_taskbar_hero_logo_15
+  - first:
+      213: -4491844956638974351
+    second: com2us_taskbar_hero_logo_16
+  - first:
+      213: -6649742297961297518
+    second: com2us_taskbar_hero_logo_17
+  - first:
+      213: -2110152843547687299
+    second: com2us_taskbar_hero_logo_18
+  - first:
+      213: -7489041549320393765
+    second: com2us_taskbar_hero_logo_19
+  - first:
+      213: -4231347987802750967
+    second: com2us_taskbar_hero_logo_20
+  - first:
+      213: 1214017467420667175
+    second: com2us_taskbar_hero_logo_21
+  - first:
+      213: -8413197661512690293
+    second: com2us_taskbar_hero_logo_22
+  - first:
+      213: 3648507616592172868
+    second: com2us_taskbar_hero_logo_23
+  - first:
+      213: 909268568821474620
+    second: com2us_taskbar_hero_logo_24
+  - first:
+      213: -8107100515942396457
+    second: com2us_taskbar_hero_logo_25
+  - first:
+      213: -1883125742137356582
+    second: com2us_taskbar_hero_logo_26
+  - first:
+      213: 2626309931201846234
+    second: com2us_taskbar_hero_logo_27
+  - first:
+      213: -4134857150259728634
+    second: com2us_taskbar_hero_logo_28
+  - first:
+      213: 4964066374071729865
+    second: com2us_taskbar_hero_logo_29
+  - first:
+      213: -2830816690652606160
+    second: com2us_taskbar_hero_logo_30
+  - first:
+      213: -7669355540465806122
+    second: com2us_taskbar_hero_logo_31
+  - first:
+      213: 7364225637490771425
+    second: com2us_taskbar_hero_logo_32
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_0
+      rect:
+        serializedVersion: 2
+        x: 194
+        y: 550
+        width: 226
+        height: 240
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 462a3ac0c68bc7a40800000000000000
+      internalID: 5367367630126817892
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_1
+      rect:
+        serializedVersion: 2
+        x: 433
+        y: 550
+        width: 236
+        height: 240
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bc2ade67ae523ffd0800000000000000
+      internalID: -2309460494963072309
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_2
+      rect:
+        serializedVersion: 2
+        x: 689
+        y: 555
+        width: 305
+        height: 235
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 054ca1ea9da30f780800000000000000
+      internalID: -8651350177575418800
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_3
+      rect:
+        serializedVersion: 2
+        x: 1026
+        y: 555
+        width: 164
+        height: 235
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a33565eb86fb19640800000000000000
+      internalID: 5085055910868833082
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_4
+      rect:
+        serializedVersion: 2
+        x: 1291
+        y: 708
+        width: 55
+        height: 82
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7c1670828b634a120800000000000000
+      internalID: 2424122664005624263
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_5
+      rect:
+        serializedVersion: 2
+        x: 1379
+        y: 708
+        width: 55
+        height: 82
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c570cae4e89f35790800000000000000
+      internalID: -7542410561314879652
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_6
+      rect:
+        serializedVersion: 2
+        x: 1527
+        y: 550
+        width: 187
+        height: 240
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e17a7cb97772fb920800000000000000
+      internalID: 3008166470774925086
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_7
+      rect:
+        serializedVersion: 2
+        x: 1211
+        y: 550
+        width: 303
+        height: 144
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 81b2b84a5cd3908f0800000000000000
+      internalID: -573859558434591976
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_8
+      rect:
+        serializedVersion: 2
+        x: 76
+        y: 198
+        width: 126
+        height: 152
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c9ac75f2339decce0800000000000000
+      internalID: -1382929221695321444
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_9
+      rect:
+        serializedVersion: 2
+        x: 218
+        y: 198
+        width: 143
+        height: 152
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 538dfca9ca26ee2d0800000000000000
+      internalID: -3247549787816339403
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_10
+      rect:
+        serializedVersion: 2
+        x: 379
+        y: 194
+        width: 130
+        height: 158
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f41410dfdecd72630800000000000000
+      internalID: 3902330516849901903
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_11
+      rect:
+        serializedVersion: 2
+        x: 540
+        y: 198
+        width: 137
+        height: 152
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 00d8ab6c523944950800000000000000
+      internalID: 6432427958249098496
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_12
+      rect:
+        serializedVersion: 2
+        x: 612
+        y: 336
+        width: 684
+        height: 112
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 02db193bd4f846e90800000000000000
+      internalID: -7033339154157945568
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_13
+      rect:
+        serializedVersion: 2
+        x: 701
+        y: 198
+        width: 126
+        height: 152
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8a5c1cbb059588ab0800000000000000
+      internalID: -5005652782540012120
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_14
+      rect:
+        serializedVersion: 2
+        x: 845
+        y: 198
+        width: 143
+        height: 152
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d60fd6745ea5402e0800000000000000
+      internalID: -2160501980438597523
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_15
+      rect:
+        serializedVersion: 2
+        x: 1013
+        y: 198
+        width: 129
+        height: 152
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7df4f5febef7798b0800000000000000
+      internalID: -5145503397937459241
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_16
+      rect:
+        serializedVersion: 2
+        x: 1222
+        y: 204
+        width: 113
+        height: 139
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 17e676d8fc2c9a1c0800000000000000
+      internalID: -4491844956638974351
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_17
+      rect:
+        serializedVersion: 2
+        x: 1385
+        y: 204
+        width: 107
+        height: 139
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2998022ac9e57b3a0800000000000000
+      internalID: -6649742297961297518
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_18
+      rect:
+        serializedVersion: 2
+        x: 1535
+        y: 204
+        width: 116
+        height: 140
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d764f8a3b2b37b2e0800000000000000
+      internalID: -2110152843547687299
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_19
+      rect:
+        serializedVersion: 2
+        x: 1688
+        y: 200
+        width: 135
+        height: 146
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bdbed98b364911890800000000000000
+      internalID: -7489041549320393765
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_20
+      rect:
+        serializedVersion: 2
+        x: 526
+        y: 80
+        width: 18
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 90004f97c6b3745c0800000000000000
+      internalID: -4231347987802750967
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_21
+      rect:
+        serializedVersion: 2
+        x: 567
+        y: 78
+        width: 48
+        height: 56
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 72d6ab8547e09d010800000000000000
+      internalID: 1214017467420667175
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_22
+      rect:
+        serializedVersion: 2
+        x: 636
+        y: 80
+        width: 41
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b8593684d415e3b80800000000000000
+      internalID: -8413197661512690293
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_23
+      rect:
+        serializedVersion: 2
+        x: 698
+        y: 80
+        width: 44
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 447984fb85a12a230800000000000000
+      internalID: 3648507616592172868
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_24
+      rect:
+        serializedVersion: 2
+        x: 797
+        y: 78
+        width: 52
+        height: 56
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c35280222fe5e9c00800000000000000
+      internalID: 909268568821474620
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_25
+      rect:
+        serializedVersion: 2
+        x: 868
+        y: 78
+        width: 48
+        height: 56
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7dd0ed4b80bcd7f80800000000000000
+      internalID: -8107100515942396457
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_26
+      rect:
+        serializedVersion: 2
+        x: 933
+        y: 78
+        width: 49
+        height: 56
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ade42806d1bcdd5e0800000000000000
+      internalID: -1883125742137356582
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_27
+      rect:
+        serializedVersion: 2
+        x: 1002
+        y: 80
+        width: 44
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: adbdd57b7f6827420800000000000000
+      internalID: 2626309931201846234
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_28
+      rect:
+        serializedVersion: 2
+        x: 1069
+        y: 78
+        width: 45
+        height: 56
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 60fe8c944590e96c0800000000000000
+      internalID: -4134857150259728634
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_29
+      rect:
+        serializedVersion: 2
+        x: 1134
+        y: 80
+        width: 47
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9ceb1040118e3e440800000000000000
+      internalID: 4964066374071729865
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_30
+      rect:
+        serializedVersion: 2
+        x: 1201
+        y: 76
+        width: 46
+        height: 58
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0319769d73be6b8d0800000000000000
+      internalID: -2830816690652606160
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_31
+      rect:
+        serializedVersion: 2
+        x: 1271
+        y: 78
+        width: 47
+        height: 56
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6d49c5a15c9f09590800000000000000
+      internalID: -7669355540465806122
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: com2us_taskbar_hero_logo_32
+      rect:
+        serializedVersion: 2
+        x: 1339
+        y: 80
+        width: 44
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1e54670333cf23660800000000000000
+      internalID: 7364225637490771425
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      com2us_taskbar_hero_logo_0: 5367367630126817892
+      com2us_taskbar_hero_logo_1: -2309460494963072309
+      com2us_taskbar_hero_logo_10: 3902330516849901903
+      com2us_taskbar_hero_logo_11: 6432427958249098496
+      com2us_taskbar_hero_logo_12: -7033339154157945568
+      com2us_taskbar_hero_logo_13: -5005652782540012120
+      com2us_taskbar_hero_logo_14: -2160501980438597523
+      com2us_taskbar_hero_logo_15: -5145503397937459241
+      com2us_taskbar_hero_logo_16: -4491844956638974351
+      com2us_taskbar_hero_logo_17: -6649742297961297518
+      com2us_taskbar_hero_logo_18: -2110152843547687299
+      com2us_taskbar_hero_logo_19: -7489041549320393765
+      com2us_taskbar_hero_logo_2: -8651350177575418800
+      com2us_taskbar_hero_logo_20: -4231347987802750967
+      com2us_taskbar_hero_logo_21: 1214017467420667175
+      com2us_taskbar_hero_logo_22: -8413197661512690293
+      com2us_taskbar_hero_logo_23: 3648507616592172868
+      com2us_taskbar_hero_logo_24: 909268568821474620
+      com2us_taskbar_hero_logo_25: -8107100515942396457
+      com2us_taskbar_hero_logo_26: -1883125742137356582
+      com2us_taskbar_hero_logo_27: 2626309931201846234
+      com2us_taskbar_hero_logo_28: -4134857150259728634
+      com2us_taskbar_hero_logo_29: 4964066374071729865
+      com2us_taskbar_hero_logo_3: 5085055910868833082
+      com2us_taskbar_hero_logo_30: -2830816690652606160
+      com2us_taskbar_hero_logo_31: -7669355540465806122
+      com2us_taskbar_hero_logo_32: 7364225637490771425
+      com2us_taskbar_hero_logo_4: 2424122664005624263
+      com2us_taskbar_hero_logo_5: -7542410561314879652
+      com2us_taskbar_hero_logo_6: 3008166470774925086
+      com2us_taskbar_hero_logo_7: -573859558434591976
+      com2us_taskbar_hero_logo_8: -1382929221695321444
+      com2us_taskbar_hero_logo_9: -3247549787816339403
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

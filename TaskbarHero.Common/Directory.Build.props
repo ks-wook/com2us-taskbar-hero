@@ -5,10 +5,12 @@
     MSBuild가 obj/bin을 이 폴더 안에 만들면 Unity가 그 안의 생성 .cs(AssemblyInfo 등)를
     중복 컴파일해 에러가 난다. 따라서 산출물을 폴더 밖(../artifacts)으로 재배치한다.
     (Directory.Build.props는 SDK가 obj 경로를 확정하기 전에 임포트되므로 BaseIntermediateOutputPath 재배치가 가능하다.)
+
+    경로는 GetFullPath로 정규화한다('..' 세그먼트 제거).
   -->
   <PropertyGroup>
-    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\artifacts\TaskbarHero.Common\obj\</BaseIntermediateOutputPath>
-    <BaseOutputPath>$(MSBuildThisFileDirectory)..\artifacts\TaskbarHero.Common\bin\</BaseOutputPath>
+    <BaseIntermediateOutputPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\artifacts\TaskbarHero.Common\obj\'))</BaseIntermediateOutputPath>
+    <BaseOutputPath>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\artifacts\TaskbarHero.Common\bin\'))</BaseOutputPath>
   </PropertyGroup>
 
 </Project>
