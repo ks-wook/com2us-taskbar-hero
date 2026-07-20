@@ -1,6 +1,61 @@
 @AccountServer_HostAddress = http://localhost:5160
 
-GET {{AccountServer_HostAddress}}/weatherforecast/
-Accept: application/json
+### 회원가입 (성공)
+POST {{AccountServer_HostAddress}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "hero@example.com",
+  "password": "password123",
+  "nickname": "hero"
+}
+
+### 회원가입 (이메일 중복 → 409, errorCode 1003)
+POST {{AccountServer_HostAddress}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "hero@example.com",
+  "password": "password123",
+  "nickname": "hero2"
+}
+
+### 회원가입 (잘못된 요청 → 400, errorCode 1006)
+POST {{AccountServer_HostAddress}}/api/auth/signup
+Content-Type: application/json
+
+{
+  "email": "not-an-email",
+  "password": "123",
+  "nickname": ""
+}
+
+### 로그인 (성공 → userId, token 발급)
+POST {{AccountServer_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "hero@example.com",
+  "password": "password123"
+}
+
+### 로그인 (비밀번호 오류 → 401, errorCode 1002)
+POST {{AccountServer_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "hero@example.com",
+  "password": "wrongpassword"
+}
+
+### 로그아웃 (인증: body에 userId·token → 성공 시 토큰 무효화)
+POST {{AccountServer_HostAddress}}/api/auth/logout
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "token": "<로그인 응답의 token 붙여넣기>",
+  "data": {}
+}
 
 ###
