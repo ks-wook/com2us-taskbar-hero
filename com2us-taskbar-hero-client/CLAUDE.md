@@ -36,3 +36,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - 새 C# 코드를 추가할 때는 기능 단위로 `.asmdef`(Assembly Definition)를 만들어 컴파일 범위를 나눈다. 첫 스크립트 작성 시 폴더 구조와 asmdef 컨벤션을 먼저 정한다.
 - **매니저 클래스는 `Assets/Scripts/Managers`에 둔다.** 싱글턴 성격의 전역 관리자(예: `UIManager`, `SceneManager`)는 이 폴더에 정리하며, 어셈블리는 `TaskbarHero.Client.Managers`(asmdef)로 묶고 네임스페이스도 `TaskbarHero.Client.Managers`를 사용한다.
 - HTTP 통신은 Unity의 `UnityWebRequest`(manifest에 포함됨)를 사용한다.
+- **네트워크 테스트는 명시적으로 요청받지 않는 한 하지 않는다.** 클라이언트 기능 구현 시 실제 서버(AccountServer·GameServer)로의 API 호출 검증은 사용자가 명시적으로 요청한 경우에만 수행한다. 그 외에는 컴파일·씬 구성·UI 흐름·씬 전환 등 서버 없이 확인 가능한 부분만 검증하고, 네트워크 연동 코드는 작성·배선까지만 하고 라이브 호출 검증은 생략한다.
