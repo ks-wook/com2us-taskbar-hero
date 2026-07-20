@@ -17,6 +17,15 @@ namespace TaskbarHero.Common.Dto
         public object data;
     }
 
+    /// <summary>인증만 필요한(추가 데이터 없는) 게임 API 요청 body. { userId, token }
+    /// load·update-last-active 등 payload가 없는 인증 엔드포인트에 사용한다.</summary>
+    [Serializable]
+    public class AuthRequest
+    {
+        public long userId;
+        public string token;
+    }
+
     /// <summary>캐릭터 생성 요청 body(인증). { userId, token, data:{ nickname, classCode } }</summary>
     [Serializable]
     public class CreateCharacterRequest
@@ -101,6 +110,8 @@ namespace TaskbarHero.Common.Dto
     [Serializable]
     public class LoadDataDto
     {
+        // 신규 계정이면 서버가 { isNew:true }만 반환하므로 true, 기존 계정이면 false(미포함→기본값).
+        public bool isNew;
         public PlayerDto player = new PlayerDto();
         public List<CharacterDto> characters = new List<CharacterDto>();
         public List<CurrencyDto> currencies = new List<CurrencyDto>();
@@ -109,5 +120,15 @@ namespace TaskbarHero.Common.Dto
         public List<RuneDto> runes = new List<RuneDto>();
         public CubeDto cube = new CubeDto();
         public long offlineElapsedSec;
+    }
+
+    /// <summary>세이브 로드 응답 { success, errorCode, message, data(LoadDataDto) }.</summary>
+    [Serializable]
+    public class LoadResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public LoadDataDto data = new LoadDataDto();
     }
 }
