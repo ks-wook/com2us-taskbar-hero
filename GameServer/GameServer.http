@@ -1,6 +1,37 @@
 @GameServer_HostAddress = http://localhost:5247
 
-GET {{GameServer_HostAddress}}/weatherforecast/
-Accept: application/json
+# 아래 요청은 모두 인증 필요: body의 userId·token을 AccountServer 로그인 응답값으로 채운다.
+@userId = 1
+@token = <AccountServer 로그인 응답의 token 붙여넣기>
+
+### 세이브 로드(신규는 { isNew:true }, 기존은 전체 스냅샷)
+POST {{GameServer_HostAddress}}/api/game/load
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": {}
+}
+
+### 캐릭터 생성(최초는 nickname+classCode, 이후는 classCode만)
+POST {{GameServer_HostAddress}}/api/game/create-character
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": { "nickname": "hero", "classCode": 1 }
+}
+
+### 접속 시각 갱신(heartbeat, 클라가 5분 주기 호출)
+POST {{GameServer_HostAddress}}/api/game/update-last-active
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": {}
+}
 
 ###

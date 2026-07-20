@@ -1,41 +1,60 @@
+using CloudStructures;
+using GameServer.Auth;
+using GameServer.Data;
+using GameServer.MasterData;
+using GameServer.Repositories;
+using GameServer.Services;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+// MVC 컨트롤러 + OpenAPI.
+// DTO는 TaskbarHero.Common의 [Serializable] + public 필드(Unity JsonUtility 공유용)이므로
+// System.Text.Json이 필드도 직렬화하도록 IncludeFields를 켠다.
+builder.Services.AddControllers()
+    .AddJsonOptions(options => options.JsonSerializerOptions.IncludeFields = true);
 builder.Services.AddOpenApi();
 
+// DB 접근 팩토리(SqlKata + MySqlConnector).
+builder.Services.AddSingleton<GameDbFactory>();
+builder.Services.AddSingleton<MasterDbFactory>();
+
+// 마스터 데이터 인메모리 캐시(기동 시 1회 적재).
+builder.Services.AddSingleton<MasterDataProvider>();
+
+// Redis 토큰 조회기(CloudStructures) — 인증 미들웨어가 사용.
+builder.Services.AddSingleton(_ =>
+{
+    var connectionString = builder.Configuration.GetValue("Redis:ConnectionString", "127.0.0.1:6379")!;
+    return new RedisConnection(new RedisConfig("game", connectionString));
+});
+builder.Services.AddSingleton<IAuthTokenReader, RedisAuthTokenReader>();
+
+// 세이브 계층: Controller → Service → Repository.
+builder.Services.AddScoped<ISaveRepository, SaveRepository>();
+builder.Services.AddScoped<ISaveService, SaveService>();
+
 var app = builder.Build();
+
+// 마스터 데이터 기동 시 적재(실패 시 IsLoaded=false → 관련 요청은 MasterDataNotLoaded).
+await app.Services.GetRequiredService<MasterDataProvider>().LoadAsync();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    // Swagger UI(/swagger)에서 위 OpenAPI 문서(/openapi/v1.json)를 렌더링한다.
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/openapi/v1.json", "GameServer v1");
+        options.RoutePrefix = "swagger";
+    });
 }
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+// 게임 API 인증(요청 body의 userId·token을 Redis와 대조).
+app.UseMiddleware<GameAuthMiddleware>();
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

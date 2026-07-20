@@ -1,0 +1,168 @@
+using GameServer.MasterData;
+using GameServer.Repositories;
+using MySqlConnector;
+using TaskbarHero.Common;
+using TaskbarHero.Common.Dto;
+
+namespace GameServer.Services;
+
+/// <summary>세이브 API 처리 결과. 성공 메시지는 엔드포인트별로 다르므로 함께 담는다.</summary>
+public readonly record struct SaveResult(ErrorCode ErrorCode, string SuccessMessage, object? Data);
+
+public interface ISaveService
+{
+    Task<SaveResult> LoadAsync(long userId);
+    Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode);
+    Task<SaveResult> UpdateLastActiveAsync(long userId);
+}
+
+public sealed class SaveService : ISaveService
+{
+    // 신규 계정 기본 인벤토리 용량(인벤토리 기획서: 기본값에서 시작해 골드로 확장). load 예시 기준 100.
+    private const int InitialInventoryCapacity = 100;
+    private const int MaxCharacterSlots = 3;
+    private const int MySqlDuplicateEntry = 1062;
+
+    private readonly ISaveRepository _saveRepository;
+    private readonly MasterDataProvider _masterData;
+    private readonly ILogger<SaveService> _logger;
+
+    public SaveService(ISaveRepository saveRepository, MasterDataProvider masterData, ILogger<SaveService> logger)
+    {
+        _saveRepository = saveRepository;
+        _masterData = masterData;
+        _logger = logger;
+    }
+
+    public async Task<SaveResult> LoadAsync(long userId)
+    {
+        var player = await _saveRepository.GetPlayerAsync(userId);
+        if (player is null)
+        {
+            return new SaveResult(ErrorCode.Success, "New player", new { isNew = true });
+        }
+
+        var characters = await _saveRepository.GetCharactersAsync(userId);
+        var (currencies, inventory) = await _saveRepository.GetInventoryAsync(userId);
+        var skills = await _saveRepository.GetSkillsAsync(userId);
+        var runes = await _saveRepository.GetRunesAsync(userId);
+        var cube = await _saveRepository.GetCubeAsync(userId) ?? new CubeDto { cubeLevel = 1, cubeExp = 0 };
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var offlineElapsed = Math.Max(0, now - player.lastActiveAt);
+
+        var data = new LoadDataDto
+        {
+            player = player,
+            characters = characters,
+            currencies = currencies,
+            inventory = inventory,
+            skills = skills,
+            runes = runes,
+            cube = cube,
+            offlineElapsedSec = offlineElapsed,
+        };
+
+        return new SaveResult(ErrorCode.Success, "Load successful", data);
+    }
+
+    public async Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode)
+    {
+        // 마스터 미로드 시 직업 검증 불가.
+        if (!_masterData.IsLoaded)
+        {
+            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+        }
+
+        // 존재하지 않는 직업 코드.
+        if (!_masterData.IsValidClass(classCode))
+        {
+            return new SaveResult(ErrorCode.InvalidClassCode, string.Empty, null);
+        }
+
+        var player = await _saveRepository.GetPlayerAsync(userId);
+
+        // 최초 생성: game_player 초기화 + 1번 슬롯.
+        if (player is null)
+        {
+            if (string.IsNullOrWhiteSpace(nickname))
+            {
+                return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
+            }
+
+            try
+            {
+                await _saveRepository.CreatePlayerWithFirstCharacterAsync(
+                    userId, nickname.Trim(), classCode, InitialInventoryCapacity,
+                    DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            }
+            catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
+            {
+                // 동시 초기화 경합.
+                _logger.LogWarning("계정 초기화 경합 감지: user {UserId}", userId);
+                return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
+            }
+
+            return SuccessCharacter(userId, 1, classCode);
+        }
+
+        // 기존 계정: 슬롯 여유·직업 중복 검사 후 추가.
+        var slots = await _saveRepository.GetCharacterSlotsAsync(userId);
+        if (slots.Count >= MaxCharacterSlots)
+        {
+            return new SaveResult(ErrorCode.PlayerAlreadyExists, string.Empty, null);
+        }
+
+        if (slots.Any(s => s.ClassCode == classCode))
+        {
+            return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
+        }
+
+        var newSlot = FirstFreeSlot(slots);
+
+        try
+        {
+            await _saveRepository.AddCharacterAsync(userId, newSlot, classCode);
+        }
+        catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
+        {
+            // 슬롯/직업 유니크 경합(동시 생성).
+            return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
+        }
+
+        return SuccessCharacter(userId, newSlot, classCode);
+    }
+
+    public async Task<SaveResult> UpdateLastActiveAsync(long userId)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var affected = await _saveRepository.UpdateLastActiveAsync(userId, now);
+        if (affected == 0)
+        {
+            // 아직 계정 세이브(game_player)가 없음.
+            return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+        }
+
+        return new SaveResult(ErrorCode.Success, "Heartbeat OK", new { lastActiveAt = now });
+    }
+
+    private static SaveResult SuccessCharacter(long userId, int characterId, int classCode)
+        => new(ErrorCode.Success, "Character created",
+            new { userId, characterId, classCode, level = 1 });
+
+    /// <summary>1~3 슬롯 중 사용되지 않은 가장 작은 번호.</summary>
+    private static int FirstFreeSlot(IReadOnlyCollection<CharacterSlot> slots)
+    {
+        var used = slots.Select(s => s.CharacterId).ToHashSet();
+        for (var slot = 1; slot <= MaxCharacterSlots; slot++)
+        {
+            if (!used.Contains(slot))
+            {
+                return slot;
+            }
+        }
+
+        // 슬롯이 가득 찬 경우는 호출 전에 걸러지므로 도달하지 않는다.
+        throw new InvalidOperationException("빈 캐릭터 슬롯이 없습니다.");
+    }
+}
