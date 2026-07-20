@@ -37,3 +37,4 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **매니저 클래스는 `Assets/Scripts/Managers`에 둔다.** 싱글턴 성격의 전역 관리자(예: `UIManager`, `SceneManager`)는 이 폴더에 정리하며, 어셈블리는 `TaskbarHero.Client.Managers`(asmdef)로 묶고 네임스페이스도 `TaskbarHero.Client.Managers`를 사용한다.
 - HTTP 통신은 Unity의 `UnityWebRequest`(manifest에 포함됨)를 사용한다.
 - **네트워크 테스트는 명시적으로 요청받지 않는 한 하지 않는다.** 클라이언트 기능 구현 시 실제 서버(AccountServer·GameServer)로의 API 호출 검증은 사용자가 명시적으로 요청한 경우에만 수행한다. 그 외에는 컴파일·씬 구성·UI 흐름·씬 전환 등 서버 없이 확인 가능한 부분만 검증하고, 네트워크 연동 코드는 작성·배선까지만 하고 라이브 호출 검증은 생략한다.
+- **클라이언트 기능 완료 시 README 현황판 갱신.** 클라이언트 측 기능 구현이 완료되면 상위 저장소 `README.md`「개발 현황」 체크리스트에서 해당 기능의 **`클라 실연동`** 칸 상태 기호를 갱신한다(☐ 미착수 → ◐ 진행 중 → ☑ 완료). 서버 실연동까지 검증된 기능만 ☑로 표시하고, 코드 배선만 된 경우는 ◐로 둔다.
