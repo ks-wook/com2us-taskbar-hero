@@ -25,11 +25,11 @@ namespace TaskbarHero.Client.Managers
         [Tooltip("요청 타임아웃(초). 0이면 무제한.")]
         [SerializeField] private int timeoutSeconds = 10;
 
-        /// <summary>로그인 후 발급받은 인증 토큰. 설정되어 있으면 요청 헤더(Authorization: Bearer)에 자동 첨부된다.</summary>
-        public string AuthToken { get; set; }
+        /// <summary>로그인 인증 토큰(캐시된 세션에서 조회). 있으면 요청 헤더(Authorization: Bearer)에 자동 첨부된다.</summary>
+        public string AuthToken => Session.Token;
 
-        /// <summary>로그인한 유저 ID.</summary>
-        public long UserId { get; set; }
+        /// <summary>로그인한 유저 ID(캐시된 세션에서 조회).</summary>
+        public long UserId => Session.UserId;
 
         public string AccountServerBaseUrl => accountServerBaseUrl;
         public string GameServerBaseUrl => gameServerBaseUrl;

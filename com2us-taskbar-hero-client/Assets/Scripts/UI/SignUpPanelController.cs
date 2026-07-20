@@ -57,6 +57,9 @@ namespace TaskbarHero.Client.UI
             SetError("가입 중...");
             SetInteractable(false);
 
+            // 입력한 닉네임을 세션에 캐싱(로그인 후 캐릭터 생성 시 계정 닉네임으로 사용).
+            Session.Nickname = nickname;
+
             var request = new SignupRequest { email = email, password = password, nickname = nickname };
             NetworkManager.Instance.PostToAccount<SignupResponse>("/api/auth/signup", request, OnSignUpSuccess, OnSignUpError);
         }

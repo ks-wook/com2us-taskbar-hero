@@ -14,6 +14,19 @@ namespace TaskbarHero.Client.UI
     {
         public static DevLogConsole Instance { get; private set; }
 
+        /// <summary>
+        /// 어떤 씬에서 시작하든 로그창이 항상 존재하도록, 첫 씬 로드 전에 인스턴스를 자동 생성한다.
+        /// (씬마다 배치할 필요 없이 DontDestroyOnLoad로 모든 씬에서 유지된다.)
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void Bootstrap()
+        {
+            if (Instance == null)
+            {
+                new GameObject("DevLogConsole").AddComponent<DevLogConsole>();
+            }
+        }
+
         [Header("설정")]
         [Tooltip("보관할 최대 로그 줄 수.")]
         [SerializeField] private int maxLines = 200;

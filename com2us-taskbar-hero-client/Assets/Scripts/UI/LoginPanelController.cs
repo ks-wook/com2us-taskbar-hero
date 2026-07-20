@@ -61,14 +61,43 @@ namespace TaskbarHero.Client.UI
 
         private void OnLoginSuccess(LoginResponse response)
         {
+            // 로그인 계정 정보를 세션에 캐싱(이후 인증 API 요청에서 재사용).
+            Session.SetAuth(response.userId, response.token);
+
+            Debug.Log($"[LoginPanel] 로그인 성공. userId={response.userId} → 게임 데이터 로드");
+            SetError("데이터 로드 중...");
+
+            // 로그인 성공 → 세이브 스냅샷 로드(/api/game/load, 인증 필요).
+            var request = new AuthRequest { userId = Session.UserId, token = Session.Token };
+            NetworkManager.Instance.PostToGame<LoadResponse>("/api/game/load", request, OnLoadSuccess, OnLoadError);
+        }
+
+        private void OnLoadSuccess(LoadResponse response)
+        {
             SetInteractable(true);
-
-            NetworkManager.Instance.AuthToken = response.token;
-            NetworkManager.Instance.UserId = response.userId;
-
             SetError(string.Empty);
-            Debug.Log($"[LoginPanel] 로그인 성공. userId={response.userId}");
-            // TODO: 로그인 성공 후 게임(로비) 씬 전환 등 다음 흐름 연결.
+
+            bool hasCharacter = !response.data.isNew && response.data.characters != null && response.data.characters.Count > 0;
+            Debug.Log($"[LoginPanel] 게임 데이터 로드 완료. isNew={response.data.isNew}, 캐릭터수={(response.data.characters != null ? response.data.characters.Count : 0)}");
+
+            // 로그인 시점의 세이브 스냅샷을 세션에 캐싱(닉네임도 함께 갱신).
+            Session.SetGameData(response.data);
+
+            if (SceneManager.Instance == null)
+            {
+                SetError("씬 매니저를 찾을 수 없습니다.");
+                return;
+            }
+
+            // 신규 계정(또는 캐릭터 없음)이면 캐릭터 생성 씬으로, 아니면 게임 씬으로 전환.
+            SceneManager.Instance.LoadScene(hasCharacter ? "GameScene" : "CreateCharacterScene");
+        }
+
+        private void OnLoadError(NetworkError error)
+        {
+            SetInteractable(true);
+            SetError(ErrorMessages.ToKorean(error));
+            Debug.LogWarning($"[LoginPanel] 게임 데이터 로드 실패: {error}");
         }
 
         private void OnLoginError(NetworkError error)
