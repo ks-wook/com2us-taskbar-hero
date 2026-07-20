@@ -34,3 +34,4 @@
 - `TaskbarHero.Common`은 Unity/게임 클라이언트와 공유하기 위해 의도적으로 `netstandard2.0`을 타겟팅하고 implicit usings와 nullable을 *비활성화*한다. 프레임워크 중립적으로 유지하고, 서버 전용 의존성을 추가하지 않는다.
 - MySQL DB 연동은 **SqlKata**를 사용해 개발한다. 쿼리는 SqlKata의 쿼리 빌더로 작성하고, 원시(raw) SQL 문자열을 직접 조립하지 않는다.
 - Redis와의 통신은 **CloudStructures**를 사용한다. Redis 접근은 CloudStructures가 제공하는 타입 구조체를 통해 처리한다.
+- **작업 완료 시 README 현황판 갱신**: 기능/작업이 완료되면 `README.md`의 「개발 현황」 체크리스트에서 해당 항목의 상태 기호를 갱신한다(☐ 미착수 → ◐ 진행 중 → ☑ 완료). 서버 구현·클라 실연동·계약 확정은 각각 별도로 표시한다.
