@@ -36,6 +36,7 @@ public sealed class AuthService : IAuthService
     private readonly int _tokenExpirationHours;
     private readonly ILogger<AuthService> _logger;
 
+    /// <summary>의존성(사용자·토큰 리포지토리, 토큰 캐시, 토큰 생성기, 설정, 로거)을 주입받고 토큰 만료 시간을 읽는다.</summary>
     public AuthService(
         IUserRepository userRepository,
         IAuthTokenRepository authTokenRepository,
@@ -52,6 +53,10 @@ public sealed class AuthService : IAuthService
         _logger = logger;
     }
 
+    /// <summary>
+    /// 회원가입을 처리한다. 입력(이메일 형식·비밀번호 최소 길이·닉네임)을 검증하고, 이메일 중복을 선검사한 뒤
+    /// 비밀번호를 BCrypt로 해시해 사용자 행을 삽입한다. 동시 삽입 경합은 UNIQUE 위반을 잡아 DuplicateEmail로 변환한다.
+    /// </summary>
     public async Task<SignupResult> SignupAsync(SignupRequest request)
     {
         // 1. 입력 검증 — 이메일 형식, 비밀번호 최소 6자, 닉네임 필수.
@@ -88,6 +93,10 @@ public sealed class AuthService : IAuthService
         }
     }
 
+    /// <summary>
+    /// 로그인을 처리한다. 입력 검증 → 이메일로 사용자 조회 → BCrypt 비밀번호 검증 후 인증 토큰을 발급하고,
+    /// MySQL에 UPSERT(기존 세션 무효화)하고 Redis에 캐싱한다(단일 세션). 성공 시 user_id와 토큰을 반환한다.
+    /// </summary>
     public async Task<LoginResult> LoginAsync(LoginRequest request)
     {
         // 1. 입력 검증.
@@ -122,6 +131,10 @@ public sealed class AuthService : IAuthService
         return new LoginResult(ErrorCode.Success, user.UserId, token);
     }
 
+    /// <summary>
+    /// 로그아웃을 처리한다. Redis 캐시 토큰과 대조해(없으면 만료, 불일치면 무효 토큰) 유효할 때만
+    /// MySQL 토큰 행과 Redis 키를 삭제해 세션을 무효화한다.
+    /// </summary>
     public async Task<ErrorCode> LogoutAsync(long userId, string token)
     {
         if (userId <= 0 || string.IsNullOrEmpty(token))
@@ -148,6 +161,7 @@ public sealed class AuthService : IAuthService
         return ErrorCode.Success;
     }
 
+    /// <summary>이메일이 비어 있지 않고 파싱 가능한 형식인지 검사한다(MailAddress 기준).</summary>
     private static bool IsValidEmail(string? email)
         => !string.IsNullOrWhiteSpace(email) && MailAddress.TryCreate(email, out _);
 }
