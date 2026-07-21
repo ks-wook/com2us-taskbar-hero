@@ -41,3 +41,4 @@
   - **컨트롤러 공통 보조 메서드**(인증 userId 추출, 공통 응답 변환, ErrorCode ↔ HTTP 상태/메시지 매핑 등)는 **베이스 컨트롤러 클래스**(`ControllerBase`를 상속한 추상 클래스, 예: `GameApiControllerBase`·`AccountApiControllerBase`)에 `protected`/`private static`으로 구현하고, 각 컨트롤러가 이를 **상속**해 사용한다.
   - 컨트롤러 작업 시 이 규칙을 매번 확인한다.
 - **기능 구현 시 빌드 및 테스트 진행**: 기능을 구현하면 반드시 빌드(`dotnet build`)로 컴파일을 확인하고, 실제 동작을 테스트로 검증한다. 빌드 성공과 테스트 통과를 확인하기 전에는 작업을 완료로 간주하지 않는다.
+- **서비스 클래스 메서드 주석 필수**: 서비스 클래스(`*Service`, 예: `AuthService`·`SaveService`·`StageService`)에 속한 **모든 메서드**(public·private 헬퍼·생성자 포함)에는 그 메서드가 **어떤 로직을 수행하는지** 설명하는 `/// <summary>` 주석을 반드시 작성한다. 새 서비스 메서드를 추가하거나 기존 메서드를 수정할 때 이 규칙을 매번 확인한다.
