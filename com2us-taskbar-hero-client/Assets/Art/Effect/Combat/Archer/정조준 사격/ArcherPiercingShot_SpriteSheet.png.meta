@@ -1,0 +1,1144 @@
+fileFormatVersion: 2
+guid: a67b891177544d747853d09cb1671986
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 484242644952255776
+    second: ArcherPiercingShot_SpriteSheet_0
+  - first:
+      213: -8389217186483873556
+    second: ArcherPiercingShot_SpriteSheet_1
+  - first:
+      213: -3395838669726450199
+    second: ArcherPiercingShot_SpriteSheet_2
+  - first:
+      213: -625462351878401655
+    second: ArcherPiercingShot_SpriteSheet_3
+  - first:
+      213: -34163303705060705
+    second: ArcherPiercingShot_SpriteSheet_4
+  - first:
+      213: -2168792366667893970
+    second: ArcherPiercingShot_SpriteSheet_5
+  - first:
+      213: 7134973053114827317
+    second: ArcherPiercingShot_SpriteSheet_6
+  - first:
+      213: -1940276936275946563
+    second: ArcherPiercingShot_SpriteSheet_7
+  - first:
+      213: 678662346044781371
+    second: ArcherPiercingShot_SpriteSheet_8
+  - first:
+      213: -6720539876005207758
+    second: ArcherPiercingShot_SpriteSheet_9
+  - first:
+      213: 2950938304309596542
+    second: ArcherPiercingShot_SpriteSheet_10
+  - first:
+      213: -1025729956933582783
+    second: ArcherPiercingShot_SpriteSheet_11
+  - first:
+      213: 8531223230475833272
+    second: ArcherPiercingShot_SpriteSheet_12
+  - first:
+      213: -6638233326425515657
+    second: ArcherPiercingShot_SpriteSheet_13
+  - first:
+      213: 7800132105717650389
+    second: ArcherPiercingShot_SpriteSheet_14
+  - first:
+      213: -7395907349602368564
+    second: ArcherPiercingShot_SpriteSheet_15
+  - first:
+      213: 3635773528777208044
+    second: ArcherPiercingShot_SpriteSheet_16
+  - first:
+      213: -2347221526405459028
+    second: ArcherPiercingShot_SpriteSheet_17
+  - first:
+      213: -8634146876949742136
+    second: ArcherPiercingShot_SpriteSheet_18
+  - first:
+      213: -8095359050209822054
+    second: ArcherPiercingShot_SpriteSheet_19
+  - first:
+      213: 271380495931937107
+    second: ArcherPiercingShot_SpriteSheet_20
+  - first:
+      213: 6197696084088164455
+    second: ArcherPiercingShot_SpriteSheet_21
+  - first:
+      213: 1763321480278600681
+    second: ArcherPiercingShot_SpriteSheet_22
+  - first:
+      213: -5994457669904922788
+    second: ArcherPiercingShot_SpriteSheet_23
+  - first:
+      213: 4237595066716514166
+    second: ArcherPiercingShot_SpriteSheet_24
+  - first:
+      213: -2921374175622808681
+    second: ArcherPiercingShot_SpriteSheet_25
+  - first:
+      213: 7142903742202213292
+    second: ArcherPiercingShot_SpriteSheet_26
+  - first:
+      213: -5423505819497697308
+    second: ArcherPiercingShot_SpriteSheet_27
+  - first:
+      213: 7589356028767204999
+    second: ArcherPiercingShot_SpriteSheet_28
+  - first:
+      213: -2637406429669157078
+    second: ArcherPiercingShot_SpriteSheet_29
+  - first:
+      213: 114406071946643709
+    second: ArcherPiercingShot_SpriteSheet_30
+  - first:
+      213: -7788714686380965980
+    second: ArcherPiercingShot_SpriteSheet_31
+  - first:
+      213: -351092399014800213
+    second: ArcherPiercingShot_SpriteSheet_32
+  - first:
+      213: 8128089605714999796
+    second: ArcherPiercingShot_SpriteSheet_33
+  - first:
+      213: 4517007450763456181
+    second: ArcherPiercingShot_SpriteSheet_34
+  - first:
+      213: 130198563776646275
+    second: ArcherPiercingShot_SpriteSheet_35
+  - first:
+      213: -3296064535443649895
+    second: ArcherPiercingShot_SpriteSheet_36
+  - first:
+      213: -7218796705097373941
+    second: ArcherPiercingShot_SpriteSheet_37
+  - first:
+      213: -7710302112998188745
+    second: ArcherPiercingShot_SpriteSheet_38
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_0
+      rect:
+        serializedVersion: 2
+        x: 999
+        y: 1059
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 02d8975be1068b600800000000000000
+      internalID: 484242644952255776
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_1
+      rect:
+        serializedVersion: 2
+        x: 1959
+        y: 1055
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ce8d608ba63839b80800000000000000
+      internalID: -8389217186483873556
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_2
+      rect:
+        serializedVersion: 2
+        x: 5759
+        y: 939
+        width: 118
+        height: 122
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9ed7b68c8be8fd0d0800000000000000
+      internalID: -3395838669726450199
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_3
+      rect:
+        serializedVersion: 2
+        x: 6719
+        y: 931
+        width: 126
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 98158e70e49e157f0800000000000000
+      internalID: -625462351878401655
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_4
+      rect:
+        serializedVersion: 2
+        x: 7679
+        y: 923
+        width: 134
+        height: 150
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f9a5e4208a0a68ff0800000000000000
+      internalID: -34163303705060705
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_5
+      rect:
+        serializedVersion: 2
+        x: 8639
+        y: 919
+        width: 138
+        height: 162
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e237e2155d6e6e1e0800000000000000
+      internalID: -2168792366667893970
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_6
+      rect:
+        serializedVersion: 2
+        x: 2923
+        y: 1047
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 532c4e86034840360800000000000000
+      internalID: 7134973053114827317
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_7
+      rect:
+        serializedVersion: 2
+        x: 3851
+        y: 955
+        width: 90
+        height: 94
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: db3936f0860c215e0800000000000000
+      internalID: -1940276936275946563
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_8
+      rect:
+        serializedVersion: 2
+        x: 4803
+        y: 947
+        width: 106
+        height: 106
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b33be6adec71b6900800000000000000
+      internalID: 678662346044781371
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_9
+      rect:
+        serializedVersion: 2
+        x: 963
+        y: 1011
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 231acd7f698dbb2a0800000000000000
+      internalID: -6720539876005207758
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_10
+      rect:
+        serializedVersion: 2
+        x: 999
+        y: 983
+        width: 38
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e719776c0c6d3f820800000000000000
+      internalID: 2950938304309596542
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_11
+      rect:
+        serializedVersion: 2
+        x: 1927
+        y: 1011
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1404f79e900e3c1f0800000000000000
+      internalID: -1025729956933582783
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_12
+      rect:
+        serializedVersion: 2
+        x: 1943
+        y: 963
+        width: 66
+        height: 70
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8bf8218e35ef46670800000000000000
+      internalID: 8531223230475833272
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_13
+      rect:
+        serializedVersion: 2
+        x: 2891
+        y: 1007
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7795f32e5f140e3a0800000000000000
+      internalID: -6638233326425515657
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_14
+      rect:
+        serializedVersion: 2
+        x: 2899
+        y: 959
+        width: 78
+        height: 78
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5d39b62c2d2af3c60800000000000000
+      internalID: 7800132105717650389
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_15
+      rect:
+        serializedVersion: 2
+        x: 987
+        y: 1003
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cc3004363757c5990800000000000000
+      internalID: -7395907349602368564
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_16
+      rect:
+        serializedVersion: 2
+        x: 1031
+        y: 967
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ce0b882e2ccd47230800000000000000
+      internalID: 3635773528777208044
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_17
+      rect:
+        serializedVersion: 2
+        x: 999
+        y: 959
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ca3d375357efc6fd0800000000000000
+      internalID: -2347221526405459028
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_18
+      rect:
+        serializedVersion: 2
+        x: 1051
+        y: 947
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8cdbcdc39295d2880800000000000000
+      internalID: -8634146876949742136
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_19
+      rect:
+        serializedVersion: 2
+        x: 2007
+        y: 951
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a9afffab5d187af80800000000000000
+      internalID: -8095359050209822054
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_20
+      rect:
+        serializedVersion: 2
+        x: 2935
+        y: 531
+        width: 406
+        height: 134
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3511efa8f1324c300800000000000000
+      internalID: 271380495931937107
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_21
+      rect:
+        serializedVersion: 2
+        x: 3895
+        y: 531
+        width: 530
+        height: 134
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 76097ed60c3a20650800000000000000
+      internalID: 6197696084088164455
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_22
+      rect:
+        serializedVersion: 2
+        x: 4855
+        y: 527
+        width: 654
+        height: 138
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9eb62d83b83987810800000000000000
+      internalID: 1763321480278600681
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_23
+      rect:
+        serializedVersion: 2
+        x: 5247
+        y: 663
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c57833c52886fcca0800000000000000
+      internalID: -5994457669904922788
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_24
+      rect:
+        serializedVersion: 2
+        x: 5815
+        y: 531
+        width: 778
+        height: 134
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 677e59de246feca30800000000000000
+      internalID: 4237595066716514166
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_25
+      rect:
+        serializedVersion: 2
+        x: 6775
+        y: 531
+        width: 906
+        height: 134
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 79bb0065aa13577d0800000000000000
+      internalID: -2921374175622808681
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_26
+      rect:
+        serializedVersion: 2
+        x: 7391
+        y: 663
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ca375cadb11b02360800000000000000
+      internalID: 7142903742202213292
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_27
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 559
+        width: 117
+        height: 82
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4ef639f2136dbb4b0800000000000000
+      internalID: -5423505819497697308
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_28
+      rect:
+        serializedVersion: 2
+        x: 1015
+        y: 579
+        width: 158
+        height: 38
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 78673a8191fc25960800000000000000
+      internalID: 7589356028767204999
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_29
+      rect:
+        serializedVersion: 2
+        x: 1975
+        y: 579
+        width: 282
+        height: 38
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a271d3763dc066bd0800000000000000
+      internalID: -2637406429669157078
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_30
+      rect:
+        serializedVersion: 2
+        x: 7735
+        y: 591
+        width: 626
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: df8078e57b3769100800000000000000
+      internalID: 114406071946643709
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_31
+      rect:
+        serializedVersion: 2
+        x: 8367
+        y: 591
+        width: 242
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4aff465524de8e390800000000000000
+      internalID: -7788714686380965980
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_32
+      rect:
+        serializedVersion: 2
+        x: 8695
+        y: 591
+        width: 874
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ba41261c25ba02bf0800000000000000
+      internalID: -351092399014800213
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_33
+      rect:
+        serializedVersion: 2
+        x: 55
+        y: 191
+        width: 874
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4f9ff239e66ccc070800000000000000
+      internalID: 8128089605714999796
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_34
+      rect:
+        serializedVersion: 2
+        x: 1035
+        y: 191
+        width: 854
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5be6c862852afae30800000000000000
+      internalID: 4517007450763456181
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_35
+      rect:
+        serializedVersion: 2
+        x: 2027
+        y: 191
+        width: 822
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 38c4c2867ee8ec100800000000000000
+      internalID: 130198563776646275
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_36
+      rect:
+        serializedVersion: 2
+        x: 3039
+        y: 191
+        width: 770
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 99a4e10b4c60242d0800000000000000
+      internalID: -3296064535443649895
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_37
+      rect:
+        serializedVersion: 2
+        x: 4087
+        y: 191
+        width: 682
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b0729eeb4aea1db90800000000000000
+      internalID: -7218796705097373941
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ArcherPiercingShot_SpriteSheet_38
+      rect:
+        serializedVersion: 2
+        x: 5215
+        y: 191
+        width: 514
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7399cc344118ff490800000000000000
+      internalID: -7710302112998188745
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      ArcherPiercingShot_SpriteSheet_0: 484242644952255776
+      ArcherPiercingShot_SpriteSheet_1: -8389217186483873556
+      ArcherPiercingShot_SpriteSheet_10: 2950938304309596542
+      ArcherPiercingShot_SpriteSheet_11: -1025729956933582783
+      ArcherPiercingShot_SpriteSheet_12: 8531223230475833272
+      ArcherPiercingShot_SpriteSheet_13: -6638233326425515657
+      ArcherPiercingShot_SpriteSheet_14: 7800132105717650389
+      ArcherPiercingShot_SpriteSheet_15: -7395907349602368564
+      ArcherPiercingShot_SpriteSheet_16: 3635773528777208044
+      ArcherPiercingShot_SpriteSheet_17: -2347221526405459028
+      ArcherPiercingShot_SpriteSheet_18: -8634146876949742136
+      ArcherPiercingShot_SpriteSheet_19: -8095359050209822054
+      ArcherPiercingShot_SpriteSheet_2: -3395838669726450199
+      ArcherPiercingShot_SpriteSheet_20: 271380495931937107
+      ArcherPiercingShot_SpriteSheet_21: 6197696084088164455
+      ArcherPiercingShot_SpriteSheet_22: 1763321480278600681
+      ArcherPiercingShot_SpriteSheet_23: -5994457669904922788
+      ArcherPiercingShot_SpriteSheet_24: 4237595066716514166
+      ArcherPiercingShot_SpriteSheet_25: -2921374175622808681
+      ArcherPiercingShot_SpriteSheet_26: 7142903742202213292
+      ArcherPiercingShot_SpriteSheet_27: -5423505819497697308
+      ArcherPiercingShot_SpriteSheet_28: 7589356028767204999
+      ArcherPiercingShot_SpriteSheet_29: -2637406429669157078
+      ArcherPiercingShot_SpriteSheet_3: -625462351878401655
+      ArcherPiercingShot_SpriteSheet_30: 114406071946643709
+      ArcherPiercingShot_SpriteSheet_31: -7788714686380965980
+      ArcherPiercingShot_SpriteSheet_32: -351092399014800213
+      ArcherPiercingShot_SpriteSheet_33: 8128089605714999796
+      ArcherPiercingShot_SpriteSheet_34: 4517007450763456181
+      ArcherPiercingShot_SpriteSheet_35: 130198563776646275
+      ArcherPiercingShot_SpriteSheet_36: -3296064535443649895
+      ArcherPiercingShot_SpriteSheet_37: -7218796705097373941
+      ArcherPiercingShot_SpriteSheet_38: -7710302112998188745
+      ArcherPiercingShot_SpriteSheet_4: -34163303705060705
+      ArcherPiercingShot_SpriteSheet_5: -2168792366667893970
+      ArcherPiercingShot_SpriteSheet_6: 7134973053114827317
+      ArcherPiercingShot_SpriteSheet_7: -1940276936275946563
+      ArcherPiercingShot_SpriteSheet_8: 678662346044781371
+      ArcherPiercingShot_SpriteSheet_9: -6720539876005207758
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

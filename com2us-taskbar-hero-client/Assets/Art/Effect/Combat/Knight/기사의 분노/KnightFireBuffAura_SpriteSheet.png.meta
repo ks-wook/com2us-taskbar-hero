@@ -1,0 +1,546 @@
+fileFormatVersion: 2
+guid: b533fae66ec8caa41b8b5c4acc466857
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 9058904559699888895
+    second: KnightFireBuffAura_SpriteSheet_0
+  - first:
+      213: 7813329900974432215
+    second: KnightFireBuffAura_SpriteSheet_1
+  - first:
+      213: 4062368555051575640
+    second: KnightFireBuffAura_SpriteSheet_2
+  - first:
+      213: 3564498747390384859
+    second: KnightFireBuffAura_SpriteSheet_3
+  - first:
+      213: -1541255701532328267
+    second: KnightFireBuffAura_SpriteSheet_4
+  - first:
+      213: 8256622317155175924
+    second: KnightFireBuffAura_SpriteSheet_5
+  - first:
+      213: 3405549536155882674
+    second: KnightFireBuffAura_SpriteSheet_6
+  - first:
+      213: -2313859318260395372
+    second: KnightFireBuffAura_SpriteSheet_7
+  - first:
+      213: -8538672795633812715
+    second: KnightFireBuffAura_SpriteSheet_8
+  - first:
+      213: -7733966737653072835
+    second: KnightFireBuffAura_SpriteSheet_9
+  - first:
+      213: 2694080147492305372
+    second: KnightFireBuffAura_SpriteSheet_10
+  - first:
+      213: 3049825720185269153
+    second: KnightFireBuffAura_SpriteSheet_11
+  - first:
+      213: -3728694541621855071
+    second: KnightFireBuffAura_SpriteSheet_12
+  - first:
+      213: -8388259154019752879
+    second: KnightFireBuffAura_SpriteSheet_13
+  - first:
+      213: -5218735143912289915
+    second: KnightFireBuffAura_SpriteSheet_14
+  - first:
+      213: 8137666912341938510
+    second: KnightFireBuffAura_SpriteSheet_15
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_0
+      rect:
+        serializedVersion: 2
+        x: 39
+        y: 1911
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ffa041f63b1b7bd70800000000000000
+      internalID: 9058904559699888895
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_1
+      rect:
+        serializedVersion: 2
+        x: 1739
+        y: 1915
+        width: 6
+        height: 5
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7dfd48ce5268e6c60800000000000000
+      internalID: 7813329900974432215
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_2
+      rect:
+        serializedVersion: 2
+        x: 2123
+        y: 1915
+        width: 6
+        height: 5
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 859e09e6dae606830800000000000000
+      internalID: 4062368555051575640
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_3
+      rect:
+        serializedVersion: 2
+        x: 2163
+        y: 1911
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bda5788a9b4a77130800000000000000
+      internalID: 3564498747390384859
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_4
+      rect:
+        serializedVersion: 2
+        x: 3707
+        y: 1899
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5bebe1afa1c5c9ae0800000000000000
+      internalID: -1541255701532328267
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_5
+      rect:
+        serializedVersion: 2
+        x: 3731
+        y: 1895
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4fdc892804a659270800000000000000
+      internalID: 8256622317155175924
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_6
+      rect:
+        serializedVersion: 2
+        x: 1771
+        y: 1891
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2b4519f7241f24f20800000000000000
+      internalID: 3405549536155882674
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_7
+      rect:
+        serializedVersion: 2
+        x: 3211
+        y: 1887
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4929cda953583efd0800000000000000
+      internalID: -2313859318260395372
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_8
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 1307
+        width: 3840
+        height: 578
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 51b74fa055a808980800000000000000
+      internalID: -8538672795633812715
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_9
+      rect:
+        serializedVersion: 2
+        x: 267
+        y: 1275
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d3c70897a3e6ba490800000000000000
+      internalID: -7733966737653072835
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_10
+      rect:
+        serializedVersion: 2
+        x: 1719
+        y: 1275
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cd9f5bbce9b436520800000000000000
+      internalID: 2694080147492305372
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_11
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 667
+        width: 3840
+        height: 578
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1ab2e767558235a20800000000000000
+      internalID: 3049825720185269153
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_12
+      rect:
+        serializedVersion: 2
+        x: 2095
+        y: 631
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1acf0b2e114014cc0800000000000000
+      internalID: -3728694541621855071
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_13
+      rect:
+        serializedVersion: 2
+        x: 419
+        y: 607
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 154ebb80ebae69b80800000000000000
+      internalID: -8388259154019752879
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_14
+      rect:
+        serializedVersion: 2
+        x: 3503
+        y: 607
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 589c24269045397b0800000000000000
+      internalID: -5218735143912289915
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: KnightFireBuffAura_SpriteSheet_15
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 27
+        width: 3840
+        height: 578
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e41579a01fccee070800000000000000
+      internalID: 8137666912341938510
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      KnightFireBuffAura_SpriteSheet_0: 9058904559699888895
+      KnightFireBuffAura_SpriteSheet_1: 7813329900974432215
+      KnightFireBuffAura_SpriteSheet_10: 2694080147492305372
+      KnightFireBuffAura_SpriteSheet_11: 3049825720185269153
+      KnightFireBuffAura_SpriteSheet_12: -3728694541621855071
+      KnightFireBuffAura_SpriteSheet_13: -8388259154019752879
+      KnightFireBuffAura_SpriteSheet_14: -5218735143912289915
+      KnightFireBuffAura_SpriteSheet_15: 8137666912341938510
+      KnightFireBuffAura_SpriteSheet_2: 4062368555051575640
+      KnightFireBuffAura_SpriteSheet_3: 3564498747390384859
+      KnightFireBuffAura_SpriteSheet_4: -1541255701532328267
+      KnightFireBuffAura_SpriteSheet_5: 8256622317155175924
+      KnightFireBuffAura_SpriteSheet_6: 3405549536155882674
+      KnightFireBuffAura_SpriteSheet_7: -2313859318260395372
+      KnightFireBuffAura_SpriteSheet_8: -8538672795633812715
+      KnightFireBuffAura_SpriteSheet_9: -7733966737653072835
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

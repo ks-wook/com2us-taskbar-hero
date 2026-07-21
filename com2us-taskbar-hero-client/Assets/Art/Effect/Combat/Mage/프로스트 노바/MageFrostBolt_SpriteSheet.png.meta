@@ -1,0 +1,1794 @@
+fileFormatVersion: 2
+guid: 2c010969f0a211f4798c64236057ebf6
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 7095785799803959396
+    second: MageFrostBolt_SpriteSheet_0
+  - first:
+      213: 3149035489642324612
+    second: MageFrostBolt_SpriteSheet_1
+  - first:
+      213: 4930039014246170568
+    second: MageFrostBolt_SpriteSheet_2
+  - first:
+      213: 2904723697652867425
+    second: MageFrostBolt_SpriteSheet_3
+  - first:
+      213: 5393301011718367386
+    second: MageFrostBolt_SpriteSheet_4
+  - first:
+      213: -3363285750090308835
+    second: MageFrostBolt_SpriteSheet_5
+  - first:
+      213: -4256747877876269182
+    second: MageFrostBolt_SpriteSheet_6
+  - first:
+      213: -299722198660353815
+    second: MageFrostBolt_SpriteSheet_7
+  - first:
+      213: 3169982328605629536
+    second: MageFrostBolt_SpriteSheet_8
+  - first:
+      213: 3751468965854135113
+    second: MageFrostBolt_SpriteSheet_9
+  - first:
+      213: 4127388080245713378
+    second: MageFrostBolt_SpriteSheet_10
+  - first:
+      213: 1477126325531629601
+    second: MageFrostBolt_SpriteSheet_11
+  - first:
+      213: -5511740638687499401
+    second: MageFrostBolt_SpriteSheet_12
+  - first:
+      213: -3436320493459324325
+    second: MageFrostBolt_SpriteSheet_13
+  - first:
+      213: -460271240401246050
+    second: MageFrostBolt_SpriteSheet_14
+  - first:
+      213: 5242757641236159568
+    second: MageFrostBolt_SpriteSheet_15
+  - first:
+      213: 8646320550424764662
+    second: MageFrostBolt_SpriteSheet_16
+  - first:
+      213: 7424943035528697965
+    second: MageFrostBolt_SpriteSheet_17
+  - first:
+      213: -3325604036886465240
+    second: MageFrostBolt_SpriteSheet_18
+  - first:
+      213: -3181566371762777290
+    second: MageFrostBolt_SpriteSheet_19
+  - first:
+      213: -2687912250143563727
+    second: MageFrostBolt_SpriteSheet_20
+  - first:
+      213: -2079645752882371623
+    second: MageFrostBolt_SpriteSheet_21
+  - first:
+      213: 8338120332008400157
+    second: MageFrostBolt_SpriteSheet_22
+  - first:
+      213: -4228999892820247707
+    second: MageFrostBolt_SpriteSheet_23
+  - first:
+      213: 4764107479454284150
+    second: MageFrostBolt_SpriteSheet_24
+  - first:
+      213: 7179859126498718634
+    second: MageFrostBolt_SpriteSheet_25
+  - first:
+      213: 8765913571085026311
+    second: MageFrostBolt_SpriteSheet_26
+  - first:
+      213: -9163976502611170530
+    second: MageFrostBolt_SpriteSheet_27
+  - first:
+      213: -4297218466837053231
+    second: MageFrostBolt_SpriteSheet_28
+  - first:
+      213: 4920702113487059254
+    second: MageFrostBolt_SpriteSheet_29
+  - first:
+      213: -5082838605023933305
+    second: MageFrostBolt_SpriteSheet_30
+  - first:
+      213: -5255247426865918495
+    second: MageFrostBolt_SpriteSheet_31
+  - first:
+      213: -7719093463514012659
+    second: MageFrostBolt_SpriteSheet_32
+  - first:
+      213: -1593434883484923116
+    second: MageFrostBolt_SpriteSheet_33
+  - first:
+      213: 6918640214144684325
+    second: MageFrostBolt_SpriteSheet_34
+  - first:
+      213: -7875310615987169885
+    second: MageFrostBolt_SpriteSheet_35
+  - first:
+      213: -3468849275846032544
+    second: MageFrostBolt_SpriteSheet_36
+  - first:
+      213: -4301982526063258304
+    second: MageFrostBolt_SpriteSheet_37
+  - first:
+      213: 6425283281484240861
+    second: MageFrostBolt_SpriteSheet_38
+  - first:
+      213: -6012806436217016441
+    second: MageFrostBolt_SpriteSheet_39
+  - first:
+      213: -2383707099882418795
+    second: MageFrostBolt_SpriteSheet_40
+  - first:
+      213: -6496391300492516171
+    second: MageFrostBolt_SpriteSheet_41
+  - first:
+      213: -5171306074966723350
+    second: MageFrostBolt_SpriteSheet_42
+  - first:
+      213: 1600445177809246475
+    second: MageFrostBolt_SpriteSheet_43
+  - first:
+      213: 6206829786780457848
+    second: MageFrostBolt_SpriteSheet_44
+  - first:
+      213: 3608974780918920545
+    second: MageFrostBolt_SpriteSheet_45
+  - first:
+      213: -7739062339517957810
+    second: MageFrostBolt_SpriteSheet_46
+  - first:
+      213: -9163113451879030421
+    second: MageFrostBolt_SpriteSheet_47
+  - first:
+      213: 5117496417302713843
+    second: MageFrostBolt_SpriteSheet_48
+  - first:
+      213: -4467159532823899976
+    second: MageFrostBolt_SpriteSheet_49
+  - first:
+      213: 5336036254137868626
+    second: MageFrostBolt_SpriteSheet_50
+  - first:
+      213: -2637573076906678047
+    second: MageFrostBolt_SpriteSheet_51
+  - first:
+      213: -4374420480068176842
+    second: MageFrostBolt_SpriteSheet_52
+  - first:
+      213: 8885508611298977656
+    second: MageFrostBolt_SpriteSheet_53
+  - first:
+      213: -4848329828094040011
+    second: MageFrostBolt_SpriteSheet_54
+  - first:
+      213: -8535278806978827027
+    second: MageFrostBolt_SpriteSheet_55
+  - first:
+      213: -2047888249325325159
+    second: MageFrostBolt_SpriteSheet_56
+  - first:
+      213: -6009664799943456008
+    second: MageFrostBolt_SpriteSheet_57
+  - first:
+      213: 544324458287572911
+    second: MageFrostBolt_SpriteSheet_58
+  - first:
+      213: 2129947436344865824
+    second: MageFrostBolt_SpriteSheet_59
+  - first:
+      213: -6092470769416555442
+    second: MageFrostBolt_SpriteSheet_60
+  - first:
+      213: 454082346572615388
+    second: MageFrostBolt_SpriteSheet_61
+  - first:
+      213: 3663209533664893566
+    second: MageFrostBolt_SpriteSheet_62
+  - first:
+      213: 2168732618732979026
+    second: MageFrostBolt_SpriteSheet_63
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_0
+      rect:
+        serializedVersion: 2
+        x: 51
+        y: 1051
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 468739ff69b497260800000000000000
+      internalID: 7095785799803959396
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_1
+      rect:
+        serializedVersion: 2
+        x: 2759
+        y: 939
+        width: 126
+        height: 122
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 482aa31f71f93bb20800000000000000
+      internalID: 3149035489642324612
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_2
+      rect:
+        serializedVersion: 2
+        x: 3679
+        y: 927
+        width: 138
+        height: 146
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8cfb5fcec540b6440800000000000000
+      internalID: 4930039014246170568
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_3
+      rect:
+        serializedVersion: 2
+        x: 15
+        y: 1003
+        width: 6
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 161224920d6af4820800000000000000
+      internalID: 2904723697652867425
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_4
+      rect:
+        serializedVersion: 2
+        x: 19
+        y: 971
+        width: 74
+        height: 58
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a986a3af1bad8da40800000000000000
+      internalID: 5393301011718367386
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_5
+      rect:
+        serializedVersion: 2
+        x: 939
+        y: 959
+        width: 86
+        height: 86
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d13ebb30e653351d0800000000000000
+      internalID: -3363285750090308835
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_6
+      rect:
+        serializedVersion: 2
+        x: 1855
+        y: 951
+        width: 98
+        height: 98
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 28f79c8bb5efce4c0800000000000000
+      internalID: -4256747877876269182
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_7
+      rect:
+        serializedVersion: 2
+        x: 4619
+        y: 979
+        width: 70
+        height: 42
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9e0fc819f3c27dbf0800000000000000
+      internalID: -299722198660353815
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_8
+      rect:
+        serializedVersion: 2
+        x: 5571
+        y: 971
+        width: 130
+        height: 50
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 06cddc0f12a0efb20800000000000000
+      internalID: 3169982328605629536
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_9
+      rect:
+        serializedVersion: 2
+        x: 6491
+        y: 979
+        width: 190
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 94343a7f525ef0430800000000000000
+      internalID: 3751468965854135113
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_10
+      rect:
+        serializedVersion: 2
+        x: 7411
+        y: 971
+        width: 246
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2e92a35579d674930800000000000000
+      internalID: 4127388080245713378
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_11
+      rect:
+        serializedVersion: 2
+        x: 8331
+        y: 995
+        width: 42
+        height: 22
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 128d0b1219ecf7410800000000000000
+      internalID: 1477126325531629601
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_12
+      rect:
+        serializedVersion: 2
+        x: 8431
+        y: 975
+        width: 198
+        height: 58
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 77b62f0771d5283b0800000000000000
+      internalID: -5511740638687499401
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_13
+      rect:
+        serializedVersion: 2
+        x: 11
+        y: 995
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b5246f4b7bcbf40d0800000000000000
+      internalID: -3436320493459324325
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_14
+      rect:
+        serializedVersion: 2
+        x: 923
+        y: 991
+        width: 14
+        height: 10
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e982e87deb9cc99f0800000000000000
+      internalID: -460271240401246050
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_15
+      rect:
+        serializedVersion: 2
+        x: 1843
+        y: 991
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 05c98512c4402c840800000000000000
+      internalID: 5242757641236159568
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_16
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 987
+        width: 5
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 6f06a3efab6edf770800000000000000
+      internalID: 8646320550424764662
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_17
+      rect:
+        serializedVersion: 2
+        x: 47
+        y: 967
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d68d23e0a52ba0760800000000000000
+      internalID: 7424943035528697965
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_18
+      rect:
+        serializedVersion: 2
+        x: 91
+        y: 955
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 825f6cd8fb419d1d0800000000000000
+      internalID: -3325604036886465240
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_19
+      rect:
+        serializedVersion: 2
+        x: 51
+        y: 587
+        width: 106
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 63350c5dd3ec8d3d0800000000000000
+      internalID: -3181566371762777290
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_20
+      rect:
+        serializedVersion: 2
+        x: 159
+        y: 567
+        width: 242
+        height: 62
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 130a5c6bc0e92bad0800000000000000
+      internalID: -2687912250143563727
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_21
+      rect:
+        serializedVersion: 2
+        x: 971
+        y: 571
+        width: 398
+        height: 66
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9d3ebc8c43d9323e0800000000000000
+      internalID: -2079645752882371623
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_22
+      rect:
+        serializedVersion: 2
+        x: 1891
+        y: 583
+        width: 126
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d15a2d3c344f6b370800000000000000
+      internalID: 8338120332008400157
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_23
+      rect:
+        serializedVersion: 2
+        x: 2043
+        y: 575
+        width: 294
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 56bb841f0039f45c0800000000000000
+      internalID: -4228999892820247707
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_24
+      rect:
+        serializedVersion: 2
+        x: 2811
+        y: 583
+        width: 38
+        height: 22
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 67977a0e2828d1240800000000000000
+      internalID: 4764107479454284150
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_25
+      rect:
+        serializedVersion: 2
+        x: 2903
+        y: 591
+        width: 58
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: aa37d44c5dbf3a360800000000000000
+      internalID: 7179859126498718634
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_26
+      rect:
+        serializedVersion: 2
+        x: 3019
+        y: 563
+        width: 290
+        height: 66
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7048c48f2f7c6a970800000000000000
+      internalID: 8765913571085026311
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_27
+      rect:
+        serializedVersion: 2
+        x: 3731
+        y: 567
+        width: 550
+        height: 62
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e1ba5d77ce303d080800000000000000
+      internalID: -9163976502611170530
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_28
+      rect:
+        serializedVersion: 2
+        x: 4715
+        y: 591
+        width: 18
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1d0cde172963d54c0800000000000000
+      internalID: -4297218466837053231
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_29
+      rect:
+        serializedVersion: 2
+        x: 4735
+        y: 571
+        width: 514
+        height: 66
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 639f8ef4088d94440800000000000000
+      internalID: 4920702113487059254
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_30
+      rect:
+        serializedVersion: 2
+        x: 5571
+        y: 567
+        width: 642
+        height: 70
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 78c08e008312679b0800000000000000
+      internalID: -5082838605023933305
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_31
+      rect:
+        serializedVersion: 2
+        x: 6491
+        y: 583
+        width: 166
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1ed0fda0f4c9117b0800000000000000
+      internalID: -5255247426865918495
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_32
+      rect:
+        serializedVersion: 2
+        x: 6663
+        y: 571
+        width: 510
+        height: 62
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d042537746540e490800000000000000
+      internalID: -7719093463514012659
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_33
+      rect:
+        serializedVersion: 2
+        x: 7411
+        y: 583
+        width: 58
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 41b4a257a6bf2e9e0800000000000000
+      internalID: -1593434883484923116
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_34
+      rect:
+        serializedVersion: 2
+        x: 7503
+        y: 583
+        width: 74
+        height: 38
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 52193d44e92f30060800000000000000
+      internalID: 6918640214144684325
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_35
+      rect:
+        serializedVersion: 2
+        x: 7635
+        y: 567
+        width: 494
+        height: 62
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3a5d83e48b645b290800000000000000
+      internalID: -7875310615987169885
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_36
+      rect:
+        serializedVersion: 2
+        x: 8331
+        y: 583
+        width: 66
+        height: 22
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 06383dd56fb2cdfc0800000000000000
+      internalID: -3468849275846032544
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_37
+      rect:
+        serializedVersion: 2
+        x: 8455
+        y: 587
+        width: 98
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 045df087fa94c44c0800000000000000
+      internalID: -4301982526063258304
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_38
+      rect:
+        serializedVersion: 2
+        x: 8595
+        y: 563
+        width: 538
+        height: 66
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: dd7df161a113b2950800000000000000
+      internalID: 6425283281484240861
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_39
+      rect:
+        serializedVersion: 2
+        x: 51
+        y: 183
+        width: 206
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 78f2a1a47683e8ca0800000000000000
+      internalID: -6012806436217016441
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_40
+      rect:
+        serializedVersion: 2
+        x: 259
+        y: 143
+        width: 626
+        height: 114
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 59d8ee6a50f5beed0800000000000000
+      internalID: -2383707099882418795
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_41
+      rect:
+        serializedVersion: 2
+        x: 971
+        y: 187
+        width: 186
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5b4a434188e28d5a0800000000000000
+      internalID: -6496391300492516171
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_42
+      rect:
+        serializedVersion: 2
+        x: 1159
+        y: 115
+        width: 682
+        height: 170
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ae4f9c80684db38b0800000000000000
+      internalID: -5171306074966723350
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_43
+      rect:
+        serializedVersion: 2
+        x: 1891
+        y: 183
+        width: 166
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b099ec1e86ce53610800000000000000
+      internalID: 1600445177809246475
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_44
+      rect:
+        serializedVersion: 2
+        x: 2099
+        y: 191
+        width: 102
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 87bdc5e4ec6132650800000000000000
+      internalID: 6206829786780457848
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_45
+      rect:
+        serializedVersion: 2
+        x: 2239
+        y: 87
+        width: 522
+        height: 226
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 165f30c2177a51230800000000000000
+      internalID: 3608974780918920545
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_46
+      rect:
+        serializedVersion: 2
+        x: 2811
+        y: 195
+        width: 46
+        height: 22
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e49bd663ec3599490800000000000000
+      internalID: -7739062339517957810
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_47
+      rect:
+        serializedVersion: 2
+        x: 2935
+        y: 183
+        width: 38
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b61a5202dd416d080800000000000000
+      internalID: -9163113451879030421
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_48
+      rect:
+        serializedVersion: 2
+        x: 3023
+        y: 179
+        width: 90
+        height: 42
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3f599acb0eff40740800000000000000
+      internalID: 5117496417302713843
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_49
+      rect:
+        serializedVersion: 2
+        x: 3135
+        y: 175
+        width: 98
+        height: 50
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8b0180ba2167102c0800000000000000
+      internalID: -4467159532823899976
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_50
+      rect:
+        serializedVersion: 2
+        x: 3259
+        y: 87
+        width: 422
+        height: 226
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2516e7c93b86d0a40800000000000000
+      internalID: 5336036254137868626
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_51
+      rect:
+        serializedVersion: 2
+        x: 3731
+        y: 187
+        width: 42
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1e8e7d1d245756bd0800000000000000
+      internalID: -2637573076906678047
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_52
+      rect:
+        serializedVersion: 2
+        x: 3835
+        y: 183
+        width: 66
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 634b75300cfea43c0800000000000000
+      internalID: -4374420480068176842
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_53
+      rect:
+        serializedVersion: 2
+        x: 3959
+        y: 87
+        width: 642
+        height: 226
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8776629210baf4b70800000000000000
+      internalID: 8885508611298977656
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_54
+      rect:
+        serializedVersion: 2
+        x: 4651
+        y: 87
+        width: 870
+        height: 226
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 538268a75b547bcb0800000000000000
+      internalID: -4848329828094040011
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_55
+      rect:
+        serializedVersion: 2
+        x: 5571
+        y: 183
+        width: 102
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: dec6b1b95299c8980800000000000000
+      internalID: -8535278806978827027
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_56
+      rect:
+        serializedVersion: 2
+        x: 5675
+        y: 87
+        width: 766
+        height: 226
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9947447cc707493e0800000000000000
+      internalID: -2047888249325325159
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_57
+      rect:
+        serializedVersion: 2
+        x: 6491
+        y: 179
+        width: 330
+        height: 46
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8fa833c74b1699ca0800000000000000
+      internalID: -6009664799943456008
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_58
+      rect:
+        serializedVersion: 2
+        x: 6859
+        y: 175
+        width: 98
+        height: 42
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fa7a9caf534dd8700800000000000000
+      internalID: 544324458287572911
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_59
+      rect:
+        serializedVersion: 2
+        x: 6979
+        y: 87
+        width: 382
+        height: 226
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 024f69d88e71f8d10800000000000000
+      internalID: 2129947436344865824
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_60
+      rect:
+        serializedVersion: 2
+        x: 7411
+        y: 179
+        width: 346
+        height: 42
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e44b9705d12337ba0800000000000000
+      internalID: -6092470769416555442
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_61
+      rect:
+        serializedVersion: 2
+        x: 7791
+        y: 207
+        width: 6
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cde8c360d793d4600800000000000000
+      internalID: 454082346572615388
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_62
+      rect:
+        serializedVersion: 2
+        x: 7819
+        y: 87
+        width: 462
+        height: 226
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e7a9bef89a556d230800000000000000
+      internalID: 3663209533664893566
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageFrostBolt_SpriteSheet_63
+      rect:
+        serializedVersion: 2
+        x: 7783
+        y: 175
+        width: 14
+        height: 6
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 253c16883d2e81e10800000000000000
+      internalID: 2168732618732979026
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      MageFrostBolt_SpriteSheet_0: 7095785799803959396
+      MageFrostBolt_SpriteSheet_1: 3149035489642324612
+      MageFrostBolt_SpriteSheet_10: 4127388080245713378
+      MageFrostBolt_SpriteSheet_11: 1477126325531629601
+      MageFrostBolt_SpriteSheet_12: -5511740638687499401
+      MageFrostBolt_SpriteSheet_13: -3436320493459324325
+      MageFrostBolt_SpriteSheet_14: -460271240401246050
+      MageFrostBolt_SpriteSheet_15: 5242757641236159568
+      MageFrostBolt_SpriteSheet_16: 8646320550424764662
+      MageFrostBolt_SpriteSheet_17: 7424943035528697965
+      MageFrostBolt_SpriteSheet_18: -3325604036886465240
+      MageFrostBolt_SpriteSheet_19: -3181566371762777290
+      MageFrostBolt_SpriteSheet_2: 4930039014246170568
+      MageFrostBolt_SpriteSheet_20: -2687912250143563727
+      MageFrostBolt_SpriteSheet_21: -2079645752882371623
+      MageFrostBolt_SpriteSheet_22: 8338120332008400157
+      MageFrostBolt_SpriteSheet_23: -4228999892820247707
+      MageFrostBolt_SpriteSheet_24: 4764107479454284150
+      MageFrostBolt_SpriteSheet_25: 7179859126498718634
+      MageFrostBolt_SpriteSheet_26: 8765913571085026311
+      MageFrostBolt_SpriteSheet_27: -9163976502611170530
+      MageFrostBolt_SpriteSheet_28: -4297218466837053231
+      MageFrostBolt_SpriteSheet_29: 4920702113487059254
+      MageFrostBolt_SpriteSheet_3: 2904723697652867425
+      MageFrostBolt_SpriteSheet_30: -5082838605023933305
+      MageFrostBolt_SpriteSheet_31: -5255247426865918495
+      MageFrostBolt_SpriteSheet_32: -7719093463514012659
+      MageFrostBolt_SpriteSheet_33: -1593434883484923116
+      MageFrostBolt_SpriteSheet_34: 6918640214144684325
+      MageFrostBolt_SpriteSheet_35: -7875310615987169885
+      MageFrostBolt_SpriteSheet_36: -3468849275846032544
+      MageFrostBolt_SpriteSheet_37: -4301982526063258304
+      MageFrostBolt_SpriteSheet_38: 6425283281484240861
+      MageFrostBolt_SpriteSheet_39: -6012806436217016441
+      MageFrostBolt_SpriteSheet_4: 5393301011718367386
+      MageFrostBolt_SpriteSheet_40: -2383707099882418795
+      MageFrostBolt_SpriteSheet_41: -6496391300492516171
+      MageFrostBolt_SpriteSheet_42: -5171306074966723350
+      MageFrostBolt_SpriteSheet_43: 1600445177809246475
+      MageFrostBolt_SpriteSheet_44: 6206829786780457848
+      MageFrostBolt_SpriteSheet_45: 3608974780918920545
+      MageFrostBolt_SpriteSheet_46: -7739062339517957810
+      MageFrostBolt_SpriteSheet_47: -9163113451879030421
+      MageFrostBolt_SpriteSheet_48: 5117496417302713843
+      MageFrostBolt_SpriteSheet_49: -4467159532823899976
+      MageFrostBolt_SpriteSheet_5: -3363285750090308835
+      MageFrostBolt_SpriteSheet_50: 5336036254137868626
+      MageFrostBolt_SpriteSheet_51: -2637573076906678047
+      MageFrostBolt_SpriteSheet_52: -4374420480068176842
+      MageFrostBolt_SpriteSheet_53: 8885508611298977656
+      MageFrostBolt_SpriteSheet_54: -4848329828094040011
+      MageFrostBolt_SpriteSheet_55: -8535278806978827027
+      MageFrostBolt_SpriteSheet_56: -2047888249325325159
+      MageFrostBolt_SpriteSheet_57: -6009664799943456008
+      MageFrostBolt_SpriteSheet_58: 544324458287572911
+      MageFrostBolt_SpriteSheet_59: 2129947436344865824
+      MageFrostBolt_SpriteSheet_6: -4256747877876269182
+      MageFrostBolt_SpriteSheet_60: -6092470769416555442
+      MageFrostBolt_SpriteSheet_61: 454082346572615388
+      MageFrostBolt_SpriteSheet_62: 3663209533664893566
+      MageFrostBolt_SpriteSheet_63: 2168732618732979026
+      MageFrostBolt_SpriteSheet_7: -299722198660353815
+      MageFrostBolt_SpriteSheet_8: 3169982328605629536
+      MageFrostBolt_SpriteSheet_9: 3751468965854135113
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

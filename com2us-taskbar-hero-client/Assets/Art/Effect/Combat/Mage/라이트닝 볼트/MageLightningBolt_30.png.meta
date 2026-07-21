@@ -1,0 +1,1066 @@
+fileFormatVersion: 2
+guid: 61eae7ddcda72de468f7d029aa8faf3e
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -7177773188175531484
+    second: MageLightningBolt_30_0
+  - first:
+      213: -6441565963606807552
+    second: MageLightningBolt_30_1
+  - first:
+      213: -3906436872555272098
+    second: MageLightningBolt_30_2
+  - first:
+      213: -8325869895175719043
+    second: MageLightningBolt_30_3
+  - first:
+      213: 5729237064995087911
+    second: MageLightningBolt_30_4
+  - first:
+      213: 2797643609724313955
+    second: MageLightningBolt_30_5
+  - first:
+      213: -6982927489075053405
+    second: MageLightningBolt_30_6
+  - first:
+      213: 2052159036326460626
+    second: MageLightningBolt_30_7
+  - first:
+      213: 2450614137761012778
+    second: MageLightningBolt_30_8
+  - first:
+      213: -4170276551043940609
+    second: MageLightningBolt_30_9
+  - first:
+      213: -7690063421638349869
+    second: MageLightningBolt_30_10
+  - first:
+      213: -3762093198084876543
+    second: MageLightningBolt_30_11
+  - first:
+      213: 1337383709799728922
+    second: MageLightningBolt_30_12
+  - first:
+      213: -4793509992939773148
+    second: MageLightningBolt_30_13
+  - first:
+      213: 3091356349547056271
+    second: MageLightningBolt_30_14
+  - first:
+      213: 596900862932924412
+    second: MageLightningBolt_30_15
+  - first:
+      213: -2876130705502034115
+    second: MageLightningBolt_30_16
+  - first:
+      213: 5817058619794801057
+    second: MageLightningBolt_30_17
+  - first:
+      213: 5799092896365454747
+    second: MageLightningBolt_30_18
+  - first:
+      213: -7260881997348961756
+    second: MageLightningBolt_30_19
+  - first:
+      213: 4402560495338806729
+    second: MageLightningBolt_30_20
+  - first:
+      213: -1946011420771099007
+    second: MageLightningBolt_30_21
+  - first:
+      213: 457572187433666880
+    second: MageLightningBolt_30_22
+  - first:
+      213: -7579927515844033385
+    second: MageLightningBolt_30_23
+  - first:
+      213: -1526168524620609097
+    second: MageLightningBolt_30_24
+  - first:
+      213: 5469807161236522873
+    second: MageLightningBolt_30_25
+  - first:
+      213: -5382266872919551048
+    second: MageLightningBolt_30_26
+  - first:
+      213: -6448575841317048359
+    second: MageLightningBolt_30_27
+  - first:
+      213: 4232664543739076432
+    second: MageLightningBolt_30_28
+  - first:
+      213: -3905620287292310121
+    second: MageLightningBolt_30_29
+  - first:
+      213: 1626138234664126877
+    second: MageLightningBolt_30_30
+  - first:
+      213: -3671851870179217989
+    second: MageLightningBolt_30_31
+  - first:
+      213: 5425949731457762343
+    second: MageLightningBolt_30_32
+  - first:
+      213: 2715849691509546987
+    second: MageLightningBolt_30_33
+  - first:
+      213: -5218520999636874924
+    second: MageLightningBolt_30_34
+  - first:
+      213: 582029249301386174
+    second: MageLightningBolt_30_35
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: MageLightningBolt_30_0
+      rect:
+        serializedVersion: 2
+        x: 264
+        y: 289
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4227978905d636c90800000000000000
+      internalID: -7177773188175531484
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_1
+      rect:
+        serializedVersion: 2
+        x: 474
+        y: 289
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 00c28fd82e5fa96a0800000000000000
+      internalID: -6441565963606807552
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_2
+      rect:
+        serializedVersion: 2
+        x: 789
+        y: 289
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e58ead19c5c89c9c0800000000000000
+      internalID: -3906436872555272098
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_3
+      rect:
+        serializedVersion: 2
+        x: 44
+        y: 279
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d77bee35171947c80800000000000000
+      internalID: -8325869895175719043
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_4
+      rect:
+        serializedVersion: 2
+        x: 364
+        y: 274
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 726a80d71c6528f40800000000000000
+      internalID: 5729237064995087911
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_5
+      rect:
+        serializedVersion: 2
+        x: 479
+        y: 274
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 36162cd5a0a33d620800000000000000
+      internalID: 2797643609724313955
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_6
+      rect:
+        serializedVersion: 2
+        x: 534
+        y: 274
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3acfe512278a71f90800000000000000
+      internalID: -6982927489075053405
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_7
+      rect:
+        serializedVersion: 2
+        x: 819
+        y: 274
+        width: 7
+        height: 12
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2dcb8de45cbba7c10800000000000000
+      internalID: 2052159036326460626
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_8
+      rect:
+        serializedVersion: 2
+        x: 924
+        y: 274
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a2c9bca0394520220800000000000000
+      internalID: 2450614137761012778
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_9
+      rect:
+        serializedVersion: 2
+        x: 84
+        y: 269
+        width: 12
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ffe72e762933026c0800000000000000
+      internalID: -4170276551043940609
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_10
+      rect:
+        serializedVersion: 2
+        x: 369
+        y: 264
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3db650dcf08674590800000000000000
+      internalID: -7690063421638349869
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_11
+      rect:
+        serializedVersion: 2
+        x: 409
+        y: 264
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 107dc343b2c5acbc0800000000000000
+      internalID: -3762093198084876543
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_12
+      rect:
+        serializedVersion: 2
+        x: 59
+        y: 244
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a17c107f5675f8210800000000000000
+      internalID: 1337383709799728922
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_13
+      rect:
+        serializedVersion: 2
+        x: 229
+        y: 249
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4232a8bfe080a7db0800000000000000
+      internalID: -4793509992939773148
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_14
+      rect:
+        serializedVersion: 2
+        x: 874
+        y: 249
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f8c86e0a834b6ea20800000000000000
+      internalID: 3091356349547056271
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_15
+      rect:
+        serializedVersion: 2
+        x: 29
+        y: 234
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cf7bd3d1c2e984800800000000000000
+      internalID: 596900862932924412
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_16
+      rect:
+        serializedVersion: 2
+        x: 39
+        y: 239
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d3725fa9c5ee518d0800000000000000
+      internalID: -2876130705502034115
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_17
+      rect:
+        serializedVersion: 2
+        x: 184
+        y: 234
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1a14e7e9ef75ab050800000000000000
+      internalID: 5817058619794801057
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_18
+      rect:
+        serializedVersion: 2
+        x: 539
+        y: 239
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b95aa5ba3448a7050800000000000000
+      internalID: 5799092896365454747
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_19
+      rect:
+        serializedVersion: 2
+        x: 19
+        y: 224
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4228cff0b4a2c3b90800000000000000
+      internalID: -7260881997348961756
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_20
+      rect:
+        serializedVersion: 2
+        x: 109
+        y: 219
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9cd56dad179091d30800000000000000
+      internalID: 4402560495338806729
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_21
+      rect:
+        serializedVersion: 2
+        x: 189
+        y: 219
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 18ed5185ce06ef4e0800000000000000
+      internalID: -1946011420771099007
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_22
+      rect:
+        serializedVersion: 2
+        x: 299
+        y: 219
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 049051bea7f995600800000000000000
+      internalID: 457572187433666880
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_23
+      rect:
+        serializedVersion: 2
+        x: 344
+        y: 224
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 79448e2a510bec690800000000000000
+      internalID: -7579927515844033385
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_24
+      rect:
+        serializedVersion: 2
+        x: 54
+        y: 214
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7b94b9610d5f1dae0800000000000000
+      internalID: -1526168524620609097
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_25
+      rect:
+        serializedVersion: 2
+        x: 119
+        y: 199
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 977046302a8a8eb40800000000000000
+      internalID: 5469807161236522873
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_26
+      rect:
+        serializedVersion: 2
+        x: 204
+        y: 204
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8b31749abc85e45b0800000000000000
+      internalID: -5382266872919551048
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_27
+      rect:
+        serializedVersion: 2
+        x: 609
+        y: 204
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9dfa127307e0286a0800000000000000
+      internalID: -6448575841317048359
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_28
+      rect:
+        serializedVersion: 2
+        x: 374
+        y: 179
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 05f55f61af17dba30800000000000000
+      internalID: 4232664543739076432
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_29
+      rect:
+        serializedVersion: 2
+        x: 434
+        y: 179
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 79df164aa037cc9c0800000000000000
+      internalID: -3905620287292310121
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_30
+      rect:
+        serializedVersion: 2
+        x: 569
+        y: 184
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d9906d8db14319610800000000000000
+      internalID: 1626138234664126877
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_31
+      rect:
+        serializedVersion: 2
+        x: 839
+        y: 179
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bbd2d1aad26fa0dc0800000000000000
+      internalID: -3671851870179217989
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_32
+      rect:
+        serializedVersion: 2
+        x: 354
+        y: 164
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7248aa86888dc4b40800000000000000
+      internalID: 5425949731457762343
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_33
+      rect:
+        serializedVersion: 2
+        x: 409
+        y: 154
+        width: 7
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: befd7cdb7e2a0b520800000000000000
+      internalID: 2715849691509546987
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_34
+      rect:
+        serializedVersion: 2
+        x: 819
+        y: 159
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4594abbbcc61497b0800000000000000
+      internalID: -5218520999636874924
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: MageLightningBolt_30_35
+      rect:
+        serializedVersion: 2
+        x: 199
+        y: 144
+        width: 7
+        height: 7
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: eb31f7db488c31800800000000000000
+      internalID: 582029249301386174
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      MageLightningBolt_30_0: -7177773188175531484
+      MageLightningBolt_30_1: -6441565963606807552
+      MageLightningBolt_30_10: -7690063421638349869
+      MageLightningBolt_30_11: -3762093198084876543
+      MageLightningBolt_30_12: 1337383709799728922
+      MageLightningBolt_30_13: -4793509992939773148
+      MageLightningBolt_30_14: 3091356349547056271
+      MageLightningBolt_30_15: 596900862932924412
+      MageLightningBolt_30_16: -2876130705502034115
+      MageLightningBolt_30_17: 5817058619794801057
+      MageLightningBolt_30_18: 5799092896365454747
+      MageLightningBolt_30_19: -7260881997348961756
+      MageLightningBolt_30_2: -3906436872555272098
+      MageLightningBolt_30_20: 4402560495338806729
+      MageLightningBolt_30_21: -1946011420771099007
+      MageLightningBolt_30_22: 457572187433666880
+      MageLightningBolt_30_23: -7579927515844033385
+      MageLightningBolt_30_24: -1526168524620609097
+      MageLightningBolt_30_25: 5469807161236522873
+      MageLightningBolt_30_26: -5382266872919551048
+      MageLightningBolt_30_27: -6448575841317048359
+      MageLightningBolt_30_28: 4232664543739076432
+      MageLightningBolt_30_29: -3905620287292310121
+      MageLightningBolt_30_3: -8325869895175719043
+      MageLightningBolt_30_30: 1626138234664126877
+      MageLightningBolt_30_31: -3671851870179217989
+      MageLightningBolt_30_32: 5425949731457762343
+      MageLightningBolt_30_33: 2715849691509546987
+      MageLightningBolt_30_34: -5218520999636874924
+      MageLightningBolt_30_35: 582029249301386174
+      MageLightningBolt_30_4: 5729237064995087911
+      MageLightningBolt_30_5: 2797643609724313955
+      MageLightningBolt_30_6: -6982927489075053405
+      MageLightningBolt_30_7: 2052159036326460626
+      MageLightningBolt_30_8: 2450614137761012778
+      MageLightningBolt_30_9: -4170276551043940609
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
