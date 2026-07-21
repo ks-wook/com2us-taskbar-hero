@@ -67,6 +67,7 @@ erDiagram
     item_master      ||--o{ box_master         : "지급 아이템 풀(등급)"
     item_master      ||--o{ attendance_master  : "일자별 보상"
     equip_slot_master||--o{ item_master        : "장착 슬롯"
+    grade_master     ||--o{ item_master        : "등급(1~5)"
     item_master      ||--o{ enhance_master     : "소모 재화(골드)"
     item_master      ||--o{ box_master         : "오픈 비용(골드)"
     cube_recipe      ||--o{ cube_recipe_ingredient : "소모 재료(자식)"
@@ -77,6 +78,7 @@ erDiagram
     level_master { int level PK }
     item_master { int item_code PK }
     equip_slot_master { int slot PK }
+    grade_master { int grade PK }
     enhance_master { int enhance_level PK }
     skill_master { int skill_code PK }
     skill_coefficient { int skill_code PK }
@@ -98,6 +100,7 @@ erDiagram
 | `level_master` | 레벨별 요구 경험치·스탯·스킬 포인트 | 최대 레벨 수만큼 |
 | `item_master` | 아이템(장비·재료)·재화 정의 | 500종 이상 |
 | `equip_slot_master` | 장비 장착 슬롯 정의 | 6~8종 |
+| `grade_master` | 아이템/장비 등급(희귀도) 정의 | 5종(노말·고급·희귀·영웅·전설) |
 | `enhance_master` | 강화 단계별 비용·효과 | 단계 수만큼 |
 | `skill_master` | 직업별 스킬 정의(이름·코드·액티브/패시브·최대 레벨) | 직업 × 스킬 |
 | `skill_coefficient` | 스킬별 레벨·타입별 계수·지속시간(`skill_master` 자식, 1:N) | 스킬 × 타입 × 레벨(= 타입 수 × `max_level`) |
@@ -163,16 +166,37 @@ erDiagram
 | 5 | 장갑 |
 | 6 | 신발 |
 
+### 5.2b `grade_master` — 등급(희귀도)
+
+아이템·장비의 **등급(희귀도)** 정의. `item_master.grade`가 FK로 참조하며, `stage_reward`/`box_master`의 등급별 확률도 이 등급 체계를 따른다. **5등급 확정**(구 6등급 체계를 통일).
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `grade` | tinyint PK | 등급(1~5) |
+| `name` | varchar | 등급 이름 |
+
+**담기는 데이터 예시**
+
+| grade | name |
+|---|---|
+| 1 | 노말 |
+| 2 | 고급 |
+| 3 | 희귀 |
+| 4 | 영웅 |
+| 5 | 전설 |
+
+> 등급은 장비 코드(`3·슬롯·클래스·등급·순번`)·`level_req`·`base_price`·드롭 확률의 기준축이다. 값 정본은 [마스터 데이터 값](master-data-값.md) §14.
+
 ### 5.3 `item_master` — 아이템·재화
 
 인벤토리/장비/드롭이 참조하는 아이템 정의이자, **재화(골드)의 정의**도 겸한다. `player_item.item_code`·`player_item_equipped.item_code`가 이 테이블을 참조한다(아이템·재화 통합).
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `item_code` | int PK | 아이템 코드 |
+| `item_code` | int PK | 아이템 코드. **장비는 5자리 인코딩** `3·슬롯·클래스·등급·순번`(= 30000 + 슬롯×1000 + 클래스×100 + 등급×10 + 순번), 재료 `41xxx`, 골드 `1` |
 | `name` | varchar | 아이템 이름 |
 | `item_type` | int | 1:장비 2:재료 3:재화(골드) |
-| `grade` | int | 등급/희귀도(숫자가 클수록 고등급) |
+| `grade` | tinyint | 등급/희귀도(**1~5**, FK `grade_master`. 클수록 고등급) |
 | `equip_slot` | int | 장비일 때 장착 슬롯(FK `equip_slot_master`), 비장비는 0 |
 | `class_req` | int | 착용 가능 클래스(FK `class_master`). **0이면 제한 없음**, 비장비는 0 |
 | `level_req` | int | 착용 요구 레벨. **5레벨 단위(5의 배수)**, 0이면 제한 없음. 비장비는 0 |
@@ -187,13 +211,13 @@ erDiagram
 
 > **스탯 컬럼화(변경)**: 구 `base_stats`(JSON)는 폐기하고 장비 옵션 스탯을 `class_master`와 동일한 개별 컬럼(`hp`~`cooldown`)으로 분리했다. 장비만 값을 갖고 그 외는 0이다. 클라 번들 JSON은 이 컬럼들을 `baseStats` 객체로 묶어 직렬화한다(5.1 DB↔번들 노트, 7장).
 
-**담기는 데이터 예시** (전체 20종·스탯 값은 [마스터 데이터 값](master-data-값.md) §6 정본)
+**담기는 데이터 예시** (전체 78종·스탯 값은 [마스터 데이터 값](master-data-값.md) §6 정본)
 
 | item_code | name | item_type | grade | equip_slot | class_req | level_req | stack_max | hp | atk | def | cooldown | sellable | base_price |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | 골드 | 3 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 30012 | 강철 대검 | 1 | 3 | 1 | 1 | 15 | 1 | 0 | 45 | 0 | -0.1 | 1 | 50000 |
-| 30105 | 코스믹 투구 | 1 | 6 | 3 | 0 | 40 | 1 | 220 | 0 | 30 | 0 | 1 | 200000 |
+| 31131 | 강철 대검 | 1 | 3 | 1 | 1 | 20 | 1 | 0 | 38 | 0 | -0.1 | 1 | 50000 |
+| 33051 | 코스믹 투구 | 1 | 5 | 3 | 0 | 40 | 1 | 300 | 0 | 42 | 0 | 1 | 400000 |
 | 41001 | 강화석 | 2 | 2 | 0 | 0 | 0 | 999 | 0 | 0 | 0 | 0 | 1 | 1000 |
 
 > 위 예시는 지면상 스탯 컬럼 일부(`hp`/`atk`/`def`/`cooldown`)만 보였다. 실제 테이블은 `move_speed`·`crit_chance`·`crit_damage`까지 7개 스탯 컬럼을 모두 가진다.
@@ -240,6 +264,7 @@ erDiagram
 | `name` | varchar | 스킬 이름 |
 | `skill_type` | int | **1:액티브 2:패시브**. 액티브는 캐릭터당 2개까지 장착([성장 시스템 기획서](../growth-기획서.md) 5.3), 패시브는 상시 적용 |
 | `max_level` | int | 최대 레벨(= `skill_coefficient`의 타입별 행 수) |
+| `cooldown` | decimal | 재사용 대기시간(초). 액티브만 값, 패시브는 0. `skill_coefficient.duration`(효과 지속시간)과 별개 |
 
 **`skill_coefficient` (skill_master 자식 테이블 · 레벨·타입별 계수, 1:N)**
 
@@ -259,23 +284,23 @@ erDiagram
 
 `skill_master`
 
-| skill_code | class_code | name | skill_type | max_level |
-|---|---|---|---|---|
-| 101 | 1 | 방패 강타 | 1 | 10 |
-| 102 | 1 | 도발 | 1 | 5 |
-| 110 | 1 | 강철 피부 | 2 | 5 |
+| skill_code | class_code | name | skill_type | max_level | cooldown |
+|---|---|---|---|---|---|
+| 101 | 1 | 방패 돌진 | 1 | 10 | 8.0 |
+| 102 | 1 | 기사의 분노 | 1 | 5 | 15.0 |
+| 110 | 1 | 강철 피부 | 2 | 5 | 0 |
 
-`skill_coefficient` (스킬 `101` 공격·`102` 디버프 발췌)
+`skill_coefficient` (스킬 `101` 공격·`102` 버프 발췌)
 
 | skill_code | skill_level | coef_type | coef | duration |
 |---|---|---|---|---|
 | 101 | 1 | 1 (공격) | 1.2 | 0 |
 | … | … | 1 (공격) | … | 0 |
 | 101 | 10 | 1 (공격) | 2.1 | 0 |
-| 102 | 1 | 3 (디버프) | 0.8 | 5.0 |
-| 102 | 5 | 3 (디버프) | 0.68 | 5.0 |
+| 102 | 1 | 2 (버프) | 1.20 | 5.0 |
+| 102 | 5 | 2 (버프) | 1.40 | 5.0 |
 
-> `skill_type=2`(패시브)는 장착 슬롯을 차지하지 않고 배운 즉시 상시 적용된다. `skill_type=1`(액티브)만 캐릭터당 2개 장착 제한을 받는다. 예: `방패 강타`는 10레벨 공격 계수가 `2.1`배(`skill_coefficient`의 `(101, 10, 1)` 행). 실제 데이터·계수 값은 [마스터 데이터 값](master-data-값.md) §4를 정본으로 한다.
+> `skill_type=2`(패시브)는 장착 슬롯을 차지하지 않고 배운 즉시 상시 적용된다. `skill_type=1`(액티브)만 캐릭터당 2개 장착 제한을 받는다. 예: `방패 돌진`은 10레벨 공격 계수가 `2.1`배(`skill_coefficient`의 `(101, 10, 1)` 행), 재사용 대기시간(`cooldown`) 8초. 실제 데이터·계수 값은 [마스터 데이터 값](master-data-값.md) §4를 정본으로 한다.
 
 ### 5.7 `rune_master` — 룬(Rune Tree)
 
@@ -313,13 +338,13 @@ erDiagram
 | `hp` | bigint | 체력 |
 | `attack` | bigint | 공격력 |
 
-**담기는 데이터 예시** (전체 10종은 [마스터 데이터 값](master-data-값.md) §9 정본)
+**담기는 데이터 예시** (전체 8종은 [마스터 데이터 값](master-data-값.md) §9 정본)
 
 | monster_code | name | hp | attack |
 |---|---|---|---|
-| 9001 | 슬라임 | 500 | 20 |
-| 9003 | 늑대 | 1200 | 55 |
-| 9099 | 오크 군주 (Act1 보스) | 25000 | 180 |
+| 9001 | 빙의된 병사 | 500 | 20 |
+| 9002 | 빙의된 암살자 | 800 | 35 |
+| 9099 | 암흑 마법사 (Act1 보스) | 25000 | 180 |
 
 > 코드 규약: Act1 `90xx` · Act2 `91xx` · Act3 `92xx`, 각 Act 보스는 `xx99`.
 
@@ -363,7 +388,7 @@ erDiagram
 | `stage_id` | int PK/FK | 참조 스테이지(`stage_master.stage_id`) |
 | `reward_gold` | bigint | 클리어 획득 골드 |
 | `reward_exp` | bigint | 클리어 획득 경험치(3캐릭터 공통) |
-| `grade1_prob` ~ `grade6_prob` | decimal | 등급 1~6 아이템 **드롭 확률(0~1)** |
+| `grade1_prob` ~ `grade5_prob` | decimal | 등급 1~5 아이템 **드롭 확률(0~1)**(`grade_master` 5등급) |
 
 **담기는 데이터 예시** (전체는 [마스터 데이터 값](master-data-값.md) §10 정본)
 
@@ -372,7 +397,7 @@ erDiagram
 | 1010001 | 100 | 50 | 0.30 | 0.10 | 0.02 | 0 |
 | 1010003 | 500 | 250 | 0.20 | 0.25 | 0.10 | 0.03 |
 
-> 클리어 시 서버가 등급을 추첨(`gradeN_prob`)해 그 등급의 `item_master` 아이템 하나를 지급하고, 확률 합이 1 미만이면 나머지는 미드롭이다(상자 가챠와 동일 방식). `grade5_prob`·`grade6_prob`은 지면상 생략했으나 실제 테이블 컬럼이다. 드롭 확정은 서버 권위([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
+> 클리어 시 서버가 등급을 추첨(`gradeN_prob`)해 그 등급의 `item_master` 아이템 하나를 지급하고, 확률 합이 1 미만이면 나머지는 미드롭이다(상자 가챠와 동일 방식). `grade5_prob`는 지면상 생략했으나 실제 테이블 컬럼이다. 구 6등급 체계의 `grade6_prob`는 5등급 통일로 폐기했다(값은 grade5에 합산). 드롭 확정은 서버 권위([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
 
 ### 5.11 `cube_master` — 큐브(Hero-dric Cube)
 
@@ -498,7 +523,7 @@ erDiagram
     "baseStats": { "hp": 120, "atk": 10, "def": 8, "moveSpeed": 3.0, "critChance": 0.05, "critDamage": 1.5, "cooldown": 1.2 } } ]
 // item_master.json
 [ { "itemCode": 1, "name": "골드", "itemType": 3, "grade": 1, "equipSlot": 0, "classReq": 0, "levelReq": 0, "stackMax": 0, "baseStats": {}, "sellable": 0, "basePrice": 0 },
-  { "itemCode": 30012, "name": "강철 대검", "itemType": 1, "grade": 3, "equipSlot": 1, "classReq": 1, "levelReq": 15, "stackMax": 1, "baseStats": { "atk": 45, "cooldown": -0.1 }, "sellable": 1, "basePrice": 50000 } ]
+  { "itemCode": 31131, "name": "강철 대검", "itemType": 1, "grade": 3, "equipSlot": 1, "classReq": 1, "levelReq": 20, "stackMax": 1, "baseStats": { "atk": 38, "cooldown": -0.1 }, "sellable": 1, "basePrice": 50000 } ]
 ```
 
 **설계 원칙**
@@ -590,6 +615,7 @@ namespace TaskbarHero.Common.MasterData
         public int skillType;         // 1:액티브 2:패시브
         public SkillCoef[] coefs;     // 레벨·타입별 계수 행. DB는 skill_coefficient 자식 테이블. 개수 = 타입 수 × maxLevel
         public int maxLevel;
+        public float cooldown;        // 재사용 대기시간(초). 액티브만 값, 패시브는 0. coefs의 duration(효과 지속)과 별개
     }
 
     [Serializable]
@@ -633,12 +659,11 @@ namespace TaskbarHero.Common.MasterData
         public int stageId;
         public long rewardGold;
         public long rewardExp;
-        public float grade1Prob;   // 등급 1~6 아이템 드롭 확률(0~1). 합<1이면 미드롭
+        public float grade1Prob;   // 등급 1~5 아이템 드롭 확률(0~1). 합<1이면 미드롭
         public float grade2Prob;
         public float grade3Prob;
         public float grade4Prob;
         public float grade5Prob;
-        public float grade6Prob;
     }
 }
 ```
