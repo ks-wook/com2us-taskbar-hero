@@ -106,7 +106,7 @@ erDiagram
 | `skill_coefficient` | 스킬별 레벨·타입별 계수·지속시간(`skill_master` 자식, 1:N) | 스킬 × 타입 × 레벨(= 타입 수 × `max_level`) |
 | `rune_master` | 룬(Rune Tree) 정의 | 트리 노드 수 |
 | `monster_master` | 몬스터 전투 스탯 | 50종 이상 |
-| `stage_master` | 스테이지 구성(보스) | 3 Act × 2 난이도 × 3 = 18 |
+| `stage_master` | 스테이지 구성(보스) | 3 Act × 2 난이도 × 4 = 24 |
 | `stage_spawn` | 스테이지별 등장 일반 몬스터(스폰, `stage_master` 자식) | 스테이지 × 몬스터 |
 | `stage_reward` | 스테이지 클리어 보상(골드·경험치·등급별 아이템 확률) | 스테이지 수만큼 |
 | `cube_master` | 큐브 레벨별 규칙·레시피 | 레벨 수만큼 |
@@ -350,7 +350,7 @@ erDiagram
 
 ### 5.9 `stage_master` — 스테이지 구성
 
-`game_player`의 `act`/`stage`/`difficulty`가 참조. **3 Act × 2 난이도 × 3 스테이지(=18)** 구성이며 **스폰·보스 구성**을 정의한다. **클리어 보상은 분리**되어 `stage_reward`(5.10)가 담당한다.
+`game_player`의 `act`/`stage`/`difficulty`가 참조. **3 Act × 2 난이도 × 4 스테이지(=24)** 구성이며(각 Act·난이도는 스테이지 1~3 일반, 스테이지 4 보스) **스폰·보스 구성**을 정의한다. **클리어 보상은 분리**되어 `stage_reward`(5.10)가 담당한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
