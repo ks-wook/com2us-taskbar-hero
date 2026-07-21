@@ -109,6 +109,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
       { "monsterCode": 9010, "count": 3 }
     ],
     "boss": { "monsterCode": 9099 },
+    "backgroundType": 3,
     "enteredAt": 1752343200
   }
 }
@@ -116,6 +117,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 - `stageId`: `stage_master` 키.
 - `monsters`: 이 스테이지에 등장하는 **일반 몬스터와 등장 수량** 목록(`monsterCode`·`count`). `boss`: **스테이지 보스 몬스터**(보스가 없는 스테이지면 `null`).
+- `backgroundType`: 스테이지 **배경 타입(1~5)**. `stage_master.background_type`을 그대로 내려주며, 클라이언트가 이 코드로 배경 아트를 선택한다([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master` 5.9).
 
 ![스테이지 일반 몬스터](../images/stage-battle-일반몬스터.png)
 

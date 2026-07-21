@@ -359,6 +359,9 @@ erDiagram
 | `difficulty` | int | 난이도 티어(1~2) |
 | `stage` | int | 스테이지 번호 |
 | `boss_monster_code` | int | **스테이지 보스 몬스터**(`monster_master`). 없으면 0 |
+| `background_type` | int | **스테이지 배경 타입(1~5)**. 클라이언트가 이 코드로 배경 아트(배경 세트 `dungeon_bg_1~5`)를 선택한다. 별도 마스터 테이블 없이 `coef_type`·`stat_type`처럼 int enum으로 둔다 |
+
+> **`background_type` enum(1~5)**: `1`=Act1 필드 · `2`=Act1 보스 · `3`=Act2 필드 · `4`=Act2 보스 · `5`=Act3. 같은 `(act, stage 역할)`이면 난이도 무관 동일 배경이다(난이도 2는 난이도 1과 같은 지역·레이아웃). 값·매핑은 [마스터 데이터 값](master-data-값.md) §11 정본이며 학습용 임시값이다.
 
 > **스폰 분리(변경)**: 구 `spawns`(JSON 배열) 컬럼은 폐기했다. **JSON 문자열 컬럼을 두지 않는 설계 규칙**에 따라 등장 일반 몬스터는 아래 `stage_spawn` **자식 테이블**로 분리한다. 클라 번들 JSON은 전송 편의상 이를 `spawns` 배열로 묶어 내려줄 수 있다(DB↔번들, 7장).
 
@@ -372,10 +375,10 @@ erDiagram
 
 **담기는 데이터 예시** (전체는 [마스터 데이터 값](master-data-값.md) §11 정본)
 
-| stage_id | act | difficulty | stage | boss_monster_code |  | stage_id | monster_code | spawn_count |
-|---|---|---|---|---|---|---|---|---|
-| 1010001 | 1 | 1 | 1 | 0 |  | 1010001 | 9001 | 8 |
-| 1010003 | 1 | 1 | 3 | 9099 |  | 1010001 | 9002 | 4 |
+| stage_id | act | difficulty | stage | boss_monster_code | background_type |  | stage_id | monster_code | spawn_count |
+|---|---|---|---|---|---|---|---|---|---|
+| 1010001 | 1 | 1 | 1 | 0 | 1 |  | 1010001 | 9001 | 8 |
+| 1010003 | 1 | 1 | 3 | 9099 | 2 |  | 1010001 | 9002 | 4 |
 
 > 스테이지 진입 응답이 스폰(`stage_spawn`)·보스 정보를 그대로 내려준다([스테이지/전투 결과 기획서](../stage-battle-기획서.md) 5.1). 벽에 막히면 이전 스테이지를 재파밍할 수 있다(하드월 없음). 클리어 보상은 같은 `stage_id`로 `stage_reward`가 정의한다.
 
@@ -650,6 +653,7 @@ namespace TaskbarHero.Common.MasterData
         public int stage;
         public Spawn[] spawns;        // DB는 stage_spawn 자식 테이블. 번들 JSON은 배열로 직렬화(전송 편의)
         public int bossMonsterCode;   // 0=보스 없음
+        public int backgroundType;    // 배경 타입(1~5). 클라 배경 아트 선택 코드
     }
 
     // 스테이지 클리어 보상(구 drop_table_master 대체). stageId로 StageMaster와 1:1.

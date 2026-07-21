@@ -588,6 +588,7 @@ INSERT INTO monster_master (monster_code, name, hp, attack) VALUES
 --    보상은 분리되어 stage_reward가 담당한다(구 reward_gold/reward_exp/drop_table_code 제거).
 --    스폰(등장 일반 몬스터)은 JSON 컬럼을 쓰지 않고 stage_spawn 자식 테이블로 분리한다(설계 규칙).
 --    3 Act × 2 난이도 × 3 스테이지 = 18종. 각 Act 스테이지 3이 보스(boss_monster_code), 나머지 0.
+--    background_type: 배경 아트 코드(1~5). 1=Act1 필드 2=Act1 보스 3=Act2 필드 4=Act2 보스 5=Act3.
 -- =====================================================================
 DROP TABLE IF EXISTS stage_master;
 CREATE TABLE stage_master (
@@ -596,29 +597,30 @@ CREATE TABLE stage_master (
     difficulty         TINYINT NOT NULL COMMENT '난이도(1~2)',
     stage              INT     NOT NULL COMMENT '스테이지 번호',
     boss_monster_code  INT     NOT NULL DEFAULT 0 COMMENT '보스 몬스터(monster_master), 없으면 0',
+    background_type    TINYINT NOT NULL DEFAULT 1 COMMENT '배경 타입(1~5). 클라 배경 아트 선택 코드',
     PRIMARY KEY (stage_id),
     KEY idx_stage_ads (act, difficulty, stage)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='스테이지 구성(보스). 스폰은 stage_spawn, 보상은 stage_reward';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='스테이지 구성(보스·배경). 스폰은 stage_spawn, 보상은 stage_reward';
 
-INSERT INTO stage_master (stage_id, act, difficulty, stage, boss_monster_code) VALUES
-    (1010001, 1, 1, 1, 0),
-    (1010002, 1, 1, 2, 0),
-    (1010003, 1, 1, 3, 9099),
-    (1020001, 1, 2, 1, 0),
-    (1020002, 1, 2, 2, 0),
-    (1020003, 1, 2, 3, 9099),
-    (2010001, 2, 1, 1, 0),
-    (2010002, 2, 1, 2, 0),
-    (2010003, 2, 1, 3, 9199),
-    (2020001, 2, 2, 1, 0),
-    (2020002, 2, 2, 2, 0),
-    (2020003, 2, 2, 3, 9199),
-    (3010001, 3, 1, 1, 0),
-    (3010002, 3, 1, 2, 0),
-    (3010003, 3, 1, 3, 9299),
-    (3020001, 3, 2, 1, 0),
-    (3020002, 3, 2, 2, 0),
-    (3020003, 3, 2, 3, 9299);
+INSERT INTO stage_master (stage_id, act, difficulty, stage, boss_monster_code, background_type) VALUES
+    (1010001, 1, 1, 1, 0,    1),
+    (1010002, 1, 1, 2, 0,    1),
+    (1010003, 1, 1, 3, 9099, 2),
+    (1020001, 1, 2, 1, 0,    1),
+    (1020002, 1, 2, 2, 0,    1),
+    (1020003, 1, 2, 3, 9099, 2),
+    (2010001, 2, 1, 1, 0,    3),
+    (2010002, 2, 1, 2, 0,    3),
+    (2010003, 2, 1, 3, 9199, 4),
+    (2020001, 2, 2, 1, 0,    3),
+    (2020002, 2, 2, 2, 0,    3),
+    (2020003, 2, 2, 3, 9199, 4),
+    (3010001, 3, 1, 1, 0,    5),
+    (3010002, 3, 1, 2, 0,    5),
+    (3010003, 3, 1, 3, 9299, 5),
+    (3020001, 3, 2, 1, 0,    5),
+    (3020002, 3, 2, 2, 0,    5),
+    (3020003, 3, 2, 3, 9299, 5);
 
 
 -- =====================================================================
