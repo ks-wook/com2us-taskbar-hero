@@ -27,6 +27,7 @@ public sealed class SaveService : ISaveService
     private readonly MasterDataProvider _masterData;
     private readonly ILogger<SaveService> _logger;
 
+    /// <summary>의존성(세이브 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
     public SaveService(ISaveRepository saveRepository, MasterDataProvider masterData, ILogger<SaveService> logger)
     {
         _saveRepository = saveRepository;
@@ -34,6 +35,10 @@ public sealed class SaveService : ISaveService
         _logger = logger;
     }
 
+    /// <summary>
+    /// 계정 세이브 스냅샷을 로드한다. game_player가 없으면 신규 계정({ isNew:true })으로 응답하고,
+    /// 있으면 캐릭터·인벤토리(재화 포함)·스킬·룬·큐브를 모아 오프라인 경과 시간과 함께 반환한다.
+    /// </summary>
     public async Task<SaveResult> LoadAsync(long userId)
     {
         var player = await _saveRepository.GetPlayerAsync(userId);
@@ -66,6 +71,11 @@ public sealed class SaveService : ISaveService
         return new SaveResult(ErrorCode.Success, "Load successful", data);
     }
 
+    /// <summary>
+    /// 캐릭터를 생성한다. 마스터 로드·직업 코드 유효성을 확인하고, 계정이 없으면 game_player와 1번 슬롯을
+    /// 초기화하며, 기존 계정이면 슬롯 여유(최대 3)·직업 중복을 검사한 뒤 빈 슬롯에 추가한다.
+    /// 동시 초기화·중복 생성 경합은 UNIQUE 위반을 잡아 에러 코드로 변환한다.
+    /// </summary>
     public async Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode)
     {
         // 마스터 미로드 시 직업 검증 불가.
@@ -133,6 +143,7 @@ public sealed class SaveService : ISaveService
         return SuccessCharacter(userId, newSlot, classCode);
     }
 
+    /// <summary>접속 시각(last_active_at)을 현재로 갱신한다(heartbeat). 계정 세이브가 없으면 SaveNotFound.</summary>
     public async Task<SaveResult> UpdateLastActiveAsync(long userId)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
@@ -146,6 +157,7 @@ public sealed class SaveService : ISaveService
         return new SaveResult(ErrorCode.Success, "Heartbeat OK", new { lastActiveAt = now });
     }
 
+    /// <summary>캐릭터 생성 성공 응답(userId·characterId·classCode·초기 레벨 1)을 만든다.</summary>
     private static SaveResult SuccessCharacter(long userId, int characterId, int classCode)
         => new(ErrorCode.Success, "Character created",
             new { userId, characterId, classCode, level = 1 });

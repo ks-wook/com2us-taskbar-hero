@@ -131,4 +131,110 @@ namespace TaskbarHero.Common.Dto
         public string message;
         public LoadDataDto data = new LoadDataDto();
     }
+
+    // ── 스테이지 진입 / 클리어 (stage-battle 기획서 §5) ──
+
+    /// <summary>스테이지 진입·클리어 공통 요청 데이터. { act, difficulty, stage }</summary>
+    [Serializable]
+    public class StageActionData
+    {
+        public int act;
+        public int difficulty;
+        public int stage;
+    }
+
+    /// <summary>스테이지 진입/클리어 요청 body(인증). { userId, token, data:{ act, difficulty, stage } }</summary>
+    [Serializable]
+    public class StageActionRequest
+    {
+        public long userId;
+        public string token;
+        public StageActionData data;
+    }
+
+    /// <summary>스테이지 스폰(일반 몬스터 등장 수) 한 항목.</summary>
+    [Serializable]
+    public class StageSpawnDto
+    {
+        public int monsterCode;
+        public int count;
+    }
+
+    /// <summary>스테이지 보스. 보스가 없는 스테이지면 응답 필드가 null.</summary>
+    [Serializable]
+    public class StageBossDto
+    {
+        public int monsterCode;
+    }
+
+    /// <summary>진입 응답 데이터(5.1).</summary>
+    [Serializable]
+    public class StageEnterData
+    {
+        public int act;
+        public int difficulty;
+        public int stage;
+        public int stageId;
+        public List<StageSpawnDto> monsters = new List<StageSpawnDto>();
+        public StageBossDto boss;        // 보스 없으면 null
+        public int backgroundType;
+        public long enteredAt;
+    }
+
+    /// <summary>클리어된 스테이지 좌표(5.2 cleared).</summary>
+    [Serializable]
+    public class ClearedStageDto
+    {
+        public int act;
+        public int difficulty;
+        public int stage;
+    }
+
+    /// <summary>클리어 보상 전리품 한 항목.</summary>
+    [Serializable]
+    public class RewardItemDto
+    {
+        public int itemCode;
+        public long quantity;
+    }
+
+    /// <summary>클리어 보상(골드·경험치·전리품).</summary>
+    [Serializable]
+    public class StageRewardsDto
+    {
+        public long gold;
+        public long exp;
+        public List<RewardItemDto> items = new List<RewardItemDto>();
+    }
+
+    /// <summary>클리어 경험치 반영 후 캐릭터 상태(5.2 characters).</summary>
+    [Serializable]
+    public class CharacterProgressDto
+    {
+        public int characterId;
+        public int level;
+        public long exp;
+        public bool isLevelUp;
+    }
+
+    /// <summary>갱신된 진행도(5.2 progress).</summary>
+    [Serializable]
+    public class StageProgressDto
+    {
+        public int act;
+        public int difficulty;
+        public int stage;
+        public int maxStageCleared;
+    }
+
+    /// <summary>클리어 응답 데이터(5.2).</summary>
+    [Serializable]
+    public class StageClearData
+    {
+        public ClearedStageDto cleared = new ClearedStageDto();
+        public StageRewardsDto rewards = new StageRewardsDto();
+        public List<CharacterProgressDto> characters = new List<CharacterProgressDto>();
+        public List<CurrencyDto> balance = new List<CurrencyDto>();
+        public StageProgressDto progress = new StageProgressDto();
+    }
 }
