@@ -1,0 +1,50 @@
+[
+  {
+    "monsterCode": 9001,
+    "name": "빙의된 병사",
+    "hp": 500,
+    "attack": 20
+  },
+  {
+    "monsterCode": 9002,
+    "name": "빙의된 암살자",
+    "hp": 800,
+    "attack": 35
+  },
+  {
+    "monsterCode": 9099,
+    "name": "암흑 마법사 (Act1 보스)",
+    "hp": 25000,
+    "attack": 180
+  },
+  {
+    "monsterCode": 9101,
+    "name": "스켈레톤 병사",
+    "hp": 3000,
+    "attack": 120
+  },
+  {
+    "monsterCode": 9102,
+    "name": "스켈레톤 기사",
+    "hp": 4500,
+    "attack": 170
+  },
+  {
+    "monsterCode": 9199,
+    "name": "스켈레톤 군주 (Act2 보스)",
+    "hp": 120000,
+    "attack": 600
+  },
+  {
+    "monsterCode": 9201,
+    "name": "데몬",
+    "hp": 15000,
+    "attack": 500
+  },
+  {
+    "monsterCode": 9299,
+    "name": "마왕 (Act3 보스)",
+    "hp": 500000,
+    "attack": 1500
+  }
+]

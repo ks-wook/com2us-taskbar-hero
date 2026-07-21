@@ -1,0 +1,74 @@
+[
+  {
+    "runeCode": 201,
+    "name": "공격력 I",
+    "prereqCode": 0,
+    "cost": 5000,
+    "maxLevel": 20,
+    "statType": 1,
+    "statValue": 0.02
+  },
+  {
+    "runeCode": 202,
+    "name": "공격력 II",
+    "prereqCode": 201,
+    "cost": 20000,
+    "maxLevel": 20,
+    "statType": 1,
+    "statValue": 0.03
+  },
+  {
+    "runeCode": 203,
+    "name": "공격력 III",
+    "prereqCode": 202,
+    "cost": 60000,
+    "maxLevel": 10,
+    "statType": 1,
+    "statValue": 0.05
+  },
+  {
+    "runeCode": 210,
+    "name": "치명확률 I",
+    "prereqCode": 0,
+    "cost": 8000,
+    "maxLevel": 10,
+    "statType": 4,
+    "statValue": 0.01
+  },
+  {
+    "runeCode": 211,
+    "name": "치명확률 II",
+    "prereqCode": 210,
+    "cost": 30000,
+    "maxLevel": 10,
+    "statType": 4,
+    "statValue": 0.015
+  },
+  {
+    "runeCode": 220,
+    "name": "정밀 사격",
+    "prereqCode": 210,
+    "cost": 25000,
+    "maxLevel": 10,
+    "statType": 4,
+    "statValue": 0.02
+  },
+  {
+    "runeCode": 230,
+    "name": "광폭화",
+    "prereqCode": 203,
+    "cost": 100000,
+    "maxLevel": 5,
+    "statType": 1,
+    "statValue": 0.08
+  },
+  {
+    "runeCode": 231,
+    "name": "필살",
+    "prereqCode": 211,
+    "cost": 90000,
+    "maxLevel": 5,
+    "statType": 4,
+    "statValue": 0.03
+  }
+]

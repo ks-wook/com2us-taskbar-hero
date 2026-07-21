@@ -1,0 +1,70 @@
+[
+  {
+    "recipeCode": 8001,
+    "resultItemCode": 31131,
+    "resultQuantity": 1,
+    "reqCubeLevel": 2,
+    "costGold": 10000,
+    "ingredients": [
+      {
+        "materialCode": 41001,
+        "quantity": 5
+      },
+      {
+        "materialCode": 41002,
+        "quantity": 2
+      }
+    ]
+  },
+  {
+    "recipeCode": 8002,
+    "resultItemCode": 34031,
+    "resultQuantity": 1,
+    "reqCubeLevel": 2,
+    "costGold": 12000,
+    "ingredients": [
+      {
+        "materialCode": 41001,
+        "quantity": 5
+      },
+      {
+        "materialCode": 41002,
+        "quantity": 2
+      }
+    ]
+  },
+  {
+    "recipeCode": 8003,
+    "resultItemCode": 36041,
+    "resultQuantity": 1,
+    "reqCubeLevel": 3,
+    "costGold": 20000,
+    "ingredients": [
+      {
+        "materialCode": 41002,
+        "quantity": 3
+      },
+      {
+        "materialCode": 41010,
+        "quantity": 1
+      }
+    ]
+  },
+  {
+    "recipeCode": 8004,
+    "resultItemCode": 33051,
+    "resultQuantity": 1,
+    "reqCubeLevel": 5,
+    "costGold": 100000,
+    "ingredients": [
+      {
+        "materialCode": 41010,
+        "quantity": 5
+      },
+      {
+        "materialCode": 41020,
+        "quantity": 2
+      }
+    ]
+  }
+]

@@ -1,0 +1,1402 @@
+[
+  {
+    "level": 1,
+    "requiredExp": 100,
+    "skillPoints": 1,
+    "statBonus": {
+      "hp": 10,
+      "atk": 2,
+      "def": 1,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 2,
+    "requiredExp": 200,
+    "skillPoints": 2,
+    "statBonus": {
+      "hp": 20,
+      "atk": 4,
+      "def": 2,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 3,
+    "requiredExp": 300,
+    "skillPoints": 3,
+    "statBonus": {
+      "hp": 30,
+      "atk": 6,
+      "def": 3,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 4,
+    "requiredExp": 400,
+    "skillPoints": 4,
+    "statBonus": {
+      "hp": 40,
+      "atk": 8,
+      "def": 4,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 5,
+    "requiredExp": 500,
+    "skillPoints": 5,
+    "statBonus": {
+      "hp": 50,
+      "atk": 10,
+      "def": 5,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 6,
+    "requiredExp": 600,
+    "skillPoints": 6,
+    "statBonus": {
+      "hp": 60,
+      "atk": 12,
+      "def": 6,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 7,
+    "requiredExp": 700,
+    "skillPoints": 7,
+    "statBonus": {
+      "hp": 70,
+      "atk": 14,
+      "def": 7,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 8,
+    "requiredExp": 800,
+    "skillPoints": 8,
+    "statBonus": {
+      "hp": 80,
+      "atk": 16,
+      "def": 8,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 9,
+    "requiredExp": 900,
+    "skillPoints": 9,
+    "statBonus": {
+      "hp": 90,
+      "atk": 18,
+      "def": 9,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 10,
+    "requiredExp": 1000,
+    "skillPoints": 10,
+    "statBonus": {
+      "hp": 100,
+      "atk": 20,
+      "def": 10,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 11,
+    "requiredExp": 1100,
+    "skillPoints": 11,
+    "statBonus": {
+      "hp": 110,
+      "atk": 22,
+      "def": 11,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 12,
+    "requiredExp": 1200,
+    "skillPoints": 12,
+    "statBonus": {
+      "hp": 120,
+      "atk": 24,
+      "def": 12,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 13,
+    "requiredExp": 1300,
+    "skillPoints": 13,
+    "statBonus": {
+      "hp": 130,
+      "atk": 26,
+      "def": 13,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 14,
+    "requiredExp": 1400,
+    "skillPoints": 14,
+    "statBonus": {
+      "hp": 140,
+      "atk": 28,
+      "def": 14,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 15,
+    "requiredExp": 1500,
+    "skillPoints": 15,
+    "statBonus": {
+      "hp": 150,
+      "atk": 30,
+      "def": 15,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 16,
+    "requiredExp": 1600,
+    "skillPoints": 16,
+    "statBonus": {
+      "hp": 160,
+      "atk": 32,
+      "def": 16,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 17,
+    "requiredExp": 1700,
+    "skillPoints": 17,
+    "statBonus": {
+      "hp": 170,
+      "atk": 34,
+      "def": 17,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 18,
+    "requiredExp": 1800,
+    "skillPoints": 18,
+    "statBonus": {
+      "hp": 180,
+      "atk": 36,
+      "def": 18,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 19,
+    "requiredExp": 1900,
+    "skillPoints": 19,
+    "statBonus": {
+      "hp": 190,
+      "atk": 38,
+      "def": 19,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 20,
+    "requiredExp": 2000,
+    "skillPoints": 20,
+    "statBonus": {
+      "hp": 200,
+      "atk": 40,
+      "def": 20,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 21,
+    "requiredExp": 2100,
+    "skillPoints": 21,
+    "statBonus": {
+      "hp": 210,
+      "atk": 42,
+      "def": 21,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 22,
+    "requiredExp": 2200,
+    "skillPoints": 22,
+    "statBonus": {
+      "hp": 220,
+      "atk": 44,
+      "def": 22,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 23,
+    "requiredExp": 2300,
+    "skillPoints": 23,
+    "statBonus": {
+      "hp": 230,
+      "atk": 46,
+      "def": 23,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 24,
+    "requiredExp": 2400,
+    "skillPoints": 24,
+    "statBonus": {
+      "hp": 240,
+      "atk": 48,
+      "def": 24,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 25,
+    "requiredExp": 2500,
+    "skillPoints": 25,
+    "statBonus": {
+      "hp": 250,
+      "atk": 50,
+      "def": 25,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 26,
+    "requiredExp": 2600,
+    "skillPoints": 26,
+    "statBonus": {
+      "hp": 260,
+      "atk": 52,
+      "def": 26,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 27,
+    "requiredExp": 2700,
+    "skillPoints": 27,
+    "statBonus": {
+      "hp": 270,
+      "atk": 54,
+      "def": 27,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 28,
+    "requiredExp": 2800,
+    "skillPoints": 28,
+    "statBonus": {
+      "hp": 280,
+      "atk": 56,
+      "def": 28,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 29,
+    "requiredExp": 2900,
+    "skillPoints": 29,
+    "statBonus": {
+      "hp": 290,
+      "atk": 58,
+      "def": 29,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 30,
+    "requiredExp": 3000,
+    "skillPoints": 30,
+    "statBonus": {
+      "hp": 300,
+      "atk": 60,
+      "def": 30,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 31,
+    "requiredExp": 3100,
+    "skillPoints": 31,
+    "statBonus": {
+      "hp": 310,
+      "atk": 62,
+      "def": 31,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 32,
+    "requiredExp": 3200,
+    "skillPoints": 32,
+    "statBonus": {
+      "hp": 320,
+      "atk": 64,
+      "def": 32,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 33,
+    "requiredExp": 3300,
+    "skillPoints": 33,
+    "statBonus": {
+      "hp": 330,
+      "atk": 66,
+      "def": 33,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 34,
+    "requiredExp": 3400,
+    "skillPoints": 34,
+    "statBonus": {
+      "hp": 340,
+      "atk": 68,
+      "def": 34,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 35,
+    "requiredExp": 3500,
+    "skillPoints": 35,
+    "statBonus": {
+      "hp": 350,
+      "atk": 70,
+      "def": 35,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 36,
+    "requiredExp": 3600,
+    "skillPoints": 36,
+    "statBonus": {
+      "hp": 360,
+      "atk": 72,
+      "def": 36,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 37,
+    "requiredExp": 3700,
+    "skillPoints": 37,
+    "statBonus": {
+      "hp": 370,
+      "atk": 74,
+      "def": 37,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 38,
+    "requiredExp": 3800,
+    "skillPoints": 38,
+    "statBonus": {
+      "hp": 380,
+      "atk": 76,
+      "def": 38,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 39,
+    "requiredExp": 3900,
+    "skillPoints": 39,
+    "statBonus": {
+      "hp": 390,
+      "atk": 78,
+      "def": 39,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 40,
+    "requiredExp": 4000,
+    "skillPoints": 40,
+    "statBonus": {
+      "hp": 400,
+      "atk": 80,
+      "def": 40,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 41,
+    "requiredExp": 4100,
+    "skillPoints": 41,
+    "statBonus": {
+      "hp": 410,
+      "atk": 82,
+      "def": 41,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 42,
+    "requiredExp": 4200,
+    "skillPoints": 42,
+    "statBonus": {
+      "hp": 420,
+      "atk": 84,
+      "def": 42,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 43,
+    "requiredExp": 4300,
+    "skillPoints": 43,
+    "statBonus": {
+      "hp": 430,
+      "atk": 86,
+      "def": 43,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 44,
+    "requiredExp": 4400,
+    "skillPoints": 44,
+    "statBonus": {
+      "hp": 440,
+      "atk": 88,
+      "def": 44,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 45,
+    "requiredExp": 4500,
+    "skillPoints": 45,
+    "statBonus": {
+      "hp": 450,
+      "atk": 90,
+      "def": 45,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 46,
+    "requiredExp": 4600,
+    "skillPoints": 46,
+    "statBonus": {
+      "hp": 460,
+      "atk": 92,
+      "def": 46,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 47,
+    "requiredExp": 4700,
+    "skillPoints": 47,
+    "statBonus": {
+      "hp": 470,
+      "atk": 94,
+      "def": 47,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 48,
+    "requiredExp": 4800,
+    "skillPoints": 48,
+    "statBonus": {
+      "hp": 480,
+      "atk": 96,
+      "def": 48,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 49,
+    "requiredExp": 4900,
+    "skillPoints": 49,
+    "statBonus": {
+      "hp": 490,
+      "atk": 98,
+      "def": 49,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 50,
+    "requiredExp": 5000,
+    "skillPoints": 50,
+    "statBonus": {
+      "hp": 500,
+      "atk": 100,
+      "def": 50,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 51,
+    "requiredExp": 5100,
+    "skillPoints": 51,
+    "statBonus": {
+      "hp": 510,
+      "atk": 102,
+      "def": 51,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 52,
+    "requiredExp": 5200,
+    "skillPoints": 52,
+    "statBonus": {
+      "hp": 520,
+      "atk": 104,
+      "def": 52,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 53,
+    "requiredExp": 5300,
+    "skillPoints": 53,
+    "statBonus": {
+      "hp": 530,
+      "atk": 106,
+      "def": 53,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 54,
+    "requiredExp": 5400,
+    "skillPoints": 54,
+    "statBonus": {
+      "hp": 540,
+      "atk": 108,
+      "def": 54,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 55,
+    "requiredExp": 5500,
+    "skillPoints": 55,
+    "statBonus": {
+      "hp": 550,
+      "atk": 110,
+      "def": 55,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 56,
+    "requiredExp": 5600,
+    "skillPoints": 56,
+    "statBonus": {
+      "hp": 560,
+      "atk": 112,
+      "def": 56,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 57,
+    "requiredExp": 5700,
+    "skillPoints": 57,
+    "statBonus": {
+      "hp": 570,
+      "atk": 114,
+      "def": 57,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 58,
+    "requiredExp": 5800,
+    "skillPoints": 58,
+    "statBonus": {
+      "hp": 580,
+      "atk": 116,
+      "def": 58,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 59,
+    "requiredExp": 5900,
+    "skillPoints": 59,
+    "statBonus": {
+      "hp": 590,
+      "atk": 118,
+      "def": 59,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 60,
+    "requiredExp": 6000,
+    "skillPoints": 60,
+    "statBonus": {
+      "hp": 600,
+      "atk": 120,
+      "def": 60,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 61,
+    "requiredExp": 6100,
+    "skillPoints": 61,
+    "statBonus": {
+      "hp": 610,
+      "atk": 122,
+      "def": 61,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 62,
+    "requiredExp": 6200,
+    "skillPoints": 62,
+    "statBonus": {
+      "hp": 620,
+      "atk": 124,
+      "def": 62,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 63,
+    "requiredExp": 6300,
+    "skillPoints": 63,
+    "statBonus": {
+      "hp": 630,
+      "atk": 126,
+      "def": 63,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 64,
+    "requiredExp": 6400,
+    "skillPoints": 64,
+    "statBonus": {
+      "hp": 640,
+      "atk": 128,
+      "def": 64,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 65,
+    "requiredExp": 6500,
+    "skillPoints": 65,
+    "statBonus": {
+      "hp": 650,
+      "atk": 130,
+      "def": 65,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 66,
+    "requiredExp": 6600,
+    "skillPoints": 66,
+    "statBonus": {
+      "hp": 660,
+      "atk": 132,
+      "def": 66,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 67,
+    "requiredExp": 6700,
+    "skillPoints": 67,
+    "statBonus": {
+      "hp": 670,
+      "atk": 134,
+      "def": 67,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 68,
+    "requiredExp": 6800,
+    "skillPoints": 68,
+    "statBonus": {
+      "hp": 680,
+      "atk": 136,
+      "def": 68,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 69,
+    "requiredExp": 6900,
+    "skillPoints": 69,
+    "statBonus": {
+      "hp": 690,
+      "atk": 138,
+      "def": 69,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 70,
+    "requiredExp": 7000,
+    "skillPoints": 70,
+    "statBonus": {
+      "hp": 700,
+      "atk": 140,
+      "def": 70,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 71,
+    "requiredExp": 7100,
+    "skillPoints": 71,
+    "statBonus": {
+      "hp": 710,
+      "atk": 142,
+      "def": 71,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 72,
+    "requiredExp": 7200,
+    "skillPoints": 72,
+    "statBonus": {
+      "hp": 720,
+      "atk": 144,
+      "def": 72,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 73,
+    "requiredExp": 7300,
+    "skillPoints": 73,
+    "statBonus": {
+      "hp": 730,
+      "atk": 146,
+      "def": 73,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 74,
+    "requiredExp": 7400,
+    "skillPoints": 74,
+    "statBonus": {
+      "hp": 740,
+      "atk": 148,
+      "def": 74,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 75,
+    "requiredExp": 7500,
+    "skillPoints": 75,
+    "statBonus": {
+      "hp": 750,
+      "atk": 150,
+      "def": 75,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 76,
+    "requiredExp": 7600,
+    "skillPoints": 76,
+    "statBonus": {
+      "hp": 760,
+      "atk": 152,
+      "def": 76,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 77,
+    "requiredExp": 7700,
+    "skillPoints": 77,
+    "statBonus": {
+      "hp": 770,
+      "atk": 154,
+      "def": 77,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 78,
+    "requiredExp": 7800,
+    "skillPoints": 78,
+    "statBonus": {
+      "hp": 780,
+      "atk": 156,
+      "def": 78,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 79,
+    "requiredExp": 7900,
+    "skillPoints": 79,
+    "statBonus": {
+      "hp": 790,
+      "atk": 158,
+      "def": 79,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 80,
+    "requiredExp": 8000,
+    "skillPoints": 80,
+    "statBonus": {
+      "hp": 800,
+      "atk": 160,
+      "def": 80,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 81,
+    "requiredExp": 8100,
+    "skillPoints": 81,
+    "statBonus": {
+      "hp": 810,
+      "atk": 162,
+      "def": 81,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 82,
+    "requiredExp": 8200,
+    "skillPoints": 82,
+    "statBonus": {
+      "hp": 820,
+      "atk": 164,
+      "def": 82,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 83,
+    "requiredExp": 8300,
+    "skillPoints": 83,
+    "statBonus": {
+      "hp": 830,
+      "atk": 166,
+      "def": 83,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 84,
+    "requiredExp": 8400,
+    "skillPoints": 84,
+    "statBonus": {
+      "hp": 840,
+      "atk": 168,
+      "def": 84,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 85,
+    "requiredExp": 8500,
+    "skillPoints": 85,
+    "statBonus": {
+      "hp": 850,
+      "atk": 170,
+      "def": 85,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 86,
+    "requiredExp": 8600,
+    "skillPoints": 86,
+    "statBonus": {
+      "hp": 860,
+      "atk": 172,
+      "def": 86,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 87,
+    "requiredExp": 8700,
+    "skillPoints": 87,
+    "statBonus": {
+      "hp": 870,
+      "atk": 174,
+      "def": 87,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 88,
+    "requiredExp": 8800,
+    "skillPoints": 88,
+    "statBonus": {
+      "hp": 880,
+      "atk": 176,
+      "def": 88,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 89,
+    "requiredExp": 8900,
+    "skillPoints": 89,
+    "statBonus": {
+      "hp": 890,
+      "atk": 178,
+      "def": 89,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 90,
+    "requiredExp": 9000,
+    "skillPoints": 90,
+    "statBonus": {
+      "hp": 900,
+      "atk": 180,
+      "def": 90,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 91,
+    "requiredExp": 9100,
+    "skillPoints": 91,
+    "statBonus": {
+      "hp": 910,
+      "atk": 182,
+      "def": 91,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 92,
+    "requiredExp": 9200,
+    "skillPoints": 92,
+    "statBonus": {
+      "hp": 920,
+      "atk": 184,
+      "def": 92,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 93,
+    "requiredExp": 9300,
+    "skillPoints": 93,
+    "statBonus": {
+      "hp": 930,
+      "atk": 186,
+      "def": 93,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 94,
+    "requiredExp": 9400,
+    "skillPoints": 94,
+    "statBonus": {
+      "hp": 940,
+      "atk": 188,
+      "def": 94,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 95,
+    "requiredExp": 9500,
+    "skillPoints": 95,
+    "statBonus": {
+      "hp": 950,
+      "atk": 190,
+      "def": 95,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 96,
+    "requiredExp": 9600,
+    "skillPoints": 96,
+    "statBonus": {
+      "hp": 960,
+      "atk": 192,
+      "def": 96,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 97,
+    "requiredExp": 9700,
+    "skillPoints": 97,
+    "statBonus": {
+      "hp": 970,
+      "atk": 194,
+      "def": 97,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 98,
+    "requiredExp": 9800,
+    "skillPoints": 98,
+    "statBonus": {
+      "hp": 980,
+      "atk": 196,
+      "def": 98,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 99,
+    "requiredExp": 9900,
+    "skillPoints": 99,
+    "statBonus": {
+      "hp": 990,
+      "atk": 198,
+      "def": 99,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  },
+  {
+    "level": 100,
+    "requiredExp": 0,
+    "skillPoints": 100,
+    "statBonus": {
+      "hp": 1000,
+      "atk": 200,
+      "def": 100,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    }
+  }
+]

@@ -1,0 +1,286 @@
+[
+  {
+    "stageId": 1010001,
+    "act": 1,
+    "difficulty": 1,
+    "stage": 1,
+    "spawns": [
+      {
+        "monsterCode": 9001,
+        "count": 8
+      },
+      {
+        "monsterCode": 9002,
+        "count": 4
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 1
+  },
+  {
+    "stageId": 1010002,
+    "act": 1,
+    "difficulty": 1,
+    "stage": 2,
+    "spawns": [
+      {
+        "monsterCode": 9001,
+        "count": 3
+      },
+      {
+        "monsterCode": 9002,
+        "count": 6
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 1
+  },
+  {
+    "stageId": 1010003,
+    "act": 1,
+    "difficulty": 1,
+    "stage": 3,
+    "spawns": [
+      {
+        "monsterCode": 9002,
+        "count": 5
+      }
+    ],
+    "bossMonsterCode": 9099,
+    "backgroundType": 2
+  },
+  {
+    "stageId": 1020001,
+    "act": 1,
+    "difficulty": 2,
+    "stage": 1,
+    "spawns": [
+      {
+        "monsterCode": 9001,
+        "count": 8
+      },
+      {
+        "monsterCode": 9002,
+        "count": 4
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 1
+  },
+  {
+    "stageId": 1020002,
+    "act": 1,
+    "difficulty": 2,
+    "stage": 2,
+    "spawns": [
+      {
+        "monsterCode": 9001,
+        "count": 3
+      },
+      {
+        "monsterCode": 9002,
+        "count": 6
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 1
+  },
+  {
+    "stageId": 1020003,
+    "act": 1,
+    "difficulty": 2,
+    "stage": 3,
+    "spawns": [
+      {
+        "monsterCode": 9002,
+        "count": 5
+      }
+    ],
+    "bossMonsterCode": 9099,
+    "backgroundType": 2
+  },
+  {
+    "stageId": 2010001,
+    "act": 2,
+    "difficulty": 1,
+    "stage": 1,
+    "spawns": [
+      {
+        "monsterCode": 9101,
+        "count": 8
+      },
+      {
+        "monsterCode": 9102,
+        "count": 4
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 3
+  },
+  {
+    "stageId": 2010002,
+    "act": 2,
+    "difficulty": 1,
+    "stage": 2,
+    "spawns": [
+      {
+        "monsterCode": 9101,
+        "count": 3
+      },
+      {
+        "monsterCode": 9102,
+        "count": 6
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 3
+  },
+  {
+    "stageId": 2010003,
+    "act": 2,
+    "difficulty": 1,
+    "stage": 3,
+    "spawns": [
+      {
+        "monsterCode": 9102,
+        "count": 5
+      }
+    ],
+    "bossMonsterCode": 9199,
+    "backgroundType": 4
+  },
+  {
+    "stageId": 2020001,
+    "act": 2,
+    "difficulty": 2,
+    "stage": 1,
+    "spawns": [
+      {
+        "monsterCode": 9101,
+        "count": 8
+      },
+      {
+        "monsterCode": 9102,
+        "count": 4
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 3
+  },
+  {
+    "stageId": 2020002,
+    "act": 2,
+    "difficulty": 2,
+    "stage": 2,
+    "spawns": [
+      {
+        "monsterCode": 9101,
+        "count": 3
+      },
+      {
+        "monsterCode": 9102,
+        "count": 6
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 3
+  },
+  {
+    "stageId": 2020003,
+    "act": 2,
+    "difficulty": 2,
+    "stage": 3,
+    "spawns": [
+      {
+        "monsterCode": 9102,
+        "count": 5
+      }
+    ],
+    "bossMonsterCode": 9199,
+    "backgroundType": 4
+  },
+  {
+    "stageId": 3010001,
+    "act": 3,
+    "difficulty": 1,
+    "stage": 1,
+    "spawns": [
+      {
+        "monsterCode": 9201,
+        "count": 10
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 5
+  },
+  {
+    "stageId": 3010002,
+    "act": 3,
+    "difficulty": 1,
+    "stage": 2,
+    "spawns": [
+      {
+        "monsterCode": 9201,
+        "count": 8
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 5
+  },
+  {
+    "stageId": 3010003,
+    "act": 3,
+    "difficulty": 1,
+    "stage": 3,
+    "spawns": [
+      {
+        "monsterCode": 9201,
+        "count": 6
+      }
+    ],
+    "bossMonsterCode": 9299,
+    "backgroundType": 5
+  },
+  {
+    "stageId": 3020001,
+    "act": 3,
+    "difficulty": 2,
+    "stage": 1,
+    "spawns": [
+      {
+        "monsterCode": 9201,
+        "count": 10
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 5
+  },
+  {
+    "stageId": 3020002,
+    "act": 3,
+    "difficulty": 2,
+    "stage": 2,
+    "spawns": [
+      {
+        "monsterCode": 9201,
+        "count": 8
+      }
+    ],
+    "bossMonsterCode": 0,
+    "backgroundType": 5
+  },
+  {
+    "stageId": 3020003,
+    "act": 3,
+    "difficulty": 2,
+    "stage": 3,
+    "spawns": [
+      {
+        "monsterCode": 9201,
+        "count": 6
+      }
+    ],
+    "bossMonsterCode": 9299,
+    "backgroundType": 5
+  }
+]

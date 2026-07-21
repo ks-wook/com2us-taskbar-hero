@@ -1,0 +1,37 @@
+[
+  {
+    "cubeLevel": 1,
+    "requiredExp": 1000,
+    "combineGradeUp": 1,
+    "combineCount": 3,
+    "goldPerScrap": 100
+  },
+  {
+    "cubeLevel": 2,
+    "requiredExp": 3000,
+    "combineGradeUp": 1,
+    "combineCount": 3,
+    "goldPerScrap": 150
+  },
+  {
+    "cubeLevel": 3,
+    "requiredExp": 6000,
+    "combineGradeUp": 1,
+    "combineCount": 3,
+    "goldPerScrap": 220
+  },
+  {
+    "cubeLevel": 4,
+    "requiredExp": 12000,
+    "combineGradeUp": 1,
+    "combineCount": 3,
+    "goldPerScrap": 320
+  },
+  {
+    "cubeLevel": 5,
+    "requiredExp": 0,
+    "combineGradeUp": 1,
+    "combineCount": 3,
+    "goldPerScrap": 450
+  }
+]

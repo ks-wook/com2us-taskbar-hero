@@ -1,0 +1,182 @@
+[
+  {
+    "stageId": 1010001,
+    "rewardGold": 100,
+    "rewardExp": 50,
+    "grade1Prob": 0.3,
+    "grade2Prob": 0.1,
+    "grade3Prob": 0.02,
+    "grade4Prob": 0.0,
+    "grade5Prob": 0.0
+  },
+  {
+    "stageId": 1010002,
+    "rewardGold": 120,
+    "rewardExp": 60,
+    "grade1Prob": 0.3,
+    "grade2Prob": 0.12,
+    "grade3Prob": 0.03,
+    "grade4Prob": 0.0,
+    "grade5Prob": 0.0
+  },
+  {
+    "stageId": 1010003,
+    "rewardGold": 500,
+    "rewardExp": 250,
+    "grade1Prob": 0.2,
+    "grade2Prob": 0.25,
+    "grade3Prob": 0.1,
+    "grade4Prob": 0.03,
+    "grade5Prob": 0.0
+  },
+  {
+    "stageId": 1020001,
+    "rewardGold": 250,
+    "rewardExp": 125,
+    "grade1Prob": 0.25,
+    "grade2Prob": 0.15,
+    "grade3Prob": 0.05,
+    "grade4Prob": 0.0,
+    "grade5Prob": 0.0
+  },
+  {
+    "stageId": 1020002,
+    "rewardGold": 300,
+    "rewardExp": 150,
+    "grade1Prob": 0.25,
+    "grade2Prob": 0.15,
+    "grade3Prob": 0.06,
+    "grade4Prob": 0.0,
+    "grade5Prob": 0.0
+  },
+  {
+    "stageId": 1020003,
+    "rewardGold": 1200,
+    "rewardExp": 600,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.25,
+    "grade3Prob": 0.15,
+    "grade4Prob": 0.05,
+    "grade5Prob": 0.0
+  },
+  {
+    "stageId": 2010001,
+    "rewardGold": 800,
+    "rewardExp": 400,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.2,
+    "grade3Prob": 0.1,
+    "grade4Prob": 0.03,
+    "grade5Prob": 0.0
+  },
+  {
+    "stageId": 2010002,
+    "rewardGold": 1000,
+    "rewardExp": 500,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.2,
+    "grade3Prob": 0.12,
+    "grade4Prob": 0.05,
+    "grade5Prob": 0.0
+  },
+  {
+    "stageId": 2010003,
+    "rewardGold": 4000,
+    "rewardExp": 2000,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.0,
+    "grade3Prob": 0.2,
+    "grade4Prob": 0.12,
+    "grade5Prob": 0.06
+  },
+  {
+    "stageId": 2020001,
+    "rewardGold": 2000,
+    "rewardExp": 1000,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.15,
+    "grade3Prob": 0.15,
+    "grade4Prob": 0.05,
+    "grade5Prob": 0.0
+  },
+  {
+    "stageId": 2020002,
+    "rewardGold": 2500,
+    "rewardExp": 1250,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.0,
+    "grade3Prob": 0.2,
+    "grade4Prob": 0.1,
+    "grade5Prob": 0.03
+  },
+  {
+    "stageId": 2020003,
+    "rewardGold": 10000,
+    "rewardExp": 5000,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.0,
+    "grade3Prob": 0.15,
+    "grade4Prob": 0.15,
+    "grade5Prob": 0.1
+  },
+  {
+    "stageId": 3010001,
+    "rewardGold": 6000,
+    "rewardExp": 3000,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.0,
+    "grade3Prob": 0.15,
+    "grade4Prob": 0.15,
+    "grade5Prob": 0.05
+  },
+  {
+    "stageId": 3010002,
+    "rewardGold": 7000,
+    "rewardExp": 3500,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.0,
+    "grade3Prob": 0.15,
+    "grade4Prob": 0.15,
+    "grade5Prob": 0.06
+  },
+  {
+    "stageId": 3010003,
+    "rewardGold": 30000,
+    "rewardExp": 15000,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.0,
+    "grade3Prob": 0.0,
+    "grade4Prob": 0.2,
+    "grade5Prob": 0.17
+  },
+  {
+    "stageId": 3020001,
+    "rewardGold": 15000,
+    "rewardExp": 7500,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.0,
+    "grade3Prob": 0.0,
+    "grade4Prob": 0.15,
+    "grade5Prob": 0.12
+  },
+  {
+    "stageId": 3020002,
+    "rewardGold": 17000,
+    "rewardExp": 8500,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.0,
+    "grade3Prob": 0.0,
+    "grade4Prob": 0.15,
+    "grade5Prob": 0.15
+  },
+  {
+    "stageId": 3020003,
+    "rewardGold": 70000,
+    "rewardExp": 35000,
+    "grade1Prob": 0.0,
+    "grade2Prob": 0.0,
+    "grade3Prob": 0.0,
+    "grade4Prob": 0.15,
+    "grade5Prob": 0.23
+  }
+]

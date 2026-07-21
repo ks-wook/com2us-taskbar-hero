@@ -1,0 +1,44 @@
+[
+  {
+    "classCode": 1,
+    "name": "기사",
+    "unlockType": 0,
+    "baseStats": {
+      "hp": 120,
+      "atk": 10,
+      "def": 8,
+      "moveSpeed": 3.0,
+      "critChance": 0.05,
+      "critDamage": 1.5,
+      "cooldown": 1.2
+    }
+  },
+  {
+    "classCode": 2,
+    "name": "레인저",
+    "unlockType": 0,
+    "baseStats": {
+      "hp": 90,
+      "atk": 14,
+      "def": 5,
+      "moveSpeed": 4.0,
+      "critChance": 0.1,
+      "critDamage": 1.5,
+      "cooldown": 0.9
+    }
+  },
+  {
+    "classCode": 3,
+    "name": "마법사",
+    "unlockType": 0,
+    "baseStats": {
+      "hp": 85,
+      "atk": 16,
+      "def": 4,
+      "moveSpeed": 3.2,
+      "critChance": 0.08,
+      "critDamage": 1.7,
+      "cooldown": 1.5
+    }
+  }
+]
