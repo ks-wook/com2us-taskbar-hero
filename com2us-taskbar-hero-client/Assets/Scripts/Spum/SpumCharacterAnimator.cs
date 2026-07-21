@@ -1,18 +1,29 @@
+using System.Collections;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 /// <summary>
 /// SPUM 캐릭터 애니메이션 헬퍼. SPUM_Prefabs가 Assembly-CSharp(asmdef 없음)에 있어
 /// asmdef 어셈블리에서 직접 참조할 수 없으므로, 같은 Assembly-CSharp에 두고
-/// 외부(CharacterSelectManager 등)에서는 SendMessage("PlayAttackOnce")로 호출한다.
+/// 외부(CharacterSelectManager·BattleDevController 등)에서는 SendMessage(...)로 호출한다.
 ///
-/// 시작 시 애니메이터를 초기화(IDLE 재생)하고, PlayAttackOnce()로 그 캐릭터 고유의
-/// 공격 애니메이션(ATTACK_List[0])을 1회 재생한다(SPUM 애니메이터가 트리거 후 IDLE로 복귀).
+/// 시작 시 애니메이터를 초기화(IDLE 재생)하고, PlayAttackOnce()/PlayDamagedOnce()/PlayDeathOnce()로
+/// 그 캐릭터 고유의 상태 애니메이션을 재생한다(SPUM 애니메이터가 트리거 후 IDLE로 복귀).
+/// 플레이어(Knight 등)와 몬스터(SPUM BasicPack)가 공용으로 쓴다.
 /// </summary>
 [RequireComponent(typeof(SPUM_Prefabs))]
 public class SpumCharacterAnimator : MonoBehaviour
 {
+    [Tooltip("돌진(방패 돌진) 시 재생할 웅크린 자세 애니메이션. MOVE 상태 클립을 이 클립으로 오버라이드해 재생한다.")]
+    public AnimationClip chargeDashClip;
+
+    [Tooltip("버프 스킬(기사의 분노) 발동 시 재생할 분노/기합 자세 애니메이션. OTHER 상태 클립을 오버라이드해 1회 재생 후 IDLE로 복귀한다.")]
+    public AnimationClip rageClip;
+
     private SPUM_Prefabs _spum;
     private bool _initialized;
+    private AnimationClip _savedMoveClip;   // 돌진 중 MOVE 오버라이드 전 원본 걷기 클립
+    private int _rageIndex = -1;            // ATTACK_List에 추가한 분노 클립 인덱스(1회 추가)
 
     private void Awake()
     {
@@ -38,22 +49,331 @@ public class SpumCharacterAnimator : MonoBehaviour
 
         _spum.OverrideControllerInit();
 
-        if (_spum.IDLE_List != null && _spum.IDLE_List.Count > 0)
-        {
-            _spum.PlayAnimation(PlayerState.IDLE, 0);
-        }
-
+        // 재귀 방지: PlayIdle()이 다시 EnsureInitialized()를 부르므로,
+        // 여기서는 플래그를 먼저 세우고 IDLE을 직접 재생한다.
         _initialized = true;
+        Play(PlayerState.IDLE, _spum.IDLE_List);
     }
 
-    /// <summary>이 캐릭터 고유의 공격 애니메이션을 1회 재생한다.</summary>
+    /// <summary>IDLE 상태로 되돌린다(리스폰·초기화).</summary>
+    public void PlayIdle()
+    {
+        EnsureInitialized();
+        Play(PlayerState.IDLE, _spum != null ? _spum.IDLE_List : null);
+    }
+
+    /// <summary>이동(MOVE) 애니메이션을 재생한다(루프). 상태 진입 시 1회 호출한다.</summary>
+    public void PlayMove()
+    {
+        EnsureInitialized();
+        Play(PlayerState.MOVE, _spum != null ? _spum.MOVE_List : null);
+    }
+
+    /// <summary>이 캐릭터 고유의 공격 애니메이션을 1회 재생한다(ATTACK_List[0]).</summary>
     public void PlayAttackOnce()
     {
         EnsureInitialized();
+        Play(PlayerState.ATTACK, _spum != null ? _spum.ATTACK_List : null);
+    }
 
-        if (_spum != null && _spum.ATTACK_List != null && _spum.ATTACK_List.Count > 0)
+    /// <summary>
+    /// ATTACK_List에서 이름에 <paramref name="contains"/>가 포함된 공격 클립을 찾아 재생한다.
+    /// 예: 레인저는 "Bow"(활 공격, 0_Attack_Bow). 없으면 index 0.
+    /// </summary>
+    public void PlayAttackByName(string contains)
+    {
+        EnsureInitialized();
+        if (_spum == null || _spum.ATTACK_List == null || _spum.ATTACK_List.Count == 0)
         {
-            _spum.PlayAnimation(PlayerState.ATTACK, 0);
+            return;
+        }
+
+        int idx = 0;
+        if (!string.IsNullOrEmpty(contains))
+        {
+            string key = contains.ToLower();
+            for (int i = 0; i < _spum.ATTACK_List.Count; i++)
+            {
+                var c = _spum.ATTACK_List[i];
+                if (c != null && c.name.ToLower().Contains(key))
+                {
+                    idx = i;
+                    break;
+                }
+            }
+        }
+        _spum.PlayAnimation(PlayerState.ATTACK, idx);
+    }
+
+    /// <summary>피격 애니메이션을 1회 재생한다(없으면 무시).</summary>
+    public void PlayDamagedOnce()
+    {
+        EnsureInitialized();
+        Play(PlayerState.DAMAGED, _spum != null ? _spum.DAMAGED_List : null);
+    }
+
+    /// <summary>사망 애니메이션을 재생한다(없으면 무시).</summary>
+    public void PlayDeathOnce()
+    {
+        EnsureInitialized();
+        Play(PlayerState.DEATH, _spum != null ? _spum.DEATH_List : null);
+    }
+
+    /// <summary>
+    /// 돌진(웅크린 자세) 애니메이션을 재생한다. MOVE 상태의 클립을 <see cref="chargeDashClip"/>으로
+    /// 오버라이드하고 MOVE를 재생해(1_Move=true) 돌진 내내 자세를 유지한다.
+    /// <see cref="StopChargeDash"/>로 원래 걷기 클립을 복원한다.
+    /// </summary>
+    public void PlayChargeDash()
+    {
+        EnsureInitialized();
+        if (_spum == null)
+        {
+            return;
+        }
+
+        if (chargeDashClip == null)
+        {
+            Play(PlayerState.MOVE, _spum.MOVE_List); // 폴백: 걷기
+            return;
+        }
+
+        var pairs = _spum.StateAnimationPairs;
+        if (pairs != null && pairs.TryGetValue("MOVE", out var moveList) && moveList != null && moveList.Count > 0)
+        {
+            if (_savedMoveClip == null)
+            {
+                _savedMoveClip = moveList[0];
+            }
+            moveList[0] = chargeDashClip;
+            _spum.PlayAnimation(PlayerState.MOVE, 0); // MOVE 상태 유지(크라우치 클립)
+        }
+    }
+
+    /// <summary>돌진 애니메이션을 끝내고 걷기 클립을 복원한 뒤 IDLE로 되돌린다.</summary>
+    public void StopChargeDash()
+    {
+        if (_spum != null && _savedMoveClip != null)
+        {
+            var pairs = _spum.StateAnimationPairs;
+            if (pairs != null && pairs.TryGetValue("MOVE", out var moveList) && moveList != null && moveList.Count > 0)
+            {
+                moveList[0] = _savedMoveClip;
+            }
+            _savedMoveClip = null;
+        }
+
+        // 크라우치 클립이 애니메이터 GameObject(UnitRoot)의 transform을 바꿔놨고
+        // IDLE/MOVE 클립은 이 transform을 애니메이션하지 않으므로 수동으로 원복한다.
+        if (_spum != null && _spum._anim != null)
+        {
+            var at = _spum._anim.transform;
+            at.localScale = Vector3.one;
+            at.localRotation = Quaternion.identity;
+        }
+
+        PlayIdle();
+    }
+
+    /// <summary>
+    /// 버프(기사의 분노) 발동용 분노/기합 애니메이션을 1회 재생한다.
+    /// SPUM의 OTHER 상태는 이 캐릭터 애니메이터에 슬롯/트리거가 없어(=idle로 떨어짐) 쓸 수 없으므로,
+    /// 검증된 ATTACK 경로를 재사용한다: <see cref="rageClip"/>을 ATTACK_List 끝에 1회 추가하고
+    /// 그 인덱스로 ATTACK을 재생한다(기본공격 index 0은 건드리지 않음). ATTACK은 1회 재생 후 IDLE로 복귀하며,
+    /// rageClip은 마지막 프레임이 원점(scale 1/rot 0/pos 0)이라 잔상 없이 원복된다.
+    /// rageClip이 없으면 기본 공격 모션으로 폴백한다.
+    /// </summary>
+    public void PlayRage()
+    {
+        EnsureInitialized();
+        if (_spum == null)
+        {
+            return;
+        }
+        if (rageClip == null || _spum.ATTACK_List == null || _spum.ATTACK_List.Count == 0)
+        {
+            PlayAttackOnce();
+            return;
+        }
+
+        if (_rageIndex < 0 || _rageIndex >= _spum.ATTACK_List.Count || _spum.ATTACK_List[_rageIndex] != rageClip)
+        {
+            _spum.ATTACK_List.Add(rageClip);
+            _rageIndex = _spum.ATTACK_List.Count - 1;
+        }
+        _spum.PlayAnimation(PlayerState.ATTACK, _rageIndex); // 1회 재생 후 IDLE 복귀
+    }
+
+    [Tooltip("캐스터 스킬 홀드 시 정지할 공격 애니 정규화 시점(0~1). 손을 든 프레임")]
+    public float castHoldNormalizedTime = 0.14f;
+
+    /// <summary>
+    /// 캐스터(마법사) 스킬용: 공격(마법) 애니를 재생하다 손 든 프레임(<see cref="castHoldNormalizedTime"/>)에서
+    /// 정지(홀드)하고, <paramref name="holdSeconds"/> 뒤 재개해 애니를 마무리하며 IDLE(차렷)로 복귀한다.
+    /// 정지 중에도 스킬 이펙트(별도 GameObject)는 자기 시간축으로 재생된다.
+    /// </summary>
+    public void PlayCastHold(float holdSeconds)
+    {
+        EnsureInitialized();
+        if (_spum == null || _spum._anim == null) return;
+        StopCoroutine(nameof(CastHoldRoutine));
+        StartCoroutine(CastHoldRoutine(holdSeconds));
+    }
+
+    private IEnumerator CastHoldRoutine(float holdSeconds)
+    {
+        var anim = _spum._anim;
+
+        // 마법(또는 index 0) 공격 애니 재생
+        int idx = 0;
+        if (_spum.ATTACK_List != null)
+        {
+            for (int i = 0; i < _spum.ATTACK_List.Count; i++)
+            {
+                var c = _spum.ATTACK_List[i];
+                if (c != null && c.name.ToLower().Contains("magic")) { idx = i; break; }
+            }
+        }
+        anim.speed = 1f;
+        _spum.PlayAnimation(PlayerState.ATTACK, idx);
+
+        // 공격 상태로 진입(트랜지션 종료 + 공격 클립이 현재)할 때까지 대기
+        float g = 0f;
+        while (g < 1f)
+        {
+            g += Time.unscaledDeltaTime;
+            if (!anim.IsInTransition(0))
+            {
+                var ci = anim.GetCurrentAnimatorClipInfo(0);
+                if (ci != null && ci.Length > 0 && ci[0].clip != null && ci[0].clip.name.ToLower().Contains("attack"))
+                {
+                    break;
+                }
+            }
+            yield return null;
+        }
+
+        // 손 든 프레임으로 강제 이동 후 정지(캡처로 검증된 방식)
+        float target = Mathf.Clamp01(castHoldNormalizedTime);
+        int hash = anim.GetCurrentAnimatorStateInfo(0).fullPathHash;
+        anim.Play(hash, 0, target);
+        anim.Update(0f);
+        anim.speed = 0f;
+
+        yield return new WaitForSeconds(Mathf.Max(0.05f, holdSeconds));
+
+        anim.speed = 1f; // 재개 → 공격 애니 마무리 후 IDLE(차렷) 복귀
+    }
+
+    [Tooltip("화살비: 점프 높이(유닛)")]
+    public float arrowRainJumpHeight = 1.4f;
+    [Tooltip("화살비: 활을 하늘로 든 정지 프레임(정규화 0~1). 활 클립상 오른팔이 최대로 올라가는 시점")]
+    public float arrowRainBowNormalizedTime = 0.62f;
+    [Tooltip("화살비: 점프/착지 각 소요 시간(초)")]
+    public float arrowRainJumpTime = 0.12f;
+    [Tooltip("화살비: 정점에서의 크기 배율(점프하며 커졌다 착지 시 원상복귀)")]
+    public float arrowRainPeakScale = 1.3f;
+    [Tooltip("화살비: 점프 중 다른 오브젝트에 가리지 않도록 올릴 정렬 순서(SortingGroup)")]
+    public int arrowRainFrontOrder = 1000;
+
+    /// <summary>
+    /// 레인저 화살비용: 위로 점프하며 활 공격 애니를 재생하다, 정점에서 활을 하늘로 든 프레임
+    /// (<see cref="arrowRainBowNormalizedTime"/>)에서 정지(홀드)한다. holdSeconds 뒤 재개하며 착지한다.
+    /// 대상 위치의 화살비 이펙트/데미지는 PlayerCombatant가 담당(정지 중에도 이펙트는 자기 시간축 재생).
+    /// </summary>
+    public void PlayArrowRain(float holdSeconds)
+    {
+        EnsureInitialized();
+        if (_spum == null || _spum._anim == null) return;
+        StopCoroutine(nameof(ArrowRainRoutine));
+        StartCoroutine(ArrowRainRoutine(holdSeconds));
+    }
+
+    private IEnumerator ArrowRainRoutine(float holdSeconds)
+    {
+        var anim = _spum._anim;
+        float baseY = transform.position.y;
+        float apexY = baseY + arrowRainJumpHeight;
+        Vector3 baseScale = transform.localScale;
+        Vector3 peakScale = baseScale * Mathf.Max(1f, arrowRainPeakScale); // 부호(좌우 반전) 유지
+
+        // 점프 동안 다른 캐릭터/오브젝트에 가리지 않도록 정렬 순서를 최상단으로
+        var sg = GetComponentInChildren<SortingGroup>();
+        int origOrder = sg != null ? sg.sortingOrder : 0;
+        if (sg != null) sg.sortingOrder = arrowRainFrontOrder;
+
+        // 활 공격 애니 재생
+        int idx = 0;
+        if (_spum.ATTACK_List != null)
+        {
+            for (int i = 0; i < _spum.ATTACK_List.Count; i++)
+            {
+                var c = _spum.ATTACK_List[i];
+                if (c != null && c.name.ToLower().Contains("bow")) { idx = i; break; }
+            }
+        }
+        anim.speed = 1f;
+        _spum.PlayAnimation(PlayerState.ATTACK, idx);
+
+        // 1) 점프 업(애니 재생하며 위로). 상승 중 공격 상태 진입 대기 겸용.
+        float jt = 0f;
+        float jd = Mathf.Max(0.01f, arrowRainJumpTime);
+        while (jt < jd)
+        {
+            jt += Time.deltaTime;
+            float k = Mathf.Sin(Mathf.Clamp01(jt / jd) * Mathf.PI * 0.5f); // ease-out 상승
+            var p = transform.position; p.y = Mathf.Lerp(baseY, apexY, k); transform.position = p;
+            transform.localScale = Vector3.Lerp(baseScale, peakScale, k); // 오르며 점점 커짐
+            yield return null;
+        }
+        { var p = transform.position; p.y = apexY; transform.position = p; }
+        transform.localScale = peakScale;
+
+        // 공격 상태로 확실히 진입할 때까지(트랜지션 종료 + 공격 클립) 잠깐 더 대기
+        float g = 0f;
+        while (g < 0.5f)
+        {
+            if (!anim.IsInTransition(0))
+            {
+                var ci = anim.GetCurrentAnimatorClipInfo(0);
+                if (ci != null && ci.Length > 0 && ci[0].clip != null && ci[0].clip.name.ToLower().Contains("attack"))
+                    break;
+            }
+            g += Time.deltaTime;
+            yield return null;
+        }
+
+        // 2) 정점에서 활을 하늘로 든 프레임으로 강제 이동 후 정지
+        int hash = anim.GetCurrentAnimatorStateInfo(0).fullPathHash;
+        anim.Play(hash, 0, Mathf.Clamp01(arrowRainBowNormalizedTime));
+        anim.Update(0f);
+        anim.speed = 0f;
+
+        // 3) 공중 유지(화살비 지속)
+        yield return new WaitForSeconds(Mathf.Max(0.05f, holdSeconds));
+
+        // 4) 재개 + 착지
+        anim.speed = 1f;
+        float lt = 0f;
+        float ld = Mathf.Max(0.01f, arrowRainJumpTime);
+        while (lt < ld)
+        {
+            lt += Time.deltaTime;
+            float k = Mathf.Clamp01(lt / ld);
+            var p = transform.position; p.y = Mathf.Lerp(apexY, baseY, k); transform.position = p;
+            transform.localScale = Vector3.Lerp(peakScale, baseScale, k); // 내려오며 원래 크기로
+            yield return null;
+        }
+        { var p = transform.position; p.y = baseY; transform.position = p; }
+        transform.localScale = baseScale; // 원래 크기 복원
+        if (sg != null) sg.sortingOrder = origOrder; // 정렬 순서 복원
+    }
+
+    private void Play(PlayerState state, System.Collections.Generic.List<AnimationClip> clips)
+    {
+        if (_spum != null && clips != null && clips.Count > 0)
+        {
+            _spum.PlayAnimation(state, 0);
         }
     }
 }

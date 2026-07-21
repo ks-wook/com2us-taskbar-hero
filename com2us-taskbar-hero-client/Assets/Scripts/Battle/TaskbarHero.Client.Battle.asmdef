@@ -1,9 +1,11 @@
 {
-    "name": "TaskbarHero.Client.Managers",
-    "rootNamespace": "TaskbarHero.Client.Managers",
+    "name": "TaskbarHero.Client.Battle",
+    "rootNamespace": "TaskbarHero.Client.Battle",
     "references": [
         "TaskbarHero.Common",
-        "TaskbarHero.Client.MasterData"
+        "TaskbarHero.Client.MasterData",
+        "TaskbarHero.Client.Managers",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

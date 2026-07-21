@@ -1,9 +1,8 @@
 {
-    "name": "TaskbarHero.Client.Managers",
-    "rootNamespace": "TaskbarHero.Client.Managers",
+    "name": "TaskbarHero.Client.MasterData",
+    "rootNamespace": "TaskbarHero.Client.MasterData",
     "references": [
-        "TaskbarHero.Common",
-        "TaskbarHero.Client.MasterData"
+        "TaskbarHero.Common"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
