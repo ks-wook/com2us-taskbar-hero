@@ -236,6 +236,7 @@ def export_stage(conn):
         "stage": _i(s["stage"]),
         "spawns": by_stage.get(_i(s["stage_id"]), []),
         "bossMonsterCode": _i(s["boss_monster_code"]),
+        "backgroundType": _i(s["background_type"]),
     } for s in stages]
 
 

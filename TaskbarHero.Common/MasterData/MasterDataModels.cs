@@ -105,6 +105,7 @@ namespace TaskbarHero.Common.MasterData
         public int skillType;     // 1:액티브 2:패시브
         public SkillCoef[] coefs; // 레벨·타입별 계수(개수 = 타입 수 × maxLevel)
         public int maxLevel;
+        public float cooldown;    // 스킬 재사용 대기시간(초). 패시브는 0
     }
 
     /// <summary>룬(rune_master, Rune Tree). player_rune.rune_code 가 참조한다.</summary>
