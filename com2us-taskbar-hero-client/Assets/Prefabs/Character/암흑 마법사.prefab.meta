@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: aec85af960a9b5641a641a8fb6bb0cb0
+guid: cfbf591c6807ec24ab3a391fa6eddafd
 PrefabImporter:
   externalObjects: {}
   userData: 
@@ -9,6 +9,6 @@ AssetOrigin:
   serializedVersion: 1
   productId: 192104
   packageName: Pixel Units - SPUM Bundle Pack Basic
-  packageVersion: "\0\0\0\b\U000C00000\f \0\x02\0\00"
-  assetPath: Assets/SPUM/Resources/Addons/BasicPack/2_Prefab/Human/SPUM_20240911215639316.prefab
+  packageVersion: "@\0\0\b\U000C0000\0\f \0\x02\0\0p"
+  assetPath: Assets/SPUM/Resources/Addons/BasicPack/2_Prefab/Skelton/SPUM_20240911215640179.prefab
   uploadId: 884206
