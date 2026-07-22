@@ -1,0 +1,387 @@
+using GameServer.Data;
+using SqlKata.Execution;
+
+namespace GameServer.Repositories;
+
+/// <summary>장착 트랜잭션 결과 상태.</summary>
+public enum EquipStatus
+{
+    Ok,
+    InvalidCharacter, // player_character 슬롯 없음
+    ItemNotFound,     // 인벤토리에 해당 아이템 없음
+    ItemEquipped,     // 이미 어딘가에 장착 중
+    NotEquippable,    // 장비 아님·슬롯/클래스/레벨 부적합
+}
+
+/// <summary>장착 트랜잭션 결과. Slot=장착 슬롯, UnequippedItemId=스왑으로 밀려난 기존 장비(없으면 null).</summary>
+public sealed record EquipOutcome(EquipStatus Status, int Slot, long? UnequippedItemId)
+{
+    public static EquipOutcome Fail(EquipStatus status) => new(status, 0, null);
+}
+
+/// <summary>장착 해제 트랜잭션 결과 상태.</summary>
+public enum UnequipStatus
+{
+    Ok,
+    InvalidCharacter, // player_character 슬롯 없음
+    NotEquipped,      // 해당 캐릭터-슬롯에 장착된 장비 없음
+}
+
+/// <summary>장착 해제 트랜잭션 결과.</summary>
+public sealed record UnequipOutcome(UnequipStatus Status, long ItemId)
+{
+    public static UnequipOutcome Fail(UnequipStatus status) => new(status, 0);
+}
+
+/// <summary>배치 이동 트랜잭션 결과 상태.</summary>
+public enum MoveStatus
+{
+    Ok,
+    ItemNotFound, // 대상 아이템이 인벤토리에 없음(또는 재화 행)
+    InvalidSlot,  // toSlot이 용량 범위 밖
+}
+
+/// <summary>배치 이동 트랜잭션 결과. Swapped*는 목표 칸에 있던 아이템(비어 있었으면 null).</summary>
+public sealed record MoveOutcome(MoveStatus Status, long MovedItemId, int MovedSlot, long? SwappedItemId, int? SwappedSlot)
+{
+    public static MoveOutcome Fail(MoveStatus status) => new(status, 0, 0, null, null);
+}
+
+/// <summary>인벤토리 용량 확장 트랜잭션 결과 상태.</summary>
+public enum ExpandStatus
+{
+    Ok,
+    NoPlayer,             // game_player 없음(세이브 미생성)
+    CapacityMax,          // 이미 상한이라 더 확장 불가
+    InsufficientCurrency, // 골드 부족
+}
+
+/// <summary>인벤토리 확장 트랜잭션 결과. Cost=차감 골드, GoldBalance=차감 후 잔액.</summary>
+public sealed record ExpandOutcome(ExpandStatus Status, int InventoryCapacity, long Cost, long GoldBalance)
+{
+    public static ExpandOutcome Fail(ExpandStatus status) => new(status, 0, 0, 0);
+}
+
+public interface IInventoryRepository
+{
+    /// <summary>
+    /// 장착을 한 트랜잭션으로 적용한다: 캐릭터·아이템 존재/미장착 확인 → validate(마스터 검증)로 장착 가능 여부·대상 슬롯 판정
+    /// → 같은 슬롯 기존 장비 해제(스왑) → 장착 행 INSERT. validate는 (itemCode, classCode, level)→(ok, slot).
+    /// </summary>
+    Task<EquipOutcome> ApplyEquipAsync(
+        long userId, int characterId, long itemId,
+        Func<int, int, int, (bool ok, int slot)> validate);
+
+    /// <summary>지정 캐릭터-장착 슬롯의 장비를 해제(장착 행 DELETE)한다.</summary>
+    Task<UnequipOutcome> ApplyUnequipAsync(long userId, int characterId, int slot);
+
+    /// <summary>아이템을 목표 칸으로 이동한다. 목표 칸이 차 있으면 두 칸을 교환(swap)하며, 한 트랜잭션으로 처리한다.</summary>
+    Task<MoveOutcome> ApplyMoveAsync(long userId, long itemId, int toSlot);
+
+    /// <summary>
+    /// 인벤토리 용량을 1칸 확장한다: 현재 용량으로 planOne(비용·가능 여부)을 산출 → 골드 확인·차감 → inventory_capacity += 1.
+    /// planOne은 (currentCapacity)→(ok, cost). 한 트랜잭션으로 처리하며 실패 시 전체 롤백한다.
+    /// </summary>
+    Task<ExpandOutcome> ApplyExpandAsync(long userId, Func<int, (bool ok, long cost)> planOne, long nowUnix);
+}
+
+/// <summary>인벤토리/아이템 액션 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더만 사용한다.</summary>
+public sealed class InventoryRepository : IInventoryRepository
+{
+    private const int RowTypeItem = 1;
+    private const int RowTypeCurrency = 2;
+    private const int GoldItemCode = 1;
+
+    private readonly GameDbFactory _dbFactory;
+
+    public InventoryRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    public async Task<EquipOutcome> ApplyEquipAsync(
+        long userId, int characterId, long itemId,
+        Func<int, int, int, (bool ok, int slot)> validate)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var db = _dbFactory.Create(connection);
+
+            // 1) 대상 캐릭터 존재 확인(클래스·레벨은 장착 검증에 사용).
+            var charRow = await db.Query("player_character")
+                .Select("class_code", "level")
+                .Where("user_id", userId).Where("character_id", characterId)
+                .FirstOrDefaultAsync(transaction);
+            if (charRow is null)
+            {
+                await transaction.RollbackAsync();
+                return EquipOutcome.Fail(EquipStatus.InvalidCharacter);
+            }
+
+            // 2) 대상 아이템 존재 확인(계정 소유).
+            var itemRow = await db.Query("player_item")
+                .Select("item_code", "enhance_level")
+                .Where("player_item_id", itemId).Where("user_id", userId)
+                .FirstOrDefaultAsync(transaction);
+            if (itemRow is null)
+            {
+                await transaction.RollbackAsync();
+                return EquipOutcome.Fail(EquipStatus.ItemNotFound);
+            }
+
+            // 3) 이미 어딘가에 장착 중이면 거부(PK가 player_item_id).
+            var already = await db.Query("player_item_equipped")
+                .Where("player_item_id", itemId)
+                .FirstOrDefaultAsync(transaction);
+            if (already is not null)
+            {
+                await transaction.RollbackAsync();
+                return EquipOutcome.Fail(EquipStatus.ItemEquipped);
+            }
+
+            int itemCode = Convert.ToInt32(itemRow.item_code);
+            int enhanceLevel = Convert.ToInt32(itemRow.enhance_level);
+            int classCode = Convert.ToInt32(charRow.class_code);
+            int level = Convert.ToInt32(charRow.level);
+
+            // 4) 마스터 검증: 장비/슬롯/클래스/레벨 정합. 대상 장착 슬롯 산출.
+            var (ok, slot) = validate(itemCode, classCode, level);
+            if (!ok)
+            {
+                await transaction.RollbackAsync();
+                return EquipOutcome.Fail(EquipStatus.NotEquippable);
+            }
+
+            // 5) 같은 캐릭터-슬롯에 기존 장비가 있으면 해제(스왑).
+            var prev = await db.Query("player_item_equipped")
+                .Select("player_item_id")
+                .Where("user_id", userId).Where("equipped_character_id", characterId).Where("equipped_slot", slot)
+                .FirstOrDefaultAsync(transaction);
+
+            long? prevItemId = null;
+            if (prev is not null)
+            {
+                long prevId = Convert.ToInt64(prev.player_item_id);
+                prevItemId = prevId;
+                await db.Query("player_item_equipped").Where("player_item_id", prevId).DeleteAsync(transaction);
+            }
+
+            // 6) 장착 행 INSERT.
+            await db.Query("player_item_equipped").InsertAsync(new
+            {
+                player_item_id = itemId,
+                user_id = userId,
+                item_code = itemCode,
+                enhance_level = enhanceLevel,
+                equipped_character_id = characterId,
+                equipped_slot = slot,
+            }, transaction);
+
+            await transaction.CommitAsync();
+            return new EquipOutcome(EquipStatus.Ok, slot, prevItemId);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<UnequipOutcome> ApplyUnequipAsync(long userId, int characterId, int slot)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var db = _dbFactory.Create(connection);
+
+            // 대상 캐릭터 존재 확인.
+            var charRow = await db.Query("player_character")
+                .Select("character_id")
+                .Where("user_id", userId).Where("character_id", characterId)
+                .FirstOrDefaultAsync(transaction);
+            if (charRow is null)
+            {
+                await transaction.RollbackAsync();
+                return UnequipOutcome.Fail(UnequipStatus.InvalidCharacter);
+            }
+
+            // 해당 캐릭터-슬롯의 장착 행 조회.
+            var row = await db.Query("player_item_equipped")
+                .Select("player_item_id")
+                .Where("user_id", userId).Where("equipped_character_id", characterId).Where("equipped_slot", slot)
+                .FirstOrDefaultAsync(transaction);
+            if (row is null)
+            {
+                await transaction.RollbackAsync();
+                return UnequipOutcome.Fail(UnequipStatus.NotEquipped);
+            }
+
+            long itemId = Convert.ToInt64(row.player_item_id);
+            await db.Query("player_item_equipped").Where("player_item_id", itemId).DeleteAsync(transaction);
+
+            await transaction.CommitAsync();
+            return new UnequipOutcome(UnequipStatus.Ok, itemId);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<MoveOutcome> ApplyMoveAsync(long userId, long itemId, int toSlot)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var db = _dbFactory.Create(connection);
+
+            // 1) 용량 확인(toSlot 범위 검증용). game_player 없으면 인벤토리 자체가 없음.
+            var player = await db.Query("game_player")
+                .Select("inventory_capacity")
+                .Where("user_id", userId)
+                .FirstOrDefaultAsync(transaction);
+            if (player is null)
+            {
+                await transaction.RollbackAsync();
+                return MoveOutcome.Fail(MoveStatus.ItemNotFound);
+            }
+
+            int capacity = Convert.ToInt32(player.inventory_capacity);
+            if (toSlot < 0 || toSlot >= capacity)
+            {
+                await transaction.RollbackAsync();
+                return MoveOutcome.Fail(MoveStatus.InvalidSlot);
+            }
+
+            // 2) 이동 대상 아이템(계정 소유) 확인.
+            var itemRow = await db.Query("player_item")
+                .Select("row_type", "slot")
+                .Where("player_item_id", itemId).Where("user_id", userId)
+                .FirstOrDefaultAsync(transaction);
+            if (itemRow is null)
+            {
+                await transaction.RollbackAsync();
+                return MoveOutcome.Fail(MoveStatus.ItemNotFound);
+            }
+
+            // 재화 행(row_type≠1)이나 미배치(slot NULL) 행은 이동 대상이 아니다.
+            if (Convert.ToInt32(itemRow.row_type) != RowTypeItem || itemRow.slot is null)
+            {
+                await transaction.RollbackAsync();
+                return MoveOutcome.Fail(MoveStatus.ItemNotFound);
+            }
+
+            int fromSlot = Convert.ToInt32(itemRow.slot);
+            if (fromSlot == toSlot)
+            {
+                // 같은 칸으로의 이동은 변경 없음.
+                await transaction.CommitAsync();
+                return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null);
+            }
+
+            // 3) 목표 칸 점유자 조회.
+            var occupant = await db.Query("player_item")
+                .Select("player_item_id")
+                .Where("user_id", userId).Where("slot", toSlot)
+                .FirstOrDefaultAsync(transaction);
+
+            if (occupant is not null)
+            {
+                // 교환: (user_id, slot) 유니크 위반을 피하려 이동 대상 slot을 잠시 비운 뒤 재배치한다.
+                long occupantId = Convert.ToInt64(occupant.player_item_id);
+                await db.Query("player_item").Where("player_item_id", itemId).UpdateAsync(new { slot = (int?)null }, transaction);
+                await db.Query("player_item").Where("player_item_id", occupantId).UpdateAsync(new { slot = fromSlot }, transaction);
+                await db.Query("player_item").Where("player_item_id", itemId).UpdateAsync(new { slot = toSlot }, transaction);
+
+                await transaction.CommitAsync();
+                return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, occupantId, fromSlot);
+            }
+
+            // 빈 칸으로 이동.
+            await db.Query("player_item").Where("player_item_id", itemId).UpdateAsync(new { slot = toSlot }, transaction);
+
+            await transaction.CommitAsync();
+            return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<ExpandOutcome> ApplyExpandAsync(long userId, Func<int, (bool ok, long cost)> planOne, long nowUnix)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var db = _dbFactory.Create(connection);
+
+            // 1) 현재 용량 확인.
+            var player = await db.Query("game_player")
+                .Select("inventory_capacity")
+                .Where("user_id", userId)
+                .FirstOrDefaultAsync(transaction);
+            if (player is null)
+            {
+                await transaction.RollbackAsync();
+                return ExpandOutcome.Fail(ExpandStatus.NoPlayer);
+            }
+
+            int capacity = Convert.ToInt32(player.inventory_capacity);
+
+            // 2) 확장 가능 여부·비용 산출(마스터). 상한 도달이면 거부.
+            var (ok, cost) = planOne(capacity);
+            if (!ok)
+            {
+                await transaction.RollbackAsync();
+                return ExpandOutcome.Fail(ExpandStatus.CapacityMax);
+            }
+
+            // 3) 골드 잔액 확인.
+            var goldRow = await db.Query("player_item")
+                .Select("player_item_id", "quantity")
+                .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+                .FirstOrDefaultAsync(transaction);
+
+            long gold = goldRow is null ? 0 : Convert.ToInt64(goldRow.quantity);
+            if (gold < cost)
+            {
+                await transaction.RollbackAsync();
+                return ExpandOutcome.Fail(ExpandStatus.InsufficientCurrency);
+            }
+
+            // 4) 골드 차감(재화 행 UPDATE) + 용량 +1.
+            long newGold = gold - cost;
+            if (goldRow is not null)
+            {
+                long goldRowId = Convert.ToInt64(goldRow.player_item_id);
+                await db.Query("player_item").Where("player_item_id", goldRowId)
+                    .UpdateAsync(new { quantity = newGold }, transaction);
+            }
+
+            int newCapacity = capacity + 1;
+            await db.Query("game_player").Where("user_id", userId)
+                .UpdateAsync(new { inventory_capacity = newCapacity, updated_at = nowUnix }, transaction);
+
+            await transaction.CommitAsync();
+            return new ExpandOutcome(ExpandStatus.Ok, newCapacity, cost, newGold);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+}

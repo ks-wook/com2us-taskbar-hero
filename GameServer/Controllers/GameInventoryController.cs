@@ -1,0 +1,49 @@
+using GameServer.Services;
+using Microsoft.AspNetCore.Mvc;
+using TaskbarHero.Common.Dto;
+
+namespace GameServer.Controllers;
+
+/// <summary>
+/// 인벤토리/아이템 액션 API(inventory-item-cube 기획서 §5.1·5.2·5.5). 인증 필요.
+/// 장착·해제·배치 이동만 제공하며 강화·용량 확장·큐브·상자는 범위 밖이다.
+/// </summary>
+[ApiController]
+[Route("api/game/inventory")]
+public sealed class GameInventoryController(IInventoryService inventoryService) : GameApiControllerBase
+{
+    /// <summary>장비 장착. POST /api/game/inventory/equip</summary>
+    [HttpPost("equip")]
+    public async Task<IActionResult> Equip([FromBody] EquipRequest request)
+    {
+        var data = request?.data ?? new EquipData();
+        var result = await inventoryService.EquipAsync(AuthenticatedUserId(), data.characterId, data.itemId);
+        return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
+    }
+
+    /// <summary>장비 장착 해제. POST /api/game/inventory/unequip</summary>
+    [HttpPost("unequip")]
+    public async Task<IActionResult> Unequip([FromBody] UnequipRequest request)
+    {
+        var data = request?.data ?? new UnequipData();
+        var result = await inventoryService.UnequipAsync(AuthenticatedUserId(), data.characterId, data.slot);
+        return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
+    }
+
+    /// <summary>인벤토리 배치 이동/교환. POST /api/game/inventory/move</summary>
+    [HttpPost("move")]
+    public async Task<IActionResult> Move([FromBody] MoveRequest request)
+    {
+        var data = request?.data ?? new MoveData();
+        var result = await inventoryService.MoveAsync(AuthenticatedUserId(), data.itemId, data.toSlot);
+        return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
+    }
+
+    /// <summary>인벤토리 용량 1칸 확장(골드 소모). POST /api/game/inventory/expand</summary>
+    [HttpPost("expand")]
+    public async Task<IActionResult> Expand([FromBody] AuthRequest request)
+    {
+        var result = await inventoryService.ExpandAsync(AuthenticatedUserId());
+        return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
+    }
+}

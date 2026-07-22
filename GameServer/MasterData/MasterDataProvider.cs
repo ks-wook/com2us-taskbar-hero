@@ -11,7 +11,7 @@ public sealed record StageDef(
     int BossMonsterCode, int BackgroundType,
     IReadOnlyList<StageSpawnDto> Spawns);
 
-/// <summary>스테이지 클리어 보상 정의. GradeProbs[0..4] = 등급 1~5 드롭 확률.</summary>
+/// <summary>스테이지 클리어 보상 정의. GradeProbs[i] = 등급 (i+1) 드롭 확률(길이 = 최대 등급, stage_reward_drop 기준).</summary>
 public sealed record StageRewardDef(long Gold, long Exp, double[] GradeProbs);
 
 /// <summary>드롭 추첨 결과(전리품 1개).</summary>
@@ -230,26 +230,57 @@ public sealed class MasterDataProvider
 
     private static async Task<Dictionary<int, StageRewardDef>> LoadStageRewardsAsync(QueryFactory db)
     {
-        var rows = await db.Query("stage_reward")
-            .Select("stage_id", "reward_gold", "reward_exp",
-                    "grade1_prob", "grade2_prob", "grade3_prob", "grade4_prob", "grade5_prob")
+        // 스칼라 보상(골드·경험치).
+        var rewardRows = await db.Query("stage_reward")
+            .Select("stage_id", "reward_gold", "reward_exp")
             .GetAsync();
 
+        // 등급별 드롭 확률(자식 테이블). 확률 0 등급은 행이 없으므로 배열에서 0으로 남는다.
+        var dropRows = await db.Query("stage_reward_drop")
+            .Select("stage_id", "grade", "drop_prob")
+            .GetAsync();
+
+        // stage_id → (grade → prob). 최대 등급을 파악해 확률 배열 길이를 정한다(등급 추가 시 스키마·코드 불변).
+        var dropsByStage = new Dictionary<int, Dictionary<int, double>>();
+        var maxGrade = 0;
+        foreach (var d in dropRows)
+        {
+            int stageId = Convert.ToInt32(d.stage_id);
+            int grade = Convert.ToInt32(d.grade);
+            if (!dropsByStage.TryGetValue(stageId, out var map))
+            {
+                map = new Dictionary<int, double>();
+                dropsByStage[stageId] = map;
+            }
+
+            map[grade] = Convert.ToDouble(d.drop_prob);
+            if (grade > maxGrade)
+            {
+                maxGrade = grade;
+            }
+        }
+
         var rewards = new Dictionary<int, StageRewardDef>();
-        foreach (var row in rows)
+        foreach (var row in rewardRows)
         {
             int stageId = Convert.ToInt32(row.stage_id);
+
+            var probs = new double[maxGrade]; // index i = 등급 (i+1) 확률, 정의 없는 등급은 0
+            if (dropsByStage.TryGetValue(stageId, out var map))
+            {
+                foreach (var kv in map)
+                {
+                    if (kv.Key >= 1 && kv.Key <= maxGrade)
+                    {
+                        probs[kv.Key - 1] = kv.Value;
+                    }
+                }
+            }
+
             rewards[stageId] = new StageRewardDef(
                 Convert.ToInt64(row.reward_gold),
                 Convert.ToInt64(row.reward_exp),
-                new double[]
-                {
-                    Convert.ToDouble(row.grade1_prob),
-                    Convert.ToDouble(row.grade2_prob),
-                    Convert.ToDouble(row.grade3_prob),
-                    Convert.ToDouble(row.grade4_prob),
-                    Convert.ToDouble(row.grade5_prob),
-                });
+                probs);
         }
 
         return rewards;

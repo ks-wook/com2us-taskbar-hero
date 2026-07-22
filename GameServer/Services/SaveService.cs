@@ -18,8 +18,6 @@ public interface ISaveService
 
 public sealed class SaveService : ISaveService
 {
-    // 신규 계정 기본 인벤토리 용량(인벤토리 기획서: 기본값에서 시작해 골드로 확장). load 예시 기준 100.
-    private const int InitialInventoryCapacity = 100;
     private const int MaxCharacterSlots = 3;
     private const int MySqlDuplicateEntry = 1062;
 
@@ -103,7 +101,7 @@ public sealed class SaveService : ISaveService
             try
             {
                 await _saveRepository.CreatePlayerWithFirstCharacterAsync(
-                    userId, nickname.Trim(), classCode, InitialInventoryCapacity,
+                    userId, nickname.Trim(), classCode, MasterDataProvider.BaseInventoryCapacity,
                     DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             }
             catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)

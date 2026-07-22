@@ -104,8 +104,8 @@ public sealed class SaveRepository : ISaveRepository
             }
 
             long itemId = Convert.ToInt64(r.player_item_id);
-            int? equippedCharacterId = null;
-            int? equippedSlot = null;
+            int equippedCharacterId = 0; // 0 = 미장착
+            int equippedSlot = 0;
             if (equipped.TryGetValue(itemId, out var eq))
             {
                 equippedCharacterId = eq.charId;
@@ -115,7 +115,7 @@ public sealed class SaveRepository : ISaveRepository
             inventory.Add(new InventoryItemDto
             {
                 itemId = itemId,
-                slot = r.slot is null ? null : Convert.ToInt32(r.slot),
+                slot = r.slot is null ? -1 : Convert.ToInt32(r.slot), // -1 = 슬롯 없음(장착 중)
                 itemCode = Convert.ToInt32(r.item_code),
                 quantity = Convert.ToInt64(r.quantity),
                 enhanceLevel = Convert.ToInt32(r.enhance_level),

@@ -75,13 +75,14 @@ namespace TaskbarHero.Common.Dto
     [Serializable]
     public class InventoryItemDto
     {
+        // ⚠️ Unity JsonUtility는 Nullable(int?)를 파싱하지 못하므로 non-nullable + 센티넬로 표현한다.
         public long itemId;
-        public int? slot;
+        public int slot;                // 가방 칸(0-based). -1 = 슬롯 없음(장착 중)
         public int itemCode;
         public long quantity;
         public int enhanceLevel;
-        public int? equippedCharacterId;
-        public int? equippedSlot;
+        public int equippedCharacterId; // 0 = 미장착
+        public int equippedSlot;        // 0 = 미장착(장착 시 1~6)
     }
 
     [Serializable]
@@ -181,6 +182,16 @@ namespace TaskbarHero.Common.Dto
         public long enteredAt;
     }
 
+    /// <summary>스테이지 진입 응답 { success, errorCode, message, data(StageEnterData) }.</summary>
+    [Serializable]
+    public class StageEnterResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public StageEnterData data = new StageEnterData();
+    }
+
     /// <summary>클리어된 스테이지 좌표(5.2 cleared).</summary>
     [Serializable]
     public class ClearedStageDto
@@ -236,5 +247,111 @@ namespace TaskbarHero.Common.Dto
         public List<CharacterProgressDto> characters = new List<CharacterProgressDto>();
         public List<CurrencyDto> balance = new List<CurrencyDto>();
         public StageProgressDto progress = new StageProgressDto();
+    }
+
+    // ── 인벤토리/아이템 액션 (inventory-item-cube 기획서 §5.1·5.2·5.5) ──
+
+    /// <summary>장착 요청 데이터. { characterId, itemId }</summary>
+    [Serializable]
+    public class EquipData
+    {
+        public int characterId;
+        public long itemId;
+    }
+
+    /// <summary>장착 요청 body(인증). { userId, token, data:{ characterId, itemId } }</summary>
+    [Serializable]
+    public class EquipRequest
+    {
+        public long userId;
+        public string token;
+        public EquipData data;
+    }
+
+    /// <summary>장착 해제 요청 데이터. { characterId, slot }(slot은 장착 슬롯 equipped_slot)</summary>
+    [Serializable]
+    public class UnequipData
+    {
+        public int characterId;
+        public int slot;
+    }
+
+    /// <summary>장착 해제 요청 body(인증).</summary>
+    [Serializable]
+    public class UnequipRequest
+    {
+        public long userId;
+        public string token;
+        public UnequipData data;
+    }
+
+    /// <summary>배치 이동 요청 데이터. { itemId, toSlot }(toSlot은 0-based 인벤토리 칸)</summary>
+    [Serializable]
+    public class MoveData
+    {
+        public long itemId;
+        public int toSlot;
+    }
+
+    /// <summary>배치 이동 요청 body(인증).</summary>
+    [Serializable]
+    public class MoveRequest
+    {
+        public long userId;
+        public string token;
+        public MoveData data;
+    }
+
+    /// <summary>슬롯-아이템 참조(장착/이동 결과 항목). { slot, itemId }</summary>
+    [Serializable]
+    public class SlotItemDto
+    {
+        public int slot;
+        public long itemId;
+    }
+
+    /// <summary>장착 결과(5.1). unequipped는 스왑으로 밀려난 기존 장비(없으면 null).</summary>
+    [Serializable]
+    public class EquipResultData
+    {
+        public int characterId;
+        public SlotItemDto equipped;
+        public SlotItemDto unequipped;   // 스왑 없으면 null
+    }
+
+    /// <summary>장착 해제 결과(5.2).</summary>
+    [Serializable]
+    public class UnequipResultData
+    {
+        public int characterId;
+        public int slot;
+        public long itemId;
+    }
+
+    /// <summary>배치 이동 결과(5.5). swapped는 목표 칸에 있던 아이템(비어 있었으면 null).</summary>
+    [Serializable]
+    public class MoveResultData
+    {
+        public SlotItemDto moved;
+        public SlotItemDto swapped;      // 목표 칸이 비어 있었으면 null
+    }
+
+    /// <summary>인벤토리 용량 확장 결과(5.4). 확장은 1회당 1칸이며, cost=차감 골드·balance=차감 후 잔액.</summary>
+    [Serializable]
+    public class ExpandResultData
+    {
+        public int inventoryCapacity;
+        public CurrencyDto cost;
+        public List<CurrencyDto> balance = new List<CurrencyDto>();
+    }
+
+    /// <summary>스테이지 클리어 응답 { success, errorCode, message, data(StageClearData) }.</summary>
+    [Serializable]
+    public class StageClearResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public StageClearData data = new StageClearData();
     }
 }
