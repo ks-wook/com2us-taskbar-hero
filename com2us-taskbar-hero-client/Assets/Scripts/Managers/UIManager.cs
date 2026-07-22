@@ -15,6 +15,8 @@ namespace TaskbarHero.Client.Managers
         {
             Login,
             SignUp,
+            Inventory,
+            Stage,
         }
 
         public static UIManager Instance { get; private set; }
@@ -22,6 +24,10 @@ namespace TaskbarHero.Client.Managers
         [Header("패널 프리팹")]
         [SerializeField] private GameObject loginPanelPrefab;
         [SerializeField] private GameObject signUpPanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/InventoryPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject inventoryPanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/StagePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject stagePanelPrefab;
 
         [Header("시작 설정")]
         [Tooltip("Start 시 자동으로 표시할 패널. 자동 표시를 원치 않으면 비활성화한다.")]
@@ -66,6 +72,38 @@ namespace TaskbarHero.Client.Managers
 
         /// <summary>회원가입 패널을 표시한다.</summary>
         public void ShowSignUp() => Show(PanelType.SignUp);
+
+        /// <summary>인벤토리 패널을 표시한다.</summary>
+        public void ShowInventory() => Show(PanelType.Inventory);
+
+        /// <summary>인벤토리 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleInventory()
+        {
+            if (Current == PanelType.Inventory)
+            {
+                Hide(PanelType.Inventory);
+            }
+            else
+            {
+                Show(PanelType.Inventory);
+            }
+        }
+
+        /// <summary>스테이지 선택 패널을 표시한다.</summary>
+        public void ShowStage() => Show(PanelType.Stage);
+
+        /// <summary>스테이지 선택 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleStage()
+        {
+            if (Current == PanelType.Stage)
+            {
+                Hide(PanelType.Stage);
+            }
+            else
+            {
+                Show(PanelType.Stage);
+            }
+        }
 
         /// <summary>지정한 패널을 표시하고 나머지 패널은 모두 숨긴다.</summary>
         public void Show(PanelType type)
@@ -143,6 +181,10 @@ namespace TaskbarHero.Client.Managers
                     return loginPanelPrefab;
                 case PanelType.SignUp:
                     return signUpPanelPrefab;
+                case PanelType.Inventory:
+                    // 프리팹은 Assets/Prefabs/UI/에 두고 UIManager 인스턴스에 직접 배선한다.
+                    // 지속 인스턴스가 생성되는 Title 씬과 사용 씬(GameScene) 양쪽에 참조를 지정한다.
+                    return inventoryPanelPrefab;
                 default:
                     return null;
             }
