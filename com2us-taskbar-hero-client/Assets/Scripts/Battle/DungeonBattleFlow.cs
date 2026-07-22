@@ -139,6 +139,7 @@ namespace TaskbarHero.Client.Battle
                 total += kv.Value;
             }
             ApplyBackground(d.backgroundType);
+            StageEnterBanner.Show(d.act, d.difficulty, d.stage); // 상단 중앙 입장 배너(페이드 인/아웃)
             Debug.Log($"[Dungeon] 진입 완료 {d.act}-{d.difficulty}-{d.stage}, 배경타입 {d.backgroundType} → 스폰 예정 {total}마리");
             battle.BeginServerBattle(plan, ResolvePrefab, OnAllCleared);
         }

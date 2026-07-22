@@ -13,16 +13,22 @@ namespace TaskbarHero.Client.UI
         IBeginDragHandler, IDragHandler, IEndDragHandler,
         IPointerEnterHandler, IPointerExitHandler
     {
-        /// <summary>툴팁·아이콘에 표시할 아이템 정보(더미).</summary>
+        /// <summary>툴팁·아이콘에 표시할 아이템 정보.</summary>
         [System.Serializable]
         public struct Display
         {
             public string name;
-            public string grade;
-            public string slotName;
+            public string grade;      // 등급명(노말·고급·희귀·영웅·전설)
+            public int gradeValue;    // 등급 값(1~5) — 이름 색·배경 색 결정
+            public string slotName;   // 종류(무기·보조무기·방어구·재료·재화)
             public string requirement;
             public string stats;
-            public Color iconColor;
+            public string description; // 아이템 설명
+            public Color iconColor;   // 아이콘 스프라이트가 없을 때의 폴백 색
+            public Sprite icon;       // 실제 아이템 아이콘(없으면 iconColor로 폴백)
+            public long itemId;       // 서버 아이템 id(장착/해제 요청용)
+            public int equippedSlot;  // 현재 장착 슬롯(1~6). 0 = 가방(미장착)
+            public bool equippable;   // 장비 아이템 여부(장착 버튼 활성 조건)
         }
 
         [SerializeField] private Display _data;
@@ -50,25 +56,51 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>에디터 빌드 전용: 더미 표시 데이터·아이콘·라벨을 구성한다.</summary>
-        public void EditorSetup(Display display, Font font)
+        /// <summary>표시 데이터로 등급 배경 + 아이콘/라벨을 구성한다.
+        /// GO 자체 Image는 등급 배경색(레이캐스트 대상), 실제 아이콘 스프라이트는 자식으로 그린다.</summary>
+        public void Setup(Display display, Font font)
         {
             _data = display;
             _rt = (RectTransform)transform;
 
+            // 배경(GO 이미지) = 등급 색. 드래그/hover 레이캐스트 대상.
             _icon = gameObject.GetComponent<Image>();
             if (_icon == null)
             {
                 _icon = gameObject.AddComponent<Image>();
             }
-            _icon.color = display.iconColor;
+            _icon.sprite = null;
+            _icon.color = InventoryPanelController.GradeBackgroundColor(display.gradeValue);
             _icon.raycastTarget = true;
 
-            var labelGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            bool hasSprite = display.icon != null;
+
+            // 아이콘 스프라이트(자식) — 배경 위에 표시.
+            var iconTf = transform.Find("IconSprite");
+            var iconGo = iconTf != null ? iconTf.gameObject
+                : new GameObject("IconSprite", typeof(RectTransform), typeof(Image));
+            iconGo.transform.SetParent(transform, false);
+            var iconImg = iconGo.GetComponent<Image>();
+            iconImg.raycastTarget = false;
+            iconImg.preserveAspect = true;
+            iconImg.sprite = hasSprite ? display.icon : null;
+            iconImg.color = hasSprite ? Color.white : display.iconColor;
+            iconImg.enabled = hasSprite || string.IsNullOrEmpty(display.name); // 스프라이트 없고 이름도 없으면 색 사각형
+            var irt = (RectTransform)iconGo.transform;
+            irt.anchorMin = Vector2.zero;
+            irt.anchorMax = Vector2.one;
+            irt.offsetMin = new Vector2(6f, 6f);
+            irt.offsetMax = new Vector2(-6f, -6f);
+
+            // 라벨: 실제 아이콘이 없을 때만 첫 글자 폴백 표시.
+            var labelTf = transform.Find("Label");
+            var labelGo = labelTf != null ? labelTf.gameObject
+                : new GameObject("Label", typeof(RectTransform), typeof(Text));
             labelGo.transform.SetParent(transform, false);
+            labelGo.transform.SetAsLastSibling();
             var label = labelGo.GetComponent<Text>();
             label.font = font;
-            label.text = string.IsNullOrEmpty(display.name) ? "?" : display.name.Substring(0, 1);
+            label.text = hasSprite || string.IsNullOrEmpty(display.name) ? string.Empty : display.name.Substring(0, 1);
             label.fontSize = 40;
             label.alignment = TextAnchor.MiddleCenter;
             label.color = Color.black;
@@ -79,6 +111,9 @@ namespace TaskbarHero.Client.UI
             lrt.offsetMin = Vector2.zero;
             lrt.offsetMax = Vector2.zero;
         }
+
+        /// <summary>에디터 빌드 호환용 별칭.</summary>
+        public void EditorSetup(Display display, Font font) => Setup(display, font);
 
         /// <summary>지정 슬롯 아래로 배치하고 패딩만큼 여백을 준다.</summary>
         public void AttachTo(InventoryItemSlot slot)

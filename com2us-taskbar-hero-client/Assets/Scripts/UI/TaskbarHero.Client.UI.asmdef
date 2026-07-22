@@ -4,6 +4,7 @@
     "references": [
         "TaskbarHero.Common",
         "TaskbarHero.Client.Managers",
+        "TaskbarHero.Client.MasterData",
         "Unity.InputSystem",
         "UnityEngine.UI"
     ],

@@ -150,7 +150,28 @@ namespace TaskbarHero.Client.Battle
             SpawnParty(start);
             _phase = Phase.Advancing;
 
+            // 장비 장착/해제 시 파티 전투 스탯을 즉시 재계산한다.
+            Session.InventoryChanged += RefreshPartyStats;
+
             Log($"전투 시작 — 파티 {_members.Count}인 vs {_monsterName} 웨이브(hp {_monsterMaxHp}, 동시 최대 {maxConcurrentEnemies})");
+        }
+
+        private void OnDestroy()
+        {
+            Session.InventoryChanged -= RefreshPartyStats;
+        }
+
+        /// <summary>장비 변경 등으로 모든 파티 멤버의 전투 스탯을 재계산한다.</summary>
+        public void RefreshPartyStats()
+        {
+            foreach (var m in _members)
+            {
+                if (m != null)
+                {
+                    m.RefreshStats();
+                }
+            }
+            Log("장비 변경 → 파티 전투 스탯 재계산");
         }
 
         private void Update()

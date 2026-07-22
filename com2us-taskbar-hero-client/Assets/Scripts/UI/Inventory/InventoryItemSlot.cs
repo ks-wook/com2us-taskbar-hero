@@ -71,8 +71,9 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>장비 슬롯에 장착 아이템(데모)을 표시하거나(값 있음), 비운다(null).</summary>
-        public void SetEquippedDemo(InventoryItemView.Display? data, Font font)
+        /// <summary>장비 슬롯에 장착 아이템을 표시하거나(값 있음), 비운다(null).
+        /// Display.icon이 있으면 실제 아이콘 스프라이트, 없으면 색+첫글자로 폴백한다.</summary>
+        public void SetEquipped(InventoryItemView.Display? data, Font font)
         {
             _equipped = data;
 
@@ -90,10 +91,14 @@ namespace TaskbarHero.Client.UI
             }
 
             EnsureEquippedIcon(font);
-            _equippedIcon.GetComponent<Image>().color = data.Value.iconColor;
+            var img = _equippedIcon.GetComponent<Image>();
+            bool hasSprite = data.Value.icon != null;
+            img.sprite = hasSprite ? data.Value.icon : null;
+            img.color = hasSprite ? Color.white : data.Value.iconColor;
+            img.preserveAspect = hasSprite;
             if (_equippedLabel != null)
             {
-                _equippedLabel.text = string.IsNullOrEmpty(data.Value.name)
+                _equippedLabel.text = hasSprite || string.IsNullOrEmpty(data.Value.name)
                     ? string.Empty
                     : data.Value.name.Substring(0, 1);
             }

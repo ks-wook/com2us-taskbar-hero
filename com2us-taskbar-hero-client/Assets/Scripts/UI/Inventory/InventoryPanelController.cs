@@ -2,13 +2,16 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
+using TaskbarHero.Client.MasterData;
+using TaskbarHero.Common.Dto;
+using TaskbarHero.Common.MasterData;
 
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
     /// 인벤토리/장비 오버레이 패널. 계층은 에디터 빌드 시 생성되어 프리팹에 정적으로 저장되고
     /// (에디터에서 바로 보임), 런타임에는 직렬화된 참조에 이벤트·표시만 배선한다.
-    /// 서버 실데이터는 아직 연동하지 않으며, 이동 확인용 더미 아이템 1개와 캐릭터별 데모 장착을 포함한다.
+    /// 표시될 때마다 세션 세이브(<see cref="Session.GameData"/>)의 실데이터로 골드·보유 아이템·장착을 채운다.
     /// 기획서: docs/ui/인벤토리-ui-기획서.md
     /// </summary>
     public class InventoryPanelController : MonoBehaviour
@@ -25,11 +28,6 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private int initialItemSlots = 14;
         [Tooltip("한 번에 보이는 줄 수(스크롤). 2줄 = 10칸.")]
         [SerializeField] private int visibleRows = 2;
-        [SerializeField] private bool spawnDummyItem = true; // 이동 확인용 더미(추후 삭제)
-
-        [Header("파티 설정(데모)")]
-        [Tooltip("파티 캐릭터 수(실데이터 연동 전 데모값, 최대 3).")]
-        [SerializeField] private int partyCount = 3;
 
         [Header("구성 참조 (에디터 빌더가 배선 — 직접 수정 불필요)")]
         [SerializeField] private List<InventoryItemSlot> _gridSlots = new List<InventoryItemSlot>();
@@ -43,12 +41,15 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Button _dimButton;
         [SerializeField] private RectTransform _gridContent; // 스크롤 콘텐츠(슬롯 부모)
         [SerializeField] private Button _expandButton;        // 확장 요청 버튼(항상 마지막 칸)
+        [SerializeField] private Image _goldIcon;             // 골드 아이콘(item_1, 런타임 배정)
+        [SerializeField] private Text _goldText;              // 보유 골드량
+        [SerializeField] private Text _statPanelText;         // 초상화 좌측 능력치(장비 포함)
 
         // 장착 슬롯 이름(equip_slot_master 1~6, 표시용 상수)
         private static readonly string[] EquipSlotNames = { "무기", "보조무기", "투구", "갑옷", "장갑", "신발" };
 
-        // 데모용 파티 캐릭터 이름(추후 실데이터 characters로 대체)
-        private static readonly string[] DummyClassNames = { "전사", "레인저", "마법사" };
+        private const int GoldCurrencyType = 1;   // 재화 타입 1 = 골드
+        private const int GoldItemCode = 1;       // item_master 골드 코드(아이콘 item_1)
 
         private const float CanvasRefWidth = 1080f;
         private const float CanvasRefHeight = 1920f;
@@ -56,6 +57,8 @@ namespace TaskbarHero.Client.UI
         private Font _font;
         private RectTransform _rootRect;      // 전체 화면(Canvas) Rect
         private int _selectedCharacter;       // 현재 보고 있는 파티 캐릭터(0-based)
+        private int _partyCount = 1;          // 실제 파티 캐릭터 수(세션 기준)
+        private ItemIconDatabase _iconDb;     // 아이템 아이콘 조회
 
         /// <summary>정적 계층이 이미 구성돼 있으면 true(프리팹에서 로드된 경우).</summary>
         private bool AlreadyBuilt => _tooltip != null;
@@ -63,6 +66,7 @@ namespace TaskbarHero.Client.UI
         private void Awake()
         {
             _rootRect = (RectTransform)transform;
+            _iconDb = ItemIconDatabase.Load();
             if (AlreadyBuilt)
             {
                 _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -73,6 +77,17 @@ namespace TaskbarHero.Client.UI
             }
 
             WireRuntime();
+        }
+
+        /// <summary>패널이 표시될 때마다 세션 실데이터(골드·보유 아이템·장착)로 갱신한다.
+        /// (UIManager가 인스턴스를 캐싱·재사용하므로 활성화 시점마다 최신 데이터를 반영해야 한다.)</summary>
+        private void OnEnable()
+        {
+            if (!AlreadyBuilt && _tooltip == null)
+            {
+                return; // 아직 구성 전(Awake 이전 비정상 활성)
+            }
+            RefreshFromSession();
         }
 
         /// <summary>에디터 빌드 전용: 전체 계층을 생성하고 참조를 배선한다(프리팹 저장용).</summary>
@@ -92,19 +107,33 @@ namespace TaskbarHero.Client.UI
             BuildDim();
             var container = BuildContainer();
             BuildHeader(container);
+            BuildGoldArea(container);  // 보유 골드 표시(좌상단)
             BuildEquipArea(container); // 캐릭터 네비게이션 포함, 가로 중앙 정렬
             BuildGrid(container);
             BuildTooltip();
+        }
 
-            if (spawnDummyItem && _gridSlots.Count > 0)
-            {
-                SpawnDummy(_gridSlots[0]);
-            }
+        /// <summary>좌상단 보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 아이콘/수량은 런타임에 세션에서 채운다.</summary>
+        private void BuildGoldArea(RectTransform container)
+        {
+            var area = NewRect("GoldArea", container);
+            area.anchorMin = area.anchorMax = new Vector2(0f, 1f);
+            area.pivot = new Vector2(0f, 1f);
+            area.anchoredPosition = new Vector2(40f, -40f);
+            area.sizeDelta = new Vector2(280f, 60f);
 
-            if (_charIndicatorText != null)
-            {
-                _charIndicatorText.text = $"캐릭터 1 / {partyCount}";
-            }
+            var bg = NewImage("GoldBg", area, null);
+            bg.color = new Color(0f, 0f, 0f, 0.35f);
+            Stretch(bg.rectTransform);
+
+            var icon = NewImage("GoldIcon", area, null); // 스프라이트는 런타임(RefreshGold)에서 item_1로 배정
+            icon.raycastTarget = false;
+            icon.preserveAspect = true;
+            TopLeft(icon.rectTransform, 8f, 6f, 48f, 48f);
+            _goldIcon = icon;
+
+            _goldText = NewText("GoldText", area, "0", 32, TextAnchor.MiddleLeft);
+            TopLeft(_goldText.rectTransform, 66f, 8f, 200f, 44f);
         }
 
         /// <summary>런타임 배선: 버튼 리스너 등록 + 선택 캐릭터 표시 갱신.</summary>
@@ -130,21 +159,125 @@ namespace TaskbarHero.Client.UI
             {
                 _expandButton.onClick.AddListener(OnExpandInventory);
             }
-
-            RefreshCharacter();
         }
 
-        /// <summary>인벤토리 확장 요청: 아이템 슬롯을 1칸 늘리고 확장 버튼을 항상 마지막으로 둔다.
-        /// 현재는 로컬 데모(서버 미연동). 추후 /api/game/inventory/expand 결과로 대체.</summary>
-        private void OnExpandInventory()
+        // ── 세션 실데이터 연동 ──
+
+        /// <summary>세션 세이브의 실데이터로 골드·파티·보유 아이템·장착을 모두 갱신한다.</summary>
+        private void RefreshFromSession()
         {
-            var slot = CreateGridSlot(_gridSlots.Count, _gridContent);
-            _gridSlots.Add(slot);
+            MasterDataManager.EnsureLoaded();
+            if (_iconDb == null)
+            {
+                _iconDb = ItemIconDatabase.Load();
+            }
+            RefreshGold();
+            RefreshCharacter(); // 파티 수/초상 라벨/장착 슬롯
+            RefreshGrid();      // 가방 아이템
+        }
+
+        /// <summary>보유 골드량과 골드 아이콘(item_1)을 세션 재화에서 갱신한다.</summary>
+        private void RefreshGold()
+        {
+            long gold = 0;
+            var currencies = Session.GameData != null ? Session.GameData.currencies : null;
+            if (currencies != null)
+            {
+                foreach (var c in currencies)
+                {
+                    if (c != null && c.currencyType == GoldCurrencyType)
+                    {
+                        gold = c.amount;
+                    }
+                }
+            }
+            if (_goldText != null)
+            {
+                _goldText.text = gold.ToString("N0");
+            }
+            if (_goldIcon != null)
+            {
+                var sp = _iconDb != null ? _iconDb.Get(GoldItemCode) : null;
+                if (sp != null)
+                {
+                    _goldIcon.sprite = sp;
+                    _goldIcon.color = Color.white;
+                }
+            }
+        }
+
+        /// <summary>세션 인벤토리(비장착 아이템)를 가방 격자에 채운다. 용량만큼 슬롯을 확보한다.</summary>
+        private void RefreshGrid()
+        {
+            // 기존 표시 아이템 제거(재오픈 대비).
+            foreach (var slot in _gridSlots)
+            {
+                if (slot != null && slot.Item != null)
+                {
+                    Destroy(slot.Item.gameObject);
+                    slot.ClearItem();
+                }
+            }
+
+            var player = Session.GameData != null ? Session.GameData.player : null;
+            int capacity = player != null ? player.inventoryCapacity : initialItemSlots;
+            capacity = Mathf.Clamp(capacity, initialItemSlots, 200);
+            EnsureGridSlots(capacity);
+
+            var inv = Session.GameData != null ? Session.GameData.inventory : null;
+            if (inv == null)
+            {
+                return;
+            }
+            foreach (var item in inv)
+            {
+                if (item == null || item.equippedCharacterId != 0)
+                {
+                    continue; // 장착 중(equippedCharacterId≠0)인 아이템은 장비 슬롯에서 표시
+                }
+                int idx = item.slot;
+                if (idx < 0 || idx >= _gridSlots.Count)
+                {
+                    continue;
+                }
+                _gridSlots[idx].SetItem(CreateItemView(item));
+            }
+        }
+
+        /// <summary>격자 슬롯 수가 count 이상이 되도록 확보한다(확장 버튼은 항상 마지막).</summary>
+        private void EnsureGridSlots(int count)
+        {
+            while (_gridSlots.Count < count)
+            {
+                _gridSlots.Add(CreateGridSlot(_gridSlots.Count, _gridContent));
+            }
             if (_expandButton != null)
             {
-                _expandButton.transform.SetAsLastSibling(); // 확장 버튼은 항상 마지막 칸
+                _expandButton.transform.SetAsLastSibling();
             }
-            Debug.Log($"[Inventory] 인벤토리 확장(+1) → 아이템 슬롯 {_gridSlots.Count}칸 (로컬 데모, 서버 미연동)");
+        }
+
+        /// <summary>인벤토리 아이템 DTO로 아이템 뷰를 생성한다(아이콘·툴팁 데이터 포함).</summary>
+        private InventoryItemView CreateItemView(InventoryItemDto item)
+        {
+            var go = NewRect($"Item_{item.itemId}", transform);
+            var view = go.gameObject.AddComponent<InventoryItemView>();
+            view.Setup(BuildDisplay(item), _font);
+            return view;
+        }
+
+        /// <summary>인벤토리 확장 요청(서버). 성공 시 세이브를 재로드해 용량·골드·격자를 갱신한다.
+        /// (POST /api/game/inventory/expand, 골드 소모 1칸 확장.)</summary>
+        private void OnExpandInventory()
+        {
+            if (NetworkManager.Instance == null || !Session.IsLoggedIn)
+            {
+                Debug.LogWarning("[Inventory] 확장 요청 불가(네트워크/세션 없음).");
+                return;
+            }
+            var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
+            Debug.Log("[Inventory] 인벤토리 확장 요청");
+            NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/inventory/expand", req, _ => ReloadAndRefresh(), OnActionError);
         }
 
         /// <summary>루트 GameObject에 오버레이 Canvas/스케일러/레이캐스터를 부착한다.</summary>
@@ -220,10 +353,13 @@ namespace TaskbarHero.Client.UI
             _closeButton = closeImg.gameObject.AddComponent<Button>();
         }
 
-        // 장비 영역 블록의 내부 폭(캐릭터 네비 + 초상 + 6부위 슬롯을 포함). 이 블록을 패널 가로 중앙에 둔다.
-        private const float EquipBlockWidth = 466f;
+        // 장비 영역 블록의 내부 폭(능력치 패널 + 초상 + 6부위 슬롯을 포함). 이 블록을 패널 가로 중앙에 둔다.
+        private const float StatPanelWidth = 190f;
+        private const float PortraitX = 214f;   // 능력치 패널(190) + 간격(24)
+        private const float EquipSlotsX = 466f; // 초상(PortraitX+220) + 간격(32)
+        private const float EquipBlockWidth = 682f; // EquipSlotsX + (2*100 + 16)
 
-        /// <summary>장비 영역(캐릭터 화살표 네비 + 초상 + 6부위 슬롯)을 패널 가로 중앙 컨테이너에 구성한다.</summary>
+        /// <summary>장비 영역(캐릭터 네비 + 능력치 패널 + 초상 + 6부위 슬롯)을 패널 가로 중앙 컨테이너에 구성한다.</summary>
         private void BuildEquipArea(RectTransform container)
         {
             // 가로 중앙 정렬 컨테이너(패널 폭과 무관하게 중앙 고정). 자식은 이 블록의 좌상단 기준으로 배치.
@@ -240,7 +376,7 @@ namespace TaskbarHero.Client.UI
             _prevButton = prev.gameObject.AddComponent<Button>();
 
             _charIndicatorText = NewText("CharIndicator", area, "", 28, TextAnchor.MiddleCenter);
-            TopLeft(_charIndicatorText.rectTransform, 70f, 0f, 326f, 64f);
+            TopLeft(_charIndicatorText.rectTransform, 70f, 0f, EquipBlockWidth - 140f, 64f);
 
             var next = NewImage("NextCharButton", area, slotNormal);
             TopLeft(next.rectTransform, EquipBlockWidth - 64f, 0f, 64f, 64f);
@@ -251,14 +387,17 @@ namespace TaskbarHero.Client.UI
             var label = NewText("EquipLabel", area, "장비", 32, TextAnchor.UpperLeft);
             TopLeft(label.rectTransform, 0f, 90f, 200f, 44f);
 
-            // 캐릭터 초상 슬롯(크기 유지)
+            // 능력치 패널(초상화 좌측): 장비 포함 현재 캐릭터 능력치.
+            BuildStatPanel(area);
+
+            // 캐릭터 초상 슬롯(능력치 패널 우측)
             var portrait = NewImage("PortraitSlot", area, slotPortrait);
-            TopLeft(portrait.rectTransform, 0f, 144f, 220f, 300f);
+            TopLeft(portrait.rectTransform, PortraitX, 144f, 220f, 300f);
             _portraitLabel = NewText("PortraitLabel", portrait.rectTransform, "캐릭터", 24, TextAnchor.LowerCenter);
             Stretch(_portraitLabel.rectTransform);
 
             // 6부위 장착 슬롯 (2열 x 3행) — 초상화보다 작은 크기
-            const float startX = 250f;
+            const float startX = EquipSlotsX;
             const float startY = 144f;
             const float cell = 100f;
             const float gap = 16f;
@@ -284,6 +423,22 @@ namespace TaskbarHero.Client.UI
                 slot.EditorInit(i, isEquipSlot: true, hoverFrame: frame.gameObject, partLabel: name);
                 _equipSlots.Add(slot);
             }
+        }
+
+        /// <summary>초상화 좌측 능력치 패널(제목 + 능력치 텍스트). 값은 런타임에 RefreshStatPanel로 채운다.</summary>
+        private void BuildStatPanel(RectTransform area)
+        {
+            var bg = NewImage("StatPanel", area, null);
+            bg.color = new Color(0.09f, 0.11f, 0.18f, 0.9f);
+            TopLeft(bg.rectTransform, 0f, 144f, StatPanelWidth, 300f);
+
+            var title = NewText("StatTitle", bg.rectTransform, "능력치", 26, TextAnchor.UpperCenter);
+            title.fontStyle = FontStyle.Bold;
+            TopLeft(title.rectTransform, 0f, 10f, StatPanelWidth, 34f);
+
+            _statPanelText = NewText("StatValues", bg.rectTransform, "", 22, TextAnchor.UpperLeft);
+            _statPanelText.lineSpacing = 1.25f;
+            TopLeft(_statPanelText.rectTransform, 14f, 54f, StatPanelWidth - 24f, 236f);
         }
 
         private const float GridCell = 120f;
@@ -435,24 +590,6 @@ namespace TaskbarHero.Client.UI
             _tooltip.gameObject.SetActive(false);
         }
 
-        /// <summary>이동 확인용 더미 아이템을 지정 슬롯에 배치한다(추후 삭제).</summary>
-        private void SpawnDummy(InventoryItemSlot slot)
-        {
-            var go = NewRect("DummyItem", slot.transform);
-            var view = go.gameObject.AddComponent<InventoryItemView>();
-            var display = new InventoryItemView.Display
-            {
-                name = "테스트 검",
-                grade = "영웅",
-                slotName = "무기",
-                requirement = "요구 Lv.10 / 기사",
-                stats = "ATK +50",
-                iconColor = new Color(0.95f, 0.78f, 0.28f, 1f),
-            };
-            view.EditorSetup(display, _font);
-            slot.SetItem(view);
-        }
-
         // ── 슬롯/아이템에서 호출하는 콜백 ──
 
         /// <summary>슬롯 hover 진입/이탈 시 하이라이트 프레임 토글.</summary>
@@ -487,86 +624,375 @@ namespace TaskbarHero.Client.UI
 
         // ── 캐릭터 전환(파티 네비게이션) ──
 
+        /// <summary>세션의 파티 캐릭터 목록(없으면 null).</summary>
+        private List<CharacterDto> Characters =>
+            Session.GameData != null ? Session.GameData.characters : null;
+
         /// <summary>이전 파티 캐릭터로 전환(순환).</summary>
         private void OnPrevCharacter()
         {
-            if (partyCount <= 1)
+            if (_partyCount <= 1)
             {
                 return;
             }
-            _selectedCharacter = (_selectedCharacter - 1 + partyCount) % partyCount;
+            _selectedCharacter = (_selectedCharacter - 1 + _partyCount) % _partyCount;
             RefreshCharacter();
         }
 
         /// <summary>다음 파티 캐릭터로 전환(순환).</summary>
         private void OnNextCharacter()
         {
-            if (partyCount <= 1)
+            if (_partyCount <= 1)
             {
                 return;
             }
-            _selectedCharacter = (_selectedCharacter + 1) % partyCount;
+            _selectedCharacter = (_selectedCharacter + 1) % _partyCount;
             RefreshCharacter();
         }
 
-        /// <summary>선택된 캐릭터의 인디케이터·초상 라벨·장착 슬롯을 갱신한다.</summary>
+        /// <summary>선택된 캐릭터의 인디케이터·초상 라벨·장착 슬롯을 세션 실데이터로 갱신한다.</summary>
         private void RefreshCharacter()
         {
+            var chars = Characters;
+            _partyCount = chars != null && chars.Count > 0 ? chars.Count : 1;
+            _selectedCharacter = Mathf.Clamp(_selectedCharacter, 0, _partyCount - 1);
+
             if (_charIndicatorText != null)
             {
-                _charIndicatorText.text = $"캐릭터 {_selectedCharacter + 1} / {partyCount}";
+                _charIndicatorText.text = $"캐릭터 {_selectedCharacter + 1} / {_partyCount}";
             }
             if (_portraitLabel != null)
             {
-                _portraitLabel.text = _selectedCharacter < DummyClassNames.Length
-                    ? DummyClassNames[_selectedCharacter]
-                    : $"캐릭터 {_selectedCharacter + 1}";
+                _portraitLabel.text = CurrentCharacterLabel(chars);
             }
-            RefreshEquip();
+            RefreshEquip(chars);
+            RefreshStatPanel(chars);
         }
 
-        /// <summary>선택된 캐릭터의 6부위 장착 상태를 장비 슬롯에 반영한다(현재는 데모 데이터).</summary>
-        private void RefreshEquip()
+        /// <summary>현재 선택 캐릭터의 능력치(클래스+레벨+장착 장비 합산)를 능력치 패널에 표시한다.</summary>
+        private void RefreshStatPanel(List<CharacterDto> chars)
         {
+            if (_statPanelText == null)
+            {
+                return;
+            }
+            if (chars == null || _selectedCharacter >= chars.Count)
+            {
+                _statPanelText.text = string.Empty;
+                return;
+            }
+
+            var s = ComputeCharacterStats(chars[_selectedCharacter]);
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"공격력  {s.atk}");
+            sb.AppendLine($"방어력  {s.def}");
+            sb.AppendLine($"체력  {s.hp}");
+            if (s.critChance != 0f) sb.AppendLine($"치명확률  {s.critChance * 100f:0.#}%");
+            if (s.critDamage != 0f) sb.AppendLine($"치명피해  {s.critDamage * 100f:0.#}%");
+            if (s.moveSpeed != 0f) sb.AppendLine($"이동속도  {s.moveSpeed:0.##}");
+            _statPanelText.text = sb.ToString().TrimEnd();
+        }
+
+        /// <summary>캐릭터의 최종 능력치를 계산한다: 클래스 기본 + 레벨 보너스 + 장착 장비 스탯 합산.</summary>
+        private Stats ComputeCharacterStats(CharacterDto c)
+        {
+            var db = MasterDataManager.Db;
+            var total = new Stats();
+            if (db == null)
+            {
+                return total;
+            }
+
+            if (db.Classes.TryGetValue(c.classCode, out var cls))
+            {
+                total = Add(total, cls.baseStats);
+            }
+            if (db.Levels.TryGetValue(c.level, out var lm))
+            {
+                total = Add(total, lm.statBonus);
+            }
+
+            var inv = Session.GameData != null ? Session.GameData.inventory : null;
+            if (inv != null)
+            {
+                foreach (var item in inv)
+                {
+                    if (item != null && item.equippedCharacterId == c.characterId
+                        && db.Items.TryGetValue(item.itemCode, out var im))
+                    {
+                        total = Add(total, im.baseStats);
+                    }
+                }
+            }
+            return total;
+        }
+
+        /// <summary>두 Stats를 합산한다.</summary>
+        private static Stats Add(Stats a, Stats b)
+        {
+            a.hp += b.hp;
+            a.atk += b.atk;
+            a.def += b.def;
+            a.moveSpeed += b.moveSpeed;
+            a.critChance += b.critChance;
+            a.critDamage += b.critDamage;
+            a.cooldown += b.cooldown;
+            return a;
+        }
+
+        /// <summary>현재 선택 캐릭터의 직업명·레벨 라벨(마스터 데이터). 없으면 기본 라벨.</summary>
+        private string CurrentCharacterLabel(List<CharacterDto> chars)
+        {
+            if (chars == null || _selectedCharacter >= chars.Count)
+            {
+                return "캐릭터";
+            }
+            var c = chars[_selectedCharacter];
+            var db = MasterDataManager.Db;
+            string cls = db != null && db.Classes.TryGetValue(c.classCode, out var cm) ? cm.name : $"직업 {c.classCode}";
+            return $"{cls} Lv.{c.level}";
+        }
+
+        /// <summary>선택된 캐릭터의 6부위 장착 상태를 세션 인벤토리(장착품)에서 장비 슬롯에 반영한다.</summary>
+        private void RefreshEquip(List<CharacterDto> chars)
+        {
+            CharacterDto cur = chars != null && _selectedCharacter < chars.Count ? chars[_selectedCharacter] : null;
+            var inv = Session.GameData != null ? Session.GameData.inventory : null;
+
             for (int slot = 0; slot < _equipSlots.Count; slot++)
             {
-                _equipSlots[slot].SetEquippedDemo(DummyEquip(_selectedCharacter, slot), _font);
+                InventoryItemView.Display? equipped = null;
+                if (cur != null && inv != null)
+                {
+                    foreach (var item in inv)
+                    {
+                        if (item != null
+                            && item.equippedCharacterId == cur.characterId
+                            && item.equippedSlot == slot + 1)
+                        {
+                            equipped = BuildDisplay(item);
+                            break;
+                        }
+                    }
+                }
+                _equipSlots[slot].SetEquipped(equipped, _font);
             }
         }
 
-        /// <summary>데모용 캐릭터별 장착 아이템(추후 실데이터로 대체). 미장착이면 null.</summary>
-        private static InventoryItemView.Display? DummyEquip(int character, int slot)
+        /// <summary>인벤토리 아이템 DTO를 마스터 데이터로 표시 정보(이름·등급·부위·요구·스탯·아이콘)로 변환한다.</summary>
+        private InventoryItemView.Display BuildDisplay(InventoryItemDto item)
         {
-            // slot: 0무기 1보조무기 2투구 3갑옷 4장갑 5신발
-            switch (character)
+            var db = MasterDataManager.Db;
+            ItemMaster im = null;
+            if (db != null)
             {
-                case 0: // 전사
-                    if (slot == 0) return MakeDisplay("롱소드", "영웅", "무기", "요구 Lv.10 / 전사", "ATK +50", new Color(0.95f, 0.78f, 0.28f, 1f));
-                    if (slot == 3) return MakeDisplay("판금 갑옷", "고급", "갑옷", "요구 Lv.10 / 전사", "DEF +30", new Color(0.60f, 0.66f, 0.75f, 1f));
-                    break;
-                case 1: // 레인저
-                    if (slot == 0) return MakeDisplay("장궁", "희귀", "무기", "요구 Lv.10 / 레인저", "ATK +40", new Color(0.40f, 0.80f, 0.50f, 1f));
-                    if (slot == 5) return MakeDisplay("가죽 부츠", "노말", "신발", "요구 Lv.5 / 레인저", "SPD +8%", new Color(0.70f, 0.55f, 0.35f, 1f));
-                    break;
-                case 2: // 마법사
-                    if (slot == 1) return MakeDisplay("마도서", "전설", "보조무기", "요구 Lv.15 / 마법사", "ATK +70", new Color(0.70f, 0.50f, 0.95f, 1f));
-                    break;
+                db.Items.TryGetValue(item.itemCode, out im);
             }
-            return null;
-        }
 
-        private static InventoryItemView.Display MakeDisplay(string name, string grade, string slotName,
-            string requirement, string stats, Color iconColor)
-        {
+            string name = im != null ? im.name : $"아이템 {item.itemCode}";
+            if (item.enhanceLevel > 0)
+            {
+                name += $" +{item.enhanceLevel}";
+            }
+
+            int gradeValue = im != null ? im.grade : 1;
+            string grade = im != null && db.Grades.TryGetValue(im.grade, out var g) ? g.name : "노말";
+
+            string category = Category(im, db);          // 종류: 무기/보조무기/방어구/재료/재화
+            string requirement = string.Empty;
+            if (im != null && im.itemType == 1)
+            {
+                string cls = im.classReq == 0
+                    ? "공용"
+                    : (db.Classes.TryGetValue(im.classReq, out var cm) ? cm.name : $"직업 {im.classReq}");
+                requirement = im.levelReq > 0 ? $"요구 Lv.{im.levelReq} / {cls}" : cls;
+            }
+
             return new InventoryItemView.Display
             {
                 name = name,
                 grade = grade,
-                slotName = slotName,
+                gradeValue = gradeValue,
+                slotName = category,
                 requirement = requirement,
-                stats = stats,
-                iconColor = iconColor,
+                stats = BuildStatsText(im, item.quantity),
+                description = BuildDescription(im, item.quantity),
+                iconColor = GradeColor(gradeValue),
+                icon = _iconDb != null ? _iconDb.Get(item.itemCode) : null,
+                itemId = item.itemId,
+                equippedSlot = item.equippedSlot,
+                equippable = im != null && im.itemType == 1,
             };
+        }
+
+        /// <summary>아이템 종류(무기/보조무기/방어구/재료/재화). 장비는 장착 슬롯으로 무기·방어구를 구분한다.</summary>
+        private static string Category(ItemMaster im, MasterDatabase db)
+        {
+            if (im == null)
+            {
+                return string.Empty;
+            }
+            switch (im.itemType)
+            {
+                case 1: // 장비
+                    if (im.equipSlot == 1) return "무기";
+                    if (im.equipSlot == 2) return "보조무기";
+                    return "방어구"; // 투구·갑옷·장갑·신발
+                case 2: return "재료";
+                case 3: return "재화";
+                default: return "기타";
+            }
+        }
+
+        /// <summary>아이템 설명문(종류별). 장비는 옵션 효과, 재료/재화는 용도 설명.</summary>
+        private static string BuildDescription(ItemMaster im, long quantity)
+        {
+            if (im == null)
+            {
+                return string.Empty;
+            }
+            if (im.itemType == 1) // 장비
+            {
+                string effect = BuildStatsText(im, quantity);
+                return string.IsNullOrEmpty(effect) || effect == "옵션 없음"
+                    ? "착용 시 캐릭터에 장착되는 장비입니다."
+                    : $"착용 시 다음 효과를 부여합니다.\n{effect}";
+            }
+            if (im.itemType == 2) // 재료
+            {
+                string q = quantity > 1 ? $" (보유 {quantity})" : string.Empty;
+                return $"강화·합성 등에 사용하는 재료입니다.{q}";
+            }
+            if (im.itemType == 3) // 재화
+            {
+                return "게임 내에서 사용하는 재화입니다.";
+            }
+            return string.Empty;
+        }
+
+        /// <summary>아이템 스탯 요약 문자열(장비는 옵션 스탯, 그 외는 수량).</summary>
+        private static string BuildStatsText(ItemMaster im, long quantity)
+        {
+            if (im == null)
+            {
+                return quantity > 1 ? $"수량 {quantity}" : string.Empty;
+            }
+            if (im.itemType != 1)
+            {
+                return quantity > 1 ? $"수량 {quantity}" : string.Empty;
+            }
+            var s = im.baseStats;
+            var parts = new List<string>();
+            if (s.atk != 0) parts.Add($"ATK +{s.atk}");
+            if (s.def != 0) parts.Add($"DEF +{s.def}");
+            if (s.hp != 0) parts.Add($"HP +{s.hp}");
+            if (s.critChance != 0) parts.Add($"치명확률 +{s.critChance * 100f:0.#}%");
+            if (s.critDamage != 0) parts.Add($"치명피해 +{s.critDamage * 100f:0.#}%");
+            if (s.moveSpeed != 0) parts.Add($"이동속도 +{s.moveSpeed:0.##}");
+            if (s.cooldown != 0) parts.Add($"쿨타임 {s.cooldown:0.##}");
+            return parts.Count > 0 ? string.Join("\n", parts) : "옵션 없음";
+        }
+
+        /// <summary>등급(1~5)별 아이콘 폴백 색(실아이콘 없을 때만 사용).</summary>
+        private static Color GradeColor(int grade)
+        {
+            switch (grade)
+            {
+                case 5: return new Color(0.95f, 0.55f, 0.20f); // 전설(주황)
+                case 4: return new Color(0.70f, 0.45f, 0.95f); // 영웅(보라)
+                case 3: return new Color(0.30f, 0.55f, 0.95f); // 희귀(파랑)
+                case 2: return new Color(0.35f, 0.80f, 0.45f); // 고급(초록)
+                default: return new Color(0.75f, 0.78f, 0.82f); // 노말(회색)
+            }
+        }
+
+        /// <summary>등급(1~5)별 아이템 배경색. 노말은 배경 없음(투명), 등급이 높을수록 뚜렷한 색.</summary>
+        public static Color GradeBackgroundColor(int grade)
+        {
+            switch (grade)
+            {
+                case 5: return new Color(0.95f, 0.80f, 0.15f, 0.55f); // 전설(노랑)
+                case 4: return new Color(0.65f, 0.35f, 0.95f, 0.50f); // 영웅(보라)
+                case 3: return new Color(0.25f, 0.55f, 0.95f, 0.50f); // 희귀(파랑)
+                case 2: return new Color(0.30f, 0.80f, 0.40f, 0.45f); // 고급(초록)
+                default: return new Color(0f, 0f, 0f, 0f);            // 노말(배경 없음)
+            }
+        }
+
+        /// <summary>등급(1~5)별 아이템 이름 텍스트 색.</summary>
+        public static Color GradeNameColor(int grade)
+        {
+            switch (grade)
+            {
+                case 5: return new Color(1f, 0.85f, 0.25f);   // 전설(노랑)
+                case 4: return new Color(0.80f, 0.55f, 1f);   // 영웅(보라)
+                case 3: return new Color(0.45f, 0.70f, 1f);   // 희귀(파랑)
+                case 2: return new Color(0.45f, 0.90f, 0.55f); // 고급(초록)
+                default: return Color.white;                   // 노말(흰색)
+            }
+        }
+
+        // ── 장착 / 해제 (서버 연동) ──
+
+        /// <summary>현재 선택 캐릭터에 지정 아이템을 장착 요청한다(성공 시 재로드·갱신).</summary>
+        public void RequestEquip(long itemId)
+        {
+            var chars = Characters;
+            if (NetworkManager.Instance == null || !Session.IsLoggedIn || chars == null || _selectedCharacter >= chars.Count)
+            {
+                Debug.LogWarning("[Inventory] 장착 요청 불가(네트워크/세션/캐릭터 없음).");
+                return;
+            }
+            int characterId = chars[_selectedCharacter].characterId;
+            var req = new EquipRequest
+            {
+                userId = Session.UserId,
+                token = Session.Token,
+                data = new EquipData { characterId = characterId, itemId = itemId },
+            };
+            Debug.Log($"[Inventory] 장착 요청 char={characterId} item={itemId}");
+            NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/inventory/equip", req, _ => ReloadAndRefresh(), OnActionError);
+        }
+
+        /// <summary>현재 선택 캐릭터의 지정 슬롯 장비를 해제 요청한다(성공 시 재로드·갱신).</summary>
+        public void RequestUnequip(int slot)
+        {
+            var chars = Characters;
+            if (NetworkManager.Instance == null || !Session.IsLoggedIn || chars == null || _selectedCharacter >= chars.Count)
+            {
+                Debug.LogWarning("[Inventory] 해제 요청 불가(네트워크/세션/캐릭터 없음).");
+                return;
+            }
+            int characterId = chars[_selectedCharacter].characterId;
+            var req = new UnequipRequest
+            {
+                userId = Session.UserId,
+                token = Session.Token,
+                data = new UnequipData { characterId = characterId, slot = slot },
+            };
+            Debug.Log($"[Inventory] 해제 요청 char={characterId} slot={slot}");
+            NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/inventory/unequip", req, _ => ReloadAndRefresh(), OnActionError);
+        }
+
+        /// <summary>장착/해제 후 세이브 스냅샷을 재로드해 세션·UI·전투 스탯을 최신화한다.</summary>
+        private void ReloadAndRefresh()
+        {
+            var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
+            NetworkManager.Instance.PostToGame<LoadResponse>("/api/game/load", req, resp =>
+            {
+                if (resp != null && resp.data != null)
+                {
+                    Session.SetGameData(resp.data);
+                }
+                RequestHideTooltip();
+                RefreshFromSession();          // 인벤토리 UI 갱신
+                Session.RaiseInventoryChanged(); // 전투 스탯 재계산 트리거
+            }, OnActionError);
+        }
+
+        private void OnActionError(NetworkError error)
+        {
+            Debug.LogWarning($"[Inventory] 장착/해제 실패: {error}");
         }
 
         // ── 아이템 이동 ──

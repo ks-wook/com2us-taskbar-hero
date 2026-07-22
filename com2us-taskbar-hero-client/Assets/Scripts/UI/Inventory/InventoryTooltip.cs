@@ -22,6 +22,11 @@ namespace TaskbarHero.Client.UI
         private RectTransform _rt;
         private const float HideDelay = 0.04f;
 
+        private InventoryItemView.Display _current; // 현재 표시 중인 아이템(장착/해제 대상)
+        private InventoryPanelController _controller;
+        private InventoryPanelController Controller =>
+            _controller != null ? _controller : (_controller = GetComponentInParent<InventoryPanelController>());
+
         private void Awake()
         {
             _rt = (RectTransform)transform;
@@ -66,14 +71,19 @@ namespace TaskbarHero.Client.UI
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
 
+            _current = data;
             _nameText.text = data.name;
-            _subText.text = $"{data.grade} · {data.slotName}";
+            _nameText.color = InventoryPanelController.GradeNameColor(data.gradeValue); // 이름을 등급 색으로
+            _subText.text = string.IsNullOrEmpty(data.slotName)
+                ? data.grade
+                : $"{data.grade} · {data.slotName}"; // 등급 · 종류(무기/방어구/재료 등)
             _reqText.text = data.requirement;
-            _statsText.text = data.stats;
+            _statsText.text = data.description;       // 아이템 설명
 
-            // 더미: 미장착 장비로 가정 → 장착 활성, 해제 비활성
-            _equipButton.interactable = true;
-            _unequipButton.interactable = false;
+            // 장착: 장비이고 미장착(가방)일 때 활성. 해제: 현재 장착 중일 때 활성.
+            bool isEquipped = data.equippedSlot > 0;
+            _equipButton.interactable = data.equippable && !isEquipped;
+            _unequipButton.interactable = isEquipped;
 
             Reposition(screenPos);
         }
@@ -131,12 +141,20 @@ namespace TaskbarHero.Client.UI
 
         private void OnEquip()
         {
-            Debug.Log("[Inventory] 장착 버튼(플레이스홀더) — 서버 미연동");
+            if (Controller != null)
+            {
+                Controller.RequestEquip(_current.itemId);
+            }
+            HideImmediate();
         }
 
         private void OnUnequip()
         {
-            Debug.Log("[Inventory] 해제 버튼(플레이스홀더) — 서버 미연동");
+            if (Controller != null && _current.equippedSlot > 0)
+            {
+                Controller.RequestUnequip(_current.equippedSlot);
+            }
+            HideImmediate();
         }
 
         private Text MakeText(Font font, string name, string content, int size, TextAnchor anchor,

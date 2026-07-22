@@ -1,3 +1,4 @@
+using System;
 using TaskbarHero.Common.Dto;
 
 namespace TaskbarHero.Client.Managers
@@ -23,6 +24,12 @@ namespace TaskbarHero.Client.Managers
 
         /// <summary>로그인 상태 여부.</summary>
         public static bool IsLoggedIn => !string.IsNullOrEmpty(Token);
+
+        /// <summary>인벤토리(장착 상태 포함)가 바뀌었을 때 발생. 전투 스탯 재계산 등에서 구독한다.</summary>
+        public static event Action InventoryChanged;
+
+        /// <summary>인벤토리 변경을 알린다(장착·해제·재로드 후 호출).</summary>
+        public static void RaiseInventoryChanged() => InventoryChanged?.Invoke();
 
         /// <summary>로그인 인증 정보를 저장한다.</summary>
         public static void SetAuth(long userId, string token)

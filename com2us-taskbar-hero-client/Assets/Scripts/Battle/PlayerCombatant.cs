@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using TaskbarHero.Client.Managers;
 using TaskbarHero.Client.MasterData;
+using TaskbarHero.Common.Dto;
 using TaskbarHero.Common.MasterData;
 
 namespace TaskbarHero.Client.Battle
@@ -51,6 +52,9 @@ namespace TaskbarHero.Client.Battle
 
         private string _name = "Ally";
         private long _atk;
+        private long _baseAtk;        // 장비 제외 기본 공격(클래스+레벨)
+        private long _baseMaxHp;      // 장비 제외 기본 체력
+        private int _characterId;     // 연결된 계정 캐릭터 id(serverMode, 0=없음)
         private long _maxHp = 1;
         private long _hp = 1;
         private float _cooldown;
@@ -60,6 +64,10 @@ namespace TaskbarHero.Client.Battle
         public long Hp => _hp;
         /// <summary>아군 최대 체력.</summary>
         public long MaxHp => _maxHp;
+        /// <summary>현재 공격력(클래스+레벨+장비 합산).</summary>
+        public long Attack => _atk;
+        /// <summary>연결된 계정 캐릭터 id(serverMode).</summary>
+        public int CharacterId => _characterId;
 
         private readonly List<Skill> _skills = new List<Skill>();
         private float _attackTimer;
@@ -109,21 +117,90 @@ namespace TaskbarHero.Client.Battle
         private void LoadStats()
         {
             var db = MasterDataManager.Db;
+            long atk, hp;
             if (db != null && db.Classes.TryGetValue(_classCode, out ClassMaster cls))
             {
                 _name = cls.name;
-                _atk = cls.baseStats.atk;
-                _maxHp = System.Math.Max(1L, cls.baseStats.hp);
+                atk = cls.baseStats.atk;
+                hp = System.Math.Max(1L, cls.baseStats.hp);
                 _cooldown = cls.baseStats.cooldown > 0f ? cls.baseStats.cooldown : 1.2f;
                 _moveSpeed = cls.baseStats.moveSpeed > 0f ? cls.baseStats.moveSpeed : 3f;
             }
             else
             {
                 _name = "Ally(?" + _classCode + ")";
-                _atk = 10; _maxHp = 100; _cooldown = 1.2f; _moveSpeed = 3f;
+                atk = 10; hp = 100; _cooldown = 1.2f; _moveSpeed = 3f;
             }
+
+            // 서버 구동 모드: 계정 캐릭터의 레벨 보너스를 기본 스탯에 반영하고 characterId를 기록(장비 합산용).
+            _characterId = 0;
+            if (_ctrl != null && _ctrl.serverMode)
+            {
+                var ch = FindAccountCharacter(_classCode);
+                if (ch != null)
+                {
+                    _characterId = ch.characterId;
+                    if (db != null && db.Levels.TryGetValue(ch.level, out LevelMaster lm))
+                    {
+                        atk += lm.statBonus.atk;
+                        hp += lm.statBonus.hp;
+                    }
+                }
+            }
+
+            _baseAtk = atk;
+            _baseMaxHp = System.Math.Max(1L, hp);
+            ApplyEquipStats(); // 장비 스탯 합산 → _atk/_maxHp 확정
             _hp = _maxHp;
             gameObject.name = "Player_" + _name;
+        }
+
+        /// <summary>기본 스탯(_baseAtk/_baseMaxHp)에 현재 장착 장비 스탯을 합산해 _atk/_maxHp를 확정한다.</summary>
+        private void ApplyEquipStats()
+        {
+            long atk = _baseAtk;
+            long hp = _baseMaxHp;
+            var db = MasterDataManager.Db;
+            var inv = Session.GameData != null ? Session.GameData.inventory : null;
+            if (_characterId != 0 && inv != null && db != null)
+            {
+                foreach (var it in inv)
+                {
+                    if (it != null && it.equippedCharacterId == _characterId
+                        && db.Items.TryGetValue(it.itemCode, out ItemMaster im))
+                    {
+                        atk += im.baseStats.atk;
+                        hp += im.baseStats.hp;
+                    }
+                }
+            }
+            _atk = atk;
+            _maxHp = System.Math.Max(1L, hp);
+        }
+
+        /// <summary>장비 변경 등으로 스탯을 재계산한다(현재 체력 비율 유지). 전투 중 즉시 반영.</summary>
+        public void RefreshStats()
+        {
+            float ratio = _maxHp > 0 ? (float)_hp / _maxHp : 1f;
+            ApplyEquipStats();
+            _hp = System.Math.Max(1L, (long)(_maxHp * ratio));
+        }
+
+        /// <summary>클래스 코드에 해당하는 계정 캐릭터(없으면 null).</summary>
+        private static CharacterDto FindAccountCharacter(int classCode)
+        {
+            var chars = Session.GameData != null ? Session.GameData.characters : null;
+            if (chars != null)
+            {
+                foreach (var c in chars)
+                {
+                    if (c != null && c.classCode == classCode)
+                    {
+                        return c;
+                    }
+                }
+            }
+            return null;
         }
 
         private void BuildSkills()
