@@ -83,8 +83,12 @@ public sealed class SaveRepository : ISaveRepository
         var equipped = new Dictionary<long, (int charId, int slot)>();
         foreach (var e in equippedRows)
         {
-            equipped[Convert.ToInt64(e.player_item_id)] =
-                (Convert.ToInt32(e.equipped_character_id), Convert.ToInt32(e.equipped_slot));
+            // dynamic 값은 typed 지역변수로 받아 튜플이 (int,int)로 확정되게 한다
+            // (Convert.ToInt32(dynamic)를 튜플에 바로 넣으면 (object,object)로 추론돼 런타임 변환 실패).
+            long equippedItemId = Convert.ToInt64(e.player_item_id);
+            int charId = Convert.ToInt32(e.equipped_character_id);
+            int slot = Convert.ToInt32(e.equipped_slot);
+            equipped[equippedItemId] = (charId, slot);
         }
 
         var currencies = new List<CurrencyDto>();
