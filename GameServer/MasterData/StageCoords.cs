@@ -7,7 +7,8 @@ namespace GameServer.MasterData;
 /// - 진행 시퀀스(max_stage_cleared에 저장): 난이도-바깥 순서.
 ///   Normal(난이도1)에서 Act1~3(각 4스테이지)을 모두 깨면 Hard(난이도2)가 열린다.
 ///   sequence = (difficulty-1)*12 + (act-1)*4 + stage  → 1..24
-///   ⚠️ Act/난이도 롤오버 규칙은 stage-battle 기획서 8장 미결이며, 본 구현은 위 순서를 채택한다.
+///   Act/난이도 전진 순서(난이도-바깥)는 stage-battle 기획서 8장에서 확정된 채택안이다.
+///   최종 스테이지(시퀀스 24) 클리어 후에는 전진처가 없어 그 스테이지에 머문다(기획서 8장 확정).
 /// </summary>
 public static class StageCoords
 {

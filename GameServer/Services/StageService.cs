@@ -15,7 +15,8 @@ public interface IStageService
 /// 스테이지 진입·클리어 처리(stage-battle 기획서 §5·§6).
 /// 진입: 도달 가능 여부 검증 후 현재 진입 스테이지 설정(보상 없음).
 /// 클리어: 서버 권위로 보상(골드·경험치·드롭) 산출 후 트랜잭션으로 지급·진행도 갱신.
-/// ⚠️ StageClearTooFast(진입~클리어 최소 시간)는 stage_entered_at 미도입(기획서 8장 미결)이라 미구현.
+/// ⚠️ StageClearTooFast(진입~클리어 최소 시간) 검증은 미구현이며 일정 미편성 백로그로 이관했다
+///    (stage_entered_at 미도입, README 「미편성 백로그」). 6004는 예약 코드로 유지.
 /// </summary>
 public sealed class StageService : IStageService
 {
