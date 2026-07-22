@@ -117,8 +117,8 @@ namespace TaskbarHero.Common.MasterData
         public int prereqCode;    // 선행 룬(0=루트)
         public long cost;
         public int maxLevel;
-        public int statType;      // 1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도
-        public float statValue;   // 레벨당 누적 상승량(%)
+        public int statType;      // 1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도 7:재사용 대기시간
+        public float statValue;   // 레벨당 누적 상승량(%). stat_type=7(재사용 대기시간)은 감소 방향
     }
 
     /// <summary>몬스터 전투 스탯(monster_master). 보상은 stage_reward 가 담당.</summary>
