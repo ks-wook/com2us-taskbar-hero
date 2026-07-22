@@ -20,6 +20,70 @@ public sealed record DroppedItem(int ItemCode, long Quantity, int ItemType, int 
 /// <summary>아이템 정의(item_master). 장착 검증(타입·슬롯·클래스·레벨)과 드롭/스택에 사용한다.</summary>
 public sealed record ItemDef(int ItemCode, int ItemType, int Grade, int StackMax, int EquipSlot, int ClassReq, int LevelReq);
 
+// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑.
+//    DECIMAL 컬럼은 decimal로 받아 float/double로 캐스팅한다. ──
+file sealed class ClassMasterRow
+{
+    public int ClassCode { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int UnlockType { get; set; }
+    public long Hp { get; set; }
+    public long Atk { get; set; }
+    public long Def { get; set; }
+    public decimal MoveSpeed { get; set; }
+    public decimal CritChance { get; set; }
+    public decimal CritDamage { get; set; }
+    public decimal Cooldown { get; set; }
+}
+
+file sealed class StageMasterRow
+{
+    public int StageId { get; set; }
+    public int Act { get; set; }
+    public int Difficulty { get; set; }
+    public int Stage { get; set; }
+    public int BossMonsterCode { get; set; }
+    public int BackgroundType { get; set; }
+}
+
+file sealed class StageSpawnRow
+{
+    public int StageId { get; set; }
+    public int MonsterCode { get; set; }
+    public int SpawnCount { get; set; }
+}
+
+file sealed class StageRewardScalarRow
+{
+    public int StageId { get; set; }
+    public long RewardGold { get; set; }
+    public long RewardExp { get; set; }
+}
+
+file sealed class StageRewardDropRow
+{
+    public int StageId { get; set; }
+    public int Grade { get; set; }
+    public decimal DropProb { get; set; }
+}
+
+file sealed class LevelMasterRow
+{
+    public int Level { get; set; }
+    public long RequiredExp { get; set; }
+}
+
+file sealed class ItemMasterRow
+{
+    public int ItemCode { get; set; }
+    public int ItemType { get; set; }
+    public int Grade { get; set; }
+    public int StackMax { get; set; }
+    public int EquipSlot { get; set; }
+    public int ClassReq { get; set; }
+    public int LevelReq { get; set; }
+}
+
 /// <summary>
 /// 마스터(정적) 데이터 인메모리 캐시. 서버 기동 시 마스터 DB에서 코드→정의 딕셔너리로 적재한다.
 /// class_master(직업)에 더해 스테이지 진행/전투(스테이지 진입·클리어)에 필요한 마스터를 적재한다:
@@ -155,25 +219,25 @@ public sealed class MasterDataProvider
         var rows = await db.Query("class_master")
             .Select("class_code", "name", "unlock_type",
                     "hp", "atk", "def", "move_speed", "crit_chance", "crit_damage", "cooldown")
-            .GetAsync();
+            .GetAsync<ClassMasterRow>();
 
         var classes = new Dictionary<int, ClassMaster>();
         foreach (var row in rows)
         {
             var master = new ClassMaster
             {
-                classCode = Convert.ToInt32(row.class_code),
-                name = (string)row.name,
-                unlockType = Convert.ToInt32(row.unlock_type),
+                classCode = row.ClassCode,
+                name = row.Name,
+                unlockType = row.UnlockType,
                 baseStats = new Stats
                 {
-                    hp = Convert.ToInt64(row.hp),
-                    atk = Convert.ToInt64(row.atk),
-                    def = Convert.ToInt64(row.def),
-                    moveSpeed = Convert.ToSingle(row.move_speed),
-                    critChance = Convert.ToSingle(row.crit_chance),
-                    critDamage = Convert.ToSingle(row.crit_damage),
-                    cooldown = Convert.ToSingle(row.cooldown),
+                    hp = row.Hp,
+                    atk = row.Atk,
+                    def = row.Def,
+                    moveSpeed = (float)row.MoveSpeed,
+                    critChance = (float)row.CritChance,
+                    critDamage = (float)row.CritDamage,
+                    cooldown = (float)row.Cooldown,
                 },
             };
             classes[master.classCode] = master;
@@ -186,42 +250,40 @@ public sealed class MasterDataProvider
     {
         var stageRows = await db.Query("stage_master")
             .Select("stage_id", "act", "difficulty", "stage", "boss_monster_code", "background_type")
-            .GetAsync();
+            .GetAsync<StageMasterRow>();
 
         var spawnRows = await db.Query("stage_spawn")
             .Select("stage_id", "monster_code", "spawn_count")
             .OrderBy("stage_id", "monster_code")
-            .GetAsync();
+            .GetAsync<StageSpawnRow>();
 
         var spawnsByStage = new Dictionary<int, List<StageSpawnDto>>();
         foreach (var sp in spawnRows)
         {
-            int stageId = Convert.ToInt32(sp.stage_id);
-            if (!spawnsByStage.TryGetValue(stageId, out var list))
+            if (!spawnsByStage.TryGetValue(sp.StageId, out var list))
             {
                 list = new List<StageSpawnDto>();
-                spawnsByStage[stageId] = list;
+                spawnsByStage[sp.StageId] = list;
             }
 
             list.Add(new StageSpawnDto
             {
-                monsterCode = Convert.ToInt32(sp.monster_code),
-                count = Convert.ToInt32(sp.spawn_count),
+                monsterCode = sp.MonsterCode,
+                count = sp.SpawnCount,
             });
         }
 
         var stages = new Dictionary<int, StageDef>();
         foreach (var row in stageRows)
         {
-            int stageId = Convert.ToInt32(row.stage_id);
-            spawnsByStage.TryGetValue(stageId, out var spawns);
-            stages[stageId] = new StageDef(
-                stageId,
-                Convert.ToInt32(row.act),
-                Convert.ToInt32(row.difficulty),
-                Convert.ToInt32(row.stage),
-                Convert.ToInt32(row.boss_monster_code),
-                Convert.ToInt32(row.background_type),
+            spawnsByStage.TryGetValue(row.StageId, out var spawns);
+            stages[row.StageId] = new StageDef(
+                row.StageId,
+                row.Act,
+                row.Difficulty,
+                row.Stage,
+                row.BossMonsterCode,
+                row.BackgroundType,
                 spawns ?? new List<StageSpawnDto>());
         }
 
@@ -233,40 +295,36 @@ public sealed class MasterDataProvider
         // 스칼라 보상(골드·경험치).
         var rewardRows = await db.Query("stage_reward")
             .Select("stage_id", "reward_gold", "reward_exp")
-            .GetAsync();
+            .GetAsync<StageRewardScalarRow>();
 
         // 등급별 드롭 확률(자식 테이블). 확률 0 등급은 행이 없으므로 배열에서 0으로 남는다.
         var dropRows = await db.Query("stage_reward_drop")
             .Select("stage_id", "grade", "drop_prob")
-            .GetAsync();
+            .GetAsync<StageRewardDropRow>();
 
         // stage_id → (grade → prob). 최대 등급을 파악해 확률 배열 길이를 정한다(등급 추가 시 스키마·코드 불변).
         var dropsByStage = new Dictionary<int, Dictionary<int, double>>();
         var maxGrade = 0;
         foreach (var d in dropRows)
         {
-            int stageId = Convert.ToInt32(d.stage_id);
-            int grade = Convert.ToInt32(d.grade);
-            if (!dropsByStage.TryGetValue(stageId, out var map))
+            if (!dropsByStage.TryGetValue(d.StageId, out var map))
             {
                 map = new Dictionary<int, double>();
-                dropsByStage[stageId] = map;
+                dropsByStage[d.StageId] = map;
             }
 
-            map[grade] = Convert.ToDouble(d.drop_prob);
-            if (grade > maxGrade)
+            map[d.Grade] = (double)d.DropProb;
+            if (d.Grade > maxGrade)
             {
-                maxGrade = grade;
+                maxGrade = d.Grade;
             }
         }
 
         var rewards = new Dictionary<int, StageRewardDef>();
         foreach (var row in rewardRows)
         {
-            int stageId = Convert.ToInt32(row.stage_id);
-
             var probs = new double[maxGrade]; // index i = 등급 (i+1) 확률, 정의 없는 등급은 0
-            if (dropsByStage.TryGetValue(stageId, out var map))
+            if (dropsByStage.TryGetValue(row.StageId, out var map))
             {
                 foreach (var kv in map)
                 {
@@ -277,10 +335,7 @@ public sealed class MasterDataProvider
                 }
             }
 
-            rewards[stageId] = new StageRewardDef(
-                Convert.ToInt64(row.reward_gold),
-                Convert.ToInt64(row.reward_exp),
-                probs);
+            rewards[row.StageId] = new StageRewardDef(row.RewardGold, row.RewardExp, probs);
         }
 
         return rewards;
@@ -288,16 +343,15 @@ public sealed class MasterDataProvider
 
     private static async Task<(Dictionary<int, long>, int)> LoadLevelsAsync(QueryFactory db)
     {
-        var rows = await db.Query("level_master").Select("level", "required_exp").GetAsync();
+        var rows = await db.Query("level_master").Select("level", "required_exp").GetAsync<LevelMasterRow>();
         var byLevel = new Dictionary<int, long>();
         var maxLevel = 1;
         foreach (var row in rows)
         {
-            int level = Convert.ToInt32(row.level);
-            byLevel[level] = Convert.ToInt64(row.required_exp);
-            if (level > maxLevel)
+            byLevel[row.Level] = row.RequiredExp;
+            if (row.Level > maxLevel)
             {
-                maxLevel = level;
+                maxLevel = row.Level;
             }
         }
 
@@ -310,31 +364,28 @@ public sealed class MasterDataProvider
         var rows = await db.Query("item_master")
             .Select("item_code", "item_type", "grade", "stack_max", "equip_slot", "class_req", "level_req")
             .WhereIn("item_type", new[] { 1, 2 })
-            .GetAsync();
+            .GetAsync<ItemMasterRow>();
 
         var byGrade = new Dictionary<int, List<int>>();
         var byCode = new Dictionary<int, ItemDef>();
         foreach (var row in rows)
         {
-            int itemCode = Convert.ToInt32(row.item_code);
-            int grade = Convert.ToInt32(row.grade);
+            byCode[row.ItemCode] = new ItemDef(
+                row.ItemCode,
+                row.ItemType,
+                row.Grade,
+                row.StackMax,
+                row.EquipSlot,
+                row.ClassReq,
+                row.LevelReq);
 
-            byCode[itemCode] = new ItemDef(
-                itemCode,
-                Convert.ToInt32(row.item_type),
-                grade,
-                Convert.ToInt32(row.stack_max),
-                Convert.ToInt32(row.equip_slot),
-                Convert.ToInt32(row.class_req),
-                Convert.ToInt32(row.level_req));
-
-            if (!byGrade.TryGetValue(grade, out var list))
+            if (!byGrade.TryGetValue(row.Grade, out var list))
             {
                 list = new List<int>();
-                byGrade[grade] = list;
+                byGrade[row.Grade] = list;
             }
 
-            list.Add(itemCode);
+            list.Add(row.ItemCode);
         }
 
         return (byGrade, byCode);
@@ -349,18 +400,12 @@ public sealed class MasterDataProvider
     {
         try
         {
-            var rows = await db.Query("inventory_expand_master")
-                .Select("step", "gold_cost")
+            var costs = await db.Query("inventory_expand_master")
+                .Select("gold_cost")
                 .OrderBy("step")
-                .GetAsync();
+                .GetAsync<long>();
 
-            var costs = new List<long>();
-            foreach (var r in rows)
-            {
-                costs.Add(Convert.ToInt64(r.gold_cost));
-            }
-
-            return costs;
+            return costs.ToList();
         }
         catch (Exception ex)
         {

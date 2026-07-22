@@ -28,10 +28,67 @@ public interface ISaveRepository
     Task<int> UpdateLastActiveAsync(long userId, long nowUnix);
 }
 
-/// <summary>세이브(taskbar_hero_game) 접근 계층. SqlKata 쿼리 빌더만 사용한다.</summary>
+// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지) ──
+// Dapper.MatchNamesWithUnderscores=true(Program.cs)로 snake_case 컬럼 → PascalCase 프로퍼티 매핑.
+file sealed class GamePlayerRow
+{
+    public string Nickname { get; set; } = string.Empty;
+    public int Act { get; set; }
+    public int Stage { get; set; }
+    public int Difficulty { get; set; }
+    public int MaxStageCleared { get; set; }
+    public int InventoryCapacity { get; set; }
+    public long LastActiveAt { get; set; }
+}
+
+file sealed class PlayerCharacterRow
+{
+    public int CharacterId { get; set; }
+    public int ClassCode { get; set; }
+    public int Level { get; set; }
+    public long Exp { get; set; }
+}
+
+file sealed class PlayerItemRow
+{
+    public long PlayerItemId { get; set; }
+    public int RowType { get; set; }
+    public int ItemCode { get; set; }
+    public long Quantity { get; set; }
+    public int? Slot { get; set; }
+    public int EnhanceLevel { get; set; }
+}
+
+file sealed class PlayerItemEquippedRow
+{
+    public long PlayerItemId { get; set; }
+    public int EquippedCharacterId { get; set; }
+    public int EquippedSlot { get; set; }
+}
+
+file sealed class PlayerSkillRow
+{
+    public int CharacterId { get; set; }
+    public int SkillCode { get; set; }
+    public int Level { get; set; }
+    public int Equipped { get; set; }
+}
+
+file sealed class PlayerRuneRow
+{
+    public int RuneCode { get; set; }
+    public int Level { get; set; }
+}
+
+file sealed class PlayerCubeRow
+{
+    public int CubeLevel { get; set; }
+    public long CubeExp { get; set; }
+}
+
+/// <summary>세이브(taskbar_hero_game) 접근 계층. SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class SaveRepository : ISaveRepository
 {
-    private const int RowTypeItem = 1;
     private const int RowTypeCurrency = 2;
 
     private readonly GameDbFactory _dbFactory;
@@ -41,7 +98,7 @@ public sealed class SaveRepository : ISaveRepository
     public async Task<PlayerDto?> GetPlayerAsync(long userId)
     {
         using var db = _dbFactory.Create();
-        var row = await db.Query("game_player").Where("user_id", userId).FirstOrDefaultAsync();
+        var row = await db.Query("game_player").Where("user_id", userId).FirstOrDefaultAsync<GamePlayerRow>();
         if (row is null)
         {
             return null;
@@ -49,26 +106,27 @@ public sealed class SaveRepository : ISaveRepository
 
         return new PlayerDto
         {
-            nickname = (string)row.nickname,
-            act = Convert.ToInt32(row.act),
-            stage = Convert.ToInt32(row.stage),
-            difficulty = Convert.ToInt32(row.difficulty),
-            maxStageCleared = Convert.ToInt32(row.max_stage_cleared),
-            inventoryCapacity = Convert.ToInt32(row.inventory_capacity),
-            lastActiveAt = Convert.ToInt64(row.last_active_at),
+            nickname = row.Nickname,
+            act = row.Act,
+            stage = row.Stage,
+            difficulty = row.Difficulty,
+            maxStageCleared = row.MaxStageCleared,
+            inventoryCapacity = row.InventoryCapacity,
+            lastActiveAt = row.LastActiveAt,
         };
     }
 
     public async Task<List<CharacterDto>> GetCharactersAsync(long userId)
     {
         using var db = _dbFactory.Create();
-        var rows = await db.Query("player_character").Where("user_id", userId).OrderBy("character_id").GetAsync();
+        var rows = await db.Query("player_character").Where("user_id", userId).OrderBy("character_id")
+            .GetAsync<PlayerCharacterRow>();
         return rows.Select(r => new CharacterDto
         {
-            characterId = Convert.ToInt32(r.character_id),
-            classCode = Convert.ToInt32(r.class_code),
-            level = Convert.ToInt32(r.level),
-            exp = Convert.ToInt64(r.exp),
+            characterId = r.CharacterId,
+            classCode = r.ClassCode,
+            level = r.Level,
+            exp = r.Exp,
         }).ToList();
     }
 
@@ -76,41 +134,30 @@ public sealed class SaveRepository : ISaveRepository
     {
         using var db = _dbFactory.Create();
 
-        var itemRows = await db.Query("player_item").Where("user_id", userId).GetAsync();
-        var equippedRows = await db.Query("player_item_equipped").Where("user_id", userId).GetAsync();
+        var itemRows = await db.Query("player_item").Where("user_id", userId).GetAsync<PlayerItemRow>();
+        var equippedRows = await db.Query("player_item_equipped").Where("user_id", userId).GetAsync<PlayerItemEquippedRow>();
 
         // player_item_id → (장착 캐릭터, 장착 슬롯)
-        var equipped = new Dictionary<long, (int charId, int slot)>();
-        foreach (var e in equippedRows)
-        {
-            // dynamic 값은 typed 지역변수로 받아 튜플이 (int,int)로 확정되게 한다
-            // (Convert.ToInt32(dynamic)를 튜플에 바로 넣으면 (object,object)로 추론돼 런타임 변환 실패).
-            long equippedItemId = Convert.ToInt64(e.player_item_id);
-            int charId = Convert.ToInt32(e.equipped_character_id);
-            int slot = Convert.ToInt32(e.equipped_slot);
-            equipped[equippedItemId] = (charId, slot);
-        }
+        var equipped = equippedRows.ToDictionary(e => e.PlayerItemId, e => (charId: e.EquippedCharacterId, slot: e.EquippedSlot));
 
         var currencies = new List<CurrencyDto>();
         var inventory = new List<InventoryItemDto>();
 
         foreach (var r in itemRows)
         {
-            var rowType = Convert.ToInt32(r.row_type);
-            if (rowType == RowTypeCurrency)
+            if (r.RowType == RowTypeCurrency)
             {
                 currencies.Add(new CurrencyDto
                 {
-                    currencyType = Convert.ToInt32(r.item_code),
-                    amount = Convert.ToInt64(r.quantity),
+                    currencyType = r.ItemCode,
+                    amount = r.Quantity,
                 });
                 continue;
             }
 
-            long itemId = Convert.ToInt64(r.player_item_id);
             int equippedCharacterId = 0; // 0 = 미장착
             int equippedSlot = 0;
-            if (equipped.TryGetValue(itemId, out var eq))
+            if (equipped.TryGetValue(r.PlayerItemId, out var eq))
             {
                 equippedCharacterId = eq.charId;
                 equippedSlot = eq.slot;
@@ -118,11 +165,11 @@ public sealed class SaveRepository : ISaveRepository
 
             inventory.Add(new InventoryItemDto
             {
-                itemId = itemId,
-                slot = r.slot is null ? -1 : Convert.ToInt32(r.slot), // -1 = 슬롯 없음(장착 중)
-                itemCode = Convert.ToInt32(r.item_code),
-                quantity = Convert.ToInt64(r.quantity),
-                enhanceLevel = Convert.ToInt32(r.enhance_level),
+                itemId = r.PlayerItemId,
+                slot = r.Slot ?? -1, // -1 = 슬롯 없음(장착 중)
+                itemCode = r.ItemCode,
+                quantity = r.Quantity,
+                enhanceLevel = r.EnhanceLevel,
                 equippedCharacterId = equippedCharacterId,
                 equippedSlot = equippedSlot,
             });
@@ -134,31 +181,31 @@ public sealed class SaveRepository : ISaveRepository
     public async Task<List<SkillDto>> GetSkillsAsync(long userId)
     {
         using var db = _dbFactory.Create();
-        var rows = await db.Query("player_skill").Where("user_id", userId).GetAsync();
+        var rows = await db.Query("player_skill").Where("user_id", userId).GetAsync<PlayerSkillRow>();
         return rows.Select(r => new SkillDto
         {
-            characterId = Convert.ToInt32(r.character_id),
-            skillCode = Convert.ToInt32(r.skill_code),
-            level = Convert.ToInt32(r.level),
-            equipped = Convert.ToInt32(r.equipped),
+            characterId = r.CharacterId,
+            skillCode = r.SkillCode,
+            level = r.Level,
+            equipped = r.Equipped,
         }).ToList();
     }
 
     public async Task<List<RuneDto>> GetRunesAsync(long userId)
     {
         using var db = _dbFactory.Create();
-        var rows = await db.Query("player_rune").Where("user_id", userId).GetAsync();
+        var rows = await db.Query("player_rune").Where("user_id", userId).GetAsync<PlayerRuneRow>();
         return rows.Select(r => new RuneDto
         {
-            runeCode = Convert.ToInt32(r.rune_code),
-            level = Convert.ToInt32(r.level),
+            runeCode = r.RuneCode,
+            level = r.Level,
         }).ToList();
     }
 
     public async Task<CubeDto?> GetCubeAsync(long userId)
     {
         using var db = _dbFactory.Create();
-        var row = await db.Query("player_cube").Where("user_id", userId).FirstOrDefaultAsync();
+        var row = await db.Query("player_cube").Where("user_id", userId).FirstOrDefaultAsync<PlayerCubeRow>();
         if (row is null)
         {
             return null;
@@ -166,16 +213,17 @@ public sealed class SaveRepository : ISaveRepository
 
         return new CubeDto
         {
-            cubeLevel = Convert.ToInt32(row.cube_level),
-            cubeExp = Convert.ToInt64(row.cube_exp),
+            cubeLevel = row.CubeLevel,
+            cubeExp = row.CubeExp,
         };
     }
 
     public async Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId)
     {
         using var db = _dbFactory.Create();
-        var rows = await db.Query("player_character").Select("character_id", "class_code").Where("user_id", userId).GetAsync();
-        return rows.Select(r => new CharacterSlot(Convert.ToInt32(r.character_id), Convert.ToInt32(r.class_code))).ToList();
+        var rows = await db.Query("player_character").Select("character_id", "class_code").Where("user_id", userId)
+            .GetAsync<PlayerCharacterRow>();
+        return rows.Select(r => new CharacterSlot(r.CharacterId, r.ClassCode)).ToList();
     }
 
     public async Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int inventoryCapacity, long nowUnix)

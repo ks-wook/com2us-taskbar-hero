@@ -50,7 +50,30 @@ public interface IStageRepository
         long nowUnix);
 }
 
-/// <summary>스테이지 진행/클리어 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더만 사용한다.</summary>
+// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑. ──
+file sealed class PlayerProgressRow
+{
+    public int Act { get; set; }
+    public int Difficulty { get; set; }
+    public int Stage { get; set; }
+    public int MaxStageCleared { get; set; }
+    public int InventoryCapacity { get; set; }
+}
+
+file sealed class CharProgressRow
+{
+    public int CharacterId { get; set; }
+    public int Level { get; set; }
+    public long Exp { get; set; }
+}
+
+file sealed class ItemIdQtyRow
+{
+    public long PlayerItemId { get; set; }
+    public long Quantity { get; set; }
+}
+
+/// <summary>스테이지 진행/클리어 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class StageRepository : IStageRepository
 {
     private const int RowTypeItem = 1;
@@ -67,19 +90,14 @@ public sealed class StageRepository : IStageRepository
         var row = await db.Query("game_player")
             .Select("act", "difficulty", "stage", "max_stage_cleared", "inventory_capacity")
             .Where("user_id", userId)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync<PlayerProgressRow>();
 
         if (row is null)
         {
             return null;
         }
 
-        return new StageProgressRow(
-            Convert.ToInt32(row.act),
-            Convert.ToInt32(row.difficulty),
-            Convert.ToInt32(row.stage),
-            Convert.ToInt32(row.max_stage_cleared),
-            Convert.ToInt32(row.inventory_capacity));
+        return new StageProgressRow(row.Act, row.Difficulty, row.Stage, row.MaxStageCleared, row.InventoryCapacity);
     }
 
     public async Task<int> SetCurrentStageAsync(long userId, int act, int difficulty, int stage, long nowUnix)
@@ -109,7 +127,7 @@ public sealed class StageRepository : IStageRepository
             var player = await db.Query("game_player")
                 .Select("act", "difficulty", "stage", "max_stage_cleared", "inventory_capacity")
                 .Where("user_id", userId)
-                .FirstOrDefaultAsync(transaction);
+                .FirstOrDefaultAsync<PlayerProgressRow>(transaction);
 
             if (player is null)
             {
@@ -117,11 +135,11 @@ public sealed class StageRepository : IStageRepository
                 return ClearOutcome.Fail(ClearStatus.NoPlayer);
             }
 
-            int curAct = Convert.ToInt32(player.act);
-            int curDiff = Convert.ToInt32(player.difficulty);
-            int curStage = Convert.ToInt32(player.stage);
-            int maxCleared = Convert.ToInt32(player.max_stage_cleared);
-            int capacity = Convert.ToInt32(player.inventory_capacity);
+            int curAct = player.Act;
+            int curDiff = player.Difficulty;
+            int curStage = player.Stage;
+            int maxCleared = player.MaxStageCleared;
+            int capacity = player.InventoryCapacity;
 
             if (curAct != expectedAct || curDiff != expectedDifficulty || curStage != expectedStage)
             {
@@ -137,16 +155,14 @@ public sealed class StageRepository : IStageRepository
                 .Select("character_id", "level", "exp")
                 .Where("user_id", userId)
                 .OrderBy("character_id")
-                .GetAsync(transaction);
+                .GetAsync<CharProgressRow>(transaction);
 
             var characters = new List<CharacterProgressDto>();
             foreach (var c in charRows)
             {
-                int characterId = Convert.ToInt32(c.character_id);
-                int level = Convert.ToInt32(c.level);
-                long exp = Convert.ToInt64(c.exp);
+                int characterId = c.CharacterId;
 
-                var (newLevel, newExp, leveledUp) = levelUp(level, exp);
+                var (newLevel, newExp, leveledUp) = levelUp(c.Level, c.Exp);
                 await db.Query("player_character")
                     .Where("user_id", userId).Where("character_id", characterId)
                     .UpdateAsync(new { level = newLevel, exp = newExp }, transaction);
@@ -223,7 +239,7 @@ public sealed class StageRepository : IStageRepository
         var goldRow = await db.Query("player_item")
             .Select("player_item_id", "quantity")
             .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
-            .FirstOrDefaultAsync(transaction);
+            .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
 
         if (goldRow is null)
         {
@@ -240,8 +256,8 @@ public sealed class StageRepository : IStageRepository
             return gold;
         }
 
-        long goldRowId = Convert.ToInt64(goldRow.player_item_id);
-        long newBalance = Convert.ToInt64(goldRow.quantity) + gold;
+        long goldRowId = goldRow.PlayerItemId;
+        long newBalance = goldRow.Quantity + gold;
         await db.Query("player_item")
             .Where("player_item_id", goldRowId)
             .UpdateAsync(new { quantity = newBalance }, transaction);
@@ -260,12 +276,12 @@ public sealed class StageRepository : IStageRepository
                 .Select("player_item_id", "quantity")
                 .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", dropped.ItemCode)
                 .Where("quantity", "<", dropped.StackMax)
-                .FirstOrDefaultAsync(transaction);
+                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
 
             if (stackRow is not null)
             {
-                long stackRowId = Convert.ToInt64(stackRow.player_item_id);
-                long merged = Convert.ToInt64(stackRow.quantity) + dropped.Quantity;
+                long stackRowId = stackRow.PlayerItemId;
+                long merged = stackRow.Quantity + dropped.Quantity;
                 await db.Query("player_item")
                     .Where("player_item_id", stackRowId)
                     .UpdateAsync(new { quantity = merged }, transaction);
@@ -274,17 +290,12 @@ public sealed class StageRepository : IStageRepository
         }
 
         // 새 칸이 필요: 점유 칸을 조회해 빈 칸을 찾는다.
-        var slotRows = await db.Query("player_item")
+        var slotValues = await db.Query("player_item")
             .Select("slot")
             .Where("user_id", userId).WhereNotNull("slot")
-            .GetAsync(transaction);
+            .GetAsync<int>(transaction);
 
-        var used = new HashSet<int>();
-        foreach (var r in slotRows)
-        {
-            int slotValue = Convert.ToInt32(r.slot);
-            used.Add(slotValue);
-        }
+        var used = new HashSet<int>(slotValues);
 
         if (used.Count >= capacity)
         {
