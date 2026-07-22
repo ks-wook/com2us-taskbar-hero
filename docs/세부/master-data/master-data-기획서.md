@@ -384,23 +384,34 @@ erDiagram
 
 ### 5.10 `stage_reward` — 스테이지 클리어 보상
 
-스테이지 클리어 시 지급하는 보상 정의(구 `drop_table_master`를 대체). **스테이지 1개당 1행**이며 `stage_master`를 `stage_id`로 참조한다. 골드·경험치와 **등급별 아이템 드롭 확률**을 담는다.
+스테이지 클리어 시 지급하는 보상 정의(구 `drop_table_master`를 대체). **스테이지 1개당 스칼라 1행**(골드·경험치)이며 `stage_master`를 `stage_id`로 참조한다. **등급별 드롭 확률은 자식 테이블 `stage_reward_drop`**로 분리한다.
+
+**설계 규칙**: 구 `stage_reward.grade1_prob~grade5_prob`(등급마다 컬럼이 늘어나는 **wide 구조**)는 **폐기**한다(반복 구조 → 자식 테이블 규칙, `stage_spawn`·`cube_recipe_ingredient`와 동일). 등급을 추가/제거해도 스키마 변경 없이 행만 조정한다.
+
+**`stage_reward`**
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `stage_id` | int PK/FK | 참조 스테이지(`stage_master.stage_id`) |
 | `reward_gold` | bigint | 클리어 획득 골드 |
 | `reward_exp` | bigint | 클리어 획득 경험치(3캐릭터 공통) |
-| `grade1_prob` ~ `grade5_prob` | decimal | 등급 1~5 아이템 **드롭 확률(0~1)**(`grade_master` 5등급) |
+
+**`stage_reward_drop` (stage_reward 자식 테이블)**
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `stage_id` | int PK/FK | 참조 스테이지(`stage_reward.stage_id`) |
+| `grade` | int PK/FK | 아이템 등급(`grade_master` 1~5) |
+| `drop_prob` | decimal | 그 등급 아이템 **드롭 확률(0~1)**. 확률 0인 등급은 행 없음(sparse) |
 
 **담기는 데이터 예시** (전체는 [마스터 데이터 값](master-data-값.md) §10 정본)
 
-| stage_id | reward_gold | reward_exp | grade1_prob | grade2_prob | grade3_prob | grade4_prob |
+| stage_id | reward_gold | reward_exp |  | stage_id | grade | drop_prob |
 |---|---|---|---|---|---|---|
-| 1010001 | 100 | 50 | 0.30 | 0.10 | 0.02 | 0 |
-| 1010003 | 500 | 250 | 0.20 | 0.25 | 0.10 | 0.03 |
+| 1010001 | 100 | 50 |  | 1010001 | 1 | 0.30 |
+| 1010003 | 500 | 250 |  | 1010003 | 2 | 0.25 |
 
-> 클리어 시 서버가 등급을 추첨(`gradeN_prob`)해 그 등급의 `item_master` 아이템 하나를 지급하고, 확률 합이 1 미만이면 나머지는 미드롭이다(상자 가챠와 동일 방식). `grade5_prob`는 지면상 생략했으나 실제 테이블 컬럼이다. 구 6등급 체계의 `grade6_prob`는 5등급 통일로 폐기했다(값은 grade5에 합산). 드롭 확정은 서버 권위([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
+> 클리어 시 서버가 등급을 추첨(`stage_reward_drop.drop_prob`)해 그 등급의 `item_master` 아이템 하나를 지급하고, 확률 합이 1 미만이면 나머지는 미드롭이다(상자 가챠와 동일 방식). 드롭 확정은 서버 권위([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
 
 ### 5.11 `cube_master` — 큐브(Hero-dric Cube)
 

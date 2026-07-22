@@ -33,6 +33,7 @@
   - [monster_master](#monster_master)
   - [stage_master](#stage_master)
   - [stage_reward](#stage_reward)
+  - [stage_reward_drop](#stage_reward_drop)
   - [cube_master](#cube_master)
   - [box_master](#box_master)
   - [attendance_master](#attendance_master)
@@ -299,7 +300,8 @@ erDiagram
 | `rune_master` | `rune_code` | `player_rune.rune_code` |
 | `monster_master` | `monster_code` | (전투 계산, 보상은 `stage_reward`) |
 | `stage_master` | `stage_id` | `game_player.act`/`stage`/`difficulty` |
-| `stage_reward` | `stage_id` | `stage_master.stage_id`와 1:1(스테이지 클리어 보상) |
+| `stage_reward` | `stage_id` | `stage_master.stage_id`와 1:1(스테이지 클리어 보상 스칼라) |
+| `stage_reward_drop` | `stage_id`+`grade` | `stage_reward.stage_id`의 자식(등급별 드롭 확률, 1:N) |
 | `cube_master` | `cube_level` | `player_cube.cube_level` |
 | `box_master` | `box_code` | (골드 가챠 상자 열기 API 입력 · 골드 차감·지급 모두 `player_item`, 상자 자체는 저장 안 함) |
 | `attendance_master` | `day` | (출석부 일자별 보상 정의 · 지급은 메일 발급, `player_attendance`는 수령 일자 기록) |
@@ -353,8 +355,13 @@ erDiagram
 
 ### stage_reward
 
-- **역할**: 스테이지 클리어 보상 정의(`stage_master`와 1:1). 서버가 클리어 시 이 값으로 보상을 확정한다.
-- **정의 데이터**: 획득 골드·경험치, 등급 1~6 아이템 드롭 확률(0~1).
+- **역할**: 스테이지 클리어 보상 **스칼라** 정의(`stage_master`와 1:1). 서버가 클리어 시 이 값으로 보상을 확정한다.
+- **정의 데이터**: 획득 골드·경험치. 등급별 아이템 드롭 확률은 자식 테이블 `stage_reward_drop`으로 분리(반복 구조 → 자식 테이블 규칙).
+
+### stage_reward_drop
+
+- **역할**: 스테이지 등급별 아이템 드롭 확률(`stage_reward`의 자식, 1:N). 구 `stage_reward.gradeN_prob`(등급마다 늘어나던 wide 컬럼)를 대체한다.
+- **정의 데이터**: `(stage_id, grade)`별 드롭 확률(0~1). 확률 0인 등급은 행 없음(sparse). 등급 추가 시 스키마 변경 없이 행만 추가.
 
 ### cube_master
 

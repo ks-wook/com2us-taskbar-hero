@@ -189,7 +189,7 @@ COMMIT → { act, difficulty, stage, stageId, enteredAt }
   2) (플레이 검증) now - stage_entered_at >= MIN_CLEAR_SEC ?  아니면 StageClearTooFast(6004)  # 임계값 미결
   3) sr = stage_reward[현재 stage_id]
      gold = sr.reward_gold; exp = sr.reward_exp
-     items = rollGradeDrop(sr.grade1_prob..grade6_prob)   # 등급 추첨 → 해당 등급 item_master 아이템 1개(서버 RNG)
+     items = rollGradeDrop(stage_reward_drop[stage_id])   # 등급별 drop_prob로 추첨 → 해당 등급 item_master 아이템 1개(서버 RNG)
   4) 지급: player_item(재화, item_code=골드).quantity += gold
            for c in player_character(3인): c.exp += exp → level 재계산   # 3캐릭터 동일
            items를 player_item에 적재(스택/용량 규칙; 초과 시 InventoryFull(4002))
