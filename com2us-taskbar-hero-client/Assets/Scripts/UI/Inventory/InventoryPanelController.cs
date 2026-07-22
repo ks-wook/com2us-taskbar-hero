@@ -22,6 +22,10 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite slotHighlight;   // ui_slot_highlight
         [SerializeField] private Sprite slotPortrait;    // ui_slot_portrait
 
+        [Header("초상화 캐릭터 프리팹 (classCode → 프리팹, 에디터 빌더가 배선)")]
+        [Tooltip("초상화에 렌더할 캐릭터 프리팹. classCode 기준으로 선택된다(기사1·레인저2·마법사3).")]
+        [SerializeField] private List<ClassCharacter> _classCharacters = new List<ClassCharacter>();
+
         [Header("격자 설정")]
         [SerializeField] private int columns = 5;
         [Tooltip("최초 아이템 슬롯 수. 그리드 마지막에는 확장 버튼 1칸이 추가된다(초기 총 칸 = +1).")]
@@ -35,6 +39,7 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private InventoryTooltip _tooltip;
         [SerializeField] private Text _charIndicatorText;
         [SerializeField] private Text _portraitLabel;
+        [SerializeField] private RawImage _portraitImage;     // 초상화 캐릭터 렌더 표시(런타임 텍스처 배정)
         [SerializeField] private Button _prevButton;
         [SerializeField] private Button _nextButton;
         [SerializeField] private Button _closeButton;
@@ -59,6 +64,25 @@ namespace TaskbarHero.Client.UI
         private int _selectedCharacter;       // 현재 보고 있는 파티 캐릭터(0-based)
         private int _partyCount = 1;          // 실제 파티 캐릭터 수(세션 기준)
         private ItemIconDatabase _iconDb;     // 아이템 아이콘 조회
+
+        private CharacterPortrait _portrait;  // 초상화 렌더러(전용 카메라+RT, 런타임 생성)
+        private GameObject _portraitStage;    // 초상화 렌더러가 얹히는 화면 밖 격리 오브젝트
+        private int _portraitClassCode = -1;  // 현재 초상화에 렌더 중인 직업(중복 재생성 방지)
+
+        // 초상화 렌더 설정: 전용 격리 레이어(전투 SkillCooldownUI가 쓰는 29~31과 겹치지 않게 28)와 화면 밖 위치.
+        private const int PortraitLayer = 28;
+        private static readonly Vector3 PortraitStageOrigin = new Vector3(500f, 500f, 0f);
+        private const float PortraitOrtho = 0.65f;                       // 전신이 들어오는 직교 크기(작을수록 확대)
+        private static readonly Vector2 PortraitAim = new Vector2(0f, 0.42f); // 발 기준 위(몸통 중앙)로 조준
+        private static readonly Color PortraitBg = new Color(0.10f, 0.11f, 0.16f, 1f);
+
+        /// <summary>초상화에 렌더할 직업별 캐릭터 프리팹 매핑(classCode → 프리팹).</summary>
+        [System.Serializable]
+        private struct ClassCharacter
+        {
+            public int classCode;
+            public GameObject prefab;
+        }
 
         /// <summary>정적 계층이 이미 구성돼 있으면 true(프리팹에서 로드된 경우).</summary>
         private bool AlreadyBuilt => _tooltip != null;
@@ -87,7 +111,30 @@ namespace TaskbarHero.Client.UI
             {
                 return; // 아직 구성 전(Awake 이전 비정상 활성)
             }
+            if (_portraitStage != null)
+            {
+                _portraitStage.SetActive(true); // 표시 중에만 초상화 렌더
+            }
             RefreshFromSession();
+        }
+
+        /// <summary>패널이 숨겨지면 초상화 렌더러(카메라)를 꺼 불필요한 렌더를 막는다.</summary>
+        private void OnDisable()
+        {
+            if (_portraitStage != null)
+            {
+                _portraitStage.SetActive(false);
+            }
+        }
+
+        /// <summary>패널 파괴 시 화면 밖 초상화 스테이지(카메라·RT·캐릭터 인스턴스)를 함께 정리한다.</summary>
+        private void OnDestroy()
+        {
+            if (_portraitStage != null)
+            {
+                Destroy(_portraitStage);
+                _portraitStage = null;
+            }
         }
 
         /// <summary>에디터 빌드 전용: 전체 계층을 생성하고 참조를 배선한다(프리팹 저장용).</summary>
@@ -159,6 +206,7 @@ namespace TaskbarHero.Client.UI
             {
                 _expandButton.onClick.AddListener(OnExpandInventory);
             }
+            EnsurePortraitStage(); // 초상화 렌더러(전용 카메라+RT) 생성
         }
 
         // ── 세션 실데이터 연동 ──
@@ -393,6 +441,19 @@ namespace TaskbarHero.Client.UI
             // 캐릭터 초상 슬롯(능력치 패널 우측)
             var portrait = NewImage("PortraitSlot", area, slotPortrait);
             TopLeft(portrait.rectTransform, PortraitX, 144f, 220f, 300f);
+
+            // 캐릭터 프리팹 렌더 표시(초상 프레임 안쪽). 텍스처/표시는 런타임에 CharacterPortrait가 배정.
+            var render = NewRawImage("PortraitRender", portrait.rectTransform);
+            var rrt = render.rectTransform;
+            rrt.anchorMin = Vector2.zero;
+            rrt.anchorMax = Vector2.one;
+            rrt.pivot = new Vector2(0.5f, 0.5f);
+            rrt.offsetMin = new Vector2(14f, 14f);
+            rrt.offsetMax = new Vector2(-14f, -14f);
+            render.color = new Color(1f, 1f, 1f, 0f); // 텍스처 배정 전에는 투명
+            render.raycastTarget = false;
+            _portraitImage = render;
+
             _portraitLabel = NewText("PortraitLabel", portrait.rectTransform, "캐릭터", 24, TextAnchor.LowerCenter);
             Stretch(_portraitLabel.rectTransform);
 
@@ -665,8 +726,62 @@ namespace TaskbarHero.Client.UI
             {
                 _portraitLabel.text = CurrentCharacterLabel(chars);
             }
+            UpdatePortrait(chars);
             RefreshEquip(chars);
             RefreshStatPanel(chars);
+        }
+
+        /// <summary>선택된 캐릭터의 직업 프리팹을 초상화 렌더러에 반영한다(직업이 바뀔 때만 재생성).</summary>
+        private void UpdatePortrait(List<CharacterDto> chars)
+        {
+            EnsurePortraitStage();
+            if (_portrait == null)
+            {
+                return;
+            }
+
+            int classCode = chars != null && _selectedCharacter < chars.Count ? chars[_selectedCharacter].classCode : -1;
+            if (classCode == _portraitClassCode)
+            {
+                return; // 동일 직업이면 인스턴스를 재생성하지 않음
+            }
+            _portraitClassCode = classCode;
+
+            var prefab = PrefabForClass(classCode);
+            _portrait.SetCharacter(prefab);
+            if (_portraitImage != null)
+            {
+                _portraitImage.color = prefab != null ? Color.white : new Color(1f, 1f, 1f, 0f);
+            }
+        }
+
+        /// <summary>초상화 렌더러(전용 카메라+RT를 얹은 화면 밖 오브젝트)를 1회 생성한다(런타임 전용).</summary>
+        private void EnsurePortraitStage()
+        {
+            if (_portrait != null || _portraitImage == null || !Application.isPlaying)
+            {
+                return;
+            }
+            _portraitStage = new GameObject("InventoryPortraitStage");
+            _portraitStage.transform.position = PortraitStageOrigin;
+            _portrait = _portraitStage.AddComponent<CharacterPortrait>();
+            _portrait.Initialize(_portraitImage, PortraitLayer, 440, 600, PortraitOrtho, PortraitAim, PortraitBg, PortraitStageOrigin);
+        }
+
+        /// <summary>classCode에 해당하는 초상화 캐릭터 프리팹을 반환한다(없으면 null).</summary>
+        private GameObject PrefabForClass(int classCode)
+        {
+            if (_classCharacters != null)
+            {
+                foreach (var e in _classCharacters)
+                {
+                    if (e.prefab != null && e.classCode == classCode)
+                    {
+                        return e.prefab;
+                    }
+                }
+            }
+            return null;
         }
 
         /// <summary>현재 선택 캐릭터의 능력치(클래스+레벨+장착 장비 합산)를 능력치 패널에 표시한다.</summary>
@@ -1050,6 +1165,13 @@ namespace TaskbarHero.Client.UI
             img.sprite = sprite;
             img.type = Image.Type.Simple;
             return img;
+        }
+
+        private static RawImage NewRawImage(string name, Transform parent)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(RawImage));
+            go.transform.SetParent(parent, false);
+            return go.GetComponent<RawImage>();
         }
 
         private Text NewText(string name, Transform parent, string content, int size, TextAnchor anchor)

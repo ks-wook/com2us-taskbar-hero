@@ -30,7 +30,8 @@ namespace TaskbarHero.Client.UI
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // 우하단: [스테이지] [가방]
+            // 우하단: [편성] [스테이지] [가방]
+            CreateButton(canvasGo.transform, font, "PartyButton", "편성", new Vector2(-440f, 40f), OnPartyButton);
             CreateButton(canvasGo.transform, font, "StageButton", "스테이지", new Vector2(-240f, 40f), OnStageButton);
             CreateButton(canvasGo.transform, font, "InventoryButton", "가방", new Vector2(-40f, 40f), OnInventoryButton);
         }
@@ -73,6 +74,19 @@ namespace TaskbarHero.Client.UI
             if (UIManager.Instance != null)
             {
                 UIManager.Instance.ToggleInventory();
+            }
+            else
+            {
+                Debug.LogWarning("[HUD] UIManager 인스턴스를 찾을 수 없습니다.");
+            }
+        }
+
+        /// <summary>파티 편성 패널 토글(UIManager 위임).</summary>
+        private void OnPartyButton()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.ToggleParty();
             }
             else
             {

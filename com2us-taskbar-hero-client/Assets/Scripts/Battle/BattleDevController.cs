@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
 using TaskbarHero.Client.MasterData;
 using TaskbarHero.Common.MasterData;
@@ -214,6 +215,8 @@ namespace TaskbarHero.Client.Battle
 
         private void LateUpdate()
         {
+            UpdateEnemyHpBars(); // 적 HP바(Canvas)를 매 프레임 몬스터 위치에 맞춰 갱신
+
             if (_cam == null || _members.Count == 0) return;
 
             float front = float.NegativeInfinity, rear = float.PositiveInfinity;
@@ -786,9 +789,7 @@ namespace TaskbarHero.Client.Battle
                 for (int i = _log.Count - 1; i >= 0; i--) GUILayout.Label(_log[i]);
                 GUILayout.EndArea();
             }
-
-            // 적 HP바는 서버 구동 모드(GameScene 던전)에서도 표시한다.
-            DrawMonsterHpBars();
+            // 적 HP바는 IMGUI가 아닌 Canvas(UpdateEnemyHpBars)로 그린다 — UI가 그 위에 오도록.
         }
 
         /// <summary>소환할 캐릭터를 고르는 토글 + 재시작 버튼(구현된 직업만 선택 가능).</summary>
@@ -822,41 +823,103 @@ namespace TaskbarHero.Client.Battle
             return _phase == Phase.Advancing ? "전진 중" : "전투 중";
         }
 
-        /// <summary>살아있는 모든 몬스터 머리 위에 HP 바를 그린다(웨이브 전원 표시).</summary>
-        private void DrawMonsterHpBars()
+        // ── 적 HP바(Canvas 기반) ──
+        // IMGUI는 항상 모든 UI 위에 그려지므로, HP바를 낮은 sortingOrder의 Canvas로 그려
+        // HUD(10)·패널(100) 등 UI가 항상 HP바 위에 오도록 한다.
+        private const int EnemyHpBarSortingOrder = 1; // HUD(10)/패널(100)보다 아래
+        private const float HpBarWidth = 90f;
+        private const float HpBarHeight = 10f;
+
+        private Canvas _hpCanvas;
+        private readonly List<RectTransform> _hpBarRoots = new List<RectTransform>();
+        private readonly List<Image> _hpBarFills = new List<Image>();
+
+        /// <summary>살아있는 모든 몬스터 머리 위에 Canvas HP 바를 배치·갱신한다(LateUpdate).</summary>
+        private void UpdateEnemyHpBars()
         {
-            if (_om == null || _cam == null) return;
-            // 게임 씬에서 전체화면 UI 패널(스테이지·인벤토리 등)이 실제로 표시돼 있으면 적 HP바를 가린다.
-            if (serverMode && UIManager.Instance != null && UIManager.Instance.IsAnyPanelVisible()) return;
+            if (_om == null || _cam == null)
+            {
+                return;
+            }
+            EnsureHpCanvas();
+
+            int used = 0;
             foreach (var go in _om.Active(CatEnemy))
             {
                 var m = go.GetComponent<MonsterUnit>();
-                if (m == null || !m.Alive || m.MaxHp <= 0) continue;
-                Vector3 sp = _cam.WorldToScreenPoint(m.transform.position + Vector3.up * 1.2f); // 몬스터에 더 가깝게(아래로)
-                if (sp.z <= 0f) continue;
-                const float w = 90f, h = 10f;
-                float x = sp.x - w / 2f;
-                float y = Screen.height - sp.y;
+                if (m == null || !m.Alive || m.MaxHp <= 0)
+                {
+                    continue;
+                }
+                Vector3 sp = _cam.WorldToScreenPoint(m.transform.position + Vector3.up * 1.2f);
+                if (sp.z <= 0f)
+                {
+                    continue;
+                }
+                var bar = GetHpBar(used);
+                bar.gameObject.SetActive(true);
+                bar.anchoredPosition = new Vector2(sp.x, sp.y); // ConstantPixelSize 캔버스(좌하단 기준 픽셀)
                 float ratio = Mathf.Clamp01((float)m.Hp / m.MaxHp);
-                DrawRect(new Rect(x - 1, y - 1, w + 2, h + 2), new Color(0f, 0f, 0f, 0.6f));
-                DrawRect(new Rect(x, y, w * ratio, h), Color.red); // 적 체력바 빨강
+                _hpBarFills[used].rectTransform.sizeDelta = new Vector2(HpBarWidth * ratio, -2f); // 너비로 체력 표현
+                used++;
+            }
+
+            // 남는 바 숨김
+            for (int i = used; i < _hpBarRoots.Count; i++)
+            {
+                if (_hpBarRoots[i] != null) _hpBarRoots[i].gameObject.SetActive(false);
             }
         }
 
-        private static Texture2D _px;
-
-        private static void DrawRect(Rect r, Color c)
+        /// <summary>적 HP바 전용 Canvas(낮은 sortingOrder, 픽셀 좌표계)를 최초 1회 생성한다.</summary>
+        private void EnsureHpCanvas()
         {
-            if (_px == null)
+            if (_hpCanvas != null)
             {
-                _px = new Texture2D(1, 1);
-                _px.SetPixel(0, 0, Color.white);
-                _px.Apply();
+                return;
             }
-            Color prev = GUI.color;
-            GUI.color = c;
-            GUI.DrawTexture(r, _px);
-            GUI.color = prev;
+            var go = new GameObject("EnemyHpBarCanvas", typeof(Canvas), typeof(CanvasScaler));
+            go.transform.SetParent(transform, false);
+            _hpCanvas = go.GetComponent<Canvas>();
+            _hpCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            _hpCanvas.sortingOrder = EnemyHpBarSortingOrder; // UI보다 아래
+            var scaler = go.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize; // WorldToScreenPoint 픽셀과 1:1
+            scaler.scaleFactor = 1f;
+        }
+
+        /// <summary>인덱스에 해당하는 HP바(배경+채움)를 풀에서 얻거나 새로 만든다.</summary>
+        private RectTransform GetHpBar(int index)
+        {
+            while (_hpBarRoots.Count <= index)
+            {
+                var bgGo = new GameObject("EnemyHpBar", typeof(RectTransform), typeof(Image));
+                bgGo.transform.SetParent(_hpCanvas.transform, false);
+                var bgRt = (RectTransform)bgGo.transform;
+                bgRt.anchorMin = bgRt.anchorMax = new Vector2(0f, 0f); // 좌하단 기준
+                bgRt.pivot = new Vector2(0.5f, 0.5f);
+                bgRt.sizeDelta = new Vector2(HpBarWidth + 2f, HpBarHeight + 2f);
+                var bgImg = bgGo.GetComponent<Image>();
+                bgImg.color = new Color(0f, 0f, 0f, 0.6f);
+                bgImg.raycastTarget = false;
+
+                // 채움: 좌측 정렬 솔리드 사각형(너비로 체력 비율 표현). 세로는 부모에 맞춰 1px 인셋.
+                var fillGo = new GameObject("Fill", typeof(RectTransform), typeof(Image));
+                fillGo.transform.SetParent(bgGo.transform, false);
+                var fillRt = (RectTransform)fillGo.transform;
+                fillRt.anchorMin = new Vector2(0f, 0f);
+                fillRt.anchorMax = new Vector2(0f, 1f);
+                fillRt.pivot = new Vector2(0f, 0.5f);
+                fillRt.anchoredPosition = new Vector2(1f, 0f);
+                fillRt.sizeDelta = new Vector2(HpBarWidth, -2f);
+                var fillImg = fillGo.GetComponent<Image>();
+                fillImg.color = Color.red;
+                fillImg.raycastTarget = false;
+
+                _hpBarRoots.Add(bgRt);
+                _hpBarFills.Add(fillImg);
+            }
+            return _hpBarRoots[index];
         }
     }
 }

@@ -57,6 +57,63 @@ namespace TaskbarHero.Client.UI
                     _panel.Show(false);
                 }
             }
+
+            MarkOwnedCharacters(); // 이미 보유한 직업은 '선택불가' 표시 + 선택 차단
+        }
+
+        /// <summary>계정이 이미 보유한 직업의 캐릭터 위에 빨간 '선택불가' 라벨을 띄운다.</summary>
+        private void MarkOwnedCharacters()
+        {
+            if (_characters == null)
+            {
+                return;
+            }
+            foreach (var sc in _characters)
+            {
+                if (sc != null && IsClassOwned(sc.ClassCode))
+                {
+                    CreateLockedLabel(sc);
+                }
+            }
+        }
+
+        /// <summary>계정이 해당 직업 캐릭터를 이미 보유했는지(세션 세이브 기준).</summary>
+        private static bool IsClassOwned(int classCode)
+        {
+            var chars = Session.GameData != null ? Session.GameData.characters : null;
+            if (chars != null)
+            {
+                foreach (var c in chars)
+                {
+                    if (c != null && c.classCode == classCode)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /// <summary>캐릭터 머리 위에 빨간 '선택불가' 월드 텍스트를 생성한다(캐릭터에 종속되어 함께 표시/숨김).</summary>
+        private void CreateLockedLabel(SelectableCharacter sc)
+        {
+            var go = new GameObject("LockedLabel");
+            go.transform.position = sc.transform.position + Vector3.up * 2.8f;
+            go.transform.SetParent(sc.transform, worldPositionStays: true); // 부모 스케일 영향 없이 월드 크기 유지
+
+            var tm = go.AddComponent<TextMesh>();
+            tm.text = "선택불가";
+            tm.anchor = TextAnchor.MiddleCenter;
+            tm.alignment = TextAlignment.Center;
+            tm.fontSize = 80;
+            tm.characterSize = 0.08f;
+            tm.color = new Color(1f, 0.2f, 0.2f);
+            tm.fontStyle = FontStyle.Bold;
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            tm.font = font;
+            var mr = go.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = font.material;
+            mr.sortingOrder = 500; // 캐릭터 스프라이트 위
         }
 
         private void Update()
@@ -86,6 +143,11 @@ namespace TaskbarHero.Client.UI
 
         private void Select(SelectableCharacter sc)
         {
+            if (IsClassOwned(sc.ClassCode))
+            {
+                Debug.Log($"[CharacterSelect] 이미 보유한 직업(class={sc.ClassCode}) — 선택 불가");
+                return; // 이미 보유한 직업은 선택 차단
+            }
             _selected = sc;
             SetAnchorsEnabled(false);      // 화면좌표 고정 해제(카메라 줌 반영)
             ShowOnlySelected(sc);          // 비선택 캐릭터 숨김

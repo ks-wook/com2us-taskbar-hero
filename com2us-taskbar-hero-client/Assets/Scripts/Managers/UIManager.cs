@@ -17,6 +17,7 @@ namespace TaskbarHero.Client.Managers
             SignUp,
             Inventory,
             Stage,
+            Party,
         }
 
         public static UIManager Instance { get; private set; }
@@ -28,6 +29,8 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private GameObject inventoryPanelPrefab;
         [Tooltip("Assets/Prefabs/UI/StagePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject stagePanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/PartyPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject partyPanelPrefab;
 
         [Header("시작 설정")]
         [Tooltip("Start 시 자동으로 표시할 패널. 자동 표시를 원치 않으면 비활성화한다.")]
@@ -119,6 +122,22 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
+        /// <summary>파티 편성 패널을 표시한다.</summary>
+        public void ShowParty() => Show(PanelType.Party);
+
+        /// <summary>파티 편성 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleParty()
+        {
+            if (Current == PanelType.Party)
+            {
+                Hide(PanelType.Party);
+            }
+            else
+            {
+                Show(PanelType.Party);
+            }
+        }
+
         /// <summary>지정한 패널을 표시하고 나머지 패널은 모두 숨긴다.</summary>
         public void Show(PanelType type)
         {
@@ -201,6 +220,8 @@ namespace TaskbarHero.Client.Managers
                     return inventoryPanelPrefab;
                 case PanelType.Stage:
                     return stagePanelPrefab;
+                case PanelType.Party:
+                    return partyPanelPrefab;
                 default:
                     return null;
             }

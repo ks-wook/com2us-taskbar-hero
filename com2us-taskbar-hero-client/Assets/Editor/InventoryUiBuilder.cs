@@ -59,6 +59,7 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
             so.FindProperty("slotPortrait").objectReferenceValue = LoadSprite("ui_slot_portrait");
+            WireClassCharacters(so); // 초상화 캐릭터 프리팹(기사1·레인저2·마법사3)
             so.ApplyModifiedPropertiesWithoutUndo();
 
             // 전체 계층을 에디터에서 생성해 프리팹에 정적으로 굽는다(에디터에서 바로 보이도록).
@@ -135,6 +136,34 @@ namespace TaskbarHero.ClientEditor
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             Debug.Log("[InventoryUiBuilder] TitleScene UIManager에 인벤토리 프리팹 배선 완료.");
+        }
+
+        /// <summary>초상화용 직업별 캐릭터 프리팹(_classCharacters)을 배선한다. classCode: 기사1·레인저2·마법사3.</summary>
+        private static void WireClassCharacters(SerializedObject so)
+        {
+            var prop = so.FindProperty("_classCharacters");
+            if (prop == null)
+            {
+                Debug.LogWarning("[InventoryUiBuilder] _classCharacters 프로퍼티를 찾지 못했습니다.");
+                return;
+            }
+            prop.arraySize = 3;
+            SetClassCharacter(prop, 0, 1, "Assets/Prefabs/Character/Knight.prefab");
+            SetClassCharacter(prop, 1, 2, "Assets/Prefabs/Character/Archer.prefab");
+            SetClassCharacter(prop, 2, 3, "Assets/Prefabs/Character/Mage.prefab");
+        }
+
+        /// <summary>_classCharacters 배열의 index번째 요소에 classCode와 프리팹을 지정한다.</summary>
+        private static void SetClassCharacter(SerializedProperty arrayProp, int index, int classCode, string prefabPath)
+        {
+            var element = arrayProp.GetArrayElementAtIndex(index);
+            element.FindPropertyRelative("classCode").intValue = classCode;
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[InventoryUiBuilder] 캐릭터 프리팹을 찾지 못했습니다: {prefabPath}");
+            }
+            element.FindPropertyRelative("prefab").objectReferenceValue = prefab;
         }
 
         /// <summary>이름으로 자식 Transform을 재귀 검색한다.</summary>
