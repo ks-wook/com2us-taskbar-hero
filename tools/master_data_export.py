@@ -241,17 +241,27 @@ def export_stage(conn):
 
 
 def export_stage_reward(conn):
-    rows = q(conn, "SELECT * FROM stage_reward ORDER BY stage_id")
-    return [{
-        "stageId": _i(r["stage_id"]),
-        "rewardGold": _i(r["reward_gold"]),
-        "rewardExp": _i(r["reward_exp"]),
-        "grade1Prob": _f(r["grade1_prob"]),
-        "grade2Prob": _f(r["grade2_prob"]),
-        "grade3Prob": _f(r["grade3_prob"]),
-        "grade4Prob": _f(r["grade4_prob"]),
-        "grade5Prob": _f(r["grade5_prob"]),
-    } for r in rows]
+    # 등급별 드롭 확률은 자식 테이블 stage_reward_drop 에 정규화되어 있다(확률 0 등급은 행 없음).
+    # 클라이언트 StageReward 모델은 평탄한 grade1Prob~grade5Prob 를 기대하므로, 자식 행을 그 형태로 투영한다.
+    rewards = q(conn, "SELECT * FROM stage_reward ORDER BY stage_id")
+    drops = q(conn, "SELECT * FROM stage_reward_drop ORDER BY stage_id, grade")
+    prob_by_stage = {}
+    for d in drops:
+        prob_by_stage.setdefault(_i(d["stage_id"]), {})[_i(d["grade"])] = _f(d["drop_prob"])
+    result = []
+    for r in rewards:
+        probs = prob_by_stage.get(_i(r["stage_id"]), {})
+        result.append({
+            "stageId": _i(r["stage_id"]),
+            "rewardGold": _i(r["reward_gold"]),
+            "rewardExp": _i(r["reward_exp"]),
+            "grade1Prob": probs.get(1, 0.0),
+            "grade2Prob": probs.get(2, 0.0),
+            "grade3Prob": probs.get(3, 0.0),
+            "grade4Prob": probs.get(4, 0.0),
+            "grade5Prob": probs.get(5, 0.0),
+        })
+    return result
 
 
 def export_cube(conn):
