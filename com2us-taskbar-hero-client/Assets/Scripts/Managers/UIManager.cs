@@ -39,6 +39,20 @@ namespace TaskbarHero.Client.Managers
         /// <summary>현재 표시 중인 패널. 없으면 null.</summary>
         public PanelType? Current { get; private set; }
 
+        /// <summary>현재 화면에 실제로 활성화(표시)된 관리 패널이 하나라도 있는지.
+        /// (<see cref="Current"/>는 씬 전환 시 초기화되지 않아 신뢰할 수 없으므로, 실제 인스턴스 활성 상태로 판정한다.)</summary>
+        public bool IsAnyPanelVisible()
+        {
+            foreach (var panel in _instances.Values)
+            {
+                if (panel != null && panel.activeInHierarchy)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)

@@ -42,6 +42,8 @@ namespace TaskbarHero.Client.Battle
         private float _chargeRange;
         private float _chargeSpeed;
         private int _rainSkillCode;   // 공중 화살비형 스킬 코드(0=없음)
+        private int _aoeSkillCode;    // 광역(범위) 스킬 코드(0=없음)
+        private bool _basicAttackAoe; // true면 근접 기본공격이 사거리 내 모든 적에게 명중
         private float _selfEffectXOffset;   // 자기 위치 이펙트 X 오프셋(+=오른쪽)
         private bool _charging;
         private Skill _chargeSkill;
@@ -95,6 +97,8 @@ namespace TaskbarHero.Client.Battle
             _chargeRange = cfg.chargeRange;
             _chargeSpeed = cfg.chargeSpeed;
             _rainSkillCode = cfg.rainSkillCode;
+            _aoeSkillCode = cfg.aoeSkillCode;
+            _basicAttackAoe = cfg.basicAttackAoe;
             _selfEffectXOffset = cfg.selfEffectXOffset;
             _anim = GetComponentInChildren<Animator>();
 
@@ -349,8 +353,19 @@ namespace TaskbarHero.Client.Battle
                         SendMessage("PlayCastHold", motion, SendMessageOptions.DontRequireReceiver);
                     else
                         PlayAttackAnim();
-                    SpawnEffectAtSelf(sk.effect);
-                    _ctrl.DealDamageAfter(motion, dmg, label);
+                    var fx = SpawnEffectAtSelf(sk.effect);
+                    if (_aoeSkillCode != 0 && sk.code == _aoeSkillCode)
+                    {
+                        // 광역(강타 등): 이펙트 범위 내 모든 적에게 데미지.
+                        Vector3 center = fx != null
+                            ? fx.transform.position
+                            : transform.position + Vector3.up * _ctrl.EffectYOffset + Vector3.right * _selfEffectXOffset;
+                        _ctrl.DealAreaDamageAfter(motion, dmg, label, center, EffectRadius(fx));
+                    }
+                    else
+                    {
+                        _ctrl.DealDamageAfter(motion, dmg, label);
+                    }
                     _busyTimer = motion;
                 }
             }
@@ -376,7 +391,19 @@ namespace TaskbarHero.Client.Battle
             }
             else // 근접
             {
-                _ctrl.DealDamageAfter(_ctrl.BasicHitDelay, dmg, $"[{_name}] → 몬스터");
+                if (_basicAttackAoe)
+                {
+                    // 광역 기본공격: 대상(최전방 몬스터) 위치를 중심으로 사거리 내 모든 적에게 명중.
+                    var target = _ctrl.MonsterTransform;
+                    Vector3 center = target != null
+                        ? target.position
+                        : transform.position + Vector3.right * Mathf.Max(1f, _attackRange * 0.5f) + Vector3.up * _ctrl.EffectYOffset;
+                    _ctrl.DealAreaDamageAfter(_ctrl.BasicHitDelay, dmg, $"[{_name}] 광역 → 적", center, _attackRange);
+                }
+                else
+                {
+                    _ctrl.DealDamageAfter(_ctrl.BasicHitDelay, dmg, $"[{_name}] → 몬스터");
+                }
                 _busyTimer = _ctrl.BasicHitDelay;
             }
         }
@@ -446,14 +473,33 @@ namespace TaskbarHero.Client.Battle
             return System.Math.Max(1L, (long)(_atk * Mathf.Max(1f, _ctrl.DevDamageMultiplier) * coef * _atkBuffMult));
         }
 
-        /// <summary>스킬 이펙트를 자기 위치에서 발생시킨다(모든 멤버 공통). <see cref="_selfEffectXOffset"/>만큼 X로 밀어 발생 위치 보정(기사 강타 등).</summary>
-        private void SpawnEffectAtSelf(GameObject effect)
+        /// <summary>스킬 이펙트를 자기 위치에서 발생시키고 생성된 인스턴스를 반환한다(없으면 null).
+        /// <see cref="_selfEffectXOffset"/>만큼 X로 밀어 발생 위치 보정(기사 강타 등).</summary>
+        private GameObject SpawnEffectAtSelf(GameObject effect)
         {
-            if (effect == null) return;
+            if (effect == null) return null;
             Vector3 pos = transform.position
                 + Vector3.up * _ctrl.EffectYOffset
                 + Vector3.right * _selfEffectXOffset;
-            Instantiate(effect, pos, Quaternion.identity);
+            return Instantiate(effect, pos, Quaternion.identity);
+        }
+
+        /// <summary>광역 스킬 이펙트의 판정 반경(월드). 이펙트 렌더러 크기 기반이며, 최소 사거리 이상을 보장해
+        /// 전방에 몰린 적 무리에 확실히 닿게 한다.</summary>
+        private float EffectRadius(GameObject fx)
+        {
+            float r = 0f;
+            if (fx != null)
+            {
+                var rends = fx.GetComponentsInChildren<Renderer>();
+                if (rends != null && rends.Length > 0)
+                {
+                    var b = rends[0].bounds;
+                    for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                    r = Mathf.Max(b.extents.x, b.extents.y);
+                }
+            }
+            return Mathf.Max(r, _attackRange);
         }
 
         /// <summary>지정 위치에 스킬 이펙트를 무조건 발생시킨다(몬스터 생존 여부와 무관 — 화살비 등 대상 기준 연출 보장).</summary>

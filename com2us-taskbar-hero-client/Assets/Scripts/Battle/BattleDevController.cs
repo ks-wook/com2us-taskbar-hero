@@ -80,6 +80,10 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("기본 공격: 공격 모션 후 데미지 적용까지 지연(초)")]
         public float basicAttackHitDelay = 0.35f;
 
+        [Header("서버 구동 모드 (GameScene 던전)")]
+        [Tooltip("true면 서버 웨이브 플랜(유한)으로 진행하고 개발용 무한 웨이브를 끈다. BeginServerBattle로 시작.")]
+        public bool serverMode = false;
+
         // ---- 런타임 상태 ----
         private Camera _cam;
         private ObjectManager _om;
@@ -107,6 +111,13 @@ namespace TaskbarHero.Client.Battle
         private Phase _phase = Phase.Advancing;
         private bool _paused;
         private int _killCount;
+
+        // 서버 구동 모드 상태
+        private Queue<int> _serverQueue;                       // 스폰할 몬스터 코드(순서대로)
+        private System.Func<int, GameObject> _prefabResolver;  // 코드 → 프리팹
+        private System.Action _onAllCleared;                   // 전멸 시 1회 호출
+        private int _serverSpawned;
+        private bool _serverCleared;
 
         // 소환 캐릭터 선택(테스트용). 현재 구현된 직업만 선택 가능.
         private static readonly HashSet<int> ImplementedClasses = new HashSet<int> { 1, 2, 3 }; // 기사1·레인저2·마법사3
@@ -250,12 +261,35 @@ namespace TaskbarHero.Client.Battle
 
         // ---- 스폰 / 대형 ----
 
-        /// <summary>선택 상태 배열을 파티 크기에 맞춰 초기화한다(구현된 직업만 기본 선택).</summary>
+        /// <summary>선택 상태 배열을 초기화한다. 개발 모드는 구현된 직업 전부, 서버 모드는
+        /// 계정에 실제로 있는 캐릭터(classCode)와 일치하는 멤버만 선택한다.</summary>
         private void InitSelection()
         {
             _selected = new bool[party.Count];
+
+            HashSet<int> accountClasses = null;
+            if (serverMode)
+            {
+                accountClasses = new HashSet<int>();
+                var chars = Session.GameData != null ? Session.GameData.characters : null;
+                if (chars != null)
+                {
+                    foreach (var c in chars)
+                    {
+                        if (c != null) accountClasses.Add(c.classCode);
+                    }
+                }
+            }
+
             for (int i = 0; i < party.Count; i++)
-                _selected[i] = IsImplemented(party[i]);
+            {
+                bool ok = IsImplemented(party[i]);
+                if (ok && accountClasses != null)
+                {
+                    ok = party[i] != null && accountClasses.Contains(party[i].classCode); // 계정 보유 직업만
+                }
+                _selected[i] = ok;
+            }
         }
 
         /// <summary>구현이 완료돼 선택 가능한 멤버인지(프리팹 지정 + 구현 직업 코드).</summary>
@@ -309,6 +343,12 @@ namespace TaskbarHero.Client.Battle
         /// <summary>주기적으로 적을 카메라 우측 바깥에 스폰(동시 상한 이내)하고, 살아있는 적을 파티 앞 라인으로 몰아넣는다.</summary>
         private void TickWave(float dt)
         {
+            if (serverMode)
+            {
+                TickServerWave(dt);
+                return;
+            }
+
             if (monsterPrefab != null)
             {
                 _spawnTimer += dt;
@@ -319,6 +359,91 @@ namespace TaskbarHero.Client.Battle
                 }
             }
             UpdateQueue();
+        }
+
+        /// <summary>서버 웨이브(유한): 큐에서 코드별로 주기 스폰하고, 모두 스폰·처치되면 전멸 콜백을 1회 호출한다.</summary>
+        private void TickServerWave(float dt)
+        {
+            if (_serverQueue != null && _serverQueue.Count > 0)
+            {
+                _spawnTimer += dt;
+                if (_spawnTimer >= Mathf.Max(0.1f, enemySpawnInterval) && AliveEnemyCount() < Mathf.Max(1, maxConcurrentEnemies))
+                {
+                    _spawnTimer = 0f;
+                    SpawnMonsterByCode(_serverQueue.Dequeue());
+                    _serverSpawned++;
+                }
+            }
+
+            UpdateQueue();
+
+            // 전멸 판정: 예정분 모두 스폰 완료 + 살아있는 적 0 + 최소 1마리 스폰됨.
+            bool allSpawned = _serverQueue == null || _serverQueue.Count == 0;
+            if (!_serverCleared && _serverSpawned > 0 && allSpawned && AliveEnemyCount() == 0)
+            {
+                _serverCleared = true;
+                Log("모든 몬스터 처치 — 클리어");
+                _onAllCleared?.Invoke();
+            }
+        }
+
+        /// <summary>지정 몬스터 코드의 프리팹(리졸버)과 마스터 스탯으로 적 1기를 스폰한다.</summary>
+        private void SpawnMonsterByCode(int code)
+        {
+            string mname = "Monster";
+            long hp = 100;
+            long atk = 5;
+            var db = MasterDataManager.Db;
+            if (db != null && db.Monsters.TryGetValue(code, out MonsterMaster mon))
+            {
+                mname = mon.name;
+                hp = mon.hp;
+                atk = mon.attack;
+            }
+
+            GameObject prefab = _prefabResolver != null ? _prefabResolver(code) : null;
+            if (prefab == null) prefab = monsterPrefab; // 폴백
+            if (prefab == null)
+            {
+                Log($"[경고] 몬스터 {code} 프리팹을 찾지 못해 스폰 건너뜀");
+                return;
+            }
+
+            float rightEdge = _cam != null ? _cam.transform.position.x + _cam.orthographicSize * _cam.aspect : 10f;
+            Vector3 pos = new Vector3(rightEdge + enemyOffscreenMargin, _pathY, 0f);
+
+            var go = _om.Spawn(CatEnemy, prefab, pos, Quaternion.identity);
+            if (go == null) return;
+            EnsureSpumAnimator(go);
+            SetFacingRight(go, false);
+            var mu = go.GetComponent<MonsterUnit>();
+            if (mu == null) mu = go.AddComponent<MonsterUnit>();
+            mu.Init(mname, hp, atk, enemyMoveSpeed, () => _paused, OnMonsterKilled);
+        }
+
+        /// <summary>서버 스테이지 진입 데이터로 유한 웨이브 전투를 시작한다.
+        /// plan: (몬스터코드→마리수) 순서 목록, prefabResolver: 코드→프리팹, onAllCleared: 전멸 시 1회.</summary>
+        public void BeginServerBattle(List<KeyValuePair<int, int>> plan,
+                                      System.Func<int, GameObject> prefabResolver, System.Action onAllCleared)
+        {
+            serverMode = true;
+            _prefabResolver = prefabResolver;
+            _onAllCleared = onAllCleared;
+            _serverQueue = new Queue<int>();
+            if (plan != null)
+            {
+                foreach (var kv in plan)
+                {
+                    for (int i = 0; i < kv.Value; i++)
+                    {
+                        _serverQueue.Enqueue(kv.Key);
+                    }
+                }
+            }
+            _serverSpawned = 0;
+            _serverCleared = false;
+            _spawnTimer = enemySpawnInterval; // 곧 첫 스폰
+            Log($"서버 전투 시작 — 총 {_serverQueue.Count}마리 예정");
         }
 
         /// <summary>카메라 우측 바깥(보이지 않는 지점)에 적 1기를 생성·배선한다.</summary>
@@ -522,7 +647,52 @@ namespace TaskbarHero.Client.Battle
                 yield break;
             }
             target.TakeDamage(dmg);
+            // 피격 데미지를 붉은 숫자로 표시(오브젝트 풀 재사용).
+            DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f));
             Log($"{label} → -{dmg} (HP {Mathf.Max(0, (int)target.Hp)}/{target.MaxHp})");
+        }
+
+        /// <summary>지연 후 지정 중심 반경 내 모든 살아있는 적에게 데미지를 적용한다(광역 스킬).</summary>
+        public void DealAreaDamageAfter(float delay, long dmg, string label, Vector3 center, float radius)
+        {
+            StartCoroutine(DoAreaDamageAfter(delay, dmg, label, center, radius));
+        }
+
+        private IEnumerator DoAreaDamageAfter(float delay, long dmg, string label, Vector3 center, float radius)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+            if (_om == null)
+            {
+                yield break;
+            }
+
+            // 순회 중 사망/파괴에 대비해 대상 스냅샷을 먼저 모은다.
+            var targets = new List<MonsterUnit>();
+            foreach (var go in _om.Active(CatEnemy))
+            {
+                var mu = go.GetComponent<MonsterUnit>();
+                if (mu != null && mu.Alive)
+                {
+                    targets.Add(mu);
+                }
+            }
+
+            int hit = 0;
+            float r2 = radius * radius;
+            foreach (var mu in targets)
+            {
+                if (mu == null || !mu.Alive) continue;
+                if (((Vector2)mu.transform.position - (Vector2)center).sqrMagnitude <= r2)
+                {
+                    mu.TakeDamage(dmg);
+                    DamageNumberPool.GetOrCreate().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f));
+                    hit++;
+                }
+            }
+            Log($"{label} (광역 r{radius:0.#}) → {hit}체 -{dmg}");
         }
 
         /// <summary>MonsterUnit이 죽는 순간 주입된 콜백으로 호출된다 — 누적 킬/로그 갱신.</summary>
@@ -555,43 +725,48 @@ namespace TaskbarHero.Client.Battle
 
         private void OnGUI()
         {
-            GUILayout.BeginArea(new Rect(10, 10, 420, 560), GUI.skin.box);
-            GUILayout.Label("<b>Battle Dev Harness</b> (파티 " + _members.Count + "인 · 마스터데이터 연동)");
-            int alive = AliveEnemyCount();
-            GUILayout.Label($"적: {_monsterName}  현재 {alive}기 (동시 최대 {maxConcurrentEnemies})");
-            GUILayout.Label($"처치 수: {_killCount}   단계: {PhaseLabel()}   partyX={_partyX:0.0}");
-
-            GUILayout.Space(3);
-            for (int i = 0; i < _members.Count; i++)
+            // 개발용 하네스 박스(스탯·로그·일시정지·소환 선택 등)는 개발 모드에서만 표시한다.
+            if (!serverMode)
             {
-                var m = _members[i];
-                if (m == null) continue;
-                GUILayout.Label($"<b>[{i}] {m.DisplayName}</b>  사거리 {m.AttackRange:0.#}{(m.IsCharging ? "  (돌진 중)" : "")}");
-                for (int j = 0; j < m.SkillCount; j++)
+                GUILayout.BeginArea(new Rect(10, 10, 420, 560), GUI.skin.box);
+                GUILayout.Label("<b>Battle Dev Harness</b> (파티 " + _members.Count + "인 · 마스터데이터 연동)");
+                int alive = AliveEnemyCount();
+                GUILayout.Label($"적: {_monsterName}  현재 {alive}기 (동시 최대 {maxConcurrentEnemies})");
+                GUILayout.Label($"처치 수: {_killCount}   단계: {PhaseLabel()}   partyX={_partyX:0.0}");
+
+                GUILayout.Space(3);
+                for (int i = 0; i < _members.Count; i++)
                 {
-                    int code = m.SkillCodeAt(j);
-                    if (m.TryGetSkillCooldown(code, out float rem, out float tot))
+                    var m = _members[i];
+                    if (m == null) continue;
+                    GUILayout.Label($"<b>[{i}] {m.DisplayName}</b>  사거리 {m.AttackRange:0.#}{(m.IsCharging ? "  (돌진 중)" : "")}");
+                    for (int j = 0; j < m.SkillCount; j++)
                     {
-                        string state = rem <= 0f ? "READY" : $"{rem:0.0}s";
-                        GUILayout.Label($"    · 스킬 {code}  cd {tot:0.#}s — {state}");
+                        int code = m.SkillCodeAt(j);
+                        if (m.TryGetSkillCooldown(code, out float rem, out float tot))
+                        {
+                            string state = rem <= 0f ? "READY" : $"{rem:0.0}s";
+                            GUILayout.Label($"    · 스킬 {code}  cd {tot:0.#}s — {state}");
+                        }
                     }
                 }
+
+                GUILayout.Space(3);
+                DrawSelectionPanel();
+
+                GUILayout.Space(3);
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Button(_paused ? "재개" : "일시정지")) _paused = !_paused;
+                if (GUILayout.Button("다음 몬스터")) CycleMonster();
+                GUILayout.EndHorizontal();
+
+                GUILayout.Space(3);
+                GUILayout.Label("<b>전투 로그</b>");
+                for (int i = _log.Count - 1; i >= 0; i--) GUILayout.Label(_log[i]);
+                GUILayout.EndArea();
             }
 
-            GUILayout.Space(3);
-            DrawSelectionPanel();
-
-            GUILayout.Space(3);
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Button(_paused ? "재개" : "일시정지")) _paused = !_paused;
-            if (GUILayout.Button("다음 몬스터")) CycleMonster();
-            GUILayout.EndHorizontal();
-
-            GUILayout.Space(3);
-            GUILayout.Label("<b>전투 로그</b>");
-            for (int i = _log.Count - 1; i >= 0; i--) GUILayout.Label(_log[i]);
-            GUILayout.EndArea();
-
+            // 적 HP바는 서버 구동 모드(GameScene 던전)에서도 표시한다.
             DrawMonsterHpBars();
         }
 
@@ -630,6 +805,8 @@ namespace TaskbarHero.Client.Battle
         private void DrawMonsterHpBars()
         {
             if (_om == null || _cam == null) return;
+            // 게임 씬에서 전체화면 UI 패널(스테이지·인벤토리 등)이 실제로 표시돼 있으면 적 HP바를 가린다.
+            if (serverMode && UIManager.Instance != null && UIManager.Instance.IsAnyPanelVisible()) return;
             foreach (var go in _om.Active(CatEnemy))
             {
                 var m = go.GetComponent<MonsterUnit>();

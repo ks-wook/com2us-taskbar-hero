@@ -81,6 +81,17 @@ namespace TaskbarHero.Client.UI
             WireRuntime();
         }
 
+        /// <summary>패널이 표시될 때마다 현재 진행도(세션 세이브)로 상태 아이콘을 갱신하고 지도 화면으로 되돌린다.
+        /// (UIManager가 인스턴스를 캐싱·재사용하므로 Awake가 아니라 활성화 시점마다 갱신해야 최신 진행도가 반영된다.)</summary>
+        private void OnEnable()
+        {
+            if (_regionStatusIcons != null && _regionStatusIcons.Count > 0)
+            {
+                RefreshRegionIcons();
+            }
+            CloseRegion(); // 다시 열면 지도(1단계)부터
+        }
+
         /// <summary>에디터 빌드 전용: 전체 계층을 생성한다.</summary>
         public void EditorConstruct()
         {
@@ -418,7 +429,7 @@ namespace TaskbarHero.Client.UI
             bool anyOpen = false;
             for (int s = 1; s <= StagesPerRegion; s++)
             {
-                var st = DemoState(region, s);
+                var st = StageStateOf(region, s);
                 if (st != StageState.Cleared)
                 {
                     allCleared = false;
@@ -488,7 +499,7 @@ namespace TaskbarHero.Client.UI
             int frontier = -1;
             foreach (var node in _regionNodes)
             {
-                bool locked = DemoState(region, node.Stage) == StageState.Locked;
+                bool locked = StageStateOf(region, node.Stage) == StageState.Locked;
                 node.SetVisual(locked ? nodeLocked : nodeUnlocked, locked);
                 if (!locked)
                 {
@@ -539,14 +550,14 @@ namespace TaskbarHero.Client.UI
             }
             if (_enterButton != null)
             {
-                _enterButton.interactable = DemoState(_openRegion, stage) != StageState.Locked;
+                _enterButton.interactable = StageStateOf(_openRegion, stage) != StageState.Locked;
             }
         }
 
         /// <summary>지역 창 노드 클릭: 잠기지 않은 스테이지면 선택.</summary>
         public void OnNodeClicked(StageNodeView node)
         {
-            if (DemoState(_openRegion, node.Stage) != StageState.Locked)
+            if (StageStateOf(_openRegion, node.Stage) != StageState.Locked)
             {
                 SetSelected(node.Stage);
             }
@@ -574,21 +585,31 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        // ── 데모 진행도(추후 실데이터로 대체) ──
+        // ── 진행도(서버 세이브 실데이터: 클리어 시퀀스) ──
 
-        private StageState DemoState(int region, int stage)
+        /// <summary>세션에 캐싱된 세이브의 최고 클리어 시퀀스(maxStageCleared). 세션이 없으면 0(1-1만 진행 가능).</summary>
+        private int MaxClearedSeq()
         {
-            if (region == 1)
+            var p = Session.GameData != null ? Session.GameData.player : null;
+            return p != null ? p.maxStageCleared : 0;
+        }
+
+        /// <summary>스테이지 상태를 서버 진행도로 판정한다.
+        /// 난이도1 기준 시퀀스 = (지역-1)×3 + 스테이지(1~15). 클리어=seq≤maxCleared, 진행 중(프런티어)=seq==maxCleared+1, 그 외 잠금.
+        /// (서버 EnterAsync의 도달 검증 규칙 seq≤maxCleared+1과 동일.)</summary>
+        private StageState StageStateOf(int region, int stage)
+        {
+            int seq = (region - 1) * StagesPerRegion + stage;
+            int maxCleared = MaxClearedSeq();
+            if (seq <= maxCleared)
             {
-                return StageState.Cleared; // 평원: 전부 클리어(별)
+                return StageState.Cleared;
             }
-            if (region == 2)
+            if (seq == maxCleared + 1)
             {
-                if (stage == 1) return StageState.Cleared;
-                if (stage == 2) return StageState.Current; // 얼음: 진행 중(해골)
-                return StageState.Locked;
+                return StageState.Current;
             }
-            return StageState.Locked; // 3~5 지역: 미도달(자물쇠)
+            return StageState.Locked;
         }
 
         // ── UI 생성 헬퍼 ──

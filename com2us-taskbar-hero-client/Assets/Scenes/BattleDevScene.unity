@@ -237,6 +237,7 @@ MonoBehaviour:
     chargeSpeed: 12
     rainSkillCode: 0
     aoeSkillCode: 103
+    basicAttackAoe: 1
     selfEffectXOffset: 0.4
     skills:
     - skillCode: 101
@@ -261,6 +262,7 @@ MonoBehaviour:
     chargeSpeed: 12
     rainSkillCode: 203
     aoeSkillCode: 0
+    basicAttackAoe: 0
     selfEffectXOffset: 0
     skills:
     - skillCode: 201
@@ -285,6 +287,7 @@ MonoBehaviour:
     chargeSpeed: 12
     rainSkillCode: 0
     aoeSkillCode: 0
+    basicAttackAoe: 0
     selfEffectXOffset: 0
     skills:
     - skillCode: 301
