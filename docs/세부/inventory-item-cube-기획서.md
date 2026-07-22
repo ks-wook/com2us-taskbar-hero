@@ -194,16 +194,16 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 5.4 인벤토리 용량 확장 — `POST /api/game/inventory/expand`
 
-골드를 소모해 인벤토리 최대 용량(`game_player.inventory_capacity`)을 늘린다. 확장 단위(1회당 늘어나는 슬롯 수)·단계별 골드 비용·최대 상한은 마스터 데이터가 정의하며, 서버가 산출한다(클라이언트 입력 불신).
+골드를 소모해 인벤토리 최대 용량(`game_player.inventory_capacity`)을 늘린다. **확장은 1회 호출당 무조건 1칸**이며, 여는 칸별 골드 비용·최대 상한은 마스터 데이터(`inventory_expand_master`)가 정의하고 서버가 산출한다(클라이언트 입력 불신). 여는 칸의 비용은 `step = 현재 용량 − 기본 용량(100) + 1`의 `inventory_expand_master.gold_cost`이며, 상한 = 기본 용량 + 확장 정의 행 수(현재 20 → **상한 120**)다. 비용은 현재 전 칸 **정액(10,000골드)**이나, 칸별 누진으로 확장할 수 있다(값만 조정).
 
 ![인벤토리 용량 확장 화면 — 골드로 최대 슬롯 수를 늘리는 UI](../images/inventory-item-cube-인벤토리_확장.png)
 
-**Request**
+**Request** — 추가 데이터 없이 인증 정보만 보낸다(1칸 확장 고정).
 ```json
-{ "userId": 1, "token": "...", "data": { "count": 1 } }
+{ "userId": 1, "token": "..." }
 ```
 
-- `count`: 확장할 단계 수(생략 시 1). 여러 단계를 한 번에 확장하면 각 단계 비용의 합계를 차감한다.
+> 초기 스펙에 있던 `count`(다단계 확장) 필드는 "**1회 1칸 고정**" 결정으로 제거했다.
 
 **Response (성공, 200 OK)**
 ```json
@@ -212,15 +212,15 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "errorCode": 0,
   "message": "Expanded",
   "data": {
-    "inventoryCapacity": 120,
-    "cost": { "currencyType": 1, "amount": 50000 },
+    "inventoryCapacity": 101,
+    "cost": { "currencyType": 1, "amount": 10000 },
     "balance": [ { "currencyType": 1, "amount": 9825421 } ]
   }
 }
 ```
 
-- 트랜잭션: 비용 골드 차감 → `inventory_capacity += (확장 슬롯 수)`. 부분 실패 시 전체 롤백.
-- `inventoryCapacity`는 확장 후 최종 용량, `cost`는 이번에 차감된 골드 합계다.
+- 트랜잭션: 비용 골드 차감 → `inventory_capacity += 1`. 부분 실패 시 전체 롤백.
+- `inventoryCapacity`는 확장 후 최종 용량, `cost`는 이번에 차감된 골드다.
 - 오류: `InsufficientCurrency(4005)`(골드 부족), `InventoryCapacityMax(4008)`(이미 상한에 도달해 더 이상 확장 불가).
 
 ### 5.5 인벤토리 배치 변경(이동/교환) — `POST /api/game/inventory/move`
@@ -468,7 +468,7 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 
 ## 8. 미결 사항 / TODO
 
-- **인벤토리 용량 정책 (확정)**: 플레이어 단위 컬럼(`game_player.inventory_capacity`)에 저장하고 **골드 소모로 확장**한다(API 5.4). 용량은 **점유 slot(=`player_item` 행) 수** 기준이며, 스택은 수량과 무관하게 1 slot을 차지한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`에 반영 완료. 남은 상세 — 기본 용량 값, 확장 단위(1회당 slot 수)·단계별 골드 비용·최대 상한 — 는 [마스터 데이터 기획서](master-data/master-data-기획서.md)에서 정의한다.
+- **인벤토리 용량 정책 (확정·구현)**: 플레이어 단위 컬럼(`game_player.inventory_capacity`)에 저장하고 **골드 소모로 확장**한다(API 5.4). 용량은 **점유 slot(=`player_item` 행) 수** 기준이며, 스택은 수량과 무관하게 1 slot을 차지한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`에 반영 완료. 세부 확정: **기본 용량 100**, 확장은 **1회당 1칸 고정**, 여는 칸별 비용·상한은 `inventory_expand_master`(step·gold_cost)로 정의(현재 20칸·칸당 10,000골드 정액 → 상한 120, 학습용 임시값). 비용 곡선은 값만 조정하면 누진 전환 가능.
 - **강화 성공 확률**: 현행은 비용 지불 시 확정 상승으로 가정. 실패/하락/파괴 확률 도입 시 `enhance_master`에 확률 필드 추가 및 본 문서 5.3 갱신.
 - **큐브 합성 상세 규칙**: 합성 소모 개수(`combine_count`)·등급 상승 규칙·분해 골드 계수와 제작 레시피(`cube_recipe`/`cube_recipe_ingredient`)는 **확정**([마스터 데이터 값](master-data/master-data-값.md) §8). 남은 상세 — 등급 상승 결과 아이템 선정·확률 개입 여부, 큐브 연산당 `cube_exp` 획득량과 `cube_level` 효과 — 는 추후 확정.
 - **큐브 제작(craft) — 우선순위 낮음(보류)**: 현재 구현 우선순위가 낮아 보류하며, **추후 제작 기능 추가 여부를 검토**한다. 5.8의 제작 API·레시피(`recipeCode`) 구성·소모 재료·비용은 도입이 확정될 때 함께 정한다.

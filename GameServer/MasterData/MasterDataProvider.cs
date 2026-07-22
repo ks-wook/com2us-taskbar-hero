@@ -17,6 +17,9 @@ public sealed record StageRewardDef(long Gold, long Exp, double[] GradeProbs);
 /// <summary>드롭 추첨 결과(전리품 1개).</summary>
 public sealed record DroppedItem(int ItemCode, long Quantity, int ItemType, int StackMax);
 
+/// <summary>아이템 정의(item_master). 장착 검증(타입·슬롯·클래스·레벨)과 드롭/스택에 사용한다.</summary>
+public sealed record ItemDef(int ItemCode, int ItemType, int Grade, int StackMax, int EquipSlot, int ClassReq, int LevelReq);
+
 /// <summary>
 /// 마스터(정적) 데이터 인메모리 캐시. 서버 기동 시 마스터 DB에서 코드→정의 딕셔너리로 적재한다.
 /// class_master(직업)에 더해 스테이지 진행/전투(스테이지 진입·클리어)에 필요한 마스터를 적재한다:
@@ -25,6 +28,9 @@ public sealed record DroppedItem(int ItemCode, long Quantity, int ItemType, int 
 /// </summary>
 public sealed class MasterDataProvider
 {
+    /// <summary>신규 계정 기본 인벤토리 용량(점유 slot 수). 골드로 1칸씩 확장(inventory_expand_master).</summary>
+    public const int BaseInventoryCapacity = 100;
+
     private readonly MasterDbFactory _masterDbFactory;
     private readonly ILogger<MasterDataProvider> _logger;
 
@@ -34,9 +40,13 @@ public sealed class MasterDataProvider
     private IReadOnlyDictionary<int, long> _levelRequiredExp = new Dictionary<int, long>();
     private int _maxLevel = 1;
 
-    // 드롭 풀: 등급 → 드롭 가능 아이템 코드 목록(재화 item_type=3 제외). 아이템 정보(타입·스택).
+    // 드롭 풀: 등급 → 드롭 가능 아이템 코드 목록(재화 item_type=3 제외). 코드 → 아이템 정의.
     private IReadOnlyDictionary<int, List<int>> _itemsByGrade = new Dictionary<int, List<int>>();
-    private IReadOnlyDictionary<int, (int itemType, int stackMax)> _itemInfo = new Dictionary<int, (int, int)>();
+    private IReadOnlyDictionary<int, ItemDef> _itemsByCode = new Dictionary<int, ItemDef>();
+
+    // 인벤토리 확장 비용: index i(0-based) = 기본 용량 이후 (i+1)번째 칸을 여는 골드 비용(inventory_expand_master, step 오름차순).
+    // 배열 길이 = 확장 가능한 총 칸 수이며, 상한 용량 = BaseInventoryCapacity + 길이.
+    private IReadOnlyList<long> _expandCosts = new List<long>();
 
     public MasterDataProvider(MasterDbFactory masterDbFactory, ILogger<MasterDataProvider> logger)
     {
@@ -61,6 +71,23 @@ public sealed class MasterDataProvider
     public StageRewardDef? GetStageReward(int stageId)
         => _rewardsByStageId.TryGetValue(stageId, out var r) ? r : null;
 
+    /// <summary>item_code의 아이템 정의(타입·등급·스택·장착 슬롯·클래스/레벨 제한). 재화(type 3)·미로드 코드는 null.</summary>
+    public ItemDef? GetItem(int itemCode)
+        => _itemsByCode.TryGetValue(itemCode, out var def) ? def : null;
+
+    /// <summary>현재 용량에서 1칸 확장 가능 여부와 그 비용을 산출한다.
+    /// 확장할 칸의 step = currentCapacity - 기본 용량 + 1이며, 상한(=기본 용량 + 확장 정의 수)을 넘으면 불가(false).</summary>
+    public (bool ok, long cost) PlanExpandOne(int currentCapacity)
+    {
+        var step = currentCapacity - BaseInventoryCapacity + 1; // 이번에 열 칸의 순번(1-based)
+        if (step < 1 || step > _expandCosts.Count)
+        {
+            return (false, 0); // 상한 도달(또는 확장 정의 없음)
+        }
+
+        return (true, _expandCosts[step - 1]);
+    }
+
     /// <summary>레벨 L에서 L+1로 가는 데 필요한 경험치. 최대 레벨 이상은 0(더 오르지 않음).</summary>
     public long LevelRequiredExp(int level)
         => _levelRequiredExp.TryGetValue(level, out var req) ? req : 0;
@@ -82,8 +109,8 @@ public sealed class MasterDataProvider
                 }
 
                 var itemCode = pool[Random.Shared.Next(pool.Count)];
-                var info = _itemInfo[itemCode];
-                return new DroppedItem(itemCode, 1, info.itemType, info.stackMax);
+                var def = _itemsByCode[itemCode];
+                return new DroppedItem(itemCode, 1, def.ItemType, def.StackMax);
             }
         }
 
@@ -101,7 +128,10 @@ public sealed class MasterDataProvider
             _stagesById = await LoadStagesAsync(db);
             _rewardsByStageId = await LoadStageRewardsAsync(db);
             (_levelRequiredExp, _maxLevel) = await LoadLevelsAsync(db);
-            (_itemsByGrade, _itemInfo) = await LoadItemsAsync(db);
+            (_itemsByGrade, _itemsByCode) = await LoadItemsAsync(db);
+
+            // 인벤토리 확장은 부가 기능이라 별도 try로 감싼다(테이블 부재 시 다른 마스터 적재까지 실패하지 않도록).
+            _expandCosts = await LoadExpandCostsAsync(db);
 
             if (_classes.Count == 0 || _stagesById.Count == 0)
             {
@@ -110,8 +140,8 @@ public sealed class MasterDataProvider
 
             IsLoaded = true;
             _logger.LogInformation(
-                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades}",
-                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count);
+                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades} · expandSlots {Expand}",
+                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count, _expandCosts.Count);
         }
         catch (Exception ex)
         {
@@ -243,24 +273,30 @@ public sealed class MasterDataProvider
         return (byLevel, maxLevel);
     }
 
-    private static async Task<(Dictionary<int, List<int>>, Dictionary<int, (int, int)>)> LoadItemsAsync(QueryFactory db)
+    private static async Task<(Dictionary<int, List<int>>, Dictionary<int, ItemDef>)> LoadItemsAsync(QueryFactory db)
     {
-        // 드롭 대상은 장비(1)·재료(2)만. 재화(3, 골드)는 제외.
+        // 드롭 대상은 장비(1)·재료(2)만. 재화(3, 골드)는 제외. 장착 검증용으로 슬롯·클래스/레벨 제한도 함께 적재.
         var rows = await db.Query("item_master")
-            .Select("item_code", "item_type", "grade", "stack_max")
+            .Select("item_code", "item_type", "grade", "stack_max", "equip_slot", "class_req", "level_req")
             .WhereIn("item_type", new[] { 1, 2 })
             .GetAsync();
 
         var byGrade = new Dictionary<int, List<int>>();
-        var info = new Dictionary<int, (int, int)>();
+        var byCode = new Dictionary<int, ItemDef>();
         foreach (var row in rows)
         {
             int itemCode = Convert.ToInt32(row.item_code);
-            int itemType = Convert.ToInt32(row.item_type);
             int grade = Convert.ToInt32(row.grade);
-            int stackMax = Convert.ToInt32(row.stack_max);
 
-            info[itemCode] = (itemType, stackMax);
+            byCode[itemCode] = new ItemDef(
+                itemCode,
+                Convert.ToInt32(row.item_type),
+                grade,
+                Convert.ToInt32(row.stack_max),
+                Convert.ToInt32(row.equip_slot),
+                Convert.ToInt32(row.class_req),
+                Convert.ToInt32(row.level_req));
+
             if (!byGrade.TryGetValue(grade, out var list))
             {
                 list = new List<int>();
@@ -270,6 +306,35 @@ public sealed class MasterDataProvider
             list.Add(itemCode);
         }
 
-        return (byGrade, info);
+        return (byGrade, byCode);
+    }
+
+    /// <summary>
+    /// inventory_expand_master를 step 오름차순으로 읽어 칸별 확장 비용 목록을 만든다.
+    /// 인벤토리 확장은 부가 기능이므로 이 테이블이 없거나 조회에 실패해도 다른 마스터 적재까지 막지 않도록
+    /// 자체 try로 감싸고, 실패 시 빈 목록(확장 불가)을 반환한다.
+    /// </summary>
+    private async Task<List<long>> LoadExpandCostsAsync(QueryFactory db)
+    {
+        try
+        {
+            var rows = await db.Query("inventory_expand_master")
+                .Select("step", "gold_cost")
+                .OrderBy("step")
+                .GetAsync();
+
+            var costs = new List<long>();
+            foreach (var r in rows)
+            {
+                costs.Add(Convert.ToInt64(r.gold_cost));
+            }
+
+            return costs;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "inventory_expand_master 적재 실패 — 인벤토리 확장은 상한 도달로 처리됩니다.");
+            return new List<long>();
+        }
     }
 }

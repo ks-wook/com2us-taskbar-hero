@@ -106,7 +106,7 @@ erDiagram
 | `skill_coefficient` | 스킬별 레벨·타입별 계수·지속시간(`skill_master` 자식, 1:N) | 스킬 × 타입 × 레벨(= 타입 수 × `max_level`) |
 | `rune_master` | 룬(Rune Tree) 정의 | 트리 노드 수 |
 | `monster_master` | 몬스터 전투 스탯 | 50종 이상 |
-| `stage_master` | 스테이지 구성(보스) | 3 Act × 2 난이도 × 4 = 24 |
+| `stage_master` | 스테이지 구성(보스) | 5 Act × 2 난이도 × 3 = 30 |
 | `stage_spawn` | 스테이지별 등장 일반 몬스터(스폰, `stage_master` 자식) | 스테이지 × 몬스터 |
 | `stage_reward` | 스테이지 클리어 보상(골드·경험치·등급별 아이템 확률) | 스테이지 수만큼 |
 | `cube_master` | 큐브 레벨별 규칙·레시피 | 레벨 수만큼 |
@@ -313,7 +313,7 @@ erDiagram
 | `prereq_code` | int | 선행 룬 코드(루트면 0) |
 | `cost` | bigint | 레벨업 1회 골드 비용의 기준값. **실제 비용 = 현재 레벨에 비례한 증가값** |
 | `max_level` | int | 최대 레벨 |
-| `stat_type` | int | 올려주는 능력치 **1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도** |
+| `stat_type` | int | 올려주는 능력치 **1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도 7:재사용 대기시간** |
 | `stat_value` | decimal | **레벨당 누적 상승량(%)**. 총 보너스 = `stat_value × 현재 룬 레벨` |
 
 > **효과 모델(변경)**: 구 `effect`(JSON)는 폐기했다. "어떤 능력치인지"를 `stat_type`(int enum)로, "상승량"을 `stat_value`로 분리해 담는다. `stat_type` enum은 클라이언트와 공유하는 분류 코드이므로 `TaskbarHero.Common`에 고정한다(값 변경 금지).
@@ -338,7 +338,7 @@ erDiagram
 | `hp` | bigint | 체력 |
 | `attack` | bigint | 공격력 |
 
-**담기는 데이터 예시** (전체 8종은 [마스터 데이터 값](master-data-값.md) §9 정본)
+**담기는 데이터 예시** (전체 12종은 [마스터 데이터 값](master-data-값.md) §9 정본)
 
 | monster_code | name | hp | attack |
 |---|---|---|---|
@@ -346,22 +346,22 @@ erDiagram
 | 9002 | 빙의된 암살자 | 800 | 35 |
 | 9099 | 암흑 마법사 (Act1 보스) | 25000 | 180 |
 
-> 코드 규약: Act1 `90xx` · Act2 `91xx` · Act3 `92xx`, 각 Act 보스는 `xx99`.
+> 코드 규약: Act1 `90xx` · Act2 `91xx` · Act3 `92xx` · Act4 `93xx` · Act5 `94xx`, 각 Act 보스는 `xx99`(`9099`·`9199`·`9299`·`9399`·`9499`).
 
 ### 5.9 `stage_master` — 스테이지 구성
 
-`game_player`의 `act`/`stage`/`difficulty`가 참조. **3 Act × 2 난이도 × 4 스테이지(=24)** 구성이며(각 Act·난이도는 스테이지 1~3 일반, 스테이지 4 보스) **스폰·보스 구성**을 정의한다. **클리어 보상은 분리**되어 `stage_reward`(5.10)가 담당한다.
+`game_player`의 `act`/`stage`/`difficulty`가 참조. **5 Act × 2 난이도 × 3 스테이지(=30)** 구성이며(각 Act·난이도는 스테이지 1~2 일반, 스테이지 3 보스) **스폰·보스 구성**을 정의한다. **클리어 보상은 분리**되어 `stage_reward`(5.10)가 담당한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `stage_id` | int PK | `(act, difficulty, stage)`를 인코딩한 키(`act×1000000+difficulty×10000+stage`) |
-| `act` | int | Act 번호(1~3) |
+| `act` | int | Act 번호(1~5) |
 | `difficulty` | int | 난이도 티어(1~2) |
-| `stage` | int | 스테이지 번호 |
+| `stage` | int | 스테이지 번호(1~3) |
 | `boss_monster_code` | int | **스테이지 보스 몬스터**(`monster_master`). 없으면 0 |
 | `background_type` | int | **스테이지 배경 타입(1~5)**. 클라이언트가 이 코드로 배경 아트(배경 세트 `dungeon_bg_1~5`)를 선택한다. 별도 마스터 테이블 없이 `coef_type`·`stat_type`처럼 int enum으로 둔다 |
 
-> **`background_type` enum(1~5)**: `1`=Act1 필드 · `2`=Act1 보스 · `3`=Act2 필드 · `4`=Act2 보스 · `5`=Act3. 같은 `(act, stage 역할)`이면 난이도 무관 동일 배경이다(난이도 2는 난이도 1과 같은 지역·레이아웃). 값·매핑은 [마스터 데이터 값](master-data-값.md) §11 정본이며 학습용 임시값이다.
+> **`background_type` enum(1~5)**: `1~5`=Act1~5 각각의 배경이다. 난이도는 무관하다(난이도 2는 난이도 1과 같은 지역·레이아웃). 값·매핑은 [마스터 데이터 값](master-data-값.md) §11 정본이며 학습용 임시값이다.
 
 > **스폰 분리(변경)**: 구 `spawns`(JSON 배열) 컬럼은 폐기했다. **JSON 문자열 컬럼을 두지 않는 설계 규칙**에 따라 등장 일반 몬스터는 아래 `stage_spawn` **자식 테이블**로 분리한다. 클라 번들 JSON은 전송 편의상 이를 `spawns` 배열로 묶어 내려줄 수 있다(DB↔번들, 7장).
 
@@ -378,7 +378,7 @@ erDiagram
 | stage_id | act | difficulty | stage | boss_monster_code | background_type |  | stage_id | monster_code | spawn_count |
 |---|---|---|---|---|---|---|---|---|---|
 | 1010001 | 1 | 1 | 1 | 0 | 1 |  | 1010001 | 9001 | 8 |
-| 1010003 | 1 | 1 | 3 | 9099 | 2 |  | 1010001 | 9002 | 4 |
+| 1010003 | 1 | 1 | 3 | 9099 | 1 |  | 1010001 | 9002 | 4 |
 
 > 스테이지 진입 응답이 스폰(`stage_spawn`)·보스 정보를 그대로 내려준다([스테이지/전투 결과 기획서](../stage-battle-기획서.md) 5.1). 벽에 막히면 이전 스테이지를 재파밍할 수 있다(하드월 없음). 클리어 보상은 같은 `stage_id`로 `stage_reward`가 정의한다.
 
@@ -489,7 +489,7 @@ erDiagram
 ### 공통 규칙
 
 - **키 규칙**: `stage_master`는 `(act, difficulty, stage)`를 인코딩한 `stage_id`를 PK로 쓰고, `stage_reward`는 같은 `stage_id`를 PK/FK로 써 스테이지와 1:1 대응한다.
-- **enum 공유**: `item_type`(1:장비 2:재료 3:재화)·`unlock_type`·`reward_type`·룬 `stat_type`(1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도) 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상). 재화는 별도 `currency_type` enum 없이 `item_master`(item_type=3)의 `item_code`로 식별한다(골드=1).
+- **enum 공유**: `item_type`(1:장비 2:재료 3:재화)·`unlock_type`·`reward_type`·룬 `stat_type`(1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도 7:재사용 대기시간) 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상, 신규 값 추가는 허용). 재화는 별도 `currency_type` enum 없이 `item_master`(item_type=3)의 `item_code`로 식별한다(골드=1).
 - **JSON 컬럼 금지(설계 규칙)**: DB 테이블에는 JSON 문자열 컬럼을 두지 않는다. 고정 스키마 값은 개별 컬럼(예: 스탯 `hp`~`cooldown`)으로, 배열·중첩 등 반복 구조는 **별도 자식 테이블**(예: `stage_master` 스폰 → `stage_spawn`, `skill_master`의 레벨별 계수 → `skill_coefficient`, 향후 `box`의 등급 가중치·아이템 풀, `cube`의 레시피도 자식 테이블)로 분리한다. 단 **클라 번들 JSON·POCO는 예외**로, 전송 편의상 이 컬럼/자식 행들을 중첩 객체·배열로 직렬화한다(DB↔번들, 5.1·7장).
 
 ## 6. 클라이언트가 보유하는 데이터 범위
@@ -629,7 +629,7 @@ namespace TaskbarHero.Common.MasterData
         public int prereqCode;   // 0=루트
         public long cost;
         public int maxLevel;
-        public int statType;     // 1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도
+        public int statType;     // 1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도 7:재사용 대기시간
         public float statValue;  // 레벨당 누적 상승량(%)
     }
 
@@ -854,10 +854,11 @@ public class CombatCalculator
 
 ## 9. 미결 사항 / TODO
 
+- **`inventory_expand_master`(신규·부가 테이블)**: 인벤토리 용량 확장(칸별 골드 비용)용 테이블을 추가했다(`step`·`gold_cost`). 1~14번 마스터 번호 체계 밖의 부가 테이블이라 값·정책 정본은 [마스터 데이터 값](master-data-값.md) 부록과 [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 5.4를 따른다(확장은 1회 1칸, 현재 상한 120·칸당 10,000골드 정액).
 - **각 마스터 테이블 세부 필드·수치·밸런스**: 직업·아이템·성장·스테이지 등 도메인 기획서에서 확정(본 문서는 골격과 예시 위주).
 - **비공격 스탯 강화·룬**: 현재 강화는 공격력 배율, 룬은 공격력 %만 반영. 방어·치명·이동속도·쿨다운 강화/룬 효과 도입 여부.
 - **스킬 효과 확장**: 현재 스킬 효과는 `skill_coefficient`의 레벨·타입별 행(`coef_type` 공격/버프/디버프 + `coef` + `duration`)으로 표현한다. 계수가 타입을 가지므로 한 스킬에 여러 타입 효과를 붙일 수 있으나, 버프/디버프가 **어떤 스탯**에 작용하는지(공격·방어·이동속도 등)를 구분할 필드(예: `target_stat`)가 필요해지면 확장한다.
-- **룬 stat_type 적용 범위**: 룬 효과는 `stat_type`(int) + `stat_value`로 확정했다. 현재 예시 계산기(`CombatCalculator`)는 `stat_type=1`(공격력)만 스탯에 반영하며, 방어·치명·이동속도 등(2·3·5·6) 반영은 전투 공식 확정 시 함께 처리한다.
+- **룬 stat_type 적용 범위**: 룬 효과는 `stat_type`(int) + `stat_value`로 확정했다. 현재 예시 계산기(`CombatCalculator`)는 `stat_type=1`(공격력)만 스탯에 반영하며, 방어·치명·이동속도·재사용 대기시간 등(2·3·5·6·7) 반영은 전투 공식 확정 시 함께 처리한다. `stat_type=7`(재사용 대기시간)은 감소 방향으로 적용한다.
 
 ## 10. 참고
 
