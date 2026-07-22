@@ -4008,7 +4008,7 @@ GameObject:
   - component: {fileID: 7583241160628425606}
   - component: {fileID: 827970192817853867}
   m_Layer: 5
-  m_Name: "\uB370\uBAAC"
+  m_Name: monster_9201
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

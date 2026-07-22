@@ -2662,7 +2662,7 @@ GameObject:
   - component: {fileID: 4672010699836848696}
   - component: {fileID: 4685632837754986153}
   m_Layer: 5
-  m_Name: "\uC2A4\uCF08\uB808\uD1A4 \uAE30\uC0AC"
+  m_Name: monster_9102
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -4001,7 +4001,7 @@ GameObject:
   - component: {fileID: 1232048629240905580}
   - component: {fileID: 3574789681032231999}
   m_Layer: 5
-  m_Name: "\uC2A4\uCF08\uB808\uD1A4 \uAD70\uC8FC"
+  m_Name: monster_9199
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
