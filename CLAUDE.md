@@ -34,6 +34,7 @@
 - 두 서버 프로젝트는 `net10.0`을 사용하며 `Nullable`과 `ImplicitUsings`가 활성화되어 있다.
 - `TaskbarHero.Common`은 Unity/게임 클라이언트와 공유하기 위해 `netstandard2.0`을 타겟팅하며(서버 참조·watch 경고 해소용으로 `net10.0`도 멀티타겟), implicit usings와 nullable을 *비활성화*한다. 프레임워크 중립적으로 유지하고(netstandard2.0에서 컴파일되는 코드만), 서버 전용 의존성을 추가하지 않는다.
 - MySQL DB 연동은 **SqlKata**를 사용해 개발한다. 쿼리는 SqlKata의 쿼리 빌더로 작성하고, 원시(raw) SQL 문자열을 직접 조립하지 않는다.
+- **DB 조회 결과는 `dynamic`으로 다루지 않는다.** 반드시 **제네릭 매핑**(`.GetAsync<T>()`·`.FirstOrDefaultAsync<T>()`, 단일 컬럼은 `.GetAsync<int>()`/`<long?>` 등 스칼라)으로 **POCO/스칼라 타입에 매핑**한다. 컬럼 접근을 `row.column`(dynamic) + `Convert.ToXxx(...)`로 하지 않는다(컴파일 타임 타입 검사 상실 + dynamic 전염으로 인한 튜플/변환 런타임 오류 방지). 행 매핑용 POCO는 리포지토리 파일에 `file sealed class`로 두고, `snake_case` 컬럼은 `Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true`(각 서버 `Program.cs`에서 1회 설정)로 `PascalCase` 프로퍼티에 자동 매핑한다. `DECIMAL` 컬럼은 POCO에서 `decimal`로 받아 `float`/`double`로 캐스팅한다.
 - Redis와의 통신은 **CloudStructures**를 사용한다. Redis 접근은 CloudStructures가 제공하는 타입 구조체를 통해 처리한다.
 - **Redis 인스턴스**: 로컬 개발용 Redis는 저장소 내 `Redis-8.8.0-Windows-x64-cygwin-with-Service/`의 Redis를 사용한다(`redis.conf` 기준 `127.0.0.1:6379`). `start.bat` 또는 `redis-server.exe redis.conf`로 실행하며, docker-compose에는 Redis를 두지 않는다(MySQL만 컨테이너로 관리).
 - **작업 완료 시 README 현황판 갱신**: 기능/작업이 완료되면 `README.md`의 「개발 현황」 체크리스트에서 해당 항목의 상태 기호를 갱신한다(☐ 미착수 → ◐ 진행 중 → ☑ 완료). 서버 구현·클라 실연동은 각각 별도로 표시한다.
