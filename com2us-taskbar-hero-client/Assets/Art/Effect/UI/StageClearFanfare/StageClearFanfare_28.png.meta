@@ -1,0 +1,546 @@
+fileFormatVersion: 2
+guid: 847ca8a468c74174a953f292ad0e2fc4
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -8411567128111035530
+    second: StageClearFanfare_28_0
+  - first:
+      213: 2197402477485958253
+    second: StageClearFanfare_28_1
+  - first:
+      213: 5959674782398871972
+    second: StageClearFanfare_28_2
+  - first:
+      213: 5506553463361966488
+    second: StageClearFanfare_28_3
+  - first:
+      213: 1166774385952492578
+    second: StageClearFanfare_28_4
+  - first:
+      213: 6302545218267785979
+    second: StageClearFanfare_28_5
+  - first:
+      213: -8051700753493935220
+    second: StageClearFanfare_28_6
+  - first:
+      213: -6846481714825316665
+    second: StageClearFanfare_28_7
+  - first:
+      213: 3027751816079769619
+    second: StageClearFanfare_28_8
+  - first:
+      213: -5085907377826421315
+    second: StageClearFanfare_28_9
+  - first:
+      213: 7228995493212918152
+    second: StageClearFanfare_28_10
+  - first:
+      213: 6204401245022470547
+    second: StageClearFanfare_28_11
+  - first:
+      213: 7537348433636878287
+    second: StageClearFanfare_28_12
+  - first:
+      213: -335393826975589848
+    second: StageClearFanfare_28_13
+  - first:
+      213: 9194932792583631634
+    second: StageClearFanfare_28_14
+  - first:
+      213: 8953646134231194615
+    second: StageClearFanfare_28_15
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 1
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: StageClearFanfare_28_0
+      rect:
+        serializedVersion: 2
+        x: 32
+        y: 83
+        width: 542
+        height: 506
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 67bc69c634c144b80800000000000000
+      internalID: -8411567128111035530
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_1
+      rect:
+        serializedVersion: 2
+        x: 575
+        y: 434
+        width: 20
+        height: 23
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d642d1339edbe7e10800000000000000
+      internalID: 2197402477485958253
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_2
+      rect:
+        serializedVersion: 2
+        x: 599
+        y: 425
+        width: 29
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4a9fcbd83a405b250800000000000000
+      internalID: 5959674782398871972
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_3
+      rect:
+        serializedVersion: 2
+        x: 563
+        y: 239
+        width: 14
+        height: 23
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 891136033353b6c40800000000000000
+      internalID: 5506553463361966488
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_4
+      rect:
+        serializedVersion: 2
+        x: 569
+        y: 206
+        width: 26
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 22c09b74f17313010800000000000000
+      internalID: 1166774385952492578
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_5
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 125
+        width: 28
+        height: 35
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bfa20b3db73277750800000000000000
+      internalID: 6302545218267785979
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_6
+      rect:
+        serializedVersion: 2
+        x: 554
+        y: 89
+        width: 29
+        height: 38
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c8bbf3e03dc924090800000000000000
+      internalID: -8051700753493935220
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_7
+      rect:
+        serializedVersion: 2
+        x: 38
+        y: 80
+        width: 20
+        height: 23
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7c631a297296cf0a0800000000000000
+      internalID: -6846481714825316665
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_8
+      rect:
+        serializedVersion: 2
+        x: 89
+        y: 77
+        width: 41
+        height: 32
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3108a792c3cb40a20800000000000000
+      internalID: 3027751816079769619
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_9
+      rect:
+        serializedVersion: 2
+        x: 101
+        y: 38
+        width: 11
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: db52e18af2a3b69b0800000000000000
+      internalID: -5085907377826421315
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_10
+      rect:
+        serializedVersion: 2
+        x: 488
+        y: 53
+        width: 23
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8811bd7a91d825460800000000000000
+      internalID: 7228995493212918152
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_11
+      rect:
+        serializedVersion: 2
+        x: 80
+        y: 8
+        width: 14
+        height: 29
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3914e8d5f067a1650800000000000000
+      internalID: 6204401245022470547
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_12
+      rect:
+        serializedVersion: 2
+        x: 311
+        y: 26
+        width: 38
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fc7e54f377a0a9860800000000000000
+      internalID: 7537348433636878287
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_13
+      rect:
+        serializedVersion: 2
+        x: 575
+        y: 32
+        width: 26
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 82ad2436711785bf0800000000000000
+      internalID: -335393826975589848
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_14
+      rect:
+        serializedVersion: 2
+        x: 35
+        y: 0
+        width: 35
+        height: 13
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 213b98378a6fa9f70800000000000000
+      internalID: 9194932792583631634
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: StageClearFanfare_28_15
+      rect:
+        serializedVersion: 2
+        x: 527
+        y: 0
+        width: 17
+        height: 25
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7fb566b78bdb14c70800000000000000
+      internalID: 8953646134231194615
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      StageClearFanfare_28_0: -8411567128111035530
+      StageClearFanfare_28_1: 2197402477485958253
+      StageClearFanfare_28_10: 7228995493212918152
+      StageClearFanfare_28_11: 6204401245022470547
+      StageClearFanfare_28_12: 7537348433636878287
+      StageClearFanfare_28_13: -335393826975589848
+      StageClearFanfare_28_14: 9194932792583631634
+      StageClearFanfare_28_15: 8953646134231194615
+      StageClearFanfare_28_2: 5959674782398871972
+      StageClearFanfare_28_3: 5506553463361966488
+      StageClearFanfare_28_4: 1166774385952492578
+      StageClearFanfare_28_5: 6302545218267785979
+      StageClearFanfare_28_6: -8051700753493935220
+      StageClearFanfare_28_7: -6846481714825316665
+      StageClearFanfare_28_8: 3027751816079769619
+      StageClearFanfare_28_9: -5085907377826421315
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
