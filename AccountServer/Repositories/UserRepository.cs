@@ -6,6 +6,13 @@ namespace AccountServer.Repositories;
 /// <summary>로그인 검증에 필요한 최소 계정 정보(user_id + BCrypt 해시).</summary>
 public sealed record UserCredential(long UserId, string PasswordHash);
 
+/// <summary>users 조회 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑.</summary>
+file sealed class UserCredentialRow
+{
+    public long UserId { get; set; }
+    public string Password { get; set; } = string.Empty;
+}
+
 public interface IUserRepository
 {
     /// <summary>해당 이메일로 가입된 계정이 이미 있는지 확인.</summary>
@@ -51,13 +58,13 @@ public sealed class UserRepository : IUserRepository
         var row = await db.Query("users")
             .Select("user_id", "password")
             .Where("email", email)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync<UserCredentialRow>();
 
         if (row is null)
         {
             return null;
         }
 
-        return new UserCredential(Convert.ToInt64(row.user_id), (string)row.password);
+        return new UserCredential(row.UserId, row.Password);
     }
 }
