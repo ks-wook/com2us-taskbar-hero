@@ -70,5 +70,32 @@
     "maxLevel": 5,
     "statType": 4,
     "statValue": 0.03
+  },
+  {
+    "runeCode": 240,
+    "name": "방어력 I",
+    "prereqCode": 0,
+    "cost": 5000,
+    "maxLevel": 20,
+    "statType": 2,
+    "statValue": 0.02
+  },
+  {
+    "runeCode": 241,
+    "name": "방어력 II",
+    "prereqCode": 240,
+    "cost": 20000,
+    "maxLevel": 10,
+    "statType": 2,
+    "statValue": 0.03
+  },
+  {
+    "runeCode": 250,
+    "name": "재사용 단축",
+    "prereqCode": 0,
+    "cost": 8000,
+    "maxLevel": 10,
+    "statType": 7,
+    "statValue": 0.01
   }
 ]

@@ -1,0 +1,17 @@
+{
+    "name": "TaskbarHero.Client.Game",
+    "rootNamespace": "TaskbarHero.Client.Game",
+    "references": [
+        "TaskbarHero.Common",
+        "TaskbarHero.Client.Managers"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

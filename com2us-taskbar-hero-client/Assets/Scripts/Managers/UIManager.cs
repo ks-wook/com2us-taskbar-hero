@@ -185,6 +185,8 @@ namespace TaskbarHero.Client.Managers
                     // 프리팹은 Assets/Prefabs/UI/에 두고 UIManager 인스턴스에 직접 배선한다.
                     // 지속 인스턴스가 생성되는 Title 씬과 사용 씬(GameScene) 양쪽에 참조를 지정한다.
                     return inventoryPanelPrefab;
+                case PanelType.Stage:
+                    return stagePanelPrefab;
                 default:
                     return null;
             }

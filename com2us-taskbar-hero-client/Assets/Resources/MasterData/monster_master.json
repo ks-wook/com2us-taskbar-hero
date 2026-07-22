@@ -46,5 +46,29 @@
     "name": "마왕 (Act3 보스)",
     "hp": 500000,
     "attack": 1500
+  },
+  {
+    "monsterCode": 9301,
+    "name": "타락한 성기사",
+    "hp": 40000,
+    "attack": 1200
+  },
+  {
+    "monsterCode": 9399,
+    "name": "몰락한 대천사 (Act4 보스)",
+    "hp": 1500000,
+    "attack": 4000
+  },
+  {
+    "monsterCode": 9401,
+    "name": "공허의 추적자",
+    "hp": 120000,
+    "attack": 3000
+  },
+  {
+    "monsterCode": 9499,
+    "name": "공허의 지배자 (Act5 보스)",
+    "hp": 5000000,
+    "attack": 10000
   }
 ]

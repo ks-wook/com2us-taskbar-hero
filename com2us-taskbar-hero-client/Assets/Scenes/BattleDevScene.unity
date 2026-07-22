@@ -236,6 +236,7 @@ MonoBehaviour:
     chargeRange: 4
     chargeSpeed: 12
     rainSkillCode: 0
+    aoeSkillCode: 103
     selfEffectXOffset: 0.4
     skills:
     - skillCode: 101
@@ -259,6 +260,7 @@ MonoBehaviour:
     chargeRange: 4
     chargeSpeed: 12
     rainSkillCode: 203
+    aoeSkillCode: 0
     selfEffectXOffset: 0
     skills:
     - skillCode: 201
@@ -282,6 +284,7 @@ MonoBehaviour:
     chargeRange: 4
     chargeSpeed: 12
     rainSkillCode: 0
+    aoeSkillCode: 0
     selfEffectXOffset: 0
     skills:
     - skillCode: 301
@@ -297,11 +300,15 @@ MonoBehaviour:
   playerSpawn: {fileID: 1848304462}
   monsterSpawn: {fileID: 538885790}
   monsterCode: 0
+  enemySpawnInterval: 1.5
+  maxConcurrentEnemies: 5
+  enemyOffscreenMargin: 2
+  enemyMoveSpeed: 1.2
+  enemyFrontStopGap: 1.2
   devSkillLevel: 1
   skillCooldown: 10
   effectYOffset: 0.6
   devDamageMultiplier: 20
-  spawnGap: 6
   camOffsetX: 2.5
   camRearMargin: 1.2
   camZoomLerp: 4
@@ -309,8 +316,8 @@ MonoBehaviour:
   rangeGroupSize: 3
   rowSpacingX: 1.6
   rowYSpacing: 0.8
-  respawnDelay: 1.5
   basicAttackHitDelay: 0.35
+  serverMode: 0
 --- !u!4 &223499211
 Transform:
   m_ObjectHideFlags: 0
@@ -946,6 +953,7 @@ MonoBehaviour:
   sortingOrder: -100
   worldHeight: 8
   centerY: 1
+  autoFitCamera: 0
 --- !u!1 &1652654814
 GameObject:
   m_ObjectHideFlags: 0
@@ -1117,6 +1125,12 @@ MonoBehaviour:
   portraitOrtho: 0.27
   portraitAim: {x: 0, y: 0.48}
   updateInterval: 0.05
+  hpBarGap: 8
+  hpBarWidth: 14
+  hpBarHeight: 84
+  hpBarOffset: {x: -45, y: -40}
+  hpBarBgColor: {r: 0, g: 0, b: 0, a: 0.6}
+  hpBarFillColor: {r: 0.25, g: 0.9, b: 0.35, a: 1}
 --- !u!114 &1793058198
 MonoBehaviour:
   m_ObjectHideFlags: 0
