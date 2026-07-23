@@ -67,20 +67,42 @@ namespace TaskbarHero.Client.UI
         private void OnSignUpSuccess(SignupResponse response)
         {
             SetInteractable(true);
+            SetError(string.Empty);
             Debug.Log($"[SignUpPanel] 회원가입 성공. userId={response.userId}");
 
-            // 가입 완료 → 로그인 화면으로 복귀.
-            if (UIManager.Instance != null)
+            // 가입 완료 → 공용 모달로 안내 후 확인 시 로그인 화면으로 복귀.
+            if (ModalManager.Instance != null)
             {
-                UIManager.Instance.ShowLogin();
+                ModalManager.Instance.ShowConfirm("회원가입 완료", "회원가입이 완료되었습니다.\n로그인해 주세요.", GoToLogin);
+            }
+            else
+            {
+                GoToLogin();
             }
         }
 
         private void OnSignUpError(NetworkError error)
         {
             SetInteractable(true);
-            SetError(ErrorMessages.ToKorean(error));
+            SetError(string.Empty);
+            if (ModalManager.Instance != null)
+            {
+                ModalManager.Instance.ShowConfirm("회원가입 실패", ErrorMessages.ToKorean(error));
+            }
+            else
+            {
+                SetError(ErrorMessages.ToKorean(error));
+            }
             Debug.LogWarning($"[SignUpPanel] 회원가입 실패: {error}");
+        }
+
+        /// <summary>로그인 화면으로 전환한다(모달 확인 콜백 포함).</summary>
+        private void GoToLogin()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.ShowLogin();
+            }
         }
 
         private void OnBackClicked()

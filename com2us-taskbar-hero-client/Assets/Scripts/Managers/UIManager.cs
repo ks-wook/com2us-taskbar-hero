@@ -18,6 +18,8 @@ namespace TaskbarHero.Client.Managers
             Inventory,
             Stage,
             Party,
+            Skill,
+            Rune,
         }
 
         public static UIManager Instance { get; private set; }
@@ -31,6 +33,10 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private GameObject stagePanelPrefab;
         [Tooltip("Assets/Prefabs/UI/PartyPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject partyPanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/SkillPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject skillPanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/RunePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject runePanelPrefab;
 
         [Header("시작 설정")]
         [Tooltip("Start 시 자동으로 표시할 패널. 자동 표시를 원치 않으면 비활성화한다.")]
@@ -119,6 +125,38 @@ namespace TaskbarHero.Client.Managers
             else
             {
                 Show(PanelType.Stage);
+            }
+        }
+
+        /// <summary>스킬 레벨업 패널을 표시한다.</summary>
+        public void ShowSkill() => Show(PanelType.Skill);
+
+        /// <summary>스킬 레벨업 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleSkill()
+        {
+            if (Current == PanelType.Skill)
+            {
+                Hide(PanelType.Skill);
+            }
+            else
+            {
+                Show(PanelType.Skill);
+            }
+        }
+
+        /// <summary>룬 패널을 표시한다.</summary>
+        public void ShowRune() => Show(PanelType.Rune);
+
+        /// <summary>룬 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleRune()
+        {
+            if (Current == PanelType.Rune)
+            {
+                Hide(PanelType.Rune);
+            }
+            else
+            {
+                Show(PanelType.Rune);
             }
         }
 
@@ -222,6 +260,12 @@ namespace TaskbarHero.Client.Managers
                     return stagePanelPrefab;
                 case PanelType.Party:
                     return partyPanelPrefab;
+                case PanelType.Skill:
+                    // 프리팹은 Assets/Prefabs/UI/에 두고 UIManager 인스턴스에 직접 배선한다.
+                    // 지속 인스턴스가 생성되는 Title 씬과 사용 씬(GameScene) 양쪽에 참조를 지정한다.
+                    return skillPanelPrefab;
+                case PanelType.Rune:
+                    return runePanelPrefab;
                 default:
                     return null;
             }

@@ -3,7 +3,8 @@
     "rootNamespace": "TaskbarHero.Client.Managers",
     "references": [
         "TaskbarHero.Common",
-        "TaskbarHero.Client.MasterData"
+        "TaskbarHero.Client.MasterData",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -96,15 +96,30 @@ namespace TaskbarHero.Client.UI
         private void OnLoadError(NetworkError error)
         {
             SetInteractable(true);
-            SetError(ErrorMessages.ToKorean(error));
+            SetError(string.Empty);
+            ShowModal("데이터 로드 실패", ErrorMessages.ToKorean(error));
             Debug.LogWarning($"[LoginPanel] 게임 데이터 로드 실패: {error}");
         }
 
         private void OnLoginError(NetworkError error)
         {
             SetInteractable(true);
-            SetError(ErrorMessages.ToKorean(error));
+            SetError(string.Empty);
+            ShowModal("로그인 실패", ErrorMessages.ToKorean(error));
             Debug.LogWarning($"[LoginPanel] 로그인 실패: {error}");
+        }
+
+        /// <summary>공용 모달로 안내한다(매니저가 없으면 인라인 문구로 폴백).</summary>
+        private void ShowModal(string title, string message)
+        {
+            if (ModalManager.Instance != null)
+            {
+                ModalManager.Instance.ShowConfirm(title, message);
+            }
+            else
+            {
+                SetError(message);
+            }
         }
 
         private void OnSignUpClicked()

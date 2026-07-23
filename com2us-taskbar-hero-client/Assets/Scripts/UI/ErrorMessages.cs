@@ -36,6 +36,29 @@ namespace TaskbarHero.Client.UI
                 case ErrorCode.InvalidToken:
                 case ErrorCode.ExpiredToken:
                     return "인증이 만료되었습니다. 다시 로그인하세요.";
+                // 성장(스킬/룬) 도메인(growth 기획서 §7)
+                case ErrorCode.InvalidGrowthTarget:
+                    return "존재하지 않는 스킬/룬입니다.";
+                case ErrorCode.SkillMaxLevel:
+                    return "이미 최대 레벨입니다.";
+                case ErrorCode.InsufficientSkillPoint:
+                    return "스킬 포인트가 부족합니다.";
+                case ErrorCode.SkillClassMismatch:
+                    return "이 캐릭터의 직업 스킬이 아닙니다.";
+                case ErrorCode.SkillNotActive:
+                    return "액티브 스킬만 장착할 수 있습니다.";
+                case ErrorCode.SkillNotLearned:
+                    return "먼저 스킬을 습득하세요.";
+                case ErrorCode.ActiveSkillLimitExceeded:
+                    return "액티브 스킬은 최대 2개까지 장착할 수 있습니다.";
+                case ErrorCode.InvalidCharacterId:
+                    return "잘못된 캐릭터입니다.";
+                case ErrorCode.RunePrereqNotMet:
+                    return "선행 룬을 먼저 해금하세요.";
+                case ErrorCode.RuneMaxLevel:
+                    return "이미 최대 레벨입니다.";
+                case ErrorCode.InsufficientCurrency:
+                    return "골드가 부족합니다.";
                 default:
                     return string.IsNullOrEmpty(fallback) ? ("오류가 발생했습니다. (" + code + ")") : fallback;
             }

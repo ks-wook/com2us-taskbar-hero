@@ -182,6 +182,23 @@ namespace TaskbarHero.ClientEditor
                 bgProp.GetArrayElementAtIndex(i).objectReferenceValue = sprite;
             }
 
+            // 레벨업 글로우 프레임(LevelUpGlow_01~30) 배선(순서대로).
+            var lvlProp = fso.FindProperty("levelUpFrames");
+            lvlProp.ClearArray();
+            int lvlCount = 0;
+            for (int i = 1; i <= 30; i++)
+            {
+                var sp = LoadSprite($"Assets/Art/Effect/Character/LevelUpGlow/LevelUpGlow_{i:00}.png");
+                if (sp == null)
+                {
+                    continue;
+                }
+                lvlProp.InsertArrayElementAtIndex(lvlCount);
+                lvlProp.GetArrayElementAtIndex(lvlCount).objectReferenceValue = sp;
+                lvlCount++;
+            }
+            Debug.Log($"[DungeonBattleBuilder] 레벨업 글로우 프레임 {lvlCount}장 배선.");
+
             fso.ApplyModifiedPropertiesWithoutUndo();
 
             // ── 8) 전투 UI(초상화·아군 스킬 슬롯·아군 HP바) 복제: BattleDevScene의 SkillUICanvas를 그대로 GameScene에 ──
@@ -193,6 +210,25 @@ namespace TaskbarHero.ClientEditor
             Debug.Log($"[DungeonBattleBuilder] 완료: DungeonBattle 배선, 몬스터 {idx}종, " +
                       $"Global Light 2D {(srcLight != null ? "복제" : "원본없음")}, 스폰 앵커 배선, " +
                       $"카메라 정합(y={camY:0.##}, ortho={camOrtho:0.##}), SkillUICanvas {(skillUiCopied ? "복제" : "원본없음")}.");
+        }
+
+        /// <summary>스프라이트를 경로에서 로드한다(Single/Multiple 스프라이트 모드 모두 대응).</summary>
+        private static Sprite LoadSprite(string path)
+        {
+            var s = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            if (s != null)
+            {
+                return s;
+            }
+            foreach (var o in AssetDatabase.LoadAllAssetsAtPath(path))
+            {
+                if (o is Sprite sp)
+                {
+                    return sp;
+                }
+            }
+            Debug.LogWarning($"[DungeonBattleBuilder] 스프라이트를 찾지 못했습니다: {path}");
+            return null;
         }
 
         /// <summary>BattleDevScene의 SkillUICanvas(초상화·스킬 슬롯·아군 HP바)를 GameScene으로 복제한다.

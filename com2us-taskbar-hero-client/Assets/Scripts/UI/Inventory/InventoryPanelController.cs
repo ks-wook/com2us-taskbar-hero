@@ -42,6 +42,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private RawImage _portraitImage;     // 초상화 캐릭터 렌더 표시(런타임 텍스처 배정)
         [SerializeField] private Button _prevButton;
         [SerializeField] private Button _nextButton;
+        [SerializeField] private Button _skillButton;   // 스킬 레벨업 패널 진입
+        [SerializeField] private Button _runeButton;    // 룬 패널 진입
         [SerializeField] private Button _closeButton;
         [SerializeField] private Button _dimButton;
         [SerializeField] private RectTransform _gridContent; // 스크롤 콘텐츠(슬롯 부모)
@@ -195,6 +197,14 @@ namespace TaskbarHero.Client.UI
             if (_nextButton != null)
             {
                 _nextButton.onClick.AddListener(OnNextCharacter);
+            }
+            if (_skillButton != null)
+            {
+                _skillButton.onClick.AddListener(OnOpenSkillPanel);
+            }
+            if (_runeButton != null)
+            {
+                _runeButton.onClick.AddListener(OnOpenRunePanel);
             }
             if (_closeButton != null)
             {
@@ -436,6 +446,22 @@ namespace TaskbarHero.Client.UI
             // '장비' 라벨
             var label = NewText("EquipLabel", area, "장비", 32, TextAnchor.UpperLeft);
             TopLeft(label.rectTransform, 0f, 90f, 200f, 44f);
+
+            // 성장 진입 버튼 행(장비 라벨 우측, 초상/장비슬롯 위 여백). 스킬·룬 패널을 각각 연다.
+            var skillImg = NewImage("SkillButton", area, slotNormal);
+            skillImg.color = new Color(0.24f, 0.20f, 0.34f, 0.98f);
+            TopLeft(skillImg.rectTransform, PortraitX, 84f, 240f, 56f);
+            var skillLabel = NewText("SkillButtonLabel", skillImg.rectTransform, "스킬 레벨업", 28, TextAnchor.MiddleCenter);
+            Stretch(skillLabel.rectTransform);
+            _skillButton = skillImg.gameObject.AddComponent<Button>();
+
+            // '룬' 진입 버튼(장비 슬롯 열 위). 성장(룬 트리) 패널을 연다.
+            var runeImg = NewImage("RuneButton", area, slotNormal);
+            runeImg.color = new Color(0.30f, 0.22f, 0.16f, 0.98f);
+            TopLeft(runeImg.rectTransform, EquipSlotsX, 84f, EquipBlockWidth - EquipSlotsX, 56f);
+            var runeLabel = NewText("RuneButtonLabel", runeImg.rectTransform, "룬", 28, TextAnchor.MiddleCenter);
+            Stretch(runeLabel.rectTransform);
+            _runeButton = runeImg.gameObject.AddComponent<Button>();
 
             // 능력치 패널(초상화 좌측): 장비 포함 현재 캐릭터 능력치.
             BuildStatPanel(area);
@@ -745,6 +771,32 @@ namespace TaskbarHero.Client.UI
             }
             _selectedCharacter = (_selectedCharacter + 1) % _partyCount;
             RefreshCharacter();
+        }
+
+        /// <summary>스킬 레벨업 패널을 연다(UIManager 위임). 없으면 무시.</summary>
+        private void OnOpenSkillPanel()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.Show(UIManager.PanelType.Skill);
+            }
+            else
+            {
+                Debug.LogWarning("[Inventory] UIManager 인스턴스를 찾을 수 없어 스킬 패널을 열 수 없습니다.");
+            }
+        }
+
+        /// <summary>룬 패널을 연다(UIManager 위임). 없으면 무시.</summary>
+        private void OnOpenRunePanel()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.Show(UIManager.PanelType.Rune);
+            }
+            else
+            {
+                Debug.LogWarning("[Inventory] UIManager 인스턴스를 찾을 수 없어 룬 패널을 열 수 없습니다.");
+            }
         }
 
         /// <summary>선택된 캐릭터의 인디케이터·초상 라벨·장착 슬롯을 세션 실데이터로 갱신한다.</summary>
@@ -1087,44 +1139,14 @@ namespace TaskbarHero.Client.UI
             return parts.Count > 0 ? string.Join("\n", parts) : "옵션 없음";
         }
 
-        /// <summary>등급(1~5)별 아이콘 폴백 색(실아이콘 없을 때만 사용).</summary>
-        private static Color GradeColor(int grade)
-        {
-            switch (grade)
-            {
-                case 5: return new Color(0.95f, 0.55f, 0.20f); // 전설(주황)
-                case 4: return new Color(0.70f, 0.45f, 0.95f); // 영웅(보라)
-                case 3: return new Color(0.30f, 0.55f, 0.95f); // 희귀(파랑)
-                case 2: return new Color(0.35f, 0.80f, 0.45f); // 고급(초록)
-                default: return new Color(0.75f, 0.78f, 0.82f); // 노말(회색)
-            }
-        }
+        /// <summary>등급(1~5)별 아이콘 폴백 색(실아이콘 없을 때만 사용). 공용 <see cref="GradeColors"/> 위임.</summary>
+        private static Color GradeColor(int grade) => GradeColors.IconFallback(grade);
 
-        /// <summary>등급(1~5)별 아이템 배경색. 노말은 배경 없음(투명), 등급이 높을수록 뚜렷한 색.</summary>
-        public static Color GradeBackgroundColor(int grade)
-        {
-            switch (grade)
-            {
-                case 5: return new Color(0.95f, 0.80f, 0.15f, 0.55f); // 전설(노랑)
-                case 4: return new Color(0.65f, 0.35f, 0.95f, 0.50f); // 영웅(보라)
-                case 3: return new Color(0.25f, 0.55f, 0.95f, 0.50f); // 희귀(파랑)
-                case 2: return new Color(0.30f, 0.80f, 0.40f, 0.45f); // 고급(초록)
-                default: return new Color(0f, 0f, 0f, 0f);            // 노말(배경 없음)
-            }
-        }
+        /// <summary>등급(1~5)별 아이템 배경색(노말은 투명). 공용 <see cref="GradeColors"/> 위임.</summary>
+        public static Color GradeBackgroundColor(int grade) => GradeColors.Background(grade);
 
-        /// <summary>등급(1~5)별 아이템 이름 텍스트 색.</summary>
-        public static Color GradeNameColor(int grade)
-        {
-            switch (grade)
-            {
-                case 5: return new Color(1f, 0.85f, 0.25f);   // 전설(노랑)
-                case 4: return new Color(0.80f, 0.55f, 1f);   // 영웅(보라)
-                case 3: return new Color(0.45f, 0.70f, 1f);   // 희귀(파랑)
-                case 2: return new Color(0.45f, 0.90f, 0.55f); // 고급(초록)
-                default: return Color.white;                   // 노말(흰색)
-            }
-        }
+        /// <summary>등급(1~5)별 아이템 이름 텍스트 색. 공용 <see cref="GradeColors"/> 위임.</summary>
+        public static Color GradeNameColor(int grade) => GradeColors.Name(grade);
 
         // ── 장착 / 해제 (서버 연동) ──
 
