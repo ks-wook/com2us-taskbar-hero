@@ -262,7 +262,9 @@ erDiagram
 | `skill_code` | int PK | 스킬 코드 |
 | `class_code` | int FK | 소속 직업(`class_master`) |
 | `name` | varchar | 스킬 이름 |
+| `description` | varchar | 스킬 설명(클라이언트 표시용 한 줄 문구) |
 | `skill_type` | int | **1:액티브 2:패시브**. 액티브는 캐릭터당 2개까지 장착([성장 시스템 기획서](../growth-기획서.md) 5.3), 패시브는 상시 적용 |
+| `stat_type` | int | 버프/디버프가 올리는 **대상 능력치**(룬과 동일 enum **1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도 7:재사용 대기시간**). 순수 공격 데미지 스킬은 **0**(해당 없음). `coef`(배율)와 짝을 이뤄 전투 계산이 대상 스탯을 데이터로 정한다 |
 | `max_level` | int | 최대 레벨(= `skill_coefficient`의 타입별 행 수) |
 | `cooldown` | decimal | 재사용 대기시간(초). 액티브만 값, 패시브는 0. `skill_coefficient.duration`(효과 지속시간)과 별개 |
 

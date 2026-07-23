@@ -102,7 +102,9 @@ namespace TaskbarHero.Common.MasterData
         public int skillCode;
         public int classCode;     // 소속 직업(FK class_master)
         public string name;
+        public string description; // 스킬 설명(클라 표시용)
         public int skillType;     // 1:액티브 2:패시브
+        public int statType;      // 버프/디버프가 올리는 대상 능력치(rune 동일 enum 1~7). 순수 공격 데미지 스킬은 0
         public SkillCoef[] coefs; // 레벨·타입별 계수(개수 = 타입 수 × maxLevel)
         public int maxLevel;
         public float cooldown;    // 스킬 재사용 대기시간(초). 패시브는 0
