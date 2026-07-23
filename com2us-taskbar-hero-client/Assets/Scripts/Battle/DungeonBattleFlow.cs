@@ -48,6 +48,7 @@ namespace TaskbarHero.Client.Battle
         private int _stage = 1;
         private bool _entered;
         private bool _cleared;
+        private bool _defeated;        // 패배 처리 1회 가드(재입장 시 해제)
         private bool _restartOnEnter; // true면 다음 입장 응답에서 전투 필드를 리셋하고 처음부터 시작
         private bool _repeatSameStage; // true면 클리어 후 같은 스테이지를 반복(이미 클리어한 스테이지 수동 입장), false면 다음 스테이지로 전진
         private readonly List<int> _pendingLevelUps = new List<int>(); // 이번 클리어에서 레벨업한 캐릭터 id(오버레이 종료 후 글로우 재생)
@@ -126,6 +127,7 @@ namespace TaskbarHero.Client.Battle
             _difficulty = difficulty;
             _stage = stage;
             _cleared = false; // 새 스테이지 진입 시 클리어 가드 해제
+            _defeated = false; // 패배 가드도 해제
             _restartOnEnter = restartFromStart;
             Time.timeScale = 1f; // 클리어 슬로우모션 중 수동 입장에 대비해 시간 배율 복원
 
@@ -160,9 +162,10 @@ namespace TaskbarHero.Client.Battle
                     plan.Add(new KeyValuePair<int, int>(m.monsterCode, m.count));
                 }
             }
-            if (d.boss != null && d.boss.monsterCode != 0)
+            int bossCode = d.boss != null ? d.boss.monsterCode : 0;
+            if (bossCode != 0)
             {
-                plan.Add(new KeyValuePair<int, int>(d.boss.monsterCode, 1));
+                plan.Add(new KeyValuePair<int, int>(bossCode, 1));
             }
 
             int total = 0;
@@ -175,11 +178,11 @@ namespace TaskbarHero.Client.Battle
             if (_restartOnEnter)
             {
                 _restartOnEnter = false;
-                battle.RestartServerBattle(plan, ResolvePrefab, OnAllCleared); // 처음부터: 진행 중 전투 필드 리셋 후 시작(카메라도 시작 지점으로 스냅)
+                battle.RestartServerBattle(plan, ResolvePrefab, OnAllCleared, bossCode, OnDefeat); // 처음부터: 진행 중 전투 필드 리셋 후 시작(카메라도 시작 지점으로 스냅)
             }
             else
             {
-                battle.BeginServerBattle(plan, ResolvePrefab, OnAllCleared);
+                battle.BeginServerBattle(plan, ResolvePrefab, OnAllCleared, bossCode, OnDefeat);
             }
             // 전투 필드 리셋(카메라 위치 확정) 후 배경을 구축해야 스크롤 배경 타일이 올바른 위치에 생성된다.
             ApplyBackground(d.backgroundType);
@@ -234,6 +237,21 @@ namespace TaskbarHero.Client.Battle
                 data = new StageActionData { act = _act, difficulty = _difficulty, stage = _stage },
             };
             NetworkManager.Instance.PostToGame<StageClearResponse>("/api/game/stage/clear", request, OnClear, OnClearError);
+        }
+
+        /// <summary>아군 전멸(패배) 시: 패배 연출을 띄우고, 닫히면 현재 스테이지를 처음부터 다시 시작한다.</summary>
+        private void OnDefeat()
+        {
+            if (_defeated)
+            {
+                return;
+            }
+            _defeated = true;
+
+            // 패배 순간 슬로우모션(응답 대기감). 오버레이가 닫힐 때 1로 복원된다.
+            Time.timeScale = Mathf.Clamp(clearSlowMotionScale, 0.01f, 1f);
+            Debug.Log($"[Dungeon] 아군 전멸 → 패배, 현재 스테이지 재시작 {_act}-{_difficulty}-{_stage}");
+            BattleDefeatOverlay.Show(() => EnterStage(_act, _difficulty, _stage, restartFromStart: true));
         }
 
         private void OnClear(StageClearResponse response)

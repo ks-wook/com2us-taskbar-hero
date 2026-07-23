@@ -25,6 +25,10 @@ namespace TaskbarHero.Client.Managers
         /// <summary>로그인 상태 여부.</summary>
         public static bool IsLoggedIn => !string.IsNullOrEmpty(Token);
 
+        /// <summary>CreateCharacterScene에 게임 안(파티 편성 '+')에서 진입했는지. true면 '뒤로가기'로 GameScene 복귀 허용.
+        /// 회원가입 직후 최초 캐릭터 생성 진입은 false(뒤로가기 없음).</summary>
+        public static bool CreateCharacterFromGame { get; set; }
+
         /// <summary>인벤토리(장착 상태 포함)가 바뀌었을 때 발생. 전투 스탯 재계산 등에서 구독한다.</summary>
         public static event Action InventoryChanged;
 

@@ -89,6 +89,8 @@ namespace TaskbarHero.Client.UI
                 return;
             }
 
+            // 회원가입 직후 최초 캐릭터 생성 진입은 '뒤로가기' 미노출(게임 안 진입 아님).
+            Session.CreateCharacterFromGame = false;
             // 신규 계정(또는 캐릭터 없음)이면 캐릭터 생성 씬으로, 아니면 게임 씬으로 전환.
             SceneManager.Instance.LoadScene(hasCharacter ? "GameScene" : "CreateCharacterScene");
         }

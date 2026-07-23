@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TaskbarHero.Client.Managers;
@@ -57,7 +58,11 @@ namespace TaskbarHero.Client.Battle
         private int _characterId;     // 연결된 계정 캐릭터 id(serverMode, 0=없음)
         private long _maxHp = 1;
         private long _hp = 1;
+        private bool _dead;
         private float _cooldown;
+
+        [Tooltip("사망 애니 후 오브젝트가 사라지기까지 지연(초)")]
+        private const float DeathLinger = 1.0f;
         private float _moveSpeed;
         private float _baseMoveSpeed = 3f;  // 패시브 제외 기본 이동속도(클래스)
 
@@ -65,6 +70,8 @@ namespace TaskbarHero.Client.Battle
         public long Hp => _hp;
         /// <summary>아군 최대 체력.</summary>
         public long MaxHp => _maxHp;
+        /// <summary>생존 여부(사망 시 false).</summary>
+        public bool Alive => !_dead;
         /// <summary>현재 공격력(클래스+레벨+장비 합산).</summary>
         public long Attack => _atk;
         /// <summary>연결된 계정 캐릭터 id(serverMode).</summary>
@@ -321,8 +328,39 @@ namespace TaskbarHero.Client.Battle
             BuildSkills();
         }
 
+        /// <summary>적에게 데미지를 받는다. 체력이 0 이하가 되면 사망 처리한다(1회).</summary>
+        public void TakeDamage(long dmg)
+        {
+            if (_dead) return;
+            _hp -= dmg;
+            if (_hp <= 0)
+            {
+                _hp = 0;
+                Die();
+            }
+        }
+
+        /// <summary>체력 0: 사망 처리 — 사망 애니 재생, 컨트롤러에 통지, 잠시 뒤 자기 소멸.</summary>
+        private void Die()
+        {
+            if (_dead) return;
+            _dead = true;
+            _charging = false;
+            SendMessage("PlayDeathOnce", SendMessageOptions.DontRequireReceiver);
+            if (_ctrl != null) _ctrl.OnAllyKilled(this);
+            StartCoroutine(DespawnAfter());
+        }
+
+        /// <summary>사망 애니가 보이도록 잠깐 대기 후 오브젝트를 파괴한다.</summary>
+        private IEnumerator DespawnAfter()
+        {
+            yield return new WaitForSeconds(DeathLinger);
+            Destroy(gameObject);
+        }
+
         private void Update()
         {
+            if (_dead) return;
             if (_ctrl == null || _ctrl.IsPaused) return;
 
             TickTimers();

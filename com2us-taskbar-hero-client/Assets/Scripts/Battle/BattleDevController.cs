@@ -47,6 +47,10 @@ namespace TaskbarHero.Client.Battle
         public float enemyMoveSpeed = 1.2f;
         [Tooltip("몬스터가 파티 선두 앞에서 멈추는 여백. 2마리 이상이면 아군과 달리 이 지점에 완전히 겹쳐 몰린다")]
         public float enemyFrontStopGap = 1.2f;
+        [Tooltip("몬스터가 아군을 공격하는 주기(초). 0 이하면 아군을 공격하지 않는다")]
+        public float enemyAttackInterval = 1.5f;
+        [Tooltip("몬스터 공격력 배수(아군에게 주는 데미지). 마스터 데이터 값 자체는 불변")]
+        public float enemyDamageMultiplier = 2f;
 
         [Header("스킬 설정")]
         [Tooltip("개발용 스킬 레벨(계수 조회 기준)")]
@@ -85,6 +89,12 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("true면 서버 웨이브 플랜(유한)으로 진행하고 개발용 무한 웨이브를 끈다. BeginServerBattle로 시작.")]
         public bool serverMode = false;
 
+        [Header("보스 연출")]
+        [Tooltip("보스 몬스터 머리 위에 띄울 아이콘(왕관). 던전 배선 빌더가 자동으로 배선한다.")]
+        [SerializeField] private Sprite bossIcon;
+        [Tooltip("보스의 이동속도 배율(일반 몹 대비). 1보다 작으면 더 느리게 전진한다.")]
+        public float bossMoveSpeedFactor = 0.6f;
+
         // ---- 런타임 상태 ----
         private Camera _cam;
         private ObjectManager _om;
@@ -117,8 +127,11 @@ namespace TaskbarHero.Client.Battle
         private Queue<int> _serverQueue;                       // 스폰할 몬스터 코드(순서대로)
         private System.Func<int, GameObject> _prefabResolver;  // 코드 → 프리팹
         private System.Action _onAllCleared;                   // 전멸 시 1회 호출
+        private System.Action _onDefeat;                       // 아군 전멸(패배) 시 1회 호출
         private int _serverSpawned;
         private bool _serverCleared;
+        private bool _defeated;                                // 아군 전멸 판정 1회 가드
+        private int _bossCode;                                 // 이 스테이지의 보스 몬스터 코드(0=없음)
 
         // 소환 캐릭터 선택(테스트용). 현재 구현된 직업만 선택 가능.
         private static readonly HashSet<int> ImplementedClasses = new HashSet<int> { 1, 2, 3 }; // 기사1·레인저2·마법사3
@@ -449,17 +462,31 @@ namespace TaskbarHero.Client.Battle
             SetFacingRight(go, false);
             var mu = go.GetComponent<MonsterUnit>();
             if (mu == null) mu = go.AddComponent<MonsterUnit>();
-            mu.Init(mname, hp, atk, enemyMoveSpeed, () => _paused, OnMonsterKilled);
+
+            bool isBoss = _bossCode != 0 && code == _bossCode;
+            float speed = isBoss ? enemyMoveSpeed * Mathf.Max(0.05f, bossMoveSpeedFactor) : enemyMoveSpeed;
+            mu.Init(mname, hp, atk, speed, () => _paused, OnMonsterKilled, isBoss, isBoss ? bossIcon : null,
+                    OnMonsterAttack, enemyAttackInterval);
+            if (isBoss)
+            {
+                BossWarningBanner.Show(); // 보스 등장 경고 연출(중앙 붉은 "Warning!!" 3회 펄스)
+                Log($"보스 등장! — {mname}");
+            }
         }
 
         /// <summary>서버 스테이지 진입 데이터로 유한 웨이브 전투를 시작한다.
-        /// plan: (몬스터코드→마리수) 순서 목록, prefabResolver: 코드→프리팹, onAllCleared: 전멸 시 1회.</summary>
+        /// plan: (몬스터코드→마리수) 순서 목록, prefabResolver: 코드→프리팹, onAllCleared: 전멸 시 1회,
+        /// bossCode: 보스 몬스터 코드(0=없음). 해당 코드 스폰 시 3배 크기·감속·왕관·경고 연출을 적용한다.</summary>
         public void BeginServerBattle(List<KeyValuePair<int, int>> plan,
-                                      System.Func<int, GameObject> prefabResolver, System.Action onAllCleared)
+                                      System.Func<int, GameObject> prefabResolver, System.Action onAllCleared,
+                                      int bossCode = 0, System.Action onDefeat = null)
         {
             serverMode = true;
             _prefabResolver = prefabResolver;
             _onAllCleared = onAllCleared;
+            _onDefeat = onDefeat;
+            _defeated = false;
+            _bossCode = bossCode;
             _serverQueue = new Queue<int>();
             if (plan != null)
             {
@@ -490,7 +517,8 @@ namespace TaskbarHero.Client.Battle
             var mu = go.GetComponent<MonsterUnit>();
             if (mu == null) mu = go.AddComponent<MonsterUnit>();
             mu.Init(_monsterName, _monsterMaxHp, _monsterAtk, enemyMoveSpeed,
-                    () => _paused, OnMonsterKilled);
+                    () => _paused, OnMonsterKilled, false, null,
+                    OnMonsterAttack, enemyAttackInterval);
         }
 
         /// <summary>살아있는 적을 모두 같은 파티 앞 라인으로 보낸다(아군과 달리 서로 완전히 겹쳐도 무방).</summary>
@@ -639,6 +667,8 @@ namespace TaskbarHero.Client.Battle
 
             _killCount = 0;
             _phase = Phase.Advancing;
+            _defeated = false;
+            _paused = false;
 
             Vector3 start = playerSpawn != null ? playerSpawn.position : new Vector3(-4.5f, -1.6f, 0f);
             _pathY = start.y;
@@ -664,10 +694,11 @@ namespace TaskbarHero.Client.Battle
         /// <summary>전투 필드를 처음 상태로 초기화한 뒤 새 플랜으로 서버 전투를 처음부터 다시 시작한다.
         /// 스테이지 UI에서 특정 스테이지를 선택해 "처음부터" 입장할 때 사용한다(진행 중인 전투를 리셋).</summary>
         public void RestartServerBattle(List<KeyValuePair<int, int>> plan,
-                                        System.Func<int, GameObject> prefabResolver, System.Action onAllCleared)
+                                        System.Func<int, GameObject> prefabResolver, System.Action onAllCleared,
+                                        int bossCode = 0, System.Action onDefeat = null)
         {
             ResetBattlefield();
-            BeginServerBattle(plan, prefabResolver, onAllCleared);
+            BeginServerBattle(plan, prefabResolver, onAllCleared, bossCode, onDefeat);
         }
 
         // ---- 파티 멤버(PlayerCombatant)가 사용하는 공유 훅 ----
@@ -756,6 +787,75 @@ namespace TaskbarHero.Client.Battle
         {
             _killCount++;
             Log($"{(m != null ? m.MonsterName : _monsterName)} 처치! (누적 {_killCount})");
+        }
+
+        /// <summary>몬스터가 공격 주기마다 호출한다. 최전방 생존 아군에게 몬스터 공격력×배수만큼 데미지를 준다.
+        /// 대상이 있으면 true(공격 애니 재생), 없으면 false.</summary>
+        public bool OnMonsterAttack(MonsterUnit m)
+        {
+            if (m == null || !m.Alive || _defeated) return false;
+            var target = FrontAlly();
+            if (target == null) return false;
+
+            long dmg = System.Math.Max(1L, (long)(m.Atk * Mathf.Max(1f, enemyDamageMultiplier)));
+            target.TakeDamage(dmg);
+            // 아군 피격 데미지를 붉은 숫자로 표시(오브젝트 풀 재사용).
+            DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f));
+            return true;
+        }
+
+        /// <summary>파티에서 가장 앞선(x 최대) 생존 아군. 없으면 null(전멸).</summary>
+        private PlayerCombatant FrontAlly()
+        {
+            PlayerCombatant best = null;
+            float bx = float.NegativeInfinity;
+            foreach (var m in _members)
+            {
+                if (m == null || !m.Alive) continue;
+                if (m.transform.position.x > bx) { bx = m.transform.position.x; best = m; }
+            }
+            return best;
+        }
+
+        /// <summary>아군 1인이 사망하면 호출된다 — 파티 목록에서 제거·대형 재계산·전투 UI 갱신하고,
+        /// 전원 사망 시 패배 처리를 1회 발동한다.</summary>
+        public void OnAllyKilled(PlayerCombatant a)
+        {
+            _members.Remove(a);
+            Log($"{(a != null ? a.DisplayName : "아군")} 전사 — 남은 파티 {_members.Count}인");
+
+            if (_members.Count > 0)
+            {
+                // 남은 멤버로 대형·선두 속도 재계산.
+                _partySpeed = Mathf.Max(0.1f, _members[0].MoveSpeed);
+                ComputeFormation();
+                // 아군 HP바·스킬 슬롯(전투 UI) 재구성.
+                var ui = FindAnyObjectByType<SkillCooldownUI>();
+                if (ui != null) ui.Rebuild();
+            }
+            else
+            {
+                TriggerDefeat();
+            }
+        }
+
+        /// <summary>아군 전멸: 패배 처리를 1회 발동한다. 서버 구동 모드는 주입된 패배 콜백(연출+재시작)을 호출하고,
+        /// 개발 하네스는 패배 오버레이 후 전장을 리셋한다.</summary>
+        private void TriggerDefeat()
+        {
+            if (_defeated) return;
+            _defeated = true;
+            Log("아군 전멸 — 패배");
+
+            if (_onDefeat != null)
+            {
+                _onDefeat();
+            }
+            else
+            {
+                // 개발 하네스: 서버 흐름이 없으므로 패배 오버레이 후 전장 리셋.
+                BattleDefeatOverlay.Show(ResetBattlefield);
+            }
         }
 
         private void CycleMonster()

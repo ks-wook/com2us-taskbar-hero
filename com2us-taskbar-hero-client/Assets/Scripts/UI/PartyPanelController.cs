@@ -22,6 +22,31 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private List<RectTransform> _slots = new List<RectTransform>();
         [SerializeField] private Button _closeButton;
         [SerializeField] private Button _dimButton;
+        // 슬롯별 구성(에디터 빌드로 baked): 캐릭터 프리팹 렌더(RawImage)·직업/레벨 캡션·'+' 추가 버튼 루트.
+        [SerializeField] private List<RawImage> _slotRenders = new List<RawImage>();
+        [SerializeField] private List<Text> _slotCaptions = new List<Text>();
+        [SerializeField] private List<GameObject> _slotAddRoots = new List<GameObject>();
+        [SerializeField] private List<Button> _slotAddButtons = new List<Button>();
+        [Header("직업별 캐릭터 프리팹(classCode → 프리팹, 에디터 빌더가 배선: 기사1·레인저2·마법사3)")]
+        [SerializeField] private List<ClassCharacter> _classCharacters = new List<ClassCharacter>();
+
+        /// <summary>초상화에 렌더할 직업별 캐릭터 프리팹 매핑(classCode → 프리팹).</summary>
+        [System.Serializable]
+        private struct ClassCharacter
+        {
+            public int classCode;
+            public GameObject prefab;
+        }
+
+        // 초상화 렌더 설정(인벤토리와 동일 방식). 슬롯마다 화면 밖 격리 위치에 캐릭터를 두고 전용 카메라로 렌더한다.
+        private const int PortraitLayer = 28; // 인벤토리와 공유(패널 상호 배타), 전투 초상(29~31)과 비겹침
+        private const float PortraitOrtho = 0.7f;
+        private static readonly Vector2 PortraitAim = new Vector2(0f, 0.45f);
+        private static readonly Color PortraitBg = new Color(0.10f, 0.11f, 0.16f, 1f);
+
+        private CharacterPortrait[] _portraits;
+        private GameObject[] _portraitStages;
+        private int[] _portraitClassCode;
 
         private Font _font;
         private bool AlreadyBuilt => _slots != null && _slots.Count == MaxSlots && _slots[0] != null;
@@ -40,7 +65,33 @@ namespace TaskbarHero.Client.UI
         {
             if (AlreadyBuilt)
             {
+                EnsurePortraits();
                 Refresh();
+            }
+        }
+
+        /// <summary>패널이 숨겨지면 초상화 렌더러(카메라)를 꺼 불필요한 렌더를 막는다.</summary>
+        private void OnDisable()
+        {
+            if (_portraitStages != null)
+            {
+                foreach (var s in _portraitStages)
+                {
+                    if (s != null) s.SetActive(false);
+                }
+            }
+        }
+
+        /// <summary>파괴 시 화면 밖 초상화 스테이지(카메라·RT·캐릭터 인스턴스)를 함께 정리한다.</summary>
+        private void OnDestroy()
+        {
+            if (_portraitStages != null)
+            {
+                foreach (var s in _portraitStages)
+                {
+                    if (s != null) Destroy(s);
+                }
+                _portraitStages = null;
             }
         }
 
@@ -124,6 +175,10 @@ namespace TaskbarHero.Client.UI
         private void BuildSlots(RectTransform panel)
         {
             _slots.Clear();
+            _slotRenders.Clear();
+            _slotCaptions.Clear();
+            _slotAddRoots.Clear();
+            _slotAddButtons.Clear();
             const float slotW = 200f;
             const float slotH = 300f;
             const float gap = 24f;
@@ -139,6 +194,40 @@ namespace TaskbarHero.Client.UI
                 rt.sizeDelta = new Vector2(slotW, slotH);
                 rt.anchoredPosition = new Vector2(startX + i * (slotW + gap), -20f);
                 _slots.Add(rt);
+
+                // 캐릭터 프리팹 렌더(RawImage). 상단 대부분을 채우고 하단은 캡션 공간. 텍스처는 런타임 CharacterPortrait가 배정.
+                var render = NewRawImage("Render", rt);
+                render.rectTransform.anchorMin = Vector2.zero;
+                render.rectTransform.anchorMax = Vector2.one;
+                render.rectTransform.offsetMin = new Vector2(10f, 44f);
+                render.rectTransform.offsetMax = new Vector2(-10f, -10f);
+                render.color = new Color(1f, 1f, 1f, 0f); // 캐릭터 배정 전 투명
+                render.raycastTarget = false;
+                render.gameObject.SetActive(false);
+                _slotRenders.Add(render);
+
+                // 직업 · 레벨 캡션(하단)
+                var cap = NewText("Caption", rt, "", 26, TextAnchor.MiddleCenter);
+                cap.fontStyle = FontStyle.Bold;
+                PlaceCenter(cap.rectTransform, 0.5f, 0.09f, 190f, 40f);
+                cap.gameObject.SetActive(false);
+                _slotCaptions.Add(cap);
+
+                // 빈 슬롯 '+' 추가 버튼 루트
+                var addRoot = new GameObject("AddRoot", typeof(RectTransform));
+                addRoot.transform.SetParent(rt, false);
+                Stretch((RectTransform)addRoot.transform);
+                var plus = NewImage("AddButton", addRoot.transform, new Color(0.25f, 0.55f, 0.35f, 1f));
+                PlaceCenter(plus.rectTransform, 0.5f, 0.55f, 110f, 110f);
+                var pt = NewText("Plus", plus.rectTransform, "＋", 64, TextAnchor.MiddleCenter);
+                Stretch(pt.rectTransform);
+                var addCap = NewText("AddCaption", addRoot.transform, "캐릭터 추가", 24, TextAnchor.MiddleCenter);
+                addCap.color = new Color(0.7f, 0.85f, 0.7f);
+                PlaceCenter(addCap.rectTransform, 0.5f, 0.22f, 190f, 36f);
+                var addBtn = plus.gameObject.AddComponent<Button>();
+                addRoot.SetActive(false);
+                _slotAddRoots.Add(addRoot);
+                _slotAddButtons.Add(addBtn);
             }
         }
 
@@ -152,63 +241,173 @@ namespace TaskbarHero.Client.UI
             {
                 _dimButton.onClick.AddListener(Close);
             }
+            if (_slotAddButtons != null)
+            {
+                foreach (var b in _slotAddButtons)
+                {
+                    if (b != null)
+                    {
+                        b.onClick.AddListener(OnAddCharacter);
+                    }
+                }
+            }
+        }
+
+        /// <summary>슬롯별 초상화 렌더러(전용 카메라+RT를 얹은 화면 밖 오브젝트)를 1회 생성한다(런타임 전용).</summary>
+        private void EnsurePortraits()
+        {
+            if (!Application.isPlaying || _slotRenders == null || _slotRenders.Count < MaxSlots)
+            {
+                return;
+            }
+            if (_portraits != null)
+            {
+                foreach (var s in _portraitStages)
+                {
+                    if (s != null) s.SetActive(true);
+                }
+                return;
+            }
+            _portraits = new CharacterPortrait[MaxSlots];
+            _portraitStages = new GameObject[MaxSlots];
+            _portraitClassCode = new int[MaxSlots];
+            for (int i = 0; i < MaxSlots; i++)
+            {
+                _portraitClassCode[i] = -2; // 첫 Refresh에서 반드시 배정되도록
+                var origin = new Vector3(700f + i * 40f, 700f, 0f);
+                var stage = new GameObject($"PartyPortraitStage{i}");
+                stage.transform.position = origin;
+                var p = stage.AddComponent<CharacterPortrait>();
+                p.Initialize(_slotRenders[i], PortraitLayer, 300, 400, PortraitOrtho, PortraitAim, PortraitBg, origin);
+                _portraits[i] = p;
+                _portraitStages[i] = stage;
+            }
         }
 
         // ── 갱신(세션 실데이터) ──
 
-        /// <summary>각 슬롯을 현재 파티로 갱신한다. 캐릭터 있으면 직업·레벨, 없으면 '+' 버튼.</summary>
+        /// <summary>각 슬롯을 현재 파티로 갱신한다. 캐릭터가 있으면 프리팹 렌더 + 직업·레벨 캡션, 없으면 '+' 버튼.</summary>
         private void Refresh()
         {
             var chars = Session.GameData != null ? Session.GameData.characters : null;
             var db = MasterDataManager.Db;
 
-            for (int i = 0; i < _slots.Count; i++)
+            for (int i = 0; i < _slots.Count && i < MaxSlots; i++)
             {
-                var slot = _slots[i];
-                if (slot == null)
-                {
-                    continue;
-                }
-                ClearSlotContent(slot);
-
                 CharacterDto c = chars != null && i < chars.Count ? chars[i] : null;
+                var render = i < _slotRenders.Count ? _slotRenders[i] : null;
+                var cap = i < _slotCaptions.Count ? _slotCaptions[i] : null;
+                var addRoot = i < _slotAddRoots.Count ? _slotAddRoots[i] : null;
+
                 if (c != null)
                 {
-                    string cls = db != null && db.Classes.TryGetValue(c.classCode, out var cm) ? cm.name : $"직업 {c.classCode}";
-                    var name = NewText("SlotName", slot, cls, 34, TextAnchor.MiddleCenter);
-                    name.fontStyle = FontStyle.Bold;
-                    PlaceCenter(name.rectTransform, 0.5f, 0.6f, 190f, 48f);
-                    var lv = NewText("SlotLevel", slot, $"Lv.{c.level}", 28, TextAnchor.MiddleCenter);
-                    lv.color = new Color(0.8f, 0.85f, 0.95f);
-                    PlaceCenter(lv.rectTransform, 0.5f, 0.42f, 190f, 40f);
+                    if (addRoot != null) addRoot.SetActive(false);
+
+                    var prefab = PrefabForClass(c.classCode);
+                    if (_portraits != null && i < _portraits.Length && _portraits[i] != null && _portraitClassCode[i] != c.classCode)
+                    {
+                        _portraits[i].SetCharacter(prefab);
+                        _portraitClassCode[i] = c.classCode;
+                    }
+                    if (render != null)
+                    {
+                        render.gameObject.SetActive(true);
+                        render.color = prefab != null ? Color.white : new Color(1f, 1f, 1f, 0f);
+                    }
+                    if (cap != null)
+                    {
+                        string cls = db != null && db.Classes.TryGetValue(c.classCode, out var cm) ? cm.name : $"직업 {c.classCode}";
+                        cap.gameObject.SetActive(true);
+                        cap.text = $"{cls} Lv.{c.level}";
+                    }
                 }
                 else
                 {
-                    // 빈 슬롯: '+' 버튼 → 캐릭터 생성 씬
-                    var plus = NewImage("AddButton", slot, new Color(0.25f, 0.55f, 0.35f, 1f));
-                    PlaceCenter(plus.rectTransform, 0.5f, 0.5f, 110f, 110f);
-                    var pt = NewText("Plus", plus.rectTransform, "＋", 64, TextAnchor.MiddleCenter);
-                    Stretch(pt.rectTransform);
-                    var cap = NewText("AddCaption", slot, "캐릭터 추가", 24, TextAnchor.MiddleCenter);
-                    cap.color = new Color(0.7f, 0.85f, 0.7f);
-                    PlaceCenter(cap.rectTransform, 0.5f, 0.2f, 190f, 36f);
-                    plus.gameObject.AddComponent<Button>().onClick.AddListener(OnAddCharacter);
+                    if (_portraits != null && i < _portraits.Length && _portraits[i] != null && _portraitClassCode[i] != -1)
+                    {
+                        _portraits[i].SetCharacter(null);
+                        _portraitClassCode[i] = -1;
+                    }
+                    if (render != null) render.gameObject.SetActive(false);
+                    if (cap != null) cap.gameObject.SetActive(false);
+                    if (addRoot != null) addRoot.SetActive(true);
                 }
             }
         }
 
-        /// <summary>슬롯의 런타임 생성 콘텐츠(이름/레벨/추가 버튼)를 모두 제거한다.</summary>
-        private static void ClearSlotContent(RectTransform slot)
+        /// <summary>classCode에 해당하는 초상화 캐릭터 프리팹을 반환한다(없으면 null).</summary>
+        private GameObject PrefabForClass(int classCode)
         {
-            for (int i = slot.childCount - 1; i >= 0; i--)
+            if (_classCharacters != null)
             {
-                Destroy(slot.GetChild(i).gameObject);
+                foreach (var e in _classCharacters)
+                {
+                    if (e.prefab != null && e.classCode == classCode)
+                    {
+                        return e.prefab;
+                    }
+                }
+            }
+            return null;
+        }
+
+        /// <summary>계정 보유 골드(재화 타입 1).</summary>
+        private static long CurrentGold()
+        {
+            var currencies = Session.GameData != null ? Session.GameData.currencies : null;
+            if (currencies != null)
+            {
+                foreach (var cur in currencies)
+                {
+                    if (cur != null && cur.currencyType == 1)
+                    {
+                        return cur.amount;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        /// <summary>'+' 클릭: 다음 캐릭터 생성 비용을 모달로 안내하고, 골드가 부족하면 차단(요청·이동 안 함).
+        /// 충분하면 확인 시 CreateCharacterScene으로 이동한다(생성·차감은 그 씬에서 서버 권위로 처리).</summary>
+        private void OnAddCharacter()
+        {
+            MasterDataManager.EnsureLoaded();
+            var db = MasterDataManager.Db;
+            int existing = Session.GameData != null && Session.GameData.characters != null ? Session.GameData.characters.Count : 0;
+            int nextSlot = existing + 1;
+            long cost = db != null ? db.CharacterCreateCostOf(nextSlot) : 0L;
+            long gold = CurrentGold();
+
+            // 골드 부족 → 차단(서버 요청·씬 이동 없이 안내만).
+            if (cost > 0 && gold < cost)
+            {
+                if (ModalManager.Instance != null)
+                {
+                    ModalManager.Instance.ShowConfirm("캐릭터 추가",
+                        $"골드가 부족합니다.\n필요 골드: {cost:N0}\n보유 골드: {gold:N0}");
+                }
+                Debug.Log($"[Party] 캐릭터 추가 차단(골드 부족): 필요 {cost}, 보유 {gold}");
+                return;
+            }
+
+            string message = cost > 0
+                ? $"캐릭터 추가에 골드 {cost:N0}이 필요합니다.\n(보유 {gold:N0})\n생성 화면으로 이동할까요?"
+                : "새 캐릭터를 생성합니다.\n생성 화면으로 이동할까요?";
+            if (ModalManager.Instance != null)
+            {
+                ModalManager.Instance.ShowConfirmCancel("캐릭터 추가", message, GoToCreateScene);
+            }
+            else
+            {
+                GoToCreateScene();
             }
         }
 
-        /// <summary>'+' 클릭: 캐릭터 생성 씬으로 이동.</summary>
-        private void OnAddCharacter()
+        /// <summary>캐릭터 생성 씬으로 이동한다(게임 안 진입 표시 → 그 씬에서 뒤로가기 노출).</summary>
+        private void GoToCreateScene()
         {
+            Session.CreateCharacterFromGame = true; // CreateCharacterScene에서 '뒤로가기'로 GameScene 복귀 허용
             Debug.Log("[Party] 캐릭터 추가 → CreateCharacterScene 이동");
             if (SceneManager.Instance != null)
             {
@@ -238,6 +437,13 @@ namespace TaskbarHero.Client.UI
             var img = go.GetComponent<Image>();
             img.color = color;
             return img;
+        }
+
+        private static RawImage NewRawImage(string name, Transform parent)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(RawImage));
+            go.transform.SetParent(parent, false);
+            return go.GetComponent<RawImage>();
         }
 
         private Text NewText(string name, Transform parent, string content, int size, TextAnchor anchor)

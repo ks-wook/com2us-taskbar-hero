@@ -42,10 +42,40 @@ namespace TaskbarHero.ClientEditor
             var ctrl = root.AddComponent<PartyPanelController>();
             ctrl.EditorConstruct(); // 계층을 프리팹에 정적으로 굽는다
 
+            WireClassCharacters(new SerializedObject(ctrl)); // 초상화 프리팹(기사1·레인저2·마법사3)
+
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
             Object.DestroyImmediate(root);
             Debug.Log($"[PartyUiBuilder] 프리팹 저장: {PrefabPath}");
             return prefab;
+        }
+
+        /// <summary>초상화용 직업별 캐릭터 프리팹(_classCharacters)을 배선한다. classCode: 기사1·레인저2·마법사3.</summary>
+        private static void WireClassCharacters(SerializedObject so)
+        {
+            var prop = so.FindProperty("_classCharacters");
+            if (prop == null)
+            {
+                Debug.LogWarning("[PartyUiBuilder] _classCharacters 프로퍼티를 찾지 못했습니다.");
+                return;
+            }
+            prop.arraySize = 3;
+            SetClassCharacter(prop, 0, 1, "Assets/Prefabs/Character/Knight.prefab");
+            SetClassCharacter(prop, 1, 2, "Assets/Prefabs/Character/Archer.prefab");
+            SetClassCharacter(prop, 2, 3, "Assets/Prefabs/Character/Mage.prefab");
+            so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void SetClassCharacter(SerializedProperty arrayProp, int index, int classCode, string prefabPath)
+        {
+            var element = arrayProp.GetArrayElementAtIndex(index);
+            element.FindPropertyRelative("classCode").intValue = classCode;
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefab == null)
+            {
+                Debug.LogWarning($"[PartyUiBuilder] 캐릭터 프리팹을 찾지 못했습니다: {prefabPath}");
+            }
+            element.FindPropertyRelative("prefab").objectReferenceValue = prefab;
         }
 
         private static void AssignToScene(string scenePath, GameObject prefab)

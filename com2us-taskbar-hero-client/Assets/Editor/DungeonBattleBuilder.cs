@@ -132,7 +132,11 @@ namespace TaskbarHero.ClientEditor
             var battleSo = new SerializedObject(battle);
             battleSo.FindProperty("playerSpawn").objectReferenceValue = playerSpawn.transform;
             battleSo.FindProperty("monsterSpawn").objectReferenceValue = monsterSpawn.transform;
+            // 보스 왕관 아이콘 배선(보스 몬스터 머리 위 표시용).
+            var bossIcon = LoadSprite("Assets/Art/Icon/stage_king.png");
+            battleSo.FindProperty("bossIcon").objectReferenceValue = bossIcon;
             battleSo.ApplyModifiedPropertiesWithoutUndo();
+            Debug.Log($"[DungeonBattleBuilder] 보스 왕관 아이콘 {(bossIcon != null ? "배선" : "없음")}.");
 
             var flow = go.AddComponent<DungeonBattleFlow>();
             var fso = new SerializedObject(flow);

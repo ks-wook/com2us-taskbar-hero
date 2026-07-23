@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
 using TaskbarHero.Common.Dto;
 
@@ -59,6 +60,64 @@ namespace TaskbarHero.Client.UI
             }
 
             MarkOwnedCharacters(); // 이미 보유한 직업은 '선택불가' 표시 + 선택 차단
+
+            // 게임 안(파티 편성 '+')에서 진입한 경우에만 좌측 상단 뒤로가기 버튼 노출(회원가입 직후 최초 생성은 미노출).
+            if (Session.CreateCharacterFromGame)
+            {
+                CreateBackButton();
+            }
+        }
+
+        /// <summary>좌측 상단 '뒤로가기' 버튼을 만들어 GameScene으로 복귀한다(게임 안에서 캐릭터 추가로 진입한 경우 전용).</summary>
+        private void CreateBackButton()
+        {
+            var canvasGo = new GameObject("BackCanvas", typeof(RectTransform), typeof(Canvas),
+                typeof(CanvasScaler), typeof(GraphicRaycaster));
+            var canvas = canvasGo.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 200;
+            var scaler = canvasGo.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1080f, 1920f);
+            scaler.matchWidthOrHeight = 0.5f;
+
+            var btnGo = new GameObject("BackButton", typeof(RectTransform), typeof(Image));
+            btnGo.transform.SetParent(canvasGo.transform, false);
+            var img = btnGo.GetComponent<Image>();
+            img.color = new Color(0.20f, 0.22f, 0.30f, 0.95f);
+            var rt = (RectTransform)btnGo.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f); // 좌측 상단
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(40f, -40f);
+            rt.sizeDelta = new Vector2(200f, 84f);
+
+            var labelGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            labelGo.transform.SetParent(btnGo.transform, false);
+            var t = labelGo.GetComponent<Text>();
+            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            t.text = "◀ 뒤로";
+            t.fontSize = 34;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.color = Color.white;
+            t.raycastTarget = false;
+            var lrt = (RectTransform)labelGo.transform;
+            lrt.anchorMin = Vector2.zero;
+            lrt.anchorMax = Vector2.one;
+            lrt.offsetMin = Vector2.zero;
+            lrt.offsetMax = Vector2.zero;
+
+            btnGo.AddComponent<Button>().onClick.AddListener(OnBack);
+        }
+
+        /// <summary>뒤로가기: 게임 진입 플래그를 해제하고 GameScene으로 돌아간다.</summary>
+        private void OnBack()
+        {
+            Session.CreateCharacterFromGame = false;
+            Debug.Log("[CharacterSelect] 뒤로가기 → GameScene 복귀");
+            if (SceneManager.Instance != null)
+            {
+                SceneManager.Instance.LoadScene("GameScene");
+            }
         }
 
         /// <summary>계정이 이미 보유한 직업의 캐릭터 위에 빨간 '선택불가' 라벨을 띄운다.</summary>
@@ -241,6 +300,7 @@ namespace TaskbarHero.Client.UI
             int charCount = response.data != null && response.data.characters != null ? response.data.characters.Count : 0;
             Debug.Log($"[CharacterSelect] 세이브 로드 완료(캐릭터수={charCount}) → GameScene 전환");
 
+            Session.CreateCharacterFromGame = false; // 진입 플래그 정리
             if (SceneManager.Instance != null)
             {
                 SceneManager.Instance.LoadScene("GameScene");
