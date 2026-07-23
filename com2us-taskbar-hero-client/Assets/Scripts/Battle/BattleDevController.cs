@@ -818,7 +818,9 @@ namespace TaskbarHero.Client.Battle
             var target = FrontAlly();
             if (target == null) return false;
 
-            long dmg = System.Math.Max(1L, (long)(m.Atk * Mathf.Max(1f, enemyDamageMultiplier)));
+            // 몬스터 공격력 × 배수에서 아군 방어력만큼 경감(최소 1). 방어력 룬/장비/패시브가 실제 전투에 반영된다.
+            long raw = (long)(m.Atk * Mathf.Max(1f, enemyDamageMultiplier));
+            long dmg = System.Math.Max(1L, raw - target.Defense);
             target.TakeDamage(dmg);
             // 아군 피격 데미지를 붉은 숫자로 표시(오브젝트 풀 재사용).
             DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f));

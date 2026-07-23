@@ -54,12 +54,15 @@ namespace TaskbarHero.Client.Battle
         private string _name = "Ally";
         private long _atk;
         private long _baseAtk;        // 장비 제외 기본 공격(클래스+레벨)
+        private long _def;            // 최종 방어력(클래스+레벨+장비 × 패시브 × 룬). 피격 데미지 경감에 사용
+        private long _baseDef;        // 장비 제외 기본 방어력(클래스+레벨)
         private long _baseMaxHp;      // 장비 제외 기본 체력
         private int _characterId;     // 연결된 계정 캐릭터 id(serverMode, 0=없음)
         private long _maxHp = 1;
         private long _hp = 1;
         private bool _dead;
         private float _cooldown;
+        private float _baseCooldown = 1.2f; // 룬(재사용 단축) 적용 전 기준 쿨다운
 
         [Tooltip("사망 애니 후 오브젝트가 사라지기까지 지연(초)")]
         private const float DeathLinger = 1.0f;
@@ -74,6 +77,8 @@ namespace TaskbarHero.Client.Battle
         public bool Alive => !_dead;
         /// <summary>현재 공격력(클래스+레벨+장비 합산).</summary>
         public long Attack => _atk;
+        /// <summary>현재 방어력(클래스+레벨+장비 × 패시브 × 룬). 피격 데미지 경감에 사용.</summary>
+        public long Defense => _def;
         /// <summary>연결된 계정 캐릭터 id(serverMode).</summary>
         public int CharacterId => _characterId;
 
@@ -127,19 +132,20 @@ namespace TaskbarHero.Client.Battle
         private void LoadStats()
         {
             var db = MasterDataManager.Db;
-            long atk, hp;
+            long atk, hp, def;
             if (db != null && db.Classes.TryGetValue(_classCode, out ClassMaster cls))
             {
                 _name = cls.name;
                 atk = cls.baseStats.atk;
                 hp = System.Math.Max(1L, cls.baseStats.hp);
+                def = cls.baseStats.def;
                 _cooldown = cls.baseStats.cooldown > 0f ? cls.baseStats.cooldown : 1.2f;
                 _moveSpeed = cls.baseStats.moveSpeed > 0f ? cls.baseStats.moveSpeed : 3f;
             }
             else
             {
                 _name = "Ally(?" + _classCode + ")";
-                atk = 10; hp = 100; _cooldown = 1.2f; _moveSpeed = 3f;
+                atk = 10; hp = 100; def = 0; _cooldown = 1.2f; _moveSpeed = 3f;
             }
 
             // 서버 구동 모드: 계정 캐릭터의 레벨 보너스를 기본 스탯에 반영하고 characterId를 기록(장비 합산용).
@@ -154,13 +160,16 @@ namespace TaskbarHero.Client.Battle
                     {
                         atk += lm.statBonus.atk;
                         hp += lm.statBonus.hp;
+                        def += lm.statBonus.def;
                     }
                 }
             }
 
             _baseAtk = atk;
+            _baseDef = def;
             _baseMaxHp = System.Math.Max(1L, hp);
             _baseMoveSpeed = _moveSpeed; // 패시브 적용 전 기준 이동속도
+            _baseCooldown = _cooldown;   // 룬 적용 전 기준 쿨다운
             ApplyEquipStats(); // 장비 스탯 + 패시브 배율 합산 → _atk/_maxHp/_moveSpeed 확정
             _hp = _maxHp;
             gameObject.name = "Player_" + _name;
@@ -172,6 +181,7 @@ namespace TaskbarHero.Client.Battle
         {
             long atk = _baseAtk;
             long hp = _baseMaxHp;
+            long def = _baseDef;
             var db = MasterDataManager.Db;
             var inv = Session.GameData != null ? Session.GameData.inventory : null;
             if (_characterId != 0 && inv != null && db != null)
@@ -183,14 +193,44 @@ namespace TaskbarHero.Client.Battle
                     {
                         atk += im.baseStats.atk;
                         hp += im.baseStats.hp;
+                        def += im.baseStats.def;
                     }
                 }
             }
 
-            // 패시브 스킬 배율(statType: 1 공격력 · 3 체력 · 6 이동속도) 적용 — 전투에 쓰이는 스탯에 곱한다.
-            _atk = System.Math.Max(1L, (long)(atk * PassiveMult(1)));
-            _maxHp = System.Math.Max(1L, (long)(hp * PassiveMult(3)));
-            _moveSpeed = _baseMoveSpeed * PassiveMult(6);
+            // 패시브 스킬 배율 + 룬(계정 공용) 배율(statType: 1 공격력 · 2 방어력 · 3 체력 · 6 이동속도 · 7 쿨다운)을 곱한다.
+            // 반올림으로 확정한다(버림 시 작은 % 상승분이 사라지는 문제 방지 — 인벤토리 능력치 패널과 동일 규칙).
+            _atk = System.Math.Max(1L, (long)System.Math.Round(atk * (double)PassiveMult(1) * RuneMult(1)));
+            _def = System.Math.Max(0L, (long)System.Math.Round(def * (double)PassiveMult(2) * RuneMult(2)));
+            _maxHp = System.Math.Max(1L, (long)System.Math.Round(hp * (double)PassiveMult(3) * RuneMult(3)));
+            _moveSpeed = _baseMoveSpeed * PassiveMult(6) * RuneMult(6);
+            _cooldown = Mathf.Max(0.1f, _baseCooldown * RuneMult(7)); // 룬 재사용 단축(감소 방향)
+        }
+
+        /// <summary>계정 공용 룬(레벨 ≥ 1) 중 대상 statType을 올리는 것들의 배율 곱. 룬 stat_value는 레벨당 누적 비율이며
+        /// 총 보너스 = stat_value × 레벨. statType 7(재사용 대기시간)은 감소(1 − 보너스), 그 외는 증가(1 + 보너스). 없으면 1.</summary>
+        private static float RuneMult(int statType)
+        {
+            float mult = 1f;
+            var db = MasterDataManager.Db;
+            var runes = Session.GameData != null ? Session.GameData.runes : null;
+            if (db == null || runes == null)
+            {
+                return mult;
+            }
+            foreach (var pr in runes)
+            {
+                if (pr == null || pr.level < 1)
+                {
+                    continue;
+                }
+                if (db.Runes.TryGetValue(pr.runeCode, out RuneMaster rm) && rm.statType == statType)
+                {
+                    float bonus = rm.statValue * pr.level;
+                    mult *= statType == 7 ? Mathf.Max(0.05f, 1f - bonus) : (1f + bonus);
+                }
+            }
+            return mult;
         }
 
         /// <summary>이 캐릭터가 습득(레벨 ≥ 1)한 패시브 스킬 중 대상 statType을 올리는 것들의 레벨별 배율 곱.

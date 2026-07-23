@@ -1015,13 +1015,14 @@ namespace TaskbarHero.Client.UI
             Stats baseS = BaseStats(c);   // 클래스 + 레벨(고유)
             Stats eqS = EquipStats(c);    // 장착 장비 합산(가산)
 
-            // 최종 = (기본 + 장비) × 패시브 배율(statType별). 상승분 = 최종 − 기본.
-            long atkF = (long)((baseS.atk + eqS.atk) * PassiveMult(c, 1));
-            long defF = (long)((baseS.def + eqS.def) * PassiveMult(c, 2));
-            long hpF = (long)((baseS.hp + eqS.hp) * PassiveMult(c, 3));
-            float critF = (baseS.critChance + eqS.critChance) * PassiveMult(c, 4);
-            float critDF = (baseS.critDamage + eqS.critDamage) * PassiveMult(c, 5);
-            float moveF = (baseS.moveSpeed + eqS.moveSpeed) * PassiveMult(c, 6);
+            // 최종 = (기본 + 장비) × 패시브 배율 × 룬(계정 공용) 배율(statType별). 상승분 = 최종 − 기본.
+            // 반올림으로 확정한다(버림 시 작은 % 상승분이 정수 표기에서 사라져 "상승 안 함"으로 보이는 문제 방지).
+            long atkF = (long)System.Math.Round((baseS.atk + eqS.atk) * (double)PassiveMult(c, 1) * RuneMult(1));
+            long defF = (long)System.Math.Round((baseS.def + eqS.def) * (double)PassiveMult(c, 2) * RuneMult(2));
+            long hpF = (long)System.Math.Round((baseS.hp + eqS.hp) * (double)PassiveMult(c, 3) * RuneMult(3));
+            float critF = (baseS.critChance + eqS.critChance) * PassiveMult(c, 4) * RuneMult(4);
+            float critDF = (baseS.critDamage + eqS.critDamage) * PassiveMult(c, 5) * RuneMult(5);
+            float moveF = (baseS.moveSpeed + eqS.moveSpeed) * PassiveMult(c, 6) * RuneMult(6);
 
             var sb = new System.Text.StringBuilder();
             sb.AppendLine(LongStatLine("공격력", baseS.atk, atkF));
@@ -1127,6 +1128,32 @@ namespace TaskbarHero.Client.UI
                             break;
                         }
                     }
+                }
+            }
+            return mult;
+        }
+
+        /// <summary>계정 공용 룬(레벨 ≥ 1) 중 대상 statType을 올리는 것들의 배율 곱(전투와 동일 규칙).
+        /// 룬 stat_value는 레벨당 누적 비율이며 총 보너스 = stat_value × 레벨. statType 7(재사용)은 감소, 그 외는 증가. 없으면 1.</summary>
+        private static float RuneMult(int statType)
+        {
+            float mult = 1f;
+            var db = MasterDataManager.Db;
+            var runes = Session.GameData != null ? Session.GameData.runes : null;
+            if (db == null || runes == null)
+            {
+                return mult;
+            }
+            foreach (var pr in runes)
+            {
+                if (pr == null || pr.level < 1)
+                {
+                    continue;
+                }
+                if (db.Runes.TryGetValue(pr.runeCode, out var rm) && rm.statType == statType)
+                {
+                    float bonus = rm.statValue * pr.level;
+                    mult *= statType == 7 ? Mathf.Max(0.05f, 1f - bonus) : (1f + bonus);
                 }
             }
             return mult;
