@@ -304,28 +304,50 @@ erDiagram
 
 ### 5.7 `rune_master` — 룬(Rune Tree)
 
-`player_rune.rune_code`가 참조. 골드로 구매하는 장기 성장 축이며, 선행 룬을 요구하는 **트리 구조**를 가진다. 업그레이드는 **1회 1레벨**씩 진행하고, **골드 비용은 현재 룬 레벨에 비례해 증가**한다([성장 시스템 기획서](../growth-기획서.md) 5.4).
+`player_rune.rune_code`가 참조. 골드로 구매하는 장기 성장 축이며, 선행 룬을 요구하는 **트리 구조**를 가진다. 업그레이드는 **1회 1레벨**씩 진행한다. **레벨별 골드 비용은 `rune_master`가 아니라 자식 테이블 `rune_cost`에 레벨당 1행으로 명시**한다(공식 파생 폐기). 클라이언트가 이 값을 그대로 표시하고 서버도 동일 값으로 차감한다([성장 시스템 기획서](../growth-기획서.md) 5.4).
+
+**`rune_master` (룬 정의)**
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `rune_code` | int PK | 룬 코드 |
 | `name` | varchar | 룬 이름 |
 | `prereq_code` | int | 선행 룬 코드(루트면 0) |
-| `cost` | bigint | 레벨업 1회 골드 비용의 기준값. **실제 비용 = 현재 레벨에 비례한 증가값** |
-| `max_level` | int | 최대 레벨 |
+| `max_level` | int | 최대 레벨(= `rune_cost`의 행 수) |
 | `stat_type` | int | 올려주는 능력치 **1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도 7:재사용 대기시간** |
 | `stat_value` | decimal | **레벨당 누적 상승량(%)**. 총 보너스 = `stat_value × 현재 룬 레벨` |
+
+**`rune_cost` (rune_master 자식 테이블 · 레벨별 골드 비용, 1:N)**
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `rune_code` | int PK/FK | 룬(`rune_master`) |
+| `level` | int PK | 목표 레벨(1~`max_level`): "이 레벨로 올릴 때 드는 비용" |
+| `cost` | bigint | 해당 레벨로 올릴 때의 골드 비용(명시값) |
+
+> **비용 모델(변경)**: 구 `rune_master.cost`(단일 base) + 서버 공식(`base × 레벨`)은 폐기했다. 클라이언트가 번들 데이터로 레벨별 비용을 **직접 표시**해야 하므로, 레벨마다 개수가 다른 비용을 `skill_coefficient`와 동일하게 **자식 테이블 `rune_cost`(레벨당 1행)** 로 명시한다(JSON/가변 컬럼 금지 규칙). 서버는 `(rune_code, 목표 레벨)` 행을 그대로 조회해 차감한다.
 
 > **효과 모델(변경)**: 구 `effect`(JSON)는 폐기했다. "어떤 능력치인지"를 `stat_type`(int enum)로, "상승량"을 `stat_value`로 분리해 담는다. `stat_type` enum은 클라이언트와 공유하는 분류 코드이므로 `TaskbarHero.Common`에 고정한다(값 변경 금지).
 
 **담기는 데이터 예시**
 
-| rune_code | name | prereq_code | cost | max_level | stat_type | stat_value |
-|---|---|---|---|---|---|---|
-| 201 | 공격력 I | 0 | 5000 | 20 | 1 (공격력) | 0.02 |
-| 210 | 치명확률 I | 0 | 8000 | 10 | 4 (치명확률) | 0.01 |
+`rune_master`
 
-> 실제 데이터·트리 구조는 [마스터 데이터 값](master-data-값.md) §5를 정본으로 한다.
+| rune_code | name | prereq_code | max_level | stat_type | stat_value |
+|---|---|---|---|---|---|
+| 201 | 공격력 I | 0 | 20 | 1 (공격력) | 0.02 |
+| 210 | 치명확률 I | 0 | 10 | 4 (치명확률) | 0.01 |
+
+`rune_cost` (룬 201 발췌)
+
+| rune_code | level | cost |
+|---|---|---|
+| 201 | 1 | 5,000 |
+| 201 | 2 | 10,000 |
+| … | … | … |
+| 201 | 20 | 100,000 |
+
+> 실제 데이터·트리 구조·레벨별 비용은 [마스터 데이터 값](master-data-값.md) §5를 정본으로 한다.
 
 ### 5.8 `monster_master` — 몬스터
 

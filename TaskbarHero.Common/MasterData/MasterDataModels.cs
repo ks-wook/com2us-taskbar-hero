@@ -108,6 +108,17 @@ namespace TaskbarHero.Common.MasterData
         public float cooldown;    // 스킬 재사용 대기시간(초). 패시브는 0
     }
 
+    /// <summary>
+    /// 룬 레벨별 골드 비용 1행(rune_cost 자식 테이블). 번들 JSON 은 RuneMaster.costs 배열로 직렬화된다.
+    /// 클라이언트는 이 값을 그대로 표시하며, 서버도 동일 값으로 비용을 차감한다(공식 파생 아님).
+    /// </summary>
+    [Serializable]
+    public struct RuneCost
+    {
+        public int level;   // 목표 레벨(1~maxLevel): 이 레벨로 올릴 때 드는 비용
+        public long cost;   // 골드 비용
+    }
+
     /// <summary>룬(rune_master, Rune Tree). player_rune.rune_code 가 참조한다.</summary>
     [Serializable]
     public class RuneMaster
@@ -115,7 +126,7 @@ namespace TaskbarHero.Common.MasterData
         public int runeCode;
         public string name;
         public int prereqCode;    // 선행 룬(0=루트)
-        public long cost;
+        public RuneCost[] costs;  // 레벨별 골드 비용(rune_cost 자식). 개수 = maxLevel
         public int maxLevel;
         public int statType;      // 1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도 7:재사용 대기시간
         public float statValue;   // 레벨당 누적 상승량(%). stat_type=7(재사용 대기시간)은 감소 방향

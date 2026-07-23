@@ -341,7 +341,7 @@ erDiagram
 ### rune_master
 
 - **역할**: 룬(Rune Tree) 정의(계정 공용 장기 성장). `player_rune.rune_code`가 참조.
-- **정의 데이터**: 선행 룬(트리 구조), 레벨업 기준 비용, 최대 레벨, 상승 능력치 종류(`stat_type`)·레벨당 상승량.
+- **정의 데이터**: 선행 룬(트리 구조), 최대 레벨, 상승 능력치 종류(`stat_type`)·레벨당 상승량. **레벨별 골드 비용은 자식 테이블 `rune_cost`(`(rune_code, level)→cost`)에 명시**한다(공식 파생 폐기).
 
 ### monster_master
 

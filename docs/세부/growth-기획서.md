@@ -200,7 +200,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- 한 번 요청에 **1레벨씩** 올라간다. `level`: 올린 뒤 룬 레벨, `balance`: 차감 후 골드 잔액. **골드 비용은 현재 룬 레벨에 비례해 증가**하며, 레벨별 비용 값은 `rune_master`에 명시된 정의를 서버가 그대로 사용한다(클라이언트 입력 불신).
+- 한 번 요청에 **1레벨씩** 올라간다. `level`: 올린 뒤 룬 레벨, `balance`: 차감 후 골드 잔액. **레벨별 골드 비용은 마스터 자식 테이블 `rune_cost`(`(rune_code, level)`)에 명시된 값을 서버가 그대로 조회해 차감**한다(공식 파생 아님, 클라이언트 입력 불신). 클라이언트는 같은 `rune_cost` 번들로 비용을 표시한다([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.7).
 - 오류: `InvalidGrowthTarget(5001)`(존재하지 않는 룬 코드), `RunePrereqNotMet(5010)`(선행 룬 미해금), `RuneMaxLevel(5011)`(최대 레벨 도달), `InsufficientCurrency(4005)`(골드 부족).
 
 > 인증 오류(401), 마스터에 없는 코드 요청 등은 기존 미들웨어·마스터 도메인 코드를 따른다. 골드 부족은 재화 부족 공용 코드 `InsufficientCurrency(4005)`를 **재사용**한다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 7장, 코드 값은 계약이므로 이동 금지).
@@ -235,7 +235,7 @@ COMMIT → { characterId, skillCode, level, cost, skillPoint = total - (spent + 
   2) if rune.prereq_code != 0 and level(prereq_code) < 1: RunePrereqNotMet(5010)
   3) cur = player_rune[user_id, runeCode].level or 0          # 룬은 계정 공용
      if cur >= rune.max_level: RuneMaxLevel(5011)
-  4) cost = 서버 산출(rune.cost, 현재 레벨 cur에 비례)
+  4) cost = rune_cost[runeCode, cur+1]        # 목표 레벨의 명시 비용 조회(공식 파생 아님)
      if gold < cost: InsufficientCurrency(4005)
   5) 반영: gold -= cost; player_rune.level = cur + 1 (없으면 INSERT)
 COMMIT → { runeCode, level, cost, balance }

@@ -198,16 +198,24 @@ def export_skill(conn):
 
 
 def export_rune(conn):
-    rows = q(conn, "SELECT * FROM rune_master ORDER BY rune_code")
+    runes = q(conn, "SELECT * FROM rune_master ORDER BY rune_code")
+    # 레벨별 골드 비용은 자식 테이블 rune_cost 에 명시되어 있다(공식 파생 아님). 부모 JSON 에 costs 배열로 중첩한다.
+    costs = q(conn, "SELECT * FROM rune_cost ORDER BY rune_code, level")
+    by_rune = {}
+    for c in costs:
+        by_rune.setdefault(_i(c["rune_code"]), []).append({
+            "level": _i(c["level"]),
+            "cost": _i(c["cost"]),
+        })
     return [{
         "runeCode": _i(r["rune_code"]),
         "name": _s(r["name"]),
         "prereqCode": _i(r["prereq_code"]),
-        "cost": _i(r["cost"]),
+        "costs": by_rune.get(_i(r["rune_code"]), []),
         "maxLevel": _i(r["max_level"]),
         "statType": _i(r["stat_type"]),
         "statValue": _f(r["stat_value"]),
-    } for r in rows]
+    } for r in runes]
 
 
 def export_monster(conn):
