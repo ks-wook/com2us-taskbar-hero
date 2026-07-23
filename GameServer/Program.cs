@@ -50,6 +50,10 @@ builder.Services.AddScoped<IStageService, StageService>();
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 
+// 성장(스킬·룬) 액션 계층(레벨업·초기화·장착·룬 업그레이드).
+builder.Services.AddScoped<IGrowthRepository, GrowthRepository>();
+builder.Services.AddScoped<IGrowthService, GrowthService>();
+
 var app = builder.Build();
 
 // 마스터 데이터 기동 시 적재(실패 시 IsLoaded=false → 관련 요청은 MasterDataNotLoaded).

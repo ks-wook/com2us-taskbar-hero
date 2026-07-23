@@ -20,6 +20,12 @@ public sealed record DroppedItem(int ItemCode, long Quantity, int ItemType, int 
 /// <summary>아이템 정의(item_master). 장착 검증(타입·슬롯·클래스·레벨)과 드롭/스택에 사용한다.</summary>
 public sealed record ItemDef(int ItemCode, int ItemType, int Grade, int StackMax, int EquipSlot, int ClassReq, int LevelReq);
 
+/// <summary>스킬 정의(skill_master). 성장 검증(직업 소속·액티브/패시브·최대 레벨)에 사용한다. SkillType 1:액티브 2:패시브.</summary>
+public sealed record SkillDef(int SkillCode, int ClassCode, int SkillType, int MaxLevel);
+
+/// <summary>룬 정의(rune_master). 성장 검증(선행 룬·최대 레벨)에 사용한다. 레벨별 골드 비용은 rune_cost(자식)에서 조회한다.</summary>
+public sealed record RuneDef(int RuneCode, int PrereqCode, int MaxLevel);
+
 // ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑.
 //    DECIMAL 컬럼은 decimal로 받아 float/double로 캐스팅한다. ──
 file sealed class ClassMasterRow
@@ -71,6 +77,29 @@ file sealed class LevelMasterRow
 {
     public int Level { get; set; }
     public long RequiredExp { get; set; }
+    public int SkillPoints { get; set; }
+}
+
+file sealed class SkillMasterRow
+{
+    public int SkillCode { get; set; }
+    public int ClassCode { get; set; }
+    public int SkillType { get; set; }
+    public int MaxLevel { get; set; }
+}
+
+file sealed class RuneMasterRow
+{
+    public int RuneCode { get; set; }
+    public int PrereqCode { get; set; }
+    public int MaxLevel { get; set; }
+}
+
+file sealed class RuneCostRow
+{
+    public int RuneCode { get; set; }
+    public int Level { get; set; }
+    public long Cost { get; set; }
 }
 
 file sealed class ItemMasterRow
@@ -102,7 +131,15 @@ public sealed class MasterDataProvider
     private IReadOnlyDictionary<int, StageDef> _stagesById = new Dictionary<int, StageDef>();
     private IReadOnlyDictionary<int, StageRewardDef> _rewardsByStageId = new Dictionary<int, StageRewardDef>();
     private IReadOnlyDictionary<int, long> _levelRequiredExp = new Dictionary<int, long>();
+    private IReadOnlyDictionary<int, int> _levelSkillPoints = new Dictionary<int, int>();
     private int _maxLevel = 1;
+
+    // 성장(스킬·룬) 정의: 코드 → 정의.
+    private IReadOnlyDictionary<int, SkillDef> _skillsByCode = new Dictionary<int, SkillDef>();
+    private IReadOnlyDictionary<int, RuneDef> _runesByCode = new Dictionary<int, RuneDef>();
+
+    // 룬 레벨별 골드 비용: (rune_code, level) → cost(rune_cost 자식 테이블, 명시값).
+    private IReadOnlyDictionary<(int rune, int level), long> _runeCosts = new Dictionary<(int, int), long>();
 
     // 드롭 풀: 등급 → 드롭 가능 아이템 코드 목록(재화 item_type=3 제외). 코드 → 아이템 정의.
     private IReadOnlyDictionary<int, List<int>> _itemsByGrade = new Dictionary<int, List<int>>();
@@ -156,6 +193,22 @@ public sealed class MasterDataProvider
     public long LevelRequiredExp(int level)
         => _levelRequiredExp.TryGetValue(level, out var req) ? req : 0;
 
+    /// <summary>레벨 L에서 사용 가능한 누적 스킬 포인트 총량(level_master.skill_points). 저장값이 아니라 레벨에서 파생하는 총량이다.</summary>
+    public int SkillPointsForLevel(int level)
+        => _levelSkillPoints.TryGetValue(level, out var pts) ? pts : 0;
+
+    /// <summary>skill_code의 스킬 정의(직업·액티브/패시브·최대 레벨). 없으면 null.</summary>
+    public SkillDef? GetSkill(int skillCode)
+        => _skillsByCode.TryGetValue(skillCode, out var s) ? s : null;
+
+    /// <summary>rune_code의 룬 정의(선행 룬·비용·최대 레벨). 없으면 null.</summary>
+    public RuneDef? GetRune(int runeCode)
+        => _runesByCode.TryGetValue(runeCode, out var r) ? r : null;
+
+    /// <summary>현재 룬 레벨(cur)에서 다음 레벨(cur+1)로 올릴 때 드는 골드 비용. rune_cost(자식)에 명시된 레벨별 값을 그대로 조회한다(공식 파생 아님). 정의가 없으면(최대 레벨 초과 등) long.MaxValue(사실상 불가).</summary>
+    public long RuneUpgradeCost(RuneDef rune, int currentLevel)
+        => _runeCosts.TryGetValue((rune.RuneCode, currentLevel + 1), out var cost) ? cost : long.MaxValue;
+
     /// <summary>등급별 확률로 전리품 1개를 추첨한다. 미드롭이면 null. (서버 권위 RNG)</summary>
     public DroppedItem? RollDrop(StageRewardDef reward)
     {
@@ -191,8 +244,11 @@ public sealed class MasterDataProvider
             _classes = await LoadClassesAsync(db);
             _stagesById = await LoadStagesAsync(db);
             _rewardsByStageId = await LoadStageRewardsAsync(db);
-            (_levelRequiredExp, _maxLevel) = await LoadLevelsAsync(db);
+            (_levelRequiredExp, _maxLevel, _levelSkillPoints) = await LoadLevelsAsync(db);
             (_itemsByGrade, _itemsByCode) = await LoadItemsAsync(db);
+            _skillsByCode = await LoadSkillsAsync(db);
+            _runesByCode = await LoadRunesAsync(db);
+            _runeCosts = await LoadRuneCostsAsync(db);
 
             // 인벤토리 확장은 부가 기능이라 별도 try로 감싼다(테이블 부재 시 다른 마스터 적재까지 실패하지 않도록).
             _expandCosts = await LoadExpandCostsAsync(db);
@@ -204,8 +260,8 @@ public sealed class MasterDataProvider
 
             IsLoaded = true;
             _logger.LogInformation(
-                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades} · expandSlots {Expand}",
-                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count, _expandCosts.Count);
+                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades} · expandSlots {Expand} · skill {Skills} · rune {Runes} · runeCost {RuneCosts}",
+                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count, _expandCosts.Count, _skillsByCode.Count, _runesByCode.Count, _runeCosts.Count);
         }
         catch (Exception ex)
         {
@@ -341,21 +397,71 @@ public sealed class MasterDataProvider
         return rewards;
     }
 
-    private static async Task<(Dictionary<int, long>, int)> LoadLevelsAsync(QueryFactory db)
+    private static async Task<(Dictionary<int, long>, int, Dictionary<int, int>)> LoadLevelsAsync(QueryFactory db)
     {
-        var rows = await db.Query("level_master").Select("level", "required_exp").GetAsync<LevelMasterRow>();
+        var rows = await db.Query("level_master").Select("level", "required_exp", "skill_points").GetAsync<LevelMasterRow>();
         var byLevel = new Dictionary<int, long>();
+        var skillPoints = new Dictionary<int, int>();
         var maxLevel = 1;
         foreach (var row in rows)
         {
             byLevel[row.Level] = row.RequiredExp;
+            skillPoints[row.Level] = row.SkillPoints;
             if (row.Level > maxLevel)
             {
                 maxLevel = row.Level;
             }
         }
 
-        return (byLevel, maxLevel);
+        return (byLevel, maxLevel, skillPoints);
+    }
+
+    /// <summary>skill_master를 skill_code → 정의(직업·액티브/패시브·최대 레벨)로 적재한다.</summary>
+    private static async Task<Dictionary<int, SkillDef>> LoadSkillsAsync(QueryFactory db)
+    {
+        var rows = await db.Query("skill_master")
+            .Select("skill_code", "class_code", "skill_type", "max_level")
+            .GetAsync<SkillMasterRow>();
+
+        var byCode = new Dictionary<int, SkillDef>();
+        foreach (var row in rows)
+        {
+            byCode[row.SkillCode] = new SkillDef(row.SkillCode, row.ClassCode, row.SkillType, row.MaxLevel);
+        }
+
+        return byCode;
+    }
+
+    /// <summary>rune_master를 rune_code → 정의(선행 룬·최대 레벨)로 적재한다. 레벨별 비용은 LoadRuneCostsAsync가 별도 적재한다.</summary>
+    private static async Task<Dictionary<int, RuneDef>> LoadRunesAsync(QueryFactory db)
+    {
+        var rows = await db.Query("rune_master")
+            .Select("rune_code", "prereq_code", "max_level")
+            .GetAsync<RuneMasterRow>();
+
+        var byCode = new Dictionary<int, RuneDef>();
+        foreach (var row in rows)
+        {
+            byCode[row.RuneCode] = new RuneDef(row.RuneCode, row.PrereqCode, row.MaxLevel);
+        }
+
+        return byCode;
+    }
+
+    /// <summary>rune_cost(자식)를 (rune_code, level) → 골드 비용으로 적재한다. 레벨별 비용은 명시값이다(공식 파생 아님).</summary>
+    private static async Task<Dictionary<(int, int), long>> LoadRuneCostsAsync(QueryFactory db)
+    {
+        var rows = await db.Query("rune_cost")
+            .Select("rune_code", "level", "cost")
+            .GetAsync<RuneCostRow>();
+
+        var byRuneLevel = new Dictionary<(int, int), long>();
+        foreach (var row in rows)
+        {
+            byRuneLevel[(row.RuneCode, row.Level)] = row.Cost;
+        }
+
+        return byRuneLevel;
     }
 
     private static async Task<(Dictionary<int, List<int>>, Dictionary<int, ItemDef>)> LoadItemsAsync(QueryFactory db)

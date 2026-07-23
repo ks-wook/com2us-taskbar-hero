@@ -354,4 +354,117 @@ namespace TaskbarHero.Common.Dto
         public string message;
         public StageClearData data = new StageClearData();
     }
+
+    // ── 성장(직업/스킬/룬) 액션 (growth 기획서 §5) ──
+
+    /// <summary>스킬 레벨업 요청 데이터. { characterId, skillCode }</summary>
+    [Serializable]
+    public class SkillLevelUpData
+    {
+        public int characterId;
+        public int skillCode;
+    }
+
+    /// <summary>스킬 레벨업 요청 body(인증). { userId, token, data:{ characterId, skillCode } }</summary>
+    [Serializable]
+    public class SkillLevelUpRequest
+    {
+        public long userId;
+        public string token;
+        public SkillLevelUpData data;
+    }
+
+    /// <summary>스킬 초기화 요청 데이터. { characterId }</summary>
+    [Serializable]
+    public class SkillResetData
+    {
+        public int characterId;
+    }
+
+    /// <summary>스킬 초기화 요청 body(인증).</summary>
+    [Serializable]
+    public class SkillResetRequest
+    {
+        public long userId;
+        public string token;
+        public SkillResetData data;
+    }
+
+    /// <summary>액티브 스킬 장착 요청 데이터. { characterId, skillCodes(0~2) }</summary>
+    [Serializable]
+    public class SkillEquipData
+    {
+        public int characterId;
+        public List<int> skillCodes = new List<int>();
+    }
+
+    /// <summary>액티브 스킬 장착 요청 body(인증).</summary>
+    [Serializable]
+    public class SkillEquipRequest
+    {
+        public long userId;
+        public string token;
+        public SkillEquipData data;
+    }
+
+    /// <summary>룬 업그레이드 요청 데이터. { runeCode }</summary>
+    [Serializable]
+    public class RuneUpgradeData
+    {
+        public int runeCode;
+    }
+
+    /// <summary>룬 업그레이드 요청 body(인증).</summary>
+    [Serializable]
+    public class RuneUpgradeRequest
+    {
+        public long userId;
+        public string token;
+        public RuneUpgradeData data;
+    }
+
+    /// <summary>스킬 레벨업 소모 비용(스킬 포인트). { skillPoint }</summary>
+    [Serializable]
+    public class SkillPointCostDto
+    {
+        public int skillPoint;
+    }
+
+    /// <summary>스킬 레벨업 결과(5.1). skillPoint = 갱신 후 사용 가능 스킬 포인트(레벨 파생값).</summary>
+    [Serializable]
+    public class SkillLevelUpResultData
+    {
+        public int characterId;
+        public int skillCode;
+        public int level;
+        public SkillPointCostDto cost = new SkillPointCostDto();
+        public int skillPoint;
+    }
+
+    /// <summary>스킬 초기화 결과(5.2). resetSkillCount = 초기화된 스킬 수, skillPoint = 초기화 후 사용 가능 포인트(전액).</summary>
+    [Serializable]
+    public class SkillResetResultData
+    {
+        public int characterId;
+        public int resetSkillCount;
+        public int skillPoint;
+    }
+
+    /// <summary>액티브 스킬 장착 결과(5.3). equipped = 설정 후 장착된 액티브 스킬 코드 목록.</summary>
+    [Serializable]
+    public class SkillEquipResultData
+    {
+        public int characterId;
+        public List<int> equipped = new List<int>();
+    }
+
+    /// <summary>룬 업그레이드 결과(5.4). cost = 차감 골드, balance = 차감 후 잔액.</summary>
+    [Serializable]
+    public class RuneUpgradeResultData
+    {
+        public int runeCode;
+        public int level;
+        public CurrencyDto cost = new CurrencyDto();
+        public List<CurrencyDto> balance = new List<CurrencyDto>();
+    }
 }
