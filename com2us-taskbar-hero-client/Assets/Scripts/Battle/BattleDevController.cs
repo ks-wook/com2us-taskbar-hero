@@ -162,7 +162,7 @@ namespace TaskbarHero.Client.Battle
             Session.InventoryChanged -= RefreshPartyStats;
         }
 
-        /// <summary>장비 변경 등으로 모든 파티 멤버의 전투 스탯을 재계산한다.</summary>
+        /// <summary>장비/스킬(장착·레벨) 변경 등으로 모든 파티 멤버의 전투 스탯과 사용 스킬 세트를 재계산한다.</summary>
         public void RefreshPartyStats()
         {
             foreach (var m in _members)
@@ -170,9 +170,16 @@ namespace TaskbarHero.Client.Battle
                 if (m != null)
                 {
                     m.RefreshStats();
+                    m.RebuildSkills(); // 장착 스킬(최대 2)·습득 레벨 변경을 전투에 반영
                 }
             }
-            Log("장비 변경 → 파티 전투 스탯 재계산");
+            // 스킬 슬롯 개수(장착 수)가 바뀔 수 있으므로 전투 스킬 HUD도 다시 구성한다.
+            var skillUi = Object.FindAnyObjectByType<SkillCooldownUI>(FindObjectsInactive.Include);
+            if (skillUi != null)
+            {
+                skillUi.Rebuild();
+            }
+            Log("장비/스킬 변경 → 파티 전투 스탯·스킬 세트 재계산");
         }
 
         private void Update()
@@ -636,6 +643,16 @@ namespace TaskbarHero.Client.Battle
             Vector3 start = playerSpawn != null ? playerSpawn.position : new Vector3(-4.5f, -1.6f, 0f);
             _pathY = start.y;
             _partyX = start.x;
+
+            // 카메라를 시작 지점으로 즉시 스냅(다음 프레임 팔로우 전). 이 직후 배경을 다시 구축하면
+            // 스크롤 배경 타일이 올바른 위치(시작 지점)에 생성된다(수동 재입장 시 배경 사라짐 방지).
+            if (_cam != null)
+            {
+                Vector3 cc = _cam.transform.position;
+                cc.x = start.x;
+                _cam.transform.position = cc;
+                if (_baseOrtho > 0f) _cam.orthographicSize = _baseOrtho;
+            }
 
             SpawnParty(start);
 
