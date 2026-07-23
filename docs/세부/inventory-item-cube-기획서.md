@@ -276,8 +276,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- 소모 개수·등급 상승 결과 아이템 선정·확률 개입 여부는 `cube_master`(`combine_grade_up`·`combine_count`)와 8장 미결에 따른다.
-- 오류: `CubeRecipeNotMet(4010)`(등급/조건 불일치·개수 부족), `CubeLevelInsufficient(4011)`(큐브 레벨 요구치 미만), `ItemNotFound(4001)`.
+- **입력/결과 규칙(확정·구현)**: 입력은 **모두 장비(item_type=1)이며 같은 등급·같은 슬롯·같은 클래스 제한(`class_req`)**, 개수는 현재 큐브 레벨의 `combine_count`(현재 5레벨 모두 3)와 일치해야 한다. 결과는 **같은 슬롯·클래스의 (입력 등급+1) 장비 하나를 서버가 무작위로 선정**해 지급한다(입력 3개 삭제로 빈 칸이 생겨 항상 적재). 등급 5 입력은 상위 등급 후보가 없어 `CubeRecipeNotMet(4010)`. 큐브 경험치 `50 × 입력 등급`을 획득해 누적한다(레벨업 시 이월). 응답 `cube`는 갱신 후 큐브 상태.
+- 오류: `ItemNotFound(4001)`(입력 일부 미보유/재화 행), `ItemEquipped(4007)`(입력 중 장착 중), `CubeRecipeNotMet(4010)`(등급/슬롯/클래스 불일치·개수 불일치·최대 등급).
 
 ### 5.7 큐브 분해 — `POST /api/game/cube/dismantle`
 
@@ -308,12 +308,13 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | `gold` | 이번 분해로 **획득한 골드**(서버 산출 합계) |
 | `cubeExp` | 이번 분해로 **획득한 큐브 경험치**(증가분) |
 
+- **산출 공식(확정·구현)**: 아이템당 골드 = `gold_per_scrap(현재 큐브 레벨) × 아이템 등급 × 개수`, 큐브 경험치 = `20 × 아이템 등급 × 개수`. 여러 아이템은 합산한다. `items[].count`는 장비(스택 1)는 1, 재료 스택은 보유 수량 이하. 장착 중 아이템은 `ItemEquipped(4007)`로 거부한다.
 - 소모된 아이템·재화 잔액·큐브 누적 상태는 응답에 담지 않는다. 클라이언트는 획득분만 표시하고, 최신 인벤토리/큐브 스냅샷이 필요하면 `POST /api/game/load`로 재조회한다.
 - 오류: `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)`.
 
 ### 5.8 큐브 제작 — `POST /api/game/cube/craft`
 
-> **상태: 보류(우선순위 낮음).** 제작 기능은 현재 구현 우선순위가 낮으며 추후 추가 여부를 검토한다(8장). 아래 명세는 도입이 확정될 경우의 기준안이다.
+> **상태: 구현 완료.** 레시피(`cube_recipe` + `cube_recipe_ingredient`) 기반으로 재료·골드를 소모해 지정 아이템을 만든다.
 
 레시피에 따라 재료를 소모해 지정 아이템을 만든다.
 
@@ -340,8 +341,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- 레시피 식별(`recipeCode`)·소모 재료 구성은 `cube_master`(합성/제작 규칙)와 연계하며 상세는 8장 미결.
-- 오류: `CubeRecipeNotMet(4010)`(재료 부족·잘못된 레시피), `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)`(비용 재화가 필요한 레시피인 경우).
+- **규칙(확정·구현)**: `recipeCode`로 `cube_recipe`(결과 아이템·수량·요구 큐브 레벨·비용 골드)와 자식 `cube_recipe_ingredient`(소모 재료·수량)를 조회한다. 현재 큐브 레벨 ≥ `req_cube_level`, 골드 ≥ `cost_gold`, 재료 보유 ≥ 요구량을 모두 만족하면 골드·재료를 차감하고 결과 아이템을 지급한다(빈 칸 부족 시 `InventoryFull`). 큐브 경험치 `20`(고정)을 획득한다. 응답 `cube`는 갱신 후 큐브 상태.
+- 오류: `CubeRecipeNotMet(4010)`(없는 레시피·재료 부족), `CubeLevelInsufficient(4011)`(큐브 레벨 미달), `InsufficientCurrency(4005)`(비용 골드 부족), `InventoryFull(4002)`(결과 적재 용량 부족).
 
 ### 5.9 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`
 
@@ -470,8 +471,10 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 
 - **인벤토리 용량 정책 (확정·구현)**: 플레이어 단위 컬럼(`game_player.inventory_capacity`)에 저장하고 **골드 소모로 확장**한다(API 5.4). 용량은 **점유 slot(=`player_item` 행) 수** 기준이며, 스택은 수량과 무관하게 1 slot을 차지한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`에 반영 완료. 세부 확정: **기본 용량 100**, 확장은 **1회당 1칸 고정**, 여는 칸별 비용·상한은 `inventory_expand_master`(step·gold_cost)로 정의(현재 20칸·칸당 10,000골드 정액 → 상한 120, 학습용 임시값). 비용 곡선은 값만 조정하면 누진 전환 가능.
 - **강화 성공 확률**: 현행은 비용 지불 시 확정 상승으로 가정. 실패/하락/파괴 확률 도입 시 `enhance_master`에 확률 필드 추가 및 본 문서 5.3 갱신.
-- **큐브 합성 상세 규칙**: 합성 소모 개수(`combine_count`)·등급 상승 규칙·분해 골드 계수와 제작 레시피(`cube_recipe`/`cube_recipe_ingredient`)는 **확정**([마스터 데이터 값](master-data/master-data-값.md) §8). 남은 상세 — 등급 상승 결과 아이템 선정·확률 개입 여부, 큐브 연산당 `cube_exp` 획득량과 `cube_level` 효과 — 는 추후 확정.
-- **큐브 제작(craft) — 우선순위 낮음(보류)**: 현재 구현 우선순위가 낮아 보류하며, **추후 제작 기능 추가 여부를 검토**한다. 5.8의 제작 API·레시피(`recipeCode`) 구성·소모 재료·비용은 도입이 확정될 때 함께 정한다.
+- **큐브 합성/분해/제작 상세 규칙 (확정·구현)**: 합성 소모 개수(`combine_count`)·등급 상승 규칙·분해 골드 계수와 제작 레시피(`cube_recipe`/`cube_recipe_ingredient`)는 **확정**([마스터 데이터 값](master-data/master-data-값.md) §8). 미결이던 세부도 아래로 **확정·구현**했다:
+  - **합성 결과 아이템 선정**: 입력과 **같은 슬롯·클래스의 (입력 등급+1) 장비 중 서버 무작위 1개**(확률 개입 없음, 균등). 등급 5는 상위 없음 → `CubeRecipeNotMet`.
+  - **큐브 경험치 획득량**: 합성 `50 × 입력 등급`, 분해 `20 × 등급 × 개수`, 제작 `20`(고정). 학습용 임시값(스키마 불변, 값만 조정).
+  - **`cube_level` 효과·성장**: `cube_exp` 누적이 `cube_master.required_exp(cube_level)` 이상이면 레벨업(초과분 이월, 최대 5). 레벨은 분해 골드 계수(`gold_per_scrap`)와 제작 요구 레벨(`req_cube_level`) 게이팅에 작용한다(합성 개수는 현재 전 레벨 3 고정).
 - **장비 클래스 제한 (확정)**: 장비는 착용 가능한 **클래스 제한**을 가진다. 현재 클래스는 **기사·레인저·마법사 3종으로 확정**([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.1 `class_master`)이며, **추후 확인 후 클래스를 추가할 예정**이다. 각 장비가 어느 클래스용인지는 `item_master.class_req`로 정의한다(`0`이면 전 클래스 공용, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.3에 반영 완료). 장착(5.1) 시 서버가 `class_req`(≠0)을 **대상 캐릭터 클래스**(`player_character.class_code`)와 대조해 불일치면 `ItemNotEquippable(4003)`로 거부한다.
 - **다연속 오픈(10연차) — 예정**: 요청 `count`와 응답 `rewards` 배열은 **다연속 확장을 위해 계약에 미리 반영**했다(5.9). 현재 서버 로직은 `count`=1(단발)만 처리하며, 추후 10연차 등 다연속 오픈 로직을 구현할 때 `count`>1 처리(비용 `오픈 비용 × count`)와 묶음 할인·등급 보장(천장) 여부를 함께 확정한다.
 - **상자 오픈 비용·등급 확률·지급 아이템 풀 (`box_master`)**: 오픈 비용(`open_cost`, 골드), `grade_weights`(등급별 추첨 가중치), 지급 대상 아이템 풀 — 전체 `item_master.grade` 필터로 할지 상자별 화이트리스트로 할지, 등급 내 아이템 선택이 균등인지 가중치인지 — 및 수량 규칙은 [마스터 데이터 기획서](master-data/master-data-기획서.md)에서 확정한다.

@@ -26,6 +26,17 @@ public sealed record SkillDef(int SkillCode, int ClassCode, int SkillType, int M
 /// <summary>룬 정의(rune_master). 성장 검증(선행 룬·최대 레벨)에 사용한다. 레벨별 골드 비용은 rune_cost(자식)에서 조회한다.</summary>
 public sealed record RuneDef(int RuneCode, int PrereqCode, int MaxLevel);
 
+/// <summary>큐브 레벨별 규칙(cube_master). 합성 소모 개수·등급 상승 허용·분해 골드 계수·다음 레벨 요구 경험치.</summary>
+public sealed record CubeRule(int Level, long RequiredExp, int CombineGradeUp, int CombineCount, long GoldPerScrap);
+
+/// <summary>큐브 제작 레시피 소모 재료 1행(cube_recipe_ingredient).</summary>
+public sealed record RecipeIngredient(int MaterialCode, int Quantity);
+
+/// <summary>큐브 제작 레시피(cube_recipe + 자식 재료). 결과 아이템·요구 큐브 레벨·비용·소모 재료 목록.</summary>
+public sealed record RecipeDef(
+    int RecipeCode, int ResultItemCode, int ResultQuantity, int ReqCubeLevel, long CostGold,
+    IReadOnlyList<RecipeIngredient> Ingredients);
+
 // ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑.
 //    DECIMAL 컬럼은 decimal로 받아 float/double로 캐스팅한다. ──
 file sealed class ClassMasterRow
@@ -108,6 +119,31 @@ file sealed class CharacterCreateCostRow
     public long GoldCost { get; set; }
 }
 
+file sealed class CubeMasterRow
+{
+    public int CubeLevel { get; set; }
+    public long RequiredExp { get; set; }
+    public int CombineGradeUp { get; set; }
+    public int CombineCount { get; set; }
+    public long GoldPerScrap { get; set; }
+}
+
+file sealed class CubeRecipeRow
+{
+    public int RecipeCode { get; set; }
+    public int ResultItemCode { get; set; }
+    public int ResultQuantity { get; set; }
+    public int ReqCubeLevel { get; set; }
+    public long CostGold { get; set; }
+}
+
+file sealed class CubeRecipeIngredientRow
+{
+    public int RecipeCode { get; set; }
+    public int MaterialCode { get; set; }
+    public int Quantity { get; set; }
+}
+
 file sealed class ItemMasterRow
 {
     public int ItemCode { get; set; }
@@ -130,6 +166,8 @@ public sealed class MasterDataProvider
     /// <summary>신규 계정 기본 인벤토리 용량(점유 slot 수). 골드로 1칸씩 확장(inventory_expand_master).</summary>
     public const int BaseInventoryCapacity = 100;
 
+    private const int ItemTypeEquip = 1; // item_master.item_type 1:장비
+
     private readonly MasterDbFactory _masterDbFactory;
     private readonly ILogger<MasterDataProvider> _logger;
 
@@ -149,6 +187,10 @@ public sealed class MasterDataProvider
 
     // 캐릭터 추가 생성 비용: character_id(슬롯 2~3) → 골드 비용(character_create_cost). 1번(최초 생성)은 무료.
     private IReadOnlyDictionary<int, long> _characterCreateCosts = new Dictionary<int, long>();
+
+    // 큐브: 레벨별 규칙(cube_master), 제작 레시피(cube_recipe + 자식).
+    private IReadOnlyDictionary<int, CubeRule> _cubeRules = new Dictionary<int, CubeRule>();
+    private IReadOnlyDictionary<int, RecipeDef> _recipesByCode = new Dictionary<int, RecipeDef>();
 
     // 드롭 풀: 등급 → 드롭 가능 아이템 코드 목록(재화 item_type=3 제외). 코드 → 아이템 정의.
     private IReadOnlyDictionary<int, List<int>> _itemsByGrade = new Dictionary<int, List<int>>();
@@ -222,6 +264,38 @@ public sealed class MasterDataProvider
     public long CharacterCreateCost(int characterId)
         => _characterCreateCosts.TryGetValue(characterId, out var cost) ? cost : 0;
 
+    /// <summary>큐브 레벨별 규칙(합성 개수·등급 상승·분해 골드 계수·요구 경험치). 없으면 null.</summary>
+    public CubeRule? GetCubeRule(int cubeLevel)
+        => _cubeRules.TryGetValue(cubeLevel, out var r) ? r : null;
+
+    /// <summary>큐브 레벨 L에서 L+1로 가는 데 필요한 경험치. 최대 레벨(정의상 0) 이상은 0(더 오르지 않음).</summary>
+    public long CubeRequiredExp(int cubeLevel)
+        => _cubeRules.TryGetValue(cubeLevel, out var r) ? r.RequiredExp : 0;
+
+    /// <summary>큐브 제작 레시피(결과·요구 큐브 레벨·비용·소모 재료). 없으면 null.</summary>
+    public RecipeDef? GetRecipe(int recipeCode)
+        => _recipesByCode.TryGetValue(recipeCode, out var r) ? r : null;
+
+    /// <summary>
+    /// 합성 결과 아이템 코드를 서버가 산출한다: 입력과 같은 슬롯·클래스 제한의 (입력 등급 + 1) 장비 중 하나를 무작위 선택.
+    /// 상위 등급 후보가 없으면(최대 등급 등) null → 호출측이 CubeRecipeNotMet으로 거부한다.
+    /// </summary>
+    public int? PickCombineResultCode(int inputGrade, int equipSlot, int classReq)
+    {
+        var candidates = _itemsByCode.Values
+            .Where(d => d.ItemType == ItemTypeEquip && d.Grade == inputGrade + 1
+                        && d.EquipSlot == equipSlot && d.ClassReq == classReq)
+            .Select(d => d.ItemCode)
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        return candidates[Random.Shared.Next(candidates.Count)];
+    }
+
     /// <summary>등급별 확률로 전리품 1개를 추첨한다. 미드롭이면 null. (서버 권위 RNG)</summary>
     public DroppedItem? RollDrop(StageRewardDef reward)
     {
@@ -263,6 +337,8 @@ public sealed class MasterDataProvider
             _runesByCode = await LoadRunesAsync(db);
             _runeCosts = await LoadRuneCostsAsync(db);
             _characterCreateCosts = await LoadCharacterCreateCostsAsync(db);
+            _cubeRules = await LoadCubeRulesAsync(db);
+            _recipesByCode = await LoadRecipesAsync(db);
 
             // 인벤토리 확장은 부가 기능이라 별도 try로 감싼다(테이블 부재 시 다른 마스터 적재까지 실패하지 않도록).
             _expandCosts = await LoadExpandCostsAsync(db);
@@ -274,8 +350,8 @@ public sealed class MasterDataProvider
 
             IsLoaded = true;
             _logger.LogInformation(
-                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades} · expandSlots {Expand} · skill {Skills} · rune {Runes} · runeCost {RuneCosts} · charCost {CharCosts}",
-                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count, _expandCosts.Count, _skillsByCode.Count, _runesByCode.Count, _runeCosts.Count, _characterCreateCosts.Count);
+                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades} · expandSlots {Expand} · skill {Skills} · rune {Runes} · runeCost {RuneCosts} · charCost {CharCosts} · cube {Cubes} · recipe {Recipes}",
+                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count, _expandCosts.Count, _skillsByCode.Count, _runesByCode.Count, _runeCosts.Count, _characterCreateCosts.Count, _cubeRules.Count, _recipesByCode.Count);
         }
         catch (Exception ex)
         {
@@ -492,6 +568,59 @@ public sealed class MasterDataProvider
         }
 
         return byCharacter;
+    }
+
+    /// <summary>cube_master를 cube_level → 규칙(합성 개수·등급 상승·분해 계수·요구 경험치)으로 적재한다.</summary>
+    private static async Task<Dictionary<int, CubeRule>> LoadCubeRulesAsync(QueryFactory db)
+    {
+        var rows = await db.Query("cube_master")
+            .Select("cube_level", "required_exp", "combine_grade_up", "combine_count", "gold_per_scrap")
+            .GetAsync<CubeMasterRow>();
+
+        var byLevel = new Dictionary<int, CubeRule>();
+        foreach (var row in rows)
+        {
+            byLevel[row.CubeLevel] = new CubeRule(
+                row.CubeLevel, row.RequiredExp, row.CombineGradeUp, row.CombineCount, row.GoldPerScrap);
+        }
+
+        return byLevel;
+    }
+
+    /// <summary>cube_recipe + cube_recipe_ingredient(자식)를 recipe_code → 레시피(결과·요구 큐브 레벨·비용·소모 재료)로 적재한다.</summary>
+    private static async Task<Dictionary<int, RecipeDef>> LoadRecipesAsync(QueryFactory db)
+    {
+        var recipeRows = await db.Query("cube_recipe")
+            .Select("recipe_code", "result_item_code", "result_quantity", "req_cube_level", "cost_gold")
+            .GetAsync<CubeRecipeRow>();
+
+        var ingredientRows = await db.Query("cube_recipe_ingredient")
+            .Select("recipe_code", "material_code", "quantity")
+            .OrderBy("recipe_code", "material_code")
+            .GetAsync<CubeRecipeIngredientRow>();
+
+        var ingredientsByRecipe = new Dictionary<int, List<RecipeIngredient>>();
+        foreach (var ing in ingredientRows)
+        {
+            if (!ingredientsByRecipe.TryGetValue(ing.RecipeCode, out var list))
+            {
+                list = new List<RecipeIngredient>();
+                ingredientsByRecipe[ing.RecipeCode] = list;
+            }
+
+            list.Add(new RecipeIngredient(ing.MaterialCode, ing.Quantity));
+        }
+
+        var byCode = new Dictionary<int, RecipeDef>();
+        foreach (var row in recipeRows)
+        {
+            ingredientsByRecipe.TryGetValue(row.RecipeCode, out var ingredients);
+            byCode[row.RecipeCode] = new RecipeDef(
+                row.RecipeCode, row.ResultItemCode, row.ResultQuantity, row.ReqCubeLevel, row.CostGold,
+                ingredients ?? new List<RecipeIngredient>());
+        }
+
+        return byCode;
     }
 
     private static async Task<(Dictionary<int, List<int>>, Dictionary<int, ItemDef>)> LoadItemsAsync(QueryFactory db)

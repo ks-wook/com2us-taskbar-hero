@@ -54,6 +54,10 @@ builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IGrowthRepository, GrowthRepository>();
 builder.Services.AddScoped<IGrowthService, GrowthService>();
 
+// 큐브 액션 계층(합성·분해·제작).
+builder.Services.AddScoped<ICubeRepository, CubeRepository>();
+builder.Services.AddScoped<ICubeService, CubeService>();
+
 var app = builder.Build();
 
 // 마스터 데이터 기동 시 적재(실패 시 IsLoaded=false → 관련 요청은 MasterDataNotLoaded).

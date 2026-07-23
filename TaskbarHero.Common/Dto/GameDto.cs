@@ -493,4 +493,112 @@ namespace TaskbarHero.Common.Dto
         public CurrencyDto cost = new CurrencyDto();
         public List<CurrencyDto> balance = new List<CurrencyDto>();
     }
+
+    // ── 큐브(합성/분해/제작) 액션 (inventory-item-cube 기획서 §5.6·5.7·5.8) ──
+
+    /// <summary>큐브 합성 요청 데이터. { itemIds } — 같은 등급·슬롯·클래스 장비 combine_count개.</summary>
+    [Serializable]
+    public class CubeCombineData
+    {
+        public List<long> itemIds = new List<long>();
+    }
+
+    /// <summary>큐브 합성 요청 body(인증).</summary>
+    [Serializable]
+    public class CubeCombineRequest
+    {
+        public long userId;
+        public string token;
+        public CubeCombineData data;
+    }
+
+    /// <summary>큐브 분해 대상 한 항목. { itemId, count }(장비는 1, 재료는 스택 수량 이하).</summary>
+    [Serializable]
+    public class CubeDismantleItemDto
+    {
+        public long itemId;
+        public int count;
+    }
+
+    /// <summary>큐브 분해 요청 데이터. { items }</summary>
+    [Serializable]
+    public class CubeDismantleData
+    {
+        public List<CubeDismantleItemDto> items = new List<CubeDismantleItemDto>();
+    }
+
+    /// <summary>큐브 분해 요청 body(인증).</summary>
+    [Serializable]
+    public class CubeDismantleRequest
+    {
+        public long userId;
+        public string token;
+        public CubeDismantleData data;
+    }
+
+    /// <summary>큐브 제작 요청 데이터. { recipeCode }</summary>
+    [Serializable]
+    public class CubeCraftData
+    {
+        public int recipeCode;
+    }
+
+    /// <summary>큐브 제작 요청 body(인증).</summary>
+    [Serializable]
+    public class CubeCraftRequest
+    {
+        public long userId;
+        public string token;
+        public CubeCraftData data;
+    }
+
+    /// <summary>아이템 코드+수량 한 항목(제작 소모/획득 목록).</summary>
+    [Serializable]
+    public class ItemQuantityDto
+    {
+        public int itemCode;
+        public int quantity;
+    }
+
+    /// <summary>큐브 합성 결과 아이템. { itemId, itemCode, grade }</summary>
+    [Serializable]
+    public class CombineResultDto
+    {
+        public long itemId;
+        public int itemCode;
+        public int grade;
+    }
+
+    /// <summary>큐브 합성 결과(5.6). consumed = 소모된 아이템 id, result = 생성된 상위 등급 아이템, cube = 갱신 후 큐브 상태.</summary>
+    [Serializable]
+    public class CubeCombineResultData
+    {
+        public List<long> consumed = new List<long>();
+        public CombineResultDto result = new CombineResultDto();
+        public CubeDto cube = new CubeDto();
+    }
+
+    /// <summary>큐브 분해 결과(5.7). gold = 이번 분해로 획득한 골드, cubeExp = 이번 분해로 획득한 큐브 경험치(증가분).</summary>
+    [Serializable]
+    public class CubeDismantleResultData
+    {
+        public long gold;
+        public long cubeExp;
+    }
+
+    /// <summary>큐브 제작 획득물(5.8).</summary>
+    [Serializable]
+    public class CubeCraftGainedDto
+    {
+        public List<ItemQuantityDto> items = new List<ItemQuantityDto>();
+    }
+
+    /// <summary>큐브 제작 결과(5.8). consumed = 소모 재료, gained = 제작 결과, cube = 갱신 후 큐브 상태.</summary>
+    [Serializable]
+    public class CubeCraftResultData
+    {
+        public List<ItemQuantityDto> consumed = new List<ItemQuantityDto>();
+        public CubeCraftGainedDto gained = new CubeCraftGainedDto();
+        public CubeDto cube = new CubeDto();
+    }
 }
