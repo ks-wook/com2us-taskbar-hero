@@ -17,8 +17,13 @@ public sealed class GameAuthMiddleware
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly RequestDelegate _next;
+    private readonly ILogger<GameAuthMiddleware> _logger;
 
-    public GameAuthMiddleware(RequestDelegate next) => _next = next;
+    public GameAuthMiddleware(RequestDelegate next, ILogger<GameAuthMiddleware> logger)
+    {
+        _next = next;
+        _logger = logger;
+    }
 
     public async Task InvokeAsync(HttpContext context, IAuthTokenReader tokenReader)
     {
@@ -32,6 +37,8 @@ public sealed class GameAuthMiddleware
         var (parsed, userId, token) = await TryReadAuthAsync(context.Request);
         if (!parsed || string.IsNullOrEmpty(token))
         {
+            // 인증 정보 파싱 실패(userId 특정 불가) — 경로만 남긴다.
+            _logger.LogWarning("인증 실패(토큰 파싱 불가): {Path}", context.Request.Path.Value);
             await WriteUnauthorizedAsync(context, ErrorCode.InvalidToken);
             return;
         }
@@ -39,12 +46,14 @@ public sealed class GameAuthMiddleware
         var cachedToken = await tokenReader.GetAsync(userId);
         if (cachedToken is null)
         {
+            _logger.LogWarning("인증 실패(만료/미보유 토큰): userId {UserId}", userId);
             await WriteUnauthorizedAsync(context, ErrorCode.ExpiredToken);
             return;
         }
 
         if (!string.Equals(cachedToken, token, StringComparison.Ordinal))
         {
+            _logger.LogWarning("인증 실패(토큰 불일치): userId {UserId}", userId);
             await WriteUnauthorizedAsync(context, ErrorCode.InvalidToken);
             return;
         }

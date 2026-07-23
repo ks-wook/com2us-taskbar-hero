@@ -155,6 +155,9 @@ public sealed class StageService : IStageService
             },
         };
 
+        _logger.LogInformation(
+            "스테이지 클리어: userId {UserId}, act {Act}, difficulty {Difficulty}, stage {Stage}, gold {Gold}, exp {Exp}",
+            userId, act, difficulty, stage, gold, rewardExp);
         return new SaveResult(ErrorCode.Success, "Stage cleared", data);
     }
 

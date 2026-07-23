@@ -80,5 +80,9 @@ namespace TaskbarHero.Common
         // 마스터 데이터 (10000번대)
         MasterDataNotLoaded = 10001,
         // 10002(구 MasterDataVersionMismatch)·10005(구 InvalidMasterRequest): 마스터 클라 번들 전환으로 폐기(결번)
+
+        // 공통 / 시스템 (11000번대)
+        // 특정 도메인에 속하지 않는 서버 내부 오류. 전역 예외 처리기가 미처리 예외를 이 코드로 일반화해 응답한다.
+        ServerError = 11001,
     }
 }

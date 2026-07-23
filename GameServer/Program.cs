@@ -2,6 +2,7 @@ using CloudStructures;
 using GameServer.Auth;
 using GameServer.Data;
 using GameServer.MasterData;
+using GameServer.Middleware;
 using GameServer.Repositories;
 using GameServer.Services;
 
@@ -17,6 +18,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.IncludeFields = true);
 builder.Services.AddOpenApi();
+
+// 전역 예외 처리기(미처리 예외 → Error 로깅 + 일반화 500 응답). 로깅 규칙 §6.
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 // DB 접근 팩토리(SqlKata + MySqlConnector).
 builder.Services.AddSingleton<GameDbFactory>();
@@ -49,6 +54,11 @@ var app = builder.Build();
 
 // 마스터 데이터 기동 시 적재(실패 시 IsLoaded=false → 관련 요청은 MasterDataNotLoaded).
 await app.Services.GetRequiredService<MasterDataProvider>().LoadAsync();
+
+// 파이프라인 최외곽: 접근 로그(요청 1줄) → 전역 예외 처리 순(로깅 규칙 §4·§6).
+// 접근 로그를 바깥에 두어야 예외 처리기가 500으로 확정한 상태코드까지 기록된다.
+app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseExceptionHandler();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

@@ -111,6 +111,9 @@ public sealed class SaveService : ISaveService
                 return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
             }
 
+            _logger.LogInformation(
+                "캐릭터 생성 성공(신규 계정): userId {UserId}, characterId {CharacterId}, classCode {ClassCode}",
+                userId, 1, classCode);
             return SuccessCharacter(userId, 1, classCode);
         }
 
@@ -138,6 +141,9 @@ public sealed class SaveService : ISaveService
             return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
         }
 
+        _logger.LogInformation(
+            "캐릭터 생성 성공: userId {UserId}, characterId {CharacterId}, classCode {ClassCode}",
+            userId, newSlot, classCode);
         return SuccessCharacter(userId, newSlot, classCode);
     }
 

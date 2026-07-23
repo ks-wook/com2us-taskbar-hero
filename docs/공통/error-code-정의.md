@@ -241,6 +241,9 @@ namespace TaskbarHero.Common
         // 마스터 데이터 (10000번대)
         MasterDataNotLoaded = 10001,
         // 10002(구 MasterDataVersionMismatch)·10005(구 InvalidMasterRequest): 마스터 클라 번들 전환으로 폐기(결번)
+
+        // 공통 / 시스템 (11000번대)
+        ServerError = 11001,
     }
 }
 ```
