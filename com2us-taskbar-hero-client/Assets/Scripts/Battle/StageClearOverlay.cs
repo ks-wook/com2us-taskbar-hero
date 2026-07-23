@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TaskbarHero.Client.Managers;
 using TaskbarHero.Common.Dto;
 
 namespace TaskbarHero.Client.Battle
@@ -43,9 +44,12 @@ namespace TaskbarHero.Client.Battle
             var data = new StageClearData();
             data.rewards.gold = 1200;
             data.rewards.exp = 340;
-            data.rewards.items.Add(new RewardItemDto { itemCode = 31121, quantity = 1 }); // 강철 검
-            data.rewards.items.Add(new RewardItemDto { itemCode = 34021, quantity = 2 }); // 가죽 갑옷
-            data.rewards.items.Add(new RewardItemDto { itemCode = 41001, quantity = 5 }); // 강화석(아이콘 없음→폴백)
+            // 등급 1~5 각 1개씩 넣어 등급별 슬롯 배경색을 한눈에 확인한다(31111~31151).
+            data.rewards.items.Add(new RewardItemDto { itemCode = 31111, quantity = 1 }); // 노말
+            data.rewards.items.Add(new RewardItemDto { itemCode = 31121, quantity = 2 }); // 고급
+            data.rewards.items.Add(new RewardItemDto { itemCode = 31131, quantity = 1 }); // 희귀
+            data.rewards.items.Add(new RewardItemDto { itemCode = 31141, quantity = 1 }); // 영웅
+            data.rewards.items.Add(new RewardItemDto { itemCode = 31151, quantity = 1 }); // 전설
             Show(data);
         }
 #endif
@@ -142,12 +146,13 @@ namespace TaskbarHero.Client.Battle
             {
                 CreateTextBadge(row, font, "EXP", $"+{rewards.exp}", new Color(0.4f, 0.8f, 1f));
             }
-            // 골드(item_1 아이콘 재사용).
+            // 골드(item_1 아이콘 재사용). 재화이므로 등급 색이 아닌 기본(노말) 슬롯 배경.
             if (rewards != null && rewards.gold > 0)
             {
-                CreateRewardEntry(row, font, GetIcon(1), $"+{rewards.gold}", new Color(1f, 0.85f, 0.3f));
+                CreateRewardEntry(row, font, GetIcon(1), $"+{rewards.gold}", new Color(1f, 0.85f, 0.3f),
+                    GradeColors.RewardSlotBackground(1));
             }
-            // 전리품 아이템.
+            // 전리품 아이템 — 등급별로 슬롯 배경색을 달리한다(마스터 데이터의 item_master.grade 기준).
             if (rewards != null && rewards.items != null)
             {
                 foreach (var item in rewards.items)
@@ -157,13 +162,21 @@ namespace TaskbarHero.Client.Battle
                         continue;
                     }
                     string qty = item.quantity > 1 ? $"x{item.quantity}" : string.Empty;
-                    CreateRewardEntry(row, font, GetIcon(item.itemCode), qty, Color.white);
+                    CreateRewardEntry(row, font, GetIcon(item.itemCode), qty, Color.white,
+                        GradeColors.RewardSlotBackground(GradeOf(item.itemCode)));
                 }
             }
         }
 
-        /// <summary>아이콘+수량 보상 항목 한 칸을 만든다(아이콘 없으면 색 사각형 폴백).</summary>
-        private void CreateRewardEntry(RectTransform parent, Font font, Sprite icon, string qtyText, Color tint)
+        /// <summary>아이템 코드의 등급(1~5)을 마스터 데이터에서 조회한다. 없으면 노말(1).</summary>
+        private static int GradeOf(int itemCode)
+        {
+            var db = MasterDataManager.Db;
+            return db != null && db.Items.TryGetValue(itemCode, out var im) ? im.grade : 1;
+        }
+
+        /// <summary>아이콘+수량 보상 항목 한 칸을 만든다(아이콘 없으면 색 사각형 폴백). slotColor는 등급별 슬롯 배경.</summary>
+        private void CreateRewardEntry(RectTransform parent, Font font, Sprite icon, string qtyText, Color tint, Color slotColor)
         {
             var entry = new GameObject("Reward", typeof(RectTransform));
             entry.transform.SetParent(parent, false);
@@ -175,7 +188,7 @@ namespace TaskbarHero.Client.Battle
             slot.sizeDelta = new Vector2(140f, 140f);
             slot.anchoredPosition = Vector2.zero;
             var slotImg = slot.gameObject.AddComponent<Image>();
-            slotImg.color = new Color(0.12f, 0.14f, 0.22f, 0.95f);
+            slotImg.color = slotColor; // 등급별 배경색
             slotImg.raycastTarget = false;
 
             var iconRt = CreateChild("Icon", slot, Vector2.zero, Vector2.one);
