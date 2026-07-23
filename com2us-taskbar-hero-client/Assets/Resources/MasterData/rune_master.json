@@ -3,7 +3,88 @@
     "runeCode": 201,
     "name": "공격력 I",
     "prereqCode": 0,
-    "cost": 5000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 5000
+      },
+      {
+        "level": 2,
+        "cost": 10000
+      },
+      {
+        "level": 3,
+        "cost": 15000
+      },
+      {
+        "level": 4,
+        "cost": 20000
+      },
+      {
+        "level": 5,
+        "cost": 25000
+      },
+      {
+        "level": 6,
+        "cost": 30000
+      },
+      {
+        "level": 7,
+        "cost": 35000
+      },
+      {
+        "level": 8,
+        "cost": 40000
+      },
+      {
+        "level": 9,
+        "cost": 45000
+      },
+      {
+        "level": 10,
+        "cost": 50000
+      },
+      {
+        "level": 11,
+        "cost": 55000
+      },
+      {
+        "level": 12,
+        "cost": 60000
+      },
+      {
+        "level": 13,
+        "cost": 65000
+      },
+      {
+        "level": 14,
+        "cost": 70000
+      },
+      {
+        "level": 15,
+        "cost": 75000
+      },
+      {
+        "level": 16,
+        "cost": 80000
+      },
+      {
+        "level": 17,
+        "cost": 85000
+      },
+      {
+        "level": 18,
+        "cost": 90000
+      },
+      {
+        "level": 19,
+        "cost": 95000
+      },
+      {
+        "level": 20,
+        "cost": 100000
+      }
+    ],
     "maxLevel": 20,
     "statType": 1,
     "statValue": 0.02
@@ -12,7 +93,88 @@
     "runeCode": 202,
     "name": "공격력 II",
     "prereqCode": 201,
-    "cost": 20000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 20000
+      },
+      {
+        "level": 2,
+        "cost": 40000
+      },
+      {
+        "level": 3,
+        "cost": 60000
+      },
+      {
+        "level": 4,
+        "cost": 80000
+      },
+      {
+        "level": 5,
+        "cost": 100000
+      },
+      {
+        "level": 6,
+        "cost": 120000
+      },
+      {
+        "level": 7,
+        "cost": 140000
+      },
+      {
+        "level": 8,
+        "cost": 160000
+      },
+      {
+        "level": 9,
+        "cost": 180000
+      },
+      {
+        "level": 10,
+        "cost": 200000
+      },
+      {
+        "level": 11,
+        "cost": 220000
+      },
+      {
+        "level": 12,
+        "cost": 240000
+      },
+      {
+        "level": 13,
+        "cost": 260000
+      },
+      {
+        "level": 14,
+        "cost": 280000
+      },
+      {
+        "level": 15,
+        "cost": 300000
+      },
+      {
+        "level": 16,
+        "cost": 320000
+      },
+      {
+        "level": 17,
+        "cost": 340000
+      },
+      {
+        "level": 18,
+        "cost": 360000
+      },
+      {
+        "level": 19,
+        "cost": 380000
+      },
+      {
+        "level": 20,
+        "cost": 400000
+      }
+    ],
     "maxLevel": 20,
     "statType": 1,
     "statValue": 0.03
@@ -21,7 +183,48 @@
     "runeCode": 203,
     "name": "공격력 III",
     "prereqCode": 202,
-    "cost": 60000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 60000
+      },
+      {
+        "level": 2,
+        "cost": 120000
+      },
+      {
+        "level": 3,
+        "cost": 180000
+      },
+      {
+        "level": 4,
+        "cost": 240000
+      },
+      {
+        "level": 5,
+        "cost": 300000
+      },
+      {
+        "level": 6,
+        "cost": 360000
+      },
+      {
+        "level": 7,
+        "cost": 420000
+      },
+      {
+        "level": 8,
+        "cost": 480000
+      },
+      {
+        "level": 9,
+        "cost": 540000
+      },
+      {
+        "level": 10,
+        "cost": 600000
+      }
+    ],
     "maxLevel": 10,
     "statType": 1,
     "statValue": 0.05
@@ -30,7 +233,48 @@
     "runeCode": 210,
     "name": "치명확률 I",
     "prereqCode": 0,
-    "cost": 8000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 8000
+      },
+      {
+        "level": 2,
+        "cost": 16000
+      },
+      {
+        "level": 3,
+        "cost": 24000
+      },
+      {
+        "level": 4,
+        "cost": 32000
+      },
+      {
+        "level": 5,
+        "cost": 40000
+      },
+      {
+        "level": 6,
+        "cost": 48000
+      },
+      {
+        "level": 7,
+        "cost": 56000
+      },
+      {
+        "level": 8,
+        "cost": 64000
+      },
+      {
+        "level": 9,
+        "cost": 72000
+      },
+      {
+        "level": 10,
+        "cost": 80000
+      }
+    ],
     "maxLevel": 10,
     "statType": 4,
     "statValue": 0.01
@@ -39,7 +283,48 @@
     "runeCode": 211,
     "name": "치명확률 II",
     "prereqCode": 210,
-    "cost": 30000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 30000
+      },
+      {
+        "level": 2,
+        "cost": 60000
+      },
+      {
+        "level": 3,
+        "cost": 90000
+      },
+      {
+        "level": 4,
+        "cost": 120000
+      },
+      {
+        "level": 5,
+        "cost": 150000
+      },
+      {
+        "level": 6,
+        "cost": 180000
+      },
+      {
+        "level": 7,
+        "cost": 210000
+      },
+      {
+        "level": 8,
+        "cost": 240000
+      },
+      {
+        "level": 9,
+        "cost": 270000
+      },
+      {
+        "level": 10,
+        "cost": 300000
+      }
+    ],
     "maxLevel": 10,
     "statType": 4,
     "statValue": 0.015
@@ -48,7 +333,48 @@
     "runeCode": 220,
     "name": "정밀 사격",
     "prereqCode": 210,
-    "cost": 25000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 25000
+      },
+      {
+        "level": 2,
+        "cost": 50000
+      },
+      {
+        "level": 3,
+        "cost": 75000
+      },
+      {
+        "level": 4,
+        "cost": 100000
+      },
+      {
+        "level": 5,
+        "cost": 125000
+      },
+      {
+        "level": 6,
+        "cost": 150000
+      },
+      {
+        "level": 7,
+        "cost": 175000
+      },
+      {
+        "level": 8,
+        "cost": 200000
+      },
+      {
+        "level": 9,
+        "cost": 225000
+      },
+      {
+        "level": 10,
+        "cost": 250000
+      }
+    ],
     "maxLevel": 10,
     "statType": 4,
     "statValue": 0.02
@@ -57,7 +383,28 @@
     "runeCode": 230,
     "name": "광폭화",
     "prereqCode": 203,
-    "cost": 100000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 100000
+      },
+      {
+        "level": 2,
+        "cost": 200000
+      },
+      {
+        "level": 3,
+        "cost": 300000
+      },
+      {
+        "level": 4,
+        "cost": 400000
+      },
+      {
+        "level": 5,
+        "cost": 500000
+      }
+    ],
     "maxLevel": 5,
     "statType": 1,
     "statValue": 0.08
@@ -66,7 +413,28 @@
     "runeCode": 231,
     "name": "필살",
     "prereqCode": 211,
-    "cost": 90000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 90000
+      },
+      {
+        "level": 2,
+        "cost": 180000
+      },
+      {
+        "level": 3,
+        "cost": 270000
+      },
+      {
+        "level": 4,
+        "cost": 360000
+      },
+      {
+        "level": 5,
+        "cost": 450000
+      }
+    ],
     "maxLevel": 5,
     "statType": 4,
     "statValue": 0.03
@@ -75,7 +443,88 @@
     "runeCode": 240,
     "name": "방어력 I",
     "prereqCode": 0,
-    "cost": 5000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 5000
+      },
+      {
+        "level": 2,
+        "cost": 10000
+      },
+      {
+        "level": 3,
+        "cost": 15000
+      },
+      {
+        "level": 4,
+        "cost": 20000
+      },
+      {
+        "level": 5,
+        "cost": 25000
+      },
+      {
+        "level": 6,
+        "cost": 30000
+      },
+      {
+        "level": 7,
+        "cost": 35000
+      },
+      {
+        "level": 8,
+        "cost": 40000
+      },
+      {
+        "level": 9,
+        "cost": 45000
+      },
+      {
+        "level": 10,
+        "cost": 50000
+      },
+      {
+        "level": 11,
+        "cost": 55000
+      },
+      {
+        "level": 12,
+        "cost": 60000
+      },
+      {
+        "level": 13,
+        "cost": 65000
+      },
+      {
+        "level": 14,
+        "cost": 70000
+      },
+      {
+        "level": 15,
+        "cost": 75000
+      },
+      {
+        "level": 16,
+        "cost": 80000
+      },
+      {
+        "level": 17,
+        "cost": 85000
+      },
+      {
+        "level": 18,
+        "cost": 90000
+      },
+      {
+        "level": 19,
+        "cost": 95000
+      },
+      {
+        "level": 20,
+        "cost": 100000
+      }
+    ],
     "maxLevel": 20,
     "statType": 2,
     "statValue": 0.02
@@ -84,7 +533,48 @@
     "runeCode": 241,
     "name": "방어력 II",
     "prereqCode": 240,
-    "cost": 20000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 20000
+      },
+      {
+        "level": 2,
+        "cost": 40000
+      },
+      {
+        "level": 3,
+        "cost": 60000
+      },
+      {
+        "level": 4,
+        "cost": 80000
+      },
+      {
+        "level": 5,
+        "cost": 100000
+      },
+      {
+        "level": 6,
+        "cost": 120000
+      },
+      {
+        "level": 7,
+        "cost": 140000
+      },
+      {
+        "level": 8,
+        "cost": 160000
+      },
+      {
+        "level": 9,
+        "cost": 180000
+      },
+      {
+        "level": 10,
+        "cost": 200000
+      }
+    ],
     "maxLevel": 10,
     "statType": 2,
     "statValue": 0.03
@@ -93,7 +583,48 @@
     "runeCode": 250,
     "name": "재사용 단축",
     "prereqCode": 0,
-    "cost": 8000,
+    "costs": [
+      {
+        "level": 1,
+        "cost": 8000
+      },
+      {
+        "level": 2,
+        "cost": 16000
+      },
+      {
+        "level": 3,
+        "cost": 24000
+      },
+      {
+        "level": 4,
+        "cost": 32000
+      },
+      {
+        "level": 5,
+        "cost": 40000
+      },
+      {
+        "level": 6,
+        "cost": 48000
+      },
+      {
+        "level": 7,
+        "cost": 56000
+      },
+      {
+        "level": 8,
+        "cost": 64000
+      },
+      {
+        "level": 9,
+        "cost": 72000
+      },
+      {
+        "level": 10,
+        "cost": 80000
+      }
+    ],
     "maxLevel": 10,
     "statType": 7,
     "statValue": 0.01

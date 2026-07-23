@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f540267f64f646a47a7c6d7f61001fc7, type: 3}
+  m_Name: SkillIconDatabase
+  m_EditorClassIdentifier: TaskbarHero.Client.Managers::TaskbarHero.Client.Managers.SkillIconDatabase
+  entries:
+  - skillCode: 101
+    sprite: {fileID: 6246287561331318063, guid: ecffbd237f27a7f4eb3ce69215d6223e, type: 3}
+  - skillCode: 102
+    sprite: {fileID: 7569313869476608826, guid: ba5e1ca001f0e6745964cfcc6249b8ff, type: 3}
+  - skillCode: 103
+    sprite: {fileID: -5325384824576815437, guid: 39ab53a10dfda104096231bc3deb5997, type: 3}
+  - skillCode: 110
+    sprite: {fileID: 1368631718085608497, guid: 1893077453b6af84fa264a11a4e412b6, type: 3}
+  - skillCode: 111
+    sprite: {fileID: 462870781451987077, guid: ed431ef864a5df243b521b747132dc6c, type: 3}
+  - skillCode: 112
+    sprite: {fileID: 1523181899848479094, guid: 880e0affd8b4efa449ffdf2ddda9e19c, type: 3}
+  - skillCode: 201
+    sprite: {fileID: -7933810402199326738, guid: d6ee3082dd79fdd4495c278dc1089b51, type: 3}
+  - skillCode: 202
+    sprite: {fileID: -6030272920824193673, guid: 2884ec9eaabe3b3418baddeeac2c3dec, type: 3}
+  - skillCode: 203
+    sprite: {fileID: -1079795458671647714, guid: 169d6f9fab7a2964e86069fd12dfed7c, type: 3}
+  - skillCode: 210
+    sprite: {fileID: 8846757086348264203, guid: 112453e363ce7be44881722a0e452952, type: 3}
+  - skillCode: 211
+    sprite: {fileID: 879845247545460081, guid: b6f1096b2cca4ad4aad16c26a935e0d5, type: 3}
+  - skillCode: 212
+    sprite: {fileID: -4516951913362547563, guid: ee68524de01318c419f2079fdc1a625b, type: 3}
+  - skillCode: 301
+    sprite: {fileID: 7689500521774833897, guid: 8c294534f213f64408c15f95f8eea73e, type: 3}
+  - skillCode: 302
+    sprite: {fileID: 2009528195217518076, guid: f5f8ebbda6fd37541b4ee5ded80a0ef9, type: 3}
+  - skillCode: 303
+    sprite: {fileID: -6539421542112172884, guid: 7a9eb0101a9edb1409f5e1e9828a885a, type: 3}
+  - skillCode: 310
+    sprite: {fileID: -7408998449635789900, guid: a2b6887c61526dd4bb667f9e30e2f4ff, type: 3}
+  - skillCode: 311
+    sprite: {fileID: 1315568854401279024, guid: 302bdd4c63ccc4046a7e15e379df55e0, type: 3}
+  - skillCode: 312
+    sprite: {fileID: 8533117060127289180, guid: ddb613849b68f4744b8ec8b688f45cd9, type: 3}

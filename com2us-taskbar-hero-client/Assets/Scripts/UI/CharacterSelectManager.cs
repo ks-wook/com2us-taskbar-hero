@@ -185,15 +185,44 @@ namespace TaskbarHero.Client.UI
 
             // 계정 닉네임(회원가입/세이브에서 캐싱). 없으면 기본값.
             string nickname = string.IsNullOrEmpty(Session.Nickname) ? ("Hero" + Session.UserId) : Session.Nickname;
+            int classCode = _selected.ClassCode;
+            string display = _selected.DisplayName;
 
+            // 이번에 생성될 슬롯 = 기존 캐릭터 수 + 1. 2·3번은 골드 비용(character_create_cost), 1번은 무료.
+            int existing = (Session.GameData != null && Session.GameData.characters != null) ? Session.GameData.characters.Count : 0;
+            int nextSlot = existing + 1;
+            MasterDataManager.EnsureLoaded();
+            long cost = MasterDataManager.Db != null ? MasterDataManager.Db.CharacterCreateCostOf(nextSlot) : 0L;
+
+            // 비용이 있으면(2·3번) 확인 모달로 소모 골드를 안내하고, 무료(1번)면 바로 생성한다.
+            if (cost > 0 && ModalManager.Instance != null)
+            {
+                ModalManager.Instance.ShowConfirmCancel(
+                    "캐릭터 생성",
+                    $"{display} 캐릭터를 생성합니다.\n소모 골드: {cost:N0}\n생성하시겠습니까?",
+                    () => DoCreate(nickname, classCode));
+            }
+            else
+            {
+                DoCreate(nickname, classCode);
+            }
+        }
+
+        /// <summary>실제 캐릭터 생성 요청(확인 모달의 '확인' 콜백 또는 무료 생성). 서버가 비용 차감·검증한다(서버 권위).</summary>
+        private void DoCreate(string nickname, int classCode)
+        {
+            if (NetworkManager.Instance == null)
+            {
+                return;
+            }
             var request = new CreateCharacterRequest
             {
                 userId = Session.UserId,
                 token = Session.Token,
-                data = new CreateCharacterData { nickname = nickname, classCode = _selected.ClassCode },
+                data = new CreateCharacterData { nickname = nickname, classCode = classCode },
             };
 
-            Debug.Log($"[CharacterSelect] 캐릭터 생성 요청: class={_selected.ClassCode}({_selected.DisplayName}), nickname={nickname}");
+            Debug.Log($"[CharacterSelect] 캐릭터 생성 요청: class={classCode}, nickname={nickname}");
             NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/create-character", request, OnCreated, OnCreateError);
         }
 
@@ -221,7 +250,11 @@ namespace TaskbarHero.Client.UI
         private void OnCreateError(NetworkError error)
         {
             Debug.LogWarning($"[CharacterSelect] 캐릭터 생성/로드 실패: {error}");
-            if (_panel != null)
+            if (ModalManager.Instance != null)
+            {
+                ModalManager.Instance.ShowConfirm("캐릭터 생성 실패", ErrorMessages.ToKorean(error));
+            }
+            else if (_panel != null)
             {
                 _panel.SetTitle(ErrorMessages.ToKorean(error));
             }

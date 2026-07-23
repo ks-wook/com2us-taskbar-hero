@@ -44,13 +44,13 @@ namespace TaskbarHero.Client.UI
 
             if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(nickname))
             {
-                SetError("이메일, 비밀번호, 닉네임을 모두 입력하세요.");
+                ShowModal("회원가입", "이메일, 비밀번호, 닉네임을 모두 입력하세요.");
                 return;
             }
 
             if (NetworkManager.Instance == null)
             {
-                SetError("네트워크 매니저를 찾을 수 없습니다.");
+                ShowModal("오류", "네트워크 매니저를 찾을 수 없습니다.");
                 return;
             }
 
@@ -85,15 +85,21 @@ namespace TaskbarHero.Client.UI
         {
             SetInteractable(true);
             SetError(string.Empty);
+            ShowModal("회원가입 실패", ErrorMessages.ToKorean(error));
+            Debug.LogWarning($"[SignUpPanel] 회원가입 실패: {error}");
+        }
+
+        /// <summary>공용 모달로 안내한다(매니저가 없으면 인라인 문구로 폴백).</summary>
+        private void ShowModal(string title, string message)
+        {
             if (ModalManager.Instance != null)
             {
-                ModalManager.Instance.ShowConfirm("회원가입 실패", ErrorMessages.ToKorean(error));
+                ModalManager.Instance.ShowConfirm(title, message);
             }
             else
             {
-                SetError(ErrorMessages.ToKorean(error));
+                SetError(message);
             }
-            Debug.LogWarning($"[SignUpPanel] 회원가입 실패: {error}");
         }
 
         /// <summary>로그인 화면으로 전환한다(모달 확인 콜백 포함).</summary>

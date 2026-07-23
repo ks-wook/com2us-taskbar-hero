@@ -28,13 +28,18 @@ namespace TaskbarHero.Client.MasterData
         public const string TableCube = "cube_master";
         public const string TableCubeRecipe = "cube_recipe";
         public const string TableAttendance = "attendance_master";
+        public const string TableInventoryExpand = "inventory_expand_master";
+        public const string TableCharacterCreateCost = "character_create_cost";
+
+        /// <summary>신규 계정 기본 인벤토리 용량(서버 BaseInventoryCapacity와 동일 계약). 확장 단계 산출에 사용.</summary>
+        public const int BaseInventoryCapacity = 100;
 
         /// <summary>로드해야 하는 모든 테이블명(로더가 리소스 존재 여부 검사에 사용).</summary>
         public static readonly string[] AllTables =
         {
             TableEquipSlot, TableGrade, TableClass, TableLevel, TableSkill, TableRune,
             TableItem, TableMonster, TableStage, TableStageReward, TableCube,
-            TableCubeRecipe, TableAttendance,
+            TableCubeRecipe, TableAttendance, TableInventoryExpand, TableCharacterCreateCost,
         };
 
         public readonly Dictionary<int, EquipSlotMaster> EquipSlots = new Dictionary<int, EquipSlotMaster>();
@@ -50,6 +55,9 @@ namespace TaskbarHero.Client.MasterData
         public readonly Dictionary<int, CubeMaster> Cubes = new Dictionary<int, CubeMaster>();
         public readonly Dictionary<int, CubeRecipe> CubeRecipes = new Dictionary<int, CubeRecipe>();
         public readonly Dictionary<int, AttendanceMaster> Attendances = new Dictionary<int, AttendanceMaster>();
+        // 인벤토리 확장 비용(step→비용)·캐릭터 추가 생성 비용(characterId→비용). UI 사전 안내용.
+        public readonly Dictionary<int, InventoryExpandCost> InventoryExpandCosts = new Dictionary<int, InventoryExpandCost>();
+        public readonly Dictionary<int, CharacterCreateCost> CharacterCreateCosts = new Dictionary<int, CharacterCreateCost>();
 
         /// <summary>파싱해 캐싱한 총 행 수(로드 검증·로그용).</summary>
         public int TotalRows { get; private set; }
@@ -81,11 +89,14 @@ namespace TaskbarHero.Client.MasterData
             Fill(Cubes, Parse<CubeMaster>(jsonForTable, TableCube), x => x.cubeLevel);
             Fill(CubeRecipes, Parse<CubeRecipe>(jsonForTable, TableCubeRecipe), x => x.recipeCode);
             Fill(Attendances, Parse<AttendanceMaster>(jsonForTable, TableAttendance), x => x.day);
+            Fill(InventoryExpandCosts, Parse<InventoryExpandCost>(jsonForTable, TableInventoryExpand), x => x.step);
+            Fill(CharacterCreateCosts, Parse<CharacterCreateCost>(jsonForTable, TableCharacterCreateCost), x => x.characterId);
 
             TotalRows =
                 EquipSlots.Count + Grades.Count + Classes.Count + Levels.Count + Skills.Count +
                 Runes.Count + Items.Count + Monsters.Count + Stages.Count + StageRewards.Count +
-                Cubes.Count + CubeRecipes.Count + Attendances.Count;
+                Cubes.Count + CubeRecipes.Count + Attendances.Count +
+                InventoryExpandCosts.Count + CharacterCreateCosts.Count;
         }
 
         /// <summary>모든 캐시를 비운다.</summary>
@@ -104,7 +115,22 @@ namespace TaskbarHero.Client.MasterData
             Cubes.Clear();
             CubeRecipes.Clear();
             Attendances.Clear();
+            InventoryExpandCosts.Clear();
+            CharacterCreateCosts.Clear();
             TotalRows = 0;
+        }
+
+        /// <summary>현재 용량에서 다음 1칸 확장에 드는 골드 비용. 상한 도달(정의된 step 없음)이면 -1.</summary>
+        public long NextExpandCost(int currentCapacity)
+        {
+            int step = currentCapacity - BaseInventoryCapacity + 1; // 이번에 여는 칸의 순번(1-based)
+            return InventoryExpandCosts.TryGetValue(step, out var row) ? row.goldCost : -1L;
+        }
+
+        /// <summary>지정 슬롯(2~3) 캐릭터 생성 골드 비용. 1번 슬롯(무료) 등 정의 없으면 0.</summary>
+        public long CharacterCreateCostOf(int characterId)
+        {
+            return CharacterCreateCosts.TryGetValue(characterId, out var row) ? row.goldCost : 0L;
         }
 
         /// <summary>

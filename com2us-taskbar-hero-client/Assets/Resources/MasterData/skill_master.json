@@ -3,7 +3,9 @@
     "skillCode": 101,
     "classCode": 1,
     "name": "방패 돌진",
+    "description": "방패를 앞세워 돌진하며 적을 강타한다.",
     "skillType": 1,
+    "statType": 0,
     "coefs": [
       {
         "skillLevel": 1,
@@ -73,7 +75,9 @@
     "skillCode": 102,
     "classCode": 1,
     "name": "기사의 분노",
+    "description": "5초간 자신의 공격력을 크게 끌어올린다.",
     "skillType": 1,
+    "statType": 1,
     "coefs": [
       {
         "skillLevel": 1,
@@ -113,7 +117,9 @@
     "skillCode": 103,
     "classCode": 1,
     "name": "강타",
+    "description": "적을 강하게 내려쳐 큰 피해를 입힌다.",
     "skillType": 1,
+    "statType": 0,
     "coefs": [
       {
         "skillLevel": 1,
@@ -153,7 +159,9 @@
     "skillCode": 110,
     "classCode": 1,
     "name": "강철 피부",
+    "description": "단단한 피부로 방어력을 상시 높인다.",
     "skillType": 2,
+    "statType": 2,
     "coefs": [
       {
         "skillLevel": 1,
@@ -190,10 +198,156 @@
     "cooldown": 0.0
   },
   {
+    "skillCode": 111,
+    "classCode": 1,
+    "name": "불굴",
+    "description": "불굴의 의지로 최대 체력을 상시 높인다.",
+    "skillType": 2,
+    "statType": 3,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 2,
+        "coef": 1.05,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 2,
+        "coef": 1.1,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 2,
+        "coef": 1.15,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 2,
+        "coef": 1.2,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 2,
+        "coef": 1.25,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 6,
+        "coefType": 2,
+        "coef": 1.3,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 7,
+        "coefType": 2,
+        "coef": 1.35,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 8,
+        "coefType": 2,
+        "coef": 1.4,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 9,
+        "coefType": 2,
+        "coef": 1.45,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 10,
+        "coefType": 2,
+        "coef": 1.5,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 10,
+    "cooldown": 0.0
+  },
+  {
+    "skillCode": 112,
+    "classCode": 1,
+    "name": "응징",
+    "description": "응징의 힘으로 공격력을 상시 높인다.",
+    "skillType": 2,
+    "statType": 1,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 2,
+        "coef": 1.03,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 2,
+        "coef": 1.06,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 2,
+        "coef": 1.09,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 2,
+        "coef": 1.12,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 2,
+        "coef": 1.15,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 6,
+        "coefType": 2,
+        "coef": 1.18,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 7,
+        "coefType": 2,
+        "coef": 1.21,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 8,
+        "coefType": 2,
+        "coef": 1.24,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 9,
+        "coefType": 2,
+        "coef": 1.27,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 10,
+        "coefType": 2,
+        "coef": 1.3,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 10,
+    "cooldown": 0.0
+  },
+  {
     "skillCode": 201,
     "classCode": 2,
     "name": "정조준 사격",
+    "description": "정조준해 단일 대상에게 강한 피해를 준다.",
     "skillType": 1,
+    "statType": 0,
     "coefs": [
       {
         "skillLevel": 1,
@@ -263,7 +417,9 @@
     "skillCode": 202,
     "classCode": 2,
     "name": "다중 사격",
+    "description": "한 번에 여러 발을 쏴 광역 피해를 준다.",
     "skillType": 1,
+    "statType": 0,
     "coefs": [
       {
         "skillLevel": 1,
@@ -333,7 +489,9 @@
     "skillCode": 203,
     "classCode": 2,
     "name": "화살비",
+    "description": "화살비를 퍼부어 넓은 범위를 공격한다.",
     "skillType": 1,
+    "statType": 0,
     "coefs": [
       {
         "skillLevel": 1,
@@ -403,7 +561,9 @@
     "skillCode": 210,
     "classCode": 2,
     "name": "민첩",
+    "description": "민첩한 몸놀림으로 이동속도를 상시 높인다.",
     "skillType": 2,
+    "statType": 6,
     "coefs": [
       {
         "skillLevel": 1,
@@ -440,10 +600,156 @@
     "cooldown": 0.0
   },
   {
+    "skillCode": 211,
+    "classCode": 2,
+    "name": "매의 눈",
+    "description": "매의 눈으로 치명타 확률을 상시 높인다.",
+    "skillType": 2,
+    "statType": 4,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 2,
+        "coef": 1.05,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 2,
+        "coef": 1.1,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 2,
+        "coef": 1.15,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 2,
+        "coef": 1.2,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 2,
+        "coef": 1.25,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 6,
+        "coefType": 2,
+        "coef": 1.3,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 7,
+        "coefType": 2,
+        "coef": 1.35,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 8,
+        "coefType": 2,
+        "coef": 1.4,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 9,
+        "coefType": 2,
+        "coef": 1.45,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 10,
+        "coefType": 2,
+        "coef": 1.5,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 10,
+    "cooldown": 0.0
+  },
+  {
+    "skillCode": 212,
+    "classCode": 2,
+    "name": "치명 훈련",
+    "description": "반복 훈련으로 치명타 피해를 상시 높인다.",
+    "skillType": 2,
+    "statType": 5,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 2,
+        "coef": 1.03,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 2,
+        "coef": 1.06,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 2,
+        "coef": 1.09,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 2,
+        "coef": 1.12,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 2,
+        "coef": 1.15,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 6,
+        "coefType": 2,
+        "coef": 1.18,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 7,
+        "coefType": 2,
+        "coef": 1.21,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 8,
+        "coefType": 2,
+        "coef": 1.24,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 9,
+        "coefType": 2,
+        "coef": 1.27,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 10,
+        "coefType": 2,
+        "coef": 1.3,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 10,
+    "cooldown": 0.0
+  },
+  {
     "skillCode": 301,
     "classCode": 3,
     "name": "파이어볼",
+    "description": "화염구를 던져 강한 화염 피해를 준다.",
     "skillType": 1,
+    "statType": 0,
     "coefs": [
       {
         "skillLevel": 1,
@@ -513,7 +819,9 @@
     "skillCode": 302,
     "classCode": 3,
     "name": "프로스트 노바",
+    "description": "얼음 폭발로 3초간 적의 이동속도를 늦춘다.",
     "skillType": 1,
+    "statType": 6,
     "coefs": [
       {
         "skillLevel": 1,
@@ -583,7 +891,9 @@
     "skillCode": 303,
     "classCode": 3,
     "name": "라이트닝 볼트",
+    "description": "번개를 내리쳐 강한 전격 피해를 준다.",
     "skillType": 1,
+    "statType": 0,
     "coefs": [
       {
         "skillLevel": 1,
@@ -653,7 +963,9 @@
     "skillCode": 310,
     "classCode": 3,
     "name": "마력 집중",
+    "description": "마력을 집중해 공격력을 상시 높인다.",
     "skillType": 2,
+    "statType": 1,
     "coefs": [
       {
         "skillLevel": 1,
@@ -687,6 +999,150 @@
       }
     ],
     "maxLevel": 5,
+    "cooldown": 0.0
+  },
+  {
+    "skillCode": 311,
+    "classCode": 3,
+    "name": "예지",
+    "description": "앞을 내다봐 방어력을 상시 높인다.",
+    "skillType": 2,
+    "statType": 2,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 2,
+        "coef": 1.05,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 2,
+        "coef": 1.1,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 2,
+        "coef": 1.15,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 2,
+        "coef": 1.2,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 2,
+        "coef": 1.25,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 6,
+        "coefType": 2,
+        "coef": 1.3,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 7,
+        "coefType": 2,
+        "coef": 1.35,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 8,
+        "coefType": 2,
+        "coef": 1.4,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 9,
+        "coefType": 2,
+        "coef": 1.45,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 10,
+        "coefType": 2,
+        "coef": 1.5,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 10,
+    "cooldown": 0.0
+  },
+  {
+    "skillCode": 312,
+    "classCode": 3,
+    "name": "원소 폭발",
+    "description": "원소를 폭발시켜 공격력을 상시 높인다.",
+    "skillType": 2,
+    "statType": 1,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 2,
+        "coef": 1.03,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 2,
+        "coef": 1.06,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 2,
+        "coef": 1.09,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 2,
+        "coef": 1.12,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 2,
+        "coef": 1.15,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 6,
+        "coefType": 2,
+        "coef": 1.18,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 7,
+        "coefType": 2,
+        "coef": 1.21,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 8,
+        "coefType": 2,
+        "coef": 1.24,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 9,
+        "coefType": 2,
+        "coef": 1.27,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 10,
+        "coefType": 2,
+        "coef": 1.3,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 10,
     "cooldown": 0.0
   }
 ]

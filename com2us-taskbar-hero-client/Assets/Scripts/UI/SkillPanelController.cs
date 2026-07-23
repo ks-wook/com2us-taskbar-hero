@@ -217,7 +217,7 @@ namespace TaskbarHero.Client.UI
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(860f, 940f); // 기존 1440에서 세로 500 축소(스킬 목록은 스크롤)
+            rt.sizeDelta = new Vector2(860f, 1020f); // 목록 뷰포트를 넓혀 스킬 2.5개가 기본 노출되도록 확장
             rt.anchoredPosition = Vector2.zero;
             return rt;
         }
@@ -335,7 +335,7 @@ namespace TaskbarHero.Client.UI
         private void BuildList(RectTransform container)
         {
             const float width = 760f;
-            const float height = 300f; // 축소된 패널(940)에 맞춘 목록 뷰포트 높이(넘치면 스크롤)
+            const float height = 372f; // 행 높이(132)+간격(12) 기준 약 2.5개가 보이는 뷰포트(넘치면 스크롤)
             const float viewW = width - ScrollbarWidth - 8f; // 스크롤바 폭·간격 제외
 
             var area = NewRect("ListArea", container);
