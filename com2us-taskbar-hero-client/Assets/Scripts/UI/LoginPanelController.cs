@@ -42,13 +42,13 @@ namespace TaskbarHero.Client.UI
 
             if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
             {
-                SetError("이메일과 비밀번호를 입력하세요.");
+                ShowModal("로그인", "이메일과 비밀번호를 입력하세요.");
                 return;
             }
 
             if (NetworkManager.Instance == null)
             {
-                SetError("네트워크 매니저를 찾을 수 없습니다.");
+                ShowModal("오류", "네트워크 매니저를 찾을 수 없습니다.");
                 return;
             }
 
@@ -85,7 +85,7 @@ namespace TaskbarHero.Client.UI
 
             if (SceneManager.Instance == null)
             {
-                SetError("씬 매니저를 찾을 수 없습니다.");
+                ShowModal("오류", "씬 매니저를 찾을 수 없습니다.");
                 return;
             }
 

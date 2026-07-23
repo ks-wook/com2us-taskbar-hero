@@ -59,6 +59,8 @@ namespace TaskbarHero.Client.UI
                     return "이미 최대 레벨입니다.";
                 case ErrorCode.InsufficientCurrency:
                     return "골드가 부족합니다.";
+                case ErrorCode.InventoryCapacityMax:
+                    return "인벤토리가 이미 최대 용량입니다.";
                 default:
                     return string.IsNullOrEmpty(fallback) ? ("오류가 발생했습니다. (" + code + ")") : fallback;
             }
