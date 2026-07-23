@@ -1,0 +1,546 @@
+fileFormatVersion: 2
+guid: 93668aec319f8db4bbcaf065e4e9d8a3
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: 7876988331096600816
+    second: LevelUpGlow_29_0
+  - first:
+      213: -585878759281233917
+    second: LevelUpGlow_29_1
+  - first:
+      213: -2062451500192320413
+    second: LevelUpGlow_29_2
+  - first:
+      213: -3364037529043774579
+    second: LevelUpGlow_29_3
+  - first:
+      213: 2460953101839405280
+    second: LevelUpGlow_29_4
+  - first:
+      213: 1111915665169549341
+    second: LevelUpGlow_29_5
+  - first:
+      213: 213523362601349900
+    second: LevelUpGlow_29_6
+  - first:
+      213: 4942781864716872798
+    second: LevelUpGlow_29_7
+  - first:
+      213: -8922615153353938484
+    second: LevelUpGlow_29_8
+  - first:
+      213: -189289285743599752
+    second: LevelUpGlow_29_9
+  - first:
+      213: -5210558500735498326
+    second: LevelUpGlow_29_10
+  - first:
+      213: -4912506540987173976
+    second: LevelUpGlow_29_11
+  - first:
+      213: -9180404519400860231
+    second: LevelUpGlow_29_12
+  - first:
+      213: -5103870998836797812
+    second: LevelUpGlow_29_13
+  - first:
+      213: -2254164470012875148
+    second: LevelUpGlow_29_14
+  - first:
+      213: 2341048501156749258
+    second: LevelUpGlow_29_15
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: LevelUpGlow_29_0
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 559
+        width: 440
+        height: 70
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0f0f8ee272fa05d60800000000000000
+      internalID: 7876988331096600816
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_1
+      rect:
+        serializedVersion: 2
+        x: 127
+        y: 547
+        width: 22
+        height: 22
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 300789f5f5a8ed7f0800000000000000
+      internalID: -585878759281233917
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_2
+      rect:
+        serializedVersion: 2
+        x: 135
+        y: 411
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 364b094b943b063e0800000000000000
+      internalID: -2062451500192320413
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_3
+      rect:
+        serializedVersion: 2
+        x: 195
+        y: 351
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d835346d0b98051d0800000000000000
+      internalID: -3364037529043774579
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_4
+      rect:
+        serializedVersion: 2
+        x: 255
+        y: 339
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0e09804becf072220800000000000000
+      internalID: 2460953101839405280
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_5
+      rect:
+        serializedVersion: 2
+        x: 327
+        y: 311
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d188f9208615e6f00800000000000000
+      internalID: 1111915665169549341
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_6
+      rect:
+        serializedVersion: 2
+        x: 63
+        y: 275
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c03b913fd5696f200800000000000000
+      internalID: 213523362601349900
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_7
+      rect:
+        serializedVersion: 2
+        x: 315
+        y: 267
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e5c21b00be9489440800000000000000
+      internalID: 4942781864716872798
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_8
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 247
+        width: 21
+        height: 22
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cc922d4cac08c2480800000000000000
+      internalID: -8922615153353938484
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_9
+      rect:
+        serializedVersion: 2
+        x: 243
+        y: 207
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 87f1773c5628f5df0800000000000000
+      internalID: -189289285743599752
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_10
+      rect:
+        serializedVersion: 2
+        x: 347
+        y: 211
+        width: 22
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: aa7c44a76a060b7b0800000000000000
+      internalID: -5210558500735498326
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_11
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 163
+        width: 21
+        height: 22
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8a33dab145543dbb0800000000000000
+      internalID: -4912506540987173976
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_12
+      rect:
+        serializedVersion: 2
+        x: 211
+        y: 115
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9b598bebab6a89080800000000000000
+      internalID: -9180404519400860231
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_13
+      rect:
+        serializedVersion: 2
+        x: 411
+        y: 135
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c8e1ae63e586b29b0800000000000000
+      internalID: -5103870998836797812
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_14
+      rect:
+        serializedVersion: 2
+        x: 0
+        y: 0
+        width: 181
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 47e639b8b5997b0e0800000000000000
+      internalID: -2254164470012875148
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: LevelUpGlow_29_15
+      rect:
+        serializedVersion: 2
+        x: 263
+        y: 0
+        width: 177
+        height: 61
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: acf986955331d7020800000000000000
+      internalID: 2341048501156749258
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      LevelUpGlow_29_0: 7876988331096600816
+      LevelUpGlow_29_1: -585878759281233917
+      LevelUpGlow_29_10: -5210558500735498326
+      LevelUpGlow_29_11: -4912506540987173976
+      LevelUpGlow_29_12: -9180404519400860231
+      LevelUpGlow_29_13: -5103870998836797812
+      LevelUpGlow_29_14: -2254164470012875148
+      LevelUpGlow_29_15: 2341048501156749258
+      LevelUpGlow_29_2: -2062451500192320413
+      LevelUpGlow_29_3: -3364037529043774579
+      LevelUpGlow_29_4: 2460953101839405280
+      LevelUpGlow_29_5: 1111915665169549341
+      LevelUpGlow_29_6: 213523362601349900
+      LevelUpGlow_29_7: 4942781864716872798
+      LevelUpGlow_29_8: -8922615153353938484
+      LevelUpGlow_29_9: -189289285743599752
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
