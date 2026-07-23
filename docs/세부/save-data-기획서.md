@@ -275,7 +275,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 5.2 캐릭터 생성 — `POST /api/game/create-character`
 
-캐릭터를 **한 번에 1개** 생성한다. 계정당 최대 3개(3인 파티)이며 **직업은 서로 중복될 수 없다**. 최초 호출 시 계정 세이브(`game_player`)가 함께 초기화되고, 서버가 **빈 슬롯에 `characterId`(1~3)를 배정**한다.
+캐릭터를 **한 번에 1개** 생성한다. 계정당 최대 3개(3인 파티)이며 **직업은 서로 중복될 수 없다**. 최초 호출 시 계정 세이브(`game_player`)가 함께 초기화되고, 서버가 **빈 슬롯에 `characterId`(1~3)를 배정**한다. **1번 슬롯(최초 생성=계정 초기화)은 무료이나, 2·3번 슬롯 추가 생성은 골드를 소모**한다(비용은 마스터 `character_create_cost` 명시값, [마스터 데이터 기획서](master-data/master-data-기획서.md)). 골드 확인·차감·캐릭터 삽입은 한 트랜잭션으로 원자적으로 처리한다.
 
 ![캐릭터 생성 화면 — 직업 선택과 닉네임 입력](../images/save-data-캐릭터생성화면.png)
 
@@ -297,12 +297,17 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "success": true,
   "errorCode": 0,
   "message": "Character created",
-  "data": { "userId": 1, "characterId": 1, "classCode": 1, "level": 1 }
+  "data": {
+    "userId": 1, "characterId": 2, "classCode": 2, "level": 1,
+    "cost": { "currencyType": 1, "amount": 100000 },
+    "balance": [ { "currencyType": 1, "amount": 900000 } ]
+  }
 }
 ```
 
 - `characterId`: 서버가 배정한 슬롯(1~3).
-- 오류: `InvalidClassCode(2005)`(존재하지 않는 직업), `InvalidCharacterId(2006)`(이미 보유한 직업과 중복), `PlayerAlreadyExists(2004)`(슬롯 3개가 모두 차 더 이상 생성 불가).
+- `cost`·`balance`: 소모한 골드와 차감 후 잔액. **최초 생성(1번 슬롯)은 무료라 `cost.amount=0`, `balance`는 빈 목록**이다. 생성 **전** 안내 비용은 클라이언트가 마스터 `character_create_cost` 번들에서 다음 슬롯 값을 조회해 표시한다.
+- 오류: `InvalidClassCode(2005)`(존재하지 않는 직업), `InvalidCharacterId(2006)`(이미 보유한 직업과 중복), `PlayerAlreadyExists(2004)`(슬롯 3개가 모두 차 더 이상 생성 불가), `InsufficientCurrency(4005)`(2·3번 슬롯 생성 골드 부족).
 
 ---
 

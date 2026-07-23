@@ -314,6 +314,14 @@ def export_attendance(conn):
     } for r in rows]
 
 
+def export_character_create_cost(conn):
+    rows = q(conn, "SELECT * FROM character_create_cost ORDER BY character_id")
+    return [{
+        "characterId": _i(r["character_id"]),
+        "goldCost": _i(r["gold_cost"]),
+    } for r in rows]
+
+
 # 파일명(테이블명) -> 추출 함수
 EXPORTERS = [
     ("equip_slot_master", export_equip_slot),
@@ -329,6 +337,7 @@ EXPORTERS = [
     ("cube_master", export_cube),
     ("cube_recipe", export_cube_recipe),
     ("attendance_master", export_attendance),
+    ("character_create_cost", export_character_create_cost),
 ]
 
 

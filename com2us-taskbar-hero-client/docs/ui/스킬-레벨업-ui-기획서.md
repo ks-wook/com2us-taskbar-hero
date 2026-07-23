@@ -43,8 +43,8 @@
 - UI 스프라이트는 **인벤토리와 공용**(`Assets/Art/UI/Inventory`의 `ui_panel_background`·`ui_slot_normal`·`ui_slot_highlight`).
 - 스킬 아이콘은 **전투 아이콘 재사용**: `Assets/Art/Icon/Combat/{Knight|Archer|Mage}/{스킬명}.png`. `SkillIconDatabase`(Resources)가 `skill_code → Sprite`를 들고, `SkillIconDatabaseBuilder`가 `skill_master` 이름과 파일명을 **공백 무시**로 대조해 채운다(예: "파이어볼" == "파이어 볼").
 - 계층(정적): `PanelRoot`(배경, 860×940) 안에 `Title`·`CloseButton`·`CharNav`(◀▶+인디케이터)·`PointBanner`·`EquipSlots`(장착 슬롯 2)·`ListArea`(ScrollRect+Viewport+Content, **우측 세로 스크롤바 `SkillScrollbar` 상시 표시**)·`Message`·`ResetButton`. **스킬 행은 런타임에 `Content`(VerticalLayoutGroup)로 생성**한다.
-- **목록 스크롤**: 패널을 컴팩트하게 유지하려고 목록 뷰포트는 300px로 짧고, 직업 스킬이 많으면 세로 스크롤(우측 스크롤바)로 본다.
-- **hover 툴팁**(`SkillTooltip`): 루트에 붙은 정보 전용(raycast 비활성) 패널로, 행에 hover 시 이름·타입/레벨·효과·재사용 대기시간을 커서 근처에 표시하고 이탈 시 숨긴다(인벤토리 아이템 툴팁과 동일 UX).
+- **목록 스크롤**: 목록 뷰포트(372px)는 기본적으로 스킬 **약 2.5개**가 보이도록 잡고, 나머지는 세로 스크롤(우측 스크롤바)로 본다.
+- **hover 툴팁**(`SkillTooltip`): 루트에 붙은 정보 전용(raycast 비활성) 패널로, 행에 hover 시 이름·타입/레벨·**스킬 설명(`skill_master.description`)**·효과(계수)·재사용 대기시간을 커서 근처에 표시하고 이탈 시 숨긴다(인벤토리 아이템 툴팁과 동일 UX).
 
 ## 5. 데이터 바인딩 (표시용 소스)
 
@@ -89,3 +89,5 @@
 > 액티브 스킬 장착(2슬롯)은 **구현·실서버 연동 검증 완료**(장착/해제 UI + 5005/5006/5007 거부 E2E). 룬 트리 UI는 [룬 UI 기획서](룬-ui-기획서.md) 참조.
 >
 > **전투 연동**: 인게임 전투(`PlayerCombatant`)는 serverMode에서 **그 캐릭터가 장착(equipped=1)한 액티브 스킬만**(최대 2) 실제 습득 레벨로 사용한다. 장착/해제·레벨업 시 `Session.InventoryChanged`로 파티 스킬 세트와 전투 스킬 HUD(`SkillCooldownUI`)가 다시 구성된다. 스킬 포인트 총량은 캐릭터 레벨(`level_master.skill_points`)에 비례한다.
+>
+> **패시브 능력치 상승**: 학습(레벨 ≥ 1)한 **패시브 스킬**(`skill_type=2`)은 장착과 무관하게 상시 적용된다. `PlayerCombatant.ApplyEquipStats`가 패시브의 `statType`별 레벨 배율(coef)을 곱해 전투 스탯에 반영한다(공격력 1 → `_atk`, 체력 3 → `_maxHp`, 이동속도 6 → `_moveSpeed`). 레벨업 시 `InventoryChanged`로 즉시 재계산된다. (검증: 불굴 Lv.1 습득 시 기사 MaxHp 130→136 = ×1.05, 실서버 E2E 통과.)

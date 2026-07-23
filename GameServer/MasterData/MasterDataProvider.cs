@@ -102,6 +102,12 @@ file sealed class RuneCostRow
     public long Cost { get; set; }
 }
 
+file sealed class CharacterCreateCostRow
+{
+    public int CharacterId { get; set; }
+    public long GoldCost { get; set; }
+}
+
 file sealed class ItemMasterRow
 {
     public int ItemCode { get; set; }
@@ -140,6 +146,9 @@ public sealed class MasterDataProvider
 
     // 룬 레벨별 골드 비용: (rune_code, level) → cost(rune_cost 자식 테이블, 명시값).
     private IReadOnlyDictionary<(int rune, int level), long> _runeCosts = new Dictionary<(int, int), long>();
+
+    // 캐릭터 추가 생성 비용: character_id(슬롯 2~3) → 골드 비용(character_create_cost). 1번(최초 생성)은 무료.
+    private IReadOnlyDictionary<int, long> _characterCreateCosts = new Dictionary<int, long>();
 
     // 드롭 풀: 등급 → 드롭 가능 아이템 코드 목록(재화 item_type=3 제외). 코드 → 아이템 정의.
     private IReadOnlyDictionary<int, List<int>> _itemsByGrade = new Dictionary<int, List<int>>();
@@ -209,6 +218,10 @@ public sealed class MasterDataProvider
     public long RuneUpgradeCost(RuneDef rune, int currentLevel)
         => _runeCosts.TryGetValue((rune.RuneCode, currentLevel + 1), out var cost) ? cost : long.MaxValue;
 
+    /// <summary>지정 슬롯(character_id, 2~3)의 캐릭터 추가 생성 골드 비용. 정의가 없으면(1번 슬롯 등) 0(무료). character_create_cost 명시값이다.</summary>
+    public long CharacterCreateCost(int characterId)
+        => _characterCreateCosts.TryGetValue(characterId, out var cost) ? cost : 0;
+
     /// <summary>등급별 확률로 전리품 1개를 추첨한다. 미드롭이면 null. (서버 권위 RNG)</summary>
     public DroppedItem? RollDrop(StageRewardDef reward)
     {
@@ -249,6 +262,7 @@ public sealed class MasterDataProvider
             _skillsByCode = await LoadSkillsAsync(db);
             _runesByCode = await LoadRunesAsync(db);
             _runeCosts = await LoadRuneCostsAsync(db);
+            _characterCreateCosts = await LoadCharacterCreateCostsAsync(db);
 
             // 인벤토리 확장은 부가 기능이라 별도 try로 감싼다(테이블 부재 시 다른 마스터 적재까지 실패하지 않도록).
             _expandCosts = await LoadExpandCostsAsync(db);
@@ -260,8 +274,8 @@ public sealed class MasterDataProvider
 
             IsLoaded = true;
             _logger.LogInformation(
-                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades} · expandSlots {Expand} · skill {Skills} · rune {Runes} · runeCost {RuneCosts}",
-                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count, _expandCosts.Count, _skillsByCode.Count, _runesByCode.Count, _runeCosts.Count);
+                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades} · expandSlots {Expand} · skill {Skills} · rune {Runes} · runeCost {RuneCosts} · charCost {CharCosts}",
+                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count, _expandCosts.Count, _skillsByCode.Count, _runesByCode.Count, _runeCosts.Count, _characterCreateCosts.Count);
         }
         catch (Exception ex)
         {
@@ -462,6 +476,22 @@ public sealed class MasterDataProvider
         }
 
         return byRuneLevel;
+    }
+
+    /// <summary>character_create_cost를 character_id(슬롯 2~3) → 골드 비용으로 적재한다. 1번 슬롯(최초 생성)은 무료라 행이 없다.</summary>
+    private static async Task<Dictionary<int, long>> LoadCharacterCreateCostsAsync(QueryFactory db)
+    {
+        var rows = await db.Query("character_create_cost")
+            .Select("character_id", "gold_cost")
+            .GetAsync<CharacterCreateCostRow>();
+
+        var byCharacter = new Dictionary<int, long>();
+        foreach (var row in rows)
+        {
+            byCharacter[row.CharacterId] = row.GoldCost;
+        }
+
+        return byCharacter;
     }
 
     private static async Task<(Dictionary<int, List<int>>, Dictionary<int, ItemDef>)> LoadItemsAsync(QueryFactory db)

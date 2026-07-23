@@ -209,6 +209,17 @@ namespace TaskbarHero.Common.MasterData
         public CubeIngredient[] ingredients;
     }
 
+    /// <summary>
+    /// 캐릭터 추가 생성 비용(character_create_cost). characterId = 생성 슬롯(2~3), 1번은 무료라 행 없음.
+    /// 클라이언트가 "다음 캐릭터 생성 N 골드" 안내에 사용하고, 서버도 동일 값으로 차감한다.
+    /// </summary>
+    [Serializable]
+    public class CharacterCreateCost
+    {
+        public int characterId;   // 생성 슬롯(2~3)
+        public long goldCost;     // 골드 비용
+    }
+
     /// <summary>출석부 일자별 보상(attendance_master).</summary>
     [Serializable]
     public class AttendanceMaster

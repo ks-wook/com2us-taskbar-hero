@@ -42,6 +42,22 @@ namespace TaskbarHero.Common.Dto
         public int classCode;
     }
 
+    /// <summary>
+    /// 캐릭터 생성 결과(create-character 응답 data). 2·3번 슬롯은 골드를 소모하며 cost·balance로 소모/잔액을 회신한다.
+    /// 최초 생성(1번 슬롯, 계정 초기화)은 무료라 cost.amount=0, balance는 빈 목록이다.
+    /// 생성 전 안내 비용은 클라이언트가 마스터(character_create_cost) 번들에서 다음 슬롯 값으로 조회한다.
+    /// </summary>
+    [Serializable]
+    public class CreateCharacterResultData
+    {
+        public long userId;
+        public int characterId;
+        public int classCode;
+        public int level;
+        public CurrencyDto cost = new CurrencyDto();                 // 소모 골드(최초 생성은 amount 0)
+        public List<CurrencyDto> balance = new List<CurrencyDto>();  // 차감 후 잔액(최초 생성은 빈 목록)
+    }
+
     // ── load 스냅샷 DTO ──
 
     [Serializable]
@@ -341,8 +357,18 @@ namespace TaskbarHero.Common.Dto
     public class ExpandResultData
     {
         public int inventoryCapacity;
-        public CurrencyDto cost;
+        public CurrencyDto cost = new CurrencyDto();
         public List<CurrencyDto> balance = new List<CurrencyDto>();
+    }
+
+    /// <summary>인벤토리 용량 확장 응답 { success, errorCode, message, data(ExpandResultData) }.</summary>
+    [Serializable]
+    public class ExpandResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public ExpandResultData data = new ExpandResultData();
     }
 
     /// <summary>스테이지 클리어 응답 { success, errorCode, message, data(StageClearData) }.</summary>

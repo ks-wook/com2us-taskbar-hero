@@ -8,7 +8,7 @@
 --   1) equip_slot_master  1b) grade_master  2) class_master  3) level_master  4) skill_master  4b) skill_coefficient  5) rune_master  5b) rune_cost
 --   6) item_master  8) cube_master  8b) cube_recipe  8c) cube_recipe_ingredient
 --   9) monster_master  10) stage_reward  10b) stage_reward_drop  11) stage_master  11b) stage_spawn
---   13) attendance_master  14) grade_master  · inventory_expand_master(인벤토리 확장 비용)
+--   13) attendance_master  14) grade_master  · inventory_expand_master(인벤토리 확장 비용)  · character_create_cost(캐릭터 추가 생성 비용)
 --   (7 enhance/12 box는 값 미확정이라 제외)
 --   * grade_master(값 문서 §14)는 item_master.grade가 FK로 참조하므로 물리적으로 item_master보다 앞(1b)에 생성한다.
 --
@@ -921,6 +921,23 @@ INSERT INTO inventory_expand_master (step, gold_cost) VALUES
     (6, 10000),  (7, 10000),  (8, 10000),  (9, 10000),  (10, 10000),
     (11, 10000), (12, 10000), (13, 10000), (14, 10000), (15, 10000),
     (16, 10000), (17, 10000), (18, 10000), (19, 10000), (20, 10000);
+
+
+-- character_create_cost — 캐릭터 추가 생성 골드 비용(슬롯별).
+--   * character_id = 생성하는 캐릭터 슬롯(2~3). 1번 슬롯은 계정 최초 생성(무료)이라 행이 없다.
+--   * 계정당 캐릭터 최대 3개, 직업 중복 불가. 2·3번째 캐릭터 생성 시 이 골드를 차감한다.
+--   * 클라이언트는 이 테이블을 번들로 갖고 "다음 캐릭터 생성 N 골드" 안내에 사용, 서버도 동일 값으로 차감(서버 권위).
+--   * 값은 학습용 임시값(향후 밸런싱은 값만 조정, 스키마 불변).
+DROP TABLE IF EXISTS character_create_cost;
+CREATE TABLE character_create_cost (
+    character_id INT    NOT NULL COMMENT '생성 슬롯(2~3). 1번은 무료라 행 없음',
+    gold_cost    BIGINT NOT NULL COMMENT '해당 슬롯 캐릭터 생성 골드 비용',
+    PRIMARY KEY (character_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='캐릭터 추가 생성 비용(슬롯별, 골드)';
+
+INSERT INTO character_create_cost (character_id, gold_cost) VALUES
+    (2, 100000),
+    (3, 500000);
 
 
 SET FOREIGN_KEY_CHECKS = 1;
