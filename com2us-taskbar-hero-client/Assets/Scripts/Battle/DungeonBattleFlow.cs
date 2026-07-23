@@ -36,6 +36,7 @@ namespace TaskbarHero.Client.Battle
         private int _stage = 1;
         private bool _entered;
         private bool _cleared;
+        private bool _restartOnEnter; // true면 다음 입장 응답에서 전투 필드를 리셋하고 처음부터 시작
 
         /// <summary>현재 진행 중인 스테이지 좌표(외부 관찰/디버그용).</summary>
         public int CurrentAct => _act;
@@ -78,8 +79,17 @@ namespace TaskbarHero.Client.Battle
             EnterStage(act, difficulty, stage);
         }
 
-        /// <summary>지정한 좌표의 스테이지로 입장 요청을 보낸다(최초 입장·클리어 후 다음 스테이지 공용).</summary>
-        private void EnterStage(int act, int difficulty, int stage)
+        /// <summary>스테이지 UI에서 선택한 스테이지로 처음부터 입장한다(전투 필드를 리셋하고 그 스테이지를 새로 시작).
+        /// 자동 진입 가드(_entered)도 세워, Start의 최초 입장과 중복되지 않게 한다.</summary>
+        public void EnterSelectedStage(int act, int difficulty, int stage)
+        {
+            _entered = true;
+            EnterStage(act, difficulty, stage, restartFromStart: true);
+        }
+
+        /// <summary>지정한 좌표의 스테이지로 입장 요청을 보낸다(최초 입장·클리어 후 다음 스테이지 공용).
+        /// restartFromStart=true면 응답 수신 시 전투 필드를 리셋하고 처음부터 시작한다.</summary>
+        private void EnterStage(int act, int difficulty, int stage, bool restartFromStart = false)
         {
             if (NetworkManager.Instance == null)
             {
@@ -96,6 +106,8 @@ namespace TaskbarHero.Client.Battle
             _difficulty = difficulty;
             _stage = stage;
             _cleared = false; // 새 스테이지 진입 시 클리어 가드 해제
+            _restartOnEnter = restartFromStart;
+            Time.timeScale = 1f; // 클리어 슬로우모션 중 수동 입장에 대비해 시간 배율 복원
 
             var request = new StageActionRequest
             {
@@ -141,7 +153,15 @@ namespace TaskbarHero.Client.Battle
             ApplyBackground(d.backgroundType);
             StageEnterBanner.Show(d.act, d.difficulty, d.stage); // 상단 중앙 입장 배너(페이드 인/아웃)
             Debug.Log($"[Dungeon] 진입 완료 {d.act}-{d.difficulty}-{d.stage}, 배경타입 {d.backgroundType} → 스폰 예정 {total}마리");
-            battle.BeginServerBattle(plan, ResolvePrefab, OnAllCleared);
+            if (_restartOnEnter)
+            {
+                _restartOnEnter = false;
+                battle.RestartServerBattle(plan, ResolvePrefab, OnAllCleared); // 처음부터: 진행 중 전투 필드 리셋 후 시작
+            }
+            else
+            {
+                battle.BeginServerBattle(plan, ResolvePrefab, OnAllCleared);
+            }
         }
 
         private void OnEnterError(NetworkError error)

@@ -613,6 +613,14 @@ namespace TaskbarHero.Client.Battle
         /// <summary>현재 선택(<see cref="_selected"/>)대로 파티/몬스터를 초기화하고 전투를 재시작한다(테스트용 선택 소환).</summary>
         private void RestartWithSelection()
         {
+            ResetBattlefield();
+            Log($"재시작 — 선택 소환 {_members.Count}인");
+        }
+
+        /// <summary>전투 필드를 처음 상태로 되돌린다: 아군/적을 모두 정리하고 진행 중 코루틴을 취소한 뒤,
+        /// 킬 수·페이즈·파티 위치를 스폰 지점으로 리셋하고 파티를 재스폰한다(스킬/초상화 UI도 재구성).</summary>
+        private void ResetBattlefield()
+        {
             // 기존 아군 제거(ObjectManager 카테고리째 정리)
             if (_om != null) _om.Clear(CatAlly);
             _members.Clear();
@@ -634,8 +642,15 @@ namespace TaskbarHero.Client.Battle
             // 스킬/초상화 UI를 새 파티로 재구성
             var ui = FindAnyObjectByType<SkillCooldownUI>();
             if (ui != null) ui.Rebuild();
+        }
 
-            Log($"재시작 — 선택 소환 {_members.Count}인");
+        /// <summary>전투 필드를 처음 상태로 초기화한 뒤 새 플랜으로 서버 전투를 처음부터 다시 시작한다.
+        /// 스테이지 UI에서 특정 스테이지를 선택해 "처음부터" 입장할 때 사용한다(진행 중인 전투를 리셋).</summary>
+        public void RestartServerBattle(List<KeyValuePair<int, int>> plan,
+                                        System.Func<int, GameObject> prefabResolver, System.Action onAllCleared)
+        {
+            ResetBattlefield();
+            BeginServerBattle(plan, prefabResolver, onAllCleared);
         }
 
         // ---- 파티 멤버(PlayerCombatant)가 사용하는 공유 훅 ----

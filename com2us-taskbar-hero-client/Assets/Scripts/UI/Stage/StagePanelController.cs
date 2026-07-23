@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
+using TaskbarHero.Client.Battle;
 
 namespace TaskbarHero.Client.UI
 {
@@ -563,14 +564,27 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>입장 요청(데모 로그, 추후 POST /api/game/stage/enter 연동).</summary>
+        /// <summary>입장: 선택한 스테이지(지역=act, 난이도 1, 스테이지)를 던전 전투에 "처음부터" 입장시킨다.
+        /// GameScene의 <see cref="DungeonBattleFlow"/>가 서버로 stage/enter 요청을 보내고 전투 필드를 리셋해 시작한다.
+        /// 요청을 위임한 뒤 스테이지 패널을 닫는다.</summary>
         private void OnEnter()
         {
             if (_selectedStage < 0)
             {
                 return;
             }
-            Debug.Log($"[Stage] 입장 요청(데모): {_openRegion}-{_selectedStage} — 서버 미연동");
+
+            var flow = FindAnyObjectByType<DungeonBattleFlow>();
+            if (flow == null)
+            {
+                Debug.LogWarning($"[Stage] 던전 전투(DungeonBattleFlow)를 찾을 수 없어 입장하지 못했습니다: {_openRegion}-{_selectedStage}");
+                return;
+            }
+
+            // UI는 난이도 1(1~15스테이지)만 노출한다. 지역=act, 선택=stage로 매핑.
+            Debug.Log($"[Stage] 입장 요청: {_openRegion}-{_selectedStage} (처음부터)");
+            flow.EnterSelectedStage(_openRegion, 1, _selectedStage);
+            Close();
         }
 
         public void Close()

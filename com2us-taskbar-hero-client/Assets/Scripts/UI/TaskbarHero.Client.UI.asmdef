@@ -5,6 +5,7 @@
         "TaskbarHero.Common",
         "TaskbarHero.Client.Managers",
         "TaskbarHero.Client.MasterData",
+        "TaskbarHero.Client.Battle",
         "Unity.InputSystem",
         "UnityEngine.UI"
     ],

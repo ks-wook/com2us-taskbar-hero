@@ -49,6 +49,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Image _goldIcon;             // 골드 아이콘(item_1, 런타임 배정)
         [SerializeField] private Text _goldText;              // 보유 골드량
         [SerializeField] private Text _statPanelText;         // 초상화 좌측 능력치(장비 포함)
+        [SerializeField] private RectTransform _expFill;       // 경험치 막대 채움(anchorMax.x = 진행률로 폭 조절)
+        [SerializeField] private Text _expText;                // 경험치 텍스트(현재/필요 + 레벨업까지 남은 양)
 
         // 장착 슬롯 이름(equip_slot_master 1~6, 표시용 상수)
         private static readonly string[] EquipSlotNames = { "무기", "보조무기", "투구", "갑옷", "장갑", "신발" };
@@ -484,6 +486,40 @@ namespace TaskbarHero.Client.UI
                 slot.EditorInit(i, isEquipSlot: true, hoverFrame: frame.gameObject, partLabel: name);
                 _equipSlots.Add(slot);
             }
+
+            // 초상화·장비 슬롯 아래: 현재 캐릭터 경험치 진행 막대(가로 막대그래프)
+            BuildExpBar(area);
+        }
+
+        /// <summary>초상화 아래 캐릭터 경험치 막대(가로 진행바 + 현재/필요·남은 경험치 텍스트)를 구성한다.
+        /// 값은 런타임 <see cref="RefreshExp"/>에서 세션·마스터 데이터로 채운다.</summary>
+        private void BuildExpBar(RectTransform area)
+        {
+            // 장비 블록 하단 가로 중앙에 배치(초상·능력치·장비 슬롯 행 바로 아래).
+            const float barWidth = 400f;
+            var container = NewRect("ExpBar", area);
+            TopLeft(container, (EquipBlockWidth - barWidth) * 0.5f, 448f, barWidth, 24f);
+
+            var bg = NewImage("ExpBarBg", container, null);
+            bg.color = new Color(0f, 0f, 0f, 0.55f);
+            Stretch(bg.rectTransform);
+
+            // 채움 막대: 좌측 고정, 폭은 런타임에 anchorMax.x = 진행률로 조절.
+            var fill = NewImage("ExpBarFill", bg.rectTransform, null);
+            fill.color = new Color(0.30f, 0.80f, 0.55f, 1f); // 경험치(초록)
+            fill.raycastTarget = false;
+            var frt = fill.rectTransform;
+            frt.anchorMin = new Vector2(0f, 0f);
+            frt.anchorMax = new Vector2(0f, 1f); // 초기 폭 0(런타임에 진행률로 설정)
+            frt.pivot = new Vector2(0f, 0.5f);
+            frt.offsetMin = Vector2.zero;
+            frt.offsetMax = Vector2.zero;
+            _expFill = frt;
+
+            // 막대 위 텍스트: 현재/필요 + 레벨업까지 남은 경험치.
+            _expText = NewText("ExpText", container, "", 16, TextAnchor.MiddleCenter);
+            _expText.fontStyle = FontStyle.Bold;
+            Stretch(_expText.rectTransform);
         }
 
         /// <summary>초상화 좌측 능력치 패널(제목 + 능력치 텍스트). 값은 런타임에 RefreshStatPanel로 채운다.</summary>
@@ -729,6 +765,49 @@ namespace TaskbarHero.Client.UI
             UpdatePortrait(chars);
             RefreshEquip(chars);
             RefreshStatPanel(chars);
+            RefreshExp(chars);
+        }
+
+        /// <summary>선택 캐릭터의 경험치 진행도를 막대와 텍스트에 반영한다.
+        /// 저장된 exp는 현재 레벨 내 누적치이므로, 막대 진행률 = exp / requiredExp,
+        /// 레벨업까지 남은 경험치 = requiredExp - exp. 최대 레벨(requiredExp=0)은 MAX로 표시한다.</summary>
+        private void RefreshExp(List<CharacterDto> chars)
+        {
+            if (_expFill == null || _expText == null)
+            {
+                return;
+            }
+            if (chars == null || _selectedCharacter >= chars.Count)
+            {
+                _expFill.anchorMax = new Vector2(0f, 1f);
+                _expText.text = string.Empty;
+                return;
+            }
+
+            var c = chars[_selectedCharacter];
+            long required = 0;
+            var db = MasterDataManager.Db;
+            if (db != null && db.Levels.TryGetValue(c.level, out var lm))
+            {
+                required = lm.requiredExp;
+            }
+
+            if (required <= 0) // 최대 레벨(요구 경험치 0) — 더 오르지 않음
+            {
+                _expFill.anchorMax = new Vector2(1f, 1f);
+                _expText.text = "EXP  MAX";
+                return;
+            }
+
+            long cur = c.exp > 0 ? c.exp : 0;
+            long remain = required - cur;
+            if (remain < 0)
+            {
+                remain = 0;
+            }
+            float frac = Mathf.Clamp01((float)cur / required);
+            _expFill.anchorMax = new Vector2(frac, 1f);
+            _expText.text = $"EXP  {cur:N0} / {required:N0}  (남은 {remain:N0})";
         }
 
         /// <summary>선택된 캐릭터의 직업 프리팹을 초상화 렌더러에 반영한다(직업이 바뀔 때만 재생성).</summary>
