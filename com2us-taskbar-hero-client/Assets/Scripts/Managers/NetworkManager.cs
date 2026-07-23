@@ -25,6 +25,11 @@ namespace TaskbarHero.Client.Managers
         [Tooltip("요청 타임아웃(초). 0이면 무제한.")]
         [SerializeField] private int timeoutSeconds = 10;
 
+        // 최초 직렬화 기본값(포트·스킴). 접속 호스트를 바꿔도 각 서버의 포트는 이 기본값을 유지한다.
+        private string _defaultAccountBaseUrl;
+        private string _defaultGameBaseUrl;
+        private const string PrefKeyServerHost = "th_server_host";
+
         /// <summary>로그인 인증 토큰(캐시된 세션에서 조회). 있으면 요청 헤더(Authorization: Bearer)에 자동 첨부된다.</summary>
         public string AuthToken => Session.Token;
 
@@ -33,6 +38,12 @@ namespace TaskbarHero.Client.Managers
 
         public string AccountServerBaseUrl => accountServerBaseUrl;
         public string GameServerBaseUrl => gameServerBaseUrl;
+
+        /// <summary>현재 접속 서버 호스트(계정 서버 URL에서 추출). 예: "localhost".</summary>
+        public string ServerHost => ExtractHost(accountServerBaseUrl);
+
+        /// <summary>최초 기본(로컬) 접속 호스트. 서버 선택 UI의 기본값·프리셋 판정에 사용.</summary>
+        public string DefaultServerHost => ExtractHost(string.IsNullOrEmpty(_defaultAccountBaseUrl) ? accountServerBaseUrl : _defaultAccountBaseUrl);
 
         private void Awake()
         {
@@ -44,6 +55,69 @@ namespace TaskbarHero.Client.Managers
 
             Instance = this;
             DontDestroyOnLoad(gameObject);
+
+            // 직렬화된 기본 URL(포트 포함)을 보존한 뒤, 저장된 접속 호스트가 있으면 적용한다.
+            _defaultAccountBaseUrl = accountServerBaseUrl;
+            _defaultGameBaseUrl = gameServerBaseUrl;
+            string savedHost = PlayerPrefs.GetString(PrefKeyServerHost, string.Empty);
+            if (!string.IsNullOrEmpty(savedHost))
+            {
+                ApplyServerHost(savedHost);
+            }
+        }
+
+        /// <summary>접속 서버 호스트를 바꾸고(각 서버의 스킴·포트는 기본값 유지) 다음 실행을 위해 저장한다.</summary>
+        public void SetServerHost(string host)
+        {
+            if (ApplyServerHost(host))
+            {
+                PlayerPrefs.SetString(PrefKeyServerHost, ExtractHost(accountServerBaseUrl));
+                PlayerPrefs.Save();
+            }
+        }
+
+        /// <summary>입력 호스트로 계정·게임 서버 base URL을 재구성한다(저장 없이). 유효하면 true.</summary>
+        private bool ApplyServerHost(string host)
+        {
+            if (string.IsNullOrWhiteSpace(host))
+            {
+                return false;
+            }
+            string accountBase = string.IsNullOrEmpty(_defaultAccountBaseUrl) ? accountServerBaseUrl : _defaultAccountBaseUrl;
+            string gameBase = string.IsNullOrEmpty(_defaultGameBaseUrl) ? gameServerBaseUrl : _defaultGameBaseUrl;
+            accountServerBaseUrl = ReplaceHost(accountBase, host);
+            gameServerBaseUrl = ReplaceHost(gameBase, host);
+            return true;
+        }
+
+        /// <summary>URL에서 호스트명만 추출한다(파싱 실패 시 원본 반환).</summary>
+        private static string ExtractHost(string url)
+        {
+            try { return new Uri(url).Host; }
+            catch { return url; }
+        }
+
+        /// <summary>base URL의 호스트만 newHost로 교체한다(스킴·포트 유지). newHost에 스킴/포트가 섞여 있으면 제거한다.</summary>
+        private static string ReplaceHost(string baseUrl, string newHost)
+        {
+            try
+            {
+                var uri = new Uri(baseUrl);
+                string h = newHost.Trim();
+                int scheme = h.IndexOf("://", StringComparison.Ordinal);
+                if (scheme >= 0) h = h.Substring(scheme + 3);
+                h = h.TrimEnd('/');
+                int slash = h.IndexOf('/');
+                if (slash >= 0) h = h.Substring(0, slash);
+                int colon = h.IndexOf(':');
+                if (colon >= 0) h = h.Substring(0, colon); // 커스텀 포트는 무시(각 서버 기본 포트 유지)
+                if (string.IsNullOrEmpty(h)) return baseUrl;
+                return $"{uri.Scheme}://{h}:{uri.Port}";
+            }
+            catch
+            {
+                return baseUrl;
+            }
         }
 
         private void OnDestroy()

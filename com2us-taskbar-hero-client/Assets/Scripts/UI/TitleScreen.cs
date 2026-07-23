@@ -7,7 +7,8 @@ namespace TaskbarHero.Client.UI
     /// <summary>
     /// 타이틀 화면 컨트롤러.
     /// 로고와 'Press to start' 안내를 표시하고, 화면 어디든 클릭/터치하면
-    /// 로그인 UI(<see cref="UIManager"/>)를 띄운 뒤 타이틀 화면을 숨긴다.
+    /// 먼저 접속 서버 선택 UI(<see cref="ServerSelectPanelController"/>)를 띄우고, '확인' 시
+    /// 로그인 UI(<see cref="UIManager"/>)를 활성화한 뒤 타이틀 화면을 숨긴다.
     /// 클릭 감지는 EventSystem 없이 Input System의 <see cref="Pointer"/>로 직접 처리한다.
     /// </summary>
     public class TitleScreen : MonoBehaviour
@@ -50,7 +51,7 @@ namespace TaskbarHero.Client.UI
             pressToStartGroup.alpha = 0.35f + 0.65f * wave;
         }
 
-        /// <summary>로그인 UI를 표시하고 타이틀 화면을 숨긴다.</summary>
+        /// <summary>접속 서버 선택 UI를 먼저 띄우고, '확인' 시 로그인 UI를 활성화한다. 타이틀 화면은 숨긴다.</summary>
         public void StartGame()
         {
             if (_started)
@@ -60,6 +61,18 @@ namespace TaskbarHero.Client.UI
 
             _started = true;
 
+            // 로그인 이전에 접속 서버 선택 UI를 노출하고, '확인' 후 로그인 UI를 활성화한다.
+            ServerSelectPanelController.Show(ShowLogin);
+
+            if (titleRoot != null)
+            {
+                titleRoot.SetActive(false);
+            }
+        }
+
+        /// <summary>접속 서버 확정 후 로그인 UI를 활성화한다.</summary>
+        private void ShowLogin()
+        {
             if (UIManager.Instance != null)
             {
                 UIManager.Instance.ShowLogin();
@@ -67,11 +80,6 @@ namespace TaskbarHero.Client.UI
             else
             {
                 Debug.LogError("[TitleScreen] UIManager.Instance가 없습니다. Managers 오브젝트를 확인하세요.", this);
-            }
-
-            if (titleRoot != null)
-            {
-                titleRoot.SetActive(false);
             }
         }
     }
