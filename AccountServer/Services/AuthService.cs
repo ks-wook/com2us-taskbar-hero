@@ -83,6 +83,7 @@ public sealed class AuthService : IAuthService
         try
         {
             var userId = await _userRepository.InsertUserAsync(email, passwordHash, nickname, nowUnix);
+            _logger.LogInformation("회원가입 성공: userId {UserId}", userId);
             return new SignupResult(ErrorCode.Success, userId);
         }
         catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
@@ -128,6 +129,7 @@ public sealed class AuthService : IAuthService
         await _authTokenRepository.UpsertAsync(user.UserId, token, now, expiredAt);
         await _authTokenCache.SetAsync(user.UserId, token, TimeSpan.FromHours(_tokenExpirationHours));
 
+        _logger.LogInformation("로그인 성공: userId {UserId}", user.UserId);
         return new LoginResult(ErrorCode.Success, user.UserId, token);
     }
 
@@ -158,6 +160,7 @@ public sealed class AuthService : IAuthService
         await _authTokenRepository.DeleteAsync(userId);
         await _authTokenCache.DeleteAsync(userId);
 
+        _logger.LogInformation("로그아웃 성공: userId {UserId}", userId);
         return ErrorCode.Success;
     }
 
