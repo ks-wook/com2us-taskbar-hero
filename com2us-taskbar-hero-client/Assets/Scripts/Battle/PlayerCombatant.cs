@@ -59,6 +59,7 @@ namespace TaskbarHero.Client.Battle
         private long _hp = 1;
         private float _cooldown;
         private float _moveSpeed;
+        private float _baseMoveSpeed = 3f;  // 패시브 제외 기본 이동속도(클래스)
 
         /// <summary>아군 현재 체력.</summary>
         public long Hp => _hp;
@@ -150,12 +151,14 @@ namespace TaskbarHero.Client.Battle
 
             _baseAtk = atk;
             _baseMaxHp = System.Math.Max(1L, hp);
-            ApplyEquipStats(); // 장비 스탯 합산 → _atk/_maxHp 확정
+            _baseMoveSpeed = _moveSpeed; // 패시브 적용 전 기준 이동속도
+            ApplyEquipStats(); // 장비 스탯 + 패시브 배율 합산 → _atk/_maxHp/_moveSpeed 확정
             _hp = _maxHp;
             gameObject.name = "Player_" + _name;
         }
 
-        /// <summary>기본 스탯(_baseAtk/_baseMaxHp)에 현재 장착 장비 스탯을 합산해 _atk/_maxHp를 확정한다.</summary>
+        /// <summary>기본 스탯(_baseAtk/_baseMaxHp/_baseMoveSpeed)에 장착 장비 합산 + 학습한 패시브 스킬 배율을
+        /// 적용해 _atk/_maxHp/_moveSpeed를 확정한다. 패시브는 장착과 무관하게 습득(레벨 ≥ 1) 시 상시 적용된다.</summary>
         private void ApplyEquipStats()
         {
             long atk = _baseAtk;
@@ -174,8 +177,49 @@ namespace TaskbarHero.Client.Battle
                     }
                 }
             }
-            _atk = atk;
-            _maxHp = System.Math.Max(1L, hp);
+
+            // 패시브 스킬 배율(statType: 1 공격력 · 3 체력 · 6 이동속도) 적용 — 전투에 쓰이는 스탯에 곱한다.
+            _atk = System.Math.Max(1L, (long)(atk * PassiveMult(1)));
+            _maxHp = System.Math.Max(1L, (long)(hp * PassiveMult(3)));
+            _moveSpeed = _baseMoveSpeed * PassiveMult(6);
+        }
+
+        /// <summary>이 캐릭터가 습득(레벨 ≥ 1)한 패시브 스킬 중 대상 statType을 올리는 것들의 레벨별 배율 곱.
+        /// 없으면 1(변화 없음). serverMode 계정 캐릭터에만 적용된다(세션 player_skill 기준).</summary>
+        private float PassiveMult(int statType)
+        {
+            float mult = 1f;
+            if (_characterId == 0)
+            {
+                return mult;
+            }
+            var db = MasterDataManager.Db;
+            var skills = Session.GameData != null ? Session.GameData.skills : null;
+            if (db == null || skills == null)
+            {
+                return mult;
+            }
+            foreach (var ps in skills)
+            {
+                if (ps == null || ps.characterId != _characterId || ps.level < 1)
+                {
+                    continue;
+                }
+                if (db.Skills.TryGetValue(ps.skillCode, out SkillMaster sm)
+                    && sm.skillType == 2 && sm.statType == statType && sm.coefs != null)
+                {
+                    int lv = Mathf.Clamp(ps.level, 1, Mathf.Max(1, sm.maxLevel));
+                    foreach (var c in sm.coefs)
+                    {
+                        if (c.skillLevel == lv)
+                        {
+                            mult *= c.coef;
+                            break;
+                        }
+                    }
+                }
+            }
+            return mult;
         }
 
         /// <summary>장비 변경 등으로 스탯을 재계산한다(현재 체력 비율 유지). 전투 중 즉시 반영.</summary>
@@ -215,19 +259,34 @@ namespace TaskbarHero.Client.Battle
                 if (s.classCode == _classCode && s.skillType == 1) actives.Add(s);
             actives.Sort((a, b) => a.skillCode.CompareTo(b.skillCode));
 
+            // serverMode + 연결된 계정 캐릭터: **장착(equipped=1)한 액티브 스킬만** 실제 습득 레벨로 사용한다
+            // (캐릭터당 최대 2개, growth 기획서 5.3). 그 외(개발 하네스)에서는 모든 액티브를 DevSkillLevel로 사용.
+            bool useEquipped = _ctrl != null && _ctrl.serverMode && _characterId != 0;
+
             float[] initReadyIn = { 2f, 4f, 6f, 8f };
-            int level = Mathf.Max(1, _ctrl != null ? _ctrl.DevSkillLevel : 1);
+            int devLevel = Mathf.Max(1, _ctrl != null ? _ctrl.DevSkillLevel : 1);
+            int added = 0;
             for (int i = 0; i < actives.Count; i++)
             {
                 var s = actives[i];
-                int lv = Mathf.Clamp(level, 1, Mathf.Max(1, s.maxLevel));
+                int lv;
+                if (useEquipped)
+                {
+                    if (!TryGetEquippedSkillLevel(s.skillCode, out int plv)) continue; // 미장착 → 전투에서 사용 안 함
+                    lv = Mathf.Clamp(plv, 1, Mathf.Max(1, s.maxLevel));
+                }
+                else
+                {
+                    lv = Mathf.Clamp(devLevel, 1, Mathf.Max(1, s.maxLevel));
+                }
+
                 float coef = 0f, dur = 0f; int ct = 1;
                 if (s.coefs != null)
                     foreach (var c in s.coefs)
                         if (c.skillLevel == lv) { coef = c.coef; dur = c.duration; ct = c.coefType; break; }
 
                 float cd = s.cooldown > 0f ? s.cooldown : (_ctrl != null ? _ctrl.SkillCooldownFallback : 10f);
-                float readyIn = i < initReadyIn.Length ? initReadyIn[i] : 2f;
+                float readyIn = added < initReadyIn.Length ? initReadyIn[added] : 2f;
                 var sk = new Skill
                 {
                     code = s.skillCode, name = s.name, coefType = ct, coef = coef, duration = dur,
@@ -237,7 +296,29 @@ namespace TaskbarHero.Client.Battle
                 };
                 _skills.Add(sk);
                 if (sk.code == _chargeSkillCode) _chargeSkill = sk;
+                added++;
             }
+        }
+
+        /// <summary>serverMode: 이 캐릭터가 장착(equipped=1)한 스킬이면 습득 레벨을 돌려준다(미장착이면 false).</summary>
+        private bool TryGetEquippedSkillLevel(int skillCode, out int level)
+        {
+            level = 0;
+            var skills = Session.GameData != null ? Session.GameData.skills : null;
+            if (skills == null) return false;
+            foreach (var s in skills)
+                if (s != null && s.characterId == _characterId && s.skillCode == skillCode && s.equipped == 1)
+                {
+                    level = s.level;
+                    return true;
+                }
+            return false;
+        }
+
+        /// <summary>장착/레벨 변경 후 전투에서 사용할 스킬 세트를 세션 기준으로 다시 구성한다(장비 스탯도 함께 갱신).</summary>
+        public void RebuildSkills()
+        {
+            BuildSkills();
         }
 
         private void Update()
