@@ -89,6 +89,14 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("true면 서버 웨이브 플랜(유한)으로 진행하고 개발용 무한 웨이브를 끈다. BeginServerBattle로 시작.")]
         public bool serverMode = false;
 
+        [Header("걷기 먼지 이펙트")]
+        [Tooltip("이동(걷기) 중 캐릭터 발밑에 반복 재생할 먼지 프레임(순서대로).")]
+        [SerializeField] private Sprite[] walkDustFrames;
+        [Tooltip("걷기 먼지 초당 프레임 수.")]
+        [SerializeField] private float walkDustFps = 24f;
+        [Tooltip("걷기 먼지 월드 폭(유닛). 확대된 캐릭터 스케일과 무관하게 이 크기로 표시.")]
+        [SerializeField] private float walkDustWorldWidth = 1.2f;
+
         [Header("보스 연출")]
         [Tooltip("보스 몬스터 머리 위에 띄울 아이콘(왕관). 던전 배선 빌더가 자동으로 배선한다.")]
         [SerializeField] private Sprite bossIcon;
@@ -379,7 +387,18 @@ namespace TaskbarHero.Client.Battle
             var pc = go.GetComponent<PlayerCombatant>();
             if (pc == null) pc = go.AddComponent<PlayerCombatant>();
             pc.Configure(this, cfg);
+            AttachWalkDust(go, () => pc != null && pc.IsMoving); // 걷기 먼지(이동 애니 재생 중에만 노출)
             return pc;
+        }
+
+        /// <summary>캐릭터 발밑에 걷기 먼지 이펙트를 붙인다(프레임 미배선이면 생략). isMoving은 이동 애니 재생 여부.</summary>
+        private void AttachWalkDust(GameObject owner, System.Func<bool> isMoving)
+        {
+            if (walkDustFrames == null || walkDustFrames.Length == 0 || owner == null) return;
+            var dustGo = new GameObject("WalkDust");
+            dustGo.transform.SetParent(owner.transform, false);
+            var wd = dustGo.AddComponent<WalkDust>();
+            wd.Initialize(walkDustFrames, walkDustFps, isMoving, walkDustWorldWidth);
         }
 
         // ---- 적 웨이브(스폰 시점/위치·스탯은 컨트롤러가 결정, 생성/추적/정리는 ObjectManager) ----
@@ -467,6 +486,7 @@ namespace TaskbarHero.Client.Battle
             float speed = isBoss ? enemyMoveSpeed * Mathf.Max(0.05f, bossMoveSpeedFactor) : enemyMoveSpeed;
             mu.Init(mname, hp, atk, speed, () => _paused, OnMonsterKilled, isBoss, isBoss ? bossIcon : null,
                     OnMonsterAttack, enemyAttackInterval);
+            AttachWalkDust(go, () => mu != null && mu.IsMoving); // 걷기 먼지(전진 애니 재생 중에만 노출)
             if (isBoss)
             {
                 BossWarningBanner.Show(); // 보스 등장 경고 연출(중앙 붉은 "Warning!!" 3회 펄스)
@@ -519,6 +539,7 @@ namespace TaskbarHero.Client.Battle
             mu.Init(_monsterName, _monsterMaxHp, _monsterAtk, enemyMoveSpeed,
                     () => _paused, OnMonsterKilled, false, null,
                     OnMonsterAttack, enemyAttackInterval);
+            AttachWalkDust(go, () => mu != null && mu.IsMoving); // 걷기 먼지(전진 애니 재생 중에만 노출)
         }
 
         /// <summary>살아있는 적을 모두 같은 파티 앞 라인으로 보낸다(아군과 달리 서로 완전히 겹쳐도 무방).</summary>

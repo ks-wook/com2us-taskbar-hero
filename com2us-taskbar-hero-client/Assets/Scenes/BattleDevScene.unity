@@ -308,6 +308,8 @@ MonoBehaviour:
   enemyOffscreenMargin: 2
   enemyMoveSpeed: 1.2
   enemyFrontStopGap: 1.2
+  enemyAttackInterval: 1.5
+  enemyDamageMultiplier: 2
   devSkillLevel: 1
   skillCooldown: 10
   effectYOffset: 0.6
@@ -321,6 +323,41 @@ MonoBehaviour:
   rowYSpacing: 0.8
   basicAttackHitDelay: 0.35
   serverMode: 0
+  walkDustFrames:
+  - {fileID: -3439497951571834545, guid: c2cc82b7e48789f46915877c5ceb927e, type: 3}
+  - {fileID: -6066256096988440421, guid: ada231de9fa737c48a4f5ab65f80284f, type: 3}
+  - {fileID: 3762135981042794699, guid: 288dd03b82faa8247979081f26ffe438, type: 3}
+  - {fileID: -3840890041528615523, guid: d7c427106f5ff644b973b79083c3161b, type: 3}
+  - {fileID: -5344432443576252567, guid: acdf94a3f0533de4eaf4a90cf6a292a4, type: 3}
+  - {fileID: -1048389514112786880, guid: 48064d0f3ba2f3c44a80b0de68e0efb5, type: 3}
+  - {fileID: 3879805756485747817, guid: f1089decef92e444fa778eb20ba02b18, type: 3}
+  - {fileID: 8815194019094526874, guid: da73c4bd0c1715a4f990857a3bb9f41b, type: 3}
+  - {fileID: -1139683908402547726, guid: 79e9a820473ed0c488868f27b9fd0f4e, type: 3}
+  - {fileID: -7075198235103140526, guid: b0ff191cfe8eb0f4db6df7c5dccb1de8, type: 3}
+  - {fileID: 3853513543218503794, guid: 95f7a6bf605894e4db657a09846b8b73, type: 3}
+  - {fileID: -8302106310332062414, guid: dcccc393324bd2f49853af412bead7e4, type: 3}
+  - {fileID: 3657894974108367106, guid: 476b7dd52d9c59b4c931bdfc28f24c63, type: 3}
+  - {fileID: 7622730025893367970, guid: e51498c3580c6b54eacfab0ae09afa5a, type: 3}
+  - {fileID: -6706328818633555130, guid: ba38a9275e1ab6940b8847948f0a6517, type: 3}
+  - {fileID: 6918904821870561786, guid: 58552b5aa6a7ef343864f1a4c91e972b, type: 3}
+  - {fileID: -795330771656590885, guid: 9ee73b08971f9a14184a737371983b8a, type: 3}
+  - {fileID: 8625148054738874798, guid: c589d74b06509b949bcdeea333cda006, type: 3}
+  - {fileID: 9160039661239274496, guid: 4d834a8ee1c885b43904779a6efe776f, type: 3}
+  - {fileID: -4995904628718858024, guid: 9fdb7b17dd490844085d96015e60f316, type: 3}
+  - {fileID: 8184627881129672497, guid: fa842caebfcb75d4db4e81470e93062b, type: 3}
+  - {fileID: -162112969174098788, guid: c7892a5d7b9760f4aa3dbf0db9c5bce8, type: 3}
+  - {fileID: -7301126734806389297, guid: d8ba81571ca8f2942af335cc342dc24a, type: 3}
+  - {fileID: 8835910559224811774, guid: a9086987f161918469c6e06731d713e8, type: 3}
+  - {fileID: 4620119072199001088, guid: 93ac0dca8e0fec54d8b77032dcde212b, type: 3}
+  - {fileID: 2650058556172108559, guid: 1ab2cb85573ebe0448205ffdbf5dc87b, type: 3}
+  - {fileID: 2586567114154853744, guid: feb74ecca4508b04bbd2049e7b53e93a, type: 3}
+  - {fileID: -256361015385717372, guid: fd31cb7a0f7b5b84fb8391ffb65a72f7, type: 3}
+  - {fileID: 4830143067446145707, guid: 8fbfa2ddf9154684aa55714b0a5b9784, type: 3}
+  - {fileID: 2645396331062920877, guid: 0b9ee2abd424ac9409383d3b30c56c7d, type: 3}
+  walkDustFps: 24
+  walkDustWorldWidth: 1.2
+  bossIcon: {fileID: 0}
+  bossMoveSpeedFactor: 0.6
 --- !u!4 &223499211
 Transform:
   m_ObjectHideFlags: 0

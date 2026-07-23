@@ -39,6 +39,8 @@ namespace TaskbarHero.Client.Battle
 
         public bool Alive => _alive;
         public bool IsBoss => _isBoss;
+        /// <summary>현재 전진(이동) 애니메이션이 재생 중인지. 걷기 먼지 이펙트 노출 판정에 사용.</summary>
+        public bool IsMoving => _moving && _alive;
         public long Hp => _hp;
         public long MaxHp => _maxHp;
         public long Atk => _atk;

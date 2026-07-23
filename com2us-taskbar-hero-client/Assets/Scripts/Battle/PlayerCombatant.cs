@@ -97,6 +97,8 @@ namespace TaskbarHero.Client.Battle
         public string DisplayName => _name;
         public float AttackRange => _attackRange;
         public float MoveSpeed => _moveSpeed;
+        /// <summary>현재 걷기(이동) 애니메이션이 재생 중인지. 걷기 먼지 이펙트 노출 판정에 사용.</summary>
+        public bool IsMoving => _moving && !_dead;
 
         /// <summary>컨트롤러가 스폰 직후 호출해 설정을 주입한다.</summary>
         public void Configure(BattleDevController ctrl, PartyMemberConfig cfg)
