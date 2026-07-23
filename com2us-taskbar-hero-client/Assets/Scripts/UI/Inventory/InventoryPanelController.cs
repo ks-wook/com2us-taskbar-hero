@@ -161,7 +161,28 @@ namespace TaskbarHero.Client.UI
             BuildGoldArea(container);  // 보유 골드 표시(좌상단)
             BuildEquipArea(container); // 캐릭터 네비게이션 포함, 가로 중앙 정렬
             BuildGrid(container);
+            BuildGrowthButtons(container); // 스킬·룬 진입 버튼(인벤토리 아이템 아래, 패널 최하단)
             BuildTooltip();
+        }
+
+        /// <summary>성장 진입 버튼(스킬 레벨업·룬)을 패널 최하단(인벤토리 아이템 아래)에 가로 중앙으로 배치한다.
+        /// 가방 격자와 패널 바닥 사이 여백에 맞춰 낮은 높이로 둔다(겹침 방지).</summary>
+        private void BuildGrowthButtons(RectTransform container)
+        {
+            const float w = 230f, h = 44f, y = 3f, dx = 120f;
+            var skillImg = NewImage("SkillButton", container, slotNormal);
+            skillImg.color = new Color(0.24f, 0.20f, 0.34f, 0.98f);
+            BottomCenter(skillImg.rectTransform, -dx, y, w, h);
+            var skillLabel = NewText("SkillButtonLabel", skillImg.rectTransform, "스킬 레벨업", 24, TextAnchor.MiddleCenter);
+            Stretch(skillLabel.rectTransform);
+            _skillButton = skillImg.gameObject.AddComponent<Button>();
+
+            var runeImg = NewImage("RuneButton", container, slotNormal);
+            runeImg.color = new Color(0.30f, 0.22f, 0.16f, 0.98f);
+            BottomCenter(runeImg.rectTransform, dx, y, w, h);
+            var runeLabel = NewText("RuneButtonLabel", runeImg.rectTransform, "룬", 24, TextAnchor.MiddleCenter);
+            Stretch(runeLabel.rectTransform);
+            _runeButton = runeImg.gameObject.AddComponent<Button>();
         }
 
         /// <summary>좌상단 보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 아이콘/수량은 런타임에 세션에서 채운다.</summary>
@@ -326,8 +347,8 @@ namespace TaskbarHero.Client.UI
             return view;
         }
 
-        /// <summary>인벤토리 확장 요청(서버). 성공 시 세이브를 재로드해 용량·골드·격자를 갱신한다.
-        /// (POST /api/game/inventory/expand, 골드 소모 1칸 확장.)</summary>
+        /// <summary>인벤토리 확장 버튼: 마스터(inventory_expand_master)에서 다음 칸 비용을 조회해 확인 모달로 안내한다.
+        /// 확인 시 서버에 확장을 요청하고, 결과(소모 골드·성공/실패)를 다시 모달로 안내한다.</summary>
         private void OnExpandInventory()
         {
             if (NetworkManager.Instance == null || !Session.IsLoggedIn)
@@ -335,9 +356,77 @@ namespace TaskbarHero.Client.UI
                 Debug.LogWarning("[Inventory] 확장 요청 불가(네트워크/세션 없음).");
                 return;
             }
+
+            MasterDataManager.EnsureLoaded();
+            var db = MasterDataManager.Db;
+            var player = Session.GameData != null ? Session.GameData.player : null;
+            int capacity = player != null ? player.inventoryCapacity : 0;
+            long cost = db != null ? db.NextExpandCost(capacity) : -1L;
+
+            if (cost < 0)
+            {
+                if (ModalManager.Instance != null)
+                {
+                    ModalManager.Instance.ShowConfirm("인벤토리 확장", "이미 최대 용량입니다.");
+                }
+                return;
+            }
+
+            if (ModalManager.Instance != null)
+            {
+                ModalManager.Instance.ShowConfirmCancel(
+                    "인벤토리 확장",
+                    $"인벤토리를 1칸 확장합니다.\n소모 골드: {cost:N0}\n확장하시겠습니까?",
+                    DoExpandRequest);
+            }
+            else
+            {
+                DoExpandRequest();
+            }
+        }
+
+        /// <summary>실제 확장 요청(확인 모달의 '확인' 콜백). 서버가 최종 비용 차감·검증한다(서버 권위).
+        /// (POST /api/game/inventory/expand, 골드 소모 1칸 확장.)</summary>
+        private void DoExpandRequest()
+        {
+            if (NetworkManager.Instance == null || !Session.IsLoggedIn)
+            {
+                return;
+            }
             var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
             Debug.Log("[Inventory] 인벤토리 확장 요청");
-            NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/inventory/expand", req, _ => ReloadAndRefresh(), OnActionError);
+            NetworkManager.Instance.PostToGame<ExpandResponse>("/api/game/inventory/expand", req, OnExpandSuccess, OnExpandError);
+        }
+
+        /// <summary>확장 성공: 소모 골드·잔액·확장 후 용량을 공용 모달로 안내하고, 세이브를 재로드해 UI를 갱신한다.</summary>
+        private void OnExpandSuccess(ExpandResponse resp)
+        {
+            long cost = 0, balance = 0;
+            int capacity = 0;
+            if (resp != null && resp.data != null)
+            {
+                if (resp.data.cost != null) cost = resp.data.cost.amount;
+                if (resp.data.balance != null && resp.data.balance.Count > 0) balance = resp.data.balance[0].amount;
+                capacity = resp.data.inventoryCapacity;
+            }
+            ReloadAndRefresh(); // 용량/골드/격자 최신화
+
+            if (ModalManager.Instance != null)
+            {
+                ModalManager.Instance.ShowConfirm(
+                    "인벤토리 확장 완료",
+                    $"골드 {cost:N0} 소모\n남은 골드: {balance:N0}\n확장 후 용량: {capacity}칸");
+            }
+        }
+
+        /// <summary>확장 실패: 사유(골드 부족·최대 용량 등)를 공용 모달로 안내한다.</summary>
+        private void OnExpandError(NetworkError error)
+        {
+            Debug.LogWarning($"[Inventory] 확장 실패: {error}");
+            if (ModalManager.Instance != null)
+            {
+                ModalManager.Instance.ShowConfirm("인벤토리 확장 실패", ErrorMessages.ToKorean(error));
+            }
         }
 
         /// <summary>루트 GameObject에 오버레이 Canvas/스케일러/레이캐스터를 부착한다.</summary>
@@ -447,22 +536,6 @@ namespace TaskbarHero.Client.UI
             var label = NewText("EquipLabel", area, "장비", 32, TextAnchor.UpperLeft);
             TopLeft(label.rectTransform, 0f, 90f, 200f, 44f);
 
-            // 성장 진입 버튼 행(장비 라벨 우측, 초상/장비슬롯 위 여백). 스킬·룬 패널을 각각 연다.
-            var skillImg = NewImage("SkillButton", area, slotNormal);
-            skillImg.color = new Color(0.24f, 0.20f, 0.34f, 0.98f);
-            TopLeft(skillImg.rectTransform, PortraitX, 84f, 240f, 56f);
-            var skillLabel = NewText("SkillButtonLabel", skillImg.rectTransform, "스킬 레벨업", 28, TextAnchor.MiddleCenter);
-            Stretch(skillLabel.rectTransform);
-            _skillButton = skillImg.gameObject.AddComponent<Button>();
-
-            // '룬' 진입 버튼(장비 슬롯 열 위). 성장(룬 트리) 패널을 연다.
-            var runeImg = NewImage("RuneButton", area, slotNormal);
-            runeImg.color = new Color(0.30f, 0.22f, 0.16f, 0.98f);
-            TopLeft(runeImg.rectTransform, EquipSlotsX, 84f, EquipBlockWidth - EquipSlotsX, 56f);
-            var runeLabel = NewText("RuneButtonLabel", runeImg.rectTransform, "룬", 28, TextAnchor.MiddleCenter);
-            Stretch(runeLabel.rectTransform);
-            _runeButton = runeImg.gameObject.AddComponent<Button>();
-
             // 능력치 패널(초상화 좌측): 장비 포함 현재 캐릭터 능력치.
             BuildStatPanel(area);
 
@@ -482,8 +555,14 @@ namespace TaskbarHero.Client.UI
             render.raycastTarget = false;
             _portraitImage = render;
 
-            _portraitLabel = NewText("PortraitLabel", portrait.rectTransform, "캐릭터", 24, TextAnchor.LowerCenter);
-            Stretch(_portraitLabel.rectTransform);
+            // 초상화 하단의 갈색 밑줄 아래 밴드에 이름표를 배치(프레임 바닥 기준으로 올림).
+            _portraitLabel = NewText("PortraitLabel", portrait.rectTransform, "캐릭터", 22, TextAnchor.MiddleCenter);
+            var plrt = _portraitLabel.rectTransform;
+            plrt.anchorMin = new Vector2(0f, 0f);
+            plrt.anchorMax = new Vector2(1f, 0f);
+            plrt.pivot = new Vector2(0.5f, 0f);
+            plrt.sizeDelta = new Vector2(0f, 34f);
+            plrt.anchoredPosition = new Vector2(0f, 10f);
 
             // 6부위 장착 슬롯 (2열 x 3행) — 초상화보다 작은 크기
             const float startX = EquipSlotsX;
@@ -522,7 +601,7 @@ namespace TaskbarHero.Client.UI
         private void BuildExpBar(RectTransform area)
         {
             // 장비 블록 하단 가로 중앙에 배치(초상·능력치·장비 슬롯 행 바로 아래).
-            const float barWidth = 400f;
+            const float barWidth = 250f; // 기존 400에서 150 축소
             var container = NewRect("ExpBar", area);
             TopLeft(container, (EquipBlockWidth - barWidth) * 0.5f, 448f, barWidth, 24f);
 
@@ -915,7 +994,11 @@ namespace TaskbarHero.Client.UI
             return null;
         }
 
-        /// <summary>현재 선택 캐릭터의 능력치(클래스+레벨+장착 장비 합산)를 능력치 패널에 표시한다.</summary>
+        // 아이템·패시브로 인한 상승분 텍스트 색(연한 파란색).
+        private const string BonusColorHex = "#8FC1FF";
+
+        /// <summary>현재 선택 캐릭터의 능력치를 능력치 패널에 표시한다.
+        /// 최종값 = (클래스+레벨 기본 + 장착 장비) × 학습 패시브 배율. 아이템·패시브로 인한 상승분은 (+상승분)으로 병기한다.</summary>
         private void RefreshStatPanel(List<CharacterDto> chars)
         {
             if (_statPanelText == null)
@@ -928,19 +1011,54 @@ namespace TaskbarHero.Client.UI
                 return;
             }
 
-            var s = ComputeCharacterStats(chars[_selectedCharacter]);
+            var c = chars[_selectedCharacter];
+            Stats baseS = BaseStats(c);   // 클래스 + 레벨(고유)
+            Stats eqS = EquipStats(c);    // 장착 장비 합산(가산)
+
+            // 최종 = (기본 + 장비) × 패시브 배율(statType별). 상승분 = 최종 − 기본.
+            long atkF = (long)((baseS.atk + eqS.atk) * PassiveMult(c, 1));
+            long defF = (long)((baseS.def + eqS.def) * PassiveMult(c, 2));
+            long hpF = (long)((baseS.hp + eqS.hp) * PassiveMult(c, 3));
+            float critF = (baseS.critChance + eqS.critChance) * PassiveMult(c, 4);
+            float critDF = (baseS.critDamage + eqS.critDamage) * PassiveMult(c, 5);
+            float moveF = (baseS.moveSpeed + eqS.moveSpeed) * PassiveMult(c, 6);
+
             var sb = new System.Text.StringBuilder();
-            sb.AppendLine($"공격력  {s.atk}");
-            sb.AppendLine($"방어력  {s.def}");
-            sb.AppendLine($"체력  {s.hp}");
-            if (s.critChance != 0f) sb.AppendLine($"치명확률  {s.critChance * 100f:0.#}%");
-            if (s.critDamage != 0f) sb.AppendLine($"치명피해  {s.critDamage * 100f:0.#}%");
-            if (s.moveSpeed != 0f) sb.AppendLine($"이동속도  {s.moveSpeed:0.##}");
+            sb.AppendLine(LongStatLine("공격력", baseS.atk, atkF));
+            sb.AppendLine(LongStatLine("방어력", baseS.def, defF));
+            sb.AppendLine(LongStatLine("체력", baseS.hp, hpF));
+            if (critF != 0f) sb.AppendLine(PercentStatLine("치명확률", baseS.critChance, critF));
+            if (critDF != 0f) sb.AppendLine(PercentStatLine("치명피해", baseS.critDamage, critDF));
+            if (moveF != 0f) sb.AppendLine(MoveStatLine("이동속도", baseS.moveSpeed, moveF));
             _statPanelText.text = sb.ToString().TrimEnd();
         }
 
-        /// <summary>캐릭터의 최종 능력치를 계산한다: 클래스 기본 + 레벨 보너스 + 장착 장비 스탯 합산.</summary>
-        private Stats ComputeCharacterStats(CharacterDto c)
+        /// <summary>정수 스탯 한 줄: "라벨  최종  (+상승분)". 상승분(장비+패시브)은 연한 파란색으로 병기.</summary>
+        private static string LongStatLine(string label, long baseV, long finalV)
+        {
+            long bonus = finalV - baseV;
+            string extra = bonus > 0 ? $"  <color={BonusColorHex}>(+{bonus})</color>" : string.Empty;
+            return $"{label}  {finalV}{extra}";
+        }
+
+        /// <summary>퍼센트 스탯 한 줄(치명확률/치명피해). 값은 0~1 → % 표기.</summary>
+        private static string PercentStatLine(string label, float baseV, float finalV)
+        {
+            float bonus = finalV - baseV;
+            string extra = bonus > 0.0001f ? $"  <color={BonusColorHex}>(+{bonus * 100f:0.#}%)</color>" : string.Empty;
+            return $"{label}  {finalV * 100f:0.#}%{extra}";
+        }
+
+        /// <summary>이동속도 한 줄.</summary>
+        private static string MoveStatLine(string label, float baseV, float finalV)
+        {
+            float bonus = finalV - baseV;
+            string extra = bonus > 0.001f ? $"  <color={BonusColorHex}>(+{bonus:0.##})</color>" : string.Empty;
+            return $"{label}  {finalV:0.##}{extra}";
+        }
+
+        /// <summary>캐릭터 고유 기본 능력치(클래스 + 레벨 보너스, 장비·패시브 제외).</summary>
+        private static Stats BaseStats(CharacterDto c)
         {
             var db = MasterDataManager.Db;
             var total = new Stats();
@@ -948,7 +1066,6 @@ namespace TaskbarHero.Client.UI
             {
                 return total;
             }
-
             if (db.Classes.TryGetValue(c.classCode, out var cls))
             {
                 total = Add(total, cls.baseStats);
@@ -957,20 +1074,62 @@ namespace TaskbarHero.Client.UI
             {
                 total = Add(total, lm.statBonus);
             }
+            return total;
+        }
 
+        /// <summary>이 캐릭터에 장착된 장비 스탯 합산(가산분).</summary>
+        private static Stats EquipStats(CharacterDto c)
+        {
+            var db = MasterDataManager.Db;
+            var total = new Stats();
             var inv = Session.GameData != null ? Session.GameData.inventory : null;
-            if (inv != null)
+            if (db == null || inv == null)
             {
-                foreach (var item in inv)
+                return total;
+            }
+            foreach (var item in inv)
+            {
+                if (item != null && item.equippedCharacterId == c.characterId
+                    && db.Items.TryGetValue(item.itemCode, out var im))
                 {
-                    if (item != null && item.equippedCharacterId == c.characterId
-                        && db.Items.TryGetValue(item.itemCode, out var im))
-                    {
-                        total = Add(total, im.baseStats);
-                    }
+                    total = Add(total, im.baseStats);
                 }
             }
             return total;
+        }
+
+        /// <summary>이 캐릭터가 습득(레벨 ≥ 1)한 패시브 스킬 중 대상 statType을 올리는 것들의 레벨별 배율 곱(전투와 동일 규칙).
+        /// statType: 1 공격력 · 2 방어력 · 3 체력 · 4 치명확률 · 5 치명피해 · 6 이동속도. 없으면 1.</summary>
+        private static float PassiveMult(CharacterDto c, int statType)
+        {
+            float mult = 1f;
+            var db = MasterDataManager.Db;
+            var skills = Session.GameData != null ? Session.GameData.skills : null;
+            if (db == null || skills == null || c == null)
+            {
+                return mult;
+            }
+            foreach (var ps in skills)
+            {
+                if (ps == null || ps.characterId != c.characterId || ps.level < 1)
+                {
+                    continue;
+                }
+                if (db.Skills.TryGetValue(ps.skillCode, out var sm)
+                    && sm.skillType == 2 && sm.statType == statType && sm.coefs != null)
+                {
+                    int lv = Mathf.Clamp(ps.level, 1, Mathf.Max(1, sm.maxLevel));
+                    foreach (var coef in sm.coefs)
+                    {
+                        if (coef.skillLevel == lv)
+                        {
+                            mult *= coef.coef;
+                            break;
+                        }
+                    }
+                }
+            }
+            return mult;
         }
 
         /// <summary>두 Stats를 합산한다.</summary>
@@ -1307,6 +1466,15 @@ namespace TaskbarHero.Client.UI
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 1f);
             rt.anchoredPosition = new Vector2(x, -y);
+            rt.sizeDelta = new Vector2(w, h);
+        }
+
+        /// <summary>부모의 하단 중앙 기준으로 배치(x=중앙 오프셋, y=바닥에서 위로).</summary>
+        private static void BottomCenter(RectTransform rt, float x, float y, float w, float h)
+        {
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.anchoredPosition = new Vector2(x, y);
             rt.sizeDelta = new Vector2(w, h);
         }
     }
