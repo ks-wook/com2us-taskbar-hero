@@ -20,6 +20,7 @@ public sealed class SaveService : ISaveService
 {
     private const int MaxCharacterSlots = 3;
     private const int MySqlDuplicateEntry = 1062;
+    private const int GoldCurrencyType = 1;
 
     private readonly ISaveRepository _saveRepository;
     private readonly MasterDataProvider _masterData;
@@ -114,7 +115,8 @@ public sealed class SaveService : ISaveService
             _logger.LogInformation(
                 "캐릭터 생성 성공(신규 계정): userId {UserId}, characterId {CharacterId}, classCode {ClassCode}",
                 userId, 1, classCode);
-            return SuccessCharacter(userId, 1, classCode);
+            // 최초 생성(1번 슬롯)은 계정 초기화라 무료.
+            return SuccessCharacter(userId, 1, classCode, 0, null);
         }
 
         // 기존 계정: 슬롯 여유·직업 중복 검사 후 추가.
@@ -130,21 +132,23 @@ public sealed class SaveService : ISaveService
         }
 
         var newSlot = FirstFreeSlot(slots);
+        // 2·3번 슬롯 추가 생성 비용(마스터 명시값). 골드 확인·차감·캐릭터 삽입은 리포지토리 트랜잭션에서 원자적으로 처리.
+        var cost = _masterData.CharacterCreateCost(newSlot);
 
-        try
+        var outcome = await _saveRepository.AddCharacterAsync(userId, newSlot, classCode, cost);
+        switch (outcome.Status)
         {
-            await _saveRepository.AddCharacterAsync(userId, newSlot, classCode);
-        }
-        catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
-        {
-            // 슬롯/직업 유니크 경합(동시 생성).
-            return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
+            case AddCharacterStatus.InsufficientCurrency:
+                return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+            case AddCharacterStatus.DuplicateConflict:
+                // 슬롯/직업 유니크 경합(동시 생성).
+                return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
         }
 
         _logger.LogInformation(
-            "캐릭터 생성 성공: userId {UserId}, characterId {CharacterId}, classCode {ClassCode}",
-            userId, newSlot, classCode);
-        return SuccessCharacter(userId, newSlot, classCode);
+            "캐릭터 생성 성공: userId {UserId}, characterId {CharacterId}, classCode {ClassCode}, cost {Cost}",
+            userId, newSlot, classCode, outcome.Cost);
+        return SuccessCharacter(userId, newSlot, classCode, outcome.Cost, outcome.GoldBalance);
     }
 
     /// <summary>접속 시각(last_active_at)을 현재로 갱신한다(heartbeat). 계정 세이브가 없으면 SaveNotFound.</summary>
@@ -161,10 +165,23 @@ public sealed class SaveService : ISaveService
         return new SaveResult(ErrorCode.Success, "Heartbeat OK", new { lastActiveAt = now });
     }
 
-    /// <summary>캐릭터 생성 성공 응답(userId·characterId·classCode·초기 레벨 1)을 만든다.</summary>
-    private static SaveResult SuccessCharacter(long userId, int characterId, int classCode)
-        => new(ErrorCode.Success, "Character created",
-            new { userId, characterId, classCode, level = 1 });
+    /// <summary>캐릭터 생성 성공 응답(userId·characterId·classCode·초기 레벨 1 + 소모 골드·잔액)을 만든다.
+    /// 무료 생성(최초 1번 슬롯)이면 goldBalance=null로 넘겨 cost 0·빈 잔액으로 회신한다.</summary>
+    private static SaveResult SuccessCharacter(long userId, int characterId, int classCode, long cost, long? goldBalance)
+    {
+        var data = new CreateCharacterResultData
+        {
+            userId = userId,
+            characterId = characterId,
+            classCode = classCode,
+            level = 1,
+            cost = new CurrencyDto { currencyType = GoldCurrencyType, amount = cost },
+            balance = goldBalance.HasValue
+                ? new List<CurrencyDto> { new CurrencyDto { currencyType = GoldCurrencyType, amount = goldBalance.Value } }
+                : new List<CurrencyDto>(),
+        };
+        return new SaveResult(ErrorCode.Success, "Character created", data);
+    }
 
     /// <summary>1~3 슬롯 중 사용되지 않은 가장 작은 번호.</summary>
     private static int FirstFreeSlot(IReadOnlyCollection<CharacterSlot> slots)

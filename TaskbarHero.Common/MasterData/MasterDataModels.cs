@@ -220,6 +220,17 @@ namespace TaskbarHero.Common.MasterData
         public long goldCost;     // 골드 비용
     }
 
+    /// <summary>
+    /// 인벤토리 확장 칸별 골드 비용(inventory_expand_master). step = 기본 용량 이후 여는 칸의 순번(1-based).
+    /// 클라이언트가 "다음 칸 확장 N 골드" 안내에 사용하고, 서버도 동일 값으로 차감한다.
+    /// </summary>
+    [Serializable]
+    public class InventoryExpandCost
+    {
+        public int step;          // 확장 단계(1-based)
+        public long goldCost;     // 그 칸을 여는 골드 비용
+    }
+
     /// <summary>출석부 일자별 보상(attendance_master).</summary>
     [Serializable]
     public class AttendanceMaster

@@ -1,4 +1,5 @@
 using GameServer.Data;
+using MySqlConnector;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 
@@ -6,6 +7,20 @@ namespace GameServer.Repositories;
 
 /// <summary>기존 캐릭터 슬롯 정보(슬롯 배정·직업 중복 검사용).</summary>
 public sealed record CharacterSlot(int CharacterId, int ClassCode);
+
+/// <summary>캐릭터 추가 생성 트랜잭션 결과 상태.</summary>
+public enum AddCharacterStatus
+{
+    Ok,
+    InsufficientCurrency, // 생성 비용 골드 부족
+    DuplicateConflict,    // 슬롯/직업 유니크 경합(동시 생성)
+}
+
+/// <summary>캐릭터 추가 생성 트랜잭션 결과. Cost=차감 골드, GoldBalance=차감 후 잔액.</summary>
+public sealed record AddCharacterOutcome(AddCharacterStatus Status, long Cost, long GoldBalance)
+{
+    public static AddCharacterOutcome Fail(AddCharacterStatus status) => new(status, 0, 0);
+}
 
 public interface ISaveRepository
 {
@@ -21,8 +36,8 @@ public interface ISaveRepository
     /// <summary>최초 접속: game_player + 1번 슬롯 캐릭터 + 큐브를 한 트랜잭션으로 초기화한다.</summary>
     Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int inventoryCapacity, long nowUnix);
 
-    /// <summary>기존 계정에 캐릭터 1개 추가.</summary>
-    Task AddCharacterAsync(long userId, int characterId, int classCode);
+    /// <summary>기존 계정에 캐릭터 1개 추가. 생성 비용(goldCost)을 골드에서 확인·차감하고 캐릭터를 삽입하는 한 트랜잭션.</summary>
+    Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, long goldCost);
 
     /// <summary>last_active_at 갱신. 갱신된 행 수(0이면 계정 없음) 반환.</summary>
     Task<int> UpdateLastActiveAsync(long userId, long nowUnix);
@@ -86,10 +101,18 @@ file sealed class PlayerCubeRow
     public long CubeExp { get; set; }
 }
 
+file sealed class ItemIdQtyRow
+{
+    public long PlayerItemId { get; set; }
+    public long Quantity { get; set; }
+}
+
 /// <summary>세이브(taskbar_hero_game) 접근 계층. SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class SaveRepository : ISaveRepository
 {
     private const int RowTypeCurrency = 2;
+    private const int GoldItemCode = 1;
+    private const int MySqlDuplicateEntry = 1062;
 
     private readonly GameDbFactory _dbFactory;
 
@@ -275,17 +298,63 @@ public sealed class SaveRepository : ISaveRepository
         }
     }
 
-    public async Task AddCharacterAsync(long userId, int characterId, int classCode)
+    public async Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, long goldCost)
     {
-        using var db = _dbFactory.Create();
-        await db.Query("player_character").InsertAsync(new
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
         {
-            user_id = userId,
-            character_id = characterId,
-            class_code = classCode,
-            level = 1,
-            exp = 0,
-        });
+            var db = _dbFactory.Create(connection);
+
+            // 1) 골드 잔액 확인(비용 > 0일 때). 재화 행(row_type=2, item_code=1)이 없으면 잔액 0.
+            var goldRow = await db.Query("player_item")
+                .Select("player_item_id", "quantity")
+                .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
+
+            long gold = goldRow?.Quantity ?? 0;
+            if (gold < goldCost)
+            {
+                await transaction.RollbackAsync();
+                return AddCharacterOutcome.Fail(AddCharacterStatus.InsufficientCurrency);
+            }
+
+            // 2) 골드 차감(비용 > 0일 때만 UPDATE).
+            long newBalance = gold - goldCost;
+            if (goldCost > 0 && goldRow is not null)
+            {
+                await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
+                    .UpdateAsync(new { quantity = newBalance }, transaction);
+            }
+
+            // 3) 캐릭터 삽입. 슬롯/직업 유니크 경합(동시 생성)은 여기서 잡아 롤백.
+            try
+            {
+                await db.Query("player_character").InsertAsync(new
+                {
+                    user_id = userId,
+                    character_id = characterId,
+                    class_code = classCode,
+                    level = 1,
+                    exp = 0,
+                }, transaction);
+            }
+            catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
+            {
+                await transaction.RollbackAsync();
+                return AddCharacterOutcome.Fail(AddCharacterStatus.DuplicateConflict);
+            }
+
+            await transaction.CommitAsync();
+            return new AddCharacterOutcome(AddCharacterStatus.Ok, goldCost, newBalance);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     public async Task<int> UpdateLastActiveAsync(long userId, long nowUnix)

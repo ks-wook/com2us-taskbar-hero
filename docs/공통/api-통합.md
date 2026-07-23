@@ -46,10 +46,11 @@
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
 | `POST /api/game/load` | 접속 시 전체 세이브 스냅샷 로드 | `{}` | `player`, `characters[]`, `currencies[]`, `inventory[]`(장착 상태 포함), `skills[]`, `runes[]`, `cube`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
-| `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정) | `{ nickname, classCode }` | `characterId`, `classCode`, `level` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `PlayerAlreadyExists(2004)` |
+| `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정) | `{ nickname, classCode }` | `characterId`, `classCode`, `level`, `cost`, `balance` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `PlayerAlreadyExists(2004)`, `InsufficientCurrency(4005)` |
 | `POST /api/game/update-last-active` | 접속 시각 갱신(heartbeat, 오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
 
 - 캐릭터는 **한 번에 1개씩** 생성(`create-character`), 계정당 최대 3개·**직업 중복 불가**. `nickname`은 최초 생성 시에만 사용. 조회는 별도 API 없이 `load` 스냅샷 사용.
+- **생성 비용**: **1번 슬롯(최초 생성=계정 초기화)은 무료**, **2·3번 슬롯은 골드 소모**(비용은 마스터 `character_create_cost` 명시값, 서버 권위 차감). 골드 부족 시 `InsufficientCurrency(4005)`. 응답 `cost`(소모 골드)·`balance`(차감 후 잔액)를 회신하며, 클라이언트는 생성 전 안내 비용을 마스터 번들(`character_create_cost`의 다음 슬롯 값)로 표시한다.
 
 ### 3.2 오프라인 보상
 
