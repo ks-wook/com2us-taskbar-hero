@@ -20,6 +20,7 @@ namespace TaskbarHero.Client.Managers
             Party,
             Skill,
             Rune,
+            Cube,
         }
 
         public static UIManager Instance { get; private set; }
@@ -37,6 +38,8 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private GameObject skillPanelPrefab;
         [Tooltip("Assets/Prefabs/UI/RunePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject runePanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/CubePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject cubePanelPrefab;
 
         [Header("시작 설정")]
         [Tooltip("Start 시 자동으로 표시할 패널. 자동 표시를 원치 않으면 비활성화한다.")]
@@ -160,6 +163,22 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
+        /// <summary>큐브 패널을 표시한다.</summary>
+        public void ShowCube() => Show(PanelType.Cube);
+
+        /// <summary>큐브 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleCube()
+        {
+            if (Current == PanelType.Cube)
+            {
+                Hide(PanelType.Cube);
+            }
+            else
+            {
+                Show(PanelType.Cube);
+            }
+        }
+
         /// <summary>파티 편성 패널을 표시한다.</summary>
         public void ShowParty() => Show(PanelType.Party);
 
@@ -266,6 +285,8 @@ namespace TaskbarHero.Client.Managers
                     return skillPanelPrefab;
                 case PanelType.Rune:
                     return runePanelPrefab;
+                case PanelType.Cube:
+                    return cubePanelPrefab;
                 default:
                     return null;
             }
