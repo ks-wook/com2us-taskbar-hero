@@ -74,9 +74,6 @@ namespace TaskbarHero.Client.UI
 
         private void OnLoadSuccess(LoadResponse response)
         {
-            SetInteractable(true);
-            SetError(string.Empty);
-
             bool hasCharacter = !response.data.isNew && response.data.characters != null && response.data.characters.Count > 0;
             Debug.Log($"[LoginPanel] 게임 데이터 로드 완료. isNew={response.data.isNew}, 캐릭터수={(response.data.characters != null ? response.data.characters.Count : 0)}");
 
@@ -85,14 +82,58 @@ namespace TaskbarHero.Client.UI
 
             if (SceneManager.Instance == null)
             {
+                SetInteractable(true);
+                SetError(string.Empty);
                 ShowModal("오류", "씬 매니저를 찾을 수 없습니다.");
                 return;
             }
 
             // 회원가입 직후 최초 캐릭터 생성 진입은 '뒤로가기' 미노출(게임 안 진입 아님).
             Session.CreateCharacterFromGame = false;
-            // 신규 계정(또는 캐릭터 없음)이면 캐릭터 생성 씬으로, 아니면 게임 씬으로 전환.
-            SceneManager.Instance.LoadScene(hasCharacter ? "GameScene" : "CreateCharacterScene");
+
+            // 캐릭터가 없으면(신규 계정) 오프라인 정산 대상이 아니므로 캐릭터 생성 씬으로 전환.
+            if (!hasCharacter)
+            {
+                SetInteractable(true);
+                SetError(string.Empty);
+                SceneManager.Instance.LoadScene("CreateCharacterScene");
+                return;
+            }
+
+            // Login → GameScene: 진입 직전에 오프라인 보상을 정산(/api/game/offline/claim).
+            // heartbeat 시작 전에 정산해야 경과가 소실되지 않는다(기획서 §6.2). 성공 시 결과를 세션에 대기시켜
+            // GameScene 진입 팝업이 표시하고, 정산할 오프라인이 없거나(3001) 실패해도 게임 진입은 계속한다.
+            SetError("오프라인 보상 정산 중...");
+            var claimRequest = new AuthRequest { userId = Session.UserId, token = Session.Token };
+            NetworkManager.Instance.PostToGame<OfflineClaimResponse>(
+                "/api/game/offline/claim", claimRequest, OnOfflineClaimed, OnOfflineClaimError);
+        }
+
+        /// <summary>오프라인 보상 정산 성공: 결과를 세션에 반영·대기시키고 GameScene으로 진입한다.</summary>
+        private void OnOfflineClaimed(OfflineClaimResponse response)
+        {
+            if (response != null && response.data != null)
+            {
+                Session.ApplyOfflineReward(response.data);
+                Debug.Log($"[LoginPanel] 오프라인 보상 정산 완료: gold=+{response.data.rewards.gold}, " +
+                          $"exp=+{response.data.rewards.exp}, effectiveSec={response.data.effectiveSec}, capped={response.data.capped}");
+            }
+            EnterGameScene();
+        }
+
+        /// <summary>오프라인 보상 정산 실패/생략(정산할 오프라인 없음 3001·이미 정산 3002 등): 팝업 없이 GameScene으로 진입한다.</summary>
+        private void OnOfflineClaimError(NetworkError error)
+        {
+            Debug.Log($"[LoginPanel] 오프라인 보상 없음/생략(code={error.ErrorCode}) → 팝업 없이 GameScene 진입");
+            EnterGameScene();
+        }
+
+        /// <summary>입력 상태를 복구하고 GameScene으로 전환한다(정산 성공/실패 공통).</summary>
+        private void EnterGameScene()
+        {
+            SetInteractable(true);
+            SetError(string.Empty);
+            SceneManager.Instance.LoadScene("GameScene");
         }
 
         private void OnLoadError(NetworkError error)

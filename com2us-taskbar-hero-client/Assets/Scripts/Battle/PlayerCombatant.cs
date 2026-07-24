@@ -431,17 +431,31 @@ namespace TaskbarHero.Client.Battle
                 return;
             }
 
-            // 전투: 교전 중 + 사거리 안 + 모션 없음이면 스킬/공격
-            bool fighting = _ctrl.IsFighting && _ctrl.MonsterAlive && _ctrl.MonsterTransform != null;
-            if (fighting)
+            // 전투: 교전 중이면 스킬/기본공격.
+            // 마법사(자기중심 광역 캐스터, _allSkillsAoe)는 몬스터 생존/사거리와 무관하게 준비된 스킬을 시전해
+            // **이미 몬스터가 죽었어도 스킬 이펙트가 무조건 나가도록** 한다. 기본공격만 대상 사거리를 요구한다.
+            if (_ctrl.IsFighting)
             {
-                float dist = _ctrl.MonsterTransform.position.x - transform.position.x;
-                _attackTimer += Time.deltaTime;
-                if (_busyTimer <= 0f && !attacking && dist > 0f && dist <= _attackRange)
+                bool monsterReady = _ctrl.MonsterAlive && _ctrl.MonsterTransform != null;
+                if (monsterReady) _attackTimer += Time.deltaTime; // 기본공격 간격 누적(기존 동작 유지)
+                float dist = monsterReady ? _ctrl.MonsterTransform.position.x - transform.position.x : float.MaxValue;
+                bool monsterInRange = monsterReady && dist > 0f && dist <= _attackRange;
+
+                if (_busyTimer <= 0f && !attacking)
                 {
-                    if (!TryCastSkill())
+                    if (_allSkillsAoe)
                     {
-                        if (_attackTimer >= Mathf.Max(0.05f, _cooldown))
+                        // 마법사: 준비된 스킬은 대상 유무·거리와 무관하게 자기 기준으로 시전(이펙트 보장).
+                        if (!TryCastSkill() && monsterInRange && _attackTimer >= Mathf.Max(0.05f, _cooldown))
+                        {
+                            _attackTimer = 0f;
+                            BasicAttack();
+                        }
+                    }
+                    else if (monsterInRange)
+                    {
+                        // 근접/원거리: 대상이 사거리 안일 때만 스킬/기본공격.
+                        if (!TryCastSkill() && _attackTimer >= Mathf.Max(0.05f, _cooldown))
                         {
                             _attackTimer = 0f;
                             BasicAttack();
@@ -582,13 +596,15 @@ namespace TaskbarHero.Client.Battle
                 }
                 else if (_allSkillsAoe && sk.effect != null)
                 {
-                    // 캐스터 전(全)스킬 광역(마법사): 대상(최전방 몬스터) 위치에 이펙트를 띄우고
-                    // 그 주변 사거리 내 모든 적에게 데미지. 사거리 밖(대상 없음)이면 앞쪽 폴백 위치.
+                    // 캐스터 전(全)스킬 광역(마법사): 이펙트를 **자기 위치 기준**으로 띄우고(대상 위치가 아님)
+                    // 이펙트 크기(EffectRadius) 내 모든 적에게 데미지. 몬스터가 이미 죽었어도 이펙트는 무조건 나간다.
                     if (_castHold)
                         SendMessage("PlayCastHold", motion, SendMessageOptions.DontRequireReceiver);
                     else
                         PlayAttackAnim();
-                    Vector3 center = ArrowRainTargetPos();
+                    Vector3 center = transform.position
+                        + Vector3.up * _ctrl.EffectYOffset
+                        + Vector3.right * _selfEffectXOffset;
                     var fx = SpawnEffectAt(sk.effect, center, sk.scale);
                     _ctrl.DealAreaDamageAfter(motion, dmg, label, center, EffectRadius(fx));
                     _busyTimer = motion;
@@ -761,8 +777,9 @@ namespace TaskbarHero.Client.Battle
             return Instantiate(effect, pos, Quaternion.identity);
         }
 
-        /// <summary>광역 스킬 이펙트의 판정 반경(월드). 이펙트 렌더러 크기 기반이며, 최소 사거리 이상을 보장해
-        /// 전방에 몰린 적 무리에 확실히 닿게 한다.</summary>
+        /// <summary>광역 스킬 이펙트의 판정 반경(월드). **이펙트의 실제 렌더 크기에 맞춘다** — 이전에는
+        /// 사거리(_attackRange)를 최소값으로 강제해 이펙트보다 넓은 범위의 적이 피격되던 문제가 있었다.
+        /// 렌더러가 없어 크기를 구하지 못한 경우에만 사거리로 폴백한다.</summary>
         private float EffectRadius(GameObject fx)
         {
             float r = 0f;
@@ -776,7 +793,8 @@ namespace TaskbarHero.Client.Battle
                     r = Mathf.Max(b.extents.x, b.extents.y);
                 }
             }
-            return Mathf.Max(r, _attackRange);
+            // 이펙트 크기를 그대로 판정 반경으로 사용(과도한 광역 피격 방지). 크기 미상일 때만 사거리 폴백.
+            return r > 0f ? r : _attackRange;
         }
 
         /// <summary>지정 위치에 스킬 이펙트를 무조건 발생시키고 인스턴스를 반환한다(몬스터 생존 여부와 무관 —

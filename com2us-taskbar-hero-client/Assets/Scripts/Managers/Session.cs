@@ -22,6 +22,10 @@ namespace TaskbarHero.Client.Managers
         /// <summary>/api/game/load로 가져온 게임 세이브 스냅샷(플레이어·캐릭터·재화 등).</summary>
         public static LoadDataDto GameData { get; private set; }
 
+        /// <summary>Login→GameScene 전환 시 정산한 오프라인 보상 결과. GameScene 진입 팝업이 소비(표시 후 <see cref="ConsumePendingOfflineReward"/>)한다.
+        /// 정산할 오프라인이 없거나(3001) 이미 팝업을 띄운 뒤에는 null이다.</summary>
+        public static OfflineRewardResult PendingOfflineReward { get; private set; }
+
         /// <summary>로그인 상태 여부.</summary>
         public static bool IsLoggedIn => !string.IsNullOrEmpty(Token);
 
@@ -52,6 +56,64 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
+        /// <summary>
+        /// 오프라인 보상 정산 결과를 캐싱된 세이브에 반영하고, GameScene 진입 팝업이 표시할 수 있게 대기시킨다.
+        /// 서버가 이미 지급을 확정한 값이므로(경험치·레벨·골드), 클라이언트 캐시(파티/HUD/인벤토리 표시)를 동일 상태로 맞춘다:
+        /// 각 캐릭터의 level·exp를 정산 후 값으로 갱신하고, 계정 골드(재화 타입 1)를 지급분만큼 증가시킨다.
+        /// </summary>
+        public static void ApplyOfflineReward(OfflineRewardResult result)
+        {
+            if (result == null)
+            {
+                return;
+            }
+
+            // 정산 후 캐릭터 상태(level·잔여 exp)를 캐시에 반영(characterId로 매칭).
+            if (GameData != null && GameData.characters != null && result.characters != null)
+            {
+                foreach (var after in result.characters)
+                {
+                    if (after == null)
+                    {
+                        continue;
+                    }
+                    foreach (var c in GameData.characters)
+                    {
+                        if (c != null && c.characterId == after.characterId)
+                        {
+                            c.level = after.level;
+                            c.exp = after.exp;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 지급 골드를 계정 재화(타입 1)에 가산.
+            long gold = result.rewards != null ? result.rewards.gold : 0L;
+            if (gold > 0 && GameData != null && GameData.currencies != null)
+            {
+                foreach (var cur in GameData.currencies)
+                {
+                    if (cur != null && cur.currencyType == 1)
+                    {
+                        cur.amount += gold;
+                        break;
+                    }
+                }
+            }
+
+            PendingOfflineReward = result;
+        }
+
+        /// <summary>대기 중인 오프라인 보상 결과를 반환하고 비운다(GameScene 팝업이 1회 소비). 없으면 null.</summary>
+        public static OfflineRewardResult ConsumePendingOfflineReward()
+        {
+            var pending = PendingOfflineReward;
+            PendingOfflineReward = null;
+            return pending;
+        }
+
         /// <summary>세션을 비운다(로그아웃).</summary>
         public static void Clear()
         {
@@ -59,6 +121,7 @@ namespace TaskbarHero.Client.Managers
             Token = null;
             Nickname = null;
             GameData = null;
+            PendingOfflineReward = null;
         }
     }
 }

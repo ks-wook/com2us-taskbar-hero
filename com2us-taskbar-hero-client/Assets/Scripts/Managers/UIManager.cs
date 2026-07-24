@@ -21,6 +21,7 @@ namespace TaskbarHero.Client.Managers
             Skill,
             Rune,
             Cube,
+            OfflineReward,
         }
 
         public static UIManager Instance { get; private set; }
@@ -40,6 +41,8 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private GameObject runePanelPrefab;
         [Tooltip("Assets/Prefabs/UI/CubePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject cubePanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/OfflineRewardPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject offlineRewardPanelPrefab;
 
         [Header("시작 설정")]
         [Tooltip("Start 시 자동으로 표시할 패널. 자동 표시를 원치 않으면 비활성화한다.")]
@@ -179,6 +182,9 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
+        /// <summary>오프라인 보상 정산 결과 팝업을 표시한다(GameScene 진입 시 대기 중인 보상이 있을 때).</summary>
+        public void ShowOfflineReward() => Show(PanelType.OfflineReward);
+
         /// <summary>파티 편성 패널을 표시한다.</summary>
         public void ShowParty() => Show(PanelType.Party);
 
@@ -287,6 +293,8 @@ namespace TaskbarHero.Client.Managers
                     return runePanelPrefab;
                 case PanelType.Cube:
                     return cubePanelPrefab;
+                case PanelType.OfflineReward:
+                    return offlineRewardPanelPrefab;
                 default:
                     return null;
             }

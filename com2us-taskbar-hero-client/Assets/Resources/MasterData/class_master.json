@@ -4,9 +4,9 @@
     "name": "기사",
     "unlockType": 0,
     "baseStats": {
-      "hp": 120,
+      "hp": 180,
       "atk": 10,
-      "def": 8,
+      "def": 16,
       "moveSpeed": 3.0,
       "critChance": 0.05,
       "critDamage": 1.5,

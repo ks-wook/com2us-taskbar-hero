@@ -16,6 +16,15 @@ namespace TaskbarHero.Client.UI
             BuildHud(font);
         }
 
+        /// <summary>GameScene 진입 시 대기 중인 오프라인 보상 정산 결과가 있으면 팝업으로 표시한다(Login에서 정산됨).</summary>
+        private void Start()
+        {
+            if (Session.PendingOfflineReward != null && UIManager.Instance != null)
+            {
+                UIManager.Instance.ShowOfflineReward();
+            }
+        }
+
         /// <summary>HUD 캔버스와 토글 버튼(스테이지·가방)을 생성·배선한다.</summary>
         private void BuildHud(Font font)
         {
@@ -33,11 +42,14 @@ namespace TaskbarHero.Client.UI
             // 우하단: [편성] [스테이지] [가방]
             CreateButton(canvasGo.transform, font, "PartyButton", "편성", new Vector2(-440f, 40f), OnPartyButton);
             CreateButton(canvasGo.transform, font, "StageButton", "스테이지", new Vector2(-240f, 40f), OnStageButton);
-            CreateButton(canvasGo.transform, font, "InventoryButton", "가방", new Vector2(-40f, 40f), OnInventoryButton);
+            var inventoryBtn = CreateButton(canvasGo.transform, font, "InventoryButton", "가방", new Vector2(-40f, 40f), OnInventoryButton);
+
+            // 가방 버튼 우측 상단 레드닷: 잔여 스킬 포인트가 있으면 표시(스킬 레벨업은 가방 안에서 진입).
+            RedDot.AttachTopRight((RectTransform)inventoryBtn.transform).Bind(RedDotConditions.HasUnspentSkillPoints);
         }
 
-        /// <summary>우하단 앵커 HUD 버튼 하나를 생성·배선한다.</summary>
-        private static void CreateButton(Transform parent, Font font, string name, string label,
+        /// <summary>우하단 앵커 HUD 버튼 하나를 생성·배선하고 생성한 버튼 오브젝트를 반환한다.</summary>
+        private static GameObject CreateButton(Transform parent, Font font, string name, string label,
             Vector2 anchoredPos, UnityEngine.Events.UnityAction onClick)
         {
             var btnGo = new GameObject(name, typeof(RectTransform), typeof(Image));
@@ -66,6 +78,7 @@ namespace TaskbarHero.Client.UI
             lrt.offsetMax = Vector2.zero;
 
             btnGo.AddComponent<Button>().onClick.AddListener(onClick);
+            return btnGo;
         }
 
         /// <summary>인벤토리 패널 토글(UIManager 위임).</summary>

@@ -230,6 +230,8 @@ namespace TaskbarHero.Client.UI
             if (_skillButton != null)
             {
                 _skillButton.onClick.AddListener(OnOpenSkillPanel);
+                // 스킬 레벨업 버튼 우측 상단 레드닷: 잔여 스킬 포인트가 있으면 표시(런타임 부착 — 프리팹에 baked 안 됨).
+                RedDot.AttachTopRight((RectTransform)_skillButton.transform).Bind(RedDotConditions.HasUnspentSkillPoints);
             }
             if (_runeButton != null)
             {

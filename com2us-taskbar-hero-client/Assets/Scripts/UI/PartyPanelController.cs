@@ -29,6 +29,9 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private List<Button> _slotAddButtons = new List<Button>();
         [Header("직업별 캐릭터 프리팹(classCode → 프리팹, 에디터 빌더가 배선: 기사1·레인저2·마법사3)")]
         [SerializeField] private List<ClassCharacter> _classCharacters = new List<ClassCharacter>();
+        [Header("배경")]
+        [Tooltip("Assets/Art/UI/modal_bg를 배선한다(에디터 빌더). 없으면 단색 배경.")]
+        [SerializeField] private Sprite _backgroundSprite;
 
         /// <summary>초상화에 렌더할 직업별 캐릭터 프리팹 매핑(classCode → 프리팹).</summary>
         [System.Serializable]
@@ -144,6 +147,7 @@ namespace TaskbarHero.Client.UI
         private RectTransform BuildPanel()
         {
             var img = NewImage("PartyPanelRoot", (RectTransform)transform, new Color(0.10f, 0.12f, 0.18f, 0.98f));
+            ApplyBackground(img);
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
@@ -429,6 +433,15 @@ namespace TaskbarHero.Client.UI
         }
 
         // ── UI 헬퍼 ──
+
+        /// <summary>패널 루트 배경에 배경 스프라이트(modal_bg)를 적용한다(지정 시). 없으면 기존 단색 배경 유지.</summary>
+        private void ApplyBackground(Image img)
+        {
+            if (img == null || _backgroundSprite == null) return;
+            img.sprite = _backgroundSprite;
+            img.type = Image.Type.Simple;
+            img.color = Color.white;
+        }
 
         private static Image NewImage(string name, Transform parent, Color color)
         {

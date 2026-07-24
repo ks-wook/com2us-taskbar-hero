@@ -104,7 +104,7 @@ CREATE TABLE class_master (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='캐릭터 직업 정의(기본 스탯 포함)';
 
 INSERT INTO class_master (class_code, name, unlock_type, hp, atk, def, move_speed, crit_chance, crit_damage, cooldown) VALUES
-    (1, '기사',   0, 120, 10, 8, 3.0, 0.05, 1.5, 1.2),
+    (1, '기사',   0, 180, 10, 16, 3.0, 0.05, 1.5, 1.2),
     (2, '레인저', 0,  90, 14, 5, 4.0, 0.10, 1.5, 0.9),
     (3, '마법사', 0,  85, 16, 4, 3.2, 0.08, 1.7, 1.5);
 
