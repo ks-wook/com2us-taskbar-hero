@@ -210,7 +210,7 @@ return { elapsed, effective, gold, exp, characters[], ... }
 
 ## 8. 공유 DTO 정의 — `OfflineRewardResult` (확정)
 
-정산 API(`POST /api/game/offline/claim`)의 **성공 응답 `data`**를 그대로 담는 공유 DTO다. `TaskbarHero.Common`에 정의해 서버(GameServer)와 클라이언트(Unity)가 동일 타입을 공유한다. 5.1 응답 예시의 필드를 그대로 확정한 것이며, 필드명은 API JSON과 동일한 **camelCase**로 직렬화한다.
+정산 API(`POST /api/game/offline/claim`)의 **성공 응답 `data`**를 그대로 담는 공유 DTO다. `TaskbarHero.Common.Dto`에 정의해 서버(GameServer)와 클라이언트(Unity)가 동일 타입을 공유한다. 5.1 응답 예시의 필드를 그대로 확정한 것이며, 필드명은 API JSON과 동일한 **camelCase**로 직렬화한다.
 
 **필드 (확정)**
 
@@ -232,45 +232,48 @@ return { elapsed, effective, gold, exp, characters[], ... }
 - **미지급 케이스에는 사용하지 않음**: 경과가 최소 기준 미만(`NoOfflineReward=3001`)·이미 정산됨(`OfflineRewardAlreadyClaimed=3002`)인 경우 응답 `data`는 `null`이며 이 DTO를 채우지 않는다(5.1).
 - **타입 근거**: `exp`·`gold`는 세이브 ERD에서 `bigint`이므로 `long`, `level`은 `int`([세이브 데이터 기획서](save-data-기획서.md) 3장).
 
-**정의 (`TaskbarHero.Common`, netstandard2.0)**
+**정의 (`TaskbarHero.Common.Dto`, netstandard2.0)** — 다른 게임 DTO(`GameDto.cs`)와 동일한 규약(`[Serializable]` + public camelCase 필드)으로 구현했다.
 
 ```csharp
-namespace TaskbarHero.Common
+namespace TaskbarHero.Common.Dto
 {
     // 오프라인 보상 정산 결과 (POST /api/game/offline/claim 성공 응답 data)
-    // 직렬화 시 camelCase 필드명 사용(API JSON 계약과 일치).
+    // 프로젝트 DTO 규약: [Serializable] + public camelCase 필드(필드명 = API JSON 키).
+    [Serializable]
     public class OfflineRewardResult
     {
-        public long OfflineElapsedSec { get; set; } // 실제 경과 시간(초), 상한 미적용
-        public long EffectiveSec { get; set; }      // 상한 적용 후 보상 산정 시간(초)
-        public bool Capped { get; set; }            // 12시간 상한 적용 여부
-        public OfflineRewardAmount Rewards { get; set; } // 지급 골드·경험치(경험치는 3캐릭터 공통)
-        public OfflineCharacterState[] Characters { get; set; } // 반영 후 3캐릭터 각각의 레벨·잔여 경험치
-        public long LastActiveAt { get; set; }      // 현재 서버 시각으로 리셋한 기준 시각(Unix ts)
+        public long offlineElapsedSec;  // 실제 경과 시간(초), 상한 미적용
+        public long effectiveSec;       // 상한 적용 후 보상 산정 시간(초)
+        public bool capped;             // 12시간 상한 적용 여부
+        public OfflineRewardAmount rewards = new OfflineRewardAmount();          // 지급 골드·경험치(경험치는 3캐릭터 공통)
+        public List<OfflineCharacterState> characters = new List<OfflineCharacterState>(); // 반영 후 3캐릭터 각각의 레벨·잔여 경험치
+        public long lastActiveAt;       // 현재 서버 시각으로 리셋한 기준 시각(Unix ts)
     }
 
+    [Serializable]
     public class OfflineRewardAmount
     {
-        public long Gold { get; set; }
-        public long Exp { get; set; }
+        public long gold;
+        public long exp;
     }
 
+    [Serializable]
     public class OfflineCharacterState
     {
-        public int CharacterId { get; set; } // 캐릭터 슬롯(1~3)
-        public int Level { get; set; }
-        public long Exp { get; set; } // 현재 레벨의 잔여 경험치
+        public int characterId; // 캐릭터 슬롯(1~3)
+        public int level;
+        public long exp;        // 현재 레벨의 잔여 경험치
     }
 }
 ```
 
-- **직렬화 규약**: 서버 응답 JSON은 camelCase(`offlineElapsedSec` 등)를 쓰므로, GameServer의 `JsonSerializerOptions`에 `PropertyNamingPolicy = CamelCase`를 적용하거나 각 속성에 `[JsonPropertyName]`을 지정한다. `TaskbarHero.Common`은 프레임워크 중립을 유지하기 위해 직렬화 속성을 하드코딩하지 않고 서버/클라이언트 각자의 직렬화 설정에서 처리한다.
+- **직렬화 규약**: 다른 게임 DTO와 동일하게 `[Serializable]` + **public camelCase 필드**로 두어 **필드명이 곧 API JSON 키**가 된다. 서버(GameServer)는 `JsonSerializerOptions.IncludeFields = true`로 필드를 직렬화하고, Unity 클라이언트는 `JsonUtility`가 같은 필드를 파싱한다(양쪽 동일 JSON). 별도 `PropertyNamingPolicy`·`[JsonPropertyName]`은 쓰지 않는다(코드베이스가 camelCase 필드로 통일). `characters`는 JSON 배열이며 C#에서는 `List<OfflineCharacterState>`로 담는다.
 
 ## 9. 미결 사항 / TODO
 
-- **스테이지별 산출율(`stageGoldRate`/`stageExpRate`)**: 파밍 기준 스테이지 선정(최고 클리어 vs 현재)과 시간당 골드·경험치 산출 공식. 스테이지/전투·마스터 데이터 기획과 연계.
+- **스테이지별 산출율(`stageGoldRate`/`stageExpRate`) (구현·baseline 확정)**: 파밍 기준 스테이지는 **현재 진입 스테이지**(`game_player.act/difficulty/stage`)로 정하고, 시간당 산출율은 그 스테이지의 **클리어 보상(`stage_reward.reward_gold`/`reward_exp`)을 가정 클리어 주기(60초)마다 얻는다**는 단순식으로 파생한다(`perSec = reward / 60`). 최종 지급 = `floor(effectiveSec × reward / (60 × 2))`(오프라인 효율 50% = ÷2). 학습용 baseline이며 상수(`AssumedClearIntervalSec`)만 조정하면 된다. 몬스터 스탯 기반의 정교한 산출은 추후 개선 여지로 남긴다.
 
-> 확정된 항목: 최대 누적 시간 12시간, 최소 정산 시간 10분, 오프라인 효율 50%, 아이템 미지급(2·6장), **`OfflineRewardResult` DTO 필드(8장)**. 정산 감사(재화 지급 원장)는 현재 미도입(향후 재화 원장 도입 시 정의).
+> 확정된 항목: 최대 누적 시간 12시간, 최소 정산 시간 10분, 오프라인 효율 50%, 아이템 미지급(2·6장), **`OfflineRewardResult` DTO 필드(8장)**, **시간당 산출율 baseline 공식(위)**. 정산 감사(재화 지급 원장)는 현재 미도입(향후 재화 원장 도입 시 정의).
 
 ## 10. 참고
 
