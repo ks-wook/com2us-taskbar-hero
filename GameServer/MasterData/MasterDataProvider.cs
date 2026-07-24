@@ -277,14 +277,13 @@ public sealed class MasterDataProvider
         => _recipesByCode.TryGetValue(recipeCode, out var r) ? r : null;
 
     /// <summary>
-    /// 합성 결과 아이템 코드를 서버가 산출한다: 입력과 같은 슬롯·클래스 제한의 (입력 등급 + 1) 장비 중 하나를 무작위 선택.
+    /// 합성 결과 아이템 코드를 서버가 산출한다: (입력 등급 + 1) 장비 중 하나를 무작위 선택(슬롯·클래스 무관).
     /// 상위 등급 후보가 없으면(최대 등급 등) null → 호출측이 CubeRecipeNotMet으로 거부한다.
     /// </summary>
-    public int? PickCombineResultCode(int inputGrade, int equipSlot, int classReq)
+    public int? PickCombineResultCode(int inputGrade)
     {
         var candidates = _itemsByCode.Values
-            .Where(d => d.ItemType == ItemTypeEquip && d.Grade == inputGrade + 1
-                        && d.EquipSlot == equipSlot && d.ClassReq == classReq)
+            .Where(d => d.ItemType == ItemTypeEquip && d.Grade == inputGrade + 1)
             .Select(d => d.ItemCode)
             .ToList();
 
