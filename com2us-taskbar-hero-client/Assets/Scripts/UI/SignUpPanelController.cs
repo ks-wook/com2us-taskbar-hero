@@ -18,6 +18,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Button backButton;
         [SerializeField] private Text errorText;
 
+        private CanvasGroup _panelGroup; // 로딩 중 회원가입 UI 전체를 숨기고 입력을 차단하기 위한 그룹
+
         private void Awake()
         {
             if (signUpButton != null)
@@ -29,11 +31,31 @@ namespace TaskbarHero.Client.UI
             {
                 backButton.onClick.AddListener(OnBackClicked);
             }
+
+            // 패널 루트에 CanvasGroup을 확보(로딩 중 회원가입 UI만 숨기고 스피너만 노출).
+            _panelGroup = transform.root.GetComponent<CanvasGroup>();
+            if (_panelGroup == null)
+            {
+                _panelGroup = transform.root.gameObject.AddComponent<CanvasGroup>();
+            }
         }
 
         private void OnEnable()
         {
             SetError(string.Empty);
+            SetSignUpUiShown(true); // 패널이 다시 표시될 때 회원가입 UI를 확실히 노출
+        }
+
+        /// <summary>회원가입 UI 전체를 표시/숨김한다(로딩 중에는 숨겨 로딩 스피너만 보이게 한다).</summary>
+        private void SetSignUpUiShown(bool shown)
+        {
+            if (_panelGroup == null)
+            {
+                return;
+            }
+            _panelGroup.alpha = shown ? 1f : 0f;
+            _panelGroup.interactable = shown;
+            _panelGroup.blocksRaycasts = shown;
         }
 
         private void OnSignUpClicked()
@@ -54,8 +76,10 @@ namespace TaskbarHero.Client.UI
                 return;
             }
 
-            SetError("가입 중...");
+            SetError(string.Empty);
             SetInteractable(false);
+            SetSignUpUiShown(false);          // 회원가입 UI 숨김 → 로딩 스피너만 노출
+            LoadingOverlay.Instance?.Show();   // 완료(성공/오류)까지 스피너 표시 + 입력 차단
 
             // 입력한 닉네임을 세션에 캐싱(로그인 후 캐릭터 생성 시 계정 닉네임으로 사용).
             Session.Nickname = nickname;
@@ -66,6 +90,7 @@ namespace TaskbarHero.Client.UI
 
         private void OnSignUpSuccess(SignupResponse response)
         {
+            LoadingOverlay.Instance?.Hide();
             SetInteractable(true);
             SetError(string.Empty);
             Debug.Log($"[SignUpPanel] 회원가입 성공. userId={response.userId}");
@@ -83,6 +108,8 @@ namespace TaskbarHero.Client.UI
 
         private void OnSignUpError(NetworkError error)
         {
+            LoadingOverlay.Instance?.Hide();
+            SetSignUpUiShown(true);
             SetInteractable(true);
             SetError(string.Empty);
             ShowModal("회원가입 실패", ErrorMessages.ToKorean(error));

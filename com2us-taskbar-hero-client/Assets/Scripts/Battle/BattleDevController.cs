@@ -989,7 +989,11 @@ namespace TaskbarHero.Client.Battle
         private readonly List<RectTransform> _hpBarRoots = new List<RectTransform>();
         private readonly List<Image> _hpBarFills = new List<Image>();
 
-        /// <summary>살아있는 모든 몬스터 머리 위에 Canvas HP 바를 배치·갱신한다(LateUpdate).</summary>
+        [Tooltip("일반 몬스터 HP바를 머리(스프라이트 상단)에서 얼마나 위에 둘지(월드 단위).")]
+        private const float HpBarAboveMargin = 0.2f;
+
+        /// <summary>살아있는 모든 몬스터 머리 위에 Canvas HP 바를 배치·갱신한다(LateUpdate).
+        /// 보스는 왕관을 머리 위로 띄워 두므로, 머리와 왕관 사이(band) 안에 바가 오도록 배치한다.</summary>
         private void UpdateEnemyHpBars()
         {
             if (_om == null || _cam == null)
@@ -1006,7 +1010,28 @@ namespace TaskbarHero.Client.Battle
                 {
                     continue;
                 }
-                Vector3 sp = _cam.WorldToScreenPoint(m.transform.position + Vector3.up * 1.2f);
+                // 몸통(왕관 제외) 경계로 머리 상단을 구해 HP바를 머리 위에 배치한다.
+                Transform crownT = m.transform.Find("BossCrown");
+                float bodyTop = m.transform.position.y + 1.2f; // 폴백(경계 없음)
+                float centerX = m.transform.position.x;
+                var rends = m.GetComponentsInChildren<SpriteRenderer>();
+                if (rends != null && rends.Length > 0)
+                {
+                    Bounds body = default;
+                    bool has = false;
+                    foreach (var r in rends)
+                    {
+                        if (r == null) continue;
+                        if (crownT != null && r.transform == crownT) continue; // 왕관은 몸통 경계에서 제외
+                        if (!has) { body = r.bounds; has = true; } else body.Encapsulate(r.bounds);
+                    }
+                    if (has) { bodyTop = body.max.y; centerX = body.center.x; }
+                }
+                // 일반: 머리 위. 보스: 머리와 왕관 사이(band 중앙).
+                float barY = m.IsBoss
+                    ? bodyTop + MonsterUnit.BossHpBarBand * 0.5f
+                    : bodyTop + HpBarAboveMargin;
+                Vector3 sp = _cam.WorldToScreenPoint(new Vector3(centerX, barY, m.transform.position.z));
                 if (sp.z <= 0f)
                 {
                     continue;

@@ -17,6 +17,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Button signUpButton;
         [SerializeField] private Text errorText;
 
+        private CanvasGroup _panelGroup; // 로딩 중 로그인 UI 전체를 숨기고 입력을 차단하기 위한 그룹
+
         private void Awake()
         {
             if (loginButton != null)
@@ -28,11 +30,31 @@ namespace TaskbarHero.Client.UI
             {
                 signUpButton.onClick.AddListener(OnSignUpClicked);
             }
+
+            // 패널 루트에 CanvasGroup을 확보(로딩 중 로그인 UI만 숨기고 스피너만 노출).
+            _panelGroup = transform.root.GetComponent<CanvasGroup>();
+            if (_panelGroup == null)
+            {
+                _panelGroup = transform.root.gameObject.AddComponent<CanvasGroup>();
+            }
+        }
+
+        /// <summary>로그인 UI 전체를 표시/숨김한다(로딩 중에는 숨겨 로딩 스피너만 보이게 한다).</summary>
+        private void SetLoginUiShown(bool shown)
+        {
+            if (_panelGroup == null)
+            {
+                return;
+            }
+            _panelGroup.alpha = shown ? 1f : 0f;
+            _panelGroup.interactable = shown;
+            _panelGroup.blocksRaycasts = shown;
         }
 
         private void OnEnable()
         {
             SetError(string.Empty);
+            SetLoginUiShown(true); // 패널이 다시 표시될 때 로그인 UI를 확실히 노출(숨김 상태 잔존 방지)
         }
 
         private void OnLoginClicked()
@@ -52,8 +74,10 @@ namespace TaskbarHero.Client.UI
                 return;
             }
 
-            SetError("로그인 중...");
+            SetError(string.Empty);
             SetInteractable(false);
+            SetLoginUiShown(false);           // 로그인 UI 숨김 → 로딩 스피너만 노출
+            LoadingOverlay.Instance?.Show();   // 완료(씬 전환/오류)까지 스피너 표시 + 입력 차단
 
             var request = new LoginRequest { email = email, password = password };
             NetworkManager.Instance.PostToAccount<LoginResponse>("/api/auth/login", request, OnLoginSuccess, OnLoginError);
@@ -82,6 +106,8 @@ namespace TaskbarHero.Client.UI
 
             if (SceneManager.Instance == null)
             {
+                LoadingOverlay.Instance?.Hide();
+                SetLoginUiShown(true);
                 SetInteractable(true);
                 SetError(string.Empty);
                 ShowModal("오류", "씬 매니저를 찾을 수 없습니다.");
@@ -138,6 +164,8 @@ namespace TaskbarHero.Client.UI
 
         private void OnLoadError(NetworkError error)
         {
+            LoadingOverlay.Instance?.Hide();
+            SetLoginUiShown(true);
             SetInteractable(true);
             SetError(string.Empty);
             ShowModal("데이터 로드 실패", ErrorMessages.ToKorean(error));
@@ -146,6 +174,8 @@ namespace TaskbarHero.Client.UI
 
         private void OnLoginError(NetworkError error)
         {
+            LoadingOverlay.Instance?.Hide();
+            SetLoginUiShown(true);
             SetInteractable(true);
             SetError(string.Empty);
             ShowModal("로그인 실패", ErrorMessages.ToKorean(error));

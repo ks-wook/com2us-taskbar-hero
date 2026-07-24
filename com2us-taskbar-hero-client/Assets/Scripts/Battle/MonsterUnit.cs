@@ -31,11 +31,14 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("사망 애니 후 오브젝트가 사라지기까지 지연(초)")]
         private const float DeathLinger = 0.8f;
 
-        // 보스 연출 상수: 일반 몹 대비 3배 크기, 머리 위 왕관 아이콘의 월드 폭/여백.
+        // 보스 연출 상수: 일반 몹 대비 3배 크기, 머리 위 왕관 아이콘의 월드 폭.
         private const float BossScale = 3f;
         private const float CrownWorldWidth = 1.4f;
-        private const float CrownYMargin = 0.4f;
         private const int CrownSortingOffset = 50;
+
+        /// <summary>보스의 머리(스프라이트 상단)와 왕관 사이에 HP바가 들어갈 수 있도록,
+        /// 왕관 하단을 머리에서 띄우는 여백(월드 단위). HP바 배치(<c>BattleDevController</c>)와 공유한다.</summary>
+        public const float BossHpBarBand = 0.5f;
 
         public bool Alive => _alive;
         public bool IsBoss => _isBoss;
@@ -129,10 +132,12 @@ namespace TaskbarHero.Client.Battle
                 worldScale / Mathf.Max(0.0001f, Mathf.Abs(lossy.y)),
                 1f);
 
-            // 머리 위(경계 상단 + 여백)에 배치. 부모를 따라가도록 월드 좌표로 지정.
+            // 왕관을 머리 위로 띄워 그 아래(머리와 왕관 사이)에 HP바 공간을 확보한다.
+            // 왕관 하단이 머리 상단보다 BossHpBarBand만큼 위에 오도록 중심 Y를 계산한다.
             float topY = hasBounds ? bounds.max.y : transform.position.y + 2f;
             float centerX = hasBounds ? bounds.center.x : transform.position.x;
-            crownGo.transform.position = new Vector3(centerX, topY + CrownYMargin, 0f);
+            float crownWorldHeight = CrownWorldWidth * (icon.bounds.size.y / Mathf.Max(0.0001f, icon.bounds.size.x));
+            crownGo.transform.position = new Vector3(centerX, topY + BossHpBarBand + crownWorldHeight * 0.5f, 0f);
         }
 
         /// <summary>이 몬스터가 멈출 목표 x(파티 앞 라인). 왼쪽으로만 이동하며 이 지점에서 정지한다.</summary>

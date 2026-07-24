@@ -10,6 +10,11 @@ namespace TaskbarHero.Client.UI
     /// </summary>
     public class GameSceneHudController : MonoBehaviour
     {
+        [Header("메뉴 버튼 아이콘 (에디터 빌더가 배선: Assets/Art/Icon)")]
+        [SerializeField] private Sprite partyIcon;      // 편성
+        [SerializeField] private Sprite stageIcon;      // 스테이지
+        [SerializeField] private Sprite inventoryIcon;  // 가방
+
         private void Awake()
         {
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -39,43 +44,73 @@ namespace TaskbarHero.Client.UI
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // 우하단: [편성] [스테이지] [가방]
-            CreateButton(canvasGo.transform, font, "PartyButton", "편성", new Vector2(-440f, 40f), OnPartyButton);
-            CreateButton(canvasGo.transform, font, "StageButton", "스테이지", new Vector2(-240f, 40f), OnStageButton);
-            var inventoryBtn = CreateButton(canvasGo.transform, font, "InventoryButton", "가방", new Vector2(-40f, 40f), OnInventoryButton);
+            // 우하단: [편성] [스테이지] [가방] — 아이콘 위 + 작은 텍스트 아래
+            CreateButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, new Vector2(-440f, 40f), OnPartyButton);
+            CreateButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, new Vector2(-240f, 40f), OnStageButton);
+            var inventoryBtn = CreateButton(canvasGo.transform, font, "InventoryButton", "가방", inventoryIcon, new Vector2(-40f, 40f), OnInventoryButton);
 
             // 가방 버튼 우측 상단 레드닷: 잔여 스킬 포인트가 있으면 표시(스킬 레벨업은 가방 안에서 진입).
             RedDot.AttachTopRight((RectTransform)inventoryBtn.transform).Bind(RedDotConditions.HasUnspentSkillPoints);
         }
 
-        /// <summary>우하단 앵커 HUD 버튼 하나를 생성·배선하고 생성한 버튼 오브젝트를 반환한다.</summary>
+        /// <summary>우하단 앵커 HUD 버튼 하나를 생성·배선하고 생성한 버튼 오브젝트를 반환한다.
+        /// 아이콘이 있으면 아이콘을 상단에, 작아진 텍스트를 그 아래에 배치한다(아이콘 없으면 텍스트만 중앙).</summary>
         private static GameObject CreateButton(Transform parent, Font font, string name, string label,
-            Vector2 anchoredPos, UnityEngine.Events.UnityAction onClick)
+            Sprite icon, Vector2 anchoredPos, UnityEngine.Events.UnityAction onClick)
         {
             var btnGo = new GameObject(name, typeof(RectTransform), typeof(Image));
             btnGo.transform.SetParent(parent, false);
             var img = btnGo.GetComponent<Image>();
-            img.color = new Color(0.25f, 0.28f, 0.4f, 0.95f);
+            // 배경 투명(A=0). raycastTarget는 유지되므로 투명해도 클릭은 정상 동작한다.
+            img.color = new Color(0.25f, 0.28f, 0.4f, 0f);
             var rt = (RectTransform)btnGo.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f); // 우하단
             rt.pivot = new Vector2(1f, 0f);
             rt.anchoredPosition = anchoredPos;
-            rt.sizeDelta = new Vector2(180f, 90f);
+            rt.sizeDelta = new Vector2(180f, 150f);
 
             var labelGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
             labelGo.transform.SetParent(btnGo.transform, false);
             var t = labelGo.GetComponent<Text>();
             t.font = font;
             t.text = label;
-            t.fontSize = 34;
             t.alignment = TextAnchor.MiddleCenter;
             t.color = Color.white;
             t.raycastTarget = false;
             var lrt = (RectTransform)labelGo.transform;
-            lrt.anchorMin = Vector2.zero;
-            lrt.anchorMax = Vector2.one;
-            lrt.offsetMin = Vector2.zero;
-            lrt.offsetMax = Vector2.zero;
+
+            if (icon != null)
+            {
+                // 아이콘(상단)
+                var iconGo = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+                iconGo.transform.SetParent(btnGo.transform, false);
+                var iconImg = iconGo.GetComponent<Image>();
+                iconImg.sprite = icon;
+                iconImg.preserveAspect = true;
+                iconImg.raycastTarget = false;
+                var irt = iconImg.rectTransform;
+                irt.anchorMin = irt.anchorMax = new Vector2(0.5f, 1f);
+                irt.pivot = new Vector2(0.5f, 1f);
+                irt.anchoredPosition = new Vector2(0f, -2f);   // 상단 여백 축소
+                irt.sizeDelta = new Vector2(104f, 104f);        // 아이콘 확대
+
+                // 텍스트(아이콘 아래) — 크게 + 볼드, 여백 축소
+                t.fontSize = 30;
+                t.fontStyle = FontStyle.Bold;
+                lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 0f);
+                lrt.pivot = new Vector2(0.5f, 0f);
+                lrt.anchoredPosition = new Vector2(0f, 4f);
+                lrt.sizeDelta = new Vector2(176f, 40f);
+            }
+            else
+            {
+                // 폴백: 아이콘이 없으면 기존처럼 텍스트만 버튼 전체 중앙에 표시.
+                t.fontSize = 34;
+                lrt.anchorMin = Vector2.zero;
+                lrt.anchorMax = Vector2.one;
+                lrt.offsetMin = Vector2.zero;
+                lrt.offsetMax = Vector2.zero;
+            }
 
             btnGo.AddComponent<Button>().onClick.AddListener(onClick);
             return btnGo;

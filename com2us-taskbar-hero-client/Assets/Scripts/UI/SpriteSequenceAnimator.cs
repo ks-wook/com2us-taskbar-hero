@@ -40,6 +40,14 @@ namespace TaskbarHero.Client.UI
             }
         }
 
+        /// <summary>프레임·재생 속도·반복 여부를 코드로 설정한다(에디터 빌더가 스프라이트 시퀀스를 배선할 때 사용).</summary>
+        public void Configure(Sprite[] frames, float fps, bool loop)
+        {
+            this.frames = frames;
+            this.fps = fps;
+            this.loop = loop;
+        }
+
         /// <summary>처음부터 재생을 시작한다.</summary>
         public void Play()
         {

@@ -58,6 +58,9 @@ namespace TaskbarHero.Client.Battle
         private bool _repeatSameStage; // true면 클리어 후 같은 스테이지를 반복(이미 클리어한 스테이지 수동 입장), false면 다음 스테이지로 전진
         private readonly List<int> _pendingLevelUps = new List<int>(); // 이번 클리어에서 레벨업한 캐릭터 id(오버레이 종료 후 글로우 재생)
 
+        // 지역당 스테이지 수(난이도1 기준 클리어 시퀀스 계산용 — 스테이지 UI/서버 규칙과 동일).
+        private const int StagesPerRegion = 3;
+
         /// <summary>현재 진행 중인 스테이지 좌표(외부 관찰/디버그용).</summary>
         public int CurrentAct => _act;
         public int CurrentDifficulty => _difficulty;
@@ -103,11 +106,14 @@ namespace TaskbarHero.Client.Battle
         /// 자동 진입 가드(_entered)도 세워, Start의 최초 입장과 중복되지 않게 한다.</summary>
         public void EnterSelectedStage(int act, int difficulty, int stage)
         {
-            // 선택 스테이지가 현재 진행도(프론티어 = 다음 도전 스테이지)와 같으면 '첫 클리어' 대상 → 클리어 시 다음으로 전진.
-            // 그보다 앞선(이미 클리어한) 스테이지면 → 클리어해도 전진하지 않고 그 스테이지를 계속 반복한다.
+            // '첫 클리어' 판정은 스테이지 UI·서버와 동일하게 클리어 시퀀스로 한다(수동 입장이어도 일관되게 전진 판단).
+            // 난이도1 기준 시퀀스 = (지역-1)×StagesPerRegion + 스테이지.
+            //  · seq ≤ maxStageCleared      → 이미 클리어한 스테이지 → 클리어해도 전진하지 않고 반복.
+            //  · seq == maxStageCleared + 1  → 최초로 깨는(프론티어) 스테이지 → 수동 입장이어도 클리어 시 다음 스테이지로 전진.
             var player = Session.GameData != null ? Session.GameData.player : null;
-            bool isFrontier = player != null && player.act == act && player.difficulty == difficulty && player.stage == stage;
-            _repeatSameStage = !isFrontier;
+            int maxCleared = player != null ? player.maxStageCleared : 0;
+            int seq = (act - 1) * StagesPerRegion + stage;
+            _repeatSameStage = seq <= maxCleared; // 이미 클리어한 스테이지만 반복. 첫 클리어는 다음 스테이지로 입장 요청.
 
             _entered = true;
             EnterStage(act, difficulty, stage, restartFromStart: true);
