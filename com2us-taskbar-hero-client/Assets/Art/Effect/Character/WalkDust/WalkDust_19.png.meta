@@ -116,10 +116,10 @@ TextureImporter:
       name: WalkDust_19_0
       rect:
         serializedVersion: 2
-        x: 119
+        x: 103
         y: 31
-        width: 246
-        height: 62
+        width: 214
+        height: 54
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}

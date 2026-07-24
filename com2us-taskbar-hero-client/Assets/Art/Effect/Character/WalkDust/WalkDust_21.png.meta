@@ -116,9 +116,9 @@ TextureImporter:
       name: WalkDust_21_0
       rect:
         serializedVersion: 2
-        x: 119
+        x: 103
         y: 31
-        width: 246
+        width: 214
         height: 58
       alignment: 0
       pivot: {x: 0, y: 0}
