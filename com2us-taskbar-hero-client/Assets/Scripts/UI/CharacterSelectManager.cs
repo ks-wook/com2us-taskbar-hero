@@ -258,7 +258,7 @@ namespace TaskbarHero.Client.UI
             {
                 ModalManager.Instance.ShowConfirmCancel(
                     "캐릭터 생성",
-                    $"{display} 캐릭터를 생성합니다.\n소모 골드: {cost:N0}\n생성하시겠습니까?",
+                    $"{display} 캐릭터를 생성합니다.\n소모 골드: {GoldFormat.Highlight(cost)}\n생성하시겠습니까?",
                     () => DoCreate(nickname, classCode));
             }
             else

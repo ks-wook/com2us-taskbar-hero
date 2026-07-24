@@ -385,14 +385,14 @@ namespace TaskbarHero.Client.UI
                 if (ModalManager.Instance != null)
                 {
                     ModalManager.Instance.ShowConfirm("캐릭터 추가",
-                        $"골드가 부족합니다.\n필요 골드: {cost:N0}\n보유 골드: {gold:N0}");
+                        $"골드가 부족합니다.\n필요 골드: {GoldFormat.Highlight(cost)}\n보유 골드: {GoldFormat.Highlight(gold)}");
                 }
                 Debug.Log($"[Party] 캐릭터 추가 차단(골드 부족): 필요 {cost}, 보유 {gold}");
                 return;
             }
 
             string message = cost > 0
-                ? $"캐릭터 추가에 골드 {cost:N0}이 필요합니다.\n(보유 {gold:N0})\n생성 화면으로 이동할까요?"
+                ? $"캐릭터 추가에 골드 {GoldFormat.Highlight(cost)}이 필요합니다.\n(보유 {GoldFormat.Highlight(gold)})\n생성 화면으로 이동할까요?"
                 : "새 캐릭터를 생성합니다.\n생성 화면으로 이동할까요?";
             if (ModalManager.Instance != null)
             {
