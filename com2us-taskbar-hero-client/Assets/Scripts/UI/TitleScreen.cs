@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using TaskbarHero.Client.Managers;
 
@@ -23,9 +24,26 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private float blinkPeriod = 1.2f;
 
         private bool _started;
+        private RectTransform _quitRect; // 우측 상단 종료 버튼(수동 히트테스트)
+
+        private void Awake()
+        {
+            BuildQuitButton();
+        }
 
         private void Update()
         {
+            var pointer = Pointer.current;
+            bool pressed = pointer != null && pointer.press.wasPressedThisFrame;
+
+            // 종료 버튼은 시작 전/후(로그인 화면 포함) 모두 동작하도록 _started 체크보다 먼저 처리.
+            if (pressed && _quitRect != null
+                && RectTransformUtility.RectangleContainsScreenPoint(_quitRect, pointer.position.ReadValue(), null))
+            {
+                QuitGame();
+                return;
+            }
+
             if (_started)
             {
                 return;
@@ -33,11 +51,64 @@ namespace TaskbarHero.Client.UI
 
             BlinkPressToStart();
 
-            var pointer = Pointer.current;
-            if (pointer != null && pointer.press.wasPressedThisFrame)
+            if (pressed)
             {
                 StartGame();
             }
+        }
+
+        /// <summary>게임을 종료한다(에디터에서는 플레이 정지).</summary>
+        private static void QuitGame()
+        {
+            Debug.Log("[TitleScreen] 종료 버튼 → 게임 종료");
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
+        /// <summary>우측 상단에 종료(✕) 버튼을 코드로 구성한다(타이틀 화면 전용, 최상단 캔버스).</summary>
+        private void BuildQuitButton()
+        {
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            var canvasGo = new GameObject("QuitButtonCanvas", typeof(RectTransform), typeof(Canvas),
+                typeof(CanvasScaler), typeof(GraphicRaycaster));
+            var canvas = canvasGo.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 120; // 로그인 패널(100) 위
+            var scaler = canvasGo.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1080f, 1920f);
+            scaler.matchWidthOrHeight = 0.5f;
+
+            var btn = new GameObject("QuitButton", typeof(RectTransform), typeof(Image));
+            btn.transform.SetParent(canvasGo.transform, false);
+            var img = btn.GetComponent<Image>();
+            img.color = new Color(0.72f, 0.22f, 0.20f, 0.96f);
+            _quitRect = (RectTransform)btn.transform;
+            _quitRect.anchorMin = _quitRect.anchorMax = new Vector2(1f, 1f);
+            _quitRect.pivot = new Vector2(1f, 1f);
+            _quitRect.anchoredPosition = new Vector2(-24f, -24f);
+            _quitRect.sizeDelta = new Vector2(76f, 76f);
+
+            var txtGo = new GameObject("X", typeof(RectTransform), typeof(Text));
+            txtGo.transform.SetParent(btn.transform, false);
+            var t = txtGo.GetComponent<Text>();
+            t.font = font;
+            t.text = "✕";
+            t.fontSize = 44;
+            t.fontStyle = FontStyle.Bold;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.color = Color.white;
+            t.raycastTarget = false;
+            var trt = (RectTransform)txtGo.transform;
+            trt.anchorMin = Vector2.zero;
+            trt.anchorMax = Vector2.one;
+            trt.offsetMin = Vector2.zero;
+            trt.offsetMax = Vector2.zero;
+
+            Debug.Log($"[TitleScreen] 종료 버튼 구성 완료 (screen={Screen.width}x{Screen.height})");
         }
 
         private void BlinkPressToStart()

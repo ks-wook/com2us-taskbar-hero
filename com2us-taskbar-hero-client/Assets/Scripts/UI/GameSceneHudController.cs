@@ -220,7 +220,10 @@ namespace TaskbarHero.Client.UI
         {
             if (_escMenuRoot != null)
             {
-                _escMenuRoot.SetActive(!_escMenuRoot.activeSelf);
+                bool show = !_escMenuRoot.activeSelf;
+                _escMenuRoot.SetActive(show);
+                // 메뉴가 열리면 창 확장, 닫히면 남은 패널 여부에 따라 스트립 복귀.
+                TaskbarWindow.Instance?.SetExpanded(show || AnyUiPanelVisible());
             }
         }
 
@@ -230,7 +233,14 @@ namespace TaskbarHero.Client.UI
             if (_escMenuRoot != null)
             {
                 _escMenuRoot.SetActive(false);
+                TaskbarWindow.Instance?.SetExpanded(AnyUiPanelVisible());
             }
+        }
+
+        /// <summary>UIManager 패널이 하나라도 표시 중인지(창 스트립/확장 판정용).</summary>
+        private static bool AnyUiPanelVisible()
+        {
+            return UIManager.Instance != null && UIManager.Instance.IsAnyPanelVisible();
         }
 
         /// <summary>타이틀 화면으로 돌아간다(게임 세션 종료 후 TitleScene 로드).</summary>

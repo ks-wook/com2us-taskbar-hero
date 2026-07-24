@@ -219,6 +219,7 @@ namespace TaskbarHero.Client.Managers
             }
 
             Current = type;
+            TaskbarWindow.Instance?.SetExpanded(true); // 패널 표시 → 창 확장(스트립 모드 해제)
         }
 
         /// <summary>지정한 패널을 숨긴다.</summary>
@@ -233,6 +234,7 @@ namespace TaskbarHero.Client.Managers
             {
                 Current = null;
             }
+            TaskbarWindow.Instance?.SetExpanded(IsAnyPanelVisible()); // 남은 패널 없으면 스트립으로 복귀
         }
 
         /// <summary>모든 패널을 숨긴다.</summary>
@@ -247,6 +249,7 @@ namespace TaskbarHero.Client.Managers
             }
 
             Current = null;
+            TaskbarWindow.Instance?.SetExpanded(false); // 모든 패널 닫힘 → 스트립으로 복귀
         }
 
         private GameObject GetOrCreate(PanelType type)
