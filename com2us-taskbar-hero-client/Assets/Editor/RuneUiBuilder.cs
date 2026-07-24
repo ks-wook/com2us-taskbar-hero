@@ -55,6 +55,7 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("panelBackground").objectReferenceValue = LoadSprite("ui_panel_background");
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
+            WireRuneIcons(so); // runeCode → Assets/Art/Icon/Rune 아이콘
             so.ApplyModifiedPropertiesWithoutUndo();
 
             ctrl.EditorConstruct();
@@ -107,6 +108,70 @@ namespace TaskbarHero.ClientEditor
                     return r;
                 }
             }
+            return null;
+        }
+
+        /// <summary>마스터 데이터의 모든 룬을 runeCode → 룬 아이콘(Assets/Art/Icon/Rune)으로 배선한다.
+        /// 룬 이름을 파일명으로 정규화한다(예: "공격력 I" → "공격력1", 명명형 "정밀 사격"은 그대로).</summary>
+        private static void WireRuneIcons(SerializedObject so)
+        {
+            var prop = so.FindProperty("_runeIcons");
+            if (prop == null)
+            {
+                Debug.LogWarning("[RuneUiBuilder] _runeIcons 프로퍼티를 찾지 못했습니다.");
+                return;
+            }
+            MasterDataManager.Load();
+            var db = MasterDataManager.Db;
+            if (db == null || db.Runes.Count == 0)
+            {
+                Debug.LogWarning("[RuneUiBuilder] 룬 마스터 데이터가 없어 아이콘 배선을 건너뜁니다.");
+                prop.arraySize = 0;
+                return;
+            }
+
+            prop.arraySize = db.Runes.Count;
+            int i = 0;
+            foreach (var r in db.Runes.Values)
+            {
+                var el = prop.GetArrayElementAtIndex(i++);
+                el.FindPropertyRelative("runeCode").intValue = r.runeCode;
+                el.FindPropertyRelative("sprite").objectReferenceValue = LoadRuneIcon(RuneIconFileName(r.name));
+            }
+        }
+
+        /// <summary>룬 이름을 아이콘 파일명으로 정규화한다(끝의 로마숫자 " I/II/III" → "1/2/3", 그 외는 그대로).</summary>
+        private static string RuneIconFileName(string runeName)
+        {
+            if (string.IsNullOrEmpty(runeName))
+            {
+                return runeName;
+            }
+            if (runeName.EndsWith(" III")) return runeName.Substring(0, runeName.Length - 4) + "3";
+            if (runeName.EndsWith(" II")) return runeName.Substring(0, runeName.Length - 3) + "2";
+            if (runeName.EndsWith(" I")) return runeName.Substring(0, runeName.Length - 2) + "1";
+            return runeName;
+        }
+
+        /// <summary>룬 아이콘을 Single 스프라이트로 교정 후 로드한다(Multiple 슬라이스 방지).</summary>
+        private static Sprite LoadRuneIcon(string fileName)
+        {
+            string path = $"Assets/Art/Icon/Rune/{fileName}.png";
+            var ti = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (ti != null)
+            {
+                bool changed = false;
+                if (ti.textureType != TextureImporterType.Sprite) { ti.textureType = TextureImporterType.Sprite; changed = true; }
+                if (ti.spriteImportMode != SpriteImportMode.Single) { ti.spriteImportMode = SpriteImportMode.Single; changed = true; }
+                if (changed) ti.SaveAndReimport();
+            }
+            var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+            if (sprite != null) return sprite;
+            foreach (var obj in AssetDatabase.LoadAllAssetsAtPath(path))
+            {
+                if (obj is Sprite s) return s;
+            }
+            Debug.LogWarning($"[RuneUiBuilder] 룬 아이콘을 찾지 못했습니다: {path}");
             return null;
         }
 

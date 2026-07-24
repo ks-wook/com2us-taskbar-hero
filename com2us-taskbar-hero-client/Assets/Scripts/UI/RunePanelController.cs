@@ -24,6 +24,17 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite slotNormal;
         [SerializeField] private Sprite slotHighlight;
 
+        [Header("룬 아이콘(runeCode → 스프라이트, 에디터 빌더가 Assets/Art/Icon/Rune에서 배선)")]
+        [SerializeField] private List<RuneIconEntry> _runeIcons = new List<RuneIconEntry>();
+
+        /// <summary>룬 코드 ↔ 아이콘 스프라이트 매핑(에디터 빌더가 채운다).</summary>
+        [System.Serializable]
+        private struct RuneIconEntry
+        {
+            public int runeCode;
+            public Sprite sprite;
+        }
+
         [Header("구성 참조 (에디터 빌더가 배선 — 직접 수정 불필요)")]
         [SerializeField] private Image _goldIcon;
         [SerializeField] private Text _goldText;
@@ -144,7 +155,7 @@ namespace TaskbarHero.Client.UI
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(860f, 1480f);
+            rt.sizeDelta = new Vector2(860f, 1020f); // 화면(가로 16:9 포함) 안에 전체 UI가 보이도록 높이 축소
             rt.anchoredPosition = Vector2.zero;
             return rt;
         }
@@ -189,42 +200,42 @@ namespace TaskbarHero.Client.UI
         {
             var bg = NewImage("DetailPanel", container, null);
             bg.color = new Color(0.08f, 0.09f, 0.14f, 0.96f);
-            TopLeft(bg.rectTransform, 40f, 108f, 780f, 320f);
+            TopLeft(bg.rectTransform, 40f, 104f, 780f, 216f); // DetailPanel 축소(트리 영역 확보)
 
             // 아이콘 타일(좌)
             var iconBg = NewImage("DetailIconBg", bg.rectTransform, slotNormal);
-            TopLeft(iconBg.rectTransform, 24f, 24f, 150f, 150f);
+            TopLeft(iconBg.rectTransform, 20f, 18f, 116f, 116f);
             var icon = NewImage("DetailIcon", iconBg.rectTransform, null);
             icon.raycastTarget = false;
             Stretch(icon.rectTransform);
-            icon.rectTransform.offsetMin = new Vector2(10f, 10f);
-            icon.rectTransform.offsetMax = new Vector2(-10f, -10f);
+            icon.rectTransform.offsetMin = new Vector2(8f, 8f);
+            icon.rectTransform.offsetMax = new Vector2(-8f, -8f);
             _detailIcon = icon;
 
-            _detailName = NewText("DetailName", bg.rectTransform, "룬을 선택하세요", 34, TextAnchor.UpperLeft);
+            _detailName = NewText("DetailName", bg.rectTransform, "룬을 선택하세요", 32, TextAnchor.UpperLeft);
             _detailName.fontStyle = FontStyle.Bold;
-            TopLeft(_detailName.rectTransform, 196f, 28f, 560f, 44f);
+            TopLeft(_detailName.rectTransform, 150f, 14f, 600f, 40f);
 
-            _detailLevel = NewText("DetailLevel", bg.rectTransform, string.Empty, 30, TextAnchor.UpperLeft);
+            _detailLevel = NewText("DetailLevel", bg.rectTransform, string.Empty, 26, TextAnchor.UpperLeft);
             _detailLevel.color = new Color(0.55f, 0.85f, 0.55f);
-            TopLeft(_detailLevel.rectTransform, 196f, 76f, 560f, 40f);
+            TopLeft(_detailLevel.rectTransform, 150f, 54f, 600f, 34f);
 
-            _detailEffect = NewText("DetailEffect", bg.rectTransform, string.Empty, 28, TextAnchor.UpperLeft);
+            _detailEffect = NewText("DetailEffect", bg.rectTransform, string.Empty, 24, TextAnchor.UpperLeft);
             _detailEffect.color = new Color(0.82f, 0.86f, 0.95f);
-            TopLeft(_detailEffect.rectTransform, 196f, 120f, 560f, 60f);
+            TopLeft(_detailEffect.rectTransform, 150f, 90f, 600f, 54f);
 
             // 다음 레벨 비용(골드) — 하단 좌측
-            var costLabel = NewText("CostLabel", bg.rectTransform, "다음 레벨", 24, TextAnchor.UpperLeft);
+            var costLabel = NewText("CostLabel", bg.rectTransform, "다음 레벨", 22, TextAnchor.UpperLeft);
             costLabel.color = new Color(0.7f, 0.72f, 0.8f);
-            TopLeft(costLabel.rectTransform, 24f, 196f, 200f, 32f);
+            TopLeft(costLabel.rectTransform, 20f, 150f, 200f, 28f);
             var ci = NewImage("DetailCostIcon", bg.rectTransform, null);
             ci.raycastTarget = false;
             ci.preserveAspect = true;
-            TopLeft(ci.rectTransform, 24f, 228f, 44f, 44f);
+            TopLeft(ci.rectTransform, 20f, 176f, 36f, 36f);
             _detailCostIcon = ci;
-            _detailCostText = NewText("DetailCostText", bg.rectTransform, string.Empty, 30, TextAnchor.MiddleLeft);
+            _detailCostText = NewText("DetailCostText", bg.rectTransform, string.Empty, 28, TextAnchor.MiddleLeft);
             _detailCostText.fontStyle = FontStyle.Bold;
-            TopLeft(_detailCostText.rectTransform, 76f, 228f, 360f, 44f);
+            TopLeft(_detailCostText.rectTransform, 62f, 172f, 320f, 44f);
 
             // 레벨업 버튼(우하단)
             var btn = NewImage("UpgradeButton", bg.rectTransform, slotNormal);
@@ -232,8 +243,8 @@ namespace TaskbarHero.Client.UI
             var brt = btn.rectTransform;
             brt.anchorMin = brt.anchorMax = new Vector2(1f, 0f);
             brt.pivot = new Vector2(1f, 0f);
-            brt.anchoredPosition = new Vector2(-24f, 24f);
-            brt.sizeDelta = new Vector2(260f, 84f);
+            brt.anchoredPosition = new Vector2(-20f, 16f);
+            brt.sizeDelta = new Vector2(230f, 72f);
             _upgradeLabel = NewText("UpgradeLabel", btn.rectTransform, "레벨업", 32, TextAnchor.MiddleCenter);
             _upgradeLabel.fontStyle = FontStyle.Bold;
             Stretch(_upgradeLabel.rectTransform);
@@ -245,7 +256,7 @@ namespace TaskbarHero.Client.UI
         {
             var bg = NewImage("TreeArea", container, null);
             bg.color = new Color(0.05f, 0.06f, 0.10f, 0.6f);
-            TopLeft(bg.rectTransform, 40f, 448f, 780f, 980f);
+            TopLeft(bg.rectTransform, 40f, 332f, 780f, 628f); // DetailPanel 축소분을 흡수해 트리 영역 확대(하단 메시지 위까지)
             _treeArea = bg.rectTransform;
         }
 
@@ -487,7 +498,11 @@ namespace TaskbarHero.Client.UI
                 if (_detailLevel != null) _detailLevel.text = string.Empty;
                 if (_detailEffect != null) _detailEffect.text = string.Empty;
                 if (_detailCostText != null) _detailCostText.text = string.Empty;
-                if (_detailIcon != null) _detailIcon.color = new Color(1f, 1f, 1f, 0f);
+                if (_detailIcon != null)
+                {
+                    _detailIcon.sprite = null;
+                    _detailIcon.color = new Color(1f, 1f, 1f, 0f);
+                }
                 SetUpgrade(false, "레벨업");
                 return;
             }
@@ -498,7 +513,11 @@ namespace TaskbarHero.Client.UI
 
             if (_detailIcon != null)
             {
-                _detailIcon.color = StatColor(rune.statType);
+                // Assets/Art/Icon/Rune 아이콘을 우선 사용. 없으면 stat 색상 폴백.
+                var runeSprite = IconForRune(rune.runeCode);
+                _detailIcon.sprite = runeSprite;
+                _detailIcon.preserveAspect = true;
+                _detailIcon.color = runeSprite != null ? Color.white : StatColor(rune.statType);
             }
             if (_detailName != null) _detailName.text = rune.name;
             if (_detailLevel != null) _detailLevel.text = $"레벨 {level} / {rune.maxLevel}";
@@ -658,6 +677,22 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>스탯 타입별 노드 배경색(트리에서 계열 구분).</summary>
+        /// <summary>룬 코드에 배선된 아이콘 스프라이트를 반환한다(없으면 null).</summary>
+        private Sprite IconForRune(int runeCode)
+        {
+            if (_runeIcons != null)
+            {
+                foreach (var e in _runeIcons)
+                {
+                    if (e.sprite != null && e.runeCode == runeCode)
+                    {
+                        return e.sprite;
+                    }
+                }
+            }
+            return null;
+        }
+
         private static Color StatColor(int statType)
         {
             switch (statType)

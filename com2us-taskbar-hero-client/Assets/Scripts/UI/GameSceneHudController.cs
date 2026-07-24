@@ -1,12 +1,12 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// GameScene 상시 HUD. 현재는 인벤토리 토글 버튼만 코드로 구성해 UIManager로 패널을 열고 닫는다.
-    /// (HUD 재화/메뉴바 등은 후속 확장)
+    /// GameScene 상시 HUD. 인벤토리·편성·스테이지 토글 버튼과 ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
     /// </summary>
     public class GameSceneHudController : MonoBehaviour
     {
@@ -15,10 +15,23 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite stageIcon;      // 스테이지
         [SerializeField] private Sprite inventoryIcon;  // 가방
 
+        private GameObject _escMenuRoot; // ESC로 토글하는 메뉴(타이틀 복귀)
+
         private void Awake()
         {
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildHud(font);
+            BuildEscMenu(font);
+        }
+
+        /// <summary>ESC 키로 타이틀 복귀 메뉴를 토글한다(새 Input System).</summary>
+        private void Update()
+        {
+            var kb = Keyboard.current;
+            if (kb != null && kb.escapeKey.wasPressedThisFrame)
+            {
+                ToggleEscMenu();
+            }
         }
 
         /// <summary>GameScene 진입 시 대기 중인 오프라인 보상 정산 결과가 있으면 팝업으로 표시한다(Login에서 정산됨).</summary>
@@ -153,6 +166,132 @@ namespace TaskbarHero.Client.UI
             {
                 Debug.LogWarning("[HUD] UIManager 인스턴스를 찾을 수 없습니다.");
             }
+        }
+
+        // ── ESC 메뉴(타이틀로 돌아가기) ──
+
+        /// <summary>ESC로 토글하는 메뉴 오버레이(딤 + '타이틀로 돌아가기' / '계속하기')를 최상단 캔버스로 구성한다(처음엔 숨김).</summary>
+        private void BuildEscMenu(Font font)
+        {
+            var canvasGo = new GameObject("EscMenuCanvas", typeof(RectTransform), typeof(Canvas),
+                typeof(CanvasScaler), typeof(GraphicRaycaster));
+            canvasGo.transform.SetParent(transform, false);
+            var canvas = canvasGo.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 200; // 패널(100)·오프라인 팝업(110)보다 위
+            var scaler = canvasGo.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1080f, 1920f);
+            scaler.matchWidthOrHeight = 0.5f;
+            _escMenuRoot = canvasGo;
+
+            // 딤(클릭 시 닫힘 = 계속하기).
+            var dim = new GameObject("Dim", typeof(RectTransform), typeof(Image));
+            dim.transform.SetParent(canvasGo.transform, false);
+            var dimRt = (RectTransform)dim.transform;
+            dimRt.anchorMin = Vector2.zero; dimRt.anchorMax = Vector2.one;
+            dimRt.offsetMin = Vector2.zero; dimRt.offsetMax = Vector2.zero;
+            dim.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.6f);
+            var dimBtn = dim.AddComponent<Button>();
+            dimBtn.transition = Selectable.Transition.None;
+            dimBtn.onClick.AddListener(HideEscMenu);
+
+            // 메뉴 패널(중앙).
+            var panel = new GameObject("EscPanel", typeof(RectTransform), typeof(Image));
+            panel.transform.SetParent(canvasGo.transform, false);
+            var prt = (RectTransform)panel.transform;
+            prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0.5f);
+            prt.pivot = new Vector2(0.5f, 0.5f);
+            prt.sizeDelta = new Vector2(560f, 420f);
+            prt.anchoredPosition = Vector2.zero;
+            panel.GetComponent<Image>().color = new Color(0.10f, 0.12f, 0.18f, 0.98f);
+
+            var title = MakeMenuText(font, panel.transform, "메뉴", 48, new Vector2(0f, 140f), 480f);
+            title.fontStyle = FontStyle.Bold;
+
+            MakeMenuButton(font, panel.transform, "타이틀로 돌아가기", new Vector2(0f, 20f), OnReturnToTitle);
+            MakeMenuButton(font, panel.transform, "계속하기", new Vector2(0f, -110f), HideEscMenu);
+
+            canvasGo.SetActive(false); // 처음엔 숨김
+        }
+
+        /// <summary>ESC 메뉴 표시/숨김 토글.</summary>
+        private void ToggleEscMenu()
+        {
+            if (_escMenuRoot != null)
+            {
+                _escMenuRoot.SetActive(!_escMenuRoot.activeSelf);
+            }
+        }
+
+        /// <summary>ESC 메뉴를 숨긴다(계속하기).</summary>
+        private void HideEscMenu()
+        {
+            if (_escMenuRoot != null)
+            {
+                _escMenuRoot.SetActive(false);
+            }
+        }
+
+        /// <summary>타이틀 화면으로 돌아간다(게임 세션 종료 후 TitleScene 로드).</summary>
+        private void OnReturnToTitle()
+        {
+            HideEscMenu();
+            Time.timeScale = 1f;                 // 전투 슬로우모션 등 배율 복원
+            UIManager.Instance?.HideAll();        // 열려 있던 패널 정리
+            Session.Clear();                      // 로그아웃(타이틀/로그인 새로 시작)
+            Debug.Log("[HUD] ESC 메뉴 → 타이틀로 돌아가기");
+            if (SceneManager.Instance != null)
+            {
+                SceneManager.Instance.LoadScene("TitleScene");
+            }
+            else
+            {
+                UnityEngine.SceneManagement.SceneManager.LoadScene("TitleScene");
+            }
+        }
+
+        /// <summary>ESC 메뉴용 중앙 정렬 텍스트를 만든다.</summary>
+        private static Text MakeMenuText(Font font, Transform parent, string content, int size, Vector2 pos, float width)
+        {
+            var go = new GameObject("Text", typeof(RectTransform), typeof(Text));
+            go.transform.SetParent(parent, false);
+            var t = go.GetComponent<Text>();
+            t.font = font;
+            t.text = content;
+            t.fontSize = size;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.color = Color.white;
+            t.raycastTarget = false;
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = new Vector2(width, 64f);
+            return t;
+        }
+
+        /// <summary>ESC 메뉴용 중앙 버튼(라벨 텍스트를 버튼 전체에 채움)을 만든다.</summary>
+        private static void MakeMenuButton(Font font, Transform parent, string label, Vector2 pos,
+            UnityEngine.Events.UnityAction onClick)
+        {
+            var go = new GameObject($"{label}Button", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = new Vector2(440f, 100f);
+            go.GetComponent<Image>().color = new Color(0.25f, 0.28f, 0.4f, 1f);
+
+            var t = MakeMenuText(font, go.transform, label, 36, Vector2.zero, 420f);
+            var trt = (RectTransform)t.transform;
+            trt.anchorMin = Vector2.zero;
+            trt.anchorMax = Vector2.one;
+            trt.offsetMin = Vector2.zero;
+            trt.offsetMax = Vector2.zero;
+
+            go.AddComponent<Button>().onClick.AddListener(onClick);
         }
     }
 }

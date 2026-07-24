@@ -3,8 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TaskbarHero.Client.Managers;
 using TaskbarHero.Common.Dto;
+using TaskbarHero.Common.MasterData;
 
 namespace TaskbarHero.Client.Battle
 {
@@ -27,6 +29,13 @@ namespace TaskbarHero.Client.Battle
         private float _frameTimer;
         private bool _dismissed;
         private Action _onClosed;
+
+        // 아이템 hover 상세 툴팁(인벤토리와 동일한 정보 표시). 코드로 구성한다.
+        private RectTransform _tooltipRoot;
+        private Text _tipName;
+        private Text _tipSub;
+        private Text _tipReq;
+        private Text _tipDesc;
 
         /// <summary>클리어 응답 데이터로 오버레이를 생성·표시한다. onClosed는 닫힐 때(클릭/자동) 1회 호출된다.</summary>
         public static void Show(StageClearData data, Action onClosed = null)
@@ -121,6 +130,8 @@ namespace TaskbarHero.Client.Battle
             hrt.sizeDelta = new Vector2(900f, 60f);
             hrt.anchoredPosition = new Vector2(0f, 70f);
 
+            BuildTooltip(font); // 아이템 hover 상세 툴팁(최상단, 처음엔 숨김)
+
             StartCoroutine(AutoCloseAfter(AutoCloseSeconds));
         }
 
@@ -163,7 +174,8 @@ namespace TaskbarHero.Client.Battle
                     }
                     string qty = item.quantity > 1 ? $"x{item.quantity}" : string.Empty;
                     CreateRewardEntry(row, font, GetIcon(item.itemCode), qty, Color.white,
-                        GradeColors.RewardSlotBackground(GradeOf(item.itemCode)));
+                        GradeColors.RewardSlotBackground(GradeOf(item.itemCode)),
+                        item.itemCode, item.quantity); // 아이템 슬롯 hover 시 상세 툴팁
                 }
             }
         }
@@ -175,8 +187,10 @@ namespace TaskbarHero.Client.Battle
             return db != null && db.Items.TryGetValue(itemCode, out var im) ? im.grade : 1;
         }
 
-        /// <summary>아이콘+수량 보상 항목 한 칸을 만든다(아이콘 없으면 색 사각형 폴백). slotColor는 등급별 슬롯 배경.</summary>
-        private void CreateRewardEntry(RectTransform parent, Font font, Sprite icon, string qtyText, Color tint, Color slotColor)
+        /// <summary>아이콘+수량 보상 항목 한 칸을 만든다(아이콘 없으면 색 사각형 폴백). slotColor는 등급별 슬롯 배경.
+        /// itemCode > 0이면 슬롯 hover 시 인벤토리처럼 아이템 상세 툴팁을 띄운다.</summary>
+        private void CreateRewardEntry(RectTransform parent, Font font, Sprite icon, string qtyText, Color tint, Color slotColor,
+            int itemCode = 0, long quantity = 0)
         {
             var entry = new GameObject("Reward", typeof(RectTransform));
             entry.transform.SetParent(parent, false);
@@ -189,7 +203,14 @@ namespace TaskbarHero.Client.Battle
             slot.anchoredPosition = Vector2.zero;
             var slotImg = slot.gameObject.AddComponent<Image>();
             slotImg.color = slotColor; // 등급별 배경색
-            slotImg.raycastTarget = false;
+            // 아이템 칸은 hover 감지를 위해 레이캐스트 대상으로 두고 hover 핸들러를 붙인다(재화/경험치는 미부착).
+            bool hoverable = itemCode > 0;
+            slotImg.raycastTarget = hoverable;
+            if (hoverable)
+            {
+                var hover = slot.gameObject.AddComponent<RewardItemHover>();
+                hover.Init(this, itemCode, quantity);
+            }
 
             var iconRt = CreateChild("Icon", slot, Vector2.zero, Vector2.one);
             iconRt.offsetMin = new Vector2(12f, 12f);
@@ -298,6 +319,189 @@ namespace TaskbarHero.Client.Battle
             cb?.Invoke();
         }
 
+        // ── 아이템 상세 툴팁(인벤토리와 동일한 정보 표시) ──
+
+        /// <summary>hover 상세 툴팁(배경 + 이름/등급·종류/요구/설명)을 최상단에 구성한다(처음엔 숨김).</summary>
+        private void BuildTooltip(Font font)
+        {
+            var go = new GameObject("ItemTooltip", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(transform, false);
+            var img = go.GetComponent<Image>();
+            img.color = new Color(0.08f, 0.09f, 0.14f, 0.98f);
+            img.raycastTarget = false; // 툴팁은 입력 통과(닫기/hover 방해 안 함)
+            _tooltipRoot = (RectTransform)go.transform;
+            _tooltipRoot.anchorMin = _tooltipRoot.anchorMax = new Vector2(0.5f, 0.5f);
+            _tooltipRoot.pivot = new Vector2(0f, 1f); // 좌상단 기준(커서 우하단에 표시)
+            _tooltipRoot.sizeDelta = new Vector2(360f, 220f);
+
+            _tipName = CreateTipText(font, "Name", 28, 14f, 328f, 36f);
+            _tipSub = CreateTipText(font, "Sub", 20, 54f, 328f, 28f);
+            _tipReq = CreateTipText(font, "Req", 18, 86f, 328f, 28f);
+            _tipDesc = CreateTipText(font, "Desc", 18, 118f, 328f, 92f);
+            _tipDesc.horizontalOverflow = HorizontalWrapMode.Wrap;
+
+            go.SetActive(false);
+        }
+
+        /// <summary>툴팁 내부 텍스트 한 줄(좌상단 기준, y는 위에서 아래로).</summary>
+        private Text CreateTipText(Font font, string name, int size, float y, float w, float h)
+        {
+            var t = CreateText(name, _tooltipRoot, font, string.Empty, size, TextAnchor.UpperLeft);
+            var rt = (RectTransform)t.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(16f, -y);
+            rt.sizeDelta = new Vector2(w, h);
+            return t;
+        }
+
+        /// <summary>아이템 코드의 상세 정보를 채워 커서 근처에 툴팁을 표시한다(hover 진입 시).</summary>
+        public void ShowItemTooltip(int itemCode, long quantity, Vector2 screenPos)
+        {
+            if (_tooltipRoot == null)
+            {
+                return;
+            }
+            var info = BuildItemInfo(itemCode, quantity);
+            _tipName.text = info.name;
+            _tipName.color = GradeColors.Name(info.gradeValue);        // 이름을 등급 색으로
+            _tipSub.text = string.IsNullOrEmpty(info.category) ? info.grade : $"{info.grade} · {info.category}";
+            _tipReq.text = info.requirement;
+            _tipDesc.text = info.description;
+
+            _tooltipRoot.gameObject.SetActive(true);
+            _tooltipRoot.SetAsLastSibling();
+            Reposition(screenPos);
+        }
+
+        /// <summary>툴팁을 숨긴다(hover 이탈 시).</summary>
+        public void HideItemTooltip()
+        {
+            if (_tooltipRoot != null)
+            {
+                _tooltipRoot.gameObject.SetActive(false);
+            }
+        }
+
+        /// <summary>커서 스크린 좌표를 캔버스 로컬 좌표로 변환해 배치하고 화면 안으로 클램프.</summary>
+        private void Reposition(Vector2 screenPos)
+        {
+            var canvasRect = (RectTransform)transform;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, screenPos, null, out var local);
+            local += new Vector2(18f, -18f);
+
+            var size = _tooltipRoot.sizeDelta;
+            float halfW = canvasRect.rect.width * 0.5f;
+            float halfH = canvasRect.rect.height * 0.5f;
+            local.x = Mathf.Clamp(local.x, -halfW, halfW - size.x);
+            local.y = Mathf.Clamp(local.y, -halfH + size.y, halfH);
+            _tooltipRoot.anchoredPosition = local;
+        }
+
+        // ── 아이템 정보 구성(마스터 데이터 — 인벤토리 BuildDisplay와 동일 규칙) ──
+
+        private struct ItemInfo
+        {
+            public string name;
+            public int gradeValue;
+            public string grade;
+            public string category;
+            public string requirement;
+            public string description;
+        }
+
+        private static ItemInfo BuildItemInfo(int itemCode, long quantity)
+        {
+            var db = MasterDataManager.Db;
+            ItemMaster im = null;
+            if (db != null)
+            {
+                db.Items.TryGetValue(itemCode, out im);
+            }
+
+            var info = new ItemInfo
+            {
+                name = im != null ? im.name : $"아이템 {itemCode}",
+                gradeValue = im != null ? im.grade : 1,
+                grade = im != null && db.Grades.TryGetValue(im.grade, out var g) ? g.name : "노말",
+                category = Category(im),
+                requirement = string.Empty,
+                description = BuildDescription(im, quantity),
+            };
+            if (im != null && im.itemType == 1)
+            {
+                string cls = im.classReq == 0
+                    ? "공용"
+                    : (db.Classes.TryGetValue(im.classReq, out var cm) ? cm.name : $"직업 {im.classReq}");
+                info.requirement = im.levelReq > 0 ? $"요구 Lv.{im.levelReq} / {cls}" : cls;
+            }
+            return info;
+        }
+
+        /// <summary>아이템 종류(무기/보조무기/방어구/재료/재화).</summary>
+        private static string Category(ItemMaster im)
+        {
+            if (im == null)
+            {
+                return string.Empty;
+            }
+            switch (im.itemType)
+            {
+                case 1:
+                    if (im.equipSlot == 1) return "무기";
+                    if (im.equipSlot == 2) return "보조무기";
+                    return "방어구";
+                case 2: return "재료";
+                case 3: return "재화";
+                default: return "기타";
+            }
+        }
+
+        /// <summary>아이템 설명문(종류별). 장비는 옵션 효과, 재료/재화는 용도 설명.</summary>
+        private static string BuildDescription(ItemMaster im, long quantity)
+        {
+            if (im == null)
+            {
+                return string.Empty;
+            }
+            if (im.itemType == 1)
+            {
+                string effect = BuildStatsText(im);
+                return string.IsNullOrEmpty(effect) || effect == "옵션 없음"
+                    ? "착용 시 캐릭터에 장착되는 장비입니다."
+                    : $"착용 시 다음 효과를 부여합니다.\n{effect}";
+            }
+            if (im.itemType == 2)
+            {
+                string q = quantity > 1 ? $" (획득 {quantity})" : string.Empty;
+                return $"강화·합성 등에 사용하는 재료입니다.{q}";
+            }
+            if (im.itemType == 3)
+            {
+                return "게임 내에서 사용하는 재화입니다.";
+            }
+            return string.Empty;
+        }
+
+        /// <summary>장비 옵션 스탯 요약 문자열.</summary>
+        private static string BuildStatsText(ItemMaster im)
+        {
+            if (im == null || im.itemType != 1)
+            {
+                return string.Empty;
+            }
+            var s = im.baseStats;
+            var parts = new List<string>();
+            if (s.atk != 0) parts.Add($"ATK +{s.atk}");
+            if (s.def != 0) parts.Add($"DEF +{s.def}");
+            if (s.hp != 0) parts.Add($"HP +{s.hp}");
+            if (s.critChance != 0) parts.Add($"치명확률 +{s.critChance * 100f:0.#}%");
+            if (s.critDamage != 0) parts.Add($"치명피해 +{s.critDamage * 100f:0.#}%");
+            if (s.moveSpeed != 0) parts.Add($"이동속도 +{s.moveSpeed:0.##}");
+            if (s.cooldown != 0) parts.Add($"쿨타임 {s.cooldown:0.##}");
+            return parts.Count > 0 ? string.Join("\n", parts) : "옵션 없음";
+        }
+
         // ── UI 생성 헬퍼 ──
 
         private static RectTransform CreateChild(string name, Transform parent, Vector2 anchorMin, Vector2 anchorMax)
@@ -325,6 +529,37 @@ namespace TaskbarHero.Client.Battle
             t.verticalOverflow = VerticalWrapMode.Overflow;
             t.raycastTarget = false;
             return t;
+        }
+    }
+
+    /// <summary>클리어 보상 아이템 칸의 hover 감지기. 진입 시 오버레이에 상세 툴팁을 요청하고, 이탈 시 숨긴다.</summary>
+    public class RewardItemHover : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+    {
+        private StageClearOverlay _overlay;
+        private int _itemCode;
+        private long _quantity;
+
+        public void Init(StageClearOverlay overlay, int itemCode, long quantity)
+        {
+            _overlay = overlay;
+            _itemCode = itemCode;
+            _quantity = quantity;
+        }
+
+        public void OnPointerEnter(PointerEventData eventData)
+        {
+            if (_overlay != null)
+            {
+                _overlay.ShowItemTooltip(_itemCode, _quantity, eventData.position);
+            }
+        }
+
+        public void OnPointerExit(PointerEventData eventData)
+        {
+            if (_overlay != null)
+            {
+                _overlay.HideItemTooltip();
+            }
         }
     }
 }
