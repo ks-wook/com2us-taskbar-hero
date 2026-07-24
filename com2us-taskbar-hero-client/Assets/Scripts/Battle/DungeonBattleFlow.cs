@@ -417,6 +417,10 @@ namespace TaskbarHero.Client.Battle
             eff.destroyOnFinish = true;
             go.SetActive(true);
 
+            // 글로우와 함께 캐릭터 위에 노란색 "Level Up!" 문구를 띄운다(글로우보다 위·앞에 표시).
+            int glowOrder = sr.sortingOrder;
+            LevelUpText.Spawn(target.transform, levelUpYOffset + levelUpHeight * 0.6f, glowOrder + 1);
+
             Debug.Log($"[Dungeon] 레벨업 글로우 재생 char={characterId}");
         }
 
