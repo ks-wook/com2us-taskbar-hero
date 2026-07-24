@@ -34,4 +34,15 @@ Content-Type: application/json
   "data": {}
 }
 
+### 오프라인 보상 정산(경과·보상은 서버 계산, data 없음)
+# 경과 10분 미만이면 3001(200 OK), 동시 중복이면 3002(409). heartbeat보다 먼저 호출할 것.
+POST {{GameServer_HostAddress}}/api/game/offline/claim
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": {}
+}
+
 ###

@@ -58,6 +58,10 @@ builder.Services.AddScoped<IGrowthService, GrowthService>();
 builder.Services.AddScoped<ICubeRepository, CubeRepository>();
 builder.Services.AddScoped<ICubeService, CubeService>();
 
+// 오프라인(방치) 보상 정산 계층.
+builder.Services.AddScoped<IOfflineRepository, OfflineRepository>();
+builder.Services.AddScoped<IOfflineService, OfflineService>();
+
 var app = builder.Build();
 
 // 마스터 데이터 기동 시 적재(실패 시 IsLoaded=false → 관련 요청은 MasterDataNotLoaded).

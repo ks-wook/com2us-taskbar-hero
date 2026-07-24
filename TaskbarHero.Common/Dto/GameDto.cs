@@ -631,4 +631,48 @@ namespace TaskbarHero.Common.Dto
         public string message;
         public CubeCraftResultData data = new CubeCraftResultData();
     }
+
+    // ── 오프라인(방치) 보상 정산 (offline-reward 기획서 §5·§8) ──
+
+    /// <summary>오프라인 보상으로 지급된 골드·경험치(경험치는 3캐릭터 공통).</summary>
+    [Serializable]
+    public class OfflineRewardAmount
+    {
+        public long gold;
+        public long exp;
+    }
+
+    /// <summary>경험치 반영 후 각 캐릭터의 상태(같은 exp를 받아도 시작 레벨이 달라 결과는 캐릭터마다 다를 수 있음).</summary>
+    [Serializable]
+    public class OfflineCharacterState
+    {
+        public int characterId; // 캐릭터 슬롯(1~3)
+        public int level;
+        public long exp;        // 현재 레벨의 잔여 경험치
+    }
+
+    /// <summary>
+    /// 오프라인 보상 정산 결과(offline-reward 기획서 5.1 성공 응답 data · §8 확정 DTO).
+    /// 기획서 §8의 필드 정의를 따르되, 프로젝트 DTO 규약(`[Serializable]`+camelCase 필드, JsonUtility·IncludeFields 공유)에 맞춘다.
+    /// </summary>
+    [Serializable]
+    public class OfflineRewardResult
+    {
+        public long offlineElapsedSec;                                       // 실제 경과 시간(now - last_active_at), 상한 미적용
+        public long effectiveSec;                                            // 상한(12h) 적용 후 보상 산정에 쓴 시간
+        public bool capped;                                                  // 12시간 상한 적용 여부
+        public OfflineRewardAmount rewards = new OfflineRewardAmount();       // 지급 골드·경험치
+        public List<OfflineCharacterState> characters = new List<OfflineCharacterState>(); // 반영 후 3캐릭터 상태
+        public long lastActiveAt;                                            // 현재 서버 시각으로 리셋한 기준 시각(Unix ts)
+    }
+
+    /// <summary>오프라인 보상 정산 응답 { success, errorCode, message, data(OfflineRewardResult) }.</summary>
+    [Serializable]
+    public class OfflineClaimResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public OfflineRewardResult data = new OfflineRewardResult();
+    }
 }

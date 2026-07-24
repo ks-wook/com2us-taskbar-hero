@@ -34,6 +34,9 @@ public abstract class GameApiControllerBase : ControllerBase
     private static int HttpStatus(ErrorCode code) => code switch
     {
         ErrorCode.Success => StatusCodes.Status200OK,
+        // 오프라인 정산: 경과 부족은 오류가 아닌 정상 응답(200, success=false), 동시 중복은 409(기획서 5.1).
+        ErrorCode.NoOfflineReward => StatusCodes.Status200OK,
+        ErrorCode.OfflineRewardAlreadyClaimed => StatusCodes.Status409Conflict,
         ErrorCode.PlayerAlreadyExists => StatusCodes.Status409Conflict,
         ErrorCode.MasterDataNotLoaded => StatusCodes.Status503ServiceUnavailable,
         ErrorCode.SaveNotFound => StatusCodes.Status404NotFound,
@@ -54,6 +57,8 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.InvalidClassCode => "Invalid class code",
         ErrorCode.InvalidCharacterId => "Invalid character id",
         ErrorCode.SaveNotFound => "Save not found",
+        ErrorCode.NoOfflineReward => "No offline reward",
+        ErrorCode.OfflineRewardAlreadyClaimed => "Offline reward already claimed",
         ErrorCode.StageNotFound => "Stage not found",
         ErrorCode.StageLocked => "Stage locked",
         ErrorCode.StageNotEntered => "Stage not entered",
