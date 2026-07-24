@@ -601,4 +601,34 @@ namespace TaskbarHero.Common.Dto
         public CubeCraftGainedDto gained = new CubeCraftGainedDto();
         public CubeDto cube = new CubeDto();
     }
+
+    /// <summary>큐브 합성 응답 { success, errorCode, message, data(CubeCombineResultData) }.</summary>
+    [Serializable]
+    public class CubeCombineResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public CubeCombineResultData data = new CubeCombineResultData();
+    }
+
+    /// <summary>큐브 분해 응답 { success, errorCode, message, data(CubeDismantleResultData) }.</summary>
+    [Serializable]
+    public class CubeDismantleResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public CubeDismantleResultData data = new CubeDismantleResultData();
+    }
+
+    /// <summary>큐브 제작 응답 { success, errorCode, message, data(CubeCraftResultData) }.</summary>
+    [Serializable]
+    public class CubeCraftResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public CubeCraftResultData data = new CubeCraftResultData();
+    }
 }
