@@ -1,0 +1,96 @@
+# GameCubeController (`/api/game/cube`, GameServer)
+
+큐브 — 합성·분해·제작(서버 권위 결과 산출). 모든 요청은 `GameAuthMiddleware` 인증을 거친다. 저장소: MySQL `taskbar_hero_game`(`player_item`·`player_cube`) + `MasterDataProvider`(cube_master·item·recipe). 연산마다 큐브 경험치가 쌓여 레벨업한다.
+
+> **공통 인증**: 첫 단계는 `GameAuthMiddleware`의 Redis 토큰 대조(실패 시 401). 아래는 인증 통과 이후를 표기한다.
+
+## POST /api/game/cube/combine — 합성(동급 3개 → 상위 등급 1개)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant MW as GameAuthMiddleware
+    participant Ctrl as GameCubeController
+    participant Svc as CubeService
+    participant MD as MasterDataProvider
+    participant Repo as CubeRepository
+    participant DB as MySQL(game)
+
+    C->>MW: POST /cube/combine { userId, token, data:{ itemIds[] } }
+    MW-->>Ctrl: 인증 통과(userId)
+    Ctrl->>Svc: CombineAsync(userId, itemIds)
+    Note over Repo,DB: 단일 트랜잭션(판정 델리게이트 DecideCombine)
+    Repo->>DB: 입력 아이템 조회(소유·미장착)
+    Svc->>MD: 큐브 규칙(combine_count·등급 상승) + 입력 등급 일치 검증(슬롯·클래스 무관)
+    Svc->>MD: PickCombineResultCode(입력등급+1) (같은 등급대 무작위, 슬롯·클래스 무관)
+    alt 미보유 / 장착 중 / 조건 미충족(등급·개수·최대 등급)
+        Svc-->>Ctrl: ItemNotFound(4001) / ItemEquipped(4007) / CubeRecipeNotMet(4010)
+    else 성공
+        Repo->>DB: 입력 3개 삭제 + 결과 아이템 지급(빈 칸)
+        Repo->>DB: 큐브 경험치(50 × 입력등급) 누적 + 레벨 재계산
+        Svc-->>Ctrl: Success + { consumed, result, cube }
+    end
+    Ctrl-->>C: { success, errorCode, message, data }
+```
+
+## POST /api/game/cube/dismantle — 분해(아이템 → 골드)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant MW as GameAuthMiddleware
+    participant Ctrl as GameCubeController
+    participant Svc as CubeService
+    participant MD as MasterDataProvider
+    participant Repo as CubeRepository
+    participant DB as MySQL(game)
+
+    C->>MW: POST /cube/dismantle { userId, token, data:{ items[]{ itemId, count } } }
+    MW-->>Ctrl: 인증 통과(userId)
+    Ctrl->>Svc: DismantleAsync(userId, items)
+    Note over Repo,DB: 단일 트랜잭션(보상 산출 ComputeDismantleReward)
+    Repo->>DB: 각 아이템 조회(소유·미장착·수량)
+    Svc->>MD: gold_per_scrap(현재 큐브 레벨)·아이템 등급
+    Svc->>Svc: 골드 = Σ(gold_per_scrap × 등급 × 개수), 큐브exp = Σ(20 × 등급 × 개수)
+    alt 미보유 / 수량 부족 / 장착 중
+        Svc-->>Ctrl: ItemNotFound(4001) / InsufficientQuantity(4006) / ItemEquipped(4007)
+    else 성공
+        Repo->>DB: 아이템 차감 + 골드 적립 + 큐브 경험치 누적·레벨 재계산
+        Svc-->>Ctrl: Success + { gold, cubeExp }
+    end
+    Ctrl-->>C: { success, errorCode, message, data }
+```
+
+## POST /api/game/cube/craft — 제작(레시피)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant MW as GameAuthMiddleware
+    participant Ctrl as GameCubeController
+    participant Svc as CubeService
+    participant MD as MasterDataProvider
+    participant Repo as CubeRepository
+    participant DB as MySQL(game)
+
+    C->>MW: POST /cube/craft { userId, token, data:{ recipeCode } }
+    MW-->>Ctrl: 인증 통과(userId)
+    Ctrl->>Svc: CraftAsync(userId, recipeCode)
+    Svc->>MD: GetRecipe(recipeCode) (결과·요구 큐브 레벨·비용·소모 재료)
+    alt 레시피 없음
+        Svc-->>Ctrl: CubeRecipeNotMet(4010)
+    else 존재
+        Note over Repo,DB: 단일 트랜잭션
+        Repo->>DB: 큐브 레벨·골드·재료 보유 확인
+        alt 큐브 레벨 미달 / 골드 부족 / 재료 부족 / 용량 부족
+            Svc-->>Ctrl: CubeLevelInsufficient(4011) / InsufficientCurrency(4005) / CubeRecipeNotMet(4010) / InventoryFull(4002)
+        else 충족
+            Repo->>DB: 골드·재료 차감 + 결과 아이템 지급 + 큐브 경험치(20) 누적
+            Svc-->>Ctrl: Success + { consumed, gained, cube }
+        end
+    end
+    Ctrl-->>C: { success, errorCode, message, data }
+```
