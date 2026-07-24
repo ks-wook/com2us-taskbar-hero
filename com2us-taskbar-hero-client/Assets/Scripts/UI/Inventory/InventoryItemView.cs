@@ -28,7 +28,8 @@ namespace TaskbarHero.Client.UI
             public Sprite icon;       // 실제 아이템 아이콘(없으면 iconColor로 폴백)
             public long itemId;       // 서버 아이템 id(장착/해제 요청용)
             public int equippedSlot;  // 현재 장착 슬롯(1~6). 0 = 가방(미장착)
-            public bool equippable;   // 장비 아이템 여부(장착 버튼 활성 조건)
+            public bool equippable;   // 착용 가능 여부(장비 + 현재 캐릭터 클래스·레벨 허용). 장착 버튼 활성 조건
+            public bool equipLocked;  // 착용 불가 장비(클래스 불일치 또는 레벨 미달) → 슬롯에 X 표시 + 흐림
         }
 
         [SerializeField] private Display _data;
@@ -74,6 +75,7 @@ namespace TaskbarHero.Client.UI
             _icon.raycastTarget = true;
 
             bool hasSprite = display.icon != null;
+            bool locked = display.equipLocked; // 착용 불가(클래스 불일치·레벨 미달): 흐리게 + X 표시
 
             // 아이콘 스프라이트(자식) — 배경 위에 표시.
             var iconTf = transform.Find("IconSprite");
@@ -84,7 +86,8 @@ namespace TaskbarHero.Client.UI
             iconImg.raycastTarget = false;
             iconImg.preserveAspect = true;
             iconImg.sprite = hasSprite ? display.icon : null;
-            iconImg.color = hasSprite ? Color.white : display.iconColor;
+            Color iconBase = hasSprite ? Color.white : display.iconColor;
+            iconImg.color = locked ? new Color(iconBase.r, iconBase.g, iconBase.b, 0.35f) : iconBase; // 잠금 시 흐리게
             iconImg.enabled = hasSprite || string.IsNullOrEmpty(display.name); // 스프라이트 없고 이름도 없으면 색 사각형
             var irt = (RectTransform)iconGo.transform;
             irt.anchorMin = Vector2.zero;
@@ -110,6 +113,27 @@ namespace TaskbarHero.Client.UI
             lrt.anchorMax = Vector2.one;
             lrt.offsetMin = Vector2.zero;
             lrt.offsetMax = Vector2.zero;
+
+            // 착용 불가 장비(클래스 불일치·레벨 미달): 착용 불가 표시로 붉은 "X"를 덮어씌운다(잠금 아닐 때는 숨김).
+            var lockTf = transform.Find("ClassLock");
+            var lockGo = lockTf != null ? lockTf.gameObject
+                : new GameObject("ClassLock", typeof(RectTransform), typeof(Text));
+            lockGo.transform.SetParent(transform, false);
+            lockGo.transform.SetAsLastSibling();
+            var lockTxt = lockGo.GetComponent<Text>();
+            lockTxt.font = font;
+            lockTxt.text = "X";
+            lockTxt.fontSize = 72;
+            lockTxt.fontStyle = FontStyle.Bold;
+            lockTxt.alignment = TextAnchor.MiddleCenter;
+            lockTxt.color = new Color(0.92f, 0.16f, 0.16f, 0.92f);
+            lockTxt.raycastTarget = false;
+            var krt = (RectTransform)lockGo.transform;
+            krt.anchorMin = Vector2.zero;
+            krt.anchorMax = Vector2.one;
+            krt.offsetMin = Vector2.zero;
+            krt.offsetMax = Vector2.zero;
+            lockGo.SetActive(locked);
         }
 
         /// <summary>에디터 빌드 호환용 별칭.</summary>

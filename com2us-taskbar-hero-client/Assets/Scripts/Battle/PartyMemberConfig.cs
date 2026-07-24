@@ -13,6 +13,8 @@ namespace TaskbarHero.Client.Battle
         public GameObject effect;
         [Tooltip("UI 스킬 아이콘 스프라이트")]
         public Sprite icon;
+        [Tooltip("발동 이펙트 크기 배율(1=기본). 예: 레인저 정조준·다중 사격 2배")]
+        public float effectScale = 1f;
     }
 
     /// <summary>
@@ -62,6 +64,14 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("자기 위치 발생 스킬 이펙트의 X 오프셋(+면 오른쪽=적 방향). 예: 기사 강타를 조금 더 오른쪽에")]
         public float selfEffectXOffset = 0f;
 
+        [Header("캐스터 기본공격 투사체 / 전(全)스킬 광역 (선택 — 마법사)")]
+        [Tooltip("기본공격을 투사체로 발사할 프리팹(없으면 근접/기존 방식). 예: 마법사 마법 볼트")]
+        public GameObject basicAttackProjectile;
+        [Tooltip("기본공격 투사체 크기 배율(1=기본)")]
+        public float basicAttackProjectileScale = 1f;
+        [Tooltip("true면 모든 액티브 공격 스킬이 대상(최전방 몬스터) 위치를 중심으로 범위 내 모든 적에게 데미지. 예: 마법사")]
+        public bool allSkillsAoe = false;
+
         [Header("스킬 이펙트 / 아이콘 (스킬 코드별)")]
         public List<SkillVisual> skills = new List<SkillVisual>();
 
@@ -76,6 +86,22 @@ namespace TaskbarHero.Client.Battle
                 }
             }
             return null;
+        }
+
+        /// <summary>스킬 코드에 해당하는 발동 이펙트 크기 배율(없으면 1).</summary>
+        public float ScaleFor(int skillCode)
+        {
+            if (skills != null)
+            {
+                foreach (var s in skills)
+                {
+                    if (s != null && s.skillCode == skillCode)
+                    {
+                        return s.effectScale > 0f ? s.effectScale : 1f;
+                    }
+                }
+            }
+            return 1f;
         }
 
         /// <summary>스킬 코드에 해당하는 아이콘(없으면 null).</summary>

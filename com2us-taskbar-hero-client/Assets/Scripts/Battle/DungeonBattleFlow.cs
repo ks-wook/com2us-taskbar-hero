@@ -26,6 +26,11 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("스테이지 backgroundType(1~5)별 배경. index 0=타입1 … 4=타입5 (dungeon_bg_1~5).")]
         [SerializeField] private Sprite[] backgrounds = new Sprite[0];
 
+        [Header("입장 연출")]
+        [Tooltip("스테이지 입장 시 띄우는 배너 프리팹(Assets/Prefabs/UI/StageEnterBanner, 에디터 빌더가 배선). " +
+                 "미배선 시 코드로 생성해 폴백한다.")]
+        [SerializeField] private GameObject stageEnterBannerPrefab;
+
         [Header("클리어 연출")]
         [Tooltip("클리어 순간 게임 속도(슬로우모션). 0~1, 예: 0.25")]
         [SerializeField] private float clearSlowMotionScale = 0.25f;
@@ -173,7 +178,7 @@ namespace TaskbarHero.Client.Battle
             {
                 total += kv.Value;
             }
-            StageEnterBanner.Show(d.act, d.difficulty, d.stage); // 상단 중앙 입장 배너(페이드 인/아웃)
+            ShowEnterBanner(d.act, d.difficulty, d.stage); // 상단 중앙 입장 배너(페이드 인/아웃)
             Debug.Log($"[Dungeon] 진입 완료 {d.act}-{d.difficulty}-{d.stage}, 배경타입 {d.backgroundType} → 스폰 예정 {total}마리");
             if (_restartOnEnter)
             {
@@ -186,6 +191,24 @@ namespace TaskbarHero.Client.Battle
             }
             // 전투 필드 리셋(카메라 위치 확정) 후 배경을 구축해야 스크롤 배경 타일이 올바른 위치에 생성된다.
             ApplyBackground(d.backgroundType);
+        }
+
+        /// <summary>스테이지 입장 배너를 띄운다. 프리팹이 배선돼 있으면 Instantiate해 재생하고,
+        /// 없으면 코드로 생성하는 폴백(<see cref="StageEnterBanner.Show"/>)을 사용한다.</summary>
+        private void ShowEnterBanner(int act, int difficulty, int stage)
+        {
+            if (stageEnterBannerPrefab != null)
+            {
+                var go = Instantiate(stageEnterBannerPrefab);
+                var banner = go.GetComponent<StageEnterBanner>();
+                if (banner != null)
+                {
+                    banner.Play(act, difficulty, stage);
+                    return;
+                }
+                Destroy(go); // StageEnterBanner가 없는 잘못된 프리팹 → 폴백
+            }
+            StageEnterBanner.Show(act, difficulty, stage);
         }
 
         private void OnEnterError(NetworkError error)

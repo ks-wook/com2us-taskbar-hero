@@ -203,6 +203,12 @@ namespace TaskbarHero.ClientEditor
             }
             Debug.Log($"[DungeonBattleBuilder] 레벨업 글로우 프레임 {lvlCount}장 배선.");
 
+            // 스테이지 입장 배너 프리팹(있으면 배선 — 없으면 런타임 코드 생성 폴백). 배너 프리팹은
+            // 'TaskbarHero/UI/스테이지 입장 배너 프리팹 생성'(StageEnterBannerBuilder)으로 만든다.
+            var bannerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/UI/StageEnterBanner.prefab");
+            fso.FindProperty("stageEnterBannerPrefab").objectReferenceValue = bannerPrefab;
+            Debug.Log($"[DungeonBattleBuilder] 입장 배너 프리팹 {(bannerPrefab != null ? "배선" : "없음(코드 폴백)")}.");
+
             fso.ApplyModifiedPropertiesWithoutUndo();
 
             // ── 8) 전투 UI(초상화·아군 스킬 슬롯·아군 HP바) 복제: BattleDevScene의 SkillUICanvas를 그대로 GameScene에 ──

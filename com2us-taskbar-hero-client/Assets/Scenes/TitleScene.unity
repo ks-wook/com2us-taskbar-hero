@@ -1702,6 +1702,7 @@ MonoBehaviour:
   partyPanelPrefab: {fileID: 6505302392153319248, guid: b5da461db03db3d42b709b6a24289439, type: 3}
   skillPanelPrefab: {fileID: 278429524623337010, guid: a018bc9219d9837429eb4f0490c7cf4e, type: 3}
   runePanelPrefab: {fileID: 2424507622272419679, guid: 8619762bd64d86642946c3e055468565, type: 3}
+  cubePanelPrefab: {fileID: 345033725727599519, guid: 2d6506590dbd84f4880138f6f753d3f7, type: 3}
   showOnStart: 0
   startPanel: 0
 --- !u!4 &1065818455

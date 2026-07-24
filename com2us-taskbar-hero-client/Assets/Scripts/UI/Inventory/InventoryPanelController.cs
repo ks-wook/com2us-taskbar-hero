@@ -44,6 +44,7 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Button _nextButton;
         [SerializeField] private Button _skillButton;   // 스킬 레벨업 패널 진입
         [SerializeField] private Button _runeButton;    // 룬 패널 진입
+        [SerializeField] private Button _cubeButton;    // 큐브 패널 진입
         [SerializeField] private Button _closeButton;
         [SerializeField] private Button _dimButton;
         [SerializeField] private RectTransform _gridContent; // 스크롤 콘텐츠(슬롯 부모)
@@ -169,7 +170,7 @@ namespace TaskbarHero.Client.UI
         /// 가방 격자와 패널 바닥 사이 여백에 맞춰 낮은 높이로 둔다(겹침 방지).</summary>
         private void BuildGrowthButtons(RectTransform container)
         {
-            const float w = 230f, h = 44f, y = 3f, dx = 120f;
+            const float w = 210f, h = 44f, y = 3f, dx = 224f;
             var skillImg = NewImage("SkillButton", container, slotNormal);
             skillImg.color = new Color(0.24f, 0.20f, 0.34f, 0.98f);
             BottomCenter(skillImg.rectTransform, -dx, y, w, h);
@@ -179,10 +180,17 @@ namespace TaskbarHero.Client.UI
 
             var runeImg = NewImage("RuneButton", container, slotNormal);
             runeImg.color = new Color(0.30f, 0.22f, 0.16f, 0.98f);
-            BottomCenter(runeImg.rectTransform, dx, y, w, h);
+            BottomCenter(runeImg.rectTransform, 0f, y, w, h);
             var runeLabel = NewText("RuneButtonLabel", runeImg.rectTransform, "룬", 24, TextAnchor.MiddleCenter);
             Stretch(runeLabel.rectTransform);
             _runeButton = runeImg.gameObject.AddComponent<Button>();
+
+            var cubeImg = NewImage("CubeButton", container, slotNormal);
+            cubeImg.color = new Color(0.42f, 0.28f, 0.16f, 0.98f);
+            BottomCenter(cubeImg.rectTransform, dx, y, w, h);
+            var cubeLabel = NewText("CubeButtonLabel", cubeImg.rectTransform, "큐브", 24, TextAnchor.MiddleCenter);
+            Stretch(cubeLabel.rectTransform);
+            _cubeButton = cubeImg.gameObject.AddComponent<Button>();
         }
 
         /// <summary>좌상단 보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 아이콘/수량은 런타임에 세션에서 채운다.</summary>
@@ -226,6 +234,10 @@ namespace TaskbarHero.Client.UI
             if (_runeButton != null)
             {
                 _runeButton.onClick.AddListener(OnOpenRunePanel);
+            }
+            if (_cubeButton != null)
+            {
+                _cubeButton.onClick.AddListener(OnOpenCubePanel);
             }
             if (_closeButton != null)
             {
@@ -376,7 +388,7 @@ namespace TaskbarHero.Client.UI
             {
                 ModalManager.Instance.ShowConfirmCancel(
                     "인벤토리 확장",
-                    $"인벤토리를 1칸 확장합니다.\n소모 골드: {cost:N0}\n확장하시겠습니까?",
+                    $"인벤토리를 1칸 확장합니다.\n소모 골드: {GoldFormat.Highlight(cost)}\n확장하시겠습니까?",
                     DoExpandRequest);
             }
             else
@@ -415,7 +427,7 @@ namespace TaskbarHero.Client.UI
             {
                 ModalManager.Instance.ShowConfirm(
                     "인벤토리 확장 완료",
-                    $"골드 {cost:N0} 소모\n남은 골드: {balance:N0}\n확장 후 용량: {capacity}칸");
+                    $"골드 {GoldFormat.Highlight(cost)} 소모\n남은 골드: {GoldFormat.Highlight(balance)}\n확장 후 용량: {capacity}칸");
             }
         }
 
@@ -839,6 +851,7 @@ namespace TaskbarHero.Client.UI
             }
             _selectedCharacter = (_selectedCharacter - 1 + _partyCount) % _partyCount;
             RefreshCharacter();
+            RefreshGrid(); // 선택 캐릭터 클래스 변경 → 다른 클래스 장비 X 표시 갱신
         }
 
         /// <summary>다음 파티 캐릭터로 전환(순환).</summary>
@@ -850,6 +863,7 @@ namespace TaskbarHero.Client.UI
             }
             _selectedCharacter = (_selectedCharacter + 1) % _partyCount;
             RefreshCharacter();
+            RefreshGrid(); // 선택 캐릭터 클래스 변경 → 다른 클래스 장비 X 표시 갱신
         }
 
         /// <summary>스킬 레벨업 패널을 연다(UIManager 위임). 없으면 무시.</summary>
@@ -875,6 +889,19 @@ namespace TaskbarHero.Client.UI
             else
             {
                 Debug.LogWarning("[Inventory] UIManager 인스턴스를 찾을 수 없어 룬 패널을 열 수 없습니다.");
+            }
+        }
+
+        /// <summary>큐브 패널을 연다(UIManager 위임). 없으면 무시.</summary>
+        private void OnOpenCubePanel()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.Show(UIManager.PanelType.Cube);
+            }
+            else
+            {
+                Debug.LogWarning("[Inventory] UIManager 인스턴스를 찾을 수 없어 큐브 패널을 열 수 없습니다.");
             }
         }
 
@@ -1240,6 +1267,17 @@ namespace TaskbarHero.Client.UI
                 requirement = im.levelReq > 0 ? $"요구 Lv.{im.levelReq} / {cls}" : cls;
             }
 
+            // 착용 가능 판정: 장비이면서 (공용이거나 현재 캐릭터의 직업과 클래스 제한 일치) + (요구 레벨 이하)여야 한다.
+            // 클래스 불일치 또는 레벨 미달 장비는 착용 불가(슬롯에 X 표시 + 장착 버튼 비활성).
+            bool isEquip = im != null && im.itemType == 1;
+            var cur = CurrentCharacter();
+            int curClass = cur != null ? cur.classCode : -1;
+            int curLevel = cur != null ? cur.level : -1;
+            bool classOk = im != null && (im.classReq == 0 || cur == null || im.classReq == curClass);
+            bool levelOk = im != null && (im.levelReq <= 0 || cur == null || curLevel >= im.levelReq);
+            bool equipLocked = isEquip && cur != null
+                && ((im.classReq != 0 && im.classReq != curClass) || (im.levelReq > 0 && curLevel < im.levelReq));
+
             return new InventoryItemView.Display
             {
                 name = name,
@@ -1253,8 +1291,20 @@ namespace TaskbarHero.Client.UI
                 icon = _iconDb != null ? _iconDb.Get(item.itemCode) : null,
                 itemId = item.itemId,
                 equippedSlot = item.equippedSlot,
-                equippable = im != null && im.itemType == 1,
+                equippable = isEquip && classOk && levelOk,
+                equipLocked = equipLocked,
             };
+        }
+
+        /// <summary>현재 보고 있는 파티 캐릭터(없으면 null). 착용 제한(클래스·레벨) 판정에 사용.</summary>
+        private CharacterDto CurrentCharacter()
+        {
+            var chars = Session.GameData != null ? Session.GameData.characters : null;
+            if (chars != null && _selectedCharacter >= 0 && _selectedCharacter < chars.Count)
+            {
+                return chars[_selectedCharacter];
+            }
+            return null;
         }
 
         /// <summary>아이템 종류(무기/보조무기/방어구/재료/재화). 장비는 장착 슬롯으로 무기·방어구를 구분한다.</summary>

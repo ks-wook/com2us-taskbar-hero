@@ -35,8 +35,8 @@ public sealed class CubeService : ICubeService
     }
 
     /// <summary>
-    /// 합성을 처리한다. 마스터 로드를 확인하고, 리포지토리 트랜잭션 안에서 입력 장비가 같은 등급·슬롯·클래스이며 큐브
-    /// 규칙의 소모 개수와 일치하는지 검증한 뒤, 같은 슬롯·클래스의 상위 등급 장비 1개를 서버 랜덤으로 생성한다.
+    /// 합성을 처리한다. 마스터 로드를 확인하고, 리포지토리 트랜잭션 안에서 입력 장비가 같은 등급이며(슬롯·클래스는 서로
+    /// 달라도 됨) 큐브 규칙의 소모 개수와 일치하는지 검증한 뒤, 상위 등급 장비 1개를 서버 랜덤으로 생성한다(클래스·슬롯 무관).
     /// </summary>
     public async Task<SaveResult> CombineAsync(long userId, IReadOnlyList<long> itemIds)
     {
@@ -184,8 +184,8 @@ public sealed class CubeService : ICubeService
     }
 
     /// <summary>
-    /// 합성 판정(리포지토리 트랜잭션 델리게이트): 큐브 규칙(등급 상승 허용·소모 개수)과 입력 장비의 등급/슬롯/클래스
-    /// 일치를 마스터로 검증하고, 통과 시 같은 슬롯·클래스의 상위 등급 결과 아이템을 서버 랜덤으로 선정한다.
+    /// 합성 판정(리포지토리 트랜잭션 델리게이트): 큐브 규칙(등급 상승 허용·소모 개수)과 입력 장비의 등급 일치(슬롯·클래스는
+    /// 서로 달라도 됨)를 마스터로 검증하고, 통과 시 상위 등급 결과 아이템(클래스·슬롯 무관)을 서버 랜덤으로 선정한다.
     /// </summary>
     private CombineDecision DecideCombine(int cubeLevel, IReadOnlyList<CombineInput> inputs)
     {
@@ -202,12 +202,13 @@ public sealed class CubeService : ICubeService
         }
 
         var first = defs[0]!;
-        if (defs.Any(d => d!.Grade != first.Grade || d.EquipSlot != first.EquipSlot || d.ClassReq != first.ClassReq))
+        // 같은 등급이면 되고 슬롯·클래스는 서로 달라도 된다.
+        if (defs.Any(d => d!.Grade != first.Grade))
         {
             return CombineDecision.Reject();
         }
 
-        var resultCode = _masterData.PickCombineResultCode(first.Grade, first.EquipSlot, first.ClassReq);
+        var resultCode = _masterData.PickCombineResultCode(first.Grade);
         if (resultCode is null)
         {
             return CombineDecision.Reject();

@@ -73,7 +73,7 @@
 | `POST /api/game/inventory/enhance` ⚠️보류 | 장비 강화 단계 +1(재화 소모) | `{ itemId }` | `enhanceLevel`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
 | `POST /api/game/inventory/expand` | 인벤토리 용량 확장(골드 소모) | `{ count }` | `inventoryCapacity`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InventoryCapacityMax(4008)` |
 | `POST /api/game/inventory/move` | 인벤토리 배치 이동/교환(드래그 저장) | `{ itemId, toSlot }` | `moved`, `swapped` | `ItemNotFound(4001)`, `InvalidInventorySlot(4009)` |
-| `POST /api/game/cube/combine` | 큐브 합성(동급·동슬롯·동클래스 아이템 3개→상위 등급 1개) | `{ itemIds[] }` | `consumed`, `result`, `cube` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `CubeRecipeNotMet(4010)` |
+| `POST /api/game/cube/combine` | 큐브 합성(동급 아이템 3개→상위 등급 1개, 슬롯·클래스 무관) | `{ itemIds[] }` | `consumed`, `result`, `cube` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `CubeRecipeNotMet(4010)` |
 | `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{itemId,count}] }` | `gold`, `cubeExp` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
 | `POST /api/game/cube/craft` | 큐브 제작(레시피로 아이템 생성) | `{ recipeCode }` | `consumed`, `gained`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)` |
 | `POST /api/game/box/open` | 랜덤 상자 열기(골드 가챠, 등급 확률 추첨→랜덤 아이템 지급). 현재 단발(`count`=1)만 처리, 다연속 예정 | `{ boxCode, count? }` | `rewards`, `gained`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InvalidSaveData(2002)`, `InventoryFull(4002)`, `MasterDataNotLoaded(10001)` |

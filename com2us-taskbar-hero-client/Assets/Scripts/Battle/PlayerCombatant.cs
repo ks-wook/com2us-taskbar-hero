@@ -27,6 +27,7 @@ namespace TaskbarHero.Client.Battle
             public float timer;
             public GameObject effect;
             public Sprite icon;
+            public float scale;    // 발동 이펙트 크기 배율(1=기본)
         }
 
         private BattleDevController _ctrl;
@@ -47,6 +48,9 @@ namespace TaskbarHero.Client.Battle
         private int _aoeSkillCode;    // 광역(범위) 스킬 코드(0=없음)
         private bool _basicAttackAoe; // true면 근접 기본공격이 사거리 내 모든 적에게 명중
         private float _selfEffectXOffset;   // 자기 위치 이펙트 X 오프셋(+=오른쪽)
+        private GameObject _basicAttackProjectile; // 기본공격 투사체 프리팹(마법사 등, 없으면 근접/기존 방식)
+        private float _basicAttackProjectileScale = 1f;
+        private bool _allSkillsAoe;    // true면 모든 액티브 공격 스킬이 대상 중심 범위 데미지(마법사)
         private bool _charging;
         private Skill _chargeSkill;
         public bool IsCharging => _charging;
@@ -123,6 +127,9 @@ namespace TaskbarHero.Client.Battle
             _aoeSkillCode = cfg.aoeSkillCode;
             _basicAttackAoe = cfg.basicAttackAoe;
             _selfEffectXOffset = cfg.selfEffectXOffset;
+            _basicAttackProjectile = cfg.basicAttackProjectile;
+            _basicAttackProjectileScale = cfg.basicAttackProjectileScale;
+            _allSkillsAoe = cfg.allSkillsAoe;
             _anim = GetComponentInChildren<Animator>();
 
             LoadStats();
@@ -342,6 +349,7 @@ namespace TaskbarHero.Client.Battle
                     cooldown = cd, timer = Mathf.Max(0f, cd - readyIn),
                     effect = _cfg != null ? _cfg.EffectFor(s.skillCode) : null,
                     icon = _cfg != null ? _cfg.IconFor(s.skillCode) : null,
+                    scale = _cfg != null ? _cfg.ScaleFor(s.skillCode) : 1f,
                 };
                 _skills.Add(sk);
                 if (sk.code == _chargeSkillCode) _chargeSkill = sk;
@@ -568,9 +576,22 @@ namespace TaskbarHero.Client.Battle
                     // 몬스터가 이미 죽었/없어도 시전 시 무조건 연출되도록 대상 위치를 캡처해 무조건 스폰.
                     _moving = false;
                     SendMessage("PlayArrowRain", motion, SendMessageOptions.DontRequireReceiver);
-                    SpawnEffectAt(sk.effect, ArrowRainTargetPos());
+                    SpawnEffectAt(sk.effect, ArrowRainTargetPos(), sk.scale);
                     _ctrl.DealDamageAfter(motion, dmg, label);
                     _busyTimer = motion + 0.4f; // 점프+홀드+착지 동안 대기
+                }
+                else if (_allSkillsAoe && sk.effect != null)
+                {
+                    // 캐스터 전(全)스킬 광역(마법사): 대상(최전방 몬스터) 위치에 이펙트를 띄우고
+                    // 그 주변 사거리 내 모든 적에게 데미지. 사거리 밖(대상 없음)이면 앞쪽 폴백 위치.
+                    if (_castHold)
+                        SendMessage("PlayCastHold", motion, SendMessageOptions.DontRequireReceiver);
+                    else
+                        PlayAttackAnim();
+                    Vector3 center = ArrowRainTargetPos();
+                    var fx = SpawnEffectAt(sk.effect, center, sk.scale);
+                    _ctrl.DealAreaDamageAfter(motion, dmg, label, center, EffectRadius(fx));
+                    _busyTimer = motion;
                 }
                 else if (_ranged && sk.effect != null && _ctrl.MonsterTransform != null)
                 {
@@ -578,6 +599,7 @@ namespace TaskbarHero.Client.Battle
                     PlayAttackAnim();
                     Vector3 origin = transform.position + Vector3.up * _ctrl.EffectYOffset;
                     var fx = Instantiate(sk.effect, origin, Quaternion.identity);
+                    if (sk.scale > 0f && sk.scale != 1f) fx.transform.localScale *= sk.scale; // 이펙트 크기 배율(정조준·다중 사격 2배 등)
                     var proj = fx.GetComponent<ProjectileEffect>();
                     if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
                     proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
@@ -592,6 +614,7 @@ namespace TaskbarHero.Client.Battle
                     else
                         PlayAttackAnim();
                     var fx = SpawnEffectAtSelf(sk.effect);
+                    if (fx != null && sk.scale > 0f && sk.scale != 1f) fx.transform.localScale *= sk.scale;
                     if (_aoeSkillCode != 0 && sk.code == _aoeSkillCode)
                     {
                         // 광역(강타 등): 이펙트 범위 내 모든 적에게 데미지.
@@ -614,7 +637,23 @@ namespace TaskbarHero.Client.Battle
             PlayAttackAnim();
             long dmg = Damage(1f);
 
-            if (_ranged && _arrowPrefab != null)
+            if (_basicAttackProjectile != null && _ctrl.MonsterTransform != null)
+            {
+                // 캐스터(마법사 등): 기본공격을 투사체로 발사(자기 위치 → 대상). 도달 시 데미지.
+                Vector3 origin = transform.position + Vector3.up * _ctrl.EffectYOffset;
+                var fx = Instantiate(_basicAttackProjectile, origin, Quaternion.identity);
+                if (_basicAttackProjectileScale > 0f && _basicAttackProjectileScale != 1f)
+                {
+                    fx.transform.localScale *= _basicAttackProjectileScale;
+                }
+                var proj = fx.GetComponent<ProjectileEffect>();
+                if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
+                string label = $"[{_name}] → 몬스터";
+                proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
+                            () => _ctrl.DealDamageAfter(0f, dmg, label));
+                _busyTimer = _ctrl.BasicHitDelay;
+            }
+            else if (_ranged && _arrowPrefab != null)
             {
                 var monster = _ctrl.MonsterTransform;
                 Vector3 origin = transform.position + Vector3.up * _ctrl.EffectYOffset;
@@ -740,11 +779,14 @@ namespace TaskbarHero.Client.Battle
             return Mathf.Max(r, _attackRange);
         }
 
-        /// <summary>지정 위치에 스킬 이펙트를 무조건 발생시킨다(몬스터 생존 여부와 무관 — 화살비 등 대상 기준 연출 보장).</summary>
-        private void SpawnEffectAt(GameObject effect, Vector3 pos)
+        /// <summary>지정 위치에 스킬 이펙트를 무조건 발생시키고 인스턴스를 반환한다(몬스터 생존 여부와 무관 —
+        /// 화살비·마법사 광역 등 대상 기준 연출 보장). scale로 이펙트 크기 배율을 적용한다.</summary>
+        private GameObject SpawnEffectAt(GameObject effect, Vector3 pos, float scale = 1f)
         {
-            if (effect == null) return;
-            Instantiate(effect, pos, Quaternion.identity);
+            if (effect == null) return null;
+            var fx = Instantiate(effect, pos, Quaternion.identity);
+            if (scale > 0f && scale != 1f) fx.transform.localScale *= scale;
+            return fx;
         }
 
         /// <summary>화살비 낙하 위치. 최전방 몬스터가 있으면 그 위치, 없으면(이미 죽음) 레인저 앞쪽으로 폴백.</summary>
