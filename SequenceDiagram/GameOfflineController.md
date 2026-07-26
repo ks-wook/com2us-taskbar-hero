@@ -1,8 +1,8 @@
 # GameOfflineController (`/api/game/offline`, GameServer)
 
-방치형 오프라인 보상 정산. 요청은 `GameAuthMiddleware` 인증을 거친다. 저장소: MySQL `taskbar_hero_game`(`game_player`·`player_character`·`player_item`) + `MasterDataProvider`(stage_reward·level). 중복 정산은 트랜잭션 + `last_active_at` CAS로 방지한다.
+방치형 오프라인 보상 정산. 저장소: MySQL `taskbar_hero_game`(`game_player`·`player_character`·`player_item`) + `MasterDataProvider`(stage_reward·level). 중복 정산은 트랜잭션 + `last_active_at` CAS로 방지한다.
 
-> **공통 인증**: 첫 단계는 `GameAuthMiddleware`의 Redis 토큰 대조(실패 시 401). 아래는 인증 통과 이후를 표기한다.
+> **인증**: `/api/game/*` 요청은 컨트롤러 진입 전에 `GameAuthMiddleware`가 토큰을 검증한다(실패 시 401). 주요 로직이 아니므로 아래 다이어그램에서는 생략하고, 인증된 `userId`가 컨트롤러에 전달된 이후를 표기한다.
 
 ## POST /api/game/offline/claim — 오프라인 보상 정산
 
@@ -10,19 +10,17 @@
 sequenceDiagram
     autonumber
     actor C as 클라이언트
-    participant MW as GameAuthMiddleware
     participant Ctrl as GameOfflineController
     participant Svc as OfflineService
     participant MD as MasterDataProvider
     participant Repo as OfflineRepository
     participant DB as MySQL(game)
 
-    C->>MW: POST /offline/claim { userId, token }
-    MW-->>Ctrl: 인증 통과(userId)
+    C->>Ctrl: POST /offline/claim { userId, token }
     Ctrl->>Svc: ClaimAsync(userId)
     Svc->>MD: IsLoaded 확인
     Svc->>Repo: GetContextAsync(userId)
-    Repo->>DB: SELECT game_player(last_active_at·현재 스테이지)
+    Repo->>DB: 기준 시각·현재 스테이지 데이터 확인
     alt 세이브 없음
         Svc-->>Ctrl: SaveNotFound(2001)
     else 존재
@@ -33,14 +31,14 @@ sequenceDiagram
             Svc->>MD: 현재 스테이지 stage_reward(gold/exp) → 시간당 산출율
             Svc->>Repo: ClaimAsync(now, computeReward, applyExp)
             Note over Repo,DB: 단일 트랜잭션
-            Repo->>DB: last_active_at 재확인
-            Repo->>DB: CAS UPDATE last_active_at = now WHERE last_active_at = 관측값
-            alt CAS 0행(동시 요청이 먼저 정산)
+            Repo->>DB: 기준 시각 데이터 재확인(트랜잭션 내부)
+            Repo->>DB: 기준 시각 데이터 조건부 갱신(CAS — 관측값과 같을 때만 now로 리셋해 정산권 선점)
+            alt 선점 실패(동시 요청이 먼저 정산)
                 Svc-->>Ctrl: OfflineRewardAlreadyClaimed(3002) — 409
             else 정산권 선점
                 Svc->>Svc: 12h 상한 적용 + 골드/경험치 = 산출율 × effective × 50%
-                Repo->>DB: 골드 적립(재화 행)
-                Repo->>DB: 전 캐릭터 경험치 지급 + 레벨 재계산(level_master)
+                Repo->>DB: 골드 재화 데이터 적립
+                Repo->>DB: 전 캐릭터 경험치·레벨 데이터 갱신(level_master 기준)
                 Svc-->>Ctrl: Success + { offlineElapsedSec, effectiveSec, capped, rewards, characters, lastActiveAt }
             end
         end

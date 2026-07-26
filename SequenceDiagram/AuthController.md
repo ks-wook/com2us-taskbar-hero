@@ -20,16 +20,16 @@ sequenceDiagram
         Svc-->>Ctrl: InvalidRequest(1006)
     else 검증 통과
         Svc->>Repo: ExistsByEmailAsync(email)
-        Repo->>DB: SELECT users WHERE email
+        Repo->>DB: 동일 이메일 계정 데이터 확인
         DB-->>Repo: 존재 여부
         alt 이미 존재
             Svc-->>Ctrl: DuplicateEmail(1003)
         else 신규
             Svc->>Svc: BCrypt.HashPassword(password)
             Svc->>Repo: InsertUserAsync(email, hash, nickname)
-            Repo->>DB: INSERT users
-            alt UNIQUE 위반(동시 가입 경합)
-                DB-->>Svc: 1062
+            Repo->>DB: 계정 데이터 적재
+            alt 이메일 중복 충돌(동시 가입 경합)
+                DB-->>Svc: 유니크 제약 위반
                 Svc-->>Ctrl: DuplicateEmail(1003)
             else 성공
                 DB-->>Repo: userId
@@ -58,7 +58,7 @@ sequenceDiagram
     Ctrl->>Svc: LoginAsync(request)
     Svc->>Svc: 입력 검증
     Svc->>URepo: GetCredentialByEmailAsync(email)
-    URepo->>DB: SELECT user_id, password_hash
+    URepo->>DB: 계정 자격(식별자·비밀번호 해시) 데이터 확인
     DB-->>URepo: 자격 or null
     alt 사용자 없음
         Svc-->>Ctrl: UserNotFound(1001)
@@ -69,9 +69,9 @@ sequenceDiagram
         else 일치
             Svc->>Svc: TokenGenerator.GenerateToken(userId)
             Svc->>TRepo: UpsertAsync(userId, token, expiredAt)
-            TRepo->>DB: UPSERT user_auth_token (기존 세션 무효화)
+            TRepo->>DB: 토큰 데이터 적재·갱신(계정당 1행 → 기존 세션 무효화)
             Svc->>Cache: SetAsync(userId, token, TTL)
-            Cache->>Redis: SET auth:token:{userId} (24h)
+            Cache->>Redis: 토큰 캐시 데이터 적재(TTL 24h)
             Svc-->>Ctrl: Success(0) + userId + token
         end
     end
@@ -94,7 +94,7 @@ sequenceDiagram
     C->>Ctrl: POST /logout { userId, token }
     Ctrl->>Svc: LogoutAsync(userId, token)
     Svc->>Cache: GetAsync(userId)
-    Cache->>Redis: GET auth:token:{userId}
+    Cache->>Redis: 토큰 캐시 데이터 확인
     Redis-->>Cache: 캐시 토큰 or null
     alt 토큰 없음(만료/폐기)
         Svc-->>Ctrl: ExpiredToken(1005)
@@ -102,9 +102,9 @@ sequenceDiagram
         Svc-->>Ctrl: InvalidToken(1004)
     else 일치
         Svc->>TRepo: DeleteAsync(userId)
-        TRepo->>DB: DELETE user_auth_token
+        TRepo->>DB: 토큰 데이터 삭제
         Svc->>Cache: DeleteAsync(userId)
-        Cache->>Redis: DEL auth:token:{userId}
+        Cache->>Redis: 토큰 캐시 데이터 삭제
         Svc-->>Ctrl: Success(0)
     end
     Ctrl-->>C: { success, errorCode, message }
