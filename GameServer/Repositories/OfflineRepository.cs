@@ -85,8 +85,14 @@ public sealed class OfflineRepository : IOfflineRepository
 
     private readonly GameDbFactory _dbFactory;
 
+    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
     public OfflineRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
+    /// <summary>
+    /// game_player에서 정산 기준 시각(last_active_at)과 파밍 스테이지 좌표를 단건 조회한다.
+    /// 트랜잭션 없이 자체 커넥션으로 읽는 사전 조회이며(실제 정산 판정은 ClaimAsync가 트랜잭션 내부에서 재확인),
+    /// 계정 세이브가 없으면 null.
+    /// </summary>
     public async Task<OfflinePlayerContext?> GetContextAsync(long userId)
     {
         using var db = _dbFactory.Create();
@@ -103,6 +109,20 @@ public sealed class OfflineRepository : IOfflineRepository
         return new OfflinePlayerContext(row.LastActiveAt, row.Act, row.Difficulty, row.Stage);
     }
 
+    /// <summary>
+    /// 오프라인(방치) 보상 정산을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 계정이 없으면 NoPlayer, 경과가 최소 기준 미만이거나 CAS 선점에 실패하면 AlreadyClaimed를 롤백 후 반환하며,
+    /// 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 기준 시각만 리셋되고 보상이 안 들어가는 상태를 막는다):
+    /// <para>1) game_player SELECT — 트랜잭션 내부에서 last_active_at을 재확인해 경과 시간 재계산(최소 기준 미만 → AlreadyClaimed)</para>
+    /// <para>2) game_player CAS UPDATE — last_active_at이 1)에서 관측한 값 그대로일 때만 now로 리셋해 정산권을 선점.
+    ///     0행이면 동시 요청이 먼저 정산한 것이므로 롤백(AlreadyClaimed). 중복 지급을 막는 핵심 게이트다.</para>
+    /// <para>3) computeReward 델리게이트 — 경과 시간에 상한을 적용해 골드·경험치 산출(서버 권위, DB 접근 없음)</para>
+    /// <para>4) player_item(재화 행) upsert — 정산 골드 적립, 갱신 후 잔액 산출</para>
+    /// <para>5) player_character SELECT + 캐릭터별 UPDATE — 전 캐릭터에 동일 경험치 지급 후 applyExp 델리게이트로 레벨 재계산</para>
+    /// </remarks>
     public async Task<OfflineClaimOutcome> ClaimAsync(
         long userId,
         long nowUnix,

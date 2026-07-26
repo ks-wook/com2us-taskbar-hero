@@ -24,13 +24,25 @@ public sealed record AddCharacterOutcome(AddCharacterStatus Status, long Cost, l
 
 public interface ISaveRepository
 {
+    /// <summary>game_player 1행을 세이브 응답용 DTO로 조회한다(계정 세이브 없으면 null).</summary>
     Task<PlayerDto?> GetPlayerAsync(long userId);
+
+    /// <summary>계정의 캐릭터 목록(슬롯 순)을 조회한다.</summary>
     Task<List<CharacterDto>> GetCharactersAsync(long userId);
+
+    /// <summary>player_item을 재화 목록과 인벤토리 아이템 목록으로 분리해 조회한다(장착 정보 결합).</summary>
     Task<(List<CurrencyDto> currencies, List<InventoryItemDto> inventory)> GetInventoryAsync(long userId);
+
+    /// <summary>계정의 전 캐릭터 보유 스킬(레벨·장착 여부)을 조회한다.</summary>
     Task<List<SkillDto>> GetSkillsAsync(long userId);
+
+    /// <summary>계정 공용 룬 목록(코드·레벨)을 조회한다.</summary>
     Task<List<RuneDto>> GetRunesAsync(long userId);
+
+    /// <summary>계정의 큐브 상태(레벨·경험치)를 조회한다(행 없으면 null).</summary>
     Task<CubeDto?> GetCubeAsync(long userId);
 
+    /// <summary>캐릭터 추가 생성 시 슬롯 배정·직업 중복 검사에 쓸 기존 슬롯 목록(슬롯 번호 + 직업)을 조회한다.</summary>
     Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId);
 
     /// <summary>최초 접속: game_player + 1번 슬롯 캐릭터 + 큐브를 한 트랜잭션으로 초기화한다.</summary>
@@ -116,8 +128,13 @@ public sealed class SaveRepository : ISaveRepository
 
     private readonly GameDbFactory _dbFactory;
 
+    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
     public SaveRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
+    /// <summary>
+    /// game_player 1행을 조회해 세이브 응답용 <see cref="PlayerDto"/>(닉네임·진행 좌표·최고 클리어·인벤 용량·마지막 활동 시각)로
+    /// 변환한다. 읽기 전용 단건 조회이므로 트랜잭션 없이 자체 커넥션을 쓰며, 계정 세이브가 없으면 null.
+    /// </summary>
     public async Task<PlayerDto?> GetPlayerAsync(long userId)
     {
         using var db = _dbFactory.Create();
@@ -139,6 +156,10 @@ public sealed class SaveRepository : ISaveRepository
         };
     }
 
+    /// <summary>
+    /// 계정의 player_character 전 행을 슬롯 번호(character_id) 순으로 조회해 캐릭터 DTO 목록으로 변환한다.
+    /// 읽기 전용이므로 트랜잭션 없이 자체 커넥션을 쓴다.
+    /// </summary>
     public async Task<List<CharacterDto>> GetCharactersAsync(long userId)
     {
         using var db = _dbFactory.Create();
@@ -153,6 +174,12 @@ public sealed class SaveRepository : ISaveRepository
         }).ToList();
     }
 
+    /// <summary>
+    /// player_item과 player_item_equipped를 각각 조회해, 재화 행(row_type=2)은 재화 목록으로, 아이템 행은
+    /// 장착 정보(장착 캐릭터·장착 슬롯)를 결합한 인벤토리 목록으로 나눠 반환한다.
+    /// 장착 중이라 인벤 칸이 없는 행은 slot을 -1로, 미장착은 장착 필드를 0으로 표기한다.
+    /// 읽기 전용 두 건이므로 트랜잭션 없이 한 커넥션에서 연달아 읽는다.
+    /// </summary>
     public async Task<(List<CurrencyDto>, List<InventoryItemDto>)> GetInventoryAsync(long userId)
     {
         using var db = _dbFactory.Create();
@@ -201,6 +228,10 @@ public sealed class SaveRepository : ISaveRepository
         return (currencies, inventory);
     }
 
+    /// <summary>
+    /// 계정의 player_skill 전 행(캐릭터별 스킬 코드·레벨·장착 여부)을 조회해 DTO 목록으로 변환한다.
+    /// 읽기 전용이므로 트랜잭션 없이 자체 커넥션을 쓴다.
+    /// </summary>
     public async Task<List<SkillDto>> GetSkillsAsync(long userId)
     {
         using var db = _dbFactory.Create();
@@ -214,6 +245,10 @@ public sealed class SaveRepository : ISaveRepository
         }).ToList();
     }
 
+    /// <summary>
+    /// 계정 공용 player_rune 전 행(룬 코드·레벨)을 조회해 DTO 목록으로 변환한다.
+    /// 읽기 전용이므로 트랜잭션 없이 자체 커넥션을 쓴다.
+    /// </summary>
     public async Task<List<RuneDto>> GetRunesAsync(long userId)
     {
         using var db = _dbFactory.Create();
@@ -225,6 +260,10 @@ public sealed class SaveRepository : ISaveRepository
         }).ToList();
     }
 
+    /// <summary>
+    /// player_cube 1행(큐브 레벨·경험치)을 조회해 DTO로 변환한다. 행이 없으면(큐브 미초기화) null.
+    /// 읽기 전용이므로 트랜잭션 없이 자체 커넥션을 쓴다.
+    /// </summary>
     public async Task<CubeDto?> GetCubeAsync(long userId)
     {
         using var db = _dbFactory.Create();
@@ -241,6 +280,10 @@ public sealed class SaveRepository : ISaveRepository
         };
     }
 
+    /// <summary>
+    /// 캐릭터 추가 생성 시 필요한 기존 슬롯 정보(character_id·class_code)만 조회한다.
+    /// 서비스가 빈 슬롯 배정과 직업 중복 검사에 사용하며, 읽기 전용이므로 트랜잭션을 쓰지 않는다.
+    /// </summary>
     public async Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId)
     {
         using var db = _dbFactory.Create();
@@ -249,6 +292,16 @@ public sealed class SaveRepository : ISaveRepository
         return rows.Select(r => new CharacterSlot(r.CharacterId, r.ClassCode)).ToList();
     }
 
+    /// <summary>
+    /// 최초 접속 시 세이브 초기화(플레이어 행 + 1번 슬롯 캐릭터 + 큐브 생성)를 단일 커넥션의 단일 트랜잭션으로 수행한다.
+    /// 세 INSERT 중 하나라도 실패하면 전부 롤백하고 예외를 그대로 전파한다(이미 존재하는 계정이면 PK 중복 예외).
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(캐릭터나 큐브가 없는 반쪽 세이브가 남지 않게 한다):
+    /// <para>1) game_player INSERT — 닉네임·시작 좌표(1-1-1)·최고 클리어 0·초기 인벤 용량·활동/생성/갱신 시각</para>
+    /// <para>2) player_character INSERT — 1번 슬롯에 선택 직업 캐릭터를 레벨 1·경험치 0으로 생성</para>
+    /// <para>3) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
+    /// </remarks>
     public async Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int inventoryCapacity, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -298,6 +351,18 @@ public sealed class SaveRepository : ISaveRepository
         }
     }
 
+    /// <summary>
+    /// 기존 계정에 캐릭터 1개 추가(생성 비용 골드 차감)를 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 골드 부족은 InsufficientCurrency, 슬롯/직업 유니크 경합은 DuplicateConflict로 롤백 후 반환하며,
+    /// 그 외 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 골드만 차감되고 캐릭터가 안 생기는 상태를 막는다):
+    /// <para>1) player_item(재화 행) SELECT — 골드 잔액 확인(행이 없으면 잔액 0, 비용 미달 → InsufficientCurrency)</para>
+    /// <para>2) player_item UPDATE — 비용이 0보다 클 때만 골드 차감</para>
+    /// <para>3) player_character INSERT — 지정 슬롯에 캐릭터를 레벨 1·경험치 0으로 생성.
+    ///     유니크 제약(슬롯 PK·계정 내 직업 중복) 위반(MySQL 1062)은 동시 생성 경합으로 보고 롤백 → DuplicateConflict</para>
+    /// </remarks>
     public async Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, long goldCost)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -357,6 +422,10 @@ public sealed class SaveRepository : ISaveRepository
         }
     }
 
+    /// <summary>
+    /// game_player의 last_active_at·updated_at을 현재 시각으로 갱신한다(오프라인 정산 기준 시각 리셋).
+    /// 쓰기가 한 문장이라 그 자체로 원자적이므로 트랜잭션을 열지 않으며, 갱신 행 수(0이면 계정 없음)를 반환한다.
+    /// </summary>
     public async Task<int> UpdateLastActiveAsync(long userId, long nowUnix)
     {
         using var db = _dbFactory.Create();

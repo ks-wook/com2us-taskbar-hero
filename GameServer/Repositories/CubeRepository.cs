@@ -133,8 +133,23 @@ public sealed class CubeRepository : ICubeRepository
 
     private readonly GameDbFactory _dbFactory;
 
+    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
     public CubeRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
+    /// <summary>
+    /// 아이템 합성(입력 여러 개 → 상위 등급 결과 1개)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증·판정 실패(ItemNotFound·ItemEquipped·RecipeNotMet)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 입력만 사라지고 결과가 안 나오는 상태를 막는다):
+    /// <para>1) player_cube SELECT — 큐브 레벨·경험치 로드(행이 없으면 레벨 1·경험치 0으로 취급)</para>
+    /// <para>2) player_item SELECT — 입력 아이템 소유 확인(조회 개수 불일치·재화 행 포함 → ItemNotFound)</para>
+    /// <para>3) player_item_equipped SELECT — 입력 중 장착 중인 아이템이 있으면 소모 거부(ItemEquipped)</para>
+    /// <para>4) decide 델리게이트 — 마스터 검증(등급·슬롯·클래스·개수)과 결과 아이템·큐브 경험치 산출(DB 접근 없음)</para>
+    /// <para>5) player_item DELETE — 입력 아이템 전량 삭제</para>
+    /// <para>6) player_item INSERT — 결과 아이템 생성(4)에서 빈 칸이 생기므로 용량은 항상 충족)</para>
+    /// <para>7) player_cube upsert — 합성으로 얻은 큐브 경험치 반영 및 레벨 재계산</para>
+    /// </remarks>
     public async Task<CombineOutcome> ApplyCombineAsync(
         long userId, IReadOnlyList<long> itemIds,
         Func<int, IReadOnlyList<CombineInput>, CombineDecision> decide,
@@ -222,6 +237,21 @@ public sealed class CubeRepository : ICubeRepository
         }
     }
 
+    /// <summary>
+    /// 아이템 분해(아이템 소모 → 골드·큐브 경험치 획득)를 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(ItemNotFound·ItemEquipped·InsufficientQuantity)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 아이템만 차감되고 보상이 안 들어가는 상태를 막는다):
+    /// <para>1) player_cube SELECT — 큐브 레벨·경험치 로드(보상 산출 입력)</para>
+    /// <para>2) player_item SELECT — 대상 아이템 일괄 조회(id→행 사전화)</para>
+    /// <para>3) player_item_equipped SELECT — 장착 중 아이템 판별용 id 집합 확보</para>
+    /// <para>4) 요청 항목별 검증 — 소유(아이템 행)·미장착·요청 수량 ≤ 보유 수량</para>
+    /// <para>5) computeReward 델리게이트 — 마스터 등급 기준 골드·큐브 경험치 합계 산출(DB 접근 없음)</para>
+    /// <para>6) player_item UPDATE/DELETE — 수량 차감, 전량 분해면 행 삭제</para>
+    /// <para>7) player_item(재화 행) upsert — 분해 보상 골드 적립</para>
+    /// <para>8) player_cube upsert — 분해로 얻은 큐브 경험치 반영 및 레벨 재계산</para>
+    /// </remarks>
     public async Task<DismantleOutcome> ApplyDismantleAsync(
         long userId, IReadOnlyList<(long itemId, int count)> items,
         Func<int, IReadOnlyList<DismantleInput>, DismantleReward> computeReward,
@@ -310,6 +340,22 @@ public sealed class CubeRepository : ICubeRepository
         }
     }
 
+    /// <summary>
+    /// 아이템 제작(골드·재료 소모 → 결과 아이템 획득)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(CubeLevelInsufficient·InsufficientCurrency·RecipeNotMet·InventoryFull)는 즉시 롤백 후
+    /// Fail 상태로 반환하고, 예외는 롤백 후 전파한다. 레시피 존재 여부는 호출 전(서비스·마스터)에서 검증한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 골드·재료만 사라지는 상태를 막는다):
+    /// <para>1) player_cube SELECT — 큐브 레벨·경험치 로드</para>
+    /// <para>2) 큐브 레벨 요구치 확인(부족 → CubeLevelInsufficient)</para>
+    /// <para>3) player_item(재화 행) SELECT — 비용 골드 잔액 확인(부족 → InsufficientCurrency)</para>
+    /// <para>4) player_item SELECT — 레시피 재료별 총 보유 수량 확인(부족 → RecipeNotMet)</para>
+    /// <para>5) player_item UPDATE — 비용 골드 차감</para>
+    /// <para>6) player_item UPDATE/DELETE — 재료를 여러 행에 걸쳐 필요 수량만큼 차감</para>
+    /// <para>7) player_item UPDATE/INSERT — 결과 아이템 적재(재료면 스택 병합 후 잔량 새 행, 장비면 개당 1행. 칸 부족 → InventoryFull)</para>
+    /// <para>8) player_cube upsert — 제작으로 얻은 큐브 경험치 반영 및 레벨 재계산</para>
+    /// </remarks>
     public async Task<CraftOutcome> ApplyCraftAsync(
         long userId, RecipeDef recipe, int resultItemType, int resultStackMax, long cubeExpGain,
         Func<int, long, long, (int newLevel, long newExp)> advanceCube,

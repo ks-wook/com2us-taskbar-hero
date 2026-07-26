@@ -119,8 +119,23 @@ public sealed class InventoryRepository : IInventoryRepository
 
     private readonly GameDbFactory _dbFactory;
 
+    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
     public InventoryRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
+    /// <summary>
+    /// 장비 장착(같은 슬롯에 기존 장비가 있으면 스왑)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(InvalidCharacter·ItemNotFound·ItemEquipped·NotEquippable)는 즉시 롤백 후 Fail 상태로 반환하고,
+    /// 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(해제와 장착을 함께 커밋해 슬롯이 비거나 유니크 제약(user_id, 캐릭터, 슬롯)이 깨지지 않게 한다):
+    /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인 및 직업·레벨 확보(장착 검증 입력)</para>
+    /// <para>2) player_item SELECT — 대상 아이템의 계정 소유 확인 및 item_code·enhance_level 확보</para>
+    /// <para>3) player_item_equipped SELECT — 이미 어딘가에 장착 중이면 거부(ItemEquipped)</para>
+    /// <para>4) validate 델리게이트 — 마스터 검증(장비 여부·슬롯·클래스·레벨 제한)과 대상 장착 슬롯 산출(DB 접근 없음)</para>
+    /// <para>5) player_item_equipped SELECT + DELETE — 같은 캐릭터·슬롯의 기존 장비가 있으면 장착 해제(스왑)</para>
+    /// <para>6) player_item_equipped INSERT — 새 장착 행 생성</para>
+    /// </remarks>
     public async Task<EquipOutcome> ApplyEquipAsync(
         long userId, int characterId, long itemId,
         Func<int, int, int, (bool ok, int slot)> validate)
@@ -211,6 +226,16 @@ public sealed class InventoryRepository : IInventoryRepository
         }
     }
 
+    /// <summary>
+    /// 지정 캐릭터·장착 슬롯의 장비 해제를 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(InvalidCharacter·NotEquipped)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(검증과 삭제 사이에 대상이 바뀌지 않도록 같은 트랜잭션에서 읽고 지운다):
+    /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인</para>
+    /// <para>2) player_item_equipped SELECT — 해당 캐릭터·슬롯의 장착 행 조회(없으면 NotEquipped)</para>
+    /// <para>3) player_item_equipped DELETE — 장착 행 삭제(아이템 자체는 player_item에 남아 인벤토리로 복귀)</para>
+    /// </remarks>
     public async Task<UnequipOutcome> ApplyUnequipAsync(long userId, int characterId, int slot)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -255,6 +280,19 @@ public sealed class InventoryRepository : IInventoryRepository
         }
     }
 
+    /// <summary>
+    /// 인벤토리 칸 이동(목표 칸이 차 있으면 교환)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(ItemNotFound·InvalidSlot)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// 같은 칸으로의 이동은 변경 없이 커밋한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(교환이 3개의 UPDATE로 이루어져 트랜잭션 없이는 유니크 제약(user_id, slot) 위반 상태가 남을 수 있다):
+    /// <para>1) game_player SELECT — inventory_capacity 확보 후 toSlot 범위 검증(범위 밖 → InvalidSlot)</para>
+    /// <para>2) player_item SELECT — 이동 대상의 계정 소유·아이템 행(재화 아님)·배치 여부(slot NOT NULL) 확인</para>
+    /// <para>3) player_item SELECT — 목표 칸 점유자 조회</para>
+    /// <para>4-a) 점유자 있음(교환): 대상 slot을 NULL로 비움 → 점유자를 대상의 원래 칸으로 이동 → 대상을 목표 칸으로 이동(UPDATE 3회)</para>
+    /// <para>4-b) 점유자 없음: 대상 slot을 목표 칸으로 UPDATE(1회)</para>
+    /// </remarks>
     public async Task<MoveOutcome> ApplyMoveAsync(long userId, long itemId, int toSlot)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -339,6 +377,18 @@ public sealed class InventoryRepository : IInventoryRepository
         }
     }
 
+    /// <summary>
+    /// 인벤토리 용량 1칸 확장(골드 소모)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(NoPlayer·CapacityMax·InsufficientCurrency)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 골드만 차감되고 용량이 안 늘어나는 상태를 막는다):
+    /// <para>1) game_player SELECT — 현재 inventory_capacity 확인(계정 세이브 없으면 NoPlayer)</para>
+    /// <para>2) planOne 델리게이트 — 현재 용량 기준 확장 가능 여부·비용 산출(마스터, DB 접근 없음. 상한 도달 → CapacityMax)</para>
+    /// <para>3) player_item(재화 행) SELECT — 골드 잔액 확인(부족 → InsufficientCurrency)</para>
+    /// <para>4) player_item UPDATE — 확장 비용 골드 차감</para>
+    /// <para>5) game_player UPDATE — inventory_capacity +1 및 updated_at 갱신</para>
+    /// </remarks>
     public async Task<ExpandOutcome> ApplyExpandAsync(long userId, Func<int, (bool ok, long cost)> planOne, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();

@@ -82,8 +82,13 @@ public sealed class StageRepository : IStageRepository
 
     private readonly GameDbFactory _dbFactory;
 
+    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
     public StageRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
+    /// <summary>
+    /// game_player에서 스테이지 도메인용 진행도 스냅샷(현재 진입 좌표·최고 클리어 시퀀스·인벤토리 용량)을
+    /// 단건 조회한다. 트랜잭션 없이 자체 커넥션으로 읽으며, 계정 세이브가 없으면 null.
+    /// </summary>
     public async Task<StageProgressRow?> GetProgressAsync(long userId)
     {
         using var db = _dbFactory.Create();
@@ -100,6 +105,10 @@ public sealed class StageRepository : IStageRepository
         return new StageProgressRow(row.Act, row.Difficulty, row.Stage, row.MaxStageCleared, row.InventoryCapacity);
     }
 
+    /// <summary>
+    /// 현재 진입 스테이지 좌표(act/difficulty/stage)와 updated_at을 game_player에 기록한다(단일 UPDATE).
+    /// 쓰기가 한 문장이라 그 자체로 원자적이므로 별도 트랜잭션을 열지 않는다. 갱신된 행 수(0이면 계정 없음)를 반환한다.
+    /// </summary>
     public async Task<int> SetCurrentStageAsync(long userId, int act, int difficulty, int stage, long nowUnix)
     {
         using var db = _dbFactory.Create();
@@ -108,6 +117,20 @@ public sealed class StageRepository : IStageRepository
             .UpdateAsync(new { act, difficulty, stage, updated_at = nowUnix });
     }
 
+    /// <summary>
+    /// 클리어 판정·보상 지급·진행도 전진을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(NoPlayer·NotEntered·InventoryFull)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 보상만 들어가고 진행도가 안 오르는 부분 반영을 막는다):
+    /// <para>1) game_player SELECT — 현재 진입 좌표·max_stage_cleared·inventory_capacity 확보 후 요청 좌표와 일치 검증(불일치 → NotEntered)</para>
+    /// <para>2) player_item(재화 행) upsert — 클리어 보상 골드 적립, 갱신 후 잔액 산출</para>
+    /// <para>3) player_character SELECT + 캐릭터별 UPDATE — 전 캐릭터에 동일 경험치 지급 후 levelUp 델리게이트로 레벨 재계산</para>
+    /// <para>4) player_item 전리품 적재 — 스택 가능하면 기존 스택 병합, 아니면 빈 칸에 INSERT(용량 초과 → InventoryFull)</para>
+    /// <para>5) game_player 진행도 UPDATE — 프런티어 클리어면 max_stage_cleared 갱신 + 다음 스테이지로 전진, 재파밍이면 updated_at만 갱신</para>
+    /// ⚠️ 원자성은 보장하지만 game_player 행에 잠금(FOR UPDATE 등)을 걸지 않으므로, 동일 userId의 동시 요청은
+    ///    1)의 검증을 함께 통과할 수 있다(중복 전리품 지급·골드/경험치 lost update·슬롯 유니크 충돌). 백로그 과제.
+    /// </remarks>
     public async Task<ClearOutcome> ApplyClearAsync(
         long userId,
         int expectedAct, int expectedDifficulty, int expectedStage,

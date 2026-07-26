@@ -125,8 +125,21 @@ public sealed class GrowthRepository : IGrowthRepository
 
     private readonly GameDbFactory _dbFactory;
 
+    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
     public GrowthRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
+    /// <summary>
+    /// 스킬 1레벨 상승을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(InvalidCharacter·SkillNotFound·ClassMismatch·MaxLevel·InsufficientPoint)는 즉시 롤백 후
+    /// Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 포인트 계산의 근거가 된 스냅샷과 반영이 어긋나지 않게 한다):
+    /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인 및 직업·레벨 확보(검증 입력)</para>
+    /// <para>2) player_skill SELECT — 해당 캐릭터의 보유 스킬 레벨 집계(대상 스킬 현재 레벨 + 사용한 총 포인트)</para>
+    /// <para>3) decide 델리게이트 — 마스터 검증(스킬 존재·직업 소속·최대 레벨·잔여 포인트)과 반영 후 잔여 포인트 산출(DB 접근 없음)</para>
+    /// <para>4) player_skill UPDATE 또는 INSERT — 기존 행이면 레벨 +1, 첫 습득이면 레벨 1·미장착으로 새 행 생성</para>
+    /// </remarks>
     public async Task<SkillLevelUpOutcome> ApplySkillLevelUpAsync(
         long userId, int characterId, int skillCode,
         Func<int, int, int, int, (SkillLevelUpStatus status, int availableAfter)> decide)
@@ -198,6 +211,16 @@ public sealed class GrowthRepository : IGrowthRepository
         }
     }
 
+    /// <summary>
+    /// 대상 캐릭터의 스킬을 전부 초기화(무료)하는 작업을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 캐릭터가 없으면 롤백 후 InvalidCharacter를 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(재화 변동은 없다):
+    /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인 및 레벨 확보(회수 후 총 포인트 산출 입력)</para>
+    /// <para>2) player_skill DELETE — 해당 캐릭터의 스킬 행 전량 삭제(포인트 전액 회수 + 장착 상태 해제가 동시에 이루어짐)</para>
+    /// <para>3) totalPoints 델리게이트 — 캐릭터 레벨 기준 총 스킬 포인트 산출(DB 접근 없음)</para>
+    /// </remarks>
     public async Task<SkillResetOutcome> ApplySkillResetAsync(long userId, int characterId, Func<int, int> totalPoints)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -234,6 +257,19 @@ public sealed class GrowthRepository : IGrowthRepository
         }
     }
 
+    /// <summary>
+    /// 액티브 스킬 장착 목록을 통째로 교체하는 작업을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(InvalidCharacter·SkillNotFound·ClassMismatch·NotActive·NotLearned·LimitExceeded)는 즉시 롤백 후
+    /// Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(전량 해제와 재장착을 함께 커밋해 "아무것도 장착되지 않은" 중간 상태가 보이지 않게 한다):
+    /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인 및 직업 확보(검증 입력)</para>
+    /// <para>2) player_skill SELECT — 보유 스킬 code→level 사전 확보</para>
+    /// <para>3) validate 델리게이트 — 마스터 검증(스킬 존재·직업 소속·액티브 여부·습득 여부·장착 한도)(DB 접근 없음)</para>
+    /// <para>4) player_skill UPDATE — 해당 캐릭터의 equipped를 전부 0으로 해제</para>
+    /// <para>5) player_skill UPDATE(요청 코드별) — 요청 목록의 스킬만 equipped=1로 재설정</para>
+    /// </remarks>
     public async Task<SkillEquipOutcome> ApplySkillEquipAsync(
         long userId, int characterId, IReadOnlyList<int> skillCodes,
         Func<int, IReadOnlyDictionary<int, int>, SkillEquipStatus> validate)
@@ -294,6 +330,20 @@ public sealed class GrowthRepository : IGrowthRepository
         }
     }
 
+    /// <summary>
+    /// 룬 1레벨 업그레이드(골드 소모)를 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(MaxLevel·PrereqNotMet·InsufficientCurrency)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// 룬 존재 여부는 호출 전(서비스·마스터)에서 검증한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 골드만 차감되고 레벨이 안 오르는 상태를 막는다):
+    /// <para>1) player_rune SELECT — 대상 룬 현재 레벨(계정 공용, 행이 없으면 0) 확인 후 최대 레벨 도달 검사</para>
+    /// <para>2) player_rune SELECT — 선행 룬(prereqCode≠0일 때) 해금 여부 확인(레벨 &lt; 1 → PrereqNotMet)</para>
+    /// <para>3) costOf 델리게이트 — 현재 레벨 기준 골드 비용 산출(서버 권위, DB 접근 없음)</para>
+    /// <para>4) player_item(재화 행) SELECT — 골드 잔액 확인(부족 → InsufficientCurrency)</para>
+    /// <para>5) player_item UPDATE — 비용 골드 차감</para>
+    /// <para>6) player_rune UPDATE 또는 INSERT — 기존 행이면 레벨 +1, 첫 해금이면 레벨 1로 새 행 생성</para>
+    /// </remarks>
     public async Task<RuneUpgradeOutcome> ApplyRuneUpgradeAsync(
         long userId, int runeCode, int prereqCode, int maxLevel, Func<int, long> costOf)
     {
