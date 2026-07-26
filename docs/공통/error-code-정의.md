@@ -26,7 +26,7 @@
 | 4000번대 | 인벤토리 / 아이템 / 큐브 | [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 7장 | 사용 중 |
 | 5000번대 | 성장(직업 / 스킬 / 룬) | [성장 시스템 기획서](../세부/growth-기획서.md) 7장 | 사용 중 |
 | 6000번대 | 스테이지 / 전투 결과 | [스테이지/전투 결과 기획서](../세부/stage-battle-기획서.md) 7장 | 사용 중 |
-| 7000번대 | 거래소 / 교역선 | [거래소 / 교역선 기획서](../세부/trade-기획서.md) 7장 | 사용 중 |
+| 7000번대 | 거래소 / 교역선 | [거래소 / 교역선 기획서](../세부/trade-기획서.md) 8장 | 사용 중 |
 | 8000번대 | 메일(보상) | [메일 기획서](../세부/mail-기획서.md) 7장 | 사용 중 |
 | 9000번대 | 출석부 보상 | [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) 7장 | 사용 중 |
 | 10000번대 | 마스터 데이터 | [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 8 | 사용 중 |
@@ -122,8 +122,10 @@
 | TradeAlreadyClosed | 7005 | 이미 판매/취소된 등록 |
 | TradePriceOutOfRange | 7006 | 등록 가격이 기준가 ±20% 범위 밖 |
 | TradeListingLimitExceeded | 7007 | 계정 동시 등록 한도(10개) 초과 |
+| TradeBusy | 7008 | 같은 등록에 다른 요청이 처리 중(재시도 가능) — **신규 제안, `ErrorCode.cs` 미반영** |
 
 - 등록 아이템 없음·장착 중은 `ItemNotFound(4001)`·`ItemEquipped(4007)`, 구매 골드 부족은 `InsufficientCurrency(4005)`, 아이템 지급 용량 초과는 `InventoryFull(4002)`를 재사용한다.
+- `TradeBusy(7008)`는 거래소 **Redis 구매 락** 획득에 재시도까지 실패했을 때 반환한다([거래소 기획서](../세부/trade-기획서.md) 7.4). HTTP 409 제안. 재시도가 무의미한 `TradeAlreadyClosed(7005)`와 의미가 다르므로 혼용하지 않는다.
 
 ### 2.9 메일(보상) (8000번대)
 
@@ -229,6 +231,7 @@ namespace TaskbarHero.Common
         TradeAlreadyClosed = 7005,
         TradePriceOutOfRange = 7006,
         TradeListingLimitExceeded = 7007,
+        // TradeBusy = 7008,  // 신규 제안(거래소 Redis 구매 락) — 구현 시 활성화
 
         // 메일(보상) (8000번대)
         MailNotFound = 8001,
@@ -256,7 +259,7 @@ namespace TaskbarHero.Common
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 7장 에러 코드 (4000번대)
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 7장 에러 코드 (5000번대)
 - [스테이지/전투 결과 기획서](../세부/stage-battle-기획서.md) — 7장 에러 코드 (6000번대)
-- [거래소 / 교역선 기획서](../세부/trade-기획서.md) — 7장 에러 코드 (7000번대)
+- [거래소 / 교역선 기획서](../세부/trade-기획서.md) — 8장 에러 코드 (7000번대), 7장 성능 설계(Redis 캐시·경합 제어)
 - [메일 기획서](../세부/mail-기획서.md) — 7장 에러 코드 (8000번대)
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — 7장 에러 코드 (9000번대)
 - [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) — 8장 에러 코드 (10000번대)

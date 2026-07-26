@@ -169,7 +169,7 @@ erDiagram
   - `player_mail`: `mail_id` PK, `user_id` 조회 인덱스. 계정 우편함.
   - `player_mail_reward`: `(mail_id, seq)` 복합 PK. 메일 첨부(0~N).
   - `player_attendance`: `(user_id, attend_date)` 복합 PK. 출석한 일자당 1행([출석부 보상 시스템 기획서](attendance-기획서.md)).
-  - `trade_listing`: `listing_id` PK, `seller_user_id`·`(status, item_code)` 인덱스. 전역 거래소 등록(에스크로), 등록 아이템은 `player_item`에서 빠져 여기 스냅샷으로 보관([거래소 / 교역선 기획서](trade-기획서.md)).
+  - `trade_listing`: `listing_id` PK, `(status, item_code, price)`·`(status, price)`·`(seller_user_id, status)`·`(status, expires_at)` 인덱스. 전역 거래소 등록(에스크로), 등록 아이템은 `player_item`에서 빠져 여기 스냅샷으로 보관([거래소 / 교역선 기획서](trade-기획서.md)). 목록 조회는 전역 공유 읽기이므로 Redis 목록 캐시를 상시 사용하고, 동시 구매는 Redis 락 + 조건부 갱신으로 직렬화한다(같은 기획서 7장).
   - `player_item`: `player_item_id` PK. `(user_id, slot)` 유니크 — 한 인벤토리 칸(slot)에는 아이템(스택) 한 행만 존재한다(재화 행은 `slot`이 NULL이라 무제한 공존).
   - `player_item_equipped`: `player_item_id` PK — 장착 중인 아이템만 행으로 존재하며 아이템당 최대 1행이라 한 아이템은 동시에 한 곳에만 장착된다. `(user_id, equipped_character_id, equipped_slot)` 유니크 — **한 캐릭터-장착슬롯에 아이템 하나**를 보장한다. 장착=INSERT, 해제=DELETE.
 - **아이템·재화 통합(`row_type`)**: `player_item`은 `row_type`(1:아이템 2:재화)으로 아이템과 재화(골드 등)를 **한 테이블에** 담는다. `item_code`는 **모든 행이 `item_master.item_code`를 참조**하며(재화는 `item_master`의 `item_type=3` 항목, 골드=`item_code` 1 — 별도 `currency_master` 없음), `quantity`가 수량/재화 금액(재화가 커 `bigint`)이다. **재화 행은 계정에 재화 종류당 1행**이어야 하므로 `(user_id, row_type=2, item_code)` 유일성을 **서버가 보장**한다(MySQL 부분 유니크 인덱스 미지원. 아이템 행은 스택 분할로 `(user_id, item_code)`가 중복될 수 있어 전역 유니크를 걸 수 없다). 재화 행은 `slot`/`enhance_level`을 쓰지 않고 장착 대상도 아니며(`player_item_equipped`에 행이 생기지 않음) **인벤토리 용량 집계에서 제외**한다.

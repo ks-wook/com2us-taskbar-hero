@@ -45,7 +45,8 @@
 | 저장소 | 서버 | 용도 |
 |---|---|---|
 | MySQL (Account DB) | `AccountServer` | 계정·인증 토큰 영속 저장 |
-| Redis | `AccountServer` 발급 / `GameServer` 검증 | 인증 토큰 캐시(`auth:token:{userId}`) |
+| Redis | `AccountServer` 발급 / `GameServer` 검증 | 인증 토큰 캐시(`auth:token:{userId}`) — **필수 의존**(없으면 인증 불가) |
+| Redis | `GameServer` | 거래소 — 목록 캐시(`trade:index:{itemCode}`·`trade:listing:{listingId}`)와 구매 락(`trade:lock:listing:{listingId}`). **상시 사용**하되 모두 파생 데이터이며, 장애 시 MySQL 폴백·락 없이 축소 운전([거래소 기획서](../세부/trade-기획서.md) 7.3·7.4) |
 | MySQL (Game DB) | `GameServer` | 플레이어 진행 세이브 데이터 |
 | 인메모리 캐시(원천 CSV/JSON) | `GameServer` | 마스터(정적 기획) 데이터. 관계형 영속 테이블이 아닌 읽기 전용 정의 |
 
@@ -226,7 +227,7 @@ erDiagram
 | `player_mail` | `mail_id` PK, `user_id` 인덱스 | 계정 우편함 |
 | `player_mail_reward` | `(mail_id, seq)` | 메일 첨부 |
 | `player_attendance` | `(user_id, attend_date)` | 계정 출석 기록(일자별) |
-| `trade_listing` | `listing_id` PK, `seller_user_id` 인덱스, `(status, item_code)` 조회 인덱스 | 거래소 등록(전역, 에스크로) |
+| `trade_listing` | `listing_id` PK, `(status, item_code, price)`·`(status, price)` 조회·정렬 인덱스, `(seller_user_id, status)` 한도·내 판매 조회, `(status, expires_at)` 만료 배치 | 거래소 등록(전역, 에스크로) |
 
 **테이블별 역할·저장 데이터**
 

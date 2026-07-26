@@ -259,8 +259,10 @@ CREATE TABLE trade_listing (
     expires_at     BIGINT  NOT NULL          COMMENT '만료 시각(= created_at + 3일)',
     closed_at      BIGINT  NOT NULL DEFAULT 0 COMMENT '판매/취소 시각(Unix ts). 미완료 0',
     PRIMARY KEY (listing_id),
-    KEY idx_trade_seller (seller_user_id)      COMMENT '내 판매 목록 조회',
-    KEY idx_trade_browse (status, item_code)   COMMENT '판매중 목록·아이템 코드 검색',
+    KEY idx_trade_seller (seller_user_id, status)   COMMENT '내 판매 목록·동시 등록 한도(10개) 검사',
+    KEY idx_trade_browse (status, item_code, price) COMMENT '판매중 목록: 아이템 코드 검색 + 가격 정렬·페이징(filesort 제거)',
+    KEY idx_trade_price  (status, price)            COMMENT '전체 목록(코드 미지정) 가격 정렬·페이징',
+    KEY idx_trade_expire (status, expires_at)       COMMENT '만료 배치 대상 스캔',
     CONSTRAINT fk_trade_seller FOREIGN KEY (seller_user_id)
         REFERENCES game_player (user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='거래소 등록(전역, 에스크로)';
