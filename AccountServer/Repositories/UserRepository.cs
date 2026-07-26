@@ -30,8 +30,14 @@ public sealed class UserRepository : IUserRepository
 {
     private readonly AccountDbFactory _dbFactory;
 
+    /// <summary>계정 DB 커넥션 팩토리를 주입받는다.</summary>
     public UserRepository(AccountDbFactory dbFactory) => _dbFactory = dbFactory;
 
+    /// <summary>
+    /// users에서 해당 이메일의 행 수를 세어 가입 여부를 판정한다(회원가입 사전 검사).
+    /// 읽기 전용 단건이므로 트랜잭션을 쓰지 않는다. 이 검사와 INSERT 사이의 경합은
+    /// email UNIQUE 제약이 최종적으로 막는다.
+    /// </summary>
     public async Task<bool> ExistsByEmailAsync(string email)
     {
         using var db = _dbFactory.Create();
@@ -39,6 +45,11 @@ public sealed class UserRepository : IUserRepository
         return count > 0;
     }
 
+    /// <summary>
+    /// users에 계정 1건(이메일·BCrypt 해시·닉네임·생성/갱신 시각)을 INSERT하고 발급된 user_id를 반환한다.
+    /// 쓰기가 한 문장이라 트랜잭션을 열지 않으며, 이메일 UNIQUE 위반 예외는 호출측(서비스)이 중복 가입으로
+    /// 판정하도록 그대로 전파한다.
+    /// </summary>
     public async Task<long> InsertUserAsync(string email, string passwordHash, string nickname, long nowUnix)
     {
         using var db = _dbFactory.Create();
@@ -52,6 +63,10 @@ public sealed class UserRepository : IUserRepository
         });
     }
 
+    /// <summary>
+    /// 로그인 검증용으로 이메일에 해당하는 user_id와 저장된 비밀번호 해시만 조회한다(해시 비교는 서비스가 수행).
+    /// 읽기 전용 단건이므로 트랜잭션을 쓰지 않으며, 계정이 없으면 null.
+    /// </summary>
     public async Task<UserCredential?> GetCredentialByEmailAsync(string email)
     {
         using var db = _dbFactory.Create();

@@ -20,8 +20,15 @@ public sealed class AuthTokenRepository : IAuthTokenRepository
 {
     private readonly AccountDbFactory _dbFactory;
 
+    /// <summary>계정 DB 커넥션 팩토리를 주입받는다.</summary>
     public AuthTokenRepository(AccountDbFactory dbFactory) => _dbFactory = dbFactory;
 
+    /// <summary>
+    /// user_auth_token에 토큰 1행을 UPSERT한다(user_id가 PK이므로 계정당 1행 = 단일 세션).
+    /// 원시 SQL을 쓰지 않으려고 UPDATE를 먼저 시도하고 0행일 때만 INSERT하는 순서로 처리한다.
+    /// ⚠️ 두 문장을 트랜잭션으로 묶지 않으므로 동시 로그인 시 두 INSERT가 겹치면 PK 중복 예외가 날 수 있다
+    ///    (정본은 Redis이고 이 테이블은 영속 백업이라 현재는 허용 범위).
+    /// </summary>
     public async Task UpsertAsync(long userId, string token, long createdAt, long expiredAt)
     {
         using var db = _dbFactory.Create();
@@ -42,6 +49,10 @@ public sealed class AuthTokenRepository : IAuthTokenRepository
         }
     }
 
+    /// <summary>
+    /// 로그아웃 시 해당 계정의 토큰 행을 삭제한다(단일 DELETE라 트랜잭션 불필요).
+    /// 행이 없어도 예외 없이 통과한다(멱등).
+    /// </summary>
     public async Task DeleteAsync(long userId)
     {
         using var db = _dbFactory.Create();
