@@ -17,8 +17,8 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>Ctrl: POST /equip { userId, token, data:{ characterId, itemId } }
-    Ctrl->>Svc: EquipAsync(userId, characterId, itemId)
-    Svc->>MD: 아이템 정의(타입·슬롯·class_req·level_req) 조회
+    Ctrl->>Svc: 장착 처리 요청(대상 캐릭터·아이템)
+    Svc->>MD: 아이템 정의 조회(타입·장착 슬롯·직업 제한·레벨 제한)
     Note over Svc,Repo: 단일 트랜잭션
     Repo->>DB: 대상 아이템·캐릭터 데이터 확인(소유·직업·레벨)
     alt 미보유 / 장비 아님·슬롯·클래스·레벨 부적합 / 이미 장착 중 / 잘못된 캐릭터
@@ -26,7 +26,7 @@ sequenceDiagram
     else 장착 가능
         Repo->>DB: (기존 슬롯 장비 있으면) 장착 데이터 삭제(스왑)
         Repo->>DB: 장착 데이터 적재(대상 캐릭터·슬롯)
-        Svc-->>Ctrl: Success + { equipped, unequipped }
+        Svc-->>Ctrl: Success + { 장착된 아이템, 밀려난 아이템 }
     end
     Ctrl-->>C: { success, errorCode, message, data }
 ```
@@ -43,13 +43,13 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>Ctrl: POST /unequip { userId, token, data:{ characterId, slot } }
-    Ctrl->>Svc: UnequipAsync(userId, characterId, slot)
+    Ctrl->>Svc: 장착 해제 요청(대상 캐릭터·장착 슬롯)
     Repo->>DB: 해당 캐릭터·슬롯의 장착 데이터 확인
     alt 슬롯 비어 있음 / 잘못된 캐릭터
         Svc-->>Ctrl: ItemNotFound(4001) / InvalidCharacterId(2006)
     else 장착 중
         Repo->>DB: 장착 데이터 삭제(아이템은 인벤토리에 잔존)
-        Svc-->>Ctrl: Success + { characterId, slot, itemId }
+        Svc-->>Ctrl: Success + { 해제된 캐릭터·슬롯·아이템 }
     end
     Ctrl-->>C: { success, errorCode, message, data }
 ```
@@ -66,14 +66,14 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>Ctrl: POST /move { userId, token, data:{ itemId, toSlot } }
-    Ctrl->>Svc: MoveAsync(userId, itemId, toSlot)
+    Ctrl->>Svc: 배치 이동 요청(대상 아이템·목표 칸)
     Repo->>DB: 대상 아이템·목표 칸 데이터 확인(소유·용량 범위)
     alt 대상 없음 / 잘못된 칸
         Svc-->>Ctrl: ItemNotFound(4001) / InvalidInventorySlot(4009)
     else 유효
         Note over Repo,DB: 단일 트랜잭션(계정-칸 유니크 제약 보존)
         Repo->>DB: 두 아이템의 칸 데이터 갱신(목표 비었으면 이동, 차 있으면 교환)
-        Svc-->>Ctrl: Success + { moved, swapped }
+        Svc-->>Ctrl: Success + { 이동한 아이템, 교환된 아이템 }
     end
     Ctrl-->>C: { success, errorCode, message, data }
 ```
@@ -91,9 +91,9 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>Ctrl: POST /expand { userId, token }
-    Ctrl->>Svc: ExpandAsync(userId)
+    Ctrl->>Svc: 인벤토리 용량 확장 요청
     Repo->>DB: 현재 인벤토리 용량 데이터 확인
-    Svc->>MD: PlanExpandOne(currentCapacity) → (가능 여부, 비용)
+    Svc->>MD: 현재 용량 기준 1칸 확장 가능 여부·비용 산출
     alt 상한 도달
         Svc-->>Ctrl: InventoryCapacityMax(4008)
     else 확장 가능
@@ -103,7 +103,7 @@ sequenceDiagram
             Svc-->>Ctrl: InsufficientCurrency(4005)
         else 충분
             Repo->>DB: 인벤토리 용량 데이터 갱신(+1칸)
-            Svc-->>Ctrl: Success + { inventoryCapacity, cost, balance }
+            Svc-->>Ctrl: Success + { 확장 후 용량, 소모 골드, 잔액 }
         end
     end
     Ctrl-->>C: { success, errorCode, message, data }

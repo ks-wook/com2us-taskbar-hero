@@ -17,12 +17,12 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>Ctrl: POST /stage/enter { userId, token, data:{ act, difficulty, stage } }
-    Ctrl->>Svc: EnterAsync(userId, act, difficulty, stage)
-    Svc->>MD: GetStage(act, difficulty, stage)
+    Ctrl->>Svc: 스테이지 진입 처리 요청(대상 좌표)
+    Svc->>MD: 해당 좌표의 스테이지 정의 조회
     alt 마스터 미로드 / 스테이지 없음
         Svc-->>Ctrl: MasterDataNotLoaded(10001) / StageNotFound(6001)
     else 스테이지 존재
-        Svc->>Repo: GetProgressAsync(userId)
+        Svc->>Repo: 플레이어 진행도 조회 요청
         Repo->>DB: 플레이어 진행도 데이터 확인
         alt 세이브 없음
             Svc-->>Ctrl: SaveNotFound(2001)
@@ -30,7 +30,7 @@ sequenceDiagram
             alt 도달 불가(잠김)
                 Svc-->>Ctrl: StageLocked(6002)
             else 허용
-                Svc->>Repo: SetCurrentStageAsync(userId, act, difficulty, stage)
+                Svc->>Repo: 현재 진입 스테이지 기록 요청
                 Repo->>DB: 현재 진입 스테이지 데이터 갱신
                 Svc-->>Ctrl: Success + { 스폰·보스·배경타입 }
             end
@@ -52,18 +52,18 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>Ctrl: POST /stage/clear { userId, token, data:{ act, difficulty, stage } }
-    Ctrl->>Svc: ClearAsync(userId, act, difficulty, stage)
-    Svc->>MD: GetStage(...) / GetStageReward(stageId)
+    Ctrl->>Svc: 스테이지 클리어 처리 요청(대상 좌표)
+    Svc->>MD: 스테이지 정의·클리어 보상 정의 조회
     alt 스테이지·보상 정의 없음
         Svc-->>Ctrl: StageNotFound(6001) / MasterDataNotLoaded(10001)
     else 정의 있음
-        Svc->>MD: RollDrop(reward) (등급 확률 추첨, 서버 RNG)
+        Svc->>MD: 전리품 추첨(등급 확률, 서버 RNG)
         MD-->>Svc: 전리품 or 미드롭
-        Svc->>Repo: ApplyClearAsync(userId, 좌표, gold, dropped, levelUp)
+        Svc->>Repo: 클리어 반영 요청(좌표·지급 골드·전리품 + 레벨 재계산 규칙 전달)
         Note over Repo,DB: 단일 트랜잭션
         Repo->>DB: 진입 스테이지 데이터 확인(재검증)
         Repo->>DB: 골드 재화 데이터 적립
-        Repo->>DB: 3캐릭터 경험치·레벨 데이터 갱신(level_master 기준)
+        Repo->>DB: 3캐릭터 경험치·레벨 데이터 갱신(레벨별 요구 경험치 기준)
         Repo->>DB: 전리품 아이템 데이터 적재(스택/용량 규칙)
         Repo->>DB: 진행도 데이터 갱신(프런티어면 다음 스테이지 전진)
         alt 미진입 / 용량 초과

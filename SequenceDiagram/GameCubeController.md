@@ -17,17 +17,17 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>Ctrl: POST /cube/combine { userId, token, data:{ itemIds[] } }
-    Ctrl->>Svc: CombineAsync(userId, itemIds)
-    Note over Repo,DB: 단일 트랜잭션(판정 델리게이트 DecideCombine)
+    Ctrl->>Svc: 합성 처리 요청(입력 아이템 목록)
+    Note over Repo,DB: 단일 트랜잭션(합성 판정·결과 산출은 서비스가 수행)
     Repo->>DB: 입력 아이템 데이터 확인(소유·미장착)
-    Svc->>MD: 큐브 규칙(combine_count·등급 상승) + 입력 등급 일치 검증(슬롯·클래스 무관)
-    Svc->>MD: PickCombineResultCode(입력등급+1) (같은 등급대 무작위, 슬롯·클래스 무관)
+    Svc->>MD: 합성 규칙 조회(필요 개수·등급 상승) + 입력 등급 일치 검증(장착 슬롯·직업 무관)
+    Svc->>MD: 상위 등급 결과 아이템 추첨(같은 등급대 무작위, 장착 슬롯·직업 무관)
     alt 미보유 / 장착 중 / 조건 미충족(등급·개수·최대 등급)
         Svc-->>Ctrl: ItemNotFound(4001) / ItemEquipped(4007) / CubeRecipeNotMet(4010)
     else 성공
         Repo->>DB: 입력 아이템 데이터 삭제 + 결과 아이템 데이터 적재(빈 칸)
         Repo->>DB: 큐브 경험치·레벨 데이터 갱신(50 × 입력등급 누적)
-        Svc-->>Ctrl: Success + { consumed, result, cube }
+        Svc-->>Ctrl: Success + { 소모한 아이템, 결과 아이템, 큐브 상태 }
     end
     Ctrl-->>C: { success, errorCode, message, data }
 ```
@@ -45,16 +45,16 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>Ctrl: POST /cube/dismantle { userId, token, data:{ items[]{ itemId, count } } }
-    Ctrl->>Svc: DismantleAsync(userId, items)
-    Note over Repo,DB: 단일 트랜잭션(보상 산출 ComputeDismantleReward)
+    Ctrl->>Svc: 분해 처리 요청(대상 아이템·수량 목록)
+    Note over Repo,DB: 단일 트랜잭션(보상 산출은 서비스가 수행)
     Repo->>DB: 각 아이템 데이터 확인(소유·미장착·수량)
-    Svc->>MD: gold_per_scrap(현재 큐브 레벨)·아이템 등급
-    Svc->>Svc: 골드 = Σ(gold_per_scrap × 등급 × 개수), 큐브exp = Σ(20 × 등급 × 개수)
+    Svc->>MD: 큐브 레벨별 분해 골드 계수·아이템 등급 조회
+    Svc->>Svc: 골드 = Σ(분해 계수 × 등급 × 개수), 큐브 경험치 = Σ(20 × 등급 × 개수)
     alt 미보유 / 수량 부족 / 장착 중
         Svc-->>Ctrl: ItemNotFound(4001) / InsufficientQuantity(4006) / ItemEquipped(4007)
     else 성공
         Repo->>DB: 아이템 수량 데이터 차감 + 골드 재화 데이터 적립 + 큐브 경험치·레벨 데이터 갱신
-        Svc-->>Ctrl: Success + { gold, cubeExp }
+        Svc-->>Ctrl: Success + { 획득 골드, 획득 큐브 경험치 }
     end
     Ctrl-->>C: { success, errorCode, message, data }
 ```
@@ -72,8 +72,8 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>Ctrl: POST /cube/craft { userId, token, data:{ recipeCode } }
-    Ctrl->>Svc: CraftAsync(userId, recipeCode)
-    Svc->>MD: GetRecipe(recipeCode) (결과·요구 큐브 레벨·비용·소모 재료)
+    Ctrl->>Svc: 제작 처리 요청(대상 레시피)
+    Svc->>MD: 레시피 정의 조회(결과 아이템·요구 큐브 레벨·비용·소모 재료)
     alt 레시피 없음
         Svc-->>Ctrl: CubeRecipeNotMet(4010)
     else 존재
@@ -83,7 +83,7 @@ sequenceDiagram
             Svc-->>Ctrl: CubeLevelInsufficient(4011) / InsufficientCurrency(4005) / CubeRecipeNotMet(4010) / InventoryFull(4002)
         else 충족
             Repo->>DB: 골드·재료 데이터 차감 + 결과 아이템 데이터 적재 + 큐브 경험치 데이터 갱신(+20)
-            Svc-->>Ctrl: Success + { consumed, gained, cube }
+            Svc-->>Ctrl: Success + { 소모한 골드·재료, 획득 아이템, 큐브 상태 }
         end
     end
     Ctrl-->>C: { success, errorCode, message, data }

@@ -17,29 +17,29 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>Ctrl: POST /offline/claim { userId, token }
-    Ctrl->>Svc: ClaimAsync(userId)
-    Svc->>MD: IsLoaded 확인
-    Svc->>Repo: GetContextAsync(userId)
+    Ctrl->>Svc: 오프라인 보상 정산 요청
+    Svc->>MD: 마스터 로드 상태 확인
+    Svc->>Repo: 기준 시각·파밍 스테이지 조회 요청
     Repo->>DB: 기준 시각·현재 스테이지 데이터 확인
     alt 세이브 없음
         Svc-->>Ctrl: SaveNotFound(2001)
     else 존재
-        Svc->>Svc: elapsed = now - last_active_at
-        alt elapsed < 10분(최소 기준)
+        Svc->>Svc: 방치 경과 시간 계산(현재 시각 − 마지막 활동 시각)
+        alt 경과 < 10분(최소 기준)
             Svc-->>Ctrl: NoOfflineReward(3001) — 200 OK, 미지급
         else 정산 대상
-            Svc->>MD: 현재 스테이지 stage_reward(gold/exp) → 시간당 산출율
-            Svc->>Repo: ClaimAsync(now, computeReward, applyExp)
+            Svc->>MD: 현재 파밍 스테이지의 클리어 보상 조회 → 시간당 산출율 환산
+            Svc->>Repo: 정산 반영 요청(보상 산출·레벨 재계산 규칙 전달)
             Note over Repo,DB: 단일 트랜잭션
             Repo->>DB: 기준 시각 데이터 재확인(트랜잭션 내부)
-            Repo->>DB: 기준 시각 데이터 조건부 갱신(CAS — 관측값과 같을 때만 now로 리셋해 정산권 선점)
+            Repo->>DB: 기준 시각 데이터 조건부 갱신(관측값과 같을 때만 현재로 리셋해 정산권 선점)
             alt 선점 실패(동시 요청이 먼저 정산)
                 Svc-->>Ctrl: OfflineRewardAlreadyClaimed(3002) — 409
             else 정산권 선점
-                Svc->>Svc: 12h 상한 적용 + 골드/경험치 = 산출율 × effective × 50%
+                Svc->>Svc: 방치 12시간 상한 적용 후 골드·경험치 산출(산출율 × 유효 시간 × 50%)
                 Repo->>DB: 골드 재화 데이터 적립
-                Repo->>DB: 전 캐릭터 경험치·레벨 데이터 갱신(level_master 기준)
-                Svc-->>Ctrl: Success + { offlineElapsedSec, effectiveSec, capped, rewards, characters, lastActiveAt }
+                Repo->>DB: 전 캐릭터 경험치·레벨 데이터 갱신(레벨별 요구 경험치 기준)
+                Svc-->>Ctrl: Success + { 경과·유효 시간·상한 여부·보상·캐릭터·기준 시각 }
             end
         end
     end
