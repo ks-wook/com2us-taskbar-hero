@@ -64,6 +64,12 @@ public interface IMailRepository
     /// </summary>
     Task<MailClaimAllOutcome> ApplyClaimAllAsync(
         long userId, Func<int, (int itemType, int stackMax)> itemLookup, long nowUnix);
+
+    /// <summary>
+    /// 보관 기한이 지난(발급 시각 &lt; createdBefore) 메일을 최대 limit건 삭제한다(GC 배치 전용, mail 기획서 §6.5).
+    /// 열람·수령 여부와 무관하며, 첨부(player_mail_reward)는 FK CASCADE로 함께 삭제된다. 삭제된 메일 수를 반환한다.
+    /// </summary>
+    Task<int> DeleteRetentionExpiredAsync(long createdBefore, int limit);
 }
 
 // ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑. ──
@@ -292,6 +298,33 @@ public sealed class MailRepository : IMailRepository
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    /// <summary>
+    /// 보관 기한이 지난 메일을 mail_id 오름차순으로 최대 limit건 삭제한다(GC 배치 전용).
+    /// 대상 mail_id를 먼저 조회한 뒤 PK 목록으로 삭제해 1회 처리량을 상한 안에 묶는다(밀린 분량은 다음 주기 이월).
+    /// 첨부(player_mail_reward)는 FK CASCADE로 함께 삭제되므로 별도 DELETE가 없다.
+    /// </summary>
+    public async Task<int> DeleteRetentionExpiredAsync(long createdBefore, int limit)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+
+        var db = _dbFactory.Create(connection);
+
+        var targets = (await db.Query("player_mail")
+            .Select("mail_id")
+            .Where("created_at", "<", createdBefore)
+            .OrderBy("mail_id")
+            .Limit(limit)
+            .GetAsync<long>()).ToList();
+
+        if (targets.Count == 0)
+        {
+            return 0;
+        }
+
+        return await db.Query("player_mail").WhereIn("mail_id", targets).DeleteAsync();
     }
 
     // ── 헬퍼 ──

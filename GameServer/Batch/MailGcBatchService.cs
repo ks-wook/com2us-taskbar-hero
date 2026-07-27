@@ -1,0 +1,60 @@
+using CloudStructures;
+using GameServer.Repositories;
+
+namespace GameServer.Batch;
+
+/// <summary>
+/// 메일 보관 GC 배치(mail 기획서 6.5). 열람·수령 여부와 무관하게 발급(수신) 시각 기준 7일이 지난 메일을
+/// 주기적으로 삭제한다(player_mail DELETE — 첨부 player_mail_reward는 FK CASCADE로 함께 삭제).
+/// 전용 삭제 API는 두지 않으며, 1회 처리 건수를 제한해 밀린 분량은 다음 주기로 이월한다.
+/// 설정: appsettings "MailGcBatch" 섹션(IntervalSeconds 기본 3600 · BatchSize 기본 500, 잠정).
+/// </summary>
+public sealed class MailGcBatchService : PeriodicBatchService
+{
+    /// <summary>보관 기간(발급 후 7일, mail 기획서 6.5 확정) — 이 시간이 지난 메일이 삭제 대상이다.</summary>
+    private const long RetentionSeconds = 7L * 24 * 60 * 60;
+
+    private const int DefaultIntervalSeconds = 3600;
+    private const int DefaultBatchSize = 500;
+
+    private readonly int _intervalSeconds;
+    private readonly int _batchSize;
+    private readonly ILogger<MailGcBatchService> _logger;
+
+    /// <summary>설정에서 실행 주기·1회 처리 상한을 읽는다(없거나 0 이하이면 기본값).</summary>
+    public MailGcBatchService(
+        IServiceScopeFactory scopeFactory, RedisConnection redis, IConfiguration configuration,
+        ILogger<MailGcBatchService> logger)
+        : base(scopeFactory, redis, logger)
+    {
+        var interval = configuration.GetValue("MailGcBatch:IntervalSeconds", DefaultIntervalSeconds);
+        var batchSize = configuration.GetValue("MailGcBatch:BatchSize", DefaultBatchSize);
+        _intervalSeconds = interval > 0 ? interval : DefaultIntervalSeconds;
+        _batchSize = batchSize > 0 ? batchSize : DefaultBatchSize;
+        _logger = logger;
+    }
+
+    protected override TimeSpan Interval => TimeSpan.FromSeconds(_intervalSeconds);
+
+    protected override string BatchName => "메일 GC 배치";
+
+    protected override string BatchKey => "mail-gc";
+
+    /// <summary>
+    /// 1주기 작업: 보관 기한(now − 7일) 이전에 발급된 메일을 상한(BatchSize)까지 삭제하고 요약을 남긴다.
+    /// 대상 0건이면 로그를 남기지 않는다(소음 방지).
+    /// </summary>
+    protected override async Task RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
+    {
+        var mailRepository = scope.ServiceProvider.GetRequiredService<IMailRepository>();
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var deleted = await mailRepository.DeleteRetentionExpiredAsync(now - RetentionSeconds, _batchSize);
+
+        if (deleted > 0)
+        {
+            _logger.LogInformation(
+                "메일 GC 배치: 삭제 {Deleted}건 (보관 7일 경과 대상, 1회 상한 {BatchSize}건)", deleted, _batchSize);
+        }
+    }
+}

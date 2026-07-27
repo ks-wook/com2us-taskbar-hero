@@ -13,7 +13,7 @@
 | [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
-| [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령) | GameMailController | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
+| [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchService(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
 
 ## 공통 아키텍처
 
@@ -575,7 +575,7 @@ sequenceDiagram
 
 ## 메일
 
-우편함 조회·첨부 수령·일괄 수령 (GameMailController, `/api/game/mail`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_mail`·`player_mail_reward`·`player_item`·`game_player`) + 인메모리 마스터 데이터(item — 첨부 적재 규칙). 첨부 종류·수량은 발급 시점에 확정된 메일 원장이 기준이며(서버 권위), 중복 수령은 조건부 갱신(`claimed` 0→1일 때만 전이)으로 차단한다.
+우편함 조회·첨부 수령·일괄 수령 (GameMailController, `/api/game/mail`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_mail`·`player_mail_reward`·`player_item`·`game_player`) + 인메모리 마스터 데이터(item — 첨부 적재 규칙). 첨부 종류·수량은 발급 시점에 확정된 메일 원장이 기준이며(서버 권위), 중복 수령은 조건부 갱신(`claimed` 0→1일 때만 전이)으로 차단한다. 보관(발급 후 7일)이 지난 메일은 GameServer 내 배치(`MailGcBatchService`)가 주기 삭제한다(엔드포인트 없음, mail 기획서 6.5).
 
 ### POST /api/game/mail/list — 우편함 조회(+읽음 처리)
 
@@ -652,4 +652,34 @@ sequenceDiagram
     else 지급 완료(대상 없으면 빈 목록)
         S-->>C: 성공 { claimedMailIds[], gained(합계), balance }
     end
+```
+
+### 메일 보관 GC 배치 — MailGcBatchService (엔드포인트 없음)
+
+발급(수신) 후 7일이 지난 메일을 열람·수령 여부와 무관하게 삭제한다(mail 기획서 6.5). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchService`)로, 기동 직후 1회 + 1시간 주기(설정 `MailGcBatch`)로 실행되고 1회 최대 500건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:mail-gc`)을 먼저 획득한 인스턴스만 실행해 scale-out 시 중복 실행을 방지한다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    Note over S: MailGcBatchService — 기동 직후 1회 실행 후 1시간 주기 반복(재진입 없음)
+    loop 매 주기
+        S->>R: 리더 락 시도(batch:lock:mail-gc, SET NX + TTL=주기 — 명시 해제 없이 자연 만료)
+        alt 락 미획득(다른 인스턴스가 이번 주기 실행)
+            S->>S: 스킵(Debug 로그)
+        else 락 획득(Redis 장애 시에도 락 없이 진행 — 축소 운전)
+            S->>S: 삭제 기준 시각 산출(now − 7일)
+            S->>DB: 보관 기한 경과 메일 데이터 확인(발급 시각 기준, mail_id 오름차순 최대 500건)
+            alt 대상 없음
+                S->>S: 종료(로그 생략 — 소음 방지)
+            else 대상 있음
+                S->>DB: 메일 데이터 삭제(첨부 player_mail_reward는 FK CASCADE로 함께 삭제)
+                S->>S: 요약 로그(삭제 N건)
+            end
+        end
+    end
+    Note over S: 주기 실행 실패는 Error 로그 후 루프 유지(다음 주기에 재시도)
 ```

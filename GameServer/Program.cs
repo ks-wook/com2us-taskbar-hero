@@ -1,5 +1,6 @@
 using CloudStructures;
 using GameServer.Auth;
+using GameServer.Batch;
 using GameServer.Data;
 using GameServer.MasterData;
 using GameServer.Middleware;
@@ -65,6 +66,9 @@ builder.Services.AddScoped<IOfflineService, OfflineService>();
 // 메일(우편함) 계층(목록·수령·일괄 수령).
 builder.Services.AddScoped<IMailRepository, MailRepository>();
 builder.Services.AddScoped<IMailService, MailService>();
+
+// 메일 보관 GC 배치(발급 7일 경과 메일 삭제, mail 기획서 6.5). 공통 골격은 PeriodicBatchService.
+builder.Services.AddHostedService<MailGcBatchService>();
 
 var app = builder.Build();
 
