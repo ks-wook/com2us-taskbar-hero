@@ -144,7 +144,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 ```
 
 - `reward`: 이번에 발급된 보상(서버 산출). `mailId`: 발급된 보상 메일. 실제 재화·아이템은 **우편함에서 수령**해야 계정에 반영된다([메일 기획서](mail-기획서.md) 5.2).
-- 오류: `AttendanceAlreadyClaimed(9001)`(오늘 이미 수령), 마스터 미로드 시 `MasterDataNotLoaded(10001)`.
+- 오류: `AttendanceAlreadyClaimed(9001)`(오늘 이미 수령), `SaveNotFound(2001)`(캐릭터 생성 전 — 계정 세이브 없음), 마스터 미로드 시 `MasterDataNotLoaded(10001)`.
 
 > 인증 오류(401) 등은 기존 미들웨어를 따른다. 조회·수령은 이번달·오늘만 대상이며, 다른 달 조회·과거일 소급 수령은 제공하지 않는다.
 
@@ -159,9 +159,10 @@ today = KST(now) → YYYYMMDD            # 서버 권위 날짜 판정
 day   = today의 일(day-of-month)
 트랜잭션(BEGIN, user_id 잠금)
   1) reward = attendance_master[day]                 # 없으면 MasterDataNotLoaded(10001)
-  2) if player_attendance[user_id, today] 존재: AttendanceAlreadyClaimed(9001)
-  3) INSERT player_attendance(user_id, today, claimed_at=now)   # 유니크 (user_id, attend_date)
-  4) 보상 메일 발급:
+  2) if game_player[user_id] 없음: SaveNotFound(2001)            # 캐릭터 생성 전(출석 기록 FK 대상)
+  3) if player_attendance[user_id, today] 존재: AttendanceAlreadyClaimed(9001)
+  4) INSERT player_attendance(user_id, today, claimed_at=now)   # 유니크 (user_id, attend_date)
+  5) 보상 메일 발급:
        INSERT player_mail(user_id, category=3, title/body, created_at=now, expires_at=now+7일, claimed=0)
        INSERT player_mail_reward(mail_id, seq=1, reward_type, reward_code, quantity)  # reward 기준
 COMMIT → { attendDate: today, day, reward, mailId }
@@ -178,6 +179,7 @@ COMMIT → { attendDate: today, day, reward, mailId }
 - **자정 경계 요청**: "오늘"은 요청 수신 시점 서버 KST 기준으로 판정한다. 클라이언트가 보낸 날짜는 무시한다.
 - **월 리셋**: 달이 바뀌면 이번달 현황은 빈 달력으로 시작한다(과거 달 `player_attendance` 행은 유지되나 조회·수령 대상은 아니다). 놓친 과거 일자는 소급 수령할 수 없다.
 - **마스터 미정의 일자**: `attendance_master`에 오늘 `day`가 없으면 `MasterDataNotLoaded(10001)`로 거부한다(정상 운영에선 1~31 전부 정의).
+- **캐릭터 생성 전 수령 시도**: `player_attendance`는 `game_player`를 FK로 참조하므로, 계정 세이브가 없으면 삽입 자체가 불가능하다. 트랜잭션 첫 단계에서 세이브 존재를 확인해 `SaveNotFound(2001)`로 거부한다(다른 게임 API와 동일 규약). 현황 조회(5.1)는 세이브가 없어도 빈 달력을 정상 반환한다.
 
 ## 7. 에러 코드
 
@@ -188,13 +190,14 @@ COMMIT → { attendDate: today, day, reward, mailId }
 | AttendanceAlreadyClaimed | 9001 | 오늘자 출석 보상을 이미 수령함 |
 
 - 마스터 데이터 미로드/미정의는 신규 코드 없이 `MasterDataNotLoaded(10001)`([마스터 데이터 기획서](master-data/master-data-기획서.md))를 재사용한다.
+- 계정 세이브(`game_player`) 미생성도 신규 코드 없이 `SaveNotFound(2001)`([세이브 데이터 기획서](save-data-기획서.md))을 재사용한다.
 
 ## 8. 미결 사항 / TODO
 
-- **일자별 보상 구성**: `attendance_master`의 일자별 보상 값(골드/아이템 종류·수량), 7·14·21·28일 등 마일스톤 보상 강화 여부 — 밸런스에서 확정.
+미결 사항 없음 — 전부 확정되었다.
 
 > **범위에서 제외(구현 안 함)**: 연속/누적 출석 보너스, 과거일 소급 수령, 다른 달(지난달) 출석 현황 조회.
-> **확정 사항**: 날짜 경계 타임존은 **KST(UTC+9)**, 출석 보상 메일 만료는 **발급(출석) 시점으로부터 7일**.
+> **확정 사항**: 날짜 경계 타임존은 **KST(UTC+9)**, 출석 보상 메일 만료는 **발급(출석) 시점으로부터 7일**. **일자별 보상 구성**은 [마스터 데이터 값 문서 §13](master-data/master-data-값.md#13-attendance_master-출석부-보상)에 1~31일 전부 확정(평일 골드, 주간 마일스톤 7·14·21·28일 상급 재료 강화, 15일 강철 투구·31일 코스믹 투구 장비 — DDL·시드는 [`master-data-schema.sql`](master-data/master-data-schema.sql) 13번).
 
 ## 9. 참고
 

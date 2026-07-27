@@ -37,6 +37,12 @@ public sealed record RecipeDef(
     int RecipeCode, int ResultItemCode, int ResultQuantity, int ReqCubeLevel, long CostGold,
     IReadOnlyList<RecipeIngredient> Ingredients);
 
+/// <summary>출석부 일자별 보상 정의(attendance_master). RewardType 1:골드 2:아이템 3:재료(메일 첨부와 동일 enum), 골드는 RewardCode 0.</summary>
+public sealed record AttendanceRewardDef(int Day, int RewardType, int RewardCode, int Quantity);
+
+/// <summary>메일 발급 문구 템플릿(mail_master). 발급 메일의 category·제목/본문 형식·만료 일수를 확정한다(mail 기획서 §4·§6.4).</summary>
+public sealed record MailTemplateDef(int TemplateCode, int Category, string TitleFormat, string BodyFormat, int ValidDays);
+
 // ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑.
 //    DECIMAL 컬럼은 decimal로 받아 float/double로 캐스팅한다. ──
 file sealed class ClassMasterRow
@@ -155,6 +161,23 @@ file sealed class ItemMasterRow
     public int LevelReq { get; set; }
 }
 
+file sealed class AttendanceMasterRow
+{
+    public int Day { get; set; }
+    public int RewardType { get; set; }
+    public int RewardCode { get; set; }
+    public int Quantity { get; set; }
+}
+
+file sealed class MailMasterRow
+{
+    public int MailTemplateCode { get; set; }
+    public int Category { get; set; }
+    public string TitleFormat { get; set; } = string.Empty;
+    public string BodyFormat { get; set; } = string.Empty;
+    public int ValidDays { get; set; }
+}
+
 /// <summary>
 /// 마스터(정적) 데이터 인메모리 캐시. 서버 기동 시 마스터 DB에서 코드→정의 딕셔너리로 적재한다.
 /// class_master(직업)에 더해 스테이지 진행/전투(스테이지 진입·클리어)에 필요한 마스터를 적재한다:
@@ -199,6 +222,12 @@ public sealed class MasterDataProvider
     // 인벤토리 확장 비용: index i(0-based) = 기본 용량 이후 (i+1)번째 칸을 여는 골드 비용(inventory_expand_master, step 오름차순).
     // 배열 길이 = 확장 가능한 총 칸 수이며, 상한 용량 = BaseInventoryCapacity + 길이.
     private IReadOnlyList<long> _expandCosts = new List<long>();
+
+    // 출석부: day(1~31) → 그날 보상 정의(attendance_master).
+    private IReadOnlyDictionary<int, AttendanceRewardDef> _attendanceByDay = new Dictionary<int, AttendanceRewardDef>();
+
+    // 메일 발급 템플릿: mail_template_code → 정의(mail_master, 서버 전용 마스터).
+    private IReadOnlyDictionary<int, MailTemplateDef> _mailTemplates = new Dictionary<int, MailTemplateDef>();
 
     public MasterDataProvider(MasterDbFactory masterDbFactory, ILogger<MasterDataProvider> logger)
     {
@@ -276,6 +305,17 @@ public sealed class MasterDataProvider
     public RecipeDef? GetRecipe(int recipeCode)
         => _recipesByCode.TryGetValue(recipeCode, out var r) ? r : null;
 
+    /// <summary>이달 day(1~31)일차의 출석 보상 정의(attendance_master). 미정의 일자는 null(호출측이 MasterDataNotLoaded로 거부).</summary>
+    public AttendanceRewardDef? GetAttendanceReward(int day)
+        => _attendanceByDay.TryGetValue(day, out var r) ? r : null;
+
+    /// <summary>attendance_master에 정의된 일자(day) 목록(오름차순). 이번달 출석 달력 구성에 사용한다.</summary>
+    public IReadOnlyCollection<int> AttendanceDays => _attendanceByDay.Keys.OrderBy(d => d).ToList();
+
+    /// <summary>메일 발급 템플릿(mail_master). 없으면 null(호출측이 MasterDataNotLoaded로 거부).</summary>
+    public MailTemplateDef? GetMailTemplate(int templateCode)
+        => _mailTemplates.TryGetValue(templateCode, out var t) ? t : null;
+
     /// <summary>
     /// 합성 결과 아이템 코드를 서버가 산출한다: (입력 등급 + 1) 장비 중 하나를 무작위 선택(슬롯·클래스 무관).
     /// 상위 등급 후보가 없으면(최대 등급 등) null → 호출측이 CubeRecipeNotMet으로 거부한다.
@@ -338,6 +378,8 @@ public sealed class MasterDataProvider
             _characterCreateCosts = await LoadCharacterCreateCostsAsync(db);
             _cubeRules = await LoadCubeRulesAsync(db);
             _recipesByCode = await LoadRecipesAsync(db);
+            _attendanceByDay = await LoadAttendanceAsync(db);
+            _mailTemplates = await LoadMailTemplatesAsync(db);
 
             // 인벤토리 확장은 부가 기능이라 별도 try로 감싼다(테이블 부재 시 다른 마스터 적재까지 실패하지 않도록).
             _expandCosts = await LoadExpandCostsAsync(db);
@@ -349,8 +391,8 @@ public sealed class MasterDataProvider
 
             IsLoaded = true;
             _logger.LogInformation(
-                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades} · expandSlots {Expand} · skill {Skills} · rune {Runes} · runeCost {RuneCosts} · charCost {CharCosts} · cube {Cubes} · recipe {Recipes}",
-                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count, _expandCosts.Count, _skillsByCode.Count, _runesByCode.Count, _runeCosts.Count, _characterCreateCosts.Count, _cubeRules.Count, _recipesByCode.Count);
+                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades} · expandSlots {Expand} · skill {Skills} · rune {Runes} · runeCost {RuneCosts} · charCost {CharCosts} · cube {Cubes} · recipe {Recipes} · attendance {Attendances} · mailTemplate {MailTemplates}",
+                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count, _expandCosts.Count, _skillsByCode.Count, _runesByCode.Count, _runeCosts.Count, _characterCreateCosts.Count, _cubeRules.Count, _recipesByCode.Count, _attendanceByDay.Count, _mailTemplates.Count);
         }
         catch (Exception ex)
         {
@@ -653,6 +695,39 @@ public sealed class MasterDataProvider
         }
 
         return (byGrade, byCode);
+    }
+
+    /// <summary>attendance_master를 day → 보상 정의로 적재한다(정상 운영에선 1~31 전부 정의).</summary>
+    private static async Task<Dictionary<int, AttendanceRewardDef>> LoadAttendanceAsync(QueryFactory db)
+    {
+        var rows = await db.Query("attendance_master")
+            .Select("day", "reward_type", "reward_code", "quantity")
+            .GetAsync<AttendanceMasterRow>();
+
+        var byDay = new Dictionary<int, AttendanceRewardDef>();
+        foreach (var row in rows)
+        {
+            byDay[row.Day] = new AttendanceRewardDef(row.Day, row.RewardType, row.RewardCode, row.Quantity);
+        }
+
+        return byDay;
+    }
+
+    /// <summary>mail_master(발급 문구 템플릿)를 mail_template_code → 정의로 적재한다. 서버 전용 마스터(클라 번들 제외).</summary>
+    private static async Task<Dictionary<int, MailTemplateDef>> LoadMailTemplatesAsync(QueryFactory db)
+    {
+        var rows = await db.Query("mail_master")
+            .Select("mail_template_code", "category", "title_format", "body_format", "valid_days")
+            .GetAsync<MailMasterRow>();
+
+        var byCode = new Dictionary<int, MailTemplateDef>();
+        foreach (var row in rows)
+        {
+            byCode[row.MailTemplateCode] = new MailTemplateDef(
+                row.MailTemplateCode, row.Category, row.TitleFormat, row.BodyFormat, row.ValidDays);
+        }
+
+        return byCode;
     }
 
     /// <summary>

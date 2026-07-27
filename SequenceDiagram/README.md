@@ -14,6 +14,7 @@
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
 | [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchService(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
+| [**출석부 보상**](#출석부-보상) (이번달 현황 조회 / 오늘자 보상 획득→메일 발급) | GameAttendanceController | Game | `POST /api/game/attendance/status` · `claim` |
 
 ## 공통 아키텍처
 
@@ -653,6 +654,68 @@ sequenceDiagram
         S-->>C: 성공 { claimedMailIds[], gained(합계), balance }
     end
 ```
+
+## 출석부 보상
+
+이번달 출석 현황 조회·오늘자 출석 보상 획득 (GameAttendanceController, `/api/game/attendance`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_attendance`·`player_mail`·`player_mail_reward`) + 인메모리 마스터 데이터(attendance — 일자별 보상, mail 템플릿 301). "오늘"은 요청 수신 시점의 서버 시각을 **KST(UTC+9) 자정 경계**로 판정하며(서버 권위, 클라이언트 날짜 불신), 보상은 즉시 지급하지 않고 **메일(category=3, 발급 후 7일 만료)로 발급**한다 — 계정 반영은 우편함 수령(메일 5.2) 시. 하루 1회는 `(user_id, attend_date)` PK가 보장한다(attendance 기획서 §5·§6).
+
+### POST /api/game/attendance/status — 이번달 출석 현황 조회
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /attendance/status { userId, token }
+    S->>S: 오늘/이번달 판정(서버 KST) — yearMonth·today·todayDay
+    S->>S: 마스터 데이터 확인(인메모리) — 이달 일자별 보상(attendance_master)
+    alt 마스터 미로드
+        S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) }
+    else 정상
+        S->>DB: 이번달 출석 일자 데이터 확인(player_attendance, 이달 범위)
+        DB-->>S: 출석한 일자 목록
+        S->>S: 달력 구성 — 일자별 보상 + 수령 여부(claimed), 오늘 수령 여부(todayClaimed)
+        S-->>C: 성공 { yearMonth, today, todayDay, todayClaimed, days[] }
+    end
+```
+
+- 조회는 상태를 바꾸지 않는다(출석 처리 아님). 다른 달 조회·과거일 소급 수령은 제공하지 않는다.
+
+### POST /api/game/attendance/claim — 출석 보상 획득(메일 발급)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /attendance/claim { userId, token }
+    S->>S: 오늘 판정(서버 KST) — today(YYYYMMDD)·day(며칠차)
+    S->>S: 마스터 데이터 확인(인메모리) — 오늘 day 보상(attendance_master) + 메일 템플릿 301(mail_master)
+    alt 마스터 미로드 / 오늘 day 미정의
+        S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) }
+    else 정상
+        S->>S: 보상 메일 초안 렌더링(제목·본문·만료 = 발급 + 7일, 템플릿 확정)
+        Note over S,DB: 단일 트랜잭션
+        S->>DB: 계정 세이브 데이터 확인(game_player)
+        alt 세이브 없음(캐릭터 생성 전)
+            S-->>C: 실패 { errorCode: SaveNotFound(2001) }
+        end
+        S->>DB: 오늘자 출석 데이터 확인(player_attendance)
+        alt 이미 출석(행 존재 — 동시 요청은 PK 중복으로 직렬화)
+            S-->>C: 실패 { errorCode: AttendanceAlreadyClaimed(9001) }
+        else 미출석
+            S->>DB: 출석 기록 데이터 적재(user_id, today, claimed_at)
+            S->>DB: 보상 메일 데이터 적재(player_mail category=3 + player_mail_reward 1건)
+            S-->>C: 성공 { attendDate, day, reward, mailId }
+        end
+    end
+```
+
+- 실제 재화·아이템 지급은 여기서 하지 않는다 — 플레이어가 우편함에서 수령(`/api/game/mail/claim`)할 때 계정에 반영된다([메일](#메일) 참고).
 
 ### 메일 보관 GC 배치 — MailGcBatchService (엔드포인트 없음)
 

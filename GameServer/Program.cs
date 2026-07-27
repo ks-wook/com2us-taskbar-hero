@@ -67,6 +67,10 @@ builder.Services.AddScoped<IOfflineService, OfflineService>();
 builder.Services.AddScoped<IMailRepository, MailRepository>();
 builder.Services.AddScoped<IMailService, MailService>();
 
+// 출석부 보상 계층(현황 조회·오늘자 획득 → 보상 메일 발급).
+builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
+builder.Services.AddScoped<IAttendanceService, AttendanceService>();
+
 // 메일 보관 GC 배치(발급 7일 경과 메일 삭제, mail 기획서 6.5). 공통 골격은 PeriodicBatchService.
 builder.Services.AddHostedService<MailGcBatchService>();
 

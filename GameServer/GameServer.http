@@ -46,3 +46,25 @@ Content-Type: application/json
 }
 
 ###
+
+### 이번달 출석 현황 조회(서버 KST 기준 달력, 상태 변경 없음)
+POST {{GameServer_HostAddress}}/api/game/attendance/status
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": {}
+}
+
+### 출석 보상 획득(하루 1회, 보상은 메일로 발급 — 이미 수령이면 9001(409))
+POST {{GameServer_HostAddress}}/api/game/attendance/claim
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": {}
+}
+
+###

@@ -15,6 +15,15 @@ public sealed record MailSummary(
     int IsRead, int Claimed, long CreatedAt, long ExpiresAt,
     IReadOnlyList<MailAttachment> Attachments);
 
+// ── 발급(issue) ──
+
+/// <summary>
+/// 발급할 메일 1건의 초안(mail 기획서 §6.4 발급 규약). 제목·본문·category·만료는 mail_master 템플릿이 확정한 값이며
+/// (발급자가 임의 문자열을 만들지 않음), player_mail에 스냅샷으로 저장된다. Rewards = 첨부(0~N건, seq 순).
+/// </summary>
+public sealed record MailDraft(
+    int Category, string Title, string Body, long ExpiresAt, IReadOnlyList<MailAttachment> Rewards);
+
 // ── 수령(claim) ──
 
 public enum MailClaimStatus
@@ -325,6 +334,45 @@ public sealed class MailRepository : IMailRepository
         }
 
         return await db.Query("player_mail").WhereIn("mail_id", targets).DeleteAsync();
+    }
+
+    // ── 발급 헬퍼(발급자 트랜잭션 공용) ──
+
+    /// <summary>
+    /// 메일 1건(player_mail + 첨부 player_mail_reward)을 **발급자의 트랜잭션 안에서** 삽입하고 mail_id를 반환한다
+    /// (mail 기획서 §6.4 — 렌더링은 발급자 측 MailComposer, 적재는 리포지토리). 출석 획득·거래소 대금 등
+    /// 도메인 트랜잭션이 자신의 상태 변경과 메일 발급을 원자적으로 묶을 때 호출한다.
+    /// </summary>
+    public static async Task<long> InsertMailAsync(
+        QueryFactory db, DbTransaction tx, long userId, MailDraft draft, long nowUnix)
+    {
+        var mailId = await db.Query("player_mail").InsertGetIdAsync<long>(new
+        {
+            user_id = userId,
+            category = draft.Category,
+            title = draft.Title,
+            body = draft.Body,
+            is_read = 0,
+            claimed = 0,
+            created_at = nowUnix,
+            expires_at = draft.ExpiresAt,
+            claimed_at = 0,
+        }, tx);
+
+        var seq = 1;
+        foreach (var reward in draft.Rewards)
+        {
+            await db.Query("player_mail_reward").InsertAsync(new
+            {
+                mail_id = mailId,
+                seq = seq++,
+                reward_type = reward.RewardType,
+                reward_code = reward.RewardCode,
+                quantity = reward.Quantity,
+            }, tx);
+        }
+
+        return mailId;
     }
 
     // ── 헬퍼 ──

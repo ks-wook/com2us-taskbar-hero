@@ -781,4 +781,68 @@ namespace TaskbarHero.Common.Dto
         public string message;
         public MailClaimAllResultData data = new MailClaimAllResultData();
     }
+
+    // ── 출석부 보상 (attendance 기획서 §5) ──
+    // status·claim 요청은 추가 데이터가 없으므로 AuthRequest({ userId, token })를 그대로 사용한다.
+
+    /// <summary>출석 보상 1건. rewardType(1:골드 2:아이템 3:재료), rewardCode(골드는 0, 그 외 item_master 코드), quantity(수량). 메일 첨부와 동일 enum.</summary>
+    [Serializable]
+    public class AttendanceRewardDto
+    {
+        public int rewardType;
+        public int rewardCode;
+        public int quantity;
+    }
+
+    /// <summary>이번달 출석 달력의 일자 1칸(5.1 목록 항목). day = 이달 며칠차(1~31), claimed = 그날 수령 여부.</summary>
+    [Serializable]
+    public class AttendanceDayDto
+    {
+        public int day;
+        public int rewardType;
+        public int rewardCode;
+        public int quantity;
+        public bool claimed;
+    }
+
+    /// <summary>이번달 출석 현황 조회 결과(5.1 응답 data). yearMonth/today는 서버 KST 판정 값.</summary>
+    [Serializable]
+    public class AttendanceStatusResultData
+    {
+        public int yearMonth;      // 이번달 YYYYMM(KST)
+        public int today;          // 오늘 YYYYMMDD(KST)
+        public int todayDay;       // 오늘의 일(day-of-month)
+        public bool todayClaimed;  // 오늘자 출석을 이미 수령했는지
+        public List<AttendanceDayDto> days = new List<AttendanceDayDto>();
+    }
+
+    /// <summary>출석 보상 획득 결과(5.2 응답 data). 보상은 mailId 메일로 발급되며 우편함 수령 시 계정에 반영된다.</summary>
+    [Serializable]
+    public class AttendanceClaimResultData
+    {
+        public int attendDate; // 출석 일자 YYYYMMDD(KST)
+        public int day;        // 이달 며칠차
+        public AttendanceRewardDto reward = new AttendanceRewardDto();
+        public long mailId;    // 발급된 보상 메일
+    }
+
+    /// <summary>출석 현황 조회 응답 { success, errorCode, message, data(AttendanceStatusResultData) }.</summary>
+    [Serializable]
+    public class AttendanceStatusResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public AttendanceStatusResultData data = new AttendanceStatusResultData();
+    }
+
+    /// <summary>출석 보상 획득 응답 { success, errorCode, message, data(AttendanceClaimResultData) }.</summary>
+    [Serializable]
+    public class AttendanceClaimResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public AttendanceClaimResultData data = new AttendanceClaimResultData();
+    }
 }
