@@ -8,7 +8,7 @@
 --   1) equip_slot_master  1b) grade_master  2) class_master  3) level_master  4) skill_master  4b) skill_coefficient  5) rune_master  5b) rune_cost
 --   6) item_master  8) cube_master  8b) cube_recipe  8c) cube_recipe_ingredient
 --   9) monster_master  10) stage_reward  10b) stage_reward_drop  11) stage_master  11b) stage_spawn
---   13) attendance_master  14) grade_master  · inventory_expand_master(인벤토리 확장 비용)  · character_create_cost(캐릭터 추가 생성 비용)
+--   13) attendance_master  14) grade_master  · inventory_expand_master(인벤토리 확장 비용)  · character_create_cost(캐릭터 추가 생성 비용)  · mail_master(메일 템플릿)
 --   (7 enhance/12 box는 값 미확정이라 제외)
 --   * grade_master(값 문서 §14)는 item_master.grade가 FK로 참조하므로 물리적으로 item_master보다 앞(1b)에 생성한다.
 --
@@ -939,6 +939,27 @@ CREATE TABLE character_create_cost (
 INSERT INTO character_create_cost (character_id, gold_cost) VALUES
     (2, 100000),
     (3, 500000);
+
+
+-- mail_master — 메일 발급 문구 템플릿 (값 문서 부록, 정본: 메일 기획서 4장·6.4)
+--   * 발급 시 서버가 {0} 자리표시자에 파라미터를 채워 렌더링한 결과를 player_mail.title/body에
+--     스냅샷으로 저장한다(템플릿 수정은 기발급 메일에 소급되지 않음).
+--   * category·만료 일수(valid_days)는 템플릿이 확정한다(발급자가 임의 지정 불가). 보관 7일 정책상 valid_days <= 7.
+--   * mail_template_code = category × 100 + 순번. 서버 전용(클라이언트 번들로 내보내지 않음).
+DROP TABLE IF EXISTS mail_master;
+CREATE TABLE mail_master (
+    mail_template_code INT          NOT NULL COMMENT '템플릿 코드(category×100+순번)',
+    category           INT          NOT NULL COMMENT '메일 분류(1:운영 2:거래 3:출석 4:시스템)',
+    title_format       VARCHAR(100) NOT NULL COMMENT '제목 문구({0} 자리표시자)',
+    body_format        VARCHAR(255) NOT NULL COMMENT '본문 문구({0} 자리표시자)',
+    valid_days         INT          NOT NULL COMMENT '만료 일수(expires_at = created_at + valid_days일, 7 이하)',
+    PRIMARY KEY (mail_template_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='메일 발급 문구 템플릿(서버 전용)';
+
+INSERT INTO mail_master (mail_template_code, category, title_format, body_format, valid_days) VALUES
+    (201, 2, '거래소 판매 대금',      '''{0}'' 판매 대금이 도착했습니다.', 7),
+    (202, 2, '거래소 판매 만료 반송', '판매 기간이 만료되어 ''{0}''이(가) 반송되었습니다.', 7),
+    (301, 3, '출석 보상',            '{0}일차 출석 보상이 도착했습니다.', 7);
 
 
 SET FOREIGN_KEY_CHECKS = 1;

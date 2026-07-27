@@ -13,6 +13,7 @@
 | [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
+| [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령) | GameMailController | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
 
 ## 공통 아키텍처
 
@@ -569,5 +570,86 @@ sequenceDiagram
     else 유효
         S->>DB: 골드 데이터 차감 + 룬 레벨 데이터 갱신(+1, 첫 해금이면 신규 적재)
         S-->>C: 성공 { 올린 레벨, 소모 골드, 잔액 }
+    end
+```
+
+## 메일
+
+우편함 조회·첨부 수령·일괄 수령 (GameMailController, `/api/game/mail`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_mail`·`player_mail_reward`·`player_item`·`game_player`) + 인메모리 마스터 데이터(item — 첨부 적재 규칙). 첨부 종류·수량은 발급 시점에 확정된 메일 원장이 기준이며(서버 권위), 중복 수령은 조건부 갱신(`claimed` 0→1일 때만 전이)으로 차단한다.
+
+### POST /api/game/mail/list — 우편함 조회(+읽음 처리)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /mail/list { userId, token }
+    Note over S,DB: 단일 트랜잭션
+    S->>DB: 우편함 메일·첨부 데이터 확인(만료·수령 완료 포함 전건)
+    DB-->>S: 메일 목록 스냅샷
+    S->>DB: 미열람 메일 읽음 데이터 갱신(조회 = 열람)
+    S-->>C: 성공 { mails[] — isRead는 조회 시점 값(신규 표시용) }
+```
+
+### POST /api/game/mail/claim — 메일 첨부 단건 수령
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /mail/claim { userId, token, data:{ mailId } }
+    Note over S,DB: 단일 트랜잭션
+    S->>DB: 메일 데이터 확인(존재·소유)
+    alt 없음 / 타인 메일(존재 비노출)
+        S-->>C: 실패 { errorCode: MailNotFound(8001) }
+    else 이미 수령
+        S-->>C: 실패 { errorCode: MailAlreadyClaimed(8002) }
+    else 만료
+        S-->>C: 실패 { errorCode: MailExpired(8003) }
+    else 수령 가능
+        S->>DB: 수령권 선점 — 수령 데이터 조건부 갱신(미수령일 때만 수령 완료로 전이)
+        alt 반영 0행(동시 요청이 먼저 수령)
+            S-->>C: 실패 { errorCode: MailAlreadyClaimed(8002) }
+        else 선점 성공
+            S->>DB: 첨부 원장 데이터 확인(클라이언트 입력 없음)
+            S->>S: 마스터 데이터 확인(인메모리) — 첨부 아이템 적재 규칙(타입·스택 상한)
+            S->>DB: 골드 재화 데이터 적립 + 아이템/재료 데이터 적재(스택 병합·빈 칸)
+            alt 용량 초과(롤백 — 미수령 유지)
+                S-->>C: 실패 { errorCode: InventoryFull(4002) }
+            else 지급 완료
+                S-->>C: 성공 { mailId, gained, balance }
+            end
+        end
+    end
+```
+
+### POST /api/game/mail/claim-all — 일괄 수령
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /mail/claim-all { userId, token }
+    Note over S,DB: 단일 트랜잭션
+    S->>DB: 미수령·미만료 메일 데이터 확인
+    loop 대상 메일별
+        S->>DB: 수령권 선점 — 수령 데이터 조건부 갱신(경합 메일은 제외하고 계속)
+    end
+    S->>DB: 선점한 메일들의 첨부 원장 데이터 확인
+    S->>S: 마스터 데이터 확인(인메모리) — 첨부 아이템 적재 규칙(타입·스택 상한)
+    S->>DB: 골드 합계 데이터 적립 + 아이템/재료 데이터 적재(스택 병합·빈 칸)
+    alt 용량 초과(전체 롤백 — 부분 수령 없음)
+        S-->>C: 실패 { errorCode: InventoryFull(4002) }
+    else 지급 완료(대상 없으면 빈 목록)
+        S-->>C: 성공 { claimedMailIds[], gained(합계), balance }
     end
 ```

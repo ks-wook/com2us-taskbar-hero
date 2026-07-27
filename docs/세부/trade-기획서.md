@@ -406,10 +406,75 @@ Redis를 상시 사용하지만 **단일 장애점으로 만들지는 않는다.
 
 ### 7.6 만료 배치
 
-- GameServer의 `BackgroundService`가 **1분 주기**(잠정)로 `status=1 AND expires_at < now`인 등록을 `idx_trade_expire`로 조회한다.
-- 한 주기에 **최대 200건**(잠정)만 처리한다. 밀려도 다음 주기로 이어지므로 긴 트랜잭션이 생기지 않는다.
-- **등록 1건 = 락 1개 + 트랜잭션 1개**: [7.4](#74-redis-구매-락)의 같은 락을 잡고, 조건부 갱신으로 닫은 뒤 같은 트랜잭션에서 반송 메일을 발급한다. 한 건 실패가 나머지를 막지 않고, 구매와 겹쳐도 한쪽만 성공한다.
+`status=1 AND expires_at < now`인 등록을 자동 취소(status=3)하고 아이템을 판매자에게 메일로 반송한다([6.2](#62-등록--취소--만료)). 본 절은 스케줄러 구현에 바로 착수할 수 있도록 실행 모델·처리 절차·실패 처리·구현 체크리스트를 정리한다.
+
 - 만료 시각이 지났지만 배치가 아직 돌지 않은 등록에 구매가 들어오면 **아직 판매중이므로 구매를 성립시킨다**(만료 판정 기준을 배치 시점으로 통일 — "성공 응답 후 반송" 같은 모순 방지). 정책 확정은 [9장](#9-미결-사항--todo).
+
+#### 7.6.1 실행 모델(스케줄러)
+
+| 항목 | 설계 | 비고 |
+|---|---|---|
+| 호스팅 | GameServer 프로세스 내 `BackgroundService` 파생 `TradeExpireBatchService`(`GameServer/Batch/`) | 별도 프로세스·외부 스케줄러(cron 등)를 두지 않는다 — 단일 인스턴스 전제([7.7](#77-하지-않는-것)) |
+| 주기 | `PeriodicTimer` + `WaitForNextTickAsync` 루프, **60초**(잠정) | 이전 주기가 끝나야 다음 tick을 기다리므로 **재진입이 구조적으로 불가**(별도 잠금 불필요) |
+| 기동 직후 | 첫 tick을 기다리지 않고 **즉시 1회 실행** | 서버 중단 동안 쌓인 만료분을 바로 소화 |
+| 1주기 상한 | **최대 200건**(잠정), `listing_id` 오름차순 | 초과분은 다음 주기로 이월(긴 점유 방지). 상한 도달은 요약 로그로 확인 |
+| 종료 | `stoppingToken` 취소 시 처리 중인 1건만 마무리하고 루프 종료 | `OperationCanceledException`은 정상 종료로 처리 |
+| 설정 | `appsettings.json`에 `"TradeExpireBatch": { "IntervalSeconds": 60, "BatchSize": 200 }` | 설정이 없으면 코드 기본값(동일 수치)으로 동작. 수치는 측정 후 확정([9장](#9-미결-사항--todo)) |
+| DI 등록 | `builder.Services.AddHostedService<TradeExpireBatchService>()` | `Program.cs` |
+| 의존성 수명 | 호스티드 서비스는 싱글턴이므로 scoped 리포지토리를 직접 주입받지 않고, **주기마다 `IServiceScopeFactory`로 스코프를 생성**해 `ITradeRepository`를 해석한다 | Redis 락 헬퍼(싱글턴, [7.4](#74-redis-구매-락)의 키 규약)는 구매·취소와 공유 |
+| 시간 기준 | `DateTimeOffset.UtcNow.ToUnixTimeSeconds()` | 거래·메일과 동일한 Unix ts 기준 |
+
+> **공통 골격(제안)** — 주기 루프·설정 바인딩·스코프 생성·요약 로깅은 메일 GC 배치([mail 기획서 6.5](mail-기획서.md))도 동일하게 필요하다. 추상 클래스 `PeriodicBatchService`(파생이 `IntervalSeconds`·`BatchSize`·`RunCycleAsync(scope, ct)`만 구현)로 골격을 분리해 두 배치가 재사용한다.
+
+#### 7.6.2 1주기 처리 절차(의사코드)
+
+```
+now = UtcNow(Unix ts)
+ids = SELECT listing_id FROM trade_listing
+      WHERE status=1 AND expires_at < {now}
+      ORDER BY listing_id LIMIT {BatchSize}            # idx_trade_expire가 커버
+for listingId in ids:                                  # 등록 1건 = 락 1개 + 트랜잭션 1개
+  락 시도: trade:lock:listing:{listingId} (NX+TTL 3초, 7.4와 같은 키 — 구매·취소와 직렬화)
+    경합으로 실패 → 스킵(재시도 없음, 다음 주기가 자연 재시도)
+    Redis 장애로 실패 → 락 없이 진행(조건부 갱신이 정합성 보증, 7.5 축소 운전)
+  트랜잭션(BEGIN)
+    1) 선점(CAS): UPDATE trade_listing SET status=3, closed_at={now}
+         WHERE listing_id={listingId} AND status=1 AND expires_at < {now}
+       반영 0행 → ROLLBACK, 스킵                        # 그 사이 구매·취소로 이미 닫힘
+    2) L = SELECT trade_listing[listingId]              # 반송 스냅샷(item_code·quantity·seller_user_id)
+    3) 반송 메일 발급(수신자 = L.seller_user_id):
+         player_mail 적재(category=2, 제목/본문="거래소 등록 만료 반송",
+                          created_at={now}, expires_at={now}+7일, is_read=0, claimed=0)
+         player_mail_reward 적재(seq=1, reward_type=2(아이템)|3(재료),
+                                 reward_code=L.item_code, quantity=L.quantity)
+  COMMIT
+  캐시 제거(커밋 후, 7.3): trade:index:{L.item_code}에서 listingId 제거 + trade:listing:{listingId} 삭제
+  락 해제(값이 자기 요청 식별자일 때만)
+요약 로그 1줄: 처리 n건 / 경합 스킵 s건 / 실패 f건
+```
+
+- **골드 이동은 없다.** 만료 반송은 에스크로 아이템을 메일 첨부로 되돌릴 뿐, 재화 정산이 없다(대금 정산은 구매 시에만 발생).
+- **`reward_type` 매핑**: 반송 아이템이 장비(`item_master.item_type=1`)면 `reward_type=2`(아이템), 재료(`item_type=2`)면 `3`(재료).
+- **강화 단계는 반송하지 않는다**: 메일 첨부(`player_mail_reward`)는 강화 단계를 보존하지 않는다(강화된 아이템은 메일 발송 대상이 아님 — [메일 기획서 4장](mail-기획서.md) 확정). 만료 반송 장비는 강화 0단계로 지급된다.
+- **메일 문구·발급 규약**: 반송 메일은 `mail_master` **템플릿 202(거래소 판매 만료 반송)** 로 발급한다 — 문구·category·만료 일수는 템플릿이 확정하며, 발급 규약(내부 호출·발급자 트랜잭션 안에서 INSERT)은 [메일 기획서 6.4](mail-기획서.md)를 따른다. 구매 대금 메일(6.1)은 템플릿 201을 쓴다.
+
+#### 7.6.3 실패 처리·로깅
+
+| 상황 | 처리 | 로그([로깅 규칙](../공통/로깅-규칙.md)) |
+|---|---|---|
+| 건별 예외(DB 오류 등) | 해당 건만 롤백하고 **다음 건 계속**(주기 전체를 중단하지 않음) | Error(`listingId` 포함) |
+| 락 경합 스킵 | 다음 주기로 이월 | 로그 없음(정상 동작) — 요약 카운트에만 포함 |
+| Redis 장애 | 락 없이 진행, 캐시 제거 실패는 무시(TTL·lazy 재적재가 흡수, [7.5](#75-redis-장애와-캐시-불일치)) | Warning(주기당 1회로 억제) |
+| 주기 요약 | 대상 0건이면 로그 생략(소음 방지) | Information: `만료 배치: 처리 {Count}건, 스킵 {Skipped}건, 실패 {Failed}건` |
+| 루프 자체의 미처리 예외 | 잡아서 로그 후 **루프 유지**(배치 사망으로 만료가 영구 방치되는 것 방지) | Error |
+
+#### 7.6.4 구현 체크리스트
+
+1. `GameServer/Batch/PeriodicBatchService.cs`(공통 골격) + `TradeExpireBatchService.cs` 작성, `Program.cs`에 `AddHostedService` 등록, `appsettings.json`에 `TradeExpireBatch` 섹션 추가.
+2. `ITradeRepository`에 배치 전용 메서드 2개: `GetExpiredListingIdsAsync(now, limit)`(대상 조회), `ApplyExpireAsync(listingId, now)`(선점 → 스냅샷 → 반송 메일 발급 → 커밋을 하나의 트랜잭션으로). 캐시 제거는 목록 캐시 헬퍼([7.3](#73-redis-목록-캐시))를 재사용한다.
+3. **에러 코드 추가 없음** — 배치는 HTTP 응답이 없으므로 `ErrorCode`·클라이언트 계약 변경이 발생하지 않는다.
+4. 빌드(`dotnet build`) 확인 후 시나리오 테스트: 만료 등록 반송(메일 수신 확인) · 만료 직전 구매와의 경합(한쪽만 성공) · Redis 중단 상태에서의 축소 운전.
+5. `SequenceDiagram/README.md` 거래소 섹션에 만료 배치 흐름 추가, `README.md` 개발 현황판 갱신.
 
 ### 7.7 하지 않는 것
 

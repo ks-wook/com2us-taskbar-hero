@@ -8,9 +8,9 @@
 >
 > **설계 규칙(중요)**: DB 테이블에는 **JSON 문자열이 그대로 들어가는 컬럼을 두지 않는다.** 고정 스키마 값은 개별 스칼라 컬럼으로, **배열·중첩 등 반복 구조는 무조건 별도(자식) 테이블**로 분리한다(예: `stage_master`의 스폰 → `stage_spawn`). 클라이언트 번들 JSON·POCO는 전송 편의상 중첩 객체/배열로 직렬화할 수 있다(DB↔번들 매핑, 기획서 5.1·7장).
 >
-> **현재 상태**: `equip_slot_master`·`grade_master`·`class_master`·`level_master`·`skill_master`·`rune_master`·`rune_cost`·`item_master`·`cube_master`·`monster_master`·`stage_reward`·`stage_master`·`attendance_master`·`inventory_expand_master`는 데이터를 채웠고, 나머지는 절 골격만 나열해 둔 상태다(각 절의 `🚧`는 미작성 표시).
+> **현재 상태**: `equip_slot_master`·`grade_master`·`class_master`·`level_master`·`skill_master`·`rune_master`·`rune_cost`·`item_master`·`cube_master`·`monster_master`·`stage_reward`·`stage_master`·`attendance_master`·`inventory_expand_master`·`mail_master`는 데이터를 채웠고, 나머지는 절 골격만 나열해 둔 상태다(각 절의 `🚧`는 미작성 표시).
 >
-> **SQL**: 값이 확정된 테이블(현재 1~6번 및 8·9·10·11·13번, 그리고 14번 `grade_master`)의 DDL + 시드 INSERT는 [`master-data-schema.sql`](master-data-schema.sql)에 정리한다. 마스터 데이터는 런타임에 "클라 번들 + 서버 인메모리 로드"로 쓰므로 이 SQL은 값 보관·시드·검수용 편의 스크립트다(플레이 경로에서 조회하지 않음). 나머지 테이블도 값이 확정되는 대로 이 파일에 이어서 추가한다.
+> **SQL**: 값이 확정된 테이블(현재 1~6번 및 8·9·10·11·13번, 14번 `grade_master`, 부록 `inventory_expand_master`·`character_create_cost`·`mail_master`)의 DDL + 시드 INSERT는 [`master-data-schema.sql`](master-data-schema.sql)에 정리한다. 마스터 데이터는 런타임에 "클라 번들 + 서버 인메모리 로드"로 쓰므로 이 SQL은 값 보관·시드·검수용 편의 스크립트다(플레이 경로에서 조회하지 않음). 나머지 테이블도 값이 확정되는 대로 이 파일에 이어서 추가한다.
 
 ## 목차
 
@@ -31,6 +31,7 @@
 - [14. grade_master (등급)](#14-grade_master-등급)
 - [부록. inventory_expand_master (인벤토리 확장 비용)](#부록-inventory_expand_master-인벤토리-확장-비용)
 - [부록. character_create_cost (캐릭터 추가 생성 비용)](#부록-character_create_cost-캐릭터-추가-생성-비용)
+- [부록. mail_master (메일 템플릿)](#부록-mail_master-메일-템플릿)
 - [15. 참고](#15-참고)
 
 ## 1. equip_slot_master (장착 슬롯)
@@ -886,6 +887,25 @@
 | 3 | 500,000 |
 
 > 서버는 생성 슬롯(2 또는 3)의 `gold_cost`를 골드에서 차감하고 캐릭터를 삽입한다(한 트랜잭션). 골드가 부족하면 `InsufficientCurrency(4005)`로 거부한다. 1번 슬롯은 이 테이블에 없어 비용 0(무료)으로 처리된다.
+
+## 부록. mail_master (메일 템플릿)
+
+> 메일(4.8) 도메인의 발급 문구 템플릿. 1~14번(마스터) 번호 체계 밖의 부가 테이블이라 부록으로 둔다. **정본 정의는 [메일 기획서](../mail-기획서.md) 4장.**
+
+- **용도**: 메일 발급 시 제목·본문·`category`·만료 일수를 확정하는 템플릿([메일 기획서](../mail-기획서.md) 6.4 발급 규약). 서버 기동 시 인메모리 적재하고, 발급 시 `{0}` 자리표시자에 파라미터를 채워 렌더링한 결과를 `player_mail.title`/`body`에 **스냅샷으로 저장**한다(템플릿 수정은 기발급 메일에 소급되지 않음).
+- **필드**: `mail_template_code`(PK, **`category × 100 + 순번`** 규약), `category`(1:운영 2:거래 3:출석 4:시스템), `title_format`, `body_format`, `valid_days`(만료 일수, `expires_at = created_at + valid_days일` — 보관 7일 정책상 **7 이하**).
+- **규모/현황**: **3종 확정** — 현재 발급 경로(거래소 구매 대금·거래소 만료 반송·출석 보상)에 필요한 문구만 정의한다. 운영 지급 등은 발급 주체가 생길 때 행만 추가한다(스키마 불변).
+- **클라 노출 없음**: 클라이언트는 렌더링 완료된 `title`/`body`를 메일 목록 조회로 받으므로, 이 테이블은 클라이언트 번들로 내보내지 않는다(**서버 전용 마스터**, 추출기 EXPORTERS 제외).
+
+**데이터 (확정)**
+
+| mail_template_code | category | title_format | body_format | valid_days |
+|---|---|---|---|---|
+| 201 | 2 거래 | 거래소 판매 대금 | '{0}' 판매 대금이 도착했습니다. | 7 |
+| 202 | 2 거래 | 거래소 판매 만료 반송 | 판매 기간이 만료되어 '{0}'이(가) 반송되었습니다. | 7 |
+| 301 | 3 출석 | 출석 보상 | {0}일차 출석 보상이 도착했습니다. | 7 |
+
+> `{0}` 파라미터 — 201·202: 판매/반송 아이템 이름(`item_master.name`, 서버가 인메모리 마스터에서 조회), 301: 출석 일차(`day`). 201은 거래소 구매([trade 기획서 6.1](../trade-기획서.md)), 202는 만료 배치([trade 기획서 7.6](../trade-기획서.md)), 301은 출석 획득([출석부 기획서](../attendance-기획서.md))이 발급한다.
 
 ## 15. 참고
 

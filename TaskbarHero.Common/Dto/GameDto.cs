@@ -675,4 +675,110 @@ namespace TaskbarHero.Common.Dto
         public string message;
         public OfflineRewardResult data = new OfflineRewardResult();
     }
+
+    // ── 메일(보상) 수신 (mail 기획서 §5) ──
+    // list·claim-all 요청은 추가 데이터가 없으므로 AuthRequest({ userId, token })를 그대로 사용한다.
+
+    /// <summary>메일 첨부 1건. rewardType(1:골드 2:아이템 3:재료), rewardCode(골드는 0, 그 외 item_master 코드), quantity(수량).</summary>
+    [Serializable]
+    public class MailAttachmentDto
+    {
+        public int rewardType;
+        public int rewardCode;
+        public int quantity;
+    }
+
+    /// <summary>우편함 메일 1건(5.1 목록 항목). attachments가 비어 있으면 첨부 없는 안내 메일.</summary>
+    [Serializable]
+    public class MailDto
+    {
+        public long mailId;
+        public int category;   // 1:운영 2:거래 3:출석 4:시스템
+        public string title;
+        public string body;
+        public List<MailAttachmentDto> attachments = new List<MailAttachmentDto>();
+        public int isRead;     // 열람 여부(0/1)
+        public int claimed;    // 첨부 수령 여부(0/1)
+        public long createdAt; // 발급 시각(Unix ts)
+        public long expiresAt; // 만료 시각(Unix ts, 0이면 무기한)
+    }
+
+    /// <summary>우편함 조회 결과(5.1 응답 data). { mails }</summary>
+    [Serializable]
+    public class MailListResultData
+    {
+        public List<MailDto> mails = new List<MailDto>();
+    }
+
+    /// <summary>메일 단건 수령 요청 데이터. { mailId }</summary>
+    [Serializable]
+    public class MailClaimData
+    {
+        public long mailId;
+    }
+
+    /// <summary>메일 단건 수령 요청 body(인증).</summary>
+    [Serializable]
+    public class MailClaimRequest
+    {
+        public long userId;
+        public string token;
+        public MailClaimData data;
+    }
+
+    /// <summary>메일 수령으로 지급된 첨부 합계. currencies = 재화(골드), items = 아이템/재료.</summary>
+    [Serializable]
+    public class MailGainedDto
+    {
+        public List<CurrencyDto> currencies = new List<CurrencyDto>();
+        public List<ItemQuantityDto> items = new List<ItemQuantityDto>();
+    }
+
+    /// <summary>메일 단건 수령 결과(5.2 응답 data). gained = 지급 첨부, balance = 지급 후 재화 잔액.</summary>
+    [Serializable]
+    public class MailClaimResultData
+    {
+        public long mailId;
+        public MailGainedDto gained = new MailGainedDto();
+        public List<CurrencyDto> balance = new List<CurrencyDto>();
+    }
+
+    /// <summary>메일 일괄 수령 결과(5.3 응답 data). claimedMailIds = 수령된 메일, gained = 첨부 합계, balance = 지급 후 재화 잔액.</summary>
+    [Serializable]
+    public class MailClaimAllResultData
+    {
+        public List<long> claimedMailIds = new List<long>();
+        public MailGainedDto gained = new MailGainedDto();
+        public List<CurrencyDto> balance = new List<CurrencyDto>();
+    }
+
+    /// <summary>우편함 조회 응답 { success, errorCode, message, data(MailListResultData) }.</summary>
+    [Serializable]
+    public class MailListResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public MailListResultData data = new MailListResultData();
+    }
+
+    /// <summary>메일 단건 수령 응답 { success, errorCode, message, data(MailClaimResultData) }.</summary>
+    [Serializable]
+    public class MailClaimResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public MailClaimResultData data = new MailClaimResultData();
+    }
+
+    /// <summary>메일 일괄 수령 응답 { success, errorCode, message, data(MailClaimAllResultData) }.</summary>
+    [Serializable]
+    public class MailClaimAllResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public MailClaimAllResultData data = new MailClaimAllResultData();
+    }
 }

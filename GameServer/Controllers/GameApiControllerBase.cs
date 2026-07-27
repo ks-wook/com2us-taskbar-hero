@@ -42,6 +42,9 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.SaveNotFound => StatusCodes.Status404NotFound,
         ErrorCode.StageNotFound => StatusCodes.Status404NotFound,
         ErrorCode.ItemNotFound => StatusCodes.Status404NotFound,
+        // 메일: 없음/타인 메일은 404, 중복 수령(동시 요청 경합 포함)은 409, 만료는 400(기본 매핑).
+        ErrorCode.MailNotFound => StatusCodes.Status404NotFound,
+        ErrorCode.MailAlreadyClaimed => StatusCodes.Status409Conflict,
         // 인증 실패 계열(미들웨어가 대부분 선처리하나 방어적으로 매핑).
         ErrorCode.InvalidToken => StatusCodes.Status401Unauthorized,
         ErrorCode.ExpiredToken => StatusCodes.Status401Unauthorized,
@@ -80,6 +83,10 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.ActiveSkillLimitExceeded => "Active skill limit exceeded",
         ErrorCode.RunePrereqNotMet => "Rune prerequisite not met",
         ErrorCode.RuneMaxLevel => "Rune max level",
+        // 메일
+        ErrorCode.MailNotFound => "Mail not found",
+        ErrorCode.MailAlreadyClaimed => "Mail already claimed",
+        ErrorCode.MailExpired => "Mail expired",
         ErrorCode.MasterDataNotLoaded => "Master data not loaded",
         ErrorCode.InvalidToken => "Invalid token",
         ErrorCode.ExpiredToken => "Expired token",

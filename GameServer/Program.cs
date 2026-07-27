@@ -62,6 +62,10 @@ builder.Services.AddScoped<ICubeService, CubeService>();
 builder.Services.AddScoped<IOfflineRepository, OfflineRepository>();
 builder.Services.AddScoped<IOfflineService, OfflineService>();
 
+// 메일(우편함) 계층(목록·수령·일괄 수령).
+builder.Services.AddScoped<IMailRepository, MailRepository>();
+builder.Services.AddScoped<IMailService, MailService>();
+
 var app = builder.Build();
 
 // 마스터 데이터 기동 시 적재(실패 시 IsLoaded=false → 관련 요청은 MasterDataNotLoaded).
