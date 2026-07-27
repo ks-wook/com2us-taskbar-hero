@@ -3917,7 +3917,6 @@ GameObject:
   - component: {fileID: 2967010356655523579}
   - component: {fileID: 3280920336031431087}
   - component: {fileID: 6008346453741717389}
-  - component: {fileID: 7880630551156595978}
   m_Layer: 0
   m_Name: WinPanel
   m_TagString: Untagged
@@ -3983,20 +3982,6 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &7880630551156595978
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7794051697983516042}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3ec6e5a7e54b8034d987df8a26716041, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: TaskbarHero.Client.UI::TaskbarHero.Client.UI.DraggableUIPanel
-  target: {fileID: 0}
-  keepVisible: 120
 --- !u!1 &7858977675363905144
 GameObject:
   m_ObjectHideFlags: 0
@@ -4517,7 +4502,6 @@ GameObject:
   - component: {fileID: 5527021342150310082}
   - component: {fileID: 2650459512435260402}
   - component: {fileID: 1281003573268920868}
-  - component: {fileID: 5254838894435267815}
   m_Layer: 0
   m_Name: PanelRoot
   m_TagString: Untagged
@@ -4583,17 +4567,3 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &5254838894435267815
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8347562530333315480}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3ec6e5a7e54b8034d987df8a26716041, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: TaskbarHero.Client.UI::TaskbarHero.Client.UI.DraggableUIPanel
-  target: {fileID: 0}
-  keepVisible: 120

@@ -484,7 +484,6 @@ GameObject:
   - component: {fileID: 943308210988196361}
   - component: {fileID: 688052297242990964}
   - component: {fileID: 847207661720838394}
-  - component: {fileID: 8517440308620548637}
   m_Layer: 0
   m_Name: PartyPanelRoot
   m_TagString: Untagged
@@ -552,20 +551,6 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &8517440308620548637
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2175060339377243443}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 3ec6e5a7e54b8034d987df8a26716041, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: TaskbarHero.Client.UI::TaskbarHero.Client.UI.DraggableUIPanel
-  target: {fileID: 0}
-  keepVisible: 120
 --- !u!1 &2781280083711330384
 GameObject:
   m_ObjectHideFlags: 0
