@@ -4,7 +4,7 @@ using UnityEngine.UI;
 namespace TaskbarHero.Client.Battle
 {
     /// <summary>
-    /// 스테이지 입장 시 화면 상단 중앙에 "지역 · 스테이지"를 잠깐 띄웠다가 서서히 사라지는 배너.
+    /// 스테이지 입장 시 화면 중단(전투 레인 위쪽)에 "지역 · 스테이지"를 잠깐 띄웠다가 서서히 사라지는 배너.
     /// 페이드 인 → 유지 → 페이드 아웃 후 자동 파괴한다. 슬로우모션(timeScale)과 무관하게 unscaled 시간으로 재생한다.
     /// <para>
     /// 정적 계층(Canvas·배경 바·지역/스테이지 텍스트)은 <b>프리팹으로 baked</b>되어(에디터 빌더 <c>StageEnterBannerBuilder</c>)
@@ -80,7 +80,7 @@ namespace TaskbarHero.Client.Battle
                 _stageText.text = $"STAGE {act}-{stage}";
             }
 
-            _baseY = _content != null ? _content.anchoredPosition.y : -160f;
+            _baseY = _content != null ? _content.anchoredPosition.y : -560f;
             _t = 0f;
             _playing = true;
             if (_cg != null)
@@ -168,12 +168,12 @@ namespace TaskbarHero.Client.Battle
             _cg.blocksRaycasts = false;
             _cg.alpha = 0f;
 
-            // 상단 중앙 컨테이너
+            // 중앙 컨테이너(상단 앵커 기준으로 아래로 내려 전투 레인에 가깝게 노출)
             _content = NewRect("Content", transform);
             _content.anchorMin = _content.anchorMax = new Vector2(0.5f, 1f);
             _content.pivot = new Vector2(0.5f, 1f);
             _content.sizeDelta = new Vector2(900f, 200f);
-            _content.anchoredPosition = new Vector2(0f, -160f);
+            _content.anchoredPosition = new Vector2(0f, -560f);
 
             // 반투명 배경 바
             var bg = NewImage("Bar", _content, new Color(0f, 0f, 0f, 0.5f));

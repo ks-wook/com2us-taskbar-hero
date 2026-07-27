@@ -11,7 +11,7 @@ namespace TaskbarHero.ClientEditor
     /// 빌드 성공 시 빌드된 실행 파일을 곧바로 실행한다.
     /// <b>현재 화면 비율을 유지한 채 크기를 키워</b> 빌드한다: PlayerSettings의 현재 기본 해상도 비율을 유지하고
     /// 높이를 <see cref="TargetHeight"/>(1080)로 스케일(예: 1280×720 → 1920×1080). 창 모드로 고정한다.
-    /// 메뉴: TaskbarHero/빌드/Windows 빌드 & 실행 (현재 비율 확대)
+    /// 메뉴: TaskbarHero/Build/Windows 빌드 & 실행 (현재 비율 확대)
     /// </summary>
     public static class WindowsBuilder
     {
@@ -19,7 +19,7 @@ namespace TaskbarHero.ClientEditor
         private const string BuildDirName = "Builds";
         private const string PlatformDirName = "Windows";
 
-        [MenuItem("TaskbarHero/빌드/Windows 빌드 & 실행 (현재 비율 확대)")]
+        [MenuItem("TaskbarHero/Build/Windows 빌드 & 실행 (현재 비율 확대)")]
         public static void BuildWindows()
         {
             // 1) 현재 화면 비율을 유지하며 크기를 키운다(높이 기준 스케일). 재실행해도 비율이 같으면 동일 결과(멱등).
@@ -78,8 +78,8 @@ namespace TaskbarHero.ClientEditor
             }
         }
 
-        /// <summary>빌드된 실행 파일을 실행한다(작업 디렉터리는 빌드 폴더).</summary>
-        private static void LaunchBuild(string exePath, string workingDir)
+        /// <summary>빌드된 실행 파일을 실행한다(작업 디렉터리는 빌드 폴더). 다른 빌더(TransparentOverlayBuilder)도 공용.</summary>
+        internal static void LaunchBuild(string exePath, string workingDir)
         {
             if (!File.Exists(exePath))
             {
@@ -102,8 +102,8 @@ namespace TaskbarHero.ClientEditor
             }
         }
 
-        /// <summary>파일명에 쓸 수 없는 문자를 '_'로 치환한다.</summary>
-        private static string SafeName(string name)
+        /// <summary>파일명에 쓸 수 없는 문자를 '_'로 치환한다. 다른 빌더(TransparentOverlayBuilder)도 공용.</summary>
+        internal static string SafeName(string name)
         {
             if (string.IsNullOrEmpty(name))
             {

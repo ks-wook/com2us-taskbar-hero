@@ -87,7 +87,7 @@ namespace TaskbarHero.Client.Battle
             // 어두운 배경(클릭 시 닫힘).
             var dim = CreateChild("Dim", transform, Vector2.zero, Vector2.one);
             var dimImg = dim.gameObject.AddComponent<Image>();
-            dimImg.color = new Color(0f, 0f, 0f, 0.65f);
+            dimImg.color = new Color(0f, 0f, 0f, 0f); // 배경을 어둡게 하지 않는다 — 클릭 닫기용 투명 차단막
             var dimBtn = dim.gameObject.AddComponent<Button>();
             dimBtn.transition = Selectable.Transition.None;
             dimBtn.onClick.AddListener(Dismiss);

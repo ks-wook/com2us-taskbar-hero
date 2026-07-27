@@ -23,10 +23,14 @@ namespace TaskbarHero.Client.Battle
         public float centerY = 1f;
         [Tooltip("true면 worldHeight/centerY 대신 카메라 뷰 높이·중심에 맞춰 화면을 꽉 채운다.")]
         public bool autoFitCamera = false;
+        [Tooltip("배경을 커버 영역 하단에서 이 비율 높이까지만 노출한다(스프라이트 아래쪽을 같은 비율로 잘라 사용). 1이면 전체 노출.")]
+        [Range(0.05f, 1f)]
+        public float visibleBottomFrac = 1f / 3f;
 
         private Camera _cam;
         private Transform[] _tiles;
         private float _tileWidth;
+        private Sprite _croppedSprite; // Build()가 생성한 하단 크롭 스프라이트(재생성/파괴 시 정리)
 
         private void Start()
         {
@@ -45,7 +49,59 @@ namespace TaskbarHero.Client.Battle
                 }
                 _tiles = null;
             }
+            DestroyCroppedSprite();
             Build();
+        }
+
+        private void OnDestroy()
+        {
+            DestroyCroppedSprite();
+        }
+
+        /// <summary>Build()가 만든 하단 크롭 스프라이트를 파괴한다(재생성·오브젝트 파괴 시 누수 방지).</summary>
+        private void DestroyCroppedSprite()
+        {
+            if (_croppedSprite != null)
+            {
+                Destroy(_croppedSprite);
+                _croppedSprite = null;
+            }
+        }
+
+        /// <summary>하단 크롭 반영 후 배경이 실제로 노출되는 영역의 상단 월드 y(스킬 UI 도킹 기준선).</summary>
+        public float VisibleTopY
+        {
+            get
+            {
+                if (_cam == null) _cam = Camera.main;
+                ComputeVisibleArea(out _, out float top);
+                return top;
+            }
+        }
+
+        /// <summary>현재 설정(autoFit·하단 크롭 반영)의 배경 노출 영역(월드 y 구간)을 계산한다.</summary>
+        private void ComputeVisibleArea(out float bottomY, out float topY)
+        {
+            float h = worldHeight;
+            float cy = centerY;
+            if (autoFitCamera && _cam != null && _cam.orthographic)
+            {
+                // 화면 꽉 채우기: 카메라 뷰 높이(orthographicSize×2)·중심 y에 맞춘다(약간 여유).
+                h = _cam.orthographicSize * 2f * 1.02f;
+                cy = _cam.transform.position.y;
+            }
+            bottomY = cy - h * 0.5f;
+            topY = bottomY + h * Mathf.Clamp(visibleBottomFrac, 0.05f, 1f);
+        }
+
+        /// <summary>원본 스프라이트의 아래쪽 frac 비율 영역만 참조하는 서브 렉트 스프라이트를 만든다(텍스처 복사 없음).</summary>
+        private static Sprite CreateBottomCroppedSprite(Sprite src, float frac)
+        {
+            Rect r = src.rect;
+            var cropped = new Rect(r.x, r.y, r.width, Mathf.Max(1f, r.height * frac));
+            var s = Sprite.Create(src.texture, cropped, new Vector2(0.5f, 0.5f), src.pixelsPerUnit);
+            s.name = src.name + "_bottomCrop";
+            return s;
         }
 
         private void Build()
@@ -57,17 +113,24 @@ namespace TaskbarHero.Client.Battle
                 return;
             }
 
-            // 화면 꽉 채우기: 카메라 뷰 높이(orthographicSize×2)·중심 y에 맞춘다(약간 여유).
-            float h = worldHeight;
-            float cy = centerY;
-            if (autoFitCamera && _cam != null && _cam.orthographic)
+            // 노출 영역(하단 크롭 반영)을 계산하고, 창 제어기에 배경 밴드로 보고한다
+            // (밴드 위의 커서는 게임 콘텐츠로 취급 → 클릭 통과 제외·창 드래그 그립).
+            ComputeVisibleArea(out float visBottom, out float visTop);
+            float h = visTop - visBottom;
+            float cy = (visBottom + visTop) * 0.5f;
+            TaskbarHero.Client.Managers.TaskbarWindow.ReportContentBand(visBottom, visTop);
+
+            // 하단 크롭: 스프라이트도 같은 비율로 아래쪽만 잘라 스케일(픽셀 밀도)을 유지한 채 그 자리에 배치한다.
+            Sprite drawSprite = sprite;
+            float frac = Mathf.Clamp(visibleBottomFrac, 0.05f, 1f);
+            if (frac < 1f)
             {
-                h = _cam.orthographicSize * 2f * 1.02f;
-                cy = _cam.transform.position.y;
+                _croppedSprite = CreateBottomCroppedSprite(sprite, frac);
+                drawSprite = _croppedSprite;
             }
 
-            float scale = h / sprite.bounds.size.y;
-            _tileWidth = sprite.bounds.size.x * scale;
+            float scale = h / drawSprite.bounds.size.y;
+            _tileWidth = drawSprite.bounds.size.x * scale;
 
             int count = Mathf.Max(2, tileCount);
             _tiles = new Transform[count];
@@ -78,7 +141,7 @@ namespace TaskbarHero.Client.Battle
                 var go = new GameObject("BGTile_" + i);
                 go.transform.SetParent(transform, false);
                 var sr = go.AddComponent<SpriteRenderer>();
-                sr.sprite = sprite;
+                sr.sprite = drawSprite;
                 sr.sortingOrder = sortingOrder;
                 go.transform.localScale = new Vector3(scale, scale, 1f);
                 go.transform.position = new Vector3(startX + i * _tileWidth, cy, 0f);

@@ -44,12 +44,13 @@ namespace TaskbarHero.ClientEditor
             Vector3 playerSpawnPos = src.playerSpawn != null ? src.playerSpawn.position : new Vector3(-4.5f, -1.6f, 0f);
             Vector3 monsterSpawnPos = src.monsterSpawn != null ? src.monsterSpawn.position : new Vector3(2.5f, -1.6f, 0f);
 
-            // 스크롤 배경 설정(높이/중심/정렬/타일).
+            // 스크롤 배경 설정(높이/중심/정렬/타일/하단 노출 비율).
             var srcBg = Object.FindAnyObjectByType<ScrollingBackground>(FindObjectsInactive.Include);
             float bgWorldHeight = srcBg != null ? srcBg.worldHeight : 8f;
             float bgCenterY = srcBg != null ? srcBg.centerY : 1f;
             int bgSorting = srcBg != null ? srcBg.sortingOrder : -100;
             int bgTiles = srcBg != null ? srcBg.tileCount : 3;
+            float bgVisibleFrac = srcBg != null ? srcBg.visibleBottomFrac : 1f / 3f;
 
             // 카메라 설정: GameScene 카메라를 BattleDevScene과 동일하게 맞춰 전투 프레이밍(배경·길·캐릭터 위치)을 일치시킨다.
             var srcCam = Camera.main;
@@ -174,6 +175,7 @@ namespace TaskbarHero.ClientEditor
             bg.centerY = bgCenterY;
             bg.sortingOrder = bgSorting;
             bg.tileCount = bgTiles;
+            bg.visibleBottomFrac = bgVisibleFrac;
             bg.autoFitCamera = false; // 카메라를 BattleDevScene과 일치시켰으므로 고정 지오메트리(worldHeight/centerY)로 동일 프레이밍
             fso.FindProperty("background").objectReferenceValue = bg;
 

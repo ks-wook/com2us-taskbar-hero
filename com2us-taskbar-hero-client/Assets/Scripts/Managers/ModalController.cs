@@ -222,7 +222,7 @@ namespace TaskbarHero.Client.Managers
 
             // Dim(뒤 입력 차단)
             var dim = NewImage("Dim", _content, null);
-            dim.color = new Color(0f, 0f, 0f, 0.72f);
+            dim.color = new Color(0f, 0f, 0f, 0f); // 배경을 어둡게 하지 않는다 — 입력 차단용 투명 차단막(레이캐스트만 유지)
             dim.raycastTarget = true; // 뒤 UI 클릭 차단(모달은 버튼으로만 닫힘)
             Stretch(dim.rectTransform);
 

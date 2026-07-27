@@ -65,12 +65,10 @@ namespace TaskbarHero.Client.Battle
         public float devDamageMultiplier = 20f;
 
         [Header("이동 / 교전 / 카메라")]
-        [Tooltip("최전방 캐릭터 앞쪽 여백(카메라)")]
+        [Tooltip("카메라 중심을 최전방 아군보다 이만큼 오른쪽에 둔다(아군은 화면 왼쪽, 오른쪽에서 다가오는 적이 멀리서부터 보이게)")]
         public float camOffsetX = 2.5f;
-        [Tooltip("최후방 캐릭터 뒤쪽 여백(카메라 — 후방 전원 노출)")]
+        [Tooltip("최후방 캐릭터 뒤쪽 여백(최후방 아군이 화면 왼쪽 밖으로 밀려나지 않게 하는 하한)")]
         public float camRearMargin = 1.2f;
-        [Tooltip("카메라 줌(orthographicSize) 보간 속도")]
-        public float camZoomLerp = 4f;
         public float fallbackMoveSpeed = 3f;
 
         [Header("대형 (사거리 기반 행 배치)")]
@@ -257,15 +255,18 @@ namespace TaskbarHero.Client.Battle
             }
             if (float.IsNegativeInfinity(front)) return;
 
-            float left = rear - camRearMargin;
-            float right = front + camOffsetX;
-            float mid = (left + right) * 0.5f;
-            float needHalfW = (right - left) * 0.5f;
-            float targetOrtho = Mathf.Max(_baseOrtho, needHalfW / Mathf.Max(0.01f, _cam.aspect));
+            // 카메라 줌은 고정(_baseOrtho) — 아군 간 거리에 따른 확대/축소를 하지 않는다.
+            if (_baseOrtho > 0f && !Mathf.Approximately(_cam.orthographicSize, _baseOrtho))
+            {
+                _cam.orthographicSize = _baseOrtho;
+            }
 
-            _cam.orthographicSize = Mathf.Lerp(_cam.orthographicSize, targetOrtho, Time.unscaledDeltaTime * camZoomLerp);
+            // x 팔로우: 카메라 중심을 최전방 아군보다 camOffsetX만큼 오른쪽에 둔다
+            // (아군은 화면 왼쪽에 두고, 오른쪽에서 다가오는 적이 멀리서부터 보이게).
+            // 단, 최후방 아군이 화면 왼쪽 밖으로 밀려나면 그만큼만 왼쪽으로 당긴다.
+            float halfW = _cam.orthographicSize * Mathf.Max(0.01f, _cam.aspect);
             Vector3 c = _cam.transform.position;
-            c.x = mid;
+            c.x = Mathf.Min(front + camOffsetX, rear - camRearMargin + halfW);
             _cam.transform.position = c;
         }
 

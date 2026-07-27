@@ -170,7 +170,7 @@ namespace TaskbarHero.Client.UI
 
         // ── ESC 메뉴(타이틀로 돌아가기) ──
 
-        /// <summary>ESC로 토글하는 메뉴 오버레이(딤 + '타이틀로 돌아가기' / '계속하기')를 최상단 캔버스로 구성한다(처음엔 숨김).</summary>
+        /// <summary>ESC로 토글하는 메뉴 오버레이(딤 + '타이틀로 돌아가기' / '계속하기' / '게임종료')를 최상단 캔버스로 구성한다(처음엔 숨김).</summary>
         private void BuildEscMenu(Font font)
         {
             var canvasGo = new GameObject("EscMenuCanvas", typeof(RectTransform), typeof(Canvas),
@@ -191,7 +191,7 @@ namespace TaskbarHero.Client.UI
             var dimRt = (RectTransform)dim.transform;
             dimRt.anchorMin = Vector2.zero; dimRt.anchorMax = Vector2.one;
             dimRt.offsetMin = Vector2.zero; dimRt.offsetMax = Vector2.zero;
-            dim.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0.6f);
+            dim.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0f); // 배경을 어둡게 하지 않는다 — 밖 클릭 닫기용 투명 차단막
             var dimBtn = dim.AddComponent<Button>();
             dimBtn.transition = Selectable.Transition.None;
             dimBtn.onClick.AddListener(HideEscMenu);
@@ -202,15 +202,16 @@ namespace TaskbarHero.Client.UI
             var prt = (RectTransform)panel.transform;
             prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0.5f);
             prt.pivot = new Vector2(0.5f, 0.5f);
-            prt.sizeDelta = new Vector2(560f, 420f);
+            prt.sizeDelta = new Vector2(560f, 540f);
             prt.anchoredPosition = Vector2.zero;
             panel.GetComponent<Image>().color = new Color(0.10f, 0.12f, 0.18f, 0.98f);
 
-            var title = MakeMenuText(font, panel.transform, "메뉴", 48, new Vector2(0f, 140f), 480f);
+            var title = MakeMenuText(font, panel.transform, "메뉴", 48, new Vector2(0f, 200f), 480f);
             title.fontStyle = FontStyle.Bold;
 
-            MakeMenuButton(font, panel.transform, "타이틀로 돌아가기", new Vector2(0f, 20f), OnReturnToTitle);
-            MakeMenuButton(font, panel.transform, "계속하기", new Vector2(0f, -110f), HideEscMenu);
+            MakeMenuButton(font, panel.transform, "타이틀로 돌아가기", new Vector2(0f, 70f), OnReturnToTitle);
+            MakeMenuButton(font, panel.transform, "계속하기", new Vector2(0f, -50f), HideEscMenu);
+            MakeMenuButton(font, panel.transform, "게임종료", new Vector2(0f, -170f), OnQuitGame);
 
             canvasGo.SetActive(false); // 처음엔 숨김
         }
@@ -222,7 +223,7 @@ namespace TaskbarHero.Client.UI
             {
                 bool show = !_escMenuRoot.activeSelf;
                 _escMenuRoot.SetActive(show);
-                // 메뉴가 열리면 창 확장, 닫히면 남은 패널 여부에 따라 스트립 복귀.
+                // 메뉴/패널 표시 상태를 창 제어기에 알린다(GameScene 창은 항상 확장이라 크기는 안 변함).
                 TaskbarWindow.Instance?.SetExpanded(show || AnyUiPanelVisible());
             }
         }
@@ -237,7 +238,7 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>UIManager 패널이 하나라도 표시 중인지(창 스트립/확장 판정용).</summary>
+        /// <summary>UIManager 패널이 하나라도 표시 중인지(창 제어기에 알릴 패널 상태 판정용).</summary>
         private static bool AnyUiPanelVisible()
         {
             return UIManager.Instance != null && UIManager.Instance.IsAnyPanelVisible();
@@ -259,6 +260,17 @@ namespace TaskbarHero.Client.UI
             {
                 UnityEngine.SceneManagement.SceneManager.LoadScene("TitleScene");
             }
+        }
+
+        /// <summary>게임을 종료한다(에디터에서는 플레이 정지).</summary>
+        private static void OnQuitGame()
+        {
+            Debug.Log("[HUD] ESC 메뉴 → 게임종료");
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
         }
 
         /// <summary>ESC 메뉴용 중앙 정렬 텍스트를 만든다.</summary>

@@ -151,7 +151,7 @@ namespace TaskbarHero.Client.UI
 
         private void BuildDim()
         {
-            var img = NewImage("Dim", (RectTransform)transform, new Color(0f, 0f, 0f, 0.72f));
+            var img = NewImage("Dim", (RectTransform)transform, new Color(0f, 0f, 0f, 0f)); // 배경을 어둡게 하지 않는다 — 입력 차단용 투명 차단막
             Stretch(img.rectTransform);
             // 보상 팝업은 반드시 '받기'로만 닫도록 Dim 클릭으로는 닫지 않는다(입력만 가로막음).
             img.raycastTarget = true;

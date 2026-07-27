@@ -98,11 +98,11 @@ namespace TaskbarHero.Client.UI
             _content.transform.SetParent(transform, false);
             Stretch((RectTransform)_content.transform);
 
-            // 입력 차단(반투명 딤). raycastTarget=true라 뒤 UI 클릭을 막는다.
+            // 입력 차단(투명 — 화면을 어둡게 하지 않는다). raycastTarget=true라 뒤 UI 클릭을 막는다.
             var blockerGo = new GameObject("Blocker", typeof(RectTransform), typeof(Image));
             blockerGo.transform.SetParent(_content.transform, false);
             var blocker = blockerGo.GetComponent<Image>();
-            blocker.color = new Color(0f, 0f, 0f, 0.55f);
+            blocker.color = new Color(0f, 0f, 0f, 0f);
             blocker.raycastTarget = true;
             Stretch(blocker.rectTransform);
 

@@ -143,7 +143,7 @@ namespace TaskbarHero.Client.UI
         private void BuildDim()
         {
             var img = NewImage("Dim", _rootRect, null);
-            img.color = new Color(0f, 0f, 0f, 0.6f);
+            img.color = new Color(0f, 0f, 0f, 0f); // 배경을 어둡게 하지 않는다 — 밖 클릭 닫기용 투명 차단막(레이캐스트만 유지)
             Stretch(img.rectTransform);
             _dimButton = img.gameObject.AddComponent<Button>();
             _dimButton.transition = Selectable.Transition.None;

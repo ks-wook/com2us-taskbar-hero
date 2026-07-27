@@ -334,7 +334,6 @@ MonoBehaviour:
   devDamageMultiplier: 20
   camOffsetX: 2.5
   camRearMargin: 1.2
-  camZoomLerp: 4
   fallbackMoveSpeed: 3
   rangeGroupSize: 3
   rowSpacingX: 1.6
@@ -1012,6 +1011,7 @@ MonoBehaviour:
   worldHeight: 8
   centerY: 1
   autoFitCamera: 0
+  visibleBottomFrac: 0.25
 --- !u!1 &1652654814
 GameObject:
   m_ObjectHideFlags: 0
@@ -1183,6 +1183,10 @@ MonoBehaviour:
   portraitOrtho: 0.27
   portraitAim: {x: 0, y: 0.48}
   updateInterval: 0.05
+  dockAboveBackground: 1
+  dockMargin: 180
+  alignLeft: 1
+  alignLeftShift: 440
   hpBarGap: 8
   hpBarWidth: 14
   hpBarHeight: 84

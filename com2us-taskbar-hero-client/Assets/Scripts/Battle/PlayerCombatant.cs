@@ -842,5 +842,22 @@ namespace TaskbarHero.Client.Battle
             remaining = 0f; total = 0f;
             return false;
         }
+
+        /// <summary>슬롯 hover 툴팁용: 스킬 코드의 유효(장착 레벨 반영) 정보를 돌려준다.</summary>
+        public bool TryGetSkillInfo(int skillCode, out string name, out int coefType, out float coef, out float duration, out float cooldown)
+        {
+            foreach (var sk in _skills)
+                if (sk.code == skillCode)
+                {
+                    name = sk.name;
+                    coefType = sk.coefType;
+                    coef = sk.coef;
+                    duration = sk.duration;
+                    cooldown = sk.cooldown;
+                    return true;
+                }
+            name = null; coefType = 0; coef = 0f; duration = 0f; cooldown = 0f;
+            return false;
+        }
     }
 }
