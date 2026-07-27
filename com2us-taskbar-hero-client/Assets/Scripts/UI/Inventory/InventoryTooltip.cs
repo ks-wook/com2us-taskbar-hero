@@ -11,6 +11,8 @@ namespace TaskbarHero.Client.UI
     /// </summary>
     public class InventoryTooltip : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
+        [Tooltip("툴팁 배경(Assets/Art/UI/item_detail_bg) — 공용 아이템 상세 팝업과 배경 통일. 없으면 단색 배경.")]
+        [SerializeField] private Sprite _backgroundSprite;
         [SerializeField] private RectTransform _rootRect;
         [SerializeField] private Text _nameText;
         [SerializeField] private Text _subText;
@@ -30,6 +32,7 @@ namespace TaskbarHero.Client.UI
         private void Awake()
         {
             _rt = (RectTransform)transform;
+            ApplyBackground();
             if (_equipButton != null)
             {
                 _equipButton.onClick.AddListener(OnEquip);
@@ -62,6 +65,23 @@ namespace TaskbarHero.Client.UI
 
             _equipButton = MakeButton(font, "EquipButton", "장착", 16f, 200f, 130f, 44f);
             _unequipButton = MakeButton(font, "UnequipButton", "해제", 174f, 200f, 130f, 44f);
+        }
+
+        /// <summary>배경 스프라이트(item_detail_bg)가 배선돼 있으면 툴팁 배경에 적용해
+        /// 공용 아이템 상세 팝업(ItemDetailPopup)과 외형을 통일한다(없으면 기존 단색 유지).</summary>
+        private void ApplyBackground()
+        {
+            if (_backgroundSprite == null)
+            {
+                return;
+            }
+            var bg = GetComponent<Image>();
+            if (bg != null)
+            {
+                bg.sprite = _backgroundSprite;
+                bg.type = Image.Type.Simple;
+                bg.color = Color.white;
+            }
         }
 
         /// <summary>상세 정보를 채우고 커서 근처에 표시한다.</summary>

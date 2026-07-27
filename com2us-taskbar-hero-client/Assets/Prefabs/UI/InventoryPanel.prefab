@@ -3670,6 +3670,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 316f5eefff68c4d4c907ac86e027e46c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: TaskbarHero.Client.UI::TaskbarHero.Client.UI.InventoryTooltip
+  _backgroundSprite: {fileID: -5635248910431450665, guid: 94bd4fa3940cf8c409294f431ef55e25, type: 3}
   _rootRect: {fileID: 4902014282497384587}
   _nameText: {fileID: 5148255220715330560}
   _subText: {fileID: 8804826374234543554}

@@ -201,3 +201,4 @@ MonoBehaviour:
   - code: 41020
     sprite: {fileID: -6441868790996641515, guid: c92a1f3ca740efc45a561ef2439be076, type: 3}
   itemSlotFrame: {fileID: 4400792897899385541, guid: af6d81aa4e4a1b9449abaa9ebafa5d1b, type: 3}
+  itemSlotPrefab: {fileID: 5356247894179942916, guid: 9fc225956eac96745b3125df87824f94, type: 3}

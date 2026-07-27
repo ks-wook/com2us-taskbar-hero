@@ -27,6 +27,9 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("보상 아이템 칸 테두리 프레임(Assets/Art/UI/item_slot.png). 없으면 색 사각형 폴백.")]
         public Sprite itemSlotFrame;
 
+        [Tooltip("공용 아이템 슬롯 프리팹(Assets/Prefabs/UI/ItemSlot.prefab). 보상 아이템 칸에 사용하며, 없으면 코드 구성 폴백.")]
+        public GameObject itemSlotPrefab;
+
         /// <summary>아이템 코드와 아이콘 스프라이트의 한 쌍.</summary>
         [Serializable]
         public struct IconEntry

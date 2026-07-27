@@ -61,6 +61,15 @@ namespace TaskbarHero.Client.UI
                     return "골드가 부족합니다.";
                 case ErrorCode.InventoryCapacityMax:
                     return "인벤토리가 이미 최대 용량입니다.";
+                case ErrorCode.InventoryFull:
+                    return "인벤토리가 가득 차 받을 수 없습니다.";
+                // 메일(우편함) 도메인(mail 기획서 §7)
+                case ErrorCode.MailNotFound:
+                    return "메일을 찾을 수 없습니다.";
+                case ErrorCode.MailAlreadyClaimed:
+                    return "이미 수령한 메일입니다.";
+                case ErrorCode.MailExpired:
+                    return "만료되어 수령할 수 없는 메일입니다.";
                 default:
                     return string.IsNullOrEmpty(fallback) ? ("오류가 발생했습니다. (" + code + ")") : fallback;
             }

@@ -6,11 +6,12 @@ using TaskbarHero.Client.Managers;
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// GameScene 상시 HUD. 인벤토리·편성·스테이지 토글 버튼과 ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
+    /// GameScene 상시 HUD. 메일·인벤토리·편성·스테이지 토글 버튼과 ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
     /// </summary>
     public class GameSceneHudController : MonoBehaviour
     {
-        [Header("메뉴 버튼 아이콘 (에디터 빌더가 배선: Assets/Art/Icon)")]
+        [Header("메뉴 버튼 아이콘 (에디터 빌더가 배선: Assets/Art/Icon, 메일은 Assets/Art/UI/Mail)")]
+        [SerializeField] private Sprite mailIcon;       // 메일(우편함)
         [SerializeField] private Sprite partyIcon;      // 편성
         [SerializeField] private Sprite stageIcon;      // 스테이지
         [SerializeField] private Sprite inventoryIcon;  // 가방
@@ -57,7 +58,8 @@ namespace TaskbarHero.Client.UI
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // 우하단: [편성] [스테이지] [가방] — 아이콘 위 + 작은 텍스트 아래
+            // 우하단: [메일] [편성] [스테이지] [가방] — 아이콘 위 + 작은 텍스트 아래
+            CreateButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, new Vector2(-640f, 40f), OnMailButton);
             CreateButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, new Vector2(-440f, 40f), OnPartyButton);
             CreateButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, new Vector2(-240f, 40f), OnStageButton);
             var inventoryBtn = CreateButton(canvasGo.transform, font, "InventoryButton", "가방", inventoryIcon, new Vector2(-40f, 40f), OnInventoryButton);
@@ -127,6 +129,19 @@ namespace TaskbarHero.Client.UI
 
             btnGo.AddComponent<Button>().onClick.AddListener(onClick);
             return btnGo;
+        }
+
+        /// <summary>우편함(메일) 패널 토글(UIManager 위임).</summary>
+        private void OnMailButton()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.ToggleMail();
+            }
+            else
+            {
+                Debug.LogWarning("[HUD] UIManager 인스턴스를 찾을 수 없습니다.");
+            }
         }
 
         /// <summary>인벤토리 패널 토글(UIManager 위임).</summary>

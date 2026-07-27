@@ -65,6 +65,16 @@ namespace TaskbarHero.ClientEditor
             // 전체 계층을 에디터에서 생성해 프리팹에 정적으로 굽는다(에디터에서 바로 보이도록).
             ctrl.EditorConstruct();
 
+            // 툴팁 배경을 공용 아이템 상세 배경(item_detail_bg)으로 배선(상세 팝업 외형 통일, 재빌드 시 유지).
+            var tooltip = root.GetComponentInChildren<InventoryTooltip>(true);
+            if (tooltip != null)
+            {
+                var tso = new SerializedObject(tooltip);
+                tso.FindProperty("_backgroundSprite").objectReferenceValue =
+                    LoadSpriteAt("Assets/Art/UI/item_detail_bg.png");
+                tso.ApplyModifiedPropertiesWithoutUndo();
+            }
+
             // 보존한 사용자 조정 크기 재적용(장비 영역은 중앙 앵커라 폭이 바뀌어도 중앙 유지).
             if (keepSize.HasValue)
             {
@@ -187,7 +197,12 @@ namespace TaskbarHero.ClientEditor
         /// <summary>스프라이트 로드(Single/Multiple 모두 대응).</summary>
         private static Sprite LoadSprite(string fileName)
         {
-            string path = $"{ArtDir}/{fileName}.png";
+            return LoadSpriteAt($"{ArtDir}/{fileName}.png");
+        }
+
+        /// <summary>에셋 경로에서 스프라이트를 로드한다(Single/Multiple 모두 대응).</summary>
+        private static Sprite LoadSpriteAt(string path)
+        {
             var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
             if (sprite != null)
             {

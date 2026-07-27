@@ -707,6 +707,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 16318a82754f5cb41ba16d95923a3336, type: 3}
   m_Name: 
   m_EditorClassIdentifier: TaskbarHero.Client.UI::TaskbarHero.Client.UI.GameSceneHudController
+  mailIcon: {fileID: 21300000, guid: f1fea9ce3344c8647bced0b848705137, type: 3}
   partyIcon: {fileID: 21300000, guid: 84ccbabcda4f6134caabaf6fd6db2910, type: 3}
   stageIcon: {fileID: 21300000, guid: 1c8b9206f21e99c4aaabd660dc5febf9, type: 3}
   inventoryIcon: {fileID: 21300000, guid: dd8d4f7dfddb13a43acb4b1fd582d7ca, type: 3}
@@ -1538,6 +1539,7 @@ MonoBehaviour:
   runePanelPrefab: {fileID: 2424507622272419679, guid: 8619762bd64d86642946c3e055468565, type: 3}
   cubePanelPrefab: {fileID: 345033725727599519, guid: 2d6506590dbd84f4880138f6f753d3f7, type: 3}
   offlineRewardPanelPrefab: {fileID: 6029417685562325294, guid: 790d3acce4a5719489f26cf129633851, type: 3}
+  mailPanelPrefab: {fileID: 89407125405729913, guid: a2ddddf23b25419429d92a2a115397d2, type: 3}
   showOnStart: 0
   startPanel: 0
 --- !u!4 &2022704252
