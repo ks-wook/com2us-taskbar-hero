@@ -200,3 +200,4 @@ MonoBehaviour:
     sprite: {fileID: -6601042313672172469, guid: bdb730bea0d3e8a488cb44938fc286ee, type: 3}
   - code: 41020
     sprite: {fileID: -6441868790996641515, guid: c92a1f3ca740efc45a561ef2439be076, type: 3}
+  itemSlotFrame: {fileID: 4400792897899385541, guid: af6d81aa4e4a1b9449abaa9ebafa5d1b, type: 3}

@@ -197,12 +197,29 @@ namespace TaskbarHero.Client.Battle
             var ert = (RectTransform)entry.transform;
             ert.sizeDelta = new Vector2(150f, 190f);
 
-            // 아이콘 배경(슬롯).
+            // 아이콘 배경(슬롯): item_slot 프레임(테두리 장식)을 바탕으로 깔고, 등급색은 테두리 안쪽에 겹친다.
+            // 프레임 스프라이트가 없으면(에셋 미빌드) 기존처럼 등급색 사각형만 표시하는 폴백.
             var slot = CreateChild("Slot", entry.transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
             slot.sizeDelta = new Vector2(140f, 140f);
             slot.anchoredPosition = Vector2.zero;
             var slotImg = slot.gameObject.AddComponent<Image>();
-            slotImg.color = slotColor; // 등급별 배경색
+            Sprite frame = _assets != null ? _assets.itemSlotFrame : null;
+            if (frame != null)
+            {
+                slotImg.sprite = frame;
+                slotImg.color = Color.white;
+                // 등급별 배경색(프레임 테두리 안쪽 영역, 아이콘 뒤).
+                var gradeRt = CreateChild("GradeBg", slot, Vector2.zero, Vector2.one);
+                gradeRt.offsetMin = new Vector2(12f, 12f);
+                gradeRt.offsetMax = new Vector2(-12f, -12f);
+                var gradeImg = gradeRt.gameObject.AddComponent<Image>();
+                gradeImg.color = slotColor;
+                gradeImg.raycastTarget = false;
+            }
+            else
+            {
+                slotImg.color = slotColor; // 등급별 배경색(프레임 미배선 폴백)
+            }
             // 아이템 칸은 hover 감지를 위해 레이캐스트 대상으로 두고 hover 핸들러를 붙인다(재화/경험치는 미부착).
             bool hoverable = itemCode > 0;
             slotImg.raycastTarget = hoverable;
@@ -253,7 +270,17 @@ namespace TaskbarHero.Client.Battle
             var slot = CreateChild("Slot", entry.transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
             slot.sizeDelta = new Vector2(140f, 140f);
             var slotImg = slot.gameObject.AddComponent<Image>();
-            slotImg.color = new Color(0.12f, 0.14f, 0.22f, 0.95f);
+            // 아이템 칸과 통일감 있게 item_slot 프레임을 사용(중앙이 어두운 판이라 별도 배경 불필요).
+            Sprite frame = _assets != null ? _assets.itemSlotFrame : null;
+            if (frame != null)
+            {
+                slotImg.sprite = frame;
+                slotImg.color = Color.white;
+            }
+            else
+            {
+                slotImg.color = new Color(0.12f, 0.14f, 0.22f, 0.95f);
+            }
             slotImg.raycastTarget = false;
 
             var lbl = CreateText("Label", slot, font, label, 40, TextAnchor.MiddleCenter);

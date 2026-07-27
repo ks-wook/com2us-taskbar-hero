@@ -135,6 +135,8 @@ namespace TaskbarHero.Client.Battle
         private System.Action _onAllCleared;                   // 전멸 시 1회 호출
         private System.Action _onDefeat;                       // 아군 전멸(패배) 시 1회 호출
         private int _serverSpawned;
+        private int _serverTotal;                              // 이번 스테이지 전체 스폰 예정 수(진행도 분모)
+        private int _serverKilled;                             // 이번 스테이지 누적 처치 수(진행도 분자)
         private bool _serverCleared;
         private bool _defeated;                                // 아군 전멸 판정 1회 가드
         private int _bossCode;                                 // 이 스테이지의 보스 몬스터 코드(0=없음)
@@ -147,6 +149,26 @@ namespace TaskbarHero.Client.Battle
 
         /// <summary>파티 멤버(UI 등 외부 조회용). index 0 = 선두.</summary>
         public IReadOnlyList<PlayerCombatant> Party => _members;
+
+        /// <summary>서버 스테이지 전투가 진행 중(스폰 계획 수신 후)인지 — 진행도 바 표시 여부 판정용.</summary>
+        public bool ServerBattleActive => serverMode && _serverTotal > 0;
+
+        /// <summary>서버 스테이지 진행도(0~1): 처치 수 ÷ 전체 스폰 예정 수. 전멸(클리어) 시 1, 서버 전투가 아니면 0.</summary>
+        public float ServerBattleProgress
+        {
+            get
+            {
+                if (!ServerBattleActive)
+                {
+                    return 0f;
+                }
+                if (_serverCleared)
+                {
+                    return 1f;
+                }
+                return Mathf.Clamp01((float)_serverKilled / _serverTotal);
+            }
+        }
 
         private void Start()
         {
@@ -520,6 +542,8 @@ namespace TaskbarHero.Client.Battle
                 }
             }
             _serverSpawned = 0;
+            _serverTotal = _serverQueue.Count;
+            _serverKilled = 0;
             _serverCleared = false;
             _spawnTimer = enemySpawnInterval; // 곧 첫 스폰
             Log($"서버 전투 시작 — 총 {_serverQueue.Count}마리 예정");
@@ -808,6 +832,10 @@ namespace TaskbarHero.Client.Battle
         public void OnMonsterKilled(MonsterUnit m)
         {
             _killCount++;
+            if (serverMode)
+            {
+                _serverKilled++; // 스테이지 진행도(처치/전체) 분자
+            }
             Log($"{(m != null ? m.MonsterName : _monsterName)} 처치! (누적 {_killCount})");
         }
 

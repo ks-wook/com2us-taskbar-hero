@@ -211,6 +211,14 @@ namespace TaskbarHero.ClientEditor
             fso.FindProperty("stageEnterBannerPrefab").objectReferenceValue = bannerPrefab;
             Debug.Log($"[DungeonBattleBuilder] 입장 배너 프리팹 {(bannerPrefab != null ? "배선" : "없음(코드 폴백)")}.");
 
+            // 스테이지 진행도 바 — 진행 위치 화살표·우측 끝 보스(목표) 아이콘 배선.
+            var progressArrow = LoadSprite("Assets/Art/UI/straight_up.png");
+            var progressBoss = LoadSprite("Assets/Art/UI/boss.png");
+            fso.FindProperty("stageProgressArrow").objectReferenceValue = progressArrow;
+            fso.FindProperty("stageProgressBoss").objectReferenceValue = progressBoss;
+            Debug.Log($"[DungeonBattleBuilder] 진행도 바 화살표 {(progressArrow != null ? "배선" : "없음")}, " +
+                      $"보스 아이콘 {(progressBoss != null ? "배선" : "없음")}.");
+
             fso.ApplyModifiedPropertiesWithoutUndo();
 
             // ── 8) 전투 UI(초상화·아군 스킬 슬롯·아군 HP바) 복제: BattleDevScene의 SkillUICanvas를 그대로 GameScene에 ──

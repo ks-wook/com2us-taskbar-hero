@@ -35,6 +35,12 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("클리어 순간 게임 속도(슬로우모션). 0~1, 예: 0.25")]
         [SerializeField] private float clearSlowMotionScale = 0.25f;
 
+        [Header("스테이지 진행도 바")]
+        [Tooltip("현재 진행 위치를 가리키는 화살표(Assets/Art/UI/straight_up.png, 에디터 빌더가 배선).")]
+        [SerializeField] private Sprite stageProgressArrow;
+        [Tooltip("바 우측 끝의 목표(보스) 아이콘(Assets/Art/UI/boss.png, 에디터 빌더가 배선).")]
+        [SerializeField] private Sprite stageProgressBoss;
+
         [Header("레벨업 이펙트")]
         [Tooltip("레벨업 시 캐릭터에 재생할 글로우 프레임(에디터 빌더가 LevelUpGlow_01~30 순서로 배선).")]
         [SerializeField] private Sprite[] levelUpFrames = new Sprite[0];
@@ -195,6 +201,8 @@ namespace TaskbarHero.Client.Battle
             {
                 battle.BeginServerBattle(plan, ResolvePrefab, OnAllCleared, bossCode, OnDefeat);
             }
+            // 우측 하단 스테이지 진행도 바(0% → 처치마다 상승 → 클리어 100%) + 진행 위치 화살표·보스 목표 아이콘.
+            StageProgressBar.Attach(battle, stageProgressArrow, stageProgressBoss);
             // 전투 필드 리셋(카메라 위치 확정) 후 배경을 구축해야 스크롤 배경 타일이 올바른 위치에 생성된다.
             ApplyBackground(d.backgroundType);
         }

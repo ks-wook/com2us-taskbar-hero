@@ -24,6 +24,9 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("아이템 코드 → 아이콘 스프라이트(item_{code}.png).")]
         public IconEntry[] itemIcons = new IconEntry[0];
 
+        [Tooltip("보상 아이템 칸 테두리 프레임(Assets/Art/UI/item_slot.png). 없으면 색 사각형 폴백.")]
+        public Sprite itemSlotFrame;
+
         /// <summary>아이템 코드와 아이콘 스프라이트의 한 쌍.</summary>
         [Serializable]
         public struct IconEntry

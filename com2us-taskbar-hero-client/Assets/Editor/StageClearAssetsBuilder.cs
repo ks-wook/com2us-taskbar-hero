@@ -11,6 +11,7 @@ namespace TaskbarHero.ClientEditor
     /// 스테이지 클리어 연출용 <see cref="StageClearAssets"/>(Resources)를 생성·갱신하는 에디터 도구.
     /// - 팡파레 프레임: Assets/Art/Effect/UI/StageClearFanfare/StageClearFanfare_*.png (번호순)
     /// - 아이템 아이콘: Assets/Art/Icon/Item/item_{code}.png (파일명에서 코드 파싱)
+    /// - 아이템 칸 테두리 프레임: Assets/Art/UI/item_slot.png
     /// 스프라이트는 Multiple 모드이므로 각 텍스처의 첫 Sprite 서브에셋을 참조로 담는다.
     /// 메뉴: TaskbarHero/UI/클리어 연출 에셋 빌드
     /// </summary>
@@ -18,6 +19,7 @@ namespace TaskbarHero.ClientEditor
     {
         private const string FanfareDir = "Assets/Art/Effect/UI/StageClearFanfare";
         private const string ItemIconDir = "Assets/Art/Icon/Item";
+        private const string ItemSlotFramePath = "Assets/Art/UI/item_slot.png";
         private const string AssetPath = "Assets/Resources/StageClearAssets.asset";
 
         [MenuItem("TaskbarHero/UI/클리어 연출 에셋 빌드")]
@@ -67,6 +69,7 @@ namespace TaskbarHero.ClientEditor
             }
             asset.fanfareFrames = frames.ToArray();
             asset.itemIcons = icons.ToArray();
+            asset.itemSlotFrame = LoadSprite(ItemSlotFramePath); // 보상 아이템 칸 테두리 프레임
 
             if (isNew)
             {
@@ -79,7 +82,8 @@ namespace TaskbarHero.ClientEditor
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Debug.Log($"[StageClearAssetsBuilder] 완료: 팡파레 {frames.Count}프레임, 아이템 아이콘 {icons.Count}종 → {AssetPath}");
+            Debug.Log($"[StageClearAssetsBuilder] 완료: 팡파레 {frames.Count}프레임, 아이템 아이콘 {icons.Count}종, " +
+                      $"슬롯 프레임 {(asset.itemSlotFrame != null ? "배선" : "없음")} → {AssetPath}");
         }
 
         /// <summary>Multiple 스프라이트 모드 텍스처에서 첫 Sprite 서브에셋을 로드한다.</summary>

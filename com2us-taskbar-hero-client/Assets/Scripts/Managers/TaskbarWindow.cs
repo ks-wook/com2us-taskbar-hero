@@ -11,10 +11,11 @@ namespace TaskbarHero.Client.Managers
 {
     /// <summary>
     /// 원작 TBH: Task Bar Hero처럼 게임 창을 <b>작업표시줄 위에 도킹된 항상-위(always-on-top) 소형 전투 창</b>으로
-    /// 유지하는 창 제어기(Windows 스탠드얼론 전용). 모드는 두 가지다:
+    /// 유지하는 창 제어기(Windows 스탠드얼론 전용). 모드는 세 가지다:
     /// <list type="bullet">
+    /// <item><b>타이틀 모드</b>(TitleScene): 패널 유무와 무관하게 항상 <b>16:9 고정</b> 가로 창(화면비가 깨지지 않게).</item>
     /// <item><b>전투 확장 모드</b>(BattleDevScene 등 개발용 투명 전투 씬·패널 없음): 낮고 넓은 16:9 가로 창(세로 투명 여백 최소화).</item>
-    /// <item><b>확장 모드</b>(타이틀/캐릭터 생성 씬·GameScene 상시·패널/ESC 메뉴 열림): 9:16 설계 기준 폭을 유지하되
+    /// <item><b>확장 모드</b>(캐릭터 생성 씬·GameScene 상시·패널/ESC 메뉴 열림): 9:16 설계 기준 폭을 유지하되
     /// 세로를 가로에 맞춘 정사각형 창(세로로 과하게 길지 않게). <b>GameScene은 패널 유무와 무관하게 항상 이 창</b>을 써서
     /// 평상시 UI가 ESC 메뉴가 열렸을 때와 동일한 화면 구성이 되게 한다(구 "스트립 모드" 소형 창은 HUD가 잘려 폐기).</item>
     /// </list>
@@ -64,16 +65,22 @@ namespace TaskbarHero.Client.Managers
             s_hasBand = true;
         }
 
-        // 확장 모드: 게임 UI 설계 비율(1080×1920 = 9:16), 작업영역 높이의 90%.
+        // 확장 모드: 게임 UI 설계 비율(1080×1920 = 9:16). 창 크기 기준 계수 —
+        // 타이틀(16:9)·확장(정사각형) 창의 공통 크기 기준이라 이 값만 줄이면 두 모드가
+        // 각자의 비율을 유지한 채 함께 작아진다(0.90 → 0.68로 축소, 2026-07-27).
         private const float PortraitAspect = 1080f / 1920f;
-        private const float ExpandedHeightFrac = 0.90f;
+        private const float ExpandedHeightFrac = 0.68f;
 
         // 전투(투명) 씬 확장 창: 세로로 긴 9:16 대신 가로가 넓은 16:9 — 줌아웃된 가로 전장에 맞춤.
         private const float BattleHeightFrac = 0.45f;
         private const float BattleAspect = 16f / 9f;
 
+        // 타이틀 씬 창: 화면비가 깨지지 않도록 16:9 고정(높이는 확장 창과 동일 기준).
+        private const float TitleAspect = 16f / 9f;
+
         private bool _panelOpen;         // UIManager 패널/ESC 메뉴 표시 중(BattleDevScene 등에서 확장 필요)
         private bool _inGameScene;       // GameScene인지(항상 확장 창 — 개발용 16:9 분기 제외 판정)
+        private bool _inTitleScene;      // TitleScene인지(항상 16:9 고정 창)
         private bool _transparentScene;  // 현재 씬이 투명 배경 대상(TransparentScenes)인지
 
         /// <summary>부팅 시 창 제어기를 1회 생성한다(씬 배선 불필요).</summary>
@@ -99,6 +106,7 @@ namespace TaskbarHero.Client.Managers
             DontDestroyOnLoad(gameObject);
             USceneManager.activeSceneChanged += OnSceneChanged;
             _inGameScene = USceneManager.GetActiveScene().name == "GameScene";
+            _inTitleScene = USceneManager.GetActiveScene().name == "TitleScene";
             _transparentScene = IsTransparentScene(USceneManager.GetActiveScene().name);
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
             // Awake는 모든 씬 오브젝트의 Start(ScrollingBackground.Build 포함)보다 먼저 실행되므로
@@ -133,6 +141,7 @@ namespace TaskbarHero.Client.Managers
         private void OnSceneChanged(Scene from, Scene to)
         {
             _inGameScene = to.name == "GameScene";
+            _inTitleScene = to.name == "TitleScene";
             _transparentScene = IsTransparentScene(to.name);
             _panelOpen = false; // 씬 전환 시 이전 씬의 패널 상태를 이월하지 않음
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
@@ -472,7 +481,19 @@ namespace TaskbarHero.Client.Managers
             int waH = wa.bottom - wa.top;
 
             int w, h;
-            if (_transparentScene && !_inGameScene && !_panelOpen)
+            if (_inTitleScene)
+            {
+                // 타이틀 씬: 화면비가 깨지지 않도록 16:9 고정(패널·모달 유무와 무관).
+                // 높이는 확장 창과 동일 기준(작업영역 높이 × 0.9 × 9:16 폭 계수)으로 잡고 폭을 16:9로 늘린다.
+                h = Mathf.Min(waH, Mathf.RoundToInt(waH * ExpandedHeightFrac * PortraitAspect));
+                w = Mathf.RoundToInt(h * TitleAspect);
+                if (w > waW)
+                {
+                    w = waW;
+                    h = Mathf.RoundToInt(w / TitleAspect); // 좁은 작업영역에서도 16:9 유지
+                }
+            }
+            else if (_transparentScene && !_inGameScene && !_panelOpen)
             {
                 // 개발용 투명 전투 씬(BattleDevScene 등): 낮고 넓은 16:9 창 — 세로 투명 여백을 줄이고 가로 전장을 확보.
                 h = Mathf.RoundToInt(waH * BattleHeightFrac);
@@ -480,7 +501,7 @@ namespace TaskbarHero.Client.Managers
             }
             else
             {
-                // 확장 창(타이틀/캐릭터 생성/GameScene 상시/패널·ESC 메뉴): 가로 폭(9:16 설계 기준 폭)은 유지하고
+                // 확장 창(캐릭터 생성/GameScene 상시/패널·ESC 메뉴): 가로 폭(9:16 설계 기준 폭)은 유지하고
                 // 세로를 가로 길이에 맞춘 정사각형으로 줄인다(세로로 과하게 길지 않게).
                 // GameScene은 패널 유무와 무관하게 항상 이 창을 써서 평상시 UI가 ESC 메뉴가 열렸을 때와 동일하게 구성된다.
                 w = Mathf.Min(waW, Mathf.RoundToInt(waH * ExpandedHeightFrac * PortraitAspect));
