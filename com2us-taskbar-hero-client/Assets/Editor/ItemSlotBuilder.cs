@@ -21,6 +21,7 @@ namespace TaskbarHero.ClientEditor
         private const string PrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
         private const string FrameSpritePath = "Assets/Art/UI/item_slot.png";
         private const string DetailBgSpritePath = "Assets/Art/UI/item_detail_bg.png";
+        private const string ClaimedCheckSpritePath = "Assets/Art/UI/Attendance/check.png";
         private const string StageClearAssetPath = "Assets/Resources/StageClearAssets.asset";
         private const string MailPanelPath = "Assets/Prefabs/UI/MailPanel.prefab";
         private const string InventoryPanelPath = "Assets/Prefabs/UI/InventoryPanel.prefab";
@@ -43,6 +44,7 @@ namespace TaskbarHero.ClientEditor
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             var frameSprite = LoadSpriteAt(FrameSpritePath);
             var detailBgSprite = LoadSpriteAt(DetailBgSpritePath);
+            var claimedCheckSprite = LoadSpriteAt(ClaimedCheckSpritePath);
 
             var root = new GameObject("ItemSlot", typeof(RectTransform), typeof(Image));
             var rootRt = (RectTransform)root.transform;
@@ -66,6 +68,24 @@ namespace TaskbarHero.ClientEditor
             // 아이템 아이콘.
             var icon = NewChildImage(root.transform, "Icon", new Vector2(0.09f, 0.09f), new Vector2(0.91f, 0.91f));
             icon.preserveAspect = true;
+
+            // 아이콘 대신 텍스트 라벨(경험치 등 아이템 아이콘이 없는 보상, SetupLabel 전용). 기본은 숨김.
+            var labelGo = new GameObject("IconLabel", typeof(RectTransform), typeof(Text));
+            labelGo.transform.SetParent(root.transform, false);
+            var iconLabel = labelGo.GetComponent<Text>();
+            iconLabel.font = font;
+            iconLabel.fontSize = 34;
+            iconLabel.fontStyle = FontStyle.Bold;
+            iconLabel.alignment = TextAnchor.MiddleCenter;
+            iconLabel.raycastTarget = false;
+            iconLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
+            iconLabel.verticalOverflow = VerticalWrapMode.Overflow;
+            var labelRt = (RectTransform)labelGo.transform;
+            labelRt.anchorMin = new Vector2(0.09f, 0.09f);
+            labelRt.anchorMax = new Vector2(0.91f, 0.91f);
+            labelRt.offsetMin = Vector2.zero;
+            labelRt.offsetMax = Vector2.zero;
+            labelGo.SetActive(false);
 
             // 수량 텍스트(우하단, BestFit — 슬롯이 작아져도 읽히게).
             var qtyGo = new GameObject("Qty", typeof(RectTransform), typeof(Text), typeof(Outline));
@@ -91,8 +111,14 @@ namespace TaskbarHero.ClientEditor
             qrt.offsetMin = Vector2.zero;
             qrt.offsetMax = Vector2.zero;
 
+            // 획득 완료 표시(check) — 슬롯 레이어 가장 위(마지막 자식)에 그려진다. 출석부 등에서 SetClaimed로 켠다.
+            var claimedOverlay = NewChildImage(root.transform, "ClaimedOverlay", new Vector2(0.09f, 0.09f), new Vector2(0.91f, 0.91f));
+            claimedOverlay.sprite = claimedCheckSprite;
+            claimedOverlay.preserveAspect = true;
+            claimedOverlay.gameObject.SetActive(false);
+
             var view = root.AddComponent<ItemSlotView>();
-            view.EditorInit(frame, gradeBg, icon, qty, detailBgSprite);
+            view.EditorInit(frame, gradeBg, icon, qty, iconLabel, claimedOverlay, detailBgSprite);
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
             Object.DestroyImmediate(root);

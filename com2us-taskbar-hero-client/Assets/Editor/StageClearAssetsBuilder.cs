@@ -21,6 +21,7 @@ namespace TaskbarHero.ClientEditor
         private const string ItemIconDir = "Assets/Art/Icon/Item";
         private const string ItemSlotFramePath = "Assets/Art/UI/item_slot.png";
         private const string ItemSlotPrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
+        private const string OverlayPrefabPath = "Assets/Prefabs/UI/StageClearOverlay.prefab";
         private const string AssetPath = "Assets/Resources/StageClearAssets.asset";
 
         [MenuItem("TaskbarHero/UI/클리어 연출 에셋 빌드")]
@@ -73,6 +74,8 @@ namespace TaskbarHero.ClientEditor
             asset.itemSlotFrame = LoadSprite(ItemSlotFramePath); // 보상 아이템 칸 테두리 프레임
             // 공용 아이템 슬롯 프리팹(재빌드 시 배선 유지). 아직 없으면 ItemSlotBuilder 실행 후 다시 배선된다.
             asset.itemSlotPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(ItemSlotPrefabPath);
+            // 클리어 연출 오버레이 프리팹(재빌드 시 배선 유지). 아직 없으면 StageClearOverlayBuilder 실행 후 다시 배선된다.
+            asset.overlayPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(OverlayPrefabPath);
 
             if (isNew)
             {

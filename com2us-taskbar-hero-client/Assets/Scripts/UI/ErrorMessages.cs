@@ -70,6 +70,9 @@ namespace TaskbarHero.Client.UI
                     return "이미 수령한 메일입니다.";
                 case ErrorCode.MailExpired:
                     return "만료되어 수령할 수 없는 메일입니다.";
+                // 출석부 도메인(attendance 기획서 §7)
+                case ErrorCode.AttendanceAlreadyClaimed:
+                    return "이미 수령한 출석 보상입니다.";
                 default:
                     return string.IsNullOrEmpty(fallback) ? ("오류가 발생했습니다. (" + code + ")") : fallback;
             }

@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -21,12 +22,20 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private Image _iconImage;
         [Tooltip("수량 텍스트(우하단, BestFit).")]
         [SerializeField] private Text _quantityText;
+        [Tooltip("아이콘 대신 표시할 텍스트 라벨(경험치 등 아이템 아이콘이 없는 보상). SetupLabel에서만 사용.")]
+        [SerializeField] private Text _iconLabelText;
         [Tooltip("상세 팝업 배경(Assets/Art/UI/item_detail_bg). 없으면 단색 팝업.")]
         [SerializeField] private Sprite _detailBackgroundSprite;
+        [Tooltip("획득 완료 표시(Assets/Art/UI/Attendance/check). 슬롯 레이어 가장 위(마지막 자식)에 그려진다. 기본 숨김.")]
+        [SerializeField] private Image _claimedOverlay;
+
+        private const float ClaimedPopShrinkScale = 0.35f;
+        private const float ClaimedPopDuration = 0.35f;
 
         private int _itemCode;
         private long _quantity;
         private bool _showDetail;
+        private Coroutine _claimedPopRoutine;
 
         /// <summary>아이템 코드·수량으로 슬롯을 구성한다(수량 2 이상이면 "xN" 표기, hover 상세 활성).</summary>
         public void Setup(int itemCode, long quantity)
@@ -58,10 +67,15 @@ namespace TaskbarHero.Client.Managers
             var icon = iconDb != null ? iconDb.Get(itemCode) : null;
             if (_iconImage != null)
             {
+                _iconImage.enabled = true;
                 _iconImage.sprite = icon;
                 _iconImage.color = icon != null
                     ? Color.white
                     : GradeColors.IconFallback(grade) * new Color(1f, 1f, 1f, 0.6f); // 아이콘 없을 때 색 폴백
+            }
+            if (_iconLabelText != null)
+            {
+                _iconLabelText.gameObject.SetActive(false); // 아이콘 모드에서는 텍스트 라벨 숨김(SetupLabel 전용)
             }
 
             if (_quantityText != null)
@@ -73,6 +87,117 @@ namespace TaskbarHero.Client.Managers
             if (_frameImage != null)
             {
                 _frameImage.raycastTarget = showDetail; // 상세 없음(골드 등)이면 입력 통과
+            }
+
+            ResetClaimedOverlay();
+        }
+
+        /// <summary>아이템 아이콘이 없는 보상(경험치 등)을 위한 구성. 아이콘 대신 텍스트 라벨을 슬롯 중앙에
+        /// 표시하고, 수량은 일반 아이템과 동일하게 슬롯 안쪽(우하단)에 표시해 외형을 통일한다.
+        /// 마스터 데이터가 없는 보상이라 hover 상세 팝업은 제공하지 않는다.</summary>
+        public void SetupLabel(string label, Color labelColor, string quantityText)
+        {
+            _itemCode = 0;
+            _quantity = 0;
+            _showDetail = false;
+
+            if (_gradeBackground != null)
+            {
+                _gradeBackground.color = GradeColors.RewardSlotBackground(1); // 일반 등급 톤(짙은 남색)으로 통일
+            }
+            if (_iconImage != null)
+            {
+                _iconImage.enabled = false;
+            }
+            if (_iconLabelText != null)
+            {
+                _iconLabelText.text = label;
+                _iconLabelText.color = labelColor;
+                _iconLabelText.gameObject.SetActive(true);
+            }
+            if (_quantityText != null)
+            {
+                _quantityText.text = quantityText ?? string.Empty;
+                _quantityText.gameObject.SetActive(!string.IsNullOrEmpty(quantityText));
+            }
+            if (_frameImage != null)
+            {
+                _frameImage.raycastTarget = false;
+            }
+
+            ResetClaimedOverlay();
+        }
+
+        /// <summary>획득 완료 표시(check)를 켜고 끈다(연출 없이 즉시 반영, 예: 출석부 현황 새로고침).</summary>
+        public void SetClaimed(bool claimed)
+        {
+            if (_claimedPopRoutine != null)
+            {
+                StopCoroutine(_claimedPopRoutine);
+                _claimedPopRoutine = null;
+            }
+            if (_claimedOverlay != null)
+            {
+                _claimedOverlay.rectTransform.localScale = Vector3.one;
+                _claimedOverlay.gameObject.SetActive(claimed);
+            }
+        }
+
+        /// <summary>방금 획득했음을 알리는 연출: 획득 완료 표시(check)가 원래 크기에서 작아졌다가
+        /// 다시 커지면서 원래 크기로 돌아온다(예: 출석부에서 오늘자 보상을 처음 받는 순간).</summary>
+        public void PlayClaimedPopAnimation()
+        {
+            if (_claimedOverlay == null)
+            {
+                return;
+            }
+            _claimedOverlay.gameObject.SetActive(true);
+            if (_claimedPopRoutine != null)
+            {
+                StopCoroutine(_claimedPopRoutine);
+            }
+            _claimedPopRoutine = StartCoroutine(ClaimedPopRoutine());
+        }
+
+        private IEnumerator ClaimedPopRoutine()
+        {
+            var rt = _claimedOverlay.rectTransform;
+            float half = ClaimedPopDuration * 0.5f;
+
+            float elapsed = 0f;
+            while (elapsed < half)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float k = Mathf.Clamp01(elapsed / half);
+                rt.localScale = Vector3.one * Mathf.Lerp(1f, ClaimedPopShrinkScale, k);
+                yield return null;
+            }
+
+            elapsed = 0f;
+            while (elapsed < half)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float k = Mathf.Clamp01(elapsed / half);
+                rt.localScale = Vector3.one * Mathf.Lerp(ClaimedPopShrinkScale, 1f, k);
+                yield return null;
+            }
+
+            rt.localScale = Vector3.one;
+            _claimedPopRoutine = null;
+        }
+
+        /// <summary>Setup 호출 시 획득 완료 표시를 기본 숨김 상태로 되돌린다(호출측이 필요 시 SetClaimed로 재설정).</summary>
+        private void ResetClaimedOverlay()
+        {
+            if (_claimedPopRoutine != null)
+            {
+                StopCoroutine(_claimedPopRoutine);
+                _claimedPopRoutine = null;
+            }
+            if (_claimedOverlay != null)
+            {
+                _claimedOverlay.rectTransform.localScale = Vector3.one;
+                _claimedOverlay.gameObject.SetActive(false);
             }
         }
 
@@ -95,12 +220,15 @@ namespace TaskbarHero.Client.Managers
         }
 
         /// <summary>에디터 빌드 전용: 위젯 참조와 상세 배경 스프라이트를 배선한다(ItemSlotBuilder).</summary>
-        public void EditorInit(Image frame, Image gradeBackground, Image icon, Text quantity, Sprite detailBackground)
+        public void EditorInit(Image frame, Image gradeBackground, Image icon, Text quantity, Text iconLabel,
+            Image claimedOverlay, Sprite detailBackground)
         {
             _frameImage = frame;
             _gradeBackground = gradeBackground;
             _iconImage = icon;
             _quantityText = quantity;
+            _iconLabelText = iconLabel;
+            _claimedOverlay = claimedOverlay;
             _detailBackgroundSprite = detailBackground;
         }
     }

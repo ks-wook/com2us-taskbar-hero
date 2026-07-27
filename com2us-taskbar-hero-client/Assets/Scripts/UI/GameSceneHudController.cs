@@ -10,11 +10,12 @@ namespace TaskbarHero.Client.UI
     /// </summary>
     public class GameSceneHudController : MonoBehaviour
     {
-        [Header("메뉴 버튼 아이콘 (에디터 빌더가 배선: Assets/Art/Icon, 메일은 Assets/Art/UI/Mail)")]
+        [Header("메뉴 버튼 아이콘 (에디터 빌더가 배선: Assets/Art/Icon, 메일은 Assets/Art/UI/Mail, 출석부는 Assets/Art/UI/Attendance)")]
         [SerializeField] private Sprite mailIcon;       // 메일(우편함)
         [SerializeField] private Sprite partyIcon;      // 편성
         [SerializeField] private Sprite stageIcon;      // 스테이지
         [SerializeField] private Sprite inventoryIcon;  // 가방
+        [SerializeField] private Sprite attendanceIcon; // 출석부
 
         private GameObject _escMenuRoot; // ESC로 토글하는 메뉴(타이틀 복귀)
 
@@ -58,7 +59,8 @@ namespace TaskbarHero.Client.UI
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // 우하단: [메일] [편성] [스테이지] [가방] — 아이콘 위 + 작은 텍스트 아래
+            // 우하단: [출석부] [메일] [편성] [스테이지] [가방] — 아이콘 위 + 작은 텍스트 아래
+            CreateButton(canvasGo.transform, font, "AttendanceButton", "출석부", attendanceIcon, new Vector2(-840f, 40f), OnAttendanceButton);
             CreateButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, new Vector2(-640f, 40f), OnMailButton);
             CreateButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, new Vector2(-440f, 40f), OnPartyButton);
             CreateButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, new Vector2(-240f, 40f), OnStageButton);
@@ -129,6 +131,19 @@ namespace TaskbarHero.Client.UI
 
             btnGo.AddComponent<Button>().onClick.AddListener(onClick);
             return btnGo;
+        }
+
+        /// <summary>출석부 패널 토글(UIManager 위임).</summary>
+        private void OnAttendanceButton()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.ToggleAttendance();
+            }
+            else
+            {
+                Debug.LogWarning("[HUD] UIManager 인스턴스를 찾을 수 없습니다.");
+            }
         }
 
         /// <summary>우편함(메일) 패널 토글(UIManager 위임).</summary>

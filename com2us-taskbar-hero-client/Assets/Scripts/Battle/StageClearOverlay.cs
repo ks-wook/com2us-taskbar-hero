@@ -10,17 +10,28 @@ namespace TaskbarHero.Client.Battle
     /// <summary>
     /// 스테이지 클리어 연출 오버레이. 서버 클리어 응답을 받으면 화면 전체에 표시된다.
     /// - 클리어 팡파레 이펙트(프레임 시퀀스, 슬로우모션과 무관하게 unscaled 시간으로 재생)
-    /// - 보상(골드·경험치·전리품 아이템 아이콘+수량) 노출
+    /// - 보상(골드·경험치·전리품 아이템 아이콘+수량) 노출. 세 종류 모두 공용 아이템 슬롯
+    ///   프리팹(ItemSlot, <see cref="ItemSlotView"/>)을 사용해 수량/획득량이 슬롯 안쪽에
+    ///   동일하게 노출되도록 통일한다(경험치는 아이콘 대신 "EXP" 라벨을 표시하는 SetupLabel 사용).
     /// - 화면 클릭 또는 5초 경과 시 자동으로 닫히며, 닫힐 때 게임 속도를 정상으로 복원한다.
-    /// 런타임에 자체 Canvas를 코드로 구성한다(HUD 방식과 동일).
+    /// 정적 계층(Canvas·팡파레·타이틀·보상 행 컨테이너·안내 문구)은 <see cref="EditorConstruct"/>가
+    /// 구성해 <c>Assets/Prefabs/UI/StageClearOverlay.prefab</c>으로 저장되고(StageClearOverlayBuilder),
+    /// 런타임에는 이 프리팹을 Instantiate해 데이터만 배선한다(가변 개수의 보상 칸만 동적으로 채움).
+    /// 프리팹이 없으면(에셋 미빌드) 폴백으로 런타임에 EditorConstruct를 직접 호출한다.
     /// </summary>
     public class StageClearOverlay : MonoBehaviour
     {
         private const float AutoCloseSeconds = 5f;
         private const float FanfareFps = 24f;
 
+        [Tooltip("전체화면 클릭 시 닫기 처리할 투명 차단막 버튼.")]
+        [SerializeField] private Button _dimButton;
+        [Tooltip("클리어 팡파레 프레임 시퀀스를 그리는 이미지.")]
+        [SerializeField] private Image _fanfareImage;
+        [Tooltip("보상 칸(공용 아이템 슬롯)이 채워지는 가로 정렬 컨테이너.")]
+        [SerializeField] private RectTransform _rewardsRow;
+
         private StageClearAssets _assets;
-        private Image _fanfareImage;
         private Sprite[] _frames;
         private int _frameIndex;
         private float _frameTimer;
@@ -30,10 +41,26 @@ namespace TaskbarHero.Client.Battle
         /// <summary>클리어 응답 데이터로 오버레이를 생성·표시한다. onClosed는 닫힐 때(클릭/자동) 1회 호출된다.</summary>
         public static void Show(StageClearData data, Action onClosed = null)
         {
-            var go = new GameObject("StageClearOverlay");
-            var overlay = go.AddComponent<StageClearOverlay>();
+            var assets = StageClearAssets.Load();
+            StageClearOverlay overlay;
+            if (assets != null && assets.overlayPrefab != null)
+            {
+                var go = Instantiate(assets.overlayPrefab);
+                overlay = go.GetComponent<StageClearOverlay>();
+            }
+            else
+            {
+                Debug.LogWarning("[StageClear] StageClearAssets.overlayPrefab이 없어 런타임 구성으로 대체합니다. " +
+                                 "에디터에서 'TaskbarHero/UI/클리어 연출 프리팹 빌드'를 실행하세요.");
+                var go = new GameObject("StageClearOverlay");
+                overlay = go.AddComponent<StageClearOverlay>();
+                overlay.EditorConstruct();
+                overlay.WireEvents();
+            }
+
+            overlay._assets = assets;
             overlay._onClosed = onClosed;
-            overlay.Build(data);
+            overlay.Populate(data);
         }
 
 #if UNITY_EDITOR
@@ -53,15 +80,26 @@ namespace TaskbarHero.Client.Battle
         }
 #endif
 
-        /// <summary>전체 화면 캔버스와 팡파레·보상 UI를 구성한다.</summary>
-        private void Build(StageClearData data)
+        private void Awake()
         {
-            _assets = StageClearAssets.Load();
-            if (_assets == null)
-            {
-                Debug.LogWarning("[StageClear] StageClearAssets(Resources)가 없어 아이콘/팡파레가 비어 있습니다. 에디터에서 'TaskbarHero/UI/클리어 연출 에셋 빌드'를 실행하세요.");
-            }
+            WireEvents();
+        }
 
+        /// <summary>구조 배선 후 이벤트 리스너를 연결한다. 프리팹 Instantiate/런타임 폴백 구성 양쪽에서 호출된다.</summary>
+        private void WireEvents()
+        {
+            if (_dimButton != null)
+            {
+                _dimButton.onClick.RemoveListener(Dismiss); // 중복 등록 방지
+                _dimButton.onClick.AddListener(Dismiss);
+            }
+        }
+
+        /// <summary>정적 계층(Canvas·Dim·팡파레·타이틀·보상 행 컨테이너·안내 문구)을 구성한다.
+        /// StageClearOverlayBuilder가 에디터에서 1회 호출해 프리팹으로 굽거나(정본 경로),
+        /// 프리팹이 없을 때 런타임 폴백으로 직접 호출된다.</summary>
+        public void EditorConstruct()
+        {
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
 
             // 최상단 캔버스(패널 100·HUD 10보다 위).
@@ -78,9 +116,8 @@ namespace TaskbarHero.Client.Battle
             var dim = CreateChild("Dim", transform, Vector2.zero, Vector2.one);
             var dimImg = dim.gameObject.AddComponent<Image>();
             dimImg.color = new Color(0f, 0f, 0f, 0f); // 배경을 어둡게 하지 않는다 — 클릭 닫기용 투명 차단막
-            var dimBtn = dim.gameObject.AddComponent<Button>();
-            dimBtn.transition = Selectable.Transition.None;
-            dimBtn.onClick.AddListener(Dismiss);
+            _dimButton = dim.gameObject.AddComponent<Button>();
+            _dimButton.transition = Selectable.Transition.None;
 
             // 팡파레 이펙트(화면 중앙, 보상 아이템 뒤). Dim 다음·보상 앞에 생성되어 아이템보다 뒤에 그려진다.
             var fanfare = CreateChild("Fanfare", transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
@@ -89,15 +126,6 @@ namespace TaskbarHero.Client.Battle
             _fanfareImage = fanfare.gameObject.AddComponent<Image>();
             _fanfareImage.raycastTarget = false;
             _fanfareImage.preserveAspect = true; // 전체 프레임을 잘림 없이 표시
-            _frames = _assets != null ? _assets.fanfareFrames : null;
-            if (_frames != null && _frames.Length > 0)
-            {
-                _fanfareImage.sprite = _frames[0];
-            }
-            else
-            {
-                _fanfareImage.enabled = false;
-            }
 
             // "STAGE CLEAR" 타이틀(상단).
             var title = CreateText("Title", transform, font, "STAGE CLEAR!", 96, TextAnchor.MiddleCenter);
@@ -108,8 +136,17 @@ namespace TaskbarHero.Client.Battle
             trt.sizeDelta = new Vector2(900f, 160f);
             trt.anchoredPosition = new Vector2(0f, 440f);
 
-            // 보상 항목 구성(화면 중앙, 팡파레 위에 그려짐).
-            BuildRewards(data, font);
+            // 보상 행 컨테이너(화면 중앙, 팡파레 위에 그려짐). 실제 보상 칸(가변 개수)은 Populate가 채운다.
+            _rewardsRow = CreateChild("Rewards", transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _rewardsRow.sizeDelta = new Vector2(960f, 220f);
+            _rewardsRow.anchoredPosition = Vector2.zero;
+            var layout = _rewardsRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+            layout.spacing = 24f;
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childForceExpandWidth = false;
+            layout.childForceExpandHeight = false;
+            layout.childControlWidth = false;
+            layout.childControlHeight = false;
 
             // 안내 문구.
             var hint = CreateText("Hint", transform, font, "클릭하거나 잠시 기다리면 닫힙니다", 34, TextAnchor.MiddleCenter);
@@ -119,36 +156,48 @@ namespace TaskbarHero.Client.Battle
             hrt.pivot = new Vector2(0.5f, 0f);
             hrt.sizeDelta = new Vector2(900f, 60f);
             hrt.anchoredPosition = new Vector2(0f, 70f);
+        }
+
+        /// <summary>클리어 응답 데이터로 팡파레·보상 칸을 채우고 자동 닫기 타이머를 시작한다.</summary>
+        private void Populate(StageClearData data)
+        {
+            _frames = _assets != null ? _assets.fanfareFrames : null;
+            if (_fanfareImage != null)
+            {
+                bool hasFrames = _frames != null && _frames.Length > 0;
+                _fanfareImage.enabled = hasFrames;
+                if (hasFrames)
+                {
+                    _fanfareImage.sprite = _frames[0];
+                }
+            }
+
+            BuildRewards(data);
 
             StartCoroutine(AutoCloseAfter(AutoCloseSeconds));
         }
 
-        /// <summary>골드·경험치·전리품 아이템을 가로로 배치한다(아이콘+수량).</summary>
-        private void BuildRewards(StageClearData data, Font font)
+        /// <summary>골드·경험치·전리품 아이템을 보상 행에 채운다(모두 공용 아이템 슬롯으로 통일).</summary>
+        private void BuildRewards(StageClearData data)
         {
+            if (_rewardsRow == null)
+            {
+                return;
+            }
+
+            var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             var rewards = data != null ? data.rewards : null;
 
-            // 보상 행 컨테이너(화면 중앙). 팡파레보다 뒤 순번(자식 인덱스 상 뒤)이라 이펙트 위에 그려진다.
-            var row = CreateChild("Rewards", transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            row.sizeDelta = new Vector2(960f, 220f);
-            row.anchoredPosition = Vector2.zero;
-            var layout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
-            layout.spacing = 24f;
-            layout.childAlignment = TextAnchor.MiddleCenter;
-            layout.childForceExpandWidth = false;
-            layout.childForceExpandHeight = false;
-            layout.childControlWidth = false;
-            layout.childControlHeight = false;
-
-            // 경험치(아이콘 없이 텍스트 배지).
+            // 경험치 — 공용 슬롯(ItemSlot 프리팹)에 아이콘 대신 "EXP" 라벨을 표시해 골드·아이템과 동일하게
+            // 슬롯 안쪽(우하단)에 획득량이 노출되도록 통일한다.
             if (rewards != null && rewards.exp > 0)
             {
-                CreateTextBadge(row, font, "EXP", $"+{rewards.exp}", new Color(0.4f, 0.8f, 1f));
+                CreateLabelRewardEntry(_rewardsRow, font, "EXP", new Color(0.4f, 0.8f, 1f), $"+{rewards.exp:N0}");
             }
             // 골드(item_1 아이콘 재사용). 마스터 데이터에 없는 재화라 hover 상세는 끈다.
             if (rewards != null && rewards.gold > 0)
             {
-                CreateRewardEntry(row, font, 1, rewards.gold, $"+{rewards.gold:N0}", false);
+                CreateRewardEntry(_rewardsRow, font, 1, rewards.gold, $"+{rewards.gold:N0}", false);
             }
             // 전리품 아이템 — 공용 슬롯(ItemSlot 프리팹)이 등급 배경·아이콘·수량을 표시하고 hover 시 상세 팝업을 띄운다.
             if (rewards != null && rewards.items != null)
@@ -160,7 +209,7 @@ namespace TaskbarHero.Client.Battle
                         continue;
                     }
                     string qty = item.quantity > 1 ? $"x{item.quantity}" : string.Empty;
-                    CreateRewardEntry(row, font, item.itemCode, item.quantity, qty, true);
+                    CreateRewardEntry(_rewardsRow, font, item.itemCode, item.quantity, qty, true);
                 }
             }
         }
@@ -195,28 +244,47 @@ namespace TaskbarHero.Client.Battle
                 GradeColors.RewardSlotBackground(GradeOf(itemCode)));
         }
 
+        /// <summary>아이콘이 없는 보상(경험치 등) 한 칸을 공용 아이템 슬롯 프리팹(ItemSlot)의 라벨 모드로
+        /// 만든다. 골드·아이템과 동일한 슬롯에 텍스트 라벨 + 슬롯 안쪽 수치를 표시한다.
+        /// 프리팹 미배선(에셋 미빌드) 시 기존 코드 구성 폴백.</summary>
+        private void CreateLabelRewardEntry(RectTransform parent, Font font, string label, Color labelColor, string valueText)
+        {
+            var prefab = _assets != null ? _assets.itemSlotPrefab : null;
+            if (prefab != null)
+            {
+                var slotGo = Instantiate(prefab, parent);
+                var srt = (RectTransform)slotGo.transform;
+                srt.sizeDelta = new Vector2(150f, 150f);
+                var view = slotGo.GetComponent<ItemSlotView>();
+                if (view != null)
+                {
+                    view.SetupLabel(label, labelColor, valueText);
+                    return;
+                }
+                Destroy(slotGo);
+            }
+            CreateLabelRewardEntryFallback(parent, font, label, labelColor, valueText);
+        }
+
         /// <summary>[폴백] 아이콘+수량 보상 항목 한 칸을 코드로 만든다(아이콘 없으면 색 사각형).
-        /// slotColor는 등급별 슬롯 배경. 폴백에서는 hover 상세를 제공하지 않는다.</summary>
+        /// slotColor는 등급별 슬롯 배경. 수량은 슬롯 안쪽 우하단에 표시해 실제 ItemSlot 프리팹과
+        /// 동일한 배치가 되도록 한다. 폴백에서는 hover 상세를 제공하지 않는다.</summary>
         private void CreateRewardEntryFallback(RectTransform parent, Font font, Sprite icon, string qtyText, Color tint, Color slotColor)
         {
-            var entry = new GameObject("Reward", typeof(RectTransform));
+            var entry = new GameObject("Reward", typeof(RectTransform), typeof(Image));
             entry.transform.SetParent(parent, false);
             var ert = (RectTransform)entry.transform;
-            ert.sizeDelta = new Vector2(150f, 190f);
+            ert.sizeDelta = new Vector2(150f, 150f);
 
-            // 아이콘 배경(슬롯): item_slot 프레임(테두리 장식)을 바탕으로 깔고, 등급색은 테두리 안쪽에 겹친다.
-            // 프레임 스프라이트가 없으면(에셋 미빌드) 기존처럼 등급색 사각형만 표시하는 폴백.
-            var slot = CreateChild("Slot", entry.transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-            slot.sizeDelta = new Vector2(140f, 140f);
-            slot.anchoredPosition = Vector2.zero;
-            var slotImg = slot.gameObject.AddComponent<Image>();
+            // 슬롯 프레임(item_slot 테두리 장식). 프레임 스프라이트가 없으면(에셋 미빌드) 등급색 사각형 폴백.
+            var slotImg = entry.GetComponent<Image>();
             Sprite frame = _assets != null ? _assets.itemSlotFrame : null;
             if (frame != null)
             {
                 slotImg.sprite = frame;
                 slotImg.color = Color.white;
                 // 등급별 배경색(프레임 테두리 안쪽 영역, 아이콘 뒤).
-                var gradeRt = CreateChild("GradeBg", slot, Vector2.zero, Vector2.one);
+                var gradeRt = CreateChild("GradeBg", entry.transform, Vector2.zero, Vector2.one);
                 gradeRt.offsetMin = new Vector2(12f, 12f);
                 gradeRt.offsetMax = new Vector2(-12f, -12f);
                 var gradeImg = gradeRt.gameObject.AddComponent<Image>();
@@ -229,7 +297,7 @@ namespace TaskbarHero.Client.Battle
             }
             slotImg.raycastTarget = false;
 
-            var iconRt = CreateChild("Icon", slot, Vector2.zero, Vector2.one);
+            var iconRt = CreateChild("Icon", entry.transform, Vector2.zero, Vector2.one);
             iconRt.offsetMin = new Vector2(12f, 12f);
             iconRt.offsetMax = new Vector2(-12f, -12f);
             var iconImg = iconRt.gameObject.AddComponent<Image>();
@@ -245,62 +313,64 @@ namespace TaskbarHero.Client.Battle
                 iconImg.color = tint * new Color(1f, 1f, 1f, 0.6f); // 아이콘 없을 때 색 폴백
             }
 
-            if (!string.IsNullOrEmpty(qtyText))
-            {
-                var qty = CreateText("Qty", entry.transform, font, qtyText, 38, TextAnchor.MiddleCenter);
-                qty.color = Color.white;
-                qty.fontStyle = FontStyle.Bold;
-                var qrt = (RectTransform)qty.transform;
-                qrt.anchorMin = new Vector2(0.5f, 0f);
-                qrt.anchorMax = new Vector2(0.5f, 0f);
-                qrt.pivot = new Vector2(0.5f, 0f);
-                qrt.sizeDelta = new Vector2(150f, 46f);
-                qrt.anchoredPosition = Vector2.zero;
-            }
+            CreateQuantityLabel(entry.transform, font, qtyText);
         }
 
-        /// <summary>라벨+값 텍스트 배지(경험치 등 아이콘 없는 보상).</summary>
-        private void CreateTextBadge(RectTransform parent, Font font, string label, string value, Color color)
+        /// <summary>[폴백] 아이콘이 없는 보상(경험치 등) 한 칸을 코드로 만든다. 텍스트 라벨을 슬롯 중앙에,
+        /// 수치는 슬롯 안쪽 우하단에 표시해 <see cref="CreateRewardEntryFallback"/>과 배치를 통일한다.</summary>
+        private void CreateLabelRewardEntryFallback(RectTransform parent, Font font, string label, Color labelColor, string valueText)
         {
-            var entry = new GameObject("Badge", typeof(RectTransform));
+            var entry = new GameObject("Badge", typeof(RectTransform), typeof(Image));
             entry.transform.SetParent(parent, false);
             var ert = (RectTransform)entry.transform;
-            ert.sizeDelta = new Vector2(150f, 190f);
+            ert.sizeDelta = new Vector2(150f, 150f);
 
-            var slot = CreateChild("Slot", entry.transform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-            slot.sizeDelta = new Vector2(140f, 140f);
-            var slotImg = slot.gameObject.AddComponent<Image>();
-            // 아이템 칸과 통일감 있게 item_slot 프레임을 사용(중앙이 어두운 판이라 별도 배경 불필요).
+            var slotImg = entry.GetComponent<Image>();
             Sprite frame = _assets != null ? _assets.itemSlotFrame : null;
             if (frame != null)
             {
                 slotImg.sprite = frame;
                 slotImg.color = Color.white;
+                var gradeRt = CreateChild("GradeBg", entry.transform, Vector2.zero, Vector2.one);
+                gradeRt.offsetMin = new Vector2(12f, 12f);
+                gradeRt.offsetMax = new Vector2(-12f, -12f);
+                var gradeImg = gradeRt.gameObject.AddComponent<Image>();
+                gradeImg.color = GradeColors.RewardSlotBackground(1);
+                gradeImg.raycastTarget = false;
             }
             else
             {
-                slotImg.color = new Color(0.12f, 0.14f, 0.22f, 0.95f);
+                slotImg.color = GradeColors.RewardSlotBackground(1);
             }
             slotImg.raycastTarget = false;
 
-            var lbl = CreateText("Label", slot, font, label, 40, TextAnchor.MiddleCenter);
-            lbl.color = color;
+            var lbl = CreateText("Label", entry.transform, font, label, 40, TextAnchor.MiddleCenter);
+            lbl.color = labelColor;
             lbl.fontStyle = FontStyle.Bold;
             var lrt = (RectTransform)lbl.transform;
-            lrt.anchorMin = Vector2.zero;
-            lrt.anchorMax = Vector2.one;
+            lrt.anchorMin = new Vector2(0.09f, 0.09f);
+            lrt.anchorMax = new Vector2(0.91f, 0.91f);
             lrt.offsetMin = Vector2.zero;
             lrt.offsetMax = Vector2.zero;
 
-            var val = CreateText("Value", entry.transform, font, value, 38, TextAnchor.MiddleCenter);
-            val.color = Color.white;
-            val.fontStyle = FontStyle.Bold;
-            var vrt = (RectTransform)val.transform;
-            vrt.anchorMin = new Vector2(0.5f, 0f);
-            vrt.anchorMax = new Vector2(0.5f, 0f);
-            vrt.pivot = new Vector2(0.5f, 0f);
-            vrt.sizeDelta = new Vector2(150f, 46f);
-            vrt.anchoredPosition = Vector2.zero;
+            CreateQuantityLabel(entry.transform, font, valueText);
+        }
+
+        /// <summary>슬롯 안쪽 우하단에 수량/획득량 텍스트를 배치한다(ItemSlot 프리팹의 Qty 배치와 동일 비율).</summary>
+        private void CreateQuantityLabel(Transform parent, Font font, string text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+            var qty = CreateText("Qty", parent, font, text, 30, TextAnchor.LowerRight);
+            qty.color = Color.white;
+            qty.fontStyle = FontStyle.Bold;
+            var qrt = (RectTransform)qty.transform;
+            qrt.anchorMin = new Vector2(0.08f, 0.06f);
+            qrt.anchorMax = new Vector2(0.92f, 0.36f);
+            qrt.offsetMin = Vector2.zero;
+            qrt.offsetMax = Vector2.zero;
         }
 
         private Sprite GetIcon(int code)

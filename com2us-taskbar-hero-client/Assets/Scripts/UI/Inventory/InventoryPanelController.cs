@@ -1250,23 +1250,14 @@ namespace TaskbarHero.Client.UI
                 db.Items.TryGetValue(item.itemCode, out im);
             }
 
-            string name = im != null ? im.name : $"아이템 {item.itemCode}";
+            // 상세 문구(등급명·종류·요구조건·설명)는 공용 헬퍼로 통일한다 — 스테이지 클리어 보상·우편함·
+            // (추후) 거래소의 아이템 상세 팝업(ItemDetailPopup)과 완전히 같은 텍스트가 나오도록 한다.
+            var info = ItemInfoText.Build(item.itemCode, item.quantity);
+
+            string name = info.name;
             if (item.enhanceLevel > 0)
             {
                 name += $" +{item.enhanceLevel}";
-            }
-
-            int gradeValue = im != null ? im.grade : 1;
-            string grade = im != null && db.Grades.TryGetValue(im.grade, out var g) ? g.name : "노말";
-
-            string category = Category(im, db);          // 종류: 무기/보조무기/방어구/재료/재화
-            string requirement = string.Empty;
-            if (im != null && im.itemType == 1)
-            {
-                string cls = im.classReq == 0
-                    ? "공용"
-                    : (db.Classes.TryGetValue(im.classReq, out var cm) ? cm.name : $"직업 {im.classReq}");
-                requirement = im.levelReq > 0 ? $"요구 Lv.{im.levelReq} / {cls}" : cls;
             }
 
             // 착용 가능 판정: 장비이면서 (공용이거나 현재 캐릭터의 직업과 클래스 제한 일치) + (요구 레벨 이하)여야 한다.
@@ -1283,13 +1274,13 @@ namespace TaskbarHero.Client.UI
             return new InventoryItemView.Display
             {
                 name = name,
-                grade = grade,
-                gradeValue = gradeValue,
-                slotName = category,
-                requirement = requirement,
-                stats = BuildStatsText(im, item.quantity),
-                description = BuildDescription(im, item.quantity),
-                iconColor = GradeColor(gradeValue),
+                grade = info.grade,
+                gradeValue = info.gradeValue,
+                slotName = info.category,
+                requirement = info.requirement,
+                stats = ItemInfoText.Stats(im),
+                description = info.description,
+                iconColor = GradeColor(info.gradeValue),
                 icon = _iconDb != null ? _iconDb.Get(item.itemCode) : null,
                 itemId = item.itemId,
                 equippedSlot = item.equippedSlot,
@@ -1307,74 +1298,6 @@ namespace TaskbarHero.Client.UI
                 return chars[_selectedCharacter];
             }
             return null;
-        }
-
-        /// <summary>아이템 종류(무기/보조무기/방어구/재료/재화). 장비는 장착 슬롯으로 무기·방어구를 구분한다.</summary>
-        private static string Category(ItemMaster im, MasterDatabase db)
-        {
-            if (im == null)
-            {
-                return string.Empty;
-            }
-            switch (im.itemType)
-            {
-                case 1: // 장비
-                    if (im.equipSlot == 1) return "무기";
-                    if (im.equipSlot == 2) return "보조무기";
-                    return "방어구"; // 투구·갑옷·장갑·신발
-                case 2: return "재료";
-                case 3: return "재화";
-                default: return "기타";
-            }
-        }
-
-        /// <summary>아이템 설명문(종류별). 장비는 옵션 효과, 재료/재화는 용도 설명.</summary>
-        private static string BuildDescription(ItemMaster im, long quantity)
-        {
-            if (im == null)
-            {
-                return string.Empty;
-            }
-            if (im.itemType == 1) // 장비
-            {
-                string effect = BuildStatsText(im, quantity);
-                return string.IsNullOrEmpty(effect) || effect == "옵션 없음"
-                    ? "착용 시 캐릭터에 장착되는 장비입니다."
-                    : $"착용 시 다음 효과를 부여합니다.\n{effect}";
-            }
-            if (im.itemType == 2) // 재료
-            {
-                string q = quantity > 1 ? $" (보유 {quantity})" : string.Empty;
-                return $"강화·합성 등에 사용하는 재료입니다.{q}";
-            }
-            if (im.itemType == 3) // 재화
-            {
-                return "게임 내에서 사용하는 재화입니다.";
-            }
-            return string.Empty;
-        }
-
-        /// <summary>아이템 스탯 요약 문자열(장비는 옵션 스탯, 그 외는 수량).</summary>
-        private static string BuildStatsText(ItemMaster im, long quantity)
-        {
-            if (im == null)
-            {
-                return quantity > 1 ? $"수량 {quantity}" : string.Empty;
-            }
-            if (im.itemType != 1)
-            {
-                return quantity > 1 ? $"수량 {quantity}" : string.Empty;
-            }
-            var s = im.baseStats;
-            var parts = new List<string>();
-            if (s.atk != 0) parts.Add($"ATK +{s.atk}");
-            if (s.def != 0) parts.Add($"DEF +{s.def}");
-            if (s.hp != 0) parts.Add($"HP +{s.hp}");
-            if (s.critChance != 0) parts.Add($"치명확률 +{s.critChance * 100f:0.#}%");
-            if (s.critDamage != 0) parts.Add($"치명피해 +{s.critDamage * 100f:0.#}%");
-            if (s.moveSpeed != 0) parts.Add($"이동속도 +{s.moveSpeed:0.##}");
-            if (s.cooldown != 0) parts.Add($"쿨타임 {s.cooldown:0.##}");
-            return parts.Count > 0 ? string.Join("\n", parts) : "옵션 없음";
         }
 
         /// <summary>등급(1~5)별 아이콘 폴백 색(실아이콘 없을 때만 사용). 공용 <see cref="GradeColors"/> 위임.</summary>

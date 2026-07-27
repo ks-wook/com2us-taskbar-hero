@@ -23,6 +23,7 @@ namespace TaskbarHero.Client.Managers
             Cube,
             OfflineReward,
             Mail,
+            Attendance,
         }
 
         public static UIManager Instance { get; private set; }
@@ -46,6 +47,8 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private GameObject offlineRewardPanelPrefab;
         [Tooltip("Assets/Prefabs/UI/MailPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject mailPanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/AttendancePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject attendancePanelPrefab;
 
         [Header("시작 설정")]
         [Tooltip("Start 시 자동으로 표시할 패널. 자동 표시를 원치 않으면 비활성화한다.")]
@@ -204,6 +207,22 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
+        /// <summary>출석부 패널을 표시한다.</summary>
+        public void ShowAttendance() => Show(PanelType.Attendance);
+
+        /// <summary>출석부 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleAttendance()
+        {
+            if (Current == PanelType.Attendance)
+            {
+                Hide(PanelType.Attendance);
+            }
+            else
+            {
+                Show(PanelType.Attendance);
+            }
+        }
+
         /// <summary>파티 편성 패널을 표시한다.</summary>
         public void ShowParty() => Show(PanelType.Party);
 
@@ -319,6 +338,8 @@ namespace TaskbarHero.Client.Managers
                     return offlineRewardPanelPrefab;
                 case PanelType.Mail:
                     return mailPanelPrefab;
+                case PanelType.Attendance:
+                    return attendancePanelPrefab;
                 default:
                     return null;
             }

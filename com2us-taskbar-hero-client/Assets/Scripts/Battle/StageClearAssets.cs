@@ -30,6 +30,9 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("공용 아이템 슬롯 프리팹(Assets/Prefabs/UI/ItemSlot.prefab). 보상 아이템 칸에 사용하며, 없으면 코드 구성 폴백.")]
         public GameObject itemSlotPrefab;
 
+        [Tooltip("스테이지 클리어 연출 오버레이 프리팹(Assets/Prefabs/UI/StageClearOverlay.prefab). 없으면 런타임 코드 구성 폴백.")]
+        public GameObject overlayPrefab;
+
         /// <summary>아이템 코드와 아이콘 스프라이트의 한 쌍.</summary>
         [Serializable]
         public struct IconEntry
