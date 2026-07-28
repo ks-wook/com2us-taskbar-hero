@@ -12,6 +12,7 @@ namespace TaskbarHero.Client.UI
     public class CharacterSelectPanelController : MonoBehaviour
     {
         [SerializeField] private Text titleText;
+        [SerializeField] private Text descriptionText;
         [SerializeField] private Button selectButton;
         [SerializeField] private Button backButton;
 
@@ -62,6 +63,15 @@ namespace TaskbarHero.Client.UI
             if (titleText != null)
             {
                 titleText.text = text;
+            }
+        }
+
+        /// <summary>직업 설명(class_master.description)을 표시한다. 빈 값이면 문구 영역을 비운다.</summary>
+        public void SetDescription(string text)
+        {
+            if (descriptionText != null)
+            {
+                descriptionText.text = string.IsNullOrEmpty(text) ? string.Empty : text;
             }
         }
 

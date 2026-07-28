@@ -13,9 +13,10 @@ namespace TaskbarHero.Client.Managers
     /// 원작 TBH: Task Bar Hero처럼 게임 창을 <b>작업표시줄 위에 도킹된 항상-위(always-on-top) 소형 전투 창</b>으로
     /// 유지하는 창 제어기(Windows 스탠드얼론 전용). 모드는 세 가지다:
     /// <list type="bullet">
-    /// <item><b>타이틀 모드</b>(TitleScene): 패널 유무와 무관하게 항상 <b>16:9 고정</b> 가로 창(화면비가 깨지지 않게).</item>
+    /// <item><b>타이틀 모드</b>(TitleScene·CreateCharacterScene): 패널 유무와 무관하게 항상 <b>16:9 고정</b> 가로 창
+    /// (화면비가 깨지지 않게). 캐릭터 생성 씬은 타이틀에서 이어지는 화면이라 같은 비율로 맞춘다.</item>
     /// <item><b>전투 확장 모드</b>(BattleDevScene 등 개발용 투명 전투 씬·패널 없음): 낮고 넓은 16:9 가로 창(세로 투명 여백 최소화).</item>
-    /// <item><b>확장 모드</b>(캐릭터 생성 씬·GameScene 상시·패널/ESC 메뉴 열림): 9:16 설계 기준 폭을 유지하되
+    /// <item><b>확장 모드</b>(GameScene 상시·패널/ESC 메뉴 열림): 9:16 설계 기준 폭을 유지하되
     /// 세로를 가로에 맞춘 정사각형 창(세로로 과하게 길지 않게). <b>GameScene은 패널 유무와 무관하게 항상 이 창</b>을 써서
     /// 평상시 UI가 ESC 메뉴가 열렸을 때와 동일한 화면 구성이 되게 한다(구 "스트립 모드" 소형 창은 HUD가 잘려 폐기).</item>
     /// </list>
@@ -51,6 +52,10 @@ namespace TaskbarHero.Client.Managers
         // 창 배경을 투명하게 두는(=바탕화면이 비치는) 씬. 그 외 씬은 불투명 UI가 화면을 채운다.
         private static readonly string[] TransparentScenes = { "GameScene", "BattleDevScene" };
 
+        // 16:9 고정 가로 창을 쓰는 씬(화면비가 깨지지 않게). 캐릭터 생성 씬은 타이틀에서 이어지는
+        // 화면이라 창 비율이 바뀌면 전환이 튀어 보이므로 타이틀과 같은 비율로 맞춘다.
+        private static readonly string[] WideAspectScenes = { "TitleScene", "CreateCharacterScene" };
+
         // 배경(길 스트립)이 노출 중인 월드 y 구간. 이 밴드 위 커서는 게임 콘텐츠로 취급되어
         // 클릭 통과 대상에서 빠지고, 창 드래그의 그립 영역이 된다.
         private static float s_bandBottomY;
@@ -75,12 +80,12 @@ namespace TaskbarHero.Client.Managers
         private const float BattleHeightFrac = 0.45f;
         private const float BattleAspect = 16f / 9f;
 
-        // 타이틀 씬 창: 화면비가 깨지지 않도록 16:9 고정(높이는 확장 창과 동일 기준).
+        // 타이틀·캐릭터 생성 씬 창: 화면비가 깨지지 않도록 16:9 고정(높이는 확장 창과 동일 기준).
         private const float TitleAspect = 16f / 9f;
 
         private bool _panelOpen;         // UIManager 패널/ESC 메뉴 표시 중(BattleDevScene 등에서 확장 필요)
         private bool _inGameScene;       // GameScene인지(항상 확장 창 — 개발용 16:9 분기 제외 판정)
-        private bool _inTitleScene;      // TitleScene인지(항상 16:9 고정 창)
+        private bool _inWideScene;       // 16:9 고정 창을 쓰는 씬(WideAspectScenes)인지
         private bool _transparentScene;  // 현재 씬이 투명 배경 대상(TransparentScenes)인지
 
         /// <summary>부팅 시 창 제어기를 1회 생성한다(씬 배선 불필요).</summary>
@@ -106,13 +111,26 @@ namespace TaskbarHero.Client.Managers
             DontDestroyOnLoad(gameObject);
             USceneManager.activeSceneChanged += OnSceneChanged;
             _inGameScene = USceneManager.GetActiveScene().name == "GameScene";
-            _inTitleScene = USceneManager.GetActiveScene().name == "TitleScene";
+            _inWideScene = IsWideAspectScene(USceneManager.GetActiveScene().name);
             _transparentScene = IsTransparentScene(USceneManager.GetActiveScene().name);
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
             // Awake는 모든 씬 오브젝트의 Start(ScrollingBackground.Build 포함)보다 먼저 실행되므로
             // 여기서 플래그를 세워야 첫 씬부터 배경 타일 생성이 생략된다.
             TransparentOverlayActive = true;
 #endif
+        }
+
+        /// <summary>해당 씬이 16:9 고정 가로 창을 쓸 대상(<see cref="WideAspectScenes"/>)인지 판정한다.</summary>
+        private static bool IsWideAspectScene(string sceneName)
+        {
+            foreach (var s in WideAspectScenes)
+            {
+                if (s == sceneName)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>해당 씬이 창 배경을 투명하게 둘 대상(전투 씬)인지 판정한다.</summary>
@@ -141,7 +159,7 @@ namespace TaskbarHero.Client.Managers
         private void OnSceneChanged(Scene from, Scene to)
         {
             _inGameScene = to.name == "GameScene";
-            _inTitleScene = to.name == "TitleScene";
+            _inWideScene = IsWideAspectScene(to.name);
             _transparentScene = IsTransparentScene(to.name);
             _panelOpen = false; // 씬 전환 시 이전 씬의 패널 상태를 이월하지 않음
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
@@ -481,9 +499,9 @@ namespace TaskbarHero.Client.Managers
             int waH = wa.bottom - wa.top;
 
             int w, h;
-            if (_inTitleScene)
+            if (_inWideScene)
             {
-                // 타이틀 씬: 화면비가 깨지지 않도록 16:9 고정(패널·모달 유무와 무관).
+                // 타이틀·캐릭터 생성 씬: 화면비가 깨지지 않도록 16:9 고정(패널·모달 유무와 무관).
                 // 높이는 확장 창과 동일 기준(작업영역 높이 × 0.9 × 9:16 폭 계수)으로 잡고 폭을 16:9로 늘린다.
                 h = Mathf.Min(waH, Mathf.RoundToInt(waH * ExpandedHeightFrac * PortraitAspect));
                 w = Mathf.RoundToInt(h * TitleAspect);

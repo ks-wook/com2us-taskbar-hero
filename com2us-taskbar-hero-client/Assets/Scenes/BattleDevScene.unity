@@ -290,7 +290,7 @@ MonoBehaviour:
     prefab: {fileID: 2832778511305924686, guid: 5971c58743c2dc348b4edbd551c61325, type: 3}
     classCode: 3
     ranged: 0
-    attackRange: 7.5
+    attackRange: 6
     attackAnim: Magic
     arrowPrefab: {fileID: 0}
     castHold: 1

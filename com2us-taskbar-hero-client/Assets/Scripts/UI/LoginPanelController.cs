@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
 using TaskbarHero.Common.Dto;
@@ -55,6 +57,52 @@ namespace TaskbarHero.Client.UI
         {
             SetError(string.Empty);
             SetLoginUiShown(true); // 패널이 다시 표시될 때 로그인 UI를 확실히 노출(숨김 상태 잔존 방지)
+            FocusInput(emailInput);  // 열자마자 바로 타이핑할 수 있게 아이디 칸에 커서를 둔다
+        }
+
+        /// <summary>키보드만으로 로그인할 수 있게 한다 — <b>Tab</b>은 아이디↔비밀번호 이동,
+        /// <b>Enter</b>는 로그인 요청. 새 Input System에는 Tab 기본 내비게이션 바인딩이 없어 직접 처리한다.
+        /// 입력이 막힌 상태(로딩 중)에는 반응하지 않는다.</summary>
+        private void Update()
+        {
+            var kb = Keyboard.current;
+            if (kb == null || _panelGroup == null || !_panelGroup.interactable)
+            {
+                return;
+            }
+
+            if (kb.tabKey.wasPressedThisFrame)
+            {
+                // 비밀번호 칸에 있으면 아이디로 되돌아가고(Shift+Tab과 동일한 순환), 그 외에는 비밀번호로.
+                bool onPassword = passwordInput != null && IsFocused(passwordInput);
+                FocusInput(onPassword ? emailInput : passwordInput);
+            }
+            else if (kb.enterKey.wasPressedThisFrame || kb.numpadEnterKey.wasPressedThisFrame)
+            {
+                OnLoginClicked();
+            }
+        }
+
+        /// <summary>해당 입력창을 선택하고 커서를 문자열 끝에 둔다.</summary>
+        private static void FocusInput(InputField input)
+        {
+            if (input == null || !input.gameObject.activeInHierarchy)
+            {
+                return;
+            }
+            if (EventSystem.current != null)
+            {
+                EventSystem.current.SetSelectedGameObject(input.gameObject);
+            }
+            input.ActivateInputField();
+            input.caretPosition = input.text.Length;
+        }
+
+        /// <summary>현재 EventSystem 선택이 이 입력창인지.</summary>
+        private static bool IsFocused(InputField input)
+        {
+            return EventSystem.current != null
+                   && EventSystem.current.currentSelectedGameObject == input.gameObject;
         }
 
         private void OnLoginClicked()

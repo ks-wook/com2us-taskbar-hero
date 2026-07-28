@@ -13,7 +13,7 @@ namespace TaskbarHero.Client.UI
     /// '오늘 보상 받기'로 오늘자 보상을 획득한다(즉시 지급이 아니라 우편함으로 발송됨을 안내).
     /// <b>일차는 날짜(day-of-month)가 아니라 이번달 누적 출석 순번</b>이다 — 월중 첫 접속이어도 1일차부터
     /// 순서대로 받으며, 앞에서부터 채워진다. 수령 가능 여부는 서버가 판정한 <c>canClaim</c>을 따른다
-    /// (30일차까지 모두 받으면 그 달에는 더 받을 수 없다 — <c>AttendanceAllClaimed(9002)</c>).
+    /// (30일차를 모두 받으면 1일차부터 순환하므로 사다리 소진으로 인한 실패는 없다).
     /// 오늘 처음 받는 순간에만 그 칸의 체크 표시가 작아졌다가 원래 크기로 돌아오는 연출을 재생한다
     /// (<see cref="ItemSlotView.PlayClaimedPopAnimation"/>). 이미 수령한 과거 일자는 연출 없이 체크만 표시한다.
     /// 외형은 <c>Assets/Art/UI/Attendance</c>의 전용 아트를 쓴다 — 게시판 배경 <c>attendance_board</c>(상단 리본이

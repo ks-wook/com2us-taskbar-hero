@@ -699,16 +699,14 @@ namespace TaskbarHero.Client.UI
             btn.onClick.AddListener(() => OnToggleEquip(characterId, skillCode, isEquipped, equippedCount));
         }
 
-        /// <summary>행에 hover 진입/이탈 시 상세 툴팁을 표시/숨김하는 EventTrigger를 부착한다(정보 전용).</summary>
+        /// <summary>행에 hover 진입/이탈 시 상세 툴팁을 표시/숨김하는 중계기를 부착한다(정보 전용).
+        /// EventTrigger가 아니라 <see cref="PointerHoverRelay"/>를 쓰는 이유는, EventTrigger가 드래그
+        /// 이벤트까지 구현해 행을 잡고 끌 때 부모 ScrollRect로 드래그가 전달되지 않기 때문이다
+        /// (= 스킬 슬롯을 누른 채로는 목록이 스크롤되지 않던 문제).</summary>
         private void AddHoverTooltip(GameObject rowGo, SkillTip tip)
         {
-            var trigger = rowGo.AddComponent<EventTrigger>();
-            var enter = new EventTrigger.Entry { eventID = EventTriggerType.PointerEnter };
-            enter.callback.AddListener(e => ShowSkillTooltip(tip, ((PointerEventData)e).position));
-            trigger.triggers.Add(enter);
-            var exit = new EventTrigger.Entry { eventID = EventTriggerType.PointerExit };
-            exit.callback.AddListener(_ => HideSkillTooltip());
-            trigger.triggers.Add(exit);
+            var relay = rowGo.AddComponent<PointerHoverRelay>();
+            relay.Bind(e => ShowSkillTooltip(tip, e.position), HideSkillTooltip);
         }
 
         /// <summary>스킬 상세 툴팁을 채우고 커서 근처에 표시한다.</summary>

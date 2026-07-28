@@ -55,6 +55,15 @@ namespace TaskbarHero.Client.Battle
         private Skill _chargeSkill;
         public bool IsCharging => _charging;
 
+        /// <summary>돌진 자세를 최소 이만큼은 유지한다(초). 적이 이미 사거리 안이라 돌진 이동 거리가 0인
+        /// **제자리 발동**에서는, 이 하한이 없으면 자세 진입(애니메이터 트랜지션)이 끝나기도 전에
+        /// 종료 처리돼 이펙트만 나오고 애니메이션이 보이지 않는다.</summary>
+        private const float MinChargeMotion = 0.45f;
+
+        private bool _chargeImpacted;  // 이번 돌진의 타격을 이미 예약했는지(중복 데미지 방지)
+        private float _chargeElapsed;  // 돌진 시작 후 경과 시간
+        private float _chargeMotion;   // 이번 돌진의 자세 유지 시간(이펙트 길이와 최소 시간 중 큰 값)
+
         private string _name = "Ally";
         private long _atk;
         private long _baseAtk;        // 장비 제외 기본 공격(클래스+레벨)
@@ -714,6 +723,10 @@ namespace TaskbarHero.Client.Battle
             _charging = true;
             _moving = false;
             _chargeSkill.timer = 0f;
+            _chargeImpacted = false;
+            _chargeElapsed = 0f;
+            // 자세 유지 시간은 이펙트 길이에 맞추되, 애니메이터 트랜지션이 보이도록 하한을 둔다.
+            _chargeMotion = Mathf.Max(MinChargeMotion, EffectDuration(_chargeSkill.effect));
 
             // 이펙트를 본인에게 두른다(자식 부착 → 돌진 중 함께 이동)
             if (_chargeSkill.effect != null)
@@ -727,29 +740,44 @@ namespace TaskbarHero.Client.Battle
 
         private float ChargeSpeedEffective() => Mathf.Max(_chargeSpeed, _moveSpeed * 1.5f);
 
+        /// <summary>돌진 진행: 사거리에 닿을 때까지 전진하고, 닿으면 타격을 예약한다.
+        /// 타격 뒤에도 <see cref="_chargeMotion"/>이 끝날 때까지 돌진 자세를 유지해,
+        /// 적이 이미 코앞이라 이동 거리가 0인 **제자리 발동**에서도 돌진 애니메이션이 보이게 한다.</summary>
         private void UpdateCharge()
         {
-            if (!_ctrl.MonsterAlive || _ctrl.MonsterTransform == null)
-            {
-                EndCharge();
-                return;
-            }
+            _chargeElapsed += Time.deltaTime;
 
-            float dist = _ctrl.MonsterTransform.position.x - transform.position.x;
-            if (dist <= _attackRange)
+            if (!_chargeImpacted)
             {
+                // 타격 전에 대상이 사라졌으면 유지할 이유가 없으므로 즉시 종료.
+                if (!_ctrl.MonsterAlive || _ctrl.MonsterTransform == null)
+                {
+                    EndCharge();
+                    return;
+                }
+
+                float dist = _ctrl.MonsterTransform.position.x - transform.position.x;
+                if (dist > _attackRange)
+                {
+                    Vector3 p = transform.position;
+                    p.x += ChargeSpeedEffective() * Time.deltaTime;
+                    p.y = _ctrl.PathY;
+                    transform.position = p;
+                    return;
+                }
+
+                // 도달(또는 발동 시점부터 사거리 안). 데미지는 자세가 끝나는 순간에 들어간다.
+                _chargeImpacted = true;
                 long dmg = Damage(_chargeSkill.coef);
-                float motion = EffectDuration(_chargeSkill.effect);
-                _ctrl.DealDamageAfter(motion, dmg, $"[{_name}] 돌진 {_chargeSkill.name} ×{_chargeSkill.coef:0.##}");
-                _busyTimer = motion;
-                EndCharge();
-                return;
+                _ctrl.DealDamageAfter(Mathf.Max(0f, _chargeMotion - _chargeElapsed), dmg,
+                    $"[{_name}] 돌진 {_chargeSkill.name} ×{_chargeSkill.coef:0.##}");
             }
 
-            Vector3 p = transform.position;
-            p.x += ChargeSpeedEffective() * Time.deltaTime;
-            p.y = _ctrl.PathY;
-            transform.position = p;
+            // 타격 후 남은 자세 유지(이 동안 _charging이 다른 행동을 막으므로 별도 _busyTimer는 불필요).
+            if (_chargeElapsed >= _chargeMotion)
+            {
+                EndCharge();
+            }
         }
 
         private void EndCharge()

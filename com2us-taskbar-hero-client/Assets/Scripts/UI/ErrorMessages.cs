@@ -73,8 +73,7 @@ namespace TaskbarHero.Client.UI
                 // 출석부 도메인(attendance 기획서 §7)
                 case ErrorCode.AttendanceAlreadyClaimed:
                     return "이미 수령한 출석 보상입니다.";
-                case ErrorCode.AttendanceAllClaimed:
-                    return "이번 달 출석 보상을 모두 받았습니다.";
+                // 9002(구 AttendanceAllClaimed)는 결번 — 30일차 이후 1일차로 순환하므로 사다리 소진 실패가 없다.
                 // 거래소 도메인(trade 기획서 §8)
                 case ErrorCode.TradeListingNotFound:
                     return "이미 사라진 거래 등록입니다.";

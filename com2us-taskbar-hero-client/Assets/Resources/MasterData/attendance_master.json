@@ -169,18 +169,12 @@
   },
   {
     "day": 29,
-    "rewardType": 1,
-    "rewardCode": 0,
-    "quantity": 9000
-  },
-  {
-    "day": 30,
     "rewardType": 3,
     "rewardCode": 41010,
     "quantity": 5
   },
   {
-    "day": 31,
+    "day": 30,
     "rewardType": 2,
     "rewardCode": 33051,
     "quantity": 1

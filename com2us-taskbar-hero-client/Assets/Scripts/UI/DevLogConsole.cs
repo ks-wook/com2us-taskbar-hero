@@ -37,6 +37,17 @@ namespace TaskbarHero.Client.UI
         [Tooltip("로그창 토글 키.")]
         [SerializeField] private Key toggleKey = Key.Backquote;
 
+        // 토글 버튼 크기/여백(캔버스 참조 해상도 360×640 기준). 이 캔버스는 ScaleWithScreenSize라
+        // 실제 픽셀 크기는 창 크기에 비례해 커진다 — 하단 UI를 가리지 않도록 작게 유지한다.
+        private const float ToggleWidth = 30f;
+        private const float ToggleHeight = 16f;
+        private const float ToggleMargin = 4f;
+        private const int ToggleFontSize = 10;
+
+        // 버튼이 작아 "LOG" 글자를 넣을 공간이 없으므로 상태를 화살표로만 표시한다(▸ 접힘 / ▾ 펼침).
+        private const string CollapsedLabel = "▸";
+        private const string ExpandedLabel = "▾";
+
         private readonly List<string> _lines = new List<string>();
         private GameObject _logPanel;
         private Text _logText;
@@ -143,7 +154,7 @@ namespace TaskbarHero.Client.UI
 
             if (_toggleLabel != null)
             {
-                _toggleLabel.text = value ? "LOG ▾" : "LOG ▸";
+                _toggleLabel.text = value ? ExpandedLabel : CollapsedLabel;
             }
 
             if (value)
@@ -186,13 +197,17 @@ namespace TaskbarHero.Client.UI
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
 
-            // 토글 버튼 (좌측 하단)
-            var toggleBtn = CreateButton(canvasGo.transform, "ToggleButton", new Vector2(8f, 8f), new Vector2(64f, 26f), "LOG ▸", font, 13);
+            // 토글 버튼 (좌측 하단). 하단 UI를 가리지 않도록 작게 두고, 상태는 화살표만으로 표시한다.
+            var toggleBtn = CreateButton(canvasGo.transform, "ToggleButton",
+                new Vector2(ToggleMargin, ToggleMargin), new Vector2(ToggleWidth, ToggleHeight),
+                CollapsedLabel, font, ToggleFontSize);
             toggleBtn.onClick.AddListener(Toggle);
             _toggleLabel = toggleBtn.GetComponentInChildren<Text>();
 
             // 로그 패널 (토글 버튼 위)
-            _logPanel = CreatePanel(canvasGo.transform, "LogPanel", new Vector2(8f, 40f), new Vector2(320f, 240f), new Color(0f, 0f, 0f, 0.78f));
+            _logPanel = CreatePanel(canvasGo.transform, "LogPanel",
+                new Vector2(ToggleMargin, ToggleMargin * 2f + ToggleHeight), new Vector2(320f, 240f),
+                new Color(0f, 0f, 0f, 0.78f));
 
             // Clear 버튼 (패널 우측 상단)
             var clearBtn = CreateButton(_logPanel.transform, "ClearButton", Vector2.zero, new Vector2(52f, 22f), "Clear", font, 12);

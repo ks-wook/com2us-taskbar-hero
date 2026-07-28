@@ -140,6 +140,18 @@ namespace TaskbarHero.Client.UI
             }
         }
 
+        /// <summary>직업 설명(class_master.description). 마스터 데이터에 없으면 빈 문자열을 돌려준다.</summary>
+        private static string ClassDescriptionOf(int classCode)
+        {
+            MasterDataManager.EnsureLoaded();
+            var db = MasterDataManager.Db;
+            if (db != null && db.Classes.TryGetValue(classCode, out var cls) && cls != null)
+            {
+                return cls.description;
+            }
+            return string.Empty;
+        }
+
         /// <summary>계정이 해당 직업 캐릭터를 이미 보유했는지(세션 세이브 기준).</summary>
         private static bool IsClassOwned(int classCode)
         {
@@ -222,6 +234,7 @@ namespace TaskbarHero.Client.UI
             if (_panel != null)
             {
                 _panel.SetTitle(sc.DisplayName);
+                _panel.SetDescription(ClassDescriptionOf(sc.ClassCode));
                 _panel.Show(true);
             }
 
