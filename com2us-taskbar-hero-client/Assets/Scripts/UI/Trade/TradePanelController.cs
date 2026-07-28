@@ -42,7 +42,10 @@ namespace TaskbarHero.Client.UI.Trade
         private const float TabWidth = 230f;      // 상단 탭 버튼 폭
         private const float TabGap = 12f;         // 탭 사이 간격
         private const float RowHeight = 96f;
-        private const int PageSize = 8;          // 한 페이지에 보여줄 등록 수(서버 상한 이하)
+        // 한 페이지 행 수는 목록 뷰포트 안에 다 들어가는 값으로 잡는다(스크롤 없이 한눈에 보이게).
+        // 뷰포트 676 = 패널 1180 − 아래 200(페이지·메시지) − 위 304(헤더까지).
+        // 6행 = 6×96 + 5×8(간격) + 20(위아래 여백) = 636 ≤ 676.
+        private const int PageSize = 6;
         private const int GoldCurrencyType = 1;  // 재화 타입 1 = 골드
         private const int GoldItemCode = 1;      // item_master 골드 코드(아이콘 item_1)
         private const float PriceMinRate = 0.8f; // 기준가 ±20%(기획서 §3) — 안내용, 최종 판정은 서버
@@ -379,6 +382,9 @@ namespace TaskbarHero.Client.UI.Trade
             var fitter = contentGo.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
+            // 내용이 뷰포트를 넘으면 잘리지 않고 스크롤되게 한다(RectMask2D만으로는 그냥 잘린다).
+            AddVerticalScroll(listBg.gameObject, lbrt, _listContent);
+
             _emptyText = NewText("EmptyText", lbrt, "판매 중인 등록이 없습니다", 28, TextAnchor.MiddleCenter);
             _emptyText.color = new Color(0.35f, 0.26f, 0.16f, 0.85f);
             var ert = _emptyText.rectTransform;
@@ -432,6 +438,9 @@ namespace TaskbarHero.Client.UI.Trade
             layout.childForceExpandHeight = false;
             var fitter = contentGo.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            // 판매 가능 아이템 수는 인벤토리에 따라 얼마든지 늘 수 있으므로 스크롤이 필수다.
+            AddVerticalScroll(listBg.gameObject, lbrt, _sellContent);
 
             // 하단 등록 폼(나무 패널).
             var form = NewImage("SellForm", root, new Color(0.32f, 0.24f, 0.15f, 1f));
@@ -1126,6 +1135,19 @@ namespace TaskbarHero.Client.UI.Trade
         }
 
         // ── UI 헬퍼 ──
+
+        /// <summary>목록 영역에 세로 스크롤을 붙인다(뷰포트 = 배경, 콘텐츠 = 세로 레이아웃 자식).
+        /// RectMask2D는 넘치는 부분을 '잘라내기만' 하므로, 이것이 없으면 아래 행이 보이지 않는다.</summary>
+        private static void AddVerticalScroll(GameObject viewportGo, RectTransform viewport, RectTransform content)
+        {
+            var scroll = viewportGo.AddComponent<ScrollRect>();
+            scroll.viewport = viewport;
+            scroll.content = content;
+            scroll.horizontal = false;
+            scroll.vertical = true;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+            scroll.scrollSensitivity = 30f;
+        }
 
         /// <summary>9-slice 프레임/버튼 스프라이트를 적용한다(미배선이면 단색 폴백 유지).</summary>
         private static void ApplySliced(Image img, Sprite sprite)

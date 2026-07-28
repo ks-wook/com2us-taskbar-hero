@@ -6,7 +6,7 @@ namespace TaskbarHero.Client.Managers
     /// 새 오버레이를 만들 때는 아래 띠 중 하나를 골라 쓴다.
     ///
     /// <list type="table">
-    /// <item><term>0~29 게임 화면</term><description>HUD(10)·스테이지 진행 바(20) — 항상 맨 아래</description></item>
+    /// <item><term>0~29 게임 화면</term><description>하단 HUD를 가리지 않는 패널(5)·HUD(10)·스테이지 진행 바(20) — 항상 맨 아래</description></item>
     /// <item><term>30~99 전투 연출</term><description>입장 배너·보스 경고·클리어/패배 연출.
     ///   <b>기능 패널보다 아래</b>라 인벤토리·출석부 등을 열어 둔 동안 가리지 않는다.</description></item>
     /// <item><term>100~119 기능 패널</term><description>인벤토리·메일·거래소·출석부·스테이지·편성(100),
@@ -18,6 +18,10 @@ namespace TaskbarHero.Client.Managers
     /// </summary>
     public static class UiSortingOrder
     {
+        /// <summary>하단 HUD를 가리면 안 되는 패널(스테이지 선택 등). HUD보다 아래에 그려져,
+        /// 패널을 열어 둔 채로도 하단 아이콘 줄이 보이고 클릭도 HUD가 먼저 받는다.</summary>
+        public const int PanelBelowHud = 5;
+
         /// <summary>상시 HUD(하단 아이콘 줄).</summary>
         public const int Hud = 10;
 

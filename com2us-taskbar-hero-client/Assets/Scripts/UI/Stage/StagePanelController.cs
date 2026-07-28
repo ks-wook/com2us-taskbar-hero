@@ -119,7 +119,9 @@ namespace TaskbarHero.Client.UI
                 canvas = gameObject.AddComponent<Canvas>();
             }
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 100;
+            // 하단 HUD(10)보다 아래에 둬서 스테이지 선택 중에도 하단 아이콘 줄이 가려지지 않게 한다
+            // (클릭도 sortingOrder가 높은 HUD가 먼저 받으므로 딤이 버튼을 가로채지 않는다).
+            canvas.sortingOrder = UiSortingOrder.PanelBelowHud;
 
             var scaler = gameObject.GetComponent<CanvasScaler>();
             if (scaler == null)
