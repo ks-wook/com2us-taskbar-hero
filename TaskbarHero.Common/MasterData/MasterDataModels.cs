@@ -51,6 +51,7 @@ namespace TaskbarHero.Common.MasterData
     {
         public int classCode;
         public string name;
+        public string description; // 직업 설명(클라 표시용). 서버는 로드하지 않는다(skill_master.description 과 동일 취급)
         public int unlockType;   // 0:기본 1:해금 2:유료
         public Stats baseStats;
     }

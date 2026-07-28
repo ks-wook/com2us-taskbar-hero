@@ -77,7 +77,7 @@ namespace TaskbarHero.Common
 
         // 출석부 보상 (9000번대)
         AttendanceAlreadyClaimed = 9001,
-        AttendanceAllClaimed = 9002,
+        // 9002(구 AttendanceAllClaimed): 30일차 이후 1일차부터 순환하도록 바뀌어 사다리 소진 실패가 없어짐(결번)
 
         // 마스터 데이터 (10000번대)
         MasterDataNotLoaded = 10001,

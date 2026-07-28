@@ -293,14 +293,17 @@ public sealed class SaveRepository : ISaveRepository
     }
 
     /// <summary>
-    /// 최초 접속 시 세이브 초기화(플레이어 행 + 1번 슬롯 캐릭터 + 큐브 생성)를 단일 커넥션의 단일 트랜잭션으로 수행한다.
-    /// 세 INSERT 중 하나라도 실패하면 전부 롤백하고 예외를 그대로 전파한다(이미 존재하는 계정이면 PK 중복 예외).
+    /// 최초 접속 시 세이브 초기화(플레이어 행 + 1번 슬롯 캐릭터 + 큐브 + 출석 진행도 생성)를 단일 커넥션의
+    /// 단일 트랜잭션으로 수행한다. INSERT 중 하나라도 실패하면 전부 롤백하고 예외를 그대로 전파한다
+    /// (이미 존재하는 계정이면 PK 중복 예외).
     /// </summary>
     /// <remarks>
-    /// 한 트랜잭션으로 묶는 작업(캐릭터나 큐브가 없는 반쪽 세이브가 남지 않게 한다):
+    /// 한 트랜잭션으로 묶는 작업(캐릭터·큐브·출석 진행도가 없는 반쪽 세이브가 남지 않게 한다):
     /// <para>1) game_player INSERT — 닉네임·시작 좌표(1-1-1)·최고 클리어 0·초기 인벤 용량·활동/생성/갱신 시각</para>
     /// <para>2) player_character INSERT — 1번 슬롯에 선택 직업 캐릭터를 레벨 1·경험치 0으로 생성</para>
     /// <para>3) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
+    /// <para>4) player_attendance INSERT — 출석 진행도를 0(누적 0·마지막 획득 일자 0)으로 초기화.
+    ///     출석 수령은 이 행의 조건부 갱신으로 처리하므로 계정 생성 시 함께 만들어 둔다(attendance 기획서 §4)</para>
     /// </remarks>
     public async Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int inventoryCapacity, long nowUnix)
     {
@@ -340,6 +343,13 @@ public sealed class SaveRepository : ISaveRepository
                 user_id = userId,
                 cube_level = 1,
                 cube_exp = 0,
+            }, transaction);
+
+            await db.Query("player_attendance").InsertAsync(new
+            {
+                user_id = userId,
+                attend_count = 0,
+                last_attend_date = 0,
             }, transaction);
 
             await transaction.CommitAsync();

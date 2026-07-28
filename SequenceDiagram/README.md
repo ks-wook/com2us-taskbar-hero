@@ -869,7 +869,7 @@ sequenceDiagram
 
 ## 출석부 보상
 
-이번달 출석 진행도 조회·오늘자 출석 보상 획득 (GameAttendanceController, `/api/game/attendance`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_attendance`·`player_mail`·`player_mail_reward`) + 인메모리 마스터 데이터(attendance — **일차별** 보상 1~30, mail 템플릿 301). "오늘"은 요청 수신 시점의 서버 시각을 **KST(UTC+9) 자정 경계**로 판정하며(서버 권위, 클라이언트 날짜 불신), 보상은 즉시 지급하지 않고 **메일(category=3, 발급 후 7일 만료)로 발급**한다 — 계정 반영은 우편함 수령(메일 5.2) 시. 하루 1회는 `(user_id, attend_date)` PK가 보장한다(attendance 기획서 §5·§6).
+출석 진행도 조회·오늘자 출석 보상 획득 (GameAttendanceController, `/api/game/attendance`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_attendance` **계정당 1행**·`player_mail`·`player_mail_reward`) + 인메모리 마스터 데이터(attendance — **일차별** 보상 1~30, mail 템플릿 301). "오늘"은 요청 수신 시점의 서버 시각을 **KST(UTC+9) 자정 경계**로 판정하며(서버 권위, 클라이언트 날짜 불신), 보상은 즉시 지급하지 않고 **메일(category=3, 발급 후 7일 만료)로 발급**한다 — 계정 반영은 우편함 수령(메일 5.2) 시. 일차는 `누적 출석일수 % 30 + 1`(30일 순환, 월 리셋 없음)이고, 하루 1회는 `last_attend_date` **조건부 갱신(CAS)** 이 보장한다(attendance 기획서 §5·§6).
 
 > **일차 = 이번달 누적 출석 순번**(`이번달 출석 수 + 1`, 1~30). 날짜(day-of-month)가 아니므로 **7월 28일에 이번달 처음 접속해도 1일차 보상**을 받는다. 달이 바뀌면 집계 범위가 바뀌어 1일차로 리셋된다.
 
@@ -888,7 +888,7 @@ sequenceDiagram
     alt 마스터 미로드
         S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) }
     else 정상
-        S->>DB: 이번달 출석 일자 데이터 확인(player_attendance, 이달 범위)
+        S->>DB: 출석 진행도 데이터 확인(player_attendance 1행 — 누적 출석일수·마지막 획득 일자)
         DB-->>S: 출석한 일자 목록
         S->>S: 진행도 산출 — attendedCount(=수령 완료 일차 수), todayDay(미수령이면 count+1, 소진 시 0), todayClaimed, canClaim
         S->>S: 사다리 구성 — 1~30일차 보상 + 수령 여부(claimed = day ≤ attendedCount)
@@ -918,21 +918,19 @@ sequenceDiagram
         alt 세이브 없음(캐릭터 생성 전)
             S-->>C: 실패 { errorCode: SaveNotFound(2001) }
         end
-        S->>DB: 오늘자 출석 데이터 확인(player_attendance)
-        alt 이미 출석(행 존재 — 동시 요청은 PK 중복으로 직렬화)
+        S->>DB: 출석 진행도 데이터 확인(player_attendance 1행)
+        DB-->>S: attend_count, last_attend_date
+        alt 마지막 획득 일자 = 오늘
             S-->>C: 실패 { errorCode: AttendanceAlreadyClaimed(9001) }
-        else 미출석
-            S->>DB: 이번달 출석 수 집계(player_attendance, 이달 범위)
-            DB-->>S: count
-            S->>S: 일차 산출 — day = count + 1 (날짜 아님)
-            alt day > maxDay(이번달 30일차 소진)
-                S-->>C: 실패 { errorCode: AttendanceAllClaimed(9002) }
-            else 유효 일차
-                S->>S: 일차 보상 확정(attendance_master[day]) + 보상 메일 초안 렌더링(만료 = 발급 + 7일)
-                S->>DB: 출석 기록 데이터 적재(user_id, today, claimed_at)
-                S->>DB: 보상 메일 데이터 적재(player_mail category=3 + player_mail_reward 1건)
-                S-->>C: 성공 { attendDate, day, reward, mailId }
+        else 오늘 미수령
+            S->>S: 일차 산출 — day = (attend_count + 1 - 1) % maxDay + 1 (날짜 아님, 30일차 이후 1일차로 순환)
+            S->>S: 일차 보상 확정(attendance_master[day]) + 보상 메일 초안 렌더링(만료 = 발급 + 7일)
+            S->>DB: 진행도 조건부 갱신(attend_count + 1, last_attend_date = today · 관측한 last_attend_date일 때만)
+            alt 0행(동시 요청이 먼저 처리)
+                S-->>C: 실패 { errorCode: AttendanceAlreadyClaimed(9001) }
             end
+            S->>DB: 보상 메일 데이터 적재(player_mail category=3 + player_mail_reward 1건)
+            S-->>C: 성공 { attendDate, day, reward, mailId }
         end
     end
 ```

@@ -142,8 +142,8 @@
 | 이름 | 값 | 의미 |
 |---|---|---|
 | AttendanceAlreadyClaimed | 9001 | 오늘자 출석 보상을 이미 수령함 |
-| AttendanceAllClaimed | 9002 | 이번달 출석 보상(30일차)을 모두 수령함 |
 
+- `9002`(구 `AttendanceAllClaimed`)는 출석 사다리가 **30일차 이후 1일차부터 순환**하도록 바뀌어 소진 실패가 사라지면서 **폐기**했다. 결번으로 두고 재사용하지 않는다.
 - 마스터 미로드/미정의는 신규 코드 없이 `MasterDataNotLoaded(10001)`를 재사용한다.
 
 ### 2.11 마스터 데이터 (10000번대)
@@ -241,7 +241,7 @@ namespace TaskbarHero.Common
 
         // 출석부 보상 (9000번대)
         AttendanceAlreadyClaimed = 9001,
-        AttendanceAllClaimed = 9002,
+        // 9002(구 AttendanceAllClaimed): 30일차 이후 1일차부터 순환하도록 바뀌어 사다리 소진 실패가 없어짐(결번)
 
         // 마스터 데이터 (10000번대)
         MasterDataNotLoaded = 10001,

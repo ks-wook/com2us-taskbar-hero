@@ -321,8 +321,8 @@ public sealed class MasterDataProvider
     /// <summary>attendance_master에 정의된 일차(day) 목록(오름차순). 출석 보상 사다리 구성에 사용한다.</summary>
     public IReadOnlyCollection<int> AttendanceDays => _attendanceByDay.Keys.OrderBy(d => d).ToList();
 
-    /// <summary>출석 보상 사다리의 마지막 일차(= attendance_master의 최대 day, 현재 30). 이번달 이 일차까지
-    /// 모두 받으면 더 받을 보상이 없다(호출측이 AttendanceAllClaimed로 거부). 정의가 비었으면 0.</summary>
+    /// <summary>출석 보상 사다리의 마지막 일차(= attendance_master의 최대 day, 현재 30) = <b>순환 주기</b>.
+    /// 이 일차까지 받으면 다음 출석은 다시 1일차다(day = 출석 수 % 이 값 + 1). 정의가 비었으면 0.</summary>
     public int MaxAttendanceDay => _attendanceByDay.Count == 0 ? 0 : _attendanceByDay.Keys.Max();
 
     /// <summary>메일 발급 템플릿(mail_master). 없으면 null(호출측이 MasterDataNotLoaded로 거부).</summary>

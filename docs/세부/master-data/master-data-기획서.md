@@ -125,6 +125,7 @@ erDiagram
 |---|---|---|
 | `class_code` | int PK | 직업 코드 |
 | `name` | varchar | 직업 이름 |
+| `description` | varchar | 직업 설명(클라이언트 표시용 한 줄 문구) |
 | `unlock_type` | int | 0:기본 1:해금 2:유료 |
 | `hp` / `atk` / `def` | bigint | 기본 체력 / 공격 / 방어 |
 | `move_speed` | decimal | 이동속도 |
@@ -557,8 +558,8 @@ erDiagram
 
 ```json
 // class_master.json
-[ { "classCode": 1, "name": "Knight", "unlockType": 0,
-    "baseStats": { "hp": 120, "atk": 10, "def": 8, "moveSpeed": 3.0, "critChance": 0.05, "critDamage": 1.5, "cooldown": 1.2 } } ]
+[ { "classCode": 1, "name": "기사", "description": "높은 체력과 방어력으로 최전방에서 적을 막아서는 근접 전사다.", "unlockType": 0,
+    "baseStats": { "hp": 180, "atk": 10, "def": 16, "moveSpeed": 3.0, "critChance": 0.05, "critDamage": 1.5, "cooldown": 1.2 } } ]
 // item_master.json
 [ { "itemCode": 1, "name": "골드", "itemType": 3, "grade": 1, "equipSlot": 0, "classReq": 0, "levelReq": 0, "stackMax": 0, "baseStats": {}, "sellable": 0, "basePrice": 0 },
   { "itemCode": 31131, "name": "강철 대검", "itemType": 1, "grade": 3, "equipSlot": 1, "classReq": 1, "levelReq": 20, "stackMax": 1, "baseStats": { "atk": 38, "cooldown": -0.1 }, "sellable": 1, "basePrice": 50000 } ]
@@ -594,6 +595,7 @@ namespace TaskbarHero.Common.MasterData
     {
         public int classCode;
         public string name;
+        public string description; // 직업 설명(클라 표시용)
         public int unlockType;   // 0:기본 1:해금 2:유료
         public Stats baseStats;
     }

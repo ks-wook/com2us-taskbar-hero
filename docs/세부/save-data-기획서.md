@@ -55,7 +55,7 @@ erDiagram
     player_character ||--o{ player_item_equipped : equips
     player_character ||--o{ player_skill     : has
     game_player      ||--o{ player_mail      : receives
-    game_player      ||--o{ player_attendance : checks_in
+    game_player      ||--|| player_attendance : progresses
     game_player      ||--o{ trade_listing    : sells
     player_mail      ||--o{ player_mail_reward : has
 
@@ -142,9 +142,9 @@ erDiagram
     }
 
     player_attendance {
-        bigint  user_id FK
-        int     attend_date "출석 일자 YYYYMMDD(KST 기준)"
-        bigint  claimed_at "출석/보상 메일 발급 시각(Unix ts)"
+        bigint  user_id PK,FK
+        int     attend_count "누적 출석일수(리셋 없음)"
+        int     last_attend_date "마지막 보상 획득 일자 YYYYMMDD(KST), 0=없음"
     }
 
     trade_listing {
@@ -168,7 +168,7 @@ erDiagram
   - `player_rune`: `(user_id, rune_code)` 복합 PK. 룬은 **계정 공용**이라 `character_id`를 두지 않는다.
   - `player_mail`: `mail_id` PK, `user_id` 조회 인덱스. 계정 우편함.
   - `player_mail_reward`: `(mail_id, seq)` 복합 PK. 메일 첨부(0~N).
-  - `player_attendance`: `(user_id, attend_date)` 복합 PK. 출석한 일자당 1행이며, **이번달 행 수가 곧 진행한 출석 일차**다(일차 컬럼 없음 — [출석부 보상 시스템 기획서](attendance-기획서.md)).
+  - `player_attendance`: `user_id` PK로 **계정당 1행**(출석 진행도). `attend_count`(누적 출석일수)로 일차를 산출하고(`% 30 + 1`, 30일 순환) `last_attend_date`로 하루 1회를 보장한다. 일자별 출석 이력은 저장하지 않는다([출석부 보상 시스템 기획서](attendance-기획서.md)).
   - `trade_listing`: `listing_id` PK, `(status, item_code, price)`·`(status, price)`·`(seller_user_id, status)`·`(status, expires_at)` 인덱스. 전역 거래소 등록(에스크로), 등록 아이템은 `player_item`에서 빠져 여기 스냅샷으로 보관([거래소 / 교역선 기획서](trade-기획서.md)). 목록 조회는 전역 공유 읽기이므로 Redis 목록 캐시를 상시 사용하고, 동시 구매는 Redis 락 + 조건부 갱신으로 직렬화한다(같은 기획서 7장).
   - `player_item`: `player_item_id` PK. `(user_id, slot)` 유니크 — 한 인벤토리 칸(slot)에는 아이템(스택) 한 행만 존재한다(재화 행은 `slot`이 NULL이라 무제한 공존).
   - `player_item_equipped`: `player_item_id` PK — 장착 중인 아이템만 행으로 존재하며 아이템당 최대 1행이라 한 아이템은 동시에 한 곳에만 장착된다. `(user_id, equipped_character_id, equipped_slot)` 유니크 — **한 캐릭터-장착슬롯에 아이템 하나**를 보장한다. 장착=INSERT, 해제=DELETE.

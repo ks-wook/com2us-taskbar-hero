@@ -50,9 +50,8 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.TradeAlreadyClosed => StatusCodes.Status409Conflict,
         ErrorCode.TradeSelfPurchase => StatusCodes.Status409Conflict,
         ErrorCode.TradeBusy => StatusCodes.Status409Conflict,
-        // 출석: 오늘자 중복 수령(동시 요청 경합 포함)·이번달 사다리 소진은 409.
+        // 출석: 오늘자 중복 수령(동시 요청 경합 포함)은 409.
         ErrorCode.AttendanceAlreadyClaimed => StatusCodes.Status409Conflict,
-        ErrorCode.AttendanceAllClaimed => StatusCodes.Status409Conflict,
         // 인증 실패 계열(미들웨어가 대부분 선처리하나 방어적으로 매핑).
         ErrorCode.InvalidToken => StatusCodes.Status401Unauthorized,
         ErrorCode.ExpiredToken => StatusCodes.Status401Unauthorized,
@@ -106,7 +105,6 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.TradeBusy => "Trade listing is busy, retry shortly",
         // 출석부
         ErrorCode.AttendanceAlreadyClaimed => "Attendance already claimed",
-        ErrorCode.AttendanceAllClaimed => "All attendance rewards claimed this month",
         ErrorCode.MasterDataNotLoaded => "Master data not loaded",
         ErrorCode.InvalidToken => "Invalid token",
         ErrorCode.ExpiredToken => "Expired token",

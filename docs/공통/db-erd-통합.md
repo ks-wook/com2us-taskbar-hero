@@ -103,7 +103,7 @@ erDiagram
     game_player      ||--o{ player_rune      : has
     game_player      ||--|| player_cube      : has
     game_player      ||--o{ player_mail      : receives
-    game_player      ||--o{ player_attendance : checks_in
+    game_player      ||--|| player_attendance : progresses
     game_player      ||--o{ trade_listing    : sells
     player_item      ||--o| player_item_equipped : "equipped as"
     player_character ||--o{ player_item_equipped : equips
@@ -194,9 +194,9 @@ erDiagram
     }
 
     player_attendance {
-        bigint  user_id FK
-        int     attend_date "출석 일자 YYYYMMDD(KST)"
-        bigint  claimed_at "출석/발급 시각(Unix ts)"
+        bigint  user_id PK,FK
+        int     attend_count "누적 출석일수(리셋 없음)"
+        int     last_attend_date "마지막 보상 획득 일자 YYYYMMDD(KST), 0=없음"
     }
 
     trade_listing {
@@ -227,7 +227,7 @@ erDiagram
 | `player_cube` | `user_id` | 계정 공유 |
 | `player_mail` | `mail_id` PK, `user_id` 인덱스 | 계정 우편함 |
 | `player_mail_reward` | `(mail_id, seq)` | 메일 첨부 |
-| `player_attendance` | `(user_id, attend_date)` | 계정 출석 기록(일자별) |
+| `player_attendance` | `user_id` | 계정 출석 진행도(누적 카운터, 계정당 1행) |
 | `trade_listing` | `listing_id` PK, `(status, item_code, price)`·`(status, price)` 조회·정렬 인덱스, `(seller_user_id, status)` 한도·내 판매 조회, `(status, expires_at)` 만료 배치 | 거래소 등록(전역, 에스크로) |
 
 **테이블별 역할·저장 데이터**
@@ -279,8 +279,8 @@ erDiagram
 
 ### player_attendance
 
-- **역할**: 계정의 **출석 수령 기록**(일자별). 하루 1회 중복 수령 방지의 근거이자, **이번달 행 수(COUNT)가 곧 진행한 출석 일차**가 된다(일차 컬럼을 따로 두지 않는다). 실제 보상 내용은 `attendance_master`가 정의하고 지급은 메일로 발급된다.
-- **저장 데이터**: `(user_id, attend_date)` 키(`attend_date`=YYYYMMDD, KST 기준), `claimed_at`(출석/발급 시각, Unix ts).
+- **역할**: 계정의 **출석 진행도**(계정당 1행). 누적 출석일수로 보상 일차를 산출하고(`% 30 + 1`, 30일 순환·월 리셋 없음), 마지막 획득 일자로 하루 1회 중복 수령을 막는다(조건부 갱신 조건으로도 사용). 행은 캐릭터 생성 시 함께 만들어진다. 실제 보상 내용은 `attendance_master`가 정의하고 지급은 메일로 발급된다.
+- **저장 데이터**: `user_id`(PK/FK), `attend_count`(누적 출석일수), `last_attend_date`(마지막 보상 획득 일자 YYYYMMDD, KST 기준. 0=이력 없음). **출석 일자별 이력은 갖지 않는다**(별도 이력 로그의 책임).
 
 ### trade_listing
 
@@ -306,14 +306,14 @@ erDiagram
 | `stage_reward_drop` | `stage_id`+`grade` | `stage_reward.stage_id`의 자식(등급별 드롭 확률, 1:N) |
 | `cube_master` | `cube_level` | `player_cube.cube_level` |
 | `box_master` | `box_code` | (골드 가챠 상자 열기 API 입력 · 골드 차감·지급 모두 `player_item`, 상자 자체는 저장 안 함) |
-| `attendance_master` | `day` | (출석부 **일차별**(누적 출석 순번 1~30) 보상 정의 · 지급은 메일 발급, `player_attendance`는 수령 일자 기록) |
+| `attendance_master` | `day` | (출석부 **일차별**(누적 출석 순번 1~30) 보상 정의 · 지급은 메일 발급, `player_attendance`는 진행도 보관) |
 
 **테이블별 역할·정의 데이터** (모두 정적·읽기 전용 정의이며 유저가 변경하지 않는다. 실제 값은 [마스터 데이터 값](../세부/master-data/master-data-값.md))
 
 ### class_master
 
 - **역할**: 캐릭터 생성 시 고르는 직업(클래스) 정의. `player_character.class_code`가 참조.
-- **정의 데이터**: 직업 이름, 해금 방식(`unlock_type`), 기본 스탯(hp·atk·def·이동속도·치명확률·치명피해·쿨다운). 현재 3종(기사·레인저·마법사).
+- **정의 데이터**: 직업 이름, 설명(`description`, 클라 표시용), 해금 방식(`unlock_type`), 기본 스탯(hp·atk·def·이동속도·치명확률·치명피해·쿨다운). 현재 3종(기사·레인저·마법사).
 
 ### level_master
 
@@ -377,7 +377,7 @@ erDiagram
 
 ### attendance_master
 
-- **역할**: 출석부 **일차별(1~30)** 보상 정의. `day`는 날짜가 아니라 **이번달 누적 출석 순번**이며, 출석 시 `이번달 출석 수 + 1`로 조회해 보상을 확정하고 메일로 발급한다(수령 기록은 `player_attendance`).
+- **역할**: 출석부 **일차별(1~30)** 보상 정의. `day`는 날짜가 아니라 **누적 출석 순번**이며, 출석 시 `누적 출석일수 % 30 + 1`(30일 순환)로 조회해 보상을 확정하고 메일로 발급한다(진행도는 `player_attendance`).
 - **정의 데이터**: `day`(출석 일차 1~30), `reward_type`(1:골드 2:아이템 3:재료), `reward_code`(골드면 0), `quantity`.
 
 - 마스터 데이터는 **클라이언트 빌드에 번들**되고 서버도 같은 원천을 기동 시 자체 로드한다(런타임 다운로드·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 6·8장).

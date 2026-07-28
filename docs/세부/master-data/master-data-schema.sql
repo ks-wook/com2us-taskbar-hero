@@ -92,6 +92,7 @@ DROP TABLE IF EXISTS class_master;
 CREATE TABLE class_master (
     class_code   INT         NOT NULL COMMENT '직업 코드',
     name         VARCHAR(20) NOT NULL COMMENT '직업 이름',
+    description  VARCHAR(100) NOT NULL DEFAULT '' COMMENT '직업 설명(클라 표시용)',
     unlock_type  TINYINT      NOT NULL COMMENT '해금 방식(0=기본 선택)',
     hp           BIGINT       NOT NULL COMMENT '기본 체력',
     atk          BIGINT       NOT NULL COMMENT '기본 공격',
@@ -103,10 +104,10 @@ CREATE TABLE class_master (
     PRIMARY KEY (class_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='캐릭터 직업 정의(기본 스탯 포함)';
 
-INSERT INTO class_master (class_code, name, unlock_type, hp, atk, def, move_speed, crit_chance, crit_damage, cooldown) VALUES
-    (1, '기사',   0, 180, 10, 16, 3.0, 0.05, 1.5, 1.2),
-    (2, '레인저', 0,  90, 14, 5, 4.0, 0.10, 1.5, 0.9),
-    (3, '마법사', 0,  85, 16, 4, 3.2, 0.08, 1.7, 1.5);
+INSERT INTO class_master (class_code, name, description, unlock_type, hp, atk, def, move_speed, crit_chance, crit_damage, cooldown) VALUES
+    (1, '기사',   '높은 체력과 방어력으로 최전방에서 적을 막아서는 근접 전사다.',        0, 180, 10, 16, 3.0, 0.05, 1.5, 1.2),
+    (2, '레인저', '빠른 공격 주기와 높은 치명타 확률로 원거리에서 적을 제압하는 궁수다.', 0,  90, 14, 5, 4.0, 0.10, 1.5, 0.9),
+    (3, '마법사', '공격 주기는 느리지만 강력한 원소 마법으로 광역 피해를 입히는 술사다.', 0,  85, 16, 4, 3.2, 0.08, 1.7, 1.5);
 
 
 -- =====================================================================

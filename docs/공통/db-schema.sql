@@ -235,13 +235,13 @@ CREATE TABLE player_mail_reward (
 -- 출석 기록. 행이 존재하면 그날(KST) 출석 보상을 수령한 것. 하루 1회 제한을 PK가 보장.
 DROP TABLE IF EXISTS player_attendance;
 CREATE TABLE player_attendance (
-    user_id     BIGINT NOT NULL COMMENT '계정 user_id',
-    attend_date INT    NOT NULL COMMENT '출석 일자 YYYYMMDD(서버 KST 기준)',
-    claimed_at  BIGINT NOT NULL COMMENT '출석/보상 메일 발급 시각(Unix ts)',
-    PRIMARY KEY (user_id, attend_date),
+    user_id          BIGINT NOT NULL COMMENT '계정 user_id',
+    attend_count     INT    NOT NULL DEFAULT 0 COMMENT '누적 출석일수(리셋 없음). 일차 = count % 30 + 1로 순환',
+    last_attend_date INT    NOT NULL DEFAULT 0 COMMENT '마지막 보상 획득 일자 YYYYMMDD(KST). 0=이력 없음',
+    PRIMARY KEY (user_id),
     CONSTRAINT fk_attend_player FOREIGN KEY (user_id)
         REFERENCES game_player (user_id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='출석 기록(일자별 1행, 하루 1회 보장)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='출석 진행도(계정당 1행). 하루 1회는 last_attend_date 조건부 갱신으로 보장';
 
 
 -- 거래소 등록(전역). 에스크로 방식 — 등록 시 아이템을 player_item에서 빼 여기 스냅샷으로 보관한다.

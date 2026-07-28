@@ -1,5 +1,4 @@
 using GameServer.Data;
-using MySqlConnector;
 using SqlKata.Execution;
 
 namespace GameServer.Repositories;
@@ -7,10 +6,9 @@ namespace GameServer.Repositories;
 public enum AttendanceClaimStatus
 {
     Ok,
-    NoPlayer,       // game_player 없음(세이브 미생성)
+    NoPlayer,       // player_attendance 행 없음 = 계정 세이브 미생성(캐릭터 생성 시 함께 만든다)
     AlreadyClaimed, // 오늘자 출석을 이미 수령(동시 요청 경합 포함)
-    AllClaimed,     // 이번달 마지막 일차(30)까지 모두 수령 — 더 받을 보상 없음
-    RewardNotFound, // 산출된 일차의 보상이 attendance_master에 없음(마스터 결함)
+    RewardNotFound, // 산출된 일차의 보상이 attendance_master에 없거나 사다리가 비어 있음(마스터 결함)
 }
 
 /// <summary>출석 획득 트랜잭션 결과. 성공 시 Day = 이번에 받은 출석 일차, MailId = 발급된 보상 메일.</summary>
@@ -19,28 +17,29 @@ public sealed record AttendanceClaimOutcome(AttendanceClaimStatus Status, int Da
     public static AttendanceClaimOutcome Fail(AttendanceClaimStatus status, int day = 0) => new(status, day, 0);
 }
 
+/// <summary>출석 진행도 스냅샷(계정당 1행). AttendCount = 누적 출석일수, LastAttendDate = 마지막 획득 일자(YYYYMMDD, 0=없음).</summary>
+public sealed record AttendanceProgress(int AttendCount, int LastAttendDate);
+
 public interface IAttendanceRepository
 {
-    /// <summary>지정 기간(YYYYMMDD, 양끝 포함)에 출석한 일자 목록을 조회한다. 이번달 출석 진행도 구성에 사용한다.</summary>
-    Task<IReadOnlyList<int>> GetClaimedDatesAsync(long userId, int fromDate, int toDate);
+    /// <summary>계정의 출석 진행도를 조회한다(계정당 1행). 세이브가 없으면 null.</summary>
+    Task<AttendanceProgress?> GetProgressAsync(long userId);
 
     /// <summary>
-    /// 오늘자 출석 획득을 한 트랜잭션으로 적용한다(attendance 기획서 §6.1): 일차 산출(이번달 출석 수 + 1)
-    /// + 출석 기록 삽입(하루 1회) + 보상 메일 발급. <b>일차 산출을 같은 트랜잭션에 넣어</b> 산출과 삽입 사이에
-    /// 다른 요청이 끼어들어 같은 일차가 두 번 발급되는 것을 막는다.
-    /// (user_id, attend_date) PK가 하루 1회를 보장하며, 이미 행이 있으면(동시 요청 경합 포함) AlreadyClaimed.
-    /// 계정 세이브(game_player)가 없으면 NoPlayer, 산출 일차가 maxDay를 넘으면 AllClaimed.
+    /// 오늘자 출석 획득을 한 트랜잭션으로 적용한다(attendance 기획서 §6.1): 진행도 관측 → 일차 산출
+    /// (누적 출석일수 % maxDay + 1) → 진행도 조건부 갱신 → 보상 메일 발급.
+    /// <b>하루 1회는 last_attend_date 조건부 갱신(CAS)이 보장한다</b> — 관측한 값과 달라졌으면(동시 요청이 먼저 처리)
+    /// 0행이 되어 AlreadyClaimed. 관측 시점에 이미 오늘 날짜면 즉시 AlreadyClaimed.
+    /// 행이 없으면(계정 세이브 미생성) NoPlayer. 마지막 일차까지 받으면 다시 1일차로 순환하므로 소진 실패는 없다.
     /// </summary>
-    /// <param name="monthFromDate">이번달 집계 시작 일자(YYYYMMDD, 이달 1일).</param>
-    /// <param name="monthToDate">이번달 집계 종료 일자(YYYYMMDD, 이달 말일).</param>
-    /// <param name="maxDay">보상 사다리의 마지막 일차(attendance_master 최대 day).</param>
+    /// <param name="attendDate">오늘 일자(YYYYMMDD, 서버 KST 기준).</param>
+    /// <param name="maxDay">보상 사다리의 마지막 일차(attendance_master 최대 day) = 순환 주기. 0 이하면 RewardNotFound.</param>
     /// <param name="composeRewardMail">산출된 일차 → 발급할 보상 메일 초안. null을 돌려주면 RewardNotFound.</param>
     Task<AttendanceClaimOutcome> ApplyClaimAsync(
-        long userId, int attendDate, int monthFromDate, int monthToDate, int maxDay,
-        Func<int, MailDraft?> composeRewardMail, long nowUnix);
+        long userId, int attendDate, int maxDay, Func<int, MailDraft?> composeRewardMail, long nowUnix);
 }
 
-/// <summary>출석 기록 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
+/// <summary>출석 진행도 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class AttendanceRepository : IAttendanceRepository
 {
     private readonly GameDbFactory _dbFactory;
@@ -48,38 +47,35 @@ public sealed class AttendanceRepository : IAttendanceRepository
     /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
     public AttendanceRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
-    /// <summary>player_attendance에서 기간 내 attend_date를 오름차순으로 조회한다(행 존재 = 그날 수령함).</summary>
-    public async Task<IReadOnlyList<int>> GetClaimedDatesAsync(long userId, int fromDate, int toDate)
+    /// <summary>player_attendance 단일 행을 읽어 진행도로 돌려준다(행 없음 = 계정 세이브 없음 → null).</summary>
+    public async Task<AttendanceProgress?> GetProgressAsync(long userId)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
 
         var db = _dbFactory.Create(connection);
-        var dates = await db.Query("player_attendance")
-            .Select("attend_date")
+        var row = await db.Query("player_attendance")
+            .Select("attend_count", "last_attend_date")
             .Where("user_id", userId)
-            .WhereBetween("attend_date", fromDate, toDate)
-            .OrderBy("attend_date")
-            .GetAsync<int>();
-        return dates.ToList();
+            .FirstOrDefaultAsync<AttendanceProgressRow>();
+
+        return row is null ? null : new AttendanceProgress(row.AttendCount, row.LastAttendDate);
     }
 
     /// <summary>
-    /// 일차 산출 + 출석 기록 삽입 + 보상 메일 발급을 단일 커넥션의 단일 트랜잭션으로 적용한다.
-    /// 검증 실패(NoPlayer·AlreadyClaimed·AllClaimed·RewardNotFound)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// 일차 산출 + 진행도 갱신 + 보상 메일 발급을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(NoPlayer·AlreadyClaimed·RewardNotFound)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
     /// </summary>
     /// <remarks>
-    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 출석만 기록되고 메일이 없는 상태를 막는다):
-    /// <para>1) game_player SELECT — 계정 세이브 존재 확인(없으면 NoPlayer. 캐릭터 생성 전 호출)</para>
-    /// <para>2) player_attendance SELECT — 오늘자 기존 행 확인(있으면 AlreadyClaimed)</para>
-    /// <para>3) player_attendance COUNT(이번달) — 일차 산출(day = 이번달 출석 수 + 1). maxDay 초과면 AllClaimed</para>
-    /// <para>4) 보상 메일 초안 렌더링 — 산출된 일차의 보상 확정(정의 없으면 RewardNotFound)</para>
-    /// <para>5) player_attendance INSERT — (user_id, attend_date) PK가 동시 요청을 직렬화, 중복 키면 경합 패배(AlreadyClaimed)</para>
-    /// <para>6) player_mail + player_mail_reward INSERT — 보상 메일 발급(MailRepository.InsertMailAsync, §6.4 규약)</para>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 진행도만 오르고 메일이 없는 상태를 막는다):
+    /// <para>1) player_attendance SELECT — 진행도 관측(행 없으면 NoPlayer). 오늘 날짜면 AlreadyClaimed</para>
+    /// <para>2) 일차 산출 — day = 갱신 후 누적 % maxDay + 1(30일차 이후 1일차로 순환)</para>
+    /// <para>3) 보상 메일 초안 렌더링 — 산출된 일차의 보상 확정(정의 없으면 RewardNotFound)</para>
+    /// <para>4) player_attendance 조건부 갱신 — last_attend_date가 관측값일 때만 전이(0행이면 경합 패배 → AlreadyClaimed)</para>
+    /// <para>5) player_mail + player_mail_reward INSERT — 보상 메일 발급(MailRepository.InsertMailAsync, §6.4 규약)</para>
     /// </remarks>
     public async Task<AttendanceClaimOutcome> ApplyClaimAsync(
-        long userId, int attendDate, int monthFromDate, int monthToDate, int maxDay,
-        Func<int, MailDraft?> composeRewardMail, long nowUnix)
+        long userId, int attendDate, int maxDay, Func<int, MailDraft?> composeRewardMail, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -89,42 +85,35 @@ public sealed class AttendanceRepository : IAttendanceRepository
         {
             var db = _dbFactory.Create(connection);
 
-            // 1) 계정 세이브 확인. 없으면 출석 기록의 FK(fk_attend_player)가 깨지므로 먼저 거부한다.
-            var player = await db.Query("game_player")
-                .Select("user_id")
+            if (maxDay <= 0)
+            {
+                await transaction.RollbackAsync();
+                return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.RewardNotFound);
+            }
+
+            // 1) 진행도 관측. 행은 캐릭터 생성 시 함께 만들어지므로, 없으면 계정 세이브가 없는 것이다.
+            var progress = await db.Query("player_attendance")
+                .Select("attend_count", "last_attend_date")
                 .Where("user_id", userId)
-                .FirstOrDefaultAsync<long?>(transaction);
-            if (player is null)
+                .FirstOrDefaultAsync<AttendanceProgressRow>(transaction);
+            if (progress is null)
             {
                 await transaction.RollbackAsync();
                 return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.NoPlayer);
             }
 
-            // 2) 오늘자 기존 행 확인(행 존재 = 이미 수령).
-            var existing = await db.Query("player_attendance")
-                .Select("attend_date")
-                .Where("user_id", userId).Where("attend_date", attendDate)
-                .FirstOrDefaultAsync<int?>(transaction);
-            if (existing is not null)
+            if (progress.LastAttendDate == attendDate)
             {
                 await transaction.RollbackAsync();
                 return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.AlreadyClaimed);
             }
 
-            // 3) 일차 산출 — 이번달 출석 수 + 1. 날짜(day-of-month)가 아니라 누적 출석 순번이므로
-            //    월중에 처음 출석해도 1일차부터 시작한다. 집계를 이 트랜잭션 안에서 해야 삽입과의 사이가 벌어지지 않는다.
-            var attendedCount = await db.Query("player_attendance")
-                .Where("user_id", userId)
-                .WhereBetween("attend_date", monthFromDate, monthToDate)
-                .CountAsync<int>(transaction: transaction);
-            var day = attendedCount + 1;
-            if (day > maxDay)
-            {
-                await transaction.RollbackAsync();
-                return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.AllClaimed, day);
-            }
+            // 2) 일차 산출 — 갱신 후 누적을 기준으로 하며 maxDay 주기로 순환한다(§2 사다리 순환).
+            //    날짜(day-of-month)와 무관하므로 월중에 처음 출석해도 1일차부터 시작한다.
+            var newCount = progress.AttendCount + 1;
+            var day = ((newCount - 1) % maxDay) + 1;
 
-            // 4) 산출된 일차의 보상으로 메일 초안을 렌더링한다(마스터에 없으면 결함 → RewardNotFound).
+            // 3) 산출된 일차의 보상으로 메일 초안을 렌더링한다(마스터에 없으면 결함 → RewardNotFound).
             var rewardMail = composeRewardMail(day);
             if (rewardMail is null)
             {
@@ -132,23 +121,19 @@ public sealed class AttendanceRepository : IAttendanceRepository
                 return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.RewardNotFound, day);
             }
 
-            // 5) 출석 기록 삽입. PK (user_id, attend_date)가 하루 1회를 보장 — 중복 키는 동시 요청 경합 패배.
-            try
-            {
-                await db.Query("player_attendance").InsertAsync(new
-                {
-                    user_id = userId,
-                    attend_date = attendDate,
-                    claimed_at = nowUnix,
-                }, transaction);
-            }
-            catch (MySqlException ex) when (ex.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
+            // 4) 진행도 선점(조건부 갱신): 관측한 last_attend_date일 때만 전이한다.
+            //    동시 요청이 먼저 처리했으면 관측값과 달라 0행 → 중복 발급을 막는 핵심 게이트.
+            var updated = await db.Query("player_attendance")
+                .Where("user_id", userId)
+                .Where("last_attend_date", progress.LastAttendDate)
+                .UpdateAsync(new { attend_count = newCount, last_attend_date = attendDate }, transaction);
+            if (updated == 0)
             {
                 await transaction.RollbackAsync();
                 return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.AlreadyClaimed);
             }
 
-            // 6) 보상 메일 발급(같은 트랜잭션).
+            // 5) 보상 메일 발급(같은 트랜잭션).
             var mailId = await MailRepository.InsertMailAsync(db, transaction, userId, rewardMail, nowUnix);
 
             await transaction.CommitAsync();
@@ -160,4 +145,11 @@ public sealed class AttendanceRepository : IAttendanceRepository
             throw;
         }
     }
+}
+
+/// <summary>player_attendance 행 매핑용 POCO(snake_case → PascalCase 자동 매핑).</summary>
+file sealed class AttendanceProgressRow
+{
+    public int AttendCount { get; set; }
+    public int LastAttendDate { get; set; }
 }
