@@ -9,7 +9,8 @@ namespace TaskbarHero.Client.Battle
 {
     /// <summary>
     /// 스테이지 클리어 연출 오버레이. 서버 클리어 응답을 받으면 화면 전체에 표시된다.
-    /// - 클리어 팡파레 이펙트(프레임 시퀀스, 슬로우모션과 무관하게 unscaled 시간으로 재생)
+    /// - 클리어 팡파레 이펙트(프레임 시퀀스, 슬로우모션과 무관하게 unscaled 시간으로 재생).
+    ///   <b>클리어 연출에서만</b> 재생하며, 보상 획득 연출로 재활용할 때는 뒤편에 나오지 않는다.
     /// - 보상(골드·경험치·전리품 아이템 아이콘+수량) 노출. 세 종류 모두 공용 아이템 슬롯
     ///   프리팹(ItemSlot, <see cref="ItemSlotView"/>)을 사용해 수량/획득량이 슬롯 안쪽에
     ///   동일하게 노출되도록 통일한다(경험치는 아이콘 대신 "EXP" 라벨을 표시하는 SetupLabel 사용).
@@ -47,30 +48,33 @@ namespace TaskbarHero.Client.Battle
         private float _frameTimer;
         private bool _dismissed;
         private bool _restoreTimeScale;
+        private bool _showFanfare;
         private Action _onClosed;
 
         /// <summary>클리어 응답 데이터로 오버레이를 생성·표시한다. onClosed는 닫힐 때(클릭/자동) 1회 호출된다.
-        /// 전투 종료 슬로우모션 상태에서 열리므로 닫을 때 게임 속도를 정상으로 되돌린다.</summary>
+        /// 전투 종료 슬로우모션 상태에서 열리므로 닫을 때 게임 속도를 정상으로 되돌리고, 팡파레를 재생한다.</summary>
         public static void Show(StageClearData data, Action onClosed = null)
         {
-            ShowRewards(StageClearTitle, data != null ? data.rewards : null, true, onClosed);
+            ShowRewards(StageClearTitle, data != null ? data.rewards : null,
+                restoreTimeScale: true, showFanfare: true, onClosed);
         }
 
         /// <summary>
-        /// 클리어 연출 UI(팡파레 + 보상 칸 순차 등장)를 <b>보상 획득 연출로 재활용</b>한다.
+        /// 클리어 연출 UI(보상 칸 순차 등장)를 <b>보상 획득 연출로 재활용</b>한다.
         /// 우편함 첨부 수령처럼 "무엇을 얼마나 받았는지"를 같은 방식으로 보여줄 때 쓴다.
-        /// 전투와 무관한 화면에서 호출되므로 게임 속도에는 손대지 않는다.
+        /// 전투 승리 연출이 아니므로 <b>뒤편 팡파레 이펙트는 재생하지 않고</b> 게임 속도에도 손대지 않는다.
         /// </summary>
         /// <param name="title">상단에 표시할 문구(예: "보상 획득!").</param>
         /// <param name="rewards">표시할 보상(골드·경험치·아이템). 비어 있으면 보상 칸 없이 연출만 나온다.</param>
         public static void ShowRewards(string title, StageRewardsDto rewards, Action onClosed = null)
         {
-            ShowRewards(title, rewards, false, onClosed);
+            ShowRewards(title, rewards, restoreTimeScale: false, showFanfare: false, onClosed);
         }
 
         /// <summary>오버레이를 만들어 표시하는 공통 경로(클리어·보상 획득 재활용 양쪽).
         /// 프리팹이 없으면 런타임 구성으로 폴백한다.</summary>
-        private static void ShowRewards(string title, StageRewardsDto rewards, bool restoreTimeScale, Action onClosed)
+        private static void ShowRewards(string title, StageRewardsDto rewards, bool restoreTimeScale,
+            bool showFanfare, Action onClosed)
         {
             var assets = StageClearAssets.Load();
             StageClearOverlay overlay;
@@ -92,6 +96,7 @@ namespace TaskbarHero.Client.Battle
             overlay._assets = assets;
             overlay._onClosed = onClosed;
             overlay._restoreTimeScale = restoreTimeScale;
+            overlay._showFanfare = showFanfare;
             overlay.SetTitle(title);
             overlay.Populate(rewards);
         }
@@ -201,10 +206,11 @@ namespace TaskbarHero.Client.Battle
             hrt.anchoredPosition = new Vector2(0f, 70f);
         }
 
-        /// <summary>보상 데이터로 팡파레·보상 칸을 채우고 자동 닫기 타이머를 시작한다.</summary>
+        /// <summary>보상 데이터로 팡파레·보상 칸을 채우고 자동 닫기 타이머를 시작한다.
+        /// 팡파레는 클리어 연출에서만 재생한다(재활용 호출은 <see cref="_showFanfare"/>가 false라 이미지를 꺼 둔다).</summary>
         private void Populate(StageRewardsDto rewards)
         {
-            _frames = _assets != null ? _assets.fanfareFrames : null;
+            _frames = _showFanfare && _assets != null ? _assets.fanfareFrames : null;
             if (_fanfareImage != null)
             {
                 bool hasFrames = _frames != null && _frames.Length > 0;
