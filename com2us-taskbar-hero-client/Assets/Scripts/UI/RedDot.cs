@@ -7,8 +7,9 @@ namespace TaskbarHero.Client.UI
 {
     /// <summary>
     /// UI 요소 <b>우측 상단</b>에 붙는 빨간 알림 점(레드닷). 바인딩한 조건(<see cref="Func{Boolean}"/>)이 참일 때만 표시된다.
-    /// 세션 변경(<see cref="Session.InventoryChanged"/>) 시 자동으로 조건을 다시 평가하므로, 데이터가 바뀌면
-    /// 별도 호출 없이 표시/숨김이 갱신된다. 어떤 버튼·아이콘에도 붙일 수 있는 재사용 공용 컴포넌트다.
+    /// 세션 변경(<see cref="Session.InventoryChanged"/>)과 우편함 갱신(<see cref="MailNotifier.Changed"/>) 시 자동으로
+    /// 조건을 다시 평가하므로, 데이터가 바뀌면 별도 호출 없이 표시/숨김이 갱신된다.
+    /// 어떤 버튼·아이콘에도 붙일 수 있는 재사용 공용 컴포넌트다.
     /// </summary>
     [RequireComponent(typeof(Image))]
     public class RedDot : MonoBehaviour
@@ -93,12 +94,14 @@ namespace TaskbarHero.Client.UI
         private void OnEnable()
         {
             Session.InventoryChanged += Refresh; // 세이브/인벤토리 변경 시 자동 재평가
+            MailNotifier.Changed += Refresh;     // 우편함 스냅샷 갱신 시 자동 재평가
             Refresh();
         }
 
         private void OnDisable()
         {
             Session.InventoryChanged -= Refresh;
+            MailNotifier.Changed -= Refresh;
         }
     }
 }

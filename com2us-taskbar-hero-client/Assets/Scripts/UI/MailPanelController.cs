@@ -22,6 +22,13 @@ namespace TaskbarHero.Client.UI
         private const float CanvasRefHeight = 1920f;
         private const float RowHeight = 170f;
 
+        // 첨부 슬롯은 행 우측의 '받기' 버튼(또는 상태 라벨) 바로 왼쪽에 오른쪽 정렬로 놓는다.
+        private const float AttachmentSlotSize = 52f;
+        private const float AttachmentSlotGap = 8f;
+        private const float ClaimAreaWidth = 176f;   // 우측 여백(20) + 상태 라벨 폭(140) + 슬롯과의 간격(16)
+        private const float RowTextLeft = 136f;      // 봉투 아이콘 오른쪽부터 시작하는 텍스트 영역
+        private const float TextToSlotGap = 24f;     // 본문 텍스트와 첨부 슬롯 사이 최소 간격
+
         [Header("UI 리소스 (Assets/Art/UI/Mail — 에디터 빌더가 배선)")]
         [Tooltip("우편함 패널 배경(mailbox_bg). 없으면 단색 배경.")]
         [SerializeField] private Sprite _backgroundSprite;
@@ -239,7 +246,9 @@ namespace TaskbarHero.Client.UI
 
         // ── 목록 조회/표시 ──
 
-        /// <summary>우편함 목록을 서버에서 조회해 행을 다시 그린다(POST /api/game/mail/list).</summary>
+        /// <summary>우편함 목록을 서버에서 조회해 행을 다시 그린다(POST /api/game/mail/list).
+        /// 조회 결과는 레드닷 알림기(<see cref="MailNotifier"/>)의 스냅샷으로도 공유해 미수령 알림을 즉시 최신화하고,
+        /// 목록을 그린 뒤에는 사용자가 우편함을 실제로 확인했으므로 미열람 표시를 해제한다.</summary>
         private void RequestList()
         {
             if (NetworkManager.Instance == null || !Session.IsLoggedIn)
@@ -251,7 +260,9 @@ namespace TaskbarHero.Client.UI
             NetworkManager.Instance.PostToGame<MailListResponse>("/api/game/mail/list", req, resp =>
             {
                 var mails = resp != null && resp.data != null ? resp.data.mails : null;
+                MailNotifier.ApplySnapshot(mails);
                 RebuildRows(mails ?? new List<MailDto>());
+                MailNotifier.MarkAllViewed();
             }, OnListError);
         }
 
@@ -279,7 +290,8 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>메일 1건의 행(봉투 아이콘·제목·본문·첨부 요약·만료·수령 버튼)을 만든다.</summary>
+        /// <summary>메일 1건의 행을 만든다. 좌측부터 봉투 아이콘 · 제목/본문,
+        /// 우측 상단에 만료 표시, 우측에 '받기' 버튼(또는 수령 완료·만료 라벨)과 그 왼쪽에 첨부 아이콘을 둔다.</summary>
         private GameObject BuildRow(MailDto mail, long now)
         {
             bool expired = mail.expiresAt != 0 && now > mail.expiresAt;
@@ -299,8 +311,11 @@ namespace TaskbarHero.Client.UI
             var rt = rowImg.rectTransform;
 
             // 봉투 아이콘(좌측): 미열람 = mail_unread, 열람 = mail_readed.
+            // 레드닷 갱신용 배경 조회도 서버에서 읽음 처리되므로, 사용자가 우편함을 열기 전까지의 미열람 여부는
+            // MailNotifier가 로컬에 보존한 값(WasUnread)으로 판정한다.
+            bool unread = mail.isRead == 0 || MailNotifier.WasUnread(mail.mailId);
             var envelope = NewImage("Envelope", rt, Color.white);
-            envelope.sprite = mail.isRead == 0 ? _unreadSprite : _readSprite;
+            envelope.sprite = unread ? _unreadSprite : _readSprite;
             envelope.preserveAspect = true;
             envelope.enabled = envelope.sprite != null;
             var ert = envelope.rectTransform;
@@ -312,18 +327,26 @@ namespace TaskbarHero.Client.UI
             // 제목 / 본문 / 첨부 요약(아이콘 오른쪽, 위에서 아래로).
             var title = NewText("Title", rt, mail.title ?? string.Empty, 30, TextAnchor.UpperLeft);
             title.fontStyle = FontStyle.Bold;
-            PlaceTopLeft(title.rectTransform, 136f, 18f, 480f, 36f);
+            PlaceTopLeft(title.rectTransform, RowTextLeft, 18f, 480f, 36f);
+
+            // 첨부 슬롯이 본문과 같은 높이에 오므로, 슬롯이 차지하는 폭만큼 본문 오른쪽을 비운다
+            // (행 폭은 레이아웃이 정하므로 좌우 늘림 앵커로 배치한다).
+            int slotCount = _itemSlotPrefab != null ? CountAttachments(mail) : 0;
+            float slotsWidth = slotCount > 0
+                ? slotCount * AttachmentSlotSize + (slotCount - 1) * AttachmentSlotGap
+                : 0f;
+            float bodyRight = slotCount > 0 ? ClaimAreaWidth + slotsWidth + TextToSlotGap : 200f;
 
             var body = NewText("Body", rt, mail.body ?? string.Empty, 22, TextAnchor.UpperLeft);
             body.color = new Color(1f, 1f, 1f, 0.72f);
             body.horizontalOverflow = HorizontalWrapMode.Wrap;
             body.verticalOverflow = VerticalWrapMode.Truncate;
-            PlaceTopLeft(body.rectTransform, 136f, 58f, 480f, 52f);
+            PlaceTopStretch(body.rectTransform, RowTextLeft, bodyRight, 58f, 52f);
 
             // 첨부: 공용 아이템 슬롯(아이콘·수량, hover 시 상세 팝업)로 표시. 프리팹 미배선 시 텍스트 요약 폴백.
-            if (_itemSlotPrefab != null && hasAttachments)
+            if (slotCount > 0)
             {
-                BuildAttachmentSlots(mail, rt);
+                BuildAttachmentSlots(mail, rt, slotCount);
             }
             else
             {
@@ -373,11 +396,11 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>메일 행에 첨부를 공용 아이템 슬롯(ItemSlot 프리팹)로 나열한다(아이콘·수량,
-        /// hover 시 item_detail_bg 배경의 공용 상세 팝업). 골드(rewardType 1)는 아이콘 코드 1을 쓰고 상세는 끈다.</summary>
-        private void BuildAttachmentSlots(MailDto mail, RectTransform row)
+        /// hover 시 item_detail_bg 배경의 공용 상세 팝업). 슬롯은 우측 '받기' 버튼(수령 완료·만료 시엔 상태 라벨)
+        /// 바로 왼쪽에 버튼과 같은 높이로 오른쪽 정렬해, 받을 보상과 수령 버튼이 나란히 보이게 한다.
+        /// 골드(rewardType 1)는 아이콘 코드 1을 쓰고 상세는 끈다.</summary>
+        private void BuildAttachmentSlots(MailDto mail, RectTransform row, int slotCount)
         {
-            const float slotSize = 52f;
-            const float gap = 8f;
             int index = 0;
             foreach (var a in mail.attachments)
             {
@@ -387,10 +410,13 @@ namespace TaskbarHero.Client.UI
                 }
                 var go = Instantiate(_itemSlotPrefab, row);
                 var rt = (RectTransform)go.transform;
-                rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
-                rt.pivot = new Vector2(0f, 1f);
-                rt.anchoredPosition = new Vector2(136f + index * (slotSize + gap), -112f);
-                rt.sizeDelta = new Vector2(slotSize, slotSize);
+                rt.anchorMin = rt.anchorMax = new Vector2(1f, 0.5f);
+                rt.pivot = new Vector2(1f, 0.5f);
+                // 오른쪽(버튼 쪽)부터 역순으로 채워, 첫 첨부가 가장 왼쪽에 오도록 한다.
+                float fromRight = ClaimAreaWidth
+                    + (slotCount - 1 - index) * (AttachmentSlotSize + AttachmentSlotGap);
+                rt.anchoredPosition = new Vector2(-fromRight, -8f); // y: 받기 버튼과 같은 높이
+                rt.sizeDelta = new Vector2(AttachmentSlotSize, AttachmentSlotSize);
                 var view = go.GetComponent<ItemSlotView>();
                 if (view != null)
                 {
@@ -405,6 +431,24 @@ namespace TaskbarHero.Client.UI
                 }
                 index++;
             }
+        }
+
+        /// <summary>메일의 유효한 첨부 개수(null 항목 제외). 슬롯 배치 폭과 본문 폭 계산에 쓴다.</summary>
+        private static int CountAttachments(MailDto mail)
+        {
+            if (mail.attachments == null)
+            {
+                return 0;
+            }
+            int count = 0;
+            foreach (var a in mail.attachments)
+            {
+                if (a != null)
+                {
+                    count++;
+                }
+            }
+            return count;
         }
 
         /// <summary>첨부 요약 문자열("골드 +5,000 · 강철 대검 x1"). 첨부가 없으면 빈 문자열.</summary>
@@ -629,6 +673,17 @@ namespace TaskbarHero.Client.UI
             rt.pivot = new Vector2(0f, 1f);
             rt.anchoredPosition = new Vector2(x, -y);
             rt.sizeDelta = new Vector2(w, h);
+        }
+
+        /// <summary>행 상단 기준으로 좌우를 늘려 배치한다(폭 = 행 폭 − left − right).
+        /// 행 폭은 세로 레이아웃이 정하므로, 우측 요소를 피해야 하는 텍스트에 쓴다.</summary>
+        private static void PlaceTopStretch(RectTransform rt, float left, float right, float y, float h)
+        {
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.offsetMin = new Vector2(left, -y - h);
+            rt.offsetMax = new Vector2(-right, -y);
         }
 
         private static void Stretch(RectTransform rt)

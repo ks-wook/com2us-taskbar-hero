@@ -404,6 +404,7 @@ namespace TaskbarHero.Client.UI
 
                 UpdateClaimButton();
                 ShowClaimedModal(data);
+                MailNotifier.Refresh(); // 보상이 메일로 발급됐으므로 미수령 메일 레드닷을 즉시 갱신
             }, OnClaimError);
         }
 

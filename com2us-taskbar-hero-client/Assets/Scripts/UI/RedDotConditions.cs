@@ -5,10 +5,15 @@ namespace TaskbarHero.Client.UI
 {
     /// <summary>
     /// 레드닷(알림 점) 표시 조건을 한곳에서 정의하는 공용 헬퍼. 새 알림 조건이 생기면 여기에 메서드를 추가하고
-    /// <see cref="RedDot.Bind"/>로 연결한다. 현재는 잔여(미사용) 스킬 포인트 여부만 제공한다.
+    /// <see cref="RedDot.Bind"/>로 연결한다. 현재는 잔여(미사용) 스킬 포인트 여부와 미수령 보상 메일 여부를 제공한다.
     /// </summary>
     public static class RedDotConditions
     {
+        /// <summary>수령하지 않은 보상(첨부)이 남은 메일이 하나라도 있으면 true — "만료 전에 받아 가라"는 알림이다.
+        /// 열람 여부와는 무관하며(조회 ≠ 수령), 판정은 <see cref="MailNotifier.HasUnclaimedReward"/>가 캐싱된
+        /// 우편함 스냅샷으로 수행한다(첨부 있음 + 미수령 + 미만료).</summary>
+        public static bool HasUnclaimedMailReward() => MailNotifier.HasUnclaimedReward;
+
         /// <summary>파티 캐릭터 중 하나라도 미사용(잔여) 스킬 포인트가 있으면 true.
         /// 스킬 포인트 = 캐릭터 레벨 파생 총량(<c>level_master.skillPoints</c>) − 이미 투자한 스킬 레벨 합(1레벨=1포인트).</summary>
         public static bool HasUnspentSkillPoints()

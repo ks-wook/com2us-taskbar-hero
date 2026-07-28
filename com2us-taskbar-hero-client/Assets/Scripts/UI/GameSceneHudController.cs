@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
@@ -16,6 +17,10 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite stageIcon;      // 스테이지
         [SerializeField] private Sprite inventoryIcon;  // 가방
         [SerializeField] private Sprite attendanceIcon; // 출석부
+
+        [Header("알림(레드닷)")]
+        [Tooltip("미수령 보상 메일 확인을 위한 우편함 재조회 주기(초). 0 이하면 진입 시 1회만 조회한다.")]
+        [SerializeField] private float mailPollIntervalSeconds = 60f;
 
         private GameObject _escMenuRoot; // ESC로 토글하는 메뉴(타이틀 복귀)
 
@@ -36,12 +41,32 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>GameScene 진입 시 대기 중인 오프라인 보상 정산 결과가 있으면 팝업으로 표시한다(Login에서 정산됨).</summary>
+        /// <summary>GameScene 진입 시 대기 중인 오프라인 보상 정산 결과가 있으면 팝업으로 표시하고,
+        /// 메일 레드닷 판정을 위한 우편함 조회 루프를 시작한다.</summary>
         private void Start()
         {
             if (Session.PendingOfflineReward != null && UIManager.Instance != null)
             {
                 UIManager.Instance.ShowOfflineReward();
+            }
+            StartCoroutine(MailNotifyLoop());
+        }
+
+        /// <summary>미수령 보상 메일 레드닷용 우편함 스냅샷을 진입 직후 1회 조회하고, 주기가 설정돼 있으면
+        /// 그 간격으로 재조회한다(플레이 중 도착한 메일도 알림에 반영). 전투 슬로우모션 등 timeScale 변화의
+        /// 영향을 받지 않도록 실시간 대기를 사용한다.</summary>
+        private IEnumerator MailNotifyLoop()
+        {
+            MailNotifier.Refresh();
+            if (mailPollIntervalSeconds <= 0f)
+            {
+                yield break;
+            }
+            var wait = new WaitForSecondsRealtime(mailPollIntervalSeconds);
+            while (true)
+            {
+                yield return wait;
+                MailNotifier.Refresh();
             }
         }
 
@@ -61,10 +86,13 @@ namespace TaskbarHero.Client.UI
 
             // 우하단: [출석부] [메일] [편성] [스테이지] [가방] — 아이콘 위 + 작은 텍스트 아래
             CreateButton(canvasGo.transform, font, "AttendanceButton", "출석부", attendanceIcon, new Vector2(-840f, 40f), OnAttendanceButton);
-            CreateButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, new Vector2(-640f, 40f), OnMailButton);
+            var mailBtn = CreateButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, new Vector2(-640f, 40f), OnMailButton);
             CreateButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, new Vector2(-440f, 40f), OnPartyButton);
             CreateButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, new Vector2(-240f, 40f), OnStageButton);
             var inventoryBtn = CreateButton(canvasGo.transform, font, "InventoryButton", "가방", inventoryIcon, new Vector2(-40f, 40f), OnInventoryButton);
+
+            // 메일 버튼 우측 상단 레드닷: 아직 수령하지 않은 보상 첨부가 남은 메일이 있으면 표시(만료 전 수령 유도).
+            RedDot.AttachTopRight((RectTransform)mailBtn.transform).Bind(RedDotConditions.HasUnclaimedMailReward);
 
             // 가방 버튼 우측 상단 레드닷: 잔여 스킬 포인트가 있으면 표시(스킬 레벨업은 가방 안에서 진입).
             RedDot.AttachTopRight((RectTransform)inventoryBtn.transform).Bind(RedDotConditions.HasUnspentSkillPoints);
@@ -281,6 +309,7 @@ namespace TaskbarHero.Client.UI
             Time.timeScale = 1f;                 // 전투 슬로우모션 등 배율 복원
             UIManager.Instance?.HideAll();        // 열려 있던 패널 정리
             Session.Clear();                      // 로그아웃(타이틀/로그인 새로 시작)
+            MailNotifier.Clear();                 // 우편함 알림 캐시 폐기(다음 계정에 이전 알림이 새지 않도록)
             Debug.Log("[HUD] ESC 메뉴 → 타이틀로 돌아가기");
             if (SceneManager.Instance != null)
             {
