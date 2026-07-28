@@ -54,15 +54,11 @@ public sealed record TradeItemInfo(int ItemType, int StackMax, int Sellable, lon
 public interface ITradeRepository
 {
     /// <summary>
-    /// 판매중 등록을 가격 오름차순으로 조회한다(itemCode 0이면 전체). 다음 페이지 존재 판정을 위해 limit+1건을 읽는다.
-    /// viewerUserId 기준으로 <b>쿼리 단계에서</b> 판매자를 거른다 — mine=false면 그 계정의 등록을 제외(구매 대상),
-    /// mine=true면 그 계정의 등록만(취소 대상) 반환한다.
+    /// 해당 itemCode(0이면 전체)의 판매중 등록 <b>전량</b>을 가격 오름차순·listing_id 보조 정렬로 조회한다.
+    /// 뷰어 필터도, 페이징도 하지 않는다 — 캐시에 담을 완전 집합을 만드는 용도이고, 뷰어별 필터와 페이징은
+    /// 서비스가 그 완전 집합 위에서 처리한다(trade 기획서 §7.3).
     /// </summary>
-    Task<(IReadOnlyList<TradeListingSnapshot> Listings, bool HasMore)> GetActiveListingsAsync(
-        int itemCode, long viewerUserId, bool mine, int page, int pageSize);
-
-    /// <summary>지정 계정의 판매중 등록 수(idx_trade_seller). 목록 캐시 사용 가능 여부 판정에 쓴다.</summary>
-    Task<int> CountActiveListingsBySellerAsync(long userId);
+    Task<IReadOnlyList<TradeListingSnapshot>> GetActiveListingsAsync(int itemCode);
 
     /// <summary>등록 스냅샷 1건(캐시 적재용). 없으면 null.</summary>
     Task<TradeListingSnapshot?> GetListingAsync(long listingId);
@@ -109,19 +105,21 @@ public sealed class TradeRepository : ITradeRepository
     private const int StatusSold = 2;
     private const int StatusCancelled = 3;
 
+    /// <summary>기간 만료로 자동 종료(만료 배치). 수동 취소(3)와 구분해 사유를 남긴다.</summary>
+    private const int StatusExpired = 4;
+
     private readonly GameDbFactory _dbFactory;
 
     /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
     public TradeRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
     /// <summary>
-    /// 판매중 등록을 가격 오름차순·listing_id 보조 정렬로 페이징 조회한다(idx_trade_browse·idx_trade_price가 커버).
-    /// pageSize+1건을 읽어 초과분 존재 여부로 hasMore를 판정한다(전체 COUNT 쿼리를 피한다).
-    /// <para><b>판매자 필터는 WHERE에서 처리한다.</b> 조회 결과를 받아서 걸러내면 페이지마다 건수가 들쭉날쭉해지고
-    /// OFFSET이 필터 전 기준이라 항목이 누락·중복된다 — 필터와 페이징은 같은 쿼리에서 끝내야 한다.</para>
+    /// 판매중 등록 전량을 가격 오름차순·listing_id 보조 정렬로 조회한다(idx_trade_browse·idx_trade_price가 커버).
+    /// <para>뷰어 필터·페이징을 쿼리에 넣지 않는다 — 결과는 <b>캐시에 담는 완전 집합</b>이고, 뷰어별 필터와 페이징은
+    /// 서비스가 그 완전 집합 위에서 처리한다. 부분 집합에 필터를 적용하면 OFFSET이 필터 전 기준이 되어
+    /// 항목이 누락·중복되므로, "완전 집합 조회 → 메모리 필터·페이징" 순서를 지키는 것이 중요하다.</para>
     /// </summary>
-    public async Task<(IReadOnlyList<TradeListingSnapshot> Listings, bool HasMore)> GetActiveListingsAsync(
-        int itemCode, long viewerUserId, bool mine, int page, int pageSize)
+    public async Task<IReadOnlyList<TradeListingSnapshot>> GetActiveListingsAsync(int itemCode)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -135,38 +133,14 @@ public sealed class TradeRepository : ITradeRepository
             query = query.Where("item_code", itemCode);
         }
 
-        if (mine)
-        {
-            query = query.Where("seller_user_id", viewerUserId);
-        }
-        else if (viewerUserId > 0)
-        {
-            query = query.Where("seller_user_id", "<>", viewerUserId);
-        }
-
-        var rows = (await query
+        var rows = await query
             .OrderBy("price").OrderBy("listing_id")
-            .Offset((long)page * pageSize).Limit(pageSize + 1)
-            .GetAsync<TradeListingRow>()).ToList();
+            .GetAsync<TradeListingRow>();
 
-        var hasMore = rows.Count > pageSize;
-        var listings = rows.Take(pageSize)
+        return rows
             .Select(r => new TradeListingSnapshot(
                 r.ListingId, r.SellerUserId, r.ItemCode, r.EnhanceLevel, r.Quantity, r.Price, r.CreatedAt))
             .ToList();
-        return (listings, hasMore);
-    }
-
-    /// <summary>지정 계정의 판매중 등록 수. (seller_user_id, status) 색인만으로 끝나는 가벼운 조회다.</summary>
-    public async Task<int> CountActiveListingsBySellerAsync(long userId)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-
-        var db = _dbFactory.Create(connection);
-        return await db.Query("trade_listing")
-            .Where("seller_user_id", userId).Where("status", StatusOnSale)
-            .CountAsync<int>();
     }
 
     /// <summary>등록 1건을 조회해 스냅샷으로 돌려준다(상태 무관 — 캐시 적재는 호출측이 판매중만 넣는다).</summary>
@@ -474,7 +448,7 @@ public sealed class TradeRepository : ITradeRepository
     }
 
     /// <summary>
-    /// 만료 1건을 단일 트랜잭션으로 처리한다(trade 기획서 §7.6.2): 조건부 갱신으로 취소 확정 →
+    /// 만료 1건을 단일 트랜잭션으로 처리한다(trade 기획서 §7.6.2): 조건부 갱신으로 만료(status=4) 확정 →
     /// 스냅샷 확보 → 판매자에게 반송 메일 발급. 그 사이 구매·취소로 이미 닫혔으면 null(스킵).
     /// 만료 반송은 아이템만 되돌리며 골드 이동은 없다.
     /// </summary>
@@ -489,11 +463,11 @@ public sealed class TradeRepository : ITradeRepository
         {
             var db = _dbFactory.Create(connection);
 
-            // 1) 선점(CAS): 아직 판매중이고 만료가 지난 등록만 취소로 전이.
+            // 1) 선점(CAS): 아직 판매중이고 만료가 지난 등록만 만료로 전이(수동 취소 3과 구분되는 4).
             var closed = await db.Query("trade_listing")
                 .Where("listing_id", listingId).Where("status", StatusOnSale)
                 .Where("expires_at", "<", nowUnix)
-                .UpdateAsync(new { status = StatusCancelled, closed_at = nowUnix }, transaction);
+                .UpdateAsync(new { status = StatusExpired, closed_at = nowUnix }, transaction);
             if (closed == 0)
             {
                 await transaction.RollbackAsync();

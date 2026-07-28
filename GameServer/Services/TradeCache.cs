@@ -24,6 +24,15 @@ public sealed class TradeCache
     /// <summary>구매 락 TTL(trade 기획서 §7.4). 락 보유 프로세스가 죽어도 이 시간 뒤 자동 해제된다.</summary>
     private static readonly TimeSpan LockTtl = TimeSpan.FromSeconds(3);
 
+    /// <summary>
+    /// 목록 색인 TTL(§7.3). 캐시 정리(<see cref="RemoveAsync"/>)가 <b>전부 실패</b>해 오염을 감지조차 못 하는 경우
+    /// (Redis 불통 중 구매 성공 → 이후 복구)의 유일한 안전망이다. 이 시간이 지나면 색인이 사라져 다음 조회가
+    /// MySQL에서 전량을 다시 읽고 색인을 새로 만든다.
+    /// <para><b>적재 시점 기준 절대 만료</b>다 — 조회·등록으로 갱신하지 않는다(갱신하면 인기 아이템의 색인이
+    /// 영구히 만료되지 않아 안전망이 무력화된다).</para>
+    /// </summary>
+    private static readonly TimeSpan IndexTtl = TimeSpan.FromHours(24);
+
     /// <summary>락 재시도 간격·횟수(§7.4). 짧은 경합은 흡수하고, 계속 실패하면 TradeBusy로 돌려보낸다.</summary>
     private static readonly TimeSpan LockRetryDelay = TimeSpan.FromMilliseconds(50);
     private const int LockRetryCount = 2;
@@ -41,27 +50,28 @@ public sealed class TradeCache
     // ── 목록 캐시 ──
 
     /// <summary>
-    /// 캐시에서 해당 페이지의 등록 목록을 읽는다. 색인이 비었거나 스냅샷이 하나라도 없으면 null을 돌려
-    /// 호출측이 MySQL로 폴백하게 한다(부분 캐시로 잘린 목록을 응답하지 않는다).
-    /// hasMore 판정을 위해 pageSize+1건 구간을 읽는다.
+    /// 캐시에서 해당 itemCode의 <b>판매중 등록 전량</b>을 읽는다. 색인이 비었거나 스냅샷이 하나라도 없으면
+    /// null을 돌려 호출측이 MySQL로 폴백하게 한다(부분 캐시로 잘린 목록을 응답하지 않는다).
+    /// <para>색인은 완전 집합으로만 적재·유지되므로(<see cref="FillAsync"/>·<see cref="AddToExistingIndexAsync"/>·
+    /// <see cref="RemoveAsync"/>), 호출측은 이 결과에 <b>뷰어별 필터(본인 제외/본인만)와 페이징을 메모리에서</b>
+    /// 적용해도 정확하다 — 그래서 목록 조회가 DB를 타지 않는다.</para>
+    /// <para>스냅샷은 한 건씩 순차로 읽지 않고 <b>한꺼번에 요청</b>해 왕복 수를 줄인다.</para>
     /// </summary>
-    public async Task<(IReadOnlyList<TradeListingSnapshot> Listings, bool HasMore)?> TryGetPageAsync(
-        int itemCode, int page, int pageSize)
+    public async Task<IReadOnlyList<TradeListingSnapshot>?> TryGetAllAsync(int itemCode)
     {
         try
         {
-            var index = Index(itemCode);
-            var start = (long)page * pageSize;
-            var ids = await index.RangeByRankAsync(start, start + pageSize, Order.Ascending);
+            var ids = await Index(itemCode).RangeByRankAsync(0, -1, Order.Ascending);
             if (ids.Length == 0)
             {
                 return null; // 비어 있음 = 미적재일 수 있으므로 MySQL에서 확인·적재한다(lazy).
             }
 
-            var snapshots = new List<TradeListingSnapshot>(ids.Length);
-            foreach (var id in ids)
+            var entries = await Task.WhenAll(ids.Select(async id => await Snapshot(id).GetAsync()));
+
+            var snapshots = new List<TradeListingSnapshot>(entries.Length);
+            foreach (var entry in entries)
             {
-                var entry = await Snapshot(id).GetAsync();
                 if (!entry.HasValue || entry.Value is null)
                 {
                     return null; // 스냅샷 결손 → 폴백
@@ -70,8 +80,7 @@ public sealed class TradeCache
                 snapshots.Add(entry.Value.ToSnapshot());
             }
 
-            var hasMore = snapshots.Count > pageSize;
-            return (snapshots.Take(pageSize).ToList(), hasMore);
+            return snapshots;
         }
         catch (Exception ex)
         {
@@ -81,25 +90,33 @@ public sealed class TradeCache
     }
 
     /// <summary>
-    /// MySQL에서 읽은 목록을 캐시에 채운다(lazy 적재). 스냅샷 TTL은 등록 만료 시각까지로 두어
+    /// MySQL에서 읽은 <b>완전 집합</b>을 캐시에 채운다(lazy 적재). 스냅샷 TTL은 등록 만료 시각까지로 두어
     /// 만료와 함께 자연히 사라지게 한다. 실패는 무시한다(다음 조회가 다시 시도).
-    /// <para><paramref name="isCompleteSet"/>가 false면(뒤 페이지 조회 등 부분 결과) <b>색인을 만들지 않는다</b> —
-    /// 부분 색인은 조회에서 완전한 캐시처럼 보여 나머지 등록을 가린다. 그 경우 계속 MySQL로 응답한다.</para>
+    /// <para><b>부분 집합을 넘기지 말 것.</b> 부분 색인은 조회에서 완전한 캐시처럼 보여 나머지 등록을 영구히 가린다
+    /// (그래서 호출측은 페이징·필터를 걸지 않은 전량 조회 결과만 넘긴다).</para>
     /// </summary>
-    public async Task FillAsync(
-        int itemCode, IReadOnlyList<TradeListingSnapshot> listings, long nowUnix, bool isCompleteSet)
+    public async Task FillAsync(int itemCode, IReadOnlyList<TradeListingSnapshot> listings, long nowUnix)
     {
-        if (listings.Count == 0 || !isCompleteSet)
+        if (listings.Count == 0)
         {
             return;
         }
 
         try
         {
+            // 색인을 지우고 다시 만든다(덮어쓰기가 아니라 재구축). 원소를 더하기만 하면 정리에 실패해 남은
+            // 고아 id가 계속 남아, 그 id의 스냅샷 결손 때문에 이 itemCode가 영구히 캐시 미스가 된다.
             var index = Index(itemCode);
+            await index.DeleteAsync();
+
+            // 일괄 추가 + 이때 한 번만 TTL을 건다(적재 시점 기준 절대 만료).
+            var entries = listings
+                .Select(l => new RedisSortedSetEntry<long>(l.ListingId, l.Price))
+                .ToArray();
+            await index.AddAsync(entries, IndexTtl, When.Always);
+
             foreach (var listing in listings)
             {
-                await index.AddAsync(listing.ListingId, listing.Price, null, When.Always);
                 await Snapshot(listing.ListingId).SetAsync(TradeListingCacheEntry.From(listing), SnapshotTtl(nowUnix));
             }
         }
@@ -141,14 +158,20 @@ public sealed class TradeCache
         await index.AddAsync(listing.ListingId, listing.Price, null, When.Always);
     }
 
-    /// <summary>등록을 캐시에서 제거한다(구매·취소·만료 커밋 후). 실패해도 거래는 되돌리지 않는다(§7.5).</summary>
+    /// <summary>
+    /// 등록을 캐시에서 제거한다(구매·취소·만료 커밋 후). 실패해도 거래는 되돌리지 않는다(§7.5) —
+    /// 커밋이 이미 끝났고, 캐시는 파생 데이터이며 이중 판매는 MySQL 조건부 갱신이 막는다.
+    /// <para><b>스냅샷을 먼저 지운다.</b> 중간에 실패해 색인에 id가 남아도, 스냅샷이 없으면 다음 조회가
+    /// 결손을 감지해(<see cref="TryGetAllAsync"/>가 null) MySQL에서 전량을 다시 읽고 색인을 재구축한다.
+    /// 반대 순서(색인 먼저)면 스냅샷이 남아 <b>팔린 등록이 계속 목록에 보인다</b>.</para>
+    /// </summary>
     public async Task RemoveAsync(TradeListingSnapshot listing)
     {
         try
         {
+            await Snapshot(listing.ListingId).DeleteAsync();
             await Index(0).RemoveAsync(listing.ListingId);
             await Index(listing.ItemCode).RemoveAsync(listing.ListingId);
-            await Snapshot(listing.ListingId).DeleteAsync();
         }
         catch (Exception ex)
         {
@@ -162,12 +185,23 @@ public sealed class TradeCache
     /// 등록 단위 락을 SET NX + TTL로 시도한다(§7.4). 경합이면 짧게 재시도하고, 그래도 실패하면
     /// Acquired=false(호출측이 TradeBusy로 응답). Redis 장애면 Degraded=true로 <b>락 없이 진행</b>한다.
     /// </summary>
-    public async Task<TradeLockHandle> AcquireLockAsync(long listingId)
+    public Task<TradeLockHandle> AcquireLockAsync(long listingId) => AcquireAsync(Lock(listingId));
+
+    /// <summary>
+    /// 판매자 단위 락을 시도한다(판매 등록 전용). 등록은 아직 listingId가 없어 등록 단위 락을 쓸 수 없고,
+    /// 경합 대상이 <b>그 계정의 동시 등록 수</b>라서 판매자 키로 잡는다 — 같은 계정의 동시 등록을 직렬화해
+    /// "한도 검사와 삽입 사이에 다른 요청이 끼어들어 한도를 넘기는" 경합을 막는다.
+    /// <para><b>보증이 아니라 완화다.</b> Redis 장애 시에는 락 없이 진행하므로(축소 운전) 경합이 다시 가능해진다.
+    /// 초과 결과가 무해(한도 10건이 11건이 되는 정도)하고 그 대가로 가용성을 지키는 선택이다(§7.4).</para>
+    /// </summary>
+    public Task<TradeLockHandle> AcquireSellerLockAsync(long userId) => AcquireAsync(SellerLock(userId));
+
+    /// <summary>락 키 하나에 대해 SET NX + TTL 획득을 재시도하며 시도한다(등록 단위·판매자 단위 공용).</summary>
+    private async Task<TradeLockHandle> AcquireAsync(RedisString<string> key)
     {
         var token = Guid.NewGuid().ToString("N");
         try
         {
-            var key = Lock(listingId);
             for (var attempt = 0; attempt <= LockRetryCount; attempt++)
             {
                 if (await key.SetAsync(token, LockTtl, When.NotExists))
@@ -185,7 +219,7 @@ public sealed class TradeCache
         }
         catch (Exception ex)
         {
-            _logger.ZLogWarning(ex, $"거래소 구매 락 사용 불가(listingId {listingId:@ListingId}) — 락 없이 진행합니다(축소 운전).");
+            _logger.ZLogWarning(ex, $"거래소 락 사용 불가(key {key.Key.ToString():@LockKey}) — 락 없이 진행합니다(축소 운전).");
             return new TradeLockHandle(false, true, token);
         }
     }
@@ -194,7 +228,15 @@ public sealed class TradeCache
     /// 락을 해제한다. <b>값이 자기 토큰일 때만</b> 지운다 — TTL이 먼저 만료돼 다른 요청이 같은 키를 잡았을 수 있어,
     /// 값 비교 없이 지우면 남의 락을 해제하게 된다(§7.4).
     /// </summary>
-    public async Task ReleaseLockAsync(long listingId, TradeLockHandle handle)
+    public Task ReleaseLockAsync(long listingId, TradeLockHandle handle)
+        => ReleaseAsync(Lock(listingId), handle);
+
+    /// <summary>판매자 단위 락(판매 등록)을 해제한다. 규약은 등록 단위 락과 동일하다.</summary>
+    public Task ReleaseSellerLockAsync(long userId, TradeLockHandle handle)
+        => ReleaseAsync(SellerLock(userId), handle);
+
+    /// <summary>락 키 하나를 자기 토큰일 때만 지운다(등록 단위·판매자 단위 공용).</summary>
+    private async Task ReleaseAsync(RedisString<string> key, TradeLockHandle handle)
     {
         if (!handle.Acquired)
         {
@@ -203,7 +245,6 @@ public sealed class TradeCache
 
         try
         {
-            var key = Lock(listingId);
             var current = await key.GetAsync();
             if (current.HasValue && current.Value == handle.Token)
             {
@@ -212,7 +253,7 @@ public sealed class TradeCache
         }
         catch (Exception ex)
         {
-            _logger.ZLogWarning(ex, $"거래소 구매 락 해제 실패(listingId {listingId:@ListingId}) — TTL로 자연 만료됩니다.");
+            _logger.ZLogWarning(ex, $"거래소 락 해제 실패(key {key.Key.ToString():@LockKey}) — TTL로 자연 만료됩니다.");
         }
     }
 
@@ -227,6 +268,9 @@ public sealed class TradeCache
 
     /// <summary>구매·취소·만료가 공유하는 등록 단위 락.</summary>
     private RedisString<string> Lock(long listingId) => new(_redis, $"trade:lock:listing:{listingId}", null);
+
+    /// <summary>판매 등록이 쓰는 판매자 단위 락(동시 등록 한도 검사를 직렬화).</summary>
+    private RedisString<string> SellerLock(long userId) => new(_redis, $"trade:lock:seller:{userId}", null);
 
     /// <summary>스냅샷 TTL. 등록 만료(3일)보다 넉넉히 잡되 무기한으로 두지 않는다.</summary>
     private static TimeSpan SnapshotTtl(long nowUnix) => TimeSpan.FromDays(3);

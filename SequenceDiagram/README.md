@@ -13,7 +13,7 @@
 | [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
-| [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소 / 만료 배치) | GameTradeController · TradeExpireBatchService(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
+| [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchService(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
 | [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchService(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
 | [**출석부 보상**](#출석부-보상) (이번달 진행도 조회 / 오늘자 보상 획득→메일 발급, 일차 = 누적 출석 순번 1~30) | GameAttendanceController | Game | `POST /api/game/attendance/status` · `claim` |
 
@@ -598,31 +598,24 @@ sequenceDiagram
 
     C->>S: POST /trade/list { userId, token, data:{ itemCode, mine, page, pageSize } }
     S->>S: 입력 정규화 — pageSize 상한 강제(기본 50 · 최대 100)
-    alt mine=true (본인 등록만 — 취소 화면용)
-        S->>DB: 본인 판매중 등록 조회(seller_user_id = 요청자, 가격 오름차순, pageSize+1건)
-        DB-->>S: 등록 목록
+    S->>R: 가격순 색인 전량 조회(trade:index:{itemCode}) + 스냅샷 일괄 조회
+    alt 캐시 적중(색인 + 스냅샷 전건 존재 = 완전 집합)
+        R-->>S: listingId 전량 + 등록 스냅샷
+        S->>S: 뷰어 필터(mine=false 본인 제외 / mine=true 본인만) + 가격·listingId 순 페이징 — 메모리
         S-->>C: 성공 { listings[], page, pageSize, hasMore }
-    else mine=false (구매 대상 — 본인 등록 제외)
-        S->>DB: 요청자의 판매중 등록 수 확인(idx_trade_seller)
-        alt 본인 등록 0건(공유 캐시 사용 가능)
-            S->>R: 가격순 색인 조회(trade:index:{itemCode}, 해당 페이지 구간)
-            alt 캐시 적중(색인 + 스냅샷 전건 존재)
-                R-->>S: listingId 목록 + 등록 스냅샷
-                S-->>C: 성공 { listings[], page, pageSize, hasMore }
-            end
-        end
-        S->>DB: 판매중 등록 조회(seller_user_id <> 요청자, 가격 오름차순, pageSize+1건)
-        DB-->>S: 등록 목록
-        opt 본인 등록 0건 · 첫 페이지 · hasMore=false(전체 집합)
-            S->>R: 캐시 적재(lazy — 색인 + 스냅샷, TTL 3일)
-        end
+    else 캐시 미적재·Redis 장애
+        S->>DB: 뷰어 필터·페이징 없이 전량 조회(가격 오름차순·LIMIT 없음)
+        DB-->>S: 등록 전량
+        S->>R: 캐시 적재(lazy — 색인 + 스냅샷, TTL 3일)
+        S->>S: 뷰어 필터(mine) + 페이징 — 메모리
         S-->>C: 성공 { listings[], page, pageSize, hasMore }
     end
 ```
 
 - 조회는 상태를 바꾸지 않는다. 아이템 이름·등급은 클라이언트가 `itemCode`로 마스터 번들에서 조회해 표시한다.
-- **판매자 필터는 쿼리 단계**에서 적용한다. 응답을 받아 걸러내면 `OFFSET`이 필터 전 기준이라 페이지 건수가 들쭉날쭉해지고 항목이 누락·중복된다.
-- **공유 캐시는 뷰어 무관 데이터만 담는다.** 본인 등록이 있는 뷰어와 `mine=true` 조회는 캐시를 쓰지도, 채우지도 않는다.
+- **캐시가 적재돼 있으면 두 모드 모두 DB를 타지 않는다.** 색인이 항상 완전 집합이고 스냅샷에 판매자가 들어 있어, 뷰어 필터와 페이징을 메모리에서 정확히 적용할 수 있다.
+- **캐시가 비어 있으면 무조건 전량을 읽어 채운다.** 규모 확인용 건수 조회나 대형 집합용 별도 경로를 두지 않는다(이용자 수가 적어 판매중 등록이 페이지 상한 100건을 넘지 않는 규모를 전제).
+- **메모리 필터는 완전 집합에서만 정확하다.** 부분 집합에 적용하면 `OFFSET`이 필터 전 기준이라 항목이 누락·중복된다. 그래서 적재용 조회에는 `LIMIT`을 걸지 않는다 — 잘라 읽으면 부분 집합이 완전 집합처럼 캐시돼 나머지 등록을 영구히 가린다. 전제가 깨져 전량이 상한을 넘으면 Warning 로그로 남긴다.
 
 ### POST /api/game/trade/register — 판매 등록(에스크로)
 
@@ -635,6 +628,10 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>S: POST /trade/register { userId, token, data:{ itemId, price } }
+    S->>R: 판매자 단위 락 획득(trade:lock:seller:{userId}, NX+TTL 3초)
+    alt 경합으로 획득 실패
+        S-->>C: 실패 { errorCode: TradeBusy(7008) }
+    end
     Note over S,DB: 단일 트랜잭션
     S->>DB: 동시 등록 수 확인(trade_listing, seller_user_id + status=1)
     alt 판매중 등록 10개 이상
@@ -703,7 +700,7 @@ sequenceDiagram
 
 - **선점을 재화 이동보다 앞에 둔다** — 경합에서 진 요청이 골드·아이템을 건드리지 않고 즉시 빠진다.
 - **구매 아이템도 우편함으로 지급한다.** 인벤토리에 직접 넣지 않으므로 구매 단계에서 용량을 검사하지 않으며(가방이 가득해도 거래 성립), 적재와 `InventoryFull(4002)` 판정은 메일 수령 시점으로 미뤄진다.
-- **구매 아이템 메일만 만료가 없다**(`expires_at=0`). 산 물건을 수령 기한으로 잃지 않도록, 보관 GC도 미수령 무기한 메일은 지우지 않는다. 판매 대금 메일은 기존대로 7일 만료다.
+- **거래에서 발급되는 메일은 모두 만료가 없다**(`expires_at=0` — 구매 아이템 203 · 판매 대금 201 · 만료 반송 202). 거래로 확정된 재산을 수령 기한으로 잃지 않도록 하며, 보관 GC도 미수령 무기한 메일은 지우지 않는다.
 - 메일 첨부는 **강화 단계를 보존**한다(`player_mail_reward.enhance_level`) — 등록 당시 강화가 구매자에게 그대로 전달된다.
 - 수수료 20%는 어디에도 지급되지 않고 **경제에서 소멸**한다(sink).
 
@@ -768,11 +765,11 @@ sequenceDiagram
                 S->>S: 스킵(다음 주기가 자연 재시도)
             else 획득 또는 Redis 장애
                 Note over S,DB: 단일 트랜잭션
-                S->>DB: 선점(조건부 갱신) — status 1에서 3으로, 만료 조건 재확인
+                S->>DB: 선점(조건부 갱신) — status 1에서 4(만료)로, 만료 조건 재확인
                 alt 반영 0행(그 사이 구매·취소로 닫힘)
                     S->>S: 스킵
                 else 선점 성공
-                    S->>DB: 반송 스냅샷 조회 후 반송 메일 데이터 적재(판매자, 템플릿 202, 만료 7일)
+                    S->>DB: 반송 스냅샷 조회 후 반송 메일 데이터 적재(판매자, 템플릿 202, 만료 없음)
                     S->>R: 커밋 후 캐시에서 등록 제거
                 end
                 S->>R: 락 해제
@@ -783,7 +780,7 @@ sequenceDiagram
 ```
 
 - **골드 이동은 없다.** 만료 반송은 에스크로 아이템을 메일 첨부로 되돌릴 뿐이다.
-- 메일 첨부는 강화 단계를 보존하지 않으므로, **만료 반송 장비는 강화 0단계로 지급**된다(mail 기획서 4장 확정).
+- 메일 첨부가 **강화 단계를 보존**하므로 반송 장비는 등록 당시 강화 단계 그대로 돌아온다(`player_mail_reward.enhance_level`).
 - 건별 예외는 그 건만 실패로 세고 다음 건을 계속 처리한다(주기 전체를 중단하지 않는다).
 
 ## 메일

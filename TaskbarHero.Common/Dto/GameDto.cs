@@ -557,7 +557,7 @@ namespace TaskbarHero.Common.Dto
     public class ItemQuantityDto
     {
         public int itemCode;
-        public int quantity;
+        public long quantity;   // player_item.quantity가 BIGINT라 long(InventoryItemDto와 동일 폭)
     }
 
     /// <summary>큐브 합성 결과 아이템. { itemId, itemCode, grade }</summary>
@@ -685,7 +685,7 @@ namespace TaskbarHero.Common.Dto
     {
         public int rewardType;
         public int rewardCode;
-        public int quantity;
+        public long quantity;   // 골드 첨부 금액이 int 상한(약 21억)을 넘을 수 있어 long
     }
 
     /// <summary>우편함 메일 1건(5.1 목록 항목). attachments가 비어 있으면 첨부 없는 안내 메일.</summary>

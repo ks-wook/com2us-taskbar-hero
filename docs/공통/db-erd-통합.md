@@ -189,7 +189,7 @@ erDiagram
         int     seq
         int     reward_type "1:골드 2:아이템 3:재료"
         int     reward_code "골드면 0"
-        int     quantity
+        bigint  quantity "수량(골드는 금액)"
         int     enhance_level "장비 강화 단계(골드/재료 0)"
     }
 
@@ -206,7 +206,7 @@ erDiagram
         int     enhance_level
         int     quantity
         bigint  price "구매가(골드)"
-        int     status "1:판매중 2:판매완료 3:취소(만료 포함)"
+        int     status "1:판매중 2:판매완료 3:취소(수동) 4:만료(배치)"
         bigint  buyer_user_id "미판매 0"
         bigint  created_at
         bigint  expires_at "만료(= created_at + 3일)"

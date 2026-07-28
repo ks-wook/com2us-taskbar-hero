@@ -9,7 +9,7 @@ namespace GameServer.Repositories;
 /// <summary>메일 첨부 1건(원장 스냅샷). RewardType 1:골드 2:아이템 3:재료, RewardCode는 골드면 0.</summary>
 /// <summary>메일 첨부 1건. EnhanceLevel은 장비의 강화 단계로, 거래소 구매·만료 반송처럼
 /// 강화 상태를 그대로 옮겨야 하는 발급 경로에서 사용한다(골드·재료는 0).</summary>
-public sealed record MailAttachment(int RewardType, int RewardCode, int Quantity, int EnhanceLevel = 0);
+public sealed record MailAttachment(int RewardType, int RewardCode, long Quantity, int EnhanceLevel = 0);
 
 /// <summary>우편함 메일 1건 + 첨부 목록(조회 시점 스냅샷).</summary>
 public sealed record MailSummary(
@@ -102,7 +102,7 @@ file sealed class MailRewardRow
     public int Seq { get; set; }
     public int RewardType { get; set; }
     public int RewardCode { get; set; }
-    public int Quantity { get; set; }
+    public long Quantity { get; set; }
     public int EnhanceLevel { get; set; }
 }
 
@@ -427,7 +427,7 @@ public sealed class MailRepository : IMailRepository
             QueryFactory db, DbTransaction tx, long userId,
             IReadOnlyList<MailAttachment> rewards, Func<int, (int itemType, int stackMax)> itemLookup, long nowUnix)
     {
-        long gold = rewards.Where(r => r.RewardType == RewardTypeGold).Sum(r => (long)r.Quantity);
+        long gold = rewards.Where(r => r.RewardType == RewardTypeGold).Sum(r => r.Quantity);
 
         // 아이템/재료는 코드별로 합산해 적재(같은 코드 첨부가 여러 건이어도 스택 병합이 한 번에 이뤄진다).
         var itemGroups = rewards.Where(r => r.RewardType != RewardTypeGold)
@@ -518,7 +518,7 @@ public sealed class MailRepository : IMailRepository
     /// 새 칸이 용량을 넘어 부족하면 false(호출측 롤백).
     /// </summary>
     private static async Task<bool> StoreItemAsync(
-        QueryFactory db, DbTransaction tx, long userId, int itemCode, int quantity,
+        QueryFactory db, DbTransaction tx, long userId, int itemCode, long quantity,
         int itemType, int stackMax, int enhanceLevel, int capacity, HashSet<int> used, long nowUnix)
     {
         long remaining = quantity;

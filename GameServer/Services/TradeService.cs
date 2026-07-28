@@ -69,9 +69,10 @@ public sealed class TradeService : ITradeService
     /// 판매중 등록 목록을 조회한다(5.1). pageSize는 서버가 상한을 강제하며, 조회는 상태를 바꾸지 않는다.
     /// <para><paramref name="mine"/>=false(기본): <b>요청자 본인 등록을 제외</b>한 구매 대상 목록.
     /// true: <b>본인 등록만</b> 조회한다(판매 취소 화면용 — 제외 모드에서는 자기 등록의 listingId를 알 수 없다).</para>
-    /// <para>목록 캐시는 전 사용자가 공유하는 <b>뷰어 무관</b> 데이터라 판매자별로 걸러낸 결과를 담을 수 없다. 그래서
-    /// 본인 등록이 하나도 없는 뷰어(대다수)의 제외 모드 조회에만 캐시를 쓰고 — 이때 전체 목록 = 제외 후 목록이라
-    /// 정확하다 — 그 외(본인 등록 보유·mine 모드)는 MySQL 쿼리로 응답하며 캐시에 담지도 않는다.</para>
+    /// <para>목록 캐시의 색인은 항상 해당 itemCode의 <b>완전 집합</b>이고 스냅샷에 판매자가 들어 있으므로,
+    /// 캐시가 적재돼 있으면 <b>뷰어별 필터와 페이징을 메모리에서 적용</b>해 DB를 타지 않고 응답한다(mine 모드 포함).
+    /// 캐시가 비어 있을 때만 MySQL에서 <b>전량을 읽어 캐시를 채우고</b> 같은 방식으로 응답한다 —
+    /// 이 프로젝트 규모(동시 등록 수가 <see cref="MaxPageSize"/>를 넘지 않는다)에서는 항상 캐시를 쓰는 것이 맞다.</para>
     /// </summary>
     public async Task<SaveResult> ListAsync(long userId, int itemCode, bool mine, int page, int pageSize)
     {
@@ -79,26 +80,26 @@ public sealed class TradeService : ITradeService
         var normalizedPage = Math.Max(0, page);
         var normalizedSize = pageSize <= 0 ? DefaultPageSize : Math.Min(pageSize, MaxPageSize);
 
-        // mine 모드는 뷰어 전용 결과라 공유 캐시를 아예 쓰지 않는다(캐시 적재도 하지 않는다).
-        // 제외 모드에서는 본인 등록 유무로 캐시 사용 가능 여부를 가른다((seller_user_id, status) 색인만 타는 가벼운 조회).
-        var ownListings = mine ? -1 : await _tradeRepository.CountActiveListingsBySellerAsync(userId);
-        if (ownListings == 0)
+        // 1) 캐시 적중이면 DB를 아예 타지 않는다. 완전 집합이라 메모리 필터·페이징이 정확하다.
+        var cached = await _cache.TryGetAllAsync(normalizedItem);
+        if (cached is not null)
         {
-            var cached = await _cache.TryGetPageAsync(normalizedItem, normalizedPage, normalizedSize);
-            if (cached is not null)
-            {
-                return Listed(cached.Value.Listings, normalizedPage, normalizedSize, cached.Value.HasMore);
-            }
+            return PageFromCompleteSet(cached, userId, mine, normalizedPage, normalizedSize);
         }
 
-        var (listings, hasMore) = await _tradeRepository.GetActiveListingsAsync(
-            normalizedItem, userId, mine, normalizedPage, normalizedSize);
+        // 2) 미적재·Redis 장애 → MySQL에서 전량(뷰어 필터·페이징 없음)을 읽어 캐시를 채우고 응답한다.
+        //    상한을 걸어 읽지 않는 이유: 잘라 읽으면 부분 집합을 완전 집합처럼 캐시해 나머지 등록을 영구히 가린다.
+        var all = await _tradeRepository.GetActiveListingsAsync(normalizedItem);
+        await _cache.FillAsync(normalizedItem, all, NowUnix());
 
-        // 캐시는 뷰어 무관 데이터만 담는다(mine 모드·본인 등록 보유자의 결과는 제외).
-        // 또 해당 itemCode의 전체 집합을 담은 조회일 때만 색인을 만든다(부분 색인 방지 — TradeCache 참고).
-        var cacheable = ownListings == 0 && normalizedPage == 0 && !hasMore;
-        await _cache.FillAsync(normalizedItem, listings, NowUnix(), cacheable);
-        return Listed(listings, normalizedPage, normalizedSize, hasMore);
+        // 규모 가정(등록 전량이 한 페이지 상한 이내)이 깨지면 응답은 계속 정확하지만 메모리·Redis 사용량이 커진다.
+        // 조용히 넘기지 않고 남겨서 페이징 방식을 다시 검토할 신호로 쓴다.
+        if (all.Count > MaxPageSize)
+        {
+            _logger.ZLogWarning($"거래소 판매중 등록이 페이지 상한을 넘었습니다: itemCode {normalizedItem:@ItemCode}, 등록 {all.Count:@ListingCount}건, 상한 {MaxPageSize:@MaxPageSize} — 전량 캐시 방식 재검토 필요");
+        }
+
+        return PageFromCompleteSet(all, userId, mine, normalizedPage, normalizedSize);
     }
 
     /// <summary>
@@ -117,37 +118,52 @@ public sealed class TradeService : ITradeService
             return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
         }
 
-        var now = NowUnix();
-        var outcome = await _tradeRepository.ApplyRegisterAsync(
-            userId, itemId, price, LookupItem, ListingLimit, now, now + ListingDurationSeconds);
-
-        switch (outcome.Status)
+        // 같은 계정의 동시 등록을 판매자 단위 락으로 직렬화한다 — 한도 검사(COUNT)와 삽입 사이에
+        // 다른 요청이 끼어들어 동시 등록 한도를 넘기는 경합을 막는다(§7.4). Redis 장애면 락 없이 진행한다.
+        var handle = await _cache.AcquireSellerLockAsync(userId);
+        if (!handle.Acquired && !handle.Degraded)
         {
-            case TradeRegisterStatus.ItemNotFound:
-                return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
-            case TradeRegisterStatus.ItemEquipped:
-                return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
-            case TradeRegisterStatus.NotSellable:
-                return new SaveResult(ErrorCode.TradeNotSellable, string.Empty, null);
-            case TradeRegisterStatus.PriceOutOfRange:
-                return new SaveResult(ErrorCode.TradePriceOutOfRange, string.Empty, null);
-            case TradeRegisterStatus.ListingLimitExceeded:
-                return new SaveResult(ErrorCode.TradeListingLimitExceeded, string.Empty, null);
+            return new SaveResult(ErrorCode.TradeBusy, string.Empty, null);
         }
 
-        var listing = outcome.Listing!;
-        await _cache.AddAsync(listing, now); // 커밋 이후에만 캐시를 고친다(§7.3)
-
-        _logger.ZLogInformation($"거래소 등록: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}, price {listing.Price:@Price}");
-
-        return new SaveResult(ErrorCode.Success, "Registered", new TradeRegisterResultData
+        try
         {
-            listingId = listing.ListingId,
-            itemCode = listing.ItemCode,
-            enhanceLevel = listing.EnhanceLevel,
-            quantity = listing.Quantity,
-            price = listing.Price,
-        });
+            var now = NowUnix();
+            var outcome = await _tradeRepository.ApplyRegisterAsync(
+                userId, itemId, price, LookupItem, ListingLimit, now, now + ListingDurationSeconds);
+
+            switch (outcome.Status)
+            {
+                case TradeRegisterStatus.ItemNotFound:
+                    return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
+                case TradeRegisterStatus.ItemEquipped:
+                    return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
+                case TradeRegisterStatus.NotSellable:
+                    return new SaveResult(ErrorCode.TradeNotSellable, string.Empty, null);
+                case TradeRegisterStatus.PriceOutOfRange:
+                    return new SaveResult(ErrorCode.TradePriceOutOfRange, string.Empty, null);
+                case TradeRegisterStatus.ListingLimitExceeded:
+                    return new SaveResult(ErrorCode.TradeListingLimitExceeded, string.Empty, null);
+            }
+
+            var listing = outcome.Listing!;
+            await _cache.AddAsync(listing, now); // 커밋 이후에만 캐시를 고친다(§7.3)
+
+            _logger.ZLogInformation($"거래소 등록: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}, price {listing.Price:@Price}");
+
+            return new SaveResult(ErrorCode.Success, "Registered", new TradeRegisterResultData
+            {
+                listingId = listing.ListingId,
+                itemCode = listing.ItemCode,
+                enhanceLevel = listing.EnhanceLevel,
+                quantity = listing.Quantity,
+                price = listing.Price,
+            });
+        }
+        finally
+        {
+            await _cache.ReleaseSellerLockAsync(userId, handle);
+        }
     }
 
     /// <summary>
@@ -198,7 +214,7 @@ public sealed class TradeService : ITradeService
                     }),
                 listing => MailComposer.Compose(
                     settlementTemplate, ItemLabel(listing.ItemCode), now,
-                    new[] { new MailAttachment(RewardTypeGold, 0, (int)SettlementAmount(listing.Price)) }),
+                    new[] { new MailAttachment(RewardTypeGold, 0, SettlementAmount(listing.Price)) }),
                 now);
 
             switch (outcome.Status)
@@ -315,6 +331,30 @@ public sealed class TradeService : ITradeService
     {
         var name = _masterData.GetItem(itemCode)?.Name;
         return string.IsNullOrEmpty(name) ? itemCode.ToString() : name!;
+    }
+
+    /// <summary>
+    /// 해당 itemCode의 <b>완전 집합</b>에 뷰어 필터와 페이징을 메모리에서 적용해 목록 응답을 만든다.
+    /// mine=false면 본인 등록을 제외하고, true면 본인 등록만 남긴다. 정렬은 MySQL 경로와 동일하게
+    /// 가격 오름차순 → listingId 순으로 고정해 페이지 경계가 흔들리지 않게 한다.
+    /// <para>부분 집합에 쓰면 페이징이 어긋나므로 <b>완전 집합에만</b> 사용한다(캐시 적중 결과 또는 전량 조회 결과).</para>
+    /// </summary>
+    private static SaveResult PageFromCompleteSet(
+        IReadOnlyList<TradeListingSnapshot> completeSet, long userId, bool mine, int page, int pageSize)
+    {
+        var filtered = completeSet
+            .Where(l => mine ? l.SellerUserId == userId : l.SellerUserId != userId)
+            .OrderBy(l => l.Price).ThenBy(l => l.ListingId)
+            .ToList();
+
+        var start = (long)page * pageSize;
+        if (start >= filtered.Count)
+        {
+            return Listed(Array.Empty<TradeListingSnapshot>(), page, pageSize, false);
+        }
+
+        var pageItems = filtered.Skip((int)start).Take(pageSize).ToList();
+        return Listed(pageItems, page, pageSize, start + pageItems.Count < filtered.Count);
     }
 
     /// <summary>목록 응답 조립(캐시·MySQL 경로 공용).</summary>

@@ -224,7 +224,7 @@ CREATE TABLE player_mail_reward (
     seq         INT     NOT NULL          COMMENT '메일 내 첨부 번호(1부터)',
     reward_type TINYINT NOT NULL          COMMENT '1:골드 2:아이템 3:재료',
     reward_code INT     NOT NULL DEFAULT 0 COMMENT '대상 코드(item_master). 골드면 0',
-    quantity    INT     NOT NULL          COMMENT '지급 수량',
+    quantity    BIGINT  NOT NULL          COMMENT '지급 수량(골드는 금액 — 인플레로 INT 상한을 넘을 수 있어 BIGINT)',
     enhance_level INT   NOT NULL DEFAULT 0 COMMENT '장비 강화 단계(거래소 구매·만료 반송이 보존). 골드/재료는 0',
     PRIMARY KEY (mail_id, seq),
     CONSTRAINT fk_mailreward_mail FOREIGN KEY (mail_id)
@@ -254,7 +254,7 @@ CREATE TABLE trade_listing (
     enhance_level  INT     NOT NULL DEFAULT 0 COMMENT '장비 강화 단계 스냅샷',
     quantity       INT     NOT NULL DEFAULT 1 COMMENT '수량(장비 1, 스택형은 전체 수량)',
     price          BIGINT  NOT NULL          COMMENT '구매가(골드). 기준가 ±20% 범위',
-    status         TINYINT NOT NULL DEFAULT 1 COMMENT '1:판매중 2:판매완료 3:취소(만료 포함)',
+    status         TINYINT NOT NULL DEFAULT 1 COMMENT '1:판매중 2:판매완료 3:취소(수동) 4:만료(배치)',
     buyer_user_id  BIGINT  NOT NULL DEFAULT 0 COMMENT '구매자 user_id. 미판매 0(FK 아님)',
     created_at     BIGINT  NOT NULL          COMMENT '등록 시각(Unix ts)',
     expires_at     BIGINT  NOT NULL          COMMENT '만료 시각(= created_at + 3일)',
