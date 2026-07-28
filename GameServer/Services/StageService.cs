@@ -2,6 +2,7 @@ using GameServer.MasterData;
 using GameServer.Repositories;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace GameServer.Services;
 
@@ -106,7 +107,7 @@ public sealed class StageService : IStageService
         var reward = _masterData.GetStageReward(stageDef.StageId);
         if (reward is null)
         {
-            _logger.LogError("stage_reward 누락: stageId {StageId}", stageDef.StageId);
+            _logger.ZLogError($"stage_reward 누락: stageId {stageDef.StageId:@StageId}");
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
@@ -155,9 +156,7 @@ public sealed class StageService : IStageService
             },
         };
 
-        _logger.LogInformation(
-            "스테이지 클리어: userId {UserId}, act {Act}, difficulty {Difficulty}, stage {Stage}, gold {Gold}, exp {Exp}",
-            userId, act, difficulty, stage, gold, rewardExp);
+        _logger.ZLogInformation($"스테이지 클리어: userId {userId:@UserId}, act {act:@Act}, difficulty {difficulty:@Difficulty}, stage {stage:@Stage}, gold {gold:@Gold}, exp {rewardExp:@Exp}");
         return new SaveResult(ErrorCode.Success, "Stage cleared", data);
     }
 

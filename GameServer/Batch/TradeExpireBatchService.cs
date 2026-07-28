@@ -2,6 +2,7 @@ using CloudStructures;
 using GameServer.MasterData;
 using GameServer.Repositories;
 using GameServer.Services;
+using ZLogger;
 
 namespace GameServer.Batch;
 
@@ -67,9 +68,7 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
         var template = _masterData.GetMailTemplate(ReturnMailTemplateCode);
         if (template is null)
         {
-            _logger.LogError(
-                "거래소 만료 반송 메일 템플릿 미정의: templateCode {TemplateCode} — mail_master 확인 필요",
-                ReturnMailTemplateCode);
+            _logger.ZLogError($"거래소 만료 반송 메일 템플릿 미정의: templateCode {ReturnMailTemplateCode:@TemplateCode} — mail_master 확인 필요");
             return;
         }
 
@@ -126,7 +125,7 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
             catch (Exception ex)
             {
                 failed++;
-                _logger.LogError(ex, "거래소 만료 처리 실패(listingId {ListingId}) — 다음 주기에 재시도합니다.", listingId);
+                _logger.ZLogError(ex, $"거래소 만료 처리 실패(listingId {listingId:@ListingId}) — 다음 주기에 재시도합니다.");
             }
             finally
             {
@@ -134,9 +133,7 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
             }
         }
 
-        _logger.LogInformation(
-            "거래소 만료 배치: 처리 {Processed}건, 스킵 {Skipped}건, 실패 {Failed}건 (1회 상한 {BatchSize}건)",
-            processed, skipped, failed, _batchSize);
+        _logger.ZLogInformation($"거래소 만료 배치: 처리 {processed:@Processed}건, 스킵 {skipped:@Skipped}건, 실패 {failed:@Failed}건 (1회 상한 {_batchSize:@BatchSize}건)");
     }
 
     /// <summary>반송 메일 문구(`{0}`)에 넣을 아이템 이름. 마스터에 없으면 코드를 문자열로 폴백한다.</summary>

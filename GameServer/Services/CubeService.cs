@@ -2,6 +2,7 @@ using GameServer.MasterData;
 using GameServer.Repositories;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace GameServer.Services;
 
@@ -77,9 +78,7 @@ public sealed class CubeService : ICubeService
             cube = new CubeDto { cubeLevel = outcome.CubeLevel, cubeExp = outcome.CubeExp },
         };
 
-        _logger.LogInformation(
-            "큐브 합성: userId {UserId}, consumed {Count}, resultItemCode {ResultCode}, grade {Grade}",
-            userId, ids.Count, outcome.ResultItemCode, outcome.ResultGrade);
+        _logger.ZLogInformation($"큐브 합성: userId {userId:@UserId}, consumed {ids.Count:@Count}, resultItemCode {outcome.ResultItemCode:@ResultCode}, grade {outcome.ResultGrade:@Grade}");
         return new SaveResult(ErrorCode.Success, "Combined", data);
     }
 
@@ -117,9 +116,7 @@ public sealed class CubeService : ICubeService
 
         var data = new CubeDismantleResultData { gold = outcome.Gold, cubeExp = outcome.CubeExp };
 
-        _logger.LogInformation(
-            "큐브 분해: userId {UserId}, items {Count}, gold {Gold}, cubeExp {CubeExp}",
-            userId, pairs.Count, outcome.Gold, outcome.CubeExp);
+        _logger.ZLogInformation($"큐브 분해: userId {userId:@UserId}, items {pairs.Count:@Count}, gold {outcome.Gold:@Gold}, cubeExp {outcome.CubeExp:@CubeExp}");
         return new SaveResult(ErrorCode.Success, "Dismantled", data);
     }
 
@@ -177,9 +174,7 @@ public sealed class CubeService : ICubeService
             cube = new CubeDto { cubeLevel = outcome.CubeLevel, cubeExp = outcome.CubeExp },
         };
 
-        _logger.LogInformation(
-            "큐브 제작: userId {UserId}, recipeCode {RecipeCode}, resultItemCode {ResultCode} x{Quantity}",
-            userId, recipeCode, recipe.ResultItemCode, recipe.ResultQuantity);
+        _logger.ZLogInformation($"큐브 제작: userId {userId:@UserId}, recipeCode {recipeCode:@RecipeCode}, resultItemCode {recipe.ResultItemCode:@ResultCode} x{recipe.ResultQuantity:@Quantity}");
         return new SaveResult(ErrorCode.Success, "Crafted", data);
     }
 

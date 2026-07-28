@@ -2,6 +2,7 @@ using CloudStructures;
 using CloudStructures.Structures;
 using GameServer.Repositories;
 using StackExchange.Redis;
+using ZLogger;
 
 namespace GameServer.Services;
 
@@ -74,7 +75,7 @@ public sealed class TradeCache
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "거래소 목록 캐시 조회 실패 — MySQL로 폴백합니다.");
+            _logger.ZLogWarning(ex, $"거래소 목록 캐시 조회 실패 — MySQL로 폴백합니다.");
             return null;
         }
     }
@@ -104,7 +105,7 @@ public sealed class TradeCache
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "거래소 목록 캐시 적재 실패 — 캐시 없이 계속합니다.");
+            _logger.ZLogWarning(ex, $"거래소 목록 캐시 적재 실패 — 캐시 없이 계속합니다.");
         }
     }
 
@@ -124,8 +125,7 @@ public sealed class TradeCache
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "거래소 목록 캐시 추가 실패(listingId {ListingId}) — 조회 시 MySQL 폴백으로 흡수됩니다.",
-                listing.ListingId);
+            _logger.ZLogWarning(ex, $"거래소 목록 캐시 추가 실패(listingId {listing.ListingId:@ListingId}) — 조회 시 MySQL 폴백으로 흡수됩니다.");
         }
     }
 
@@ -152,8 +152,7 @@ public sealed class TradeCache
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "거래소 목록 캐시 제거 실패(listingId {ListingId}) — TTL·재적재가 흡수합니다.",
-                listing.ListingId);
+            _logger.ZLogWarning(ex, $"거래소 목록 캐시 제거 실패(listingId {listing.ListingId:@ListingId}) — TTL·재적재가 흡수합니다.");
         }
     }
 
@@ -186,7 +185,7 @@ public sealed class TradeCache
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "거래소 구매 락 사용 불가(listingId {ListingId}) — 락 없이 진행합니다(축소 운전).", listingId);
+            _logger.ZLogWarning(ex, $"거래소 구매 락 사용 불가(listingId {listingId:@ListingId}) — 락 없이 진행합니다(축소 운전).");
             return new TradeLockHandle(false, true, token);
         }
     }
@@ -213,7 +212,7 @@ public sealed class TradeCache
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "거래소 구매 락 해제 실패(listingId {ListingId}) — TTL로 자연 만료됩니다.", listingId);
+            _logger.ZLogWarning(ex, $"거래소 구매 락 해제 실패(listingId {listingId:@ListingId}) — TTL로 자연 만료됩니다.");
         }
     }
 

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using TaskbarHero.Common;
+using ZLogger;
 
 namespace GameServer.Auth;
 
@@ -38,7 +39,7 @@ public sealed class GameAuthMiddleware
         if (!parsed || string.IsNullOrEmpty(token))
         {
             // 인증 정보 파싱 실패(userId 특정 불가) — 경로만 남긴다.
-            _logger.LogWarning("인증 실패(토큰 파싱 불가): {Path}", context.Request.Path.Value);
+            _logger.ZLogWarning($"인증 실패(토큰 파싱 불가): {context.Request.Path.Value:@Path}");
             await WriteUnauthorizedAsync(context, ErrorCode.InvalidToken);
             return;
         }
@@ -46,14 +47,14 @@ public sealed class GameAuthMiddleware
         var cachedToken = await tokenReader.GetAsync(userId);
         if (cachedToken is null)
         {
-            _logger.LogWarning("인증 실패(만료/미보유 토큰): userId {UserId}", userId);
+            _logger.ZLogWarning($"인증 실패(만료/미보유 토큰): userId {userId:@UserId}");
             await WriteUnauthorizedAsync(context, ErrorCode.ExpiredToken);
             return;
         }
 
         if (!string.Equals(cachedToken, token, StringComparison.Ordinal))
         {
-            _logger.LogWarning("인증 실패(토큰 불일치): userId {UserId}", userId);
+            _logger.ZLogWarning($"인증 실패(토큰 불일치): userId {userId:@UserId}");
             await WriteUnauthorizedAsync(context, ErrorCode.InvalidToken);
             return;
         }

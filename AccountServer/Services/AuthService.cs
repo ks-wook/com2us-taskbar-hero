@@ -4,6 +4,7 @@ using AccountServer.Repositories;
 using MySqlConnector;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace AccountServer.Services;
 
@@ -83,13 +84,13 @@ public sealed class AuthService : IAuthService
         try
         {
             var userId = await _userRepository.InsertUserAsync(email, passwordHash, nickname, nowUnix);
-            _logger.LogInformation("회원가입 성공: userId {UserId}", userId);
+            _logger.ZLogInformation($"회원가입 성공: userId {userId:@UserId}");
             return new SignupResult(ErrorCode.Success, userId);
         }
         catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
         {
             // 선검사 통과 후 동시 요청이 먼저 삽입한 경합(race). UNIQUE 인덱스가 막아준다.
-            _logger.LogWarning("회원가입 이메일 중복 경합 감지: {Email}", email);
+            _logger.ZLogWarning($"회원가입 이메일 중복 경합 감지: {email:@Email}");
             return new SignupResult(ErrorCode.DuplicateEmail, 0);
         }
     }
@@ -129,7 +130,7 @@ public sealed class AuthService : IAuthService
         await _authTokenRepository.UpsertAsync(user.UserId, token, now, expiredAt);
         await _authTokenCache.SetAsync(user.UserId, token, TimeSpan.FromHours(_tokenExpirationHours));
 
-        _logger.LogInformation("로그인 성공: userId {UserId}", user.UserId);
+        _logger.ZLogInformation($"로그인 성공: userId {user.UserId:@UserId}");
         return new LoginResult(ErrorCode.Success, user.UserId, token);
     }
 
@@ -160,7 +161,7 @@ public sealed class AuthService : IAuthService
         await _authTokenRepository.DeleteAsync(userId);
         await _authTokenCache.DeleteAsync(userId);
 
-        _logger.LogInformation("로그아웃 성공: userId {UserId}", userId);
+        _logger.ZLogInformation($"로그아웃 성공: userId {userId:@UserId}");
         return ErrorCode.Success;
     }
 

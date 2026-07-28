@@ -2,6 +2,7 @@ using GameServer.MasterData;
 using GameServer.Repositories;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace GameServer.Services;
 
@@ -70,9 +71,7 @@ public sealed class InventoryService : IInventoryService
                 : new SlotItemDto { slot = outcome.Slot, itemId = outcome.UnequippedItemId.Value },
         };
 
-        _logger.LogDebug(
-            "장착 성공: userId {UserId}, characterId {CharacterId}, itemId {ItemId}, slot {Slot}",
-            userId, characterId, itemId, outcome.Slot);
+        _logger.ZLogDebug($"장착 성공: userId {userId:@UserId}, characterId {characterId:@CharacterId}, itemId {itemId:@ItemId}, slot {outcome.Slot:@Slot}");
         return new SaveResult(ErrorCode.Success, "Equipped", data);
     }
 
@@ -90,9 +89,7 @@ public sealed class InventoryService : IInventoryService
         }
 
         var data = new UnequipResultData { characterId = characterId, slot = slot, itemId = outcome.ItemId };
-        _logger.LogDebug(
-            "장착 해제 성공: userId {UserId}, characterId {CharacterId}, slot {Slot}, itemId {ItemId}",
-            userId, characterId, slot, outcome.ItemId);
+        _logger.ZLogDebug($"장착 해제 성공: userId {userId:@UserId}, characterId {characterId:@CharacterId}, slot {slot:@Slot}, itemId {outcome.ItemId:@ItemId}");
         return new SaveResult(ErrorCode.Success, "Unequipped", data);
     }
 
@@ -117,9 +114,7 @@ public sealed class InventoryService : IInventoryService
                 : new SlotItemDto { slot = outcome.SwappedSlot!.Value, itemId = outcome.SwappedItemId.Value },
         };
 
-        _logger.LogDebug(
-            "배치 이동 성공: userId {UserId}, itemId {ItemId}, toSlot {ToSlot}",
-            userId, itemId, toSlot);
+        _logger.ZLogDebug($"배치 이동 성공: userId {userId:@UserId}, itemId {itemId:@ItemId}, toSlot {toSlot:@ToSlot}");
         return new SaveResult(ErrorCode.Success, "Moved", data);
     }
 
@@ -157,9 +152,7 @@ public sealed class InventoryService : IInventoryService
             },
         };
 
-        _logger.LogInformation(
-            "인벤토리 확장 성공: userId {UserId}, capacity {Capacity}, cost {Cost}",
-            userId, outcome.InventoryCapacity, outcome.Cost);
+        _logger.ZLogInformation($"인벤토리 확장 성공: userId {userId:@UserId}, capacity {outcome.InventoryCapacity:@Capacity}, cost {outcome.Cost:@Cost}");
         return new SaveResult(ErrorCode.Success, "Expanded", data);
     }
 

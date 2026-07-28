@@ -2,6 +2,7 @@ using GameServer.MasterData;
 using GameServer.Repositories;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace GameServer.Services;
 
@@ -96,9 +97,7 @@ public sealed class MailService : IMailService
             balance = BuildBalance(outcome.GoldBalance),
         };
 
-        _logger.LogInformation(
-            "메일 수령: userId {UserId}, mailId {MailId}, gold {Gold}, items {ItemKinds}종",
-            userId, mailId, outcome.Gold, outcome.Items.Count);
+        _logger.ZLogInformation($"메일 수령: userId {userId:@UserId}, mailId {mailId:@MailId}, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
         return new SaveResult(ErrorCode.Success, "Claimed", data);
     }
 
@@ -129,9 +128,7 @@ public sealed class MailService : IMailService
             balance = BuildBalance(outcome.GoldBalance),
         };
 
-        _logger.LogInformation(
-            "메일 일괄 수령: userId {UserId}, mails {MailCount}건, gold {Gold}, items {ItemKinds}종",
-            userId, outcome.ClaimedMailIds.Count, outcome.Gold, outcome.Items.Count);
+        _logger.ZLogInformation($"메일 일괄 수령: userId {userId:@UserId}, mails {outcome.ClaimedMailIds.Count:@MailCount}건, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
         return new SaveResult(ErrorCode.Success, "Claimed all", data);
     }
 

@@ -2,6 +2,7 @@ using GameServer.MasterData;
 using GameServer.Repositories;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace GameServer.Services;
 
@@ -100,9 +101,7 @@ public sealed class GrowthService : IGrowthService
             skillPoint = outcome.AvailablePoints,
         };
 
-        _logger.LogInformation(
-            "스킬 레벨업: userId {UserId}, characterId {CharacterId}, skillCode {SkillCode}, level {Level}",
-            userId, characterId, skillCode, outcome.NewLevel);
+        _logger.ZLogInformation($"스킬 레벨업: userId {userId:@UserId}, characterId {characterId:@CharacterId}, skillCode {skillCode:@SkillCode}, level {outcome.NewLevel:@Level}");
         return new SaveResult(ErrorCode.Success, "Skill leveled up", data);
     }
 
@@ -132,9 +131,7 @@ public sealed class GrowthService : IGrowthService
             skillPoint = outcome.AvailablePoints,
         };
 
-        _logger.LogInformation(
-            "스킬 초기화: userId {UserId}, characterId {CharacterId}, resetCount {ResetCount}",
-            userId, characterId, outcome.ResetCount);
+        _logger.ZLogInformation($"스킬 초기화: userId {userId:@UserId}, characterId {characterId:@CharacterId}, resetCount {outcome.ResetCount:@ResetCount}");
         return new SaveResult(ErrorCode.Success, "Skills reset", data);
     }
 
@@ -208,9 +205,7 @@ public sealed class GrowthService : IGrowthService
             equipped = outcome.Equipped,
         };
 
-        _logger.LogInformation(
-            "액티브 스킬 장착: userId {UserId}, characterId {CharacterId}, count {Count}",
-            userId, characterId, outcome.Equipped.Count);
+        _logger.ZLogInformation($"액티브 스킬 장착: userId {userId:@UserId}, characterId {characterId:@CharacterId}, count {outcome.Equipped.Count:@Count}");
         return new SaveResult(ErrorCode.Success, "Active skills equipped", data);
     }
 
@@ -256,9 +251,7 @@ public sealed class GrowthService : IGrowthService
             },
         };
 
-        _logger.LogInformation(
-            "룬 업그레이드: userId {UserId}, runeCode {RuneCode}, level {Level}, cost {Cost}",
-            userId, runeCode, outcome.NewLevel, outcome.Cost);
+        _logger.ZLogInformation($"룬 업그레이드: userId {userId:@UserId}, runeCode {runeCode:@RuneCode}, level {outcome.NewLevel:@Level}, cost {outcome.Cost:@Cost}");
         return new SaveResult(ErrorCode.Success, "Rune upgraded", data);
     }
 }

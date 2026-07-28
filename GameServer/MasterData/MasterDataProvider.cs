@@ -2,6 +2,7 @@ using GameServer.Data;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 using TaskbarHero.Common.MasterData;
+using ZLogger;
 
 namespace GameServer.MasterData;
 
@@ -402,14 +403,12 @@ public sealed class MasterDataProvider
             }
 
             IsLoaded = true;
-            _logger.LogInformation(
-                "마스터 데이터 적재 완료: class {Classes} · stage {Stages} · reward {Rewards} · level {Levels} · dropGrades {Grades} · expandSlots {Expand} · skill {Skills} · rune {Runes} · runeCost {RuneCosts} · charCost {CharCosts} · cube {Cubes} · recipe {Recipes} · attendance {Attendances} · mailTemplate {MailTemplates}",
-                _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count, _itemsByGrade.Count, _expandCosts.Count, _skillsByCode.Count, _runesByCode.Count, _runeCosts.Count, _characterCreateCosts.Count, _cubeRules.Count, _recipesByCode.Count, _attendanceByDay.Count, _mailTemplates.Count);
+            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · dropGrades {_itemsByGrade.Count:@Grades} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates}");
         }
         catch (Exception ex)
         {
             IsLoaded = false;
-            _logger.LogError(ex, "마스터 데이터 적재 실패. 관련 요청은 MasterDataNotLoaded(10001)로 처리됩니다.");
+            _logger.ZLogError(ex, $"마스터 데이터 적재 실패. 관련 요청은 MasterDataNotLoaded(10001)로 처리됩니다.");
         }
     }
 
@@ -764,7 +763,7 @@ public sealed class MasterDataProvider
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "inventory_expand_master 적재 실패 — 인벤토리 확장은 상한 도달로 처리됩니다.");
+            _logger.ZLogWarning(ex, $"inventory_expand_master 적재 실패 — 인벤토리 확장은 상한 도달로 처리됩니다.");
             return new List<long>();
         }
     }

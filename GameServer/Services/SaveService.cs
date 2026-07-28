@@ -3,6 +3,7 @@ using GameServer.Repositories;
 using MySqlConnector;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace GameServer.Services;
 
@@ -108,13 +109,11 @@ public sealed class SaveService : ISaveService
             catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
             {
                 // 동시 초기화 경합.
-                _logger.LogWarning("계정 초기화 경합 감지: user {UserId}", userId);
+                _logger.ZLogWarning($"계정 초기화 경합 감지: user {userId:@UserId}");
                 return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
             }
 
-            _logger.LogInformation(
-                "캐릭터 생성 성공(신규 계정): userId {UserId}, characterId {CharacterId}, classCode {ClassCode}",
-                userId, 1, classCode);
+            _logger.ZLogInformation($"캐릭터 생성 성공(신규 계정): userId {userId:@UserId}, characterId {1:@CharacterId}, classCode {classCode:@ClassCode}");
             // 최초 생성(1번 슬롯)은 계정 초기화라 무료.
             return SuccessCharacter(userId, 1, classCode, 0, null);
         }
@@ -145,9 +144,7 @@ public sealed class SaveService : ISaveService
                 return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
         }
 
-        _logger.LogInformation(
-            "캐릭터 생성 성공: userId {UserId}, characterId {CharacterId}, classCode {ClassCode}, cost {Cost}",
-            userId, newSlot, classCode, outcome.Cost);
+        _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newSlot:@CharacterId}, classCode {classCode:@ClassCode}, cost {outcome.Cost:@Cost}");
         return SuccessCharacter(userId, newSlot, classCode, outcome.Cost, outcome.GoldBalance);
     }
 

@@ -1,5 +1,6 @@
 using CloudStructures;
 using GameServer.Repositories;
+using ZLogger;
 
 namespace GameServer.Batch;
 
@@ -55,8 +56,7 @@ public sealed class MailGcBatchService : PeriodicBatchService
 
         if (deleted > 0)
         {
-            _logger.LogInformation(
-                "메일 GC 배치: 삭제 {Deleted}건 (보관 7일 경과 대상, 1회 상한 {BatchSize}건)", deleted, _batchSize);
+            _logger.ZLogInformation($"메일 GC 배치: 삭제 {deleted:@Deleted}건 (보관 7일 경과 대상, 1회 상한 {_batchSize:@BatchSize}건)");
         }
     }
 }

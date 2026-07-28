@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using ZLogger;
 
 namespace AccountServer.Middleware;
 
@@ -27,12 +28,7 @@ public sealed class RequestLoggingMiddleware
         finally
         {
             stopwatch.Stop();
-            _logger.LogInformation(
-                "요청 처리: {Method} {Path} → {StatusCode} ({ElapsedMs}ms)",
-                context.Request.Method,
-                context.Request.Path.Value,
-                context.Response.StatusCode,
-                stopwatch.ElapsedMilliseconds);
+            _logger.ZLogInformation($"요청 처리: {context.Request.Method:@Method} {context.Request.Path.Value:@Path} → {context.Response.StatusCode:@StatusCode} ({stopwatch.ElapsedMilliseconds:@ElapsedMs}ms)");
         }
     }
 }

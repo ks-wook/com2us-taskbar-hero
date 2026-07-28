@@ -2,6 +2,7 @@ using GameServer.MasterData;
 using GameServer.Repositories;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace GameServer.Services;
 
@@ -89,9 +90,7 @@ public sealed class OfflineService : IOfflineService
             lastActiveAt = outcome.LastActiveAt,
         };
 
-        _logger.LogInformation(
-            "오프라인 보상 정산: userId {UserId}, elapsed {Elapsed}s, effective {Effective}s, gold {Gold}, exp {Exp}",
-            userId, elapsed, outcome.EffectiveSec, outcome.Gold, outcome.Exp);
+        _logger.ZLogInformation($"오프라인 보상 정산: userId {userId:@UserId}, elapsed {elapsed:@Elapsed}s, effective {outcome.EffectiveSec:@Effective}s, gold {outcome.Gold:@Gold}, exp {outcome.Exp:@Exp}");
         return new SaveResult(ErrorCode.Success, "Offline reward claimed", data);
     }
 

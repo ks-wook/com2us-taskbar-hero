@@ -2,6 +2,7 @@ using GameServer.MasterData;
 using GameServer.Repositories;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace GameServer.Services;
 
@@ -127,9 +128,7 @@ public sealed class AttendanceService : IAttendanceService
         var template = _masterData.GetMailTemplate(AttendanceMailTemplateCode);
         if (template is null)
         {
-            _logger.LogError(
-                "출석 보상 메일 템플릿 미정의: templateCode {TemplateCode} — mail_master 확인 필요",
-                AttendanceMailTemplateCode);
+            _logger.ZLogError($"출석 보상 메일 템플릿 미정의: templateCode {AttendanceMailTemplateCode:@TemplateCode} — mail_master 확인 필요");
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
@@ -149,8 +148,7 @@ public sealed class AttendanceService : IAttendanceService
                 // 이번달 보상 사다리 소진(31일 있는 달에 하루도 빠짐없이 출석한 경우).
                 return new SaveResult(ErrorCode.AttendanceAllClaimed, string.Empty, null);
             case AttendanceClaimStatus.RewardNotFound:
-                _logger.LogError(
-                    "출석 일차 보상 미정의: day {Day} — attendance_master 확인 필요", outcome.Day);
+                _logger.ZLogError($"출석 일차 보상 미정의: day {outcome.Day:@Day} — attendance_master 확인 필요");
                 return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
@@ -169,9 +167,7 @@ public sealed class AttendanceService : IAttendanceService
             mailId = outcome.MailId,
         };
 
-        _logger.LogInformation(
-            "출석 보상 발급: userId {UserId}, attendDate {AttendDate}, day {Day}, mailId {MailId}",
-            userId, today, outcome.Day, outcome.MailId);
+        _logger.ZLogInformation($"출석 보상 발급: userId {userId:@UserId}, attendDate {today:@AttendDate}, day {outcome.Day:@Day}, mailId {outcome.MailId:@MailId}");
         return new SaveResult(ErrorCode.Success, "Attended", data);
     }
 

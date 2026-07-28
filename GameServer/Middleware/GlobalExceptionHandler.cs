@@ -2,6 +2,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Diagnostics;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace GameServer.Middleware;
 
@@ -21,8 +22,7 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
     public async ValueTask<bool> TryHandleAsync(
         HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
-        _logger.LogError(exception, "미처리 예외: {Method} {Path}",
-            context.Request.Method, context.Request.Path.Value);
+        _logger.ZLogError(exception, $"미처리 예외: {context.Request.Method:@Method} {context.Request.Path.Value:@Path}");
 
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/json";

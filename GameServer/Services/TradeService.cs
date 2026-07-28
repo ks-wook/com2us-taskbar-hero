@@ -2,6 +2,7 @@ using GameServer.MasterData;
 using GameServer.Repositories;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
+using ZLogger;
 
 namespace GameServer.Services;
 
@@ -137,9 +138,7 @@ public sealed class TradeService : ITradeService
         var listing = outcome.Listing!;
         await _cache.AddAsync(listing, now); // 커밋 이후에만 캐시를 고친다(§7.3)
 
-        _logger.LogInformation(
-            "거래소 등록: userId {UserId}, listingId {ListingId}, itemCode {ItemCode}, price {Price}",
-            userId, listing.ListingId, listing.ItemCode, listing.Price);
+        _logger.ZLogInformation($"거래소 등록: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}, price {listing.Price:@Price}");
 
         return new SaveResult(ErrorCode.Success, "Registered", new TradeRegisterResultData
         {
@@ -174,9 +173,7 @@ public sealed class TradeService : ITradeService
         var purchaseTemplate = _masterData.GetMailTemplate(PurchaseMailTemplateCode);
         if (settlementTemplate is null || purchaseTemplate is null)
         {
-            _logger.LogError(
-                "거래소 메일 템플릿 미정의: 대금 {HasSettlement}, 구매 아이템 {HasPurchase} — mail_master 확인 필요",
-                settlementTemplate is not null, purchaseTemplate is not null);
+            _logger.ZLogError($"거래소 메일 템플릿 미정의: 대금 {settlementTemplate is not null:@HasSettlement}, 구매 아이템 {purchaseTemplate is not null:@HasPurchase} — mail_master 확인 필요");
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
@@ -219,9 +216,7 @@ public sealed class TradeService : ITradeService
             var listing = outcome.Listing!;
             await _cache.RemoveAsync(listing);
 
-            _logger.LogInformation(
-                "거래소 구매: buyerUserId {BuyerUserId}, listingId {ListingId}, price {Price}, 정산액 {Settlement}, 아이템 메일 {MailId}",
-                userId, listing.ListingId, listing.Price, SettlementAmount(listing.Price), outcome.ItemMailId);
+            _logger.ZLogInformation($"거래소 구매: buyerUserId {userId:@BuyerUserId}, listingId {listing.ListingId:@ListingId}, price {listing.Price:@Price}, 정산액 {SettlementAmount(listing.Price):@Settlement}, 아이템 메일 {outcome.ItemMailId:@MailId}");
 
             var data = new TradeBuyResultData
             {
@@ -280,9 +275,7 @@ public sealed class TradeService : ITradeService
             var listing = outcome.Listing!;
             await _cache.RemoveAsync(listing);
 
-            _logger.LogInformation(
-                "거래소 취소: userId {UserId}, listingId {ListingId}, itemCode {ItemCode}",
-                userId, listing.ListingId, listing.ItemCode);
+            _logger.ZLogInformation($"거래소 취소: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}");
 
             return new SaveResult(ErrorCode.Success, "Cancelled", new TradeCancelResultData
             {

@@ -1,6 +1,7 @@
 using CloudStructures;
 using CloudStructures.Structures;
 using StackExchange.Redis;
+using ZLogger;
 
 namespace GameServer.Batch;
 
@@ -59,7 +60,7 @@ public abstract class PeriodicBatchService : BackgroundService
             {
                 if (!await TryAcquireLeaderLockAsync())
                 {
-                    _logger.LogDebug("{Batch}: 리더 락 미획득 — 이번 주기는 다른 인스턴스가 실행(스킵).", BatchName);
+                    _logger.ZLogDebug($"{BatchName:@Batch}: 리더 락 미획득 — 이번 주기는 다른 인스턴스가 실행(스킵).");
                     continue;
                 }
 
@@ -72,7 +73,7 @@ public abstract class PeriodicBatchService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "{Batch} 주기 실행 실패 — 다음 주기에 재시도합니다.", BatchName);
+                _logger.ZLogError(ex, $"{BatchName:@Batch} 주기 실행 실패 — 다음 주기에 재시도합니다.");
             }
         }
         while (await WaitForNextTickAsync(timer, stoppingToken));
@@ -92,7 +93,7 @@ public abstract class PeriodicBatchService : BackgroundService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "{Batch}: Redis 리더 락 사용 불가 — 락 없이 진행합니다(축소 운전).", BatchName);
+            _logger.ZLogWarning(ex, $"{BatchName:@Batch}: Redis 리더 락 사용 불가 — 락 없이 진행합니다(축소 운전).");
             return true;
         }
     }
