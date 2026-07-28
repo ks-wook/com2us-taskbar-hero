@@ -85,6 +85,7 @@ namespace TaskbarHero.Client.UI
 
         private void OnLoginSuccess(LoginResponse response)
         {
+            SoundManager.Sfx(SoundId.LoginSuccess);
             // 로그인 계정 정보를 세션에 캐싱(이후 인증 API 요청에서 재사용).
             Session.SetAuth(response.userId, response.token);
 
@@ -174,6 +175,7 @@ namespace TaskbarHero.Client.UI
 
         private void OnLoginError(NetworkError error)
         {
+            SoundManager.Sfx(SoundId.LoginFail);
             LoadingOverlay.Instance?.Hide();
             SetLoginUiShown(true);
             SetInteractable(true);

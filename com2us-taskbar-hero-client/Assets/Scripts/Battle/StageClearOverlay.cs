@@ -56,6 +56,7 @@ namespace TaskbarHero.Client.Battle
         public static void Show(StageClearData data, Action onClosed = null)
         {
             // 전투 연출 띠(기능 패널 아래) — 인벤토리·출석부 등을 열어 둔 동안 가리지 않는다.
+            SoundManager.Jingle(SoundId.JingleStageClear);
             ShowRewards(StageClearTitle, data != null ? data.rewards : null,
                 restoreTimeScale: true, showFanfare: true, UiSortingOrder.BattleResult, onClosed);
         }

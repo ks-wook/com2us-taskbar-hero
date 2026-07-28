@@ -66,6 +66,7 @@ namespace TaskbarHero.Client.Battle
         /// <summary>이미 생성된(프리팹) 배너에 스테이지 문구를 채우고 페이드 연출을 시작한다.</summary>
         public void Play(int act, int difficulty, int stage)
         {
+            SoundManager.Sfx(SoundId.StageEnter);
             if (!AlreadyBuilt)
             {
                 Construct();

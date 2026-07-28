@@ -489,6 +489,7 @@ MonoBehaviour:
   inventoryIcon: {fileID: 21300000, guid: dd8d4f7dfddb13a43acb4b1fd582d7ca, type: 3}
   attendanceIcon: {fileID: 21300000, guid: ab51841b0e3ef8a41bb6f10fe2cd74bd, type: 3}
   tradeIcon: {fileID: 21300000, guid: a851c259d51f9204fac1993594ca9f4f, type: 3}
+  settingsIcon: {fileID: 21300000, guid: e96efdf00edbc62438e3eeaa98707ae3, type: 3}
   uiBackgroundSprite: {fileID: 21300000, guid: 5a7d925cc2fedcf4383acbe2dc857cba, type: 3}
   systemBackgroundSprite: {fileID: 21300000, guid: bc0d2e30484693b4d8076bb0020cb4f3, type: 3}
   systemSlotSprite: {fileID: 21300000, guid: 0dd82755c31b84e4099a16001ad10f6b, type: 3}
@@ -1704,6 +1705,7 @@ MonoBehaviour:
   mailPanelPrefab: {fileID: 89407125405729913, guid: a2ddddf23b25419429d92a2a115397d2, type: 3}
   attendancePanelPrefab: {fileID: 1145327173041529558, guid: 8e9b1c934473d6d4f885167f9adbdf7d, type: 3}
   tradePanelPrefab: {fileID: 3281263510454333301, guid: cbe47ea4bf92c7d44bd641e48defd342, type: 3}
+  settingsPanelPrefab: {fileID: 6153933301113318958, guid: cfde72febb76d0b45884e1d1db6a2556, type: 3}
   showOnStart: 0
   startPanel: 0
 --- !u!4 &2022704252

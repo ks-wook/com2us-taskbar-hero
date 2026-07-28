@@ -24,6 +24,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite attendanceIcon; // 출석부
         [Tooltip("거래소 아이콘(Assets/Art/UI/Trade/거래소.png).")]
         [SerializeField] private Sprite tradeIcon;      // 거래소
+        [Tooltip("환경설정 아이콘(Assets/Art/Icon/환경설정.png).")]
+        [SerializeField] private Sprite settingsIcon;   // 환경설정
         [Tooltip("하단 아이콘 줄 뒷배경 프레임(Assets/Art/UI/ui_bg.png, 9-slice). 없으면 배경 없이 아이콘만 표시.")]
         [SerializeField] private Sprite uiBackgroundSprite;
 
@@ -43,7 +45,7 @@ namespace TaskbarHero.Client.UI
 
         // 우하단 버튼 줄: 오른쪽 끝부터 왼쪽으로 한 칸씩. GameScene 창은 정사각형이라 캔버스 가로가
         // 약 1440 단위 — 버튼 6개(맨 왼쪽 칸이 -1100까지)가 넉넉히 들어간다.
-        private const int MenuSlotCount = 6;
+        private const int MenuSlotCount = 7;
         private const float MenuSlotStep = 180f;
         private const float MenuButtonWidth = 160f;
         private const float MenuButtonHeight = 150f;
@@ -166,13 +168,14 @@ namespace TaskbarHero.Client.UI
             // 아이콘보다 먼저 만들어 뒤에 깔리게 한다(같은 캔버스에서는 자식 순서 = 그리기 순서).
             BuildMenuBackground(canvasGo.transform);
 
-            // 우하단 한 줄로 상시 노출: 오른쪽부터 [가방] [스테이지] [편성] [메일] [출석부] [거래소].
-            var inventoryBtn = CreateMenuButton(canvasGo.transform, font, "InventoryButton", "가방", inventoryIcon, 0, OnInventoryButton);
-            CreateMenuButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, 1, OnStageButton);
-            CreateMenuButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, 2, OnPartyButton);
-            var mailBtn = CreateMenuButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, 3, OnMailButton);
-            CreateMenuButton(canvasGo.transform, font, "AttendanceButton", "출석부", attendanceIcon, 4, OnAttendanceButton);
-            CreateMenuButton(canvasGo.transform, font, "TradeButton", "거래소", tradeIcon, 5, OnTradeButton);
+            // 우하단 한 줄로 상시 노출: 오른쪽부터 [환경설정] [가방] [스테이지] [편성] [메일] [출석부] [거래소].
+            CreateMenuButton(canvasGo.transform, font, "SettingsButton", "환경설정", settingsIcon, 0, OnSettingsButton);
+            var inventoryBtn = CreateMenuButton(canvasGo.transform, font, "InventoryButton", "가방", inventoryIcon, 1, OnInventoryButton);
+            CreateMenuButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, 2, OnStageButton);
+            CreateMenuButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, 3, OnPartyButton);
+            var mailBtn = CreateMenuButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, 4, OnMailButton);
+            CreateMenuButton(canvasGo.transform, font, "AttendanceButton", "출석부", attendanceIcon, 5, OnAttendanceButton);
+            CreateMenuButton(canvasGo.transform, font, "TradeButton", "거래소", tradeIcon, 6, OnTradeButton);
 
             // 메일 버튼 우측 상단 레드닷: 아직 수령하지 않은 보상 첨부가 남은 메일이 있으면 표시(만료 전 수령 유도).
             RedDot.AttachTopRight((RectTransform)mailBtn.transform).Bind(RedDotConditions.HasUnclaimedMailReward);
@@ -307,6 +310,19 @@ namespace TaskbarHero.Client.UI
             if (UIManager.Instance != null)
             {
                 UIManager.Instance.ToggleMail();
+            }
+            else
+            {
+                Debug.LogWarning("[HUD] UIManager 인스턴스를 찾을 수 없습니다.");
+            }
+        }
+
+        /// <summary>환경설정 패널 토글(UIManager 위임).</summary>
+        private void OnSettingsButton()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.ToggleSettings();
             }
             else
             {

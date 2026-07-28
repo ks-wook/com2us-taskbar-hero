@@ -36,6 +36,10 @@ namespace TaskbarHero.Client.UI
 
         private void Awake()
         {
+            // 캐릭터 생성 씬 전용 BGM + 모닥불 앰비언트(씬을 벗어나면 다음 씬이 BGM을 바꾼다).
+            SoundManager.Bgm(SoundId.BgmCharacterCreate);
+            SoundManager.Ambient(SoundId.AmbCampfireLoop);
+
             if (cam == null)
             {
                 cam = Camera.main;

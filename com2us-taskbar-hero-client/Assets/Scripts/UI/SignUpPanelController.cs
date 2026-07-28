@@ -90,6 +90,7 @@ namespace TaskbarHero.Client.UI
 
         private void OnSignUpSuccess(SignupResponse response)
         {
+            SoundManager.Sfx(SoundId.SignupSuccess);
             LoadingOverlay.Instance?.Hide();
             SetInteractable(true);
             SetError(string.Empty);

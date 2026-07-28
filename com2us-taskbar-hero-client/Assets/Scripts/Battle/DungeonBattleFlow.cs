@@ -242,6 +242,23 @@ namespace TaskbarHero.Client.Battle
             {
                 background.SetSprite(backgrounds[idx]);
             }
+            PlayActBgm(backgroundType);
+        }
+
+        /// <summary>배경 타입(1~5 = Act)에 대응하는 전투 BGM으로 바꾼다. 같은 곡이면 SoundManager가 무시하므로
+        /// 같은 Act 안에서 스테이지를 넘겨도 음악이 끊기지 않는다.</summary>
+        private static void PlayActBgm(int backgroundType)
+        {
+            SoundId id = backgroundType switch
+            {
+                1 => SoundId.BgmBattleAct1,
+                2 => SoundId.BgmBattleAct2,
+                3 => SoundId.BgmBattleAct3,
+                4 => SoundId.BgmBattleAct4,
+                5 => SoundId.BgmBattleAct5,
+                _ => SoundId.BgmBattleAct1,
+            };
+            SoundManager.Bgm(id);
         }
 
         /// <summary>코드로 몬스터 프리팹을 조회(없으면 null → 컨트롤러가 폴백/건너뜀).</summary>
@@ -288,6 +305,7 @@ namespace TaskbarHero.Client.Battle
             // 패배 순간 슬로우모션(응답 대기감). 오버레이가 닫힐 때 1로 복원된다.
             Time.timeScale = Mathf.Clamp(clearSlowMotionScale, 0.01f, 1f);
             Debug.Log($"[Dungeon] 아군 전멸 → 패배, 현재 스테이지 재시작 {_act}-{_difficulty}-{_stage}");
+            SoundManager.Jingle(SoundId.JingleDefeat);
             BattleDefeatOverlay.Show(() => EnterStage(_act, _difficulty, _stage, restartFromStart: true));
         }
 

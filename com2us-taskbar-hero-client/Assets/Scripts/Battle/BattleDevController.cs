@@ -513,6 +513,8 @@ namespace TaskbarHero.Client.Battle
             if (isBoss)
             {
                 BossWarningBanner.Show(); // 보스 등장 경고 연출(중앙 붉은 "Warning!!" 3회 펄스)
+                SoundManager.Sfx(SoundId.BossWarning);
+                SoundManager.Bgm(SoundId.BgmBoss, 2f); // 보스전 BGM으로 2초 크로스페이드
                 Log($"보스 등장! — {mname}");
             }
         }
@@ -906,6 +908,7 @@ namespace TaskbarHero.Client.Battle
             else
             {
                 // 개발 하네스: 서버 흐름이 없으므로 패배 오버레이 후 전장 리셋.
+                SoundManager.Jingle(SoundId.JingleDefeat);
                 BattleDefeatOverlay.Show(ResetBattlefield);
             }
         }

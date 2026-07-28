@@ -142,12 +142,14 @@ namespace TaskbarHero.Client.Managers
 
         private void OnOkClicked()
         {
+            SoundManager.Sfx(SoundId.UiModalOk);
             var cb = _onOk;
             PunchThenClose(_okButton, cb);
         }
 
         private void OnCancelClicked()
         {
+            SoundManager.Sfx(SoundId.UiModalCancel);
             var cb = _onCancel;
             PunchThenClose(_cancelButton, cb);
         }

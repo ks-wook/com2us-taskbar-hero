@@ -25,6 +25,7 @@ namespace TaskbarHero.Client.Managers
             Mail,
             Attendance,
             Trade,
+            Settings,
         }
 
         public static UIManager Instance { get; private set; }
@@ -52,6 +53,8 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private GameObject attendancePanelPrefab;
         [Tooltip("Assets/Prefabs/UI/TradePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject tradePanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/SettingsPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject settingsPanelPrefab;
 
         [Header("시작 설정")]
         [Tooltip("Start 시 자동으로 표시할 패널. 자동 표시를 원치 않으면 비활성화한다.")]
@@ -242,6 +245,22 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
+        /// <summary>환경설정 패널을 표시한다.</summary>
+        public void ShowSettings() => Show(PanelType.Settings);
+
+        /// <summary>환경설정 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleSettings()
+        {
+            if (Current == PanelType.Settings)
+            {
+                Hide(PanelType.Settings);
+            }
+            else
+            {
+                Show(PanelType.Settings);
+            }
+        }
+
         /// <summary>파티 편성 패널을 표시한다.</summary>
         public void ShowParty() => Show(PanelType.Party);
 
@@ -266,6 +285,10 @@ namespace TaskbarHero.Client.Managers
             {
                 return;
             }
+            if (Current != type)
+            {
+                SoundManager.Sfx(SoundId.UiPanelOpen); // 이미 열린 패널을 다시 Show하면 울리지 않는다
+            }
 
             foreach (var pair in _instances)
             {
@@ -282,6 +305,7 @@ namespace TaskbarHero.Client.Managers
         /// <summary>지정한 패널을 숨긴다.</summary>
         public void Hide(PanelType type)
         {
+            // 닫힘 사운드는 넣지 않는다 — 패널을 자주 여닫는 조작이라 소리가 과하다(열림음만 유지).
             if (_instances.TryGetValue(type, out var panel) && panel != null)
             {
                 panel.SetActive(false);
@@ -361,6 +385,8 @@ namespace TaskbarHero.Client.Managers
                     return attendancePanelPrefab;
                 case PanelType.Trade:
                     return tradePanelPrefab;
+                case PanelType.Settings:
+                    return settingsPanelPrefab;
                 default:
                     return null;
             }

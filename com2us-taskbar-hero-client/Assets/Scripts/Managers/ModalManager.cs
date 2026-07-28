@@ -43,14 +43,18 @@ namespace TaskbarHero.Client.Managers
         public void ShowConfirm(string title, string message, Action onOk = null)
         {
             var modal = GetOrCreate();
-            if (modal != null) modal.ShowOk(title, message, onOk);
+            if (modal == null) return;
+            SoundManager.Sfx(SoundId.UiModalOpen);
+            modal.ShowOk(title, message, onOk);
         }
 
         /// <summary>'확인'·'취소'가 있는 선택 모달을 표시한다.</summary>
         public void ShowConfirmCancel(string title, string message, Action onOk = null, Action onCancel = null)
         {
             var modal = GetOrCreate();
-            if (modal != null) modal.ShowOkCancel(title, message, onOk, onCancel);
+            if (modal == null) return;
+            SoundManager.Sfx(SoundId.UiModalOpen);
+            modal.ShowOkCancel(title, message, onOk, onCancel);
         }
 
         /// <summary>모달 인스턴스를 최초 1회 생성·캐싱해 반환한다(없으면 null 경고).</summary>

@@ -27,6 +27,12 @@ namespace TaskbarHero.Client.UI
         private bool _pressHeld;          // 시작 클릭 후보(버튼 눌림 → 놓을 때까지 추적)
         private bool _draggedDuringPress; // 누르고 있는 동안 창 드래그(오버레이 이동)가 발생했는지
 
+        /// <summary>타이틀 씬 BGM을 시작한다(같은 곡이면 SoundManager가 무시하므로 재진입에도 끊기지 않는다).</summary>
+        private void Awake()
+        {
+            SoundManager.Bgm(SoundId.BgmTitle);
+        }
+
         private void Update()
         {
             // ESC → 종료 확인 모달. 시작 전/후(로그인 화면 포함) 모두 동작.
@@ -121,6 +127,7 @@ namespace TaskbarHero.Client.UI
             {
                 return;
             }
+            SoundManager.Sfx(SoundId.TitleStart);
 
             _started = true;
 
