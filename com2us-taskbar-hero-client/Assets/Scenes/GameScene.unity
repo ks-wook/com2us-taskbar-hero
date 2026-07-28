@@ -712,8 +712,10 @@ MonoBehaviour:
   stageIcon: {fileID: 21300000, guid: 1c8b9206f21e99c4aaabd660dc5febf9, type: 3}
   inventoryIcon: {fileID: 21300000, guid: dd8d4f7dfddb13a43acb4b1fd582d7ca, type: 3}
   attendanceIcon: {fileID: 21300000, guid: ab51841b0e3ef8a41bb6f10fe2cd74bd, type: 3}
+  menuToggleIcon: {fileID: 21300000, guid: 148d7bdb8640eb34dab0203a3de79b32, type: 3}
   mailPollIntervalSeconds: 60
   autoOpenAttendance: 1
+  menuOpenOnStart: 0
 --- !u!4 &499822581
 Transform:
   m_ObjectHideFlags: 0

@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
@@ -8,7 +9,10 @@ using TaskbarHero.Common.Dto;
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// GameScene 상시 HUD. 메일·인벤토리·편성·스테이지 토글 버튼과 ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
+    /// GameScene 상시 HUD. 우하단에 <b>햄버거 메뉴 버튼</b> 하나만 상시 노출하고, 기능 버튼
+    /// (출석부·메일·편성·스테이지·가방)은 그 버튼으로 펼치고 접는다. 펼침/접힘은 버튼들이 햄버거 뒤에서
+    /// 좌측으로 미끄러져 나오며 커지고 밝아지는(접을 때는 역순) 연출로 처리한다.
+    /// ESC 메뉴(타이틀로 돌아가기)도 함께 구성한다.
     /// </summary>
     public class GameSceneHudController : MonoBehaviour
     {
@@ -18,6 +22,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite stageIcon;      // 스테이지
         [SerializeField] private Sprite inventoryIcon;  // 가방
         [SerializeField] private Sprite attendanceIcon; // 출석부
+        [Tooltip("햄버거 메뉴 아이콘(Assets/Art/UI/햄버거메뉴.png).")]
+        [SerializeField] private Sprite menuToggleIcon; // 메뉴 펼치기/접기
 
         [Header("알림(레드닷)")]
         [Tooltip("미수령 보상 메일 확인을 위한 우편함 재조회 주기(초). 0 이하면 진입 시 1회만 조회한다.")]
@@ -26,8 +32,29 @@ namespace TaskbarHero.Client.UI
         [Header("접속 시 자동 표시")]
         [Tooltip("접속 시 오늘자 출석 보상이 아직 남아 있으면 출석부 패널을 자동으로 연다.")]
         [SerializeField] private bool autoOpenAttendance = true;
+        [Tooltip("시작할 때 기능 버튼을 펼친 상태로 둔다(기본은 접힘 — 햄버거 버튼만 보인다).")]
+        [SerializeField] private bool menuOpenOnStart = false;
+
+        // 우하단 버튼 배치: 햄버거를 맨 오른쪽에 두고 기능 버튼이 왼쪽으로 한 칸씩 늘어선다.
+        private const float MenuSlotStep = 200f;
+        private const float MenuAnimDuration = 0.20f;  // 버튼 하나가 펼쳐지는 시간
+        private const float MenuAnimStagger = 0.045f;  // 옆 버튼과의 시간차
+        private const float MenuHiddenScale = 0.6f;    // 접힌 상태(햄버거 뒤)에서의 크기
 
         private GameObject _escMenuRoot; // ESC로 토글하는 메뉴(타이틀 복귀)
+
+        private readonly List<MenuButton> _menuButtons = new List<MenuButton>();
+        private float _menuOriginX;  // 접힌 버튼이 모이는 지점(= 햄버거 버튼 위치)
+        private bool _menuOpen;
+        private Coroutine _menuAnimRoutine;
+
+        /// <summary>펼침/접힘 연출 대상인 기능 버튼 하나. 제자리 좌표를 기억해 그 사이를 오간다.</summary>
+        private class MenuButton
+        {
+            public RectTransform rect;
+            public CanvasGroup group;
+            public Vector2 shownPos;
+        }
 
         private void Awake()
         {
@@ -126,18 +153,44 @@ namespace TaskbarHero.Client.UI
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // 우하단: [출석부] [메일] [편성] [스테이지] [가방] — 아이콘 위 + 작은 텍스트 아래
-            CreateButton(canvasGo.transform, font, "AttendanceButton", "출석부", attendanceIcon, new Vector2(-840f, 40f), OnAttendanceButton);
-            var mailBtn = CreateButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, new Vector2(-640f, 40f), OnMailButton);
-            CreateButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, new Vector2(-440f, 40f), OnPartyButton);
-            CreateButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, new Vector2(-240f, 40f), OnStageButton);
-            var inventoryBtn = CreateButton(canvasGo.transform, font, "InventoryButton", "가방", inventoryIcon, new Vector2(-40f, 40f), OnInventoryButton);
+            // 우하단 맨 오른쪽: 상시 노출되는 햄버거 버튼. 왼쪽으로 [가방] [스테이지] [편성] [메일] [출석부] 순으로 펼쳐진다.
+            _menuOriginX = -40f;
+            var menuToggleBtn = CreateButton(canvasGo.transform, font, "MenuToggleButton", "메뉴", menuToggleIcon,
+                new Vector2(_menuOriginX, 40f), ToggleMenu);
+
+            // 접혀 있을 때도 알림을 놓치지 않도록, 기능 버튼 알림을 햄버거에 모아 표시한다.
+            RedDot.AttachTopRight((RectTransform)menuToggleBtn.transform).Bind(RedDotConditions.HasAnyMenuNotification);
+
+            // 햄버거에 가까운 순서로 등록한다(펼칠 때 가까운 것부터 차례로 나온다).
+            var inventoryBtn = CreateMenuButton(canvasGo.transform, font, "InventoryButton", "가방", inventoryIcon, 1, OnInventoryButton);
+            CreateMenuButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, 2, OnStageButton);
+            CreateMenuButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, 3, OnPartyButton);
+            var mailBtn = CreateMenuButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, 4, OnMailButton);
+            CreateMenuButton(canvasGo.transform, font, "AttendanceButton", "출석부", attendanceIcon, 5, OnAttendanceButton);
 
             // 메일 버튼 우측 상단 레드닷: 아직 수령하지 않은 보상 첨부가 남은 메일이 있으면 표시(만료 전 수령 유도).
             RedDot.AttachTopRight((RectTransform)mailBtn.transform).Bind(RedDotConditions.HasUnclaimedMailReward);
 
             // 가방 버튼 우측 상단 레드닷: 잔여 스킬 포인트가 있으면 표시(스킬 레벨업은 가방 안에서 진입).
             RedDot.AttachTopRight((RectTransform)inventoryBtn.transform).Bind(RedDotConditions.HasUnspentSkillPoints);
+
+            ApplyMenuStateImmediate(menuOpenOnStart);
+        }
+
+        /// <summary>펼침 대상 기능 버튼 하나를 만들고 연출 목록에 등록한다.
+        /// <paramref name="slot"/>은 햄버거로부터 왼쪽으로 몇 번째 칸인지(1부터).</summary>
+        private GameObject CreateMenuButton(Transform parent, Font font, string name, string label, Sprite icon,
+            int slot, UnityEngine.Events.UnityAction onClick)
+        {
+            var shownPos = new Vector2(_menuOriginX - slot * MenuSlotStep, 40f);
+            var go = CreateButton(parent, font, name, label, icon, shownPos, onClick);
+            _menuButtons.Add(new MenuButton
+            {
+                rect = (RectTransform)go.transform,
+                group = go.AddComponent<CanvasGroup>(),
+                shownPos = shownPos,
+            });
+            return go;
         }
 
         /// <summary>우하단 앵커 HUD 버튼 하나를 생성·배선하고 생성한 버튼 오브젝트를 반환한다.
@@ -201,6 +254,91 @@ namespace TaskbarHero.Client.UI
 
             btnGo.AddComponent<Button>().onClick.AddListener(onClick);
             return btnGo;
+        }
+
+        // ── 기능 버튼 펼치기/접기 ──
+
+        /// <summary>햄버거 버튼: 기능 버튼을 펼치거나 접는다.</summary>
+        private void ToggleMenu() => SetMenuOpen(!_menuOpen);
+
+        /// <summary>기능 버튼의 펼침 상태를 바꾸고 연출을 재생한다(같은 상태면 무시).
+        /// 연출 도중 다시 눌러도 진행 중인 코루틴을 멈추고 현재 위치에서 반대 방향으로 이어간다.</summary>
+        private void SetMenuOpen(bool open)
+        {
+            if (_menuOpen == open)
+            {
+                return;
+            }
+            _menuOpen = open;
+            if (_menuAnimRoutine != null)
+            {
+                StopCoroutine(_menuAnimRoutine);
+            }
+            _menuAnimRoutine = StartCoroutine(AnimateMenu(open));
+        }
+
+        /// <summary>연출 없이 즉시 상태를 적용한다(시작 시 초기 상태 구성용).</summary>
+        private void ApplyMenuStateImmediate(bool open)
+        {
+            _menuOpen = open;
+            foreach (var button in _menuButtons)
+            {
+                button.rect.gameObject.SetActive(open);
+                ApplyMenuButtonProgress(button, open ? 1f : 0f);
+            }
+        }
+
+        /// <summary>
+        /// 기능 버튼을 순차적으로 펼치거나 접는다. 펼칠 때는 햄버거에 가까운 버튼부터, 접을 때는 먼 버튼부터
+        /// <see cref="MenuAnimStagger"/> 간격으로 시작해 물결치듯 움직인다. 자식 코루틴 없이 한 코루틴이
+        /// 모든 버튼을 시간으로 구동하므로, 도중에 멈춰도 잔여 애니메이션이 남지 않는다.
+        /// 전투 슬로우모션(timeScale)의 영향을 받지 않도록 unscaled 시간을 쓴다.
+        /// </summary>
+        private IEnumerator AnimateMenu(bool open)
+        {
+            int count = _menuButtons.Count;
+            if (open)
+            {
+                foreach (var button in _menuButtons)
+                {
+                    button.rect.gameObject.SetActive(true);
+                }
+            }
+
+            float total = MenuAnimDuration + MenuAnimStagger * Mathf.Max(0, count - 1);
+            float elapsed = 0f;
+            while (elapsed < total)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                for (int i = 0; i < count; i++)
+                {
+                    int order = open ? i : count - 1 - i; // 접을 때는 먼 버튼부터 사라진다
+                    float t = Mathf.Clamp01((elapsed - order * MenuAnimStagger) / MenuAnimDuration);
+                    ApplyMenuButtonProgress(_menuButtons[i], open ? t : 1f - t);
+                }
+                yield return null;
+            }
+
+            foreach (var button in _menuButtons)
+            {
+                ApplyMenuButtonProgress(button, open ? 1f : 0f);
+                if (!open)
+                {
+                    button.rect.gameObject.SetActive(false); // 접힌 뒤에는 클릭도 막는다
+                }
+            }
+            _menuAnimRoutine = null;
+        }
+
+        /// <summary>버튼 하나의 진행도를 반영한다(0 = 햄버거 뒤에 숨은 상태, 1 = 제자리).
+        /// 위치·크기·투명도를 함께 보간해 미끄러져 나오며 커지고 밝아지는 느낌을 낸다.</summary>
+        private void ApplyMenuButtonProgress(MenuButton button, float progress)
+        {
+            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress));
+            button.rect.anchoredPosition = new Vector2(Mathf.Lerp(_menuOriginX, button.shownPos.x, k), button.shownPos.y);
+            button.rect.localScale = Vector3.one * Mathf.Lerp(MenuHiddenScale, 1f, k);
+            button.group.alpha = k;
+            button.group.blocksRaycasts = k >= 1f; // 이동 중에는 클릭을 받지 않는다
         }
 
         /// <summary>출석부 패널 토글(UIManager 위임).</summary>
