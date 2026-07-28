@@ -24,6 +24,14 @@ namespace TaskbarHero.Client.UI
         private RectTransform _rt;
         private const float HideDelay = 0.04f;
 
+        /// <summary>커서와 툴팁 사이 간격. 이만큼 떨어뜨려 툴팁이 커서를 덮지 않게 한다.</summary>
+        private const float CursorGap = 18f;
+
+        /// <summary>닫을 시각(<see cref="Time.unscaledTime"/> 기준, -1 = 예약 없음).
+        /// <b>Invoke를 쓰지 않는 이유</b>: Invoke는 <see cref="Time.timeScale"/>에 비례해 지연되므로,
+        /// 스테이지 클리어 슬로우모션(0.25배, 최저 0.01배) 중에는 닫힘이 4~400배 늦어져 툴팁이 남는다.</summary>
+        private float _hideAt = -1f;
+
         private InventoryItemView.Display _current; // 현재 표시 중인 아이템(장착/해제 대상)
         private InventoryPanelController _controller;
         private InventoryPanelController Controller =>
@@ -87,7 +95,7 @@ namespace TaskbarHero.Client.UI
         /// <summary>상세 정보를 채우고 커서 근처에 표시한다.</summary>
         public void Show(InventoryItemView.Display data, Vector2 screenPos)
         {
-            CancelInvoke(nameof(DoHide));
+            _hideAt = -1f;
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
 
@@ -111,23 +119,36 @@ namespace TaskbarHero.Client.UI
         /// <summary>지연 닫기 예약(칸→툴팁 이동 중 취소될 수 있음).</summary>
         public void RequestHide()
         {
-            CancelInvoke(nameof(DoHide));
-            Invoke(nameof(DoHide), HideDelay);
+            _hideAt = Time.unscaledTime + HideDelay;
         }
 
-        /// <summary>즉시 숨김(초기화용).</summary>
+        /// <summary>즉시 숨김(초기화·패널 열닫기용).</summary>
         public void HideImmediate()
         {
-            CancelInvoke(nameof(DoHide));
+            _hideAt = -1f;
             gameObject.SetActive(false);
         }
 
-        private void DoHide()
+        /// <summary>예약된 닫기를 처리한다(슬로우모션에 영향받지 않는 unscaled 시간 기준).</summary>
+        private void Update()
         {
-            gameObject.SetActive(false);
+            if (_hideAt >= 0f && Time.unscaledTime >= _hideAt)
+            {
+                HideImmediate();
+            }
         }
 
-        /// <summary>커서 스크린 좌표를 루트 로컬 좌표로 변환해 배치하고 화면 안으로 클램프.</summary>
+        /// <summary>
+        /// 커서 스크린 좌표를 루트 로컬 좌표로 변환해 배치한다. 기본은 커서 우하단이고,
+        /// 그쪽에 공간이 없으면 <b>반대쪽으로 뒤집어</b> 배치한다.
+        /// <para>
+        /// <b>뒤집는 이유</b>: 예전에는 그냥 화면 안으로 clamp했는데, 커서가 우하단 모서리
+        /// (이 패널 기준 x&gt;382 · y&lt;-442)에 있으면 x·y가 동시에 당겨져 <b>툴팁이 커서를 덮었다</b>.
+        /// 툴팁은 raycastTarget이라 커서를 가로채므로 아래 칸은 pointer exit, 툴팁은 pointer enter를 받아
+        /// 닫기 예약이 취소되고, 툴팁이 닫히면 다시 칸이 hover되어 또 열리는 진동이 생겨
+        /// "툴팁이 사라지지 않는" 증상이 됐다.
+        /// </para>
+        /// </summary>
         private void Reposition(Vector2 screenPos)
         {
             if (_rootRect == null)
@@ -135,23 +156,35 @@ namespace TaskbarHero.Client.UI
                 return;
             }
 
-            Vector2 local;
-            RectTransformUtility.ScreenPointToLocalPointInRectangle(_rootRect, screenPos, null, out local);
-            local += new Vector2(18f, -18f);
+            Vector2 cursor;
+            RectTransformUtility.ScreenPointToLocalPointInRectangle(_rootRect, screenPos, null, out cursor);
 
             var size = _rt.sizeDelta;
             float halfW = _rootRect.rect.width * 0.5f;
             float halfH = _rootRect.rect.height * 0.5f;
 
-            // pivot (0,1): x는 좌측 기준, y는 상단 기준
-            local.x = Mathf.Clamp(local.x, -halfW, halfW - size.x);
-            local.y = Mathf.Clamp(local.y, -halfH + size.y, halfH);
-            _rt.anchoredPosition = local;
+            // pivot (0,1): x는 좌측 기준, y는 상단 기준.
+            float x = cursor.x + CursorGap;
+            if (x + size.x > halfW)
+            {
+                x = cursor.x - CursorGap - size.x; // 오른쪽 공간 부족 → 커서 왼쪽
+            }
+
+            float y = cursor.y - CursorGap;
+            if (y - size.y < -halfH)
+            {
+                y = cursor.y + CursorGap + size.y; // 아래 공간 부족 → 커서 위쪽
+            }
+
+            // 뒤집어도 넘치는 극단(툴팁이 루트보다 큰 경우)에서만 화면 안으로 밀어넣는다.
+            x = Mathf.Clamp(x, -halfW, Mathf.Max(-halfW, halfW - size.x));
+            y = Mathf.Clamp(y, Mathf.Min(halfH, -halfH + size.y), halfH);
+            _rt.anchoredPosition = new Vector2(x, y);
         }
 
         public void OnPointerEnter(PointerEventData eventData)
         {
-            CancelInvoke(nameof(DoHide));
+            _hideAt = -1f; // 칸 → 툴팁으로 커서가 넘어옴 → 예약된 닫기 취소(keep-open)
         }
 
         public void OnPointerExit(PointerEventData eventData)

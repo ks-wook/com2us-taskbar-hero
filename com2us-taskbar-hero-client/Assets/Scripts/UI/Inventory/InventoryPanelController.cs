@@ -120,15 +120,27 @@ namespace TaskbarHero.Client.UI
             {
                 _portraitStage.SetActive(true); // 표시 중에만 초상화 렌더
             }
+            // 이전에 열렸을 때 뜬 툴팁이 남아 있으면 지운다(아래 OnDisable의 보강 — 어떤 경로로 닫혔든 깨끗하게 시작).
+            if (_tooltip != null)
+            {
+                _tooltip.HideImmediate();
+            }
             RefreshFromSession();
         }
 
-        /// <summary>패널이 숨겨지면 초상화 렌더러(카메라)를 꺼 불필요한 렌더를 막는다.</summary>
+        /// <summary>패널이 숨겨지면 초상화 렌더러(카메라)를 꺼 불필요한 렌더를 막고, 툴팁을 닫는다.
+        /// <b>툴팁을 닫아야 하는 이유</b>: 툴팁이 표시된 채 패널이 비활성화되면 툴팁의 activeSelf가 true로
+        /// 남아, 다음에 패널을 열 때 옛 위치에 그대로 떠 있다. 이때 커서가 그 위에 없으면 pointer exit가
+        /// 오지 않아 스스로 닫히지도 못한다.</summary>
         private void OnDisable()
         {
             if (_portraitStage != null)
             {
                 _portraitStage.SetActive(false);
+            }
+            if (_tooltip != null)
+            {
+                _tooltip.HideImmediate();
             }
         }
 
