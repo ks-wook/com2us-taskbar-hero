@@ -115,10 +115,10 @@ public sealed class TradeCache
                 .ToArray();
             await index.AddAsync(entries, IndexTtl, When.Always);
 
-            foreach (var listing in listings)
-            {
-                await Snapshot(listing.ListingId).SetAsync(TradeListingCacheEntry.From(listing), SnapshotTtl(nowUnix));
-            }
+            // 스냅샷도 읽기와 같이 한꺼번에 요청한다(등록 수만큼 순차 왕복하지 않는다).
+            await Task.WhenAll(listings.Select(async listing =>
+                await Snapshot(listing.ListingId)
+                    .SetAsync(TradeListingCacheEntry.From(listing), SnapshotTtl(listing.ExpiresAt, nowUnix))));
         }
         catch (Exception ex)
         {
@@ -138,7 +138,8 @@ public sealed class TradeCache
         {
             await AddToExistingIndexAsync(0, listing);
             await AddToExistingIndexAsync(listing.ItemCode, listing);
-            await Snapshot(listing.ListingId).SetAsync(TradeListingCacheEntry.From(listing), SnapshotTtl(nowUnix));
+            await Snapshot(listing.ListingId)
+                .SetAsync(TradeListingCacheEntry.From(listing), SnapshotTtl(listing.ExpiresAt, nowUnix));
         }
         catch (Exception ex)
         {
@@ -272,8 +273,14 @@ public sealed class TradeCache
     /// <summary>판매 등록이 쓰는 판매자 단위 락(동시 등록 한도 검사를 직렬화).</summary>
     private RedisString<string> SellerLock(long userId) => new(_redis, $"trade:lock:seller:{userId}", null);
 
-    /// <summary>스냅샷 TTL. 등록 만료(3일)보다 넉넉히 잡되 무기한으로 두지 않는다.</summary>
-    private static TimeSpan SnapshotTtl(long nowUnix) => TimeSpan.FromDays(3);
+    /// <summary>
+    /// 스냅샷 TTL — <b>등록 만료 시각까지</b>(trade 기획서 §7.3). 등록이 만료되면 스냅샷도 함께 사라지므로
+    /// 색인에 남은 id는 결손으로 감지되어 다음 조회가 전량을 다시 읽는다.
+    /// <para>이미 만료 시각을 지난 등록(만료 배치가 아직 닫지 않은 구간)은 최소값 1초로 둔다 — 0 이하를 넘기면
+    /// TTL 없이 영구 보관되어 유령 항목이 남는다.</para>
+    /// </summary>
+    private static TimeSpan SnapshotTtl(long expiresAt, long nowUnix)
+        => TimeSpan.FromSeconds(Math.Max(1, expiresAt - nowUnix));
 }
 
 /// <summary>
@@ -288,6 +295,7 @@ public sealed class TradeListingCacheEntry
     public int Quantity { get; set; }
     public long Price { get; set; }
     public long CreatedAt { get; set; }
+    public long ExpiresAt { get; set; }
 
     /// <summary>리포지토리 스냅샷 → 캐시 엔트리.</summary>
     public static TradeListingCacheEntry From(TradeListingSnapshot s) => new()
@@ -299,9 +307,10 @@ public sealed class TradeListingCacheEntry
         Quantity = s.Quantity,
         Price = s.Price,
         CreatedAt = s.CreatedAt,
+        ExpiresAt = s.ExpiresAt,
     };
 
     /// <summary>캐시 엔트리 → 리포지토리 스냅샷.</summary>
     public TradeListingSnapshot ToSnapshot()
-        => new(ListingId, SellerUserId, ItemCode, EnhanceLevel, Quantity, Price, CreatedAt);
+        => new(ListingId, SellerUserId, ItemCode, EnhanceLevel, Quantity, Price, CreatedAt, ExpiresAt);
 }

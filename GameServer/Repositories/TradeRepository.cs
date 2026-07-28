@@ -4,9 +4,14 @@ using SqlKata.Execution;
 
 namespace GameServer.Repositories;
 
-/// <summary>거래소 등록 1건의 스냅샷(목록 응답·에스크로 반송 공용).</summary>
+/// <summary>
+/// 거래소 등록 1건의 스냅샷(목록 응답·에스크로 반송 공용).
+/// <para><c>ExpiresAt</c>은 판매 만료 시각(Unix ts)이며, 목록 캐시 스냅샷의 TTL 기준으로 쓴다 —
+/// 등록이 만료되면 캐시 항목도 함께 사라지게 하기 위함이다(trade 기획서 §7.3).</para>
+/// </summary>
 public sealed record TradeListingSnapshot(
-    long ListingId, long SellerUserId, int ItemCode, int EnhanceLevel, int Quantity, long Price, long CreatedAt);
+    long ListingId, long SellerUserId, int ItemCode, int EnhanceLevel, int Quantity, long Price,
+    long CreatedAt, long ExpiresAt);
 
 public enum TradeRegisterStatus
 {
@@ -126,7 +131,7 @@ public sealed class TradeRepository : ITradeRepository
 
         var db = _dbFactory.Create(connection);
         var query = db.Query("trade_listing")
-            .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at")
+            .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at", "expires_at")
             .Where("status", StatusOnSale);
         if (itemCode > 0)
         {
@@ -139,7 +144,8 @@ public sealed class TradeRepository : ITradeRepository
 
         return rows
             .Select(r => new TradeListingSnapshot(
-                r.ListingId, r.SellerUserId, r.ItemCode, r.EnhanceLevel, r.Quantity, r.Price, r.CreatedAt))
+                r.ListingId, r.SellerUserId, r.ItemCode, r.EnhanceLevel, r.Quantity, r.Price,
+                r.CreatedAt, r.ExpiresAt))
             .ToList();
     }
 
@@ -151,14 +157,14 @@ public sealed class TradeRepository : ITradeRepository
 
         var db = _dbFactory.Create(connection);
         var row = await db.Query("trade_listing")
-            .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at")
+            .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at", "expires_at")
             .Where("listing_id", listingId).Where("status", StatusOnSale)
             .FirstOrDefaultAsync<TradeListingRow>();
         return row is null
             ? null
             : new TradeListingSnapshot(
                 row.ListingId, row.SellerUserId, row.ItemCode, row.EnhanceLevel,
-                row.Quantity, row.Price, row.CreatedAt);
+                row.Quantity, row.Price, row.CreatedAt, row.ExpiresAt);
     }
 
     /// <summary>
@@ -259,7 +265,8 @@ public sealed class TradeRepository : ITradeRepository
             await transaction.CommitAsync();
             return new TradeRegisterOutcome(
                 TradeRegisterStatus.Ok,
-                new TradeListingSnapshot(listingId, userId, item.ItemCode, item.EnhanceLevel, quantity, price, nowUnix));
+                new TradeListingSnapshot(
+                    listingId, userId, item.ItemCode, item.EnhanceLevel, quantity, price, nowUnix, expiresAt));
         }
         catch
         {
@@ -297,7 +304,7 @@ public sealed class TradeRepository : ITradeRepository
             // 1) 등록 확인.
             var row = await db.Query("trade_listing")
                 .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price",
-                        "created_at", "status")
+                        "created_at", "expires_at", "status")
                 .Where("listing_id", listingId)
                 .FirstOrDefaultAsync<TradeListingStatusRow>(transaction);
             if (row is null)
@@ -339,7 +346,7 @@ public sealed class TradeRepository : ITradeRepository
 
             var snapshot = new TradeListingSnapshot(
                 row.ListingId, row.SellerUserId, row.ItemCode, row.EnhanceLevel,
-                row.Quantity, row.Price, row.CreatedAt);
+                row.Quantity, row.Price, row.CreatedAt, row.ExpiresAt);
 
             // 4) 골드 차감.
             var balance = gold.Value.Quantity - row.Price;
@@ -382,7 +389,7 @@ public sealed class TradeRepository : ITradeRepository
 
             var row = await db.Query("trade_listing")
                 .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price",
-                        "created_at", "status")
+                        "created_at", "expires_at", "status")
                 .Where("listing_id", listingId)
                 .FirstOrDefaultAsync<TradeListingStatusRow>(transaction);
             if (row is null)
@@ -414,7 +421,7 @@ public sealed class TradeRepository : ITradeRepository
 
             var snapshot = new TradeListingSnapshot(
                 row.ListingId, row.SellerUserId, row.ItemCode, row.EnhanceLevel,
-                row.Quantity, row.Price, row.CreatedAt);
+                row.Quantity, row.Price, row.CreatedAt, row.ExpiresAt);
             var stored = await StoreTradeItemAsync(db, transaction, userId, snapshot, itemLookup, nowUnix);
             if (!stored)
             {
@@ -476,7 +483,7 @@ public sealed class TradeRepository : ITradeRepository
 
             // 2) 반송 스냅샷.
             var row = await db.Query("trade_listing")
-                .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at")
+                .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at", "expires_at")
                 .Where("listing_id", listingId)
                 .FirstOrDefaultAsync<TradeListingRow>(transaction);
             if (row is null)
@@ -488,7 +495,7 @@ public sealed class TradeRepository : ITradeRepository
             // 3) 반송 메일 발급(판매자). 인벤토리가 가득해도 안전하게 되돌리기 위해 메일을 쓴다.
             var snapshot = new TradeListingSnapshot(
                 row.ListingId, row.SellerUserId, row.ItemCode, row.EnhanceLevel,
-                row.Quantity, row.Price, row.CreatedAt);
+                row.Quantity, row.Price, row.CreatedAt, row.ExpiresAt);
             await MailRepository.InsertMailAsync(
                 db, transaction, snapshot.SellerUserId, composeReturnMail(snapshot), nowUnix);
 
@@ -624,6 +631,7 @@ file sealed class TradeListingRow
     public int Quantity { get; set; }
     public long Price { get; set; }
     public long CreatedAt { get; set; }
+    public long ExpiresAt { get; set; }
 }
 
 file sealed class TradeListingStatusRow
@@ -635,6 +643,7 @@ file sealed class TradeListingStatusRow
     public int Quantity { get; set; }
     public long Price { get; set; }
     public long CreatedAt { get; set; }
+    public long ExpiresAt { get; set; }
     public int Status { get; set; }
 }
 
