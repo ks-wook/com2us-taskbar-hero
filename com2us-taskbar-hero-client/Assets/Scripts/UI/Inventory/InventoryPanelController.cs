@@ -1374,7 +1374,9 @@ namespace TaskbarHero.Client.UI
 
         // ── 아이템 이동 ──
 
-        /// <summary>드래그된 아이템을 대상 슬롯으로 이동(점유 시 스왑). 서버 미연동 로컬 처리.</summary>
+        /// <summary>드래그된 아이템을 대상 슬롯으로 이동한다(점유 시 스왑). 화면은 즉시 바꾸고(낙관적 반영)
+        /// 배치를 서버에 저장한다(POST /api/game/inventory/move). 저장하지 않으면 패널을 닫았다 열 때
+        /// 세이브 스냅샷 기준으로 다시 그려져 이동이 사라진다.</summary>
         public void MoveItem(InventoryItemView view, InventoryItemSlot from, InventoryItemSlot to)
         {
             if (to == null || to == from)
@@ -1393,8 +1395,65 @@ namespace TaskbarHero.Client.UI
                 from.SetItem(occupant); // 점유 아이템은 원래 칸으로(스왑), 없으면 null
             }
 
-            Debug.Log($"[Inventory] 더미 이동: slot {(from != null ? from.Index : -1)} → {to.Index}" +
+            RequestMove(view, from, to, occupant);
+        }
+
+        /// <summary>배치 이동을 서버에 저장한다. 성공하면 캐시된 세이브 스냅샷의 칸 번호도 같은 값으로 맞춰
+        /// 재조회 없이 패널을 다시 열어도 배치가 유지되게 하고, 실패하면 서버 상태로 되돌린다.</summary>
+        private void RequestMove(InventoryItemView view, InventoryItemSlot from, InventoryItemSlot to,
+            InventoryItemView occupant)
+        {
+            if (NetworkManager.Instance == null || !Session.IsLoggedIn)
+            {
+                return;
+            }
+
+            long itemId = view.Data.itemId;
+            int toSlot = to.Index;
+            int fromSlot = from != null ? from.Index : -1;
+
+            var req = new MoveRequest
+            {
+                userId = Session.UserId,
+                token = Session.Token,
+                data = new MoveData { itemId = itemId, toSlot = toSlot },
+            };
+            Debug.Log($"[Inventory] 배치 이동 요청 item={itemId} slot {fromSlot} → {toSlot}" +
                       (occupant != null ? " (스왑)" : string.Empty));
+
+            NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/inventory/move", req, _ =>
+            {
+                ApplyMovedSlotToCache(itemId, toSlot);
+                if (occupant != null && fromSlot >= 0)
+                {
+                    ApplyMovedSlotToCache(occupant.Data.itemId, fromSlot); // 스왑된 아이템도 함께
+                }
+            }, OnMoveError);
+        }
+
+        /// <summary>캐시된 세이브 스냅샷에서 해당 아이템의 가방 칸 번호를 갱신한다(서버가 확정한 값과 동일하게).</summary>
+        private static void ApplyMovedSlotToCache(long itemId, int slot)
+        {
+            var inventory = Session.GameData != null ? Session.GameData.inventory : null;
+            if (inventory == null)
+            {
+                return;
+            }
+            foreach (var item in inventory)
+            {
+                if (item != null && item.itemId == itemId)
+                {
+                    item.slot = slot;
+                    return;
+                }
+            }
+        }
+
+        /// <summary>배치 이동 실패: 낙관적으로 바꿔 둔 화면이 서버와 어긋나므로 세이브를 재로드해 되돌린다.</summary>
+        private void OnMoveError(NetworkError error)
+        {
+            Debug.LogWarning($"[Inventory] 배치 이동 실패: {error}");
+            ReloadAndRefresh();
         }
 
         /// <summary>패널을 닫는다(UIManager 우선, 없으면 자체 비활성).</summary>
