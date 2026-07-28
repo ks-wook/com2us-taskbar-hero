@@ -55,8 +55,9 @@ namespace TaskbarHero.Client.Battle
         /// 전투 종료 슬로우모션 상태에서 열리므로 닫을 때 게임 속도를 정상으로 되돌리고, 팡파레를 재생한다.</summary>
         public static void Show(StageClearData data, Action onClosed = null)
         {
+            // 전투 연출 띠(기능 패널 아래) — 인벤토리·출석부 등을 열어 둔 동안 가리지 않는다.
             ShowRewards(StageClearTitle, data != null ? data.rewards : null,
-                restoreTimeScale: true, showFanfare: true, onClosed);
+                restoreTimeScale: true, showFanfare: true, UiSortingOrder.BattleResult, onClosed);
         }
 
         /// <summary>
@@ -68,13 +69,16 @@ namespace TaskbarHero.Client.Battle
         /// <param name="rewards">표시할 보상(골드·경험치·아이템). 비어 있으면 보상 칸 없이 연출만 나온다.</param>
         public static void ShowRewards(string title, StageRewardsDto rewards, Action onClosed = null)
         {
-            ShowRewards(title, rewards, restoreTimeScale: false, showFanfare: false, onClosed);
+            // 패널(우편함·거래소)에서 띄우므로 그 위 띠에 올린다 — 전투 연출과 달리 패널에 가려지면 안 된다.
+            ShowRewards(title, rewards, restoreTimeScale: false, showFanfare: false,
+                UiSortingOrder.RewardOverPanel, onClosed);
         }
 
         /// <summary>오버레이를 만들어 표시하는 공통 경로(클리어·보상 획득 재활용 양쪽).
+        /// <paramref name="sortingOrder"/>로 어느 띠에 뜰지 정한다(클리어는 패널 아래, 보상 재활용은 패널 위).
         /// 프리팹이 없으면 런타임 구성으로 폴백한다.</summary>
         private static void ShowRewards(string title, StageRewardsDto rewards, bool restoreTimeScale,
-            bool showFanfare, Action onClosed)
+            bool showFanfare, int sortingOrder, Action onClosed)
         {
             var assets = StageClearAssets.Load();
             StageClearOverlay overlay;
@@ -97,8 +101,19 @@ namespace TaskbarHero.Client.Battle
             overlay._onClosed = onClosed;
             overlay._restoreTimeScale = restoreTimeScale;
             overlay._showFanfare = showFanfare;
+            overlay.ApplySortingOrder(sortingOrder); // 프리팹에 구워진 값을 호출 경로에 맞게 덮어쓴다
             overlay.SetTitle(title);
             overlay.Populate(rewards);
+        }
+
+        /// <summary>이 오버레이 캔버스의 정렬 순서를 설정한다(같은 프리팹을 두 띠에서 쓰므로 표시 직전에 정한다).</summary>
+        private void ApplySortingOrder(int sortingOrder)
+        {
+            var canvas = GetComponent<Canvas>();
+            if (canvas != null)
+            {
+                canvas.sortingOrder = sortingOrder;
+            }
         }
 
         /// <summary>상단 타이틀 문구를 바꾼다(빈 값이면 프리팹에 구워진 기본 문구를 유지).</summary>
@@ -152,7 +167,8 @@ namespace TaskbarHero.Client.Battle
             // 최상단 캔버스(패널 100·HUD 10보다 위).
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 300;
+            // 프리팹에 굽는 기본값(전투 연출 띠). 표시 직전 ApplySortingOrder가 호출 경로에 맞게 덮어쓴다.
+            canvas.sortingOrder = UiSortingOrder.BattleResult;
             var scaler = gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080f, 1920f);

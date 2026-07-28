@@ -110,12 +110,13 @@
 
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
-| `POST /api/game/trade/list` | 거래소 목록 조회(판매중, 아이템 코드 검색) | `{ itemCode?, page?, pageSize? }` | `listings[]`, `page`, `hasMore` | — |
+| `POST /api/game/trade/list` | 거래소 목록 조회(판매중, 아이템 코드 검색). `mine=false`(기본) 본인 등록 제외 / `mine=true` 본인 등록만 | `{ itemCode?, mine?, page?, pageSize? }` | `listings[]`, `page`, `hasMore` | — |
 | `POST /api/game/trade/register` | 판매 등록(에스크로) | `{ itemId, price }` | `listingId`, `itemCode`, `price` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `TradeNotSellable(7002)`, `TradePriceOutOfRange(7006)`, `TradeListingLimitExceeded(7007)`, `InvalidSaveData(2002)` |
-| `POST /api/game/trade/buy` | 구매(골드→아이템, 대금 메일) | `{ listingId }` | `gained`, `cost`, `balance` | `TradeListingNotFound(7001)`, `TradeAlreadyClosed(7005)`, `TradeSelfPurchase(7004)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)`, `TradeBusy(7008)`(제안) |
-| `POST /api/game/trade/cancel` | 판매 취소(아이템 복귀) | `{ listingId }` | `restored` | `TradeListingNotFound(7001)`, `TradeNotOwner(7003)`, `TradeAlreadyClosed(7005)`, `InventoryFull(4002)`, `TradeBusy(7008)`(제안) |
+| `POST /api/game/trade/buy` | 구매(골드 차감 → 아이템·대금 모두 메일 발급) | `{ listingId }` | `gained`, `cost`, `balance`, `mailId` | `TradeListingNotFound(7001)`, `TradeAlreadyClosed(7005)`, `TradeSelfPurchase(7004)`, `InsufficientCurrency(4005)`, `TradeBusy(7008)` |
+| `POST /api/game/trade/cancel` | 판매 취소(아이템 복귀) | `{ listingId }` | `restored` | `TradeListingNotFound(7001)`, `TradeNotOwner(7003)`, `TradeAlreadyClosed(7005)`, `InventoryFull(4002)`, `TradeBusy(7008)` |
 
-- 등록은 아이템을 인벤토리에서 거래소 보관(에스크로)으로 이동. 구매 시 아이템은 구매자 인벤토리로 즉시, **판매 대금(수수료 차감)은 판매자에게 메일(3.7, `category=2` 거래)로** 지급.
+- 목록 조회는 **본인 등록을 쿼리 단계에서 제외**한다(자기 등록은 구매 불가). 판매 취소에 필요한 `listingId`는 `mine=true` 조회로 얻는다.
+- 등록은 아이템을 인벤토리에서 거래소 보관(에스크로)으로 이동. 구매 시 **구매 아이템(구매자)·판매 대금(판매자) 모두 메일(3.7, `category=2` 거래)로 지급**되며 수령 시 계정에 반영된다. 구매 단계에서는 인벤토리 용량을 검사하지 않는다.
 - 동시 구매 경합은 **Redis 구매 락으로 1차 차단**(획득 실패 시 `TradeBusy(7008)`)하고, **조건부 갱신으로 최종 직렬화**한다(복제·이중 판매 불가). 취소·만료 배치도 같은 락을 공유한다.
 - 목록 조회는 전역 공유 읽기이므로 **Redis 목록 캐시를 상시 사용**한다(정합성 정본은 MySQL, 캐시 미스·장애 시 MySQL 색인 폴백). `pageSize`는 서버가 상한을 강제한다. 상세는 [거래소 기획서](../세부/trade-기획서.md) 7장.
 

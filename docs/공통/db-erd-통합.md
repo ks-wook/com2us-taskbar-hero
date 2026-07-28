@@ -190,6 +190,7 @@ erDiagram
         int     reward_type "1:골드 2:아이템 3:재료"
         int     reward_code "골드면 0"
         int     quantity
+        int     enhance_level "장비 강화 단계(골드/재료 0)"
     }
 
     player_attendance {
@@ -274,7 +275,7 @@ erDiagram
 ### player_mail_reward
 
 - **역할**: 메일 1건의 **첨부 보상 목록**(`player_mail`과 1:N). 메일 수령 시 이 행들이 계정 재화/인벤토리로 반영된다.
-- **저장 데이터**: `(mail_id, seq)` 키, `reward_type`(1:골드 2:아이템 3:재료), `reward_code`(골드면 0), `quantity`.
+- **저장 데이터**: `(mail_id, seq)` 키, `reward_type`(1:골드 2:아이템 3:재료), `reward_code`(골드면 0), `quantity`, `enhance_level`(장비 강화 단계 — 거래소 구매·만료 반송이 보존, 골드/재료는 0).
 
 ### player_attendance
 

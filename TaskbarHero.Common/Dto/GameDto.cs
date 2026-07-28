@@ -849,4 +849,181 @@ namespace TaskbarHero.Common.Dto
         public string message;
         public AttendanceClaimResultData data = new AttendanceClaimResultData();
     }
+
+    // ── 거래소 / 교역선 (trade 기획서 §5) ──
+    // 판매 대금은 판매자에게 메일로 지급되므로 구매 응답에는 포함되지 않는다.
+    // 아이템 이름·등급·기준가는 클라이언트가 itemCode로 마스터 데이터에서 조회해 표시한다.
+
+    /// <summary>거래소 목록 조회 요청 데이터(5.1). itemCode 0 = 전체, page는 0부터, pageSize는 서버가 상한을 강제한다.
+    /// mine=false(기본)면 <b>본인 등록을 제외한</b> 구매 가능 목록, true면 <b>본인 등록만</b>(판매 취소용) 조회한다.</summary>
+    [Serializable]
+    public class TradeListData
+    {
+        public int itemCode;
+        public int page;
+        public int pageSize;
+        public bool mine;   // false = 남의 등록(구매 대상) · true = 내 등록(취소 대상)
+    }
+
+    /// <summary>거래소 목록 조회 요청 body(인증).</summary>
+    [Serializable]
+    public class TradeListRequest
+    {
+        public long userId;
+        public string token;
+        public TradeListData data;
+    }
+
+    /// <summary>판매 중인 거래소 등록 1건(5.1 목록 항목).</summary>
+    [Serializable]
+    public class TradeListingDto
+    {
+        public long listingId;
+        public int itemCode;
+        public int enhanceLevel;  // 장비 강화 단계 스냅샷
+        public int quantity;      // 장비는 1, 스택형은 등록된 전체 수량
+        public long price;        // 구매가(골드)
+        public long sellerUserId; // 자기 등록이면 구매 불가·취소 가능
+        public long createdAt;    // 등록 시각(Unix ts)
+    }
+
+    /// <summary>거래소 목록 조회 결과(5.1 응답 data). 기본 정렬은 가격 오름차순.</summary>
+    [Serializable]
+    public class TradeListResultData
+    {
+        public List<TradeListingDto> listings = new List<TradeListingDto>();
+        public int page;
+        public int pageSize;
+        public bool hasMore;
+    }
+
+    /// <summary>판매 등록 요청 데이터(5.2). 수량 지정은 받지 않는다(스택형은 해당 행 전체 수량).</summary>
+    [Serializable]
+    public class TradeRegisterData
+    {
+        public long itemId;
+        public long price;
+    }
+
+    /// <summary>판매 등록 요청 body(인증).</summary>
+    [Serializable]
+    public class TradeRegisterRequest
+    {
+        public long userId;
+        public string token;
+        public TradeRegisterData data;
+    }
+
+    /// <summary>판매 등록 결과(5.2 응답 data). 등록 아이템은 인벤토리에서 빠져 거래소 보관(에스크로)이 된다.</summary>
+    [Serializable]
+    public class TradeRegisterResultData
+    {
+        public long listingId;
+        public int itemCode;
+        public int enhanceLevel;
+        public int quantity;
+        public long price;
+    }
+
+    /// <summary>등록 지정 요청 데이터(5.3 구매·5.4 취소 공용). { listingId }</summary>
+    [Serializable]
+    public class TradeListingData
+    {
+        public long listingId;
+    }
+
+    /// <summary>구매 요청 body(인증).</summary>
+    [Serializable]
+    public class TradeBuyRequest
+    {
+        public long userId;
+        public string token;
+        public TradeListingData data;
+    }
+
+    /// <summary>판매 취소 요청 body(인증).</summary>
+    [Serializable]
+    public class TradeCancelRequest
+    {
+        public long userId;
+        public string token;
+        public TradeListingData data;
+    }
+
+    /// <summary>거래로 오간 아이템 1건(구매 획득·취소 복귀). 강화 단계 스냅샷을 함께 옮긴다.</summary>
+    [Serializable]
+    public class TradeItemDto
+    {
+        public int itemCode;
+        public int enhanceLevel;
+        public long quantity;
+    }
+
+    /// <summary>구매로 구매자 인벤토리에 들어온 아이템 목록(5.3 gained).</summary>
+    [Serializable]
+    public class TradeGainedDto
+    {
+        public List<TradeItemDto> items = new List<TradeItemDto>();
+    }
+
+    /// <summary>구매 결과(5.3 응답 data). cost = 차감 골드, balance = 차감 후 재화 잔액.
+    /// <b>구매 아이템은 인벤토리에 즉시 들어가지 않고 우편함으로 발급</b>되며(mailId), gained는 그 메일에 담긴
+    /// 아이템 내역이다 — 실제 인벤토리 반영은 플레이어가 메일을 수령할 때 이뤄진다.</summary>
+    [Serializable]
+    public class TradeBuyResultData
+    {
+        public long listingId;
+        public TradeGainedDto gained = new TradeGainedDto();
+        public CurrencyDto cost = new CurrencyDto();
+        public List<CurrencyDto> balance = new List<CurrencyDto>();
+        public long mailId;   // 구매 아이템이 담긴 메일(우편함에서 수령해야 인벤토리에 반영)
+    }
+
+    /// <summary>판매 취소 결과(5.4 응답 data). restored = 인벤토리로 되돌아온 아이템.</summary>
+    [Serializable]
+    public class TradeCancelResultData
+    {
+        public long listingId;
+        public TradeItemDto restored = new TradeItemDto();
+    }
+
+    /// <summary>거래소 목록 조회 응답 { success, errorCode, message, data(TradeListResultData) }.</summary>
+    [Serializable]
+    public class TradeListResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public TradeListResultData data = new TradeListResultData();
+    }
+
+    /// <summary>판매 등록 응답 { success, errorCode, message, data(TradeRegisterResultData) }.</summary>
+    [Serializable]
+    public class TradeRegisterResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public TradeRegisterResultData data = new TradeRegisterResultData();
+    }
+
+    /// <summary>구매 응답 { success, errorCode, message, data(TradeBuyResultData) }.</summary>
+    [Serializable]
+    public class TradeBuyResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public TradeBuyResultData data = new TradeBuyResultData();
+    }
+
+    /// <summary>판매 취소 응답 { success, errorCode, message, data(TradeCancelResultData) }.</summary>
+    [Serializable]
+    public class TradeCancelResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public TradeCancelResultData data = new TradeCancelResultData();
+    }
 }

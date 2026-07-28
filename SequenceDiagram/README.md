@@ -13,6 +13,7 @@
 | [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
+| [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소 / 만료 배치) | GameTradeController · TradeExpireBatchService(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
 | [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchService(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
 | [**출석부 보상**](#출석부-보상) (이번달 진행도 조회 / 오늘자 보상 획득→메일 발급, 일차 = 누적 출석 순번 1~30) | GameAttendanceController | Game | `POST /api/game/attendance/status` · `claim` |
 
@@ -573,6 +574,217 @@ sequenceDiagram
         S-->>C: 성공 { 올린 레벨, 소모 골드, 잔액 }
     end
 ```
+
+## 거래소/교역선
+
+판매 등록·목록 조회·구매·취소 (GameTradeController, `/api/game/trade`, GameServer)와 만료 배치(TradeExpireBatchService). 저장소: MySQL `taskbar_hero_game`(`trade_listing`·`player_item`·`player_mail`) + **Redis**(목록 캐시 `trade:index:{itemCode}`·`trade:listing:{listingId}`, 구매 락 `trade:lock:listing:{listingId}`) + 인메모리 마스터(item — `sellable`·`base_price`, mail 템플릿 201·202).
+
+핵심 규약(trade 기획서 §4·§7):
+
+- **에스크로** — 등록 즉시 아이템을 `player_item`에서 빼 `trade_listing` 스냅샷으로 옮긴다. 등록 중 아이템의 장착·분해·재등록은 대상이 없어 `ItemNotFound(4001)`.
+- **정합성 2중화** — Redis 락은 몰린 요청을 DB 앞단에서 줄이는 **혼잡 제어**, MySQL 조건부 갱신(`status=1`일 때만 전이)은 **정합성 보증**이다. 락 TTL 만료·Redis 장애·배치 충돌에서도 조건부 갱신이 한 번만 팔리게 한다.
+- **캐시는 파생 데이터** — 목록은 Redis로 응답하되 정합성 정본은 MySQL이다. 미적재·장애면 MySQL 폴백 후 lazy 적재하고, 캐시 갱신은 **항상 커밋 이후**에 한다.
+- **거래 결과물은 전부 메일로** — 구매 아이템(구매자, 템플릿 203) · 판매 대금(판매자, 수수료 20% 차감, 템플릿 201) · 만료 반송 아이템(판매자, 템플릿 202)이 모두 우편함을 거친다. 지급 경로를 하나로 통일해 구매 시 인벤토리 용량을 보지 않아도 되고, 수령 이력이 메일 원장에 남는다. 첨부는 강화 단계를 보존한다. 수동 취소만 예외로 판매자 인벤토리에 직접 복원한다(요청자가 온라인).
+
+### POST /api/game/trade/list — 거래소 목록 조회
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    C->>S: POST /trade/list { userId, token, data:{ itemCode, mine, page, pageSize } }
+    S->>S: 입력 정규화 — pageSize 상한 강제(기본 50 · 최대 100)
+    alt mine=true (본인 등록만 — 취소 화면용)
+        S->>DB: 본인 판매중 등록 조회(seller_user_id = 요청자, 가격 오름차순, pageSize+1건)
+        DB-->>S: 등록 목록
+        S-->>C: 성공 { listings[], page, pageSize, hasMore }
+    else mine=false (구매 대상 — 본인 등록 제외)
+        S->>DB: 요청자의 판매중 등록 수 확인(idx_trade_seller)
+        alt 본인 등록 0건(공유 캐시 사용 가능)
+            S->>R: 가격순 색인 조회(trade:index:{itemCode}, 해당 페이지 구간)
+            alt 캐시 적중(색인 + 스냅샷 전건 존재)
+                R-->>S: listingId 목록 + 등록 스냅샷
+                S-->>C: 성공 { listings[], page, pageSize, hasMore }
+            end
+        end
+        S->>DB: 판매중 등록 조회(seller_user_id <> 요청자, 가격 오름차순, pageSize+1건)
+        DB-->>S: 등록 목록
+        opt 본인 등록 0건 · 첫 페이지 · hasMore=false(전체 집합)
+            S->>R: 캐시 적재(lazy — 색인 + 스냅샷, TTL 3일)
+        end
+        S-->>C: 성공 { listings[], page, pageSize, hasMore }
+    end
+```
+
+- 조회는 상태를 바꾸지 않는다. 아이템 이름·등급은 클라이언트가 `itemCode`로 마스터 번들에서 조회해 표시한다.
+- **판매자 필터는 쿼리 단계**에서 적용한다. 응답을 받아 걸러내면 `OFFSET`이 필터 전 기준이라 페이지 건수가 들쭉날쭉해지고 항목이 누락·중복된다.
+- **공유 캐시는 뷰어 무관 데이터만 담는다.** 본인 등록이 있는 뷰어와 `mine=true` 조회는 캐시를 쓰지도, 채우지도 않는다.
+
+### POST /api/game/trade/register — 판매 등록(에스크로)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    C->>S: POST /trade/register { userId, token, data:{ itemId, price } }
+    Note over S,DB: 단일 트랜잭션
+    S->>DB: 동시 등록 수 확인(trade_listing, seller_user_id + status=1)
+    alt 판매중 등록 10개 이상
+        S-->>C: 실패 { errorCode: TradeListingLimitExceeded(7007) }
+    end
+    S->>DB: 아이템 소유 확인(player_item) + 장착 여부 확인(player_item_equipped)
+    alt 아이템 없음
+        S-->>C: 실패 { errorCode: ItemNotFound(4001) }
+    else 장착 중
+        S-->>C: 실패 { errorCode: ItemEquipped(4007) }
+    end
+    S->>S: 마스터 검증(인메모리) — sellable=1 · 가격이 base_price ±20%
+    alt 판매 불가 아이템
+        S-->>C: 실패 { errorCode: TradeNotSellable(7002) }
+    else 가격 범위 밖
+        S-->>C: 실패 { errorCode: TradePriceOutOfRange(7006) }
+    else 정상
+        S->>DB: 인벤토리 아이템 데이터 제거(에스크로 이동, 스택형은 행 전체 수량)
+        S->>DB: 등록 데이터 적재(trade_listing status=1, expires_at = now + 3일)
+        S->>R: 커밋 후 캐시 추가(색인 2종 + 스냅샷)
+        S-->>C: 성공 { listingId, itemCode, enhanceLevel, quantity, price }
+    end
+```
+
+### POST /api/game/trade/buy — 구매
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트(구매자)
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    C->>S: POST /trade/buy { userId, token, data:{ listingId } }
+    S->>R: 구매 락 획득(trade:lock:listing:{listingId}, SET NX + TTL 3초, 50ms 간격 2회 재시도)
+    alt 락 경합(재시도 후에도 실패)
+        S-->>C: 실패 { errorCode: TradeBusy(7008) }
+    else 락 획득 또는 Redis 장애(축소 운전 — 락 없이 진행)
+        Note over S,DB: 단일 트랜잭션
+        S->>DB: 등록 조회(trade_listing)
+        alt 등록 없음
+            S-->>C: 실패 { errorCode: TradeListingNotFound(7001) }
+        else 판매중 아님
+            S-->>C: 실패 { errorCode: TradeAlreadyClosed(7005) }
+        else 자기 등록
+            S-->>C: 실패 { errorCode: TradeSelfPurchase(7004) }
+        end
+        S->>DB: 구매자 골드 확인(player_item 재화 행)
+        alt 골드 부족
+            S-->>C: 실패 { errorCode: InsufficientCurrency(4005) }
+        end
+        S->>DB: 선점(조건부 갱신) — status 1에서 2로, buyer_user_id·closed_at 기록
+        alt 반영 0행(동시 구매자가 먼저 선점)
+            S-->>C: 실패 { errorCode: TradeAlreadyClosed(7005) }
+        else 선점 성공
+            S->>DB: 구매자 골드 차감
+            S->>DB: 구매 아이템 메일 데이터 적재(구매자, 템플릿 203, 무기한, 강화 단계 보존)
+            S->>DB: 판매 대금 메일 데이터 적재(판매자, 템플릿 201, 판매가의 80%)
+            S->>R: 커밋 후 캐시에서 등록 제거
+            S-->>C: 성공 { listingId, gained, cost, balance, mailId }
+        end
+        S->>R: 락 해제(값이 자기 토큰일 때만)
+    end
+```
+
+- **선점을 재화 이동보다 앞에 둔다** — 경합에서 진 요청이 골드·아이템을 건드리지 않고 즉시 빠진다.
+- **구매 아이템도 우편함으로 지급한다.** 인벤토리에 직접 넣지 않으므로 구매 단계에서 용량을 검사하지 않으며(가방이 가득해도 거래 성립), 적재와 `InventoryFull(4002)` 판정은 메일 수령 시점으로 미뤄진다.
+- **구매 아이템 메일만 만료가 없다**(`expires_at=0`). 산 물건을 수령 기한으로 잃지 않도록, 보관 GC도 미수령 무기한 메일은 지우지 않는다. 판매 대금 메일은 기존대로 7일 만료다.
+- 메일 첨부는 **강화 단계를 보존**한다(`player_mail_reward.enhance_level`) — 등록 당시 강화가 구매자에게 그대로 전달된다.
+- 수수료 20%는 어디에도 지급되지 않고 **경제에서 소멸**한다(sink).
+
+### POST /api/game/trade/cancel — 판매 취소
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트(판매자)
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    C->>S: POST /trade/cancel { userId, token, data:{ listingId } }
+    S->>R: 구매 락 획득(구매와 같은 키 — 같은 등록을 닫는 경로를 직렬화)
+    alt 락 경합
+        S-->>C: 실패 { errorCode: TradeBusy(7008) }
+    else 락 획득
+        Note over S,DB: 단일 트랜잭션
+        S->>DB: 등록 조회(trade_listing)
+        alt 등록 없음
+            S-->>C: 실패 { errorCode: TradeListingNotFound(7001) }
+        else 본인 등록 아님
+            S-->>C: 실패 { errorCode: TradeNotOwner(7003) }
+        else 판매중 아님
+            S-->>C: 실패 { errorCode: TradeAlreadyClosed(7005) }
+        else 정상
+            S->>DB: 선점(조건부 갱신) — status 1에서 3(취소)으로
+            S->>DB: 판매자 인벤토리에 아이템 데이터 복원(강화 단계 보존)
+            alt 빈 칸 부족
+                S-->>C: 실패 { errorCode: InventoryFull(4002) }
+            end
+            S->>R: 커밋 후 캐시에서 등록 제거
+            S-->>C: 성공 { listingId, restored }
+        end
+        S->>R: 락 해제
+    end
+```
+
+- 수동 취소는 요청자가 온라인이므로 **인벤토리로 직접 복원**한다(만료 반송은 메일 — 아래 참고).
+
+### 거래소 만료 배치 — TradeExpireBatchService (엔드포인트 없음)
+
+등록 후 3일이 지난 판매중 등록을 자동 취소하고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchService`)로, 기동 직후 1회 + 60초 주기(설정 `TradeExpireBatch`)로 실행되고 1회 최대 200건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:trade-expire`)을 획득한 인스턴스만 실행한다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    S->>R: 리더 락 획득(batch:lock:trade-expire, SET NX + TTL=주기)
+    alt 미획득(다른 인스턴스가 실행 중)
+        S->>S: 이번 주기 스킵
+    else 획득
+        S->>DB: 만료 대상 조회(trade_listing, status=1 이면서 expires_at 경과, 최대 200건)
+        DB-->>S: listingId 목록
+        loop 등록 1건씩
+            S->>R: 구매 락 획득(trade:lock:listing:{listingId} — 구매·취소와 직렬화)
+            alt 경합으로 실패
+                S->>S: 스킵(다음 주기가 자연 재시도)
+            else 획득 또는 Redis 장애
+                Note over S,DB: 단일 트랜잭션
+                S->>DB: 선점(조건부 갱신) — status 1에서 3으로, 만료 조건 재확인
+                alt 반영 0행(그 사이 구매·취소로 닫힘)
+                    S->>S: 스킵
+                else 선점 성공
+                    S->>DB: 반송 스냅샷 조회 후 반송 메일 데이터 적재(판매자, 템플릿 202, 만료 7일)
+                    S->>R: 커밋 후 캐시에서 등록 제거
+                end
+                S->>R: 락 해제
+            end
+        end
+        S->>S: 요약 로그 1줄(처리 n건 / 스킵 s건 / 실패 f건)
+    end
+```
+
+- **골드 이동은 없다.** 만료 반송은 에스크로 아이템을 메일 첨부로 되돌릴 뿐이다.
+- 메일 첨부는 강화 단계를 보존하지 않으므로, **만료 반송 장비는 강화 0단계로 지급**된다(mail 기획서 4장 확정).
+- 건별 예외는 그 건만 실패로 세고 다음 건을 계속 처리한다(주기 전체를 중단하지 않는다).
 
 ## 메일
 

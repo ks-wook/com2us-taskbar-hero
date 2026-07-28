@@ -68,6 +68,7 @@ namespace TaskbarHero.Common
         TradeAlreadyClosed = 7005,
         TradePriceOutOfRange = 7006,
         TradeListingLimitExceeded = 7007,
+        TradeBusy = 7008,
 
         // 메일(보상) (8000번대)
         MailNotFound = 8001,

@@ -71,6 +71,14 @@ builder.Services.AddScoped<IMailService, MailService>();
 builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 
+// 거래소(교역선) 계층(목록·등록·구매·취소). TradeCache는 Redis 목록 캐시 + 구매 락(싱글턴).
+builder.Services.AddSingleton<TradeCache>();
+builder.Services.AddScoped<ITradeRepository, TradeRepository>();
+builder.Services.AddScoped<ITradeService, TradeService>();
+
+// 거래소 만료 배치(등록 3일 경과 → 자동 취소 + 아이템 메일 반송, trade 기획서 7.6).
+builder.Services.AddHostedService<TradeExpireBatchService>();
+
 // 메일 보관 GC 배치(발급 7일 경과 메일 삭제, mail 기획서 6.5). 공통 골격은 PeriodicBatchService.
 builder.Services.AddHostedService<MailGcBatchService>();
 

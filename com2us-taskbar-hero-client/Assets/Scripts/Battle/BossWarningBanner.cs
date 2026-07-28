@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.Battle
 {
@@ -39,7 +40,7 @@ namespace TaskbarHero.Client.Battle
 
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 250; // 입장 배너(200) 위, 클리어 연출(300) 아래
+            canvas.sortingOrder = UiSortingOrder.BattleBossWarning; // 입장 배너 위·클리어 연출 아래, 기능 패널보다는 아래
             var scaler = gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080f, 1920f);

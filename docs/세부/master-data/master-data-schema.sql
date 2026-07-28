@@ -960,6 +960,7 @@ CREATE TABLE mail_master (
 INSERT INTO mail_master (mail_template_code, category, title_format, body_format, valid_days) VALUES
     (201, 2, '거래소 판매 대금',      '''{0}'' 판매 대금이 도착했습니다.', 7),
     (202, 2, '거래소 판매 만료 반송', '판매 기간이 만료되어 ''{0}''이(가) 반송되었습니다.', 7),
+    (203, 2, '거래소 구매 아이템',    '구매하신 ''{0}''이(가) 도착했습니다.', 0),   -- 0 = 무기한(구매 아이템은 만료로 잃지 않는다)
     (301, 3, '출석 보상',            '{0}일차 출석 보상이 도착했습니다.', 7);
 
 

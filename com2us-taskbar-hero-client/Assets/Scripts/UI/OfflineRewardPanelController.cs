@@ -19,6 +19,14 @@ namespace TaskbarHero.Client.UI
         private const float CanvasRefWidth = 1080f;
         private const float CanvasRefHeight = 1920f;
 
+        private const float PanelWidth = 880f;
+        private const float PanelHeight = 1000f;
+        // 캐릭터 슬롯 띠는 위(요약 박스)·아래(받기 버튼) 사이 남는 공간에서 계산한다.
+        // 값을 박아 두면 패널 높이를 바꿀 때 슬롯이 다른 요소를 파고들므로 파생값으로 둔다.
+        private const float SummaryBottomY = 306f;   // 패널 위에서 요약 박스 아래 끝(176 + 130)
+        private const float ConfirmAreaHeight = 126f; // 패널 아래에서 받기 버튼 위 끝(30 + 96)
+        private const float SlotBandMargin = 24f;    // 슬롯 띠 위아래 여백
+
         [SerializeField] private Button _confirmButton;
         [SerializeField] private Text _subtitleText;   // 경과 시간 안내
         [SerializeField] private Text _goldText;        // 획득 골드
@@ -164,7 +172,7 @@ namespace TaskbarHero.Client.UI
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(880f, 1180f);
+            rt.sizeDelta = new Vector2(PanelWidth, PanelHeight);
             rt.anchoredPosition = Vector2.zero;
             return rt;
         }
@@ -217,10 +225,15 @@ namespace TaskbarHero.Client.UI
             _slotExpTexts.Clear();
 
             const float slotW = 250f;
-            const float slotH = 620f;
             const float gap = 16f;
             float totalW = MaxSlots * slotW + (MaxSlots - 1) * gap;
             float startX = -totalW * 0.5f + slotW * 0.5f;
+
+            // 요약 박스 아래 ~ 받기 버튼 위 사이에 여백을 두고 슬롯 띠를 앉힌다(패널 높이가 바뀌어도 겹치지 않음).
+            float bandTop = SummaryBottomY + SlotBandMargin;
+            float bandBottom = PanelHeight - ConfirmAreaHeight - SlotBandMargin;
+            float slotH = bandBottom - bandTop;
+            float slotY = PanelHeight * 0.5f - (bandTop + bandBottom) * 0.5f; // 패널 중심 기준 오프셋
 
             for (int i = 0; i < MaxSlots; i++)
             {
@@ -229,7 +242,7 @@ namespace TaskbarHero.Client.UI
                 rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
                 rt.pivot = new Vector2(0.5f, 0.5f);
                 rt.sizeDelta = new Vector2(slotW, slotH);
-                rt.anchoredPosition = new Vector2(startX + i * (slotW + gap), -60f);
+                rt.anchoredPosition = new Vector2(startX + i * (slotW + gap), slotY);
                 _slots.Add(rt);
 
                 // 캐릭터 프리팹 렌더(RawImage). 상단 대부분을 채우고 하단은 캡션·경험치 공간.

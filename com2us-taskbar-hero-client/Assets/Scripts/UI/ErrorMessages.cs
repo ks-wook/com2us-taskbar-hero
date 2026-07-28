@@ -75,6 +75,21 @@ namespace TaskbarHero.Client.UI
                     return "이미 수령한 출석 보상입니다.";
                 case ErrorCode.AttendanceAllClaimed:
                     return "이번 달 출석 보상을 모두 받았습니다.";
+                // 거래소 도메인(trade 기획서 §8)
+                case ErrorCode.TradeListingNotFound:
+                    return "이미 사라진 거래 등록입니다.";
+                case ErrorCode.TradeNotSellable:
+                    return "거래소에 등록할 수 없는 아이템입니다.";
+                case ErrorCode.TradeNotOwner:
+                    return "본인이 등록한 매물만 취소할 수 있습니다.";
+                case ErrorCode.TradeSelfPurchase:
+                    return "내가 등록한 매물은 구매할 수 없습니다.";
+                case ErrorCode.TradeAlreadyClosed:
+                    return "이미 판매되었거나 취소된 매물입니다.";
+                case ErrorCode.TradePriceOutOfRange:
+                    return "등록 가격이 허용 범위(기준가 ±20%)를 벗어났습니다.";
+                case ErrorCode.TradeListingLimitExceeded:
+                    return "판매 등록은 최대 10개까지 가능합니다.";
                 default:
                     return string.IsNullOrEmpty(fallback) ? ("오류가 발생했습니다. (" + code + ")") : fallback;
             }

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.Battle
 {
@@ -143,7 +144,7 @@ namespace TaskbarHero.Client.Battle
                 canvas = gameObject.AddComponent<Canvas>();
             }
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 200; // HUD(10)·패널(100) 위, 클리어 연출(300) 아래
+            canvas.sortingOrder = UiSortingOrder.BattleEnterBanner; // HUD·진행 바 위, 기능 패널 아래
 
             var scaler = gameObject.GetComponent<CanvasScaler>();
             if (scaler == null)

@@ -9,10 +9,10 @@ using TaskbarHero.Common.Dto;
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// GameScene 상시 HUD. 우하단에 <b>햄버거 메뉴 버튼</b> 하나만 상시 노출하고, 기능 버튼
-    /// (출석부·메일·편성·스테이지·가방)은 그 버튼으로 펼치고 접는다. 펼침/접힘은 버튼들이 햄버거 뒤에서
-    /// 좌측으로 미끄러져 나오며 커지고 밝아지는(접을 때는 역순) 연출로 처리한다.
-    /// ESC 메뉴(타이틀로 돌아가기)도 함께 구성한다.
+    /// GameScene 상시 HUD. 우하단에 기능 버튼(거래소·출석부·메일·편성·스테이지·가방)을 한 줄로 상시 노출하고,
+    /// ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
+    /// 버튼 줄은 던전 배경 띠보다 아래(화면 최하단)에 놓여 배경 아트에 묻히지 않는다 —
+    /// 배경 띠를 위로 띄우는 쪽은 <c>DungeonBattleBuilder</c>가 GameScene을 구울 때 처리한다.
     /// </summary>
     public class GameSceneHudController : MonoBehaviour
     {
@@ -22,8 +22,10 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite stageIcon;      // 스테이지
         [SerializeField] private Sprite inventoryIcon;  // 가방
         [SerializeField] private Sprite attendanceIcon; // 출석부
-        [Tooltip("햄버거 메뉴 아이콘(Assets/Art/UI/햄버거메뉴.png).")]
-        [SerializeField] private Sprite menuToggleIcon; // 메뉴 펼치기/접기
+        [Tooltip("거래소 아이콘(Assets/Art/UI/Trade/거래소.png).")]
+        [SerializeField] private Sprite tradeIcon;      // 거래소
+        [Tooltip("하단 아이콘 줄 뒷배경 프레임(Assets/Art/UI/ui_bg.png, 9-slice). 없으면 배경 없이 아이콘만 표시.")]
+        [SerializeField] private Sprite uiBackgroundSprite;
 
         [Header("알림(레드닷)")]
         [Tooltip("미수령 보상 메일 확인을 위한 우편함 재조회 주기(초). 0 이하면 진입 시 1회만 조회한다.")]
@@ -32,29 +34,26 @@ namespace TaskbarHero.Client.UI
         [Header("접속 시 자동 표시")]
         [Tooltip("접속 시 오늘자 출석 보상이 아직 남아 있으면 출석부 패널을 자동으로 연다.")]
         [SerializeField] private bool autoOpenAttendance = true;
-        [Tooltip("시작할 때 기능 버튼을 펼친 상태로 둔다(기본은 접힘 — 햄버거 버튼만 보인다).")]
-        [SerializeField] private bool menuOpenOnStart = false;
 
-        // 우하단 버튼 배치: 햄버거를 맨 오른쪽에 두고 기능 버튼이 왼쪽으로 한 칸씩 늘어선다.
-        private const float MenuSlotStep = 200f;
-        private const float MenuAnimDuration = 0.20f;  // 버튼 하나가 펼쳐지는 시간
-        private const float MenuAnimStagger = 0.045f;  // 옆 버튼과의 시간차
-        private const float MenuHiddenScale = 0.6f;    // 접힌 상태(햄버거 뒤)에서의 크기
+        // 우하단 버튼 줄: 오른쪽 끝부터 왼쪽으로 한 칸씩. GameScene 창은 정사각형이라 캔버스 가로가
+        // 약 1440 단위 — 버튼 6개(맨 왼쪽 칸이 -1100까지)가 넉넉히 들어간다.
+        private const int MenuSlotCount = 6;
+        private const float MenuSlotStep = 180f;
+        private const float MenuButtonWidth = 160f;
+        private const float MenuButtonHeight = 150f;
+        private const float MenuRowRightX = -40f; // 맨 오른쪽 칸의 오른쪽 끝
+        private const float MenuRowY = 28f;       // 화면 하단에서 띄우는 높이(던전 배경 띠 아래)
+
+        // 하단 UI 뒷배경(ui_bg) 크기 계산용.
+        private const float UiBackPadding = 18f;          // 아이콘 줄과 배경 프레임 안쪽 여백
+        private const float UiBackSidePadding = 24f;      // 좌우 여백
+        private const float DungeonBandBottomY = 216f;    // 던전 배경 띠의 아래 끝(DungeonBattleBuilder.GameSceneBattleLiftY와 짝)
+        private const float UiBackGapFromDungeon = 20f;   // 던전 배경과 띄울 간격(패딩)
+        // 9-slice 원본(2048×731)의 테두리(상하 250px)가 두꺼워 그대로 쓰면 바 높이(186)를 넘는다
+        // → 배율로 줄여 쓴다(250/4 = 62.5씩, 상하 합 125 < 186).
+        private const float UiBackPixelsPerUnitMultiplier = 4f;
 
         private GameObject _escMenuRoot; // ESC로 토글하는 메뉴(타이틀 복귀)
-
-        private readonly List<MenuButton> _menuButtons = new List<MenuButton>();
-        private float _menuOriginX;  // 접힌 버튼이 모이는 지점(= 햄버거 버튼 위치)
-        private bool _menuOpen;
-        private Coroutine _menuAnimRoutine;
-
-        /// <summary>펼침/접힘 연출 대상인 기능 버튼 하나. 제자리 좌표를 기억해 그 사이를 오간다.</summary>
-        private class MenuButton
-        {
-            public RectTransform rect;
-            public CanvasGroup group;
-            public Vector2 shownPos;
-        }
 
         private void Awake()
         {
@@ -153,44 +152,66 @@ namespace TaskbarHero.Client.UI
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // 우하단 맨 오른쪽: 상시 노출되는 햄버거 버튼. 왼쪽으로 [가방] [스테이지] [편성] [메일] [출석부] 순으로 펼쳐진다.
-            _menuOriginX = -40f;
-            var menuToggleBtn = CreateButton(canvasGo.transform, font, "MenuToggleButton", "메뉴", menuToggleIcon,
-                new Vector2(_menuOriginX, 40f), ToggleMenu);
+            // 아이콘보다 먼저 만들어 뒤에 깔리게 한다(같은 캔버스에서는 자식 순서 = 그리기 순서).
+            BuildMenuBackground(canvasGo.transform);
 
-            // 접혀 있을 때도 알림을 놓치지 않도록, 기능 버튼 알림을 햄버거에 모아 표시한다.
-            RedDot.AttachTopRight((RectTransform)menuToggleBtn.transform).Bind(RedDotConditions.HasAnyMenuNotification);
-
-            // 햄버거에 가까운 순서로 등록한다(펼칠 때 가까운 것부터 차례로 나온다).
-            var inventoryBtn = CreateMenuButton(canvasGo.transform, font, "InventoryButton", "가방", inventoryIcon, 1, OnInventoryButton);
-            CreateMenuButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, 2, OnStageButton);
-            CreateMenuButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, 3, OnPartyButton);
-            var mailBtn = CreateMenuButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, 4, OnMailButton);
-            CreateMenuButton(canvasGo.transform, font, "AttendanceButton", "출석부", attendanceIcon, 5, OnAttendanceButton);
+            // 우하단 한 줄로 상시 노출: 오른쪽부터 [가방] [스테이지] [편성] [메일] [출석부] [거래소].
+            var inventoryBtn = CreateMenuButton(canvasGo.transform, font, "InventoryButton", "가방", inventoryIcon, 0, OnInventoryButton);
+            CreateMenuButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, 1, OnStageButton);
+            CreateMenuButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, 2, OnPartyButton);
+            var mailBtn = CreateMenuButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, 3, OnMailButton);
+            CreateMenuButton(canvasGo.transform, font, "AttendanceButton", "출석부", attendanceIcon, 4, OnAttendanceButton);
+            CreateMenuButton(canvasGo.transform, font, "TradeButton", "거래소", tradeIcon, 5, OnTradeButton);
 
             // 메일 버튼 우측 상단 레드닷: 아직 수령하지 않은 보상 첨부가 남은 메일이 있으면 표시(만료 전 수령 유도).
             RedDot.AttachTopRight((RectTransform)mailBtn.transform).Bind(RedDotConditions.HasUnclaimedMailReward);
 
             // 가방 버튼 우측 상단 레드닷: 잔여 스킬 포인트가 있으면 표시(스킬 레벨업은 가방 안에서 진입).
             RedDot.AttachTopRight((RectTransform)inventoryBtn.transform).Bind(RedDotConditions.HasUnspentSkillPoints);
-
-            ApplyMenuStateImmediate(menuOpenOnStart);
         }
 
-        /// <summary>펼침 대상 기능 버튼 하나를 만들고 연출 목록에 등록한다.
-        /// <paramref name="slot"/>은 햄버거로부터 왼쪽으로 몇 번째 칸인지(1부터).</summary>
+        /// <summary>
+        /// 아이콘 줄 뒤에 깔리는 배경 프레임(ui_bg)을 만든다. 아이콘 줄 전체를 감싸도록 크기를 잡되,
+        /// 위쪽은 던전 배경 띠(아래 끝 <see cref="DungeonBandBottomY"/>)와 <see cref="UiBackGapFromDungeon"/>만큼
+        /// 띄워 배경끼리 붙어 보이지 않게 한다. 스프라이트가 없으면 배경을 만들지 않는다(아이콘만 표시).
+        /// </summary>
+        private void BuildMenuBackground(Transform parent)
+        {
+            if (uiBackgroundSprite == null)
+            {
+                return;
+            }
+
+            float rowLeftX = MenuRowRightX - (MenuSlotCount - 1) * MenuSlotStep - MenuButtonWidth; // -1100
+            float left = rowLeftX - UiBackSidePadding;
+            float right = MenuRowRightX + UiBackSidePadding;
+            float bottom = MenuRowY - UiBackPadding;
+            // 아이콘 줄 위 여백과 던전 배경과의 간격 중 더 낮은 쪽을 택해 배경이 던전 띠를 침범하지 않게 한다.
+            float top = Mathf.Min(MenuRowY + MenuButtonHeight + UiBackPadding,
+                                  DungeonBandBottomY - UiBackGapFromDungeon);
+
+            var go = new GameObject("MenuBackground", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = uiBackgroundSprite;
+            img.type = Image.Type.Sliced;
+            img.pixelsPerUnitMultiplier = UiBackPixelsPerUnitMultiplier;
+            img.color = Color.white;
+            img.raycastTarget = false; // 배경은 클릭을 먹지 않는다(창 드래그·아이콘 클릭 방해 금지)
+
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f); // 우하단
+            rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = new Vector2(right, bottom);
+            rt.sizeDelta = new Vector2(right - left, top - bottom);
+        }
+
+        /// <summary>기능 버튼 하나를 우하단 줄의 <paramref name="slot"/>번째 칸(0 = 맨 오른쪽)에 만든다.</summary>
         private GameObject CreateMenuButton(Transform parent, Font font, string name, string label, Sprite icon,
             int slot, UnityEngine.Events.UnityAction onClick)
         {
-            var shownPos = new Vector2(_menuOriginX - slot * MenuSlotStep, 40f);
-            var go = CreateButton(parent, font, name, label, icon, shownPos, onClick);
-            _menuButtons.Add(new MenuButton
-            {
-                rect = (RectTransform)go.transform,
-                group = go.AddComponent<CanvasGroup>(),
-                shownPos = shownPos,
-            });
-            return go;
+            var pos = new Vector2(MenuRowRightX - slot * MenuSlotStep, MenuRowY);
+            return CreateButton(parent, font, name, label, icon, pos, onClick);
         }
 
         /// <summary>우하단 앵커 HUD 버튼 하나를 생성·배선하고 생성한 버튼 오브젝트를 반환한다.
@@ -207,7 +228,7 @@ namespace TaskbarHero.Client.UI
             rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f); // 우하단
             rt.pivot = new Vector2(1f, 0f);
             rt.anchoredPosition = anchoredPos;
-            rt.sizeDelta = new Vector2(180f, 150f);
+            rt.sizeDelta = new Vector2(MenuButtonWidth, MenuButtonHeight);
 
             var labelGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
             labelGo.transform.SetParent(btnGo.transform, false);
@@ -235,12 +256,12 @@ namespace TaskbarHero.Client.UI
                 irt.sizeDelta = new Vector2(104f, 104f);        // 아이콘 확대
 
                 // 텍스트(아이콘 아래) — 크게 + 볼드, 여백 축소
-                t.fontSize = 30;
+                t.fontSize = 28;
                 t.fontStyle = FontStyle.Bold;
                 lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 0f);
                 lrt.pivot = new Vector2(0.5f, 0f);
                 lrt.anchoredPosition = new Vector2(0f, 4f);
-                lrt.sizeDelta = new Vector2(176f, 40f);
+                lrt.sizeDelta = new Vector2(MenuButtonWidth - 4f, 40f);
             }
             else
             {
@@ -254,91 +275,6 @@ namespace TaskbarHero.Client.UI
 
             btnGo.AddComponent<Button>().onClick.AddListener(onClick);
             return btnGo;
-        }
-
-        // ── 기능 버튼 펼치기/접기 ──
-
-        /// <summary>햄버거 버튼: 기능 버튼을 펼치거나 접는다.</summary>
-        private void ToggleMenu() => SetMenuOpen(!_menuOpen);
-
-        /// <summary>기능 버튼의 펼침 상태를 바꾸고 연출을 재생한다(같은 상태면 무시).
-        /// 연출 도중 다시 눌러도 진행 중인 코루틴을 멈추고 현재 위치에서 반대 방향으로 이어간다.</summary>
-        private void SetMenuOpen(bool open)
-        {
-            if (_menuOpen == open)
-            {
-                return;
-            }
-            _menuOpen = open;
-            if (_menuAnimRoutine != null)
-            {
-                StopCoroutine(_menuAnimRoutine);
-            }
-            _menuAnimRoutine = StartCoroutine(AnimateMenu(open));
-        }
-
-        /// <summary>연출 없이 즉시 상태를 적용한다(시작 시 초기 상태 구성용).</summary>
-        private void ApplyMenuStateImmediate(bool open)
-        {
-            _menuOpen = open;
-            foreach (var button in _menuButtons)
-            {
-                button.rect.gameObject.SetActive(open);
-                ApplyMenuButtonProgress(button, open ? 1f : 0f);
-            }
-        }
-
-        /// <summary>
-        /// 기능 버튼을 순차적으로 펼치거나 접는다. 펼칠 때는 햄버거에 가까운 버튼부터, 접을 때는 먼 버튼부터
-        /// <see cref="MenuAnimStagger"/> 간격으로 시작해 물결치듯 움직인다. 자식 코루틴 없이 한 코루틴이
-        /// 모든 버튼을 시간으로 구동하므로, 도중에 멈춰도 잔여 애니메이션이 남지 않는다.
-        /// 전투 슬로우모션(timeScale)의 영향을 받지 않도록 unscaled 시간을 쓴다.
-        /// </summary>
-        private IEnumerator AnimateMenu(bool open)
-        {
-            int count = _menuButtons.Count;
-            if (open)
-            {
-                foreach (var button in _menuButtons)
-                {
-                    button.rect.gameObject.SetActive(true);
-                }
-            }
-
-            float total = MenuAnimDuration + MenuAnimStagger * Mathf.Max(0, count - 1);
-            float elapsed = 0f;
-            while (elapsed < total)
-            {
-                elapsed += Time.unscaledDeltaTime;
-                for (int i = 0; i < count; i++)
-                {
-                    int order = open ? i : count - 1 - i; // 접을 때는 먼 버튼부터 사라진다
-                    float t = Mathf.Clamp01((elapsed - order * MenuAnimStagger) / MenuAnimDuration);
-                    ApplyMenuButtonProgress(_menuButtons[i], open ? t : 1f - t);
-                }
-                yield return null;
-            }
-
-            foreach (var button in _menuButtons)
-            {
-                ApplyMenuButtonProgress(button, open ? 1f : 0f);
-                if (!open)
-                {
-                    button.rect.gameObject.SetActive(false); // 접힌 뒤에는 클릭도 막는다
-                }
-            }
-            _menuAnimRoutine = null;
-        }
-
-        /// <summary>버튼 하나의 진행도를 반영한다(0 = 햄버거 뒤에 숨은 상태, 1 = 제자리).
-        /// 위치·크기·투명도를 함께 보간해 미끄러져 나오며 커지고 밝아지는 느낌을 낸다.</summary>
-        private void ApplyMenuButtonProgress(MenuButton button, float progress)
-        {
-            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(progress));
-            button.rect.anchoredPosition = new Vector2(Mathf.Lerp(_menuOriginX, button.shownPos.x, k), button.shownPos.y);
-            button.rect.localScale = Vector3.one * Mathf.Lerp(MenuHiddenScale, 1f, k);
-            button.group.alpha = k;
-            button.group.blocksRaycasts = k >= 1f; // 이동 중에는 클릭을 받지 않는다
         }
 
         /// <summary>출석부 패널 토글(UIManager 위임).</summary>
@@ -360,6 +296,19 @@ namespace TaskbarHero.Client.UI
             if (UIManager.Instance != null)
             {
                 UIManager.Instance.ToggleMail();
+            }
+            else
+            {
+                Debug.LogWarning("[HUD] UIManager 인스턴스를 찾을 수 없습니다.");
+            }
+        }
+
+        /// <summary>거래소 패널 토글(UIManager 위임).</summary>
+        private void OnTradeButton()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.ToggleTrade();
             }
             else
             {

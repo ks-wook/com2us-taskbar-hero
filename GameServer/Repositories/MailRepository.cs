@@ -7,7 +7,9 @@ namespace GameServer.Repositories;
 // ── 우편함 조회 ──
 
 /// <summary>메일 첨부 1건(원장 스냅샷). RewardType 1:골드 2:아이템 3:재료, RewardCode는 골드면 0.</summary>
-public sealed record MailAttachment(int RewardType, int RewardCode, int Quantity);
+/// <summary>메일 첨부 1건. EnhanceLevel은 장비의 강화 단계로, 거래소 구매·만료 반송처럼
+/// 강화 상태를 그대로 옮겨야 하는 발급 경로에서 사용한다(골드·재료는 0).</summary>
+public sealed record MailAttachment(int RewardType, int RewardCode, int Quantity, int EnhanceLevel = 0);
 
 /// <summary>우편함 메일 1건 + 첨부 목록(조회 시점 스냅샷).</summary>
 public sealed record MailSummary(
@@ -101,6 +103,7 @@ file sealed class MailRewardRow
     public int RewardType { get; set; }
     public int RewardCode { get; set; }
     public int Quantity { get; set; }
+    public int EnhanceLevel { get; set; }
 }
 
 file sealed class ItemIdQtyRow
@@ -313,6 +316,9 @@ public sealed class MailRepository : IMailRepository
     /// 보관 기한이 지난 메일을 mail_id 오름차순으로 최대 limit건 삭제한다(GC 배치 전용).
     /// 대상 mail_id를 먼저 조회한 뒤 PK 목록으로 삭제해 1회 처리량을 상한 안에 묶는다(밀린 분량은 다음 주기 이월).
     /// 첨부(player_mail_reward)는 FK CASCADE로 함께 삭제되므로 별도 DELETE가 없다.
+    /// <para><b>미수령 무기한 메일(<c>expires_at=0 AND claimed=0</c>)은 삭제하지 않는다.</b> 거래소 구매 아이템처럼
+    /// 만료를 두지 않기로 한 메일을 보관 기한으로 지워 버리면 무기한 발급이 무의미해진다. 수령을 마친 뒤에는
+    /// 보관 기한이 지나면 함께 정리된다.</para>
     /// </summary>
     public async Task<int> DeleteRetentionExpiredAsync(long createdBefore, int limit)
     {
@@ -324,6 +330,7 @@ public sealed class MailRepository : IMailRepository
         var targets = (await db.Query("player_mail")
             .Select("mail_id")
             .Where("created_at", "<", createdBefore)
+            .Where(q => q.Where("expires_at", "<>", 0).OrWhere("claimed", 1))
             .OrderBy("mail_id")
             .Limit(limit)
             .GetAsync<long>()).ToList();
@@ -369,6 +376,7 @@ public sealed class MailRepository : IMailRepository
                 reward_type = reward.RewardType,
                 reward_code = reward.RewardCode,
                 quantity = reward.Quantity,
+                enhance_level = reward.EnhanceLevel,
             }, tx);
         }
 
@@ -387,7 +395,7 @@ public sealed class MailRepository : IMailRepository
         }
 
         var rows = await db.Query("player_mail_reward")
-            .Select("mail_id", "seq", "reward_type", "reward_code", "quantity")
+            .Select("mail_id", "seq", "reward_type", "reward_code", "quantity", "enhance_level")
             .WhereIn("mail_id", mailIds)
             .OrderBy("mail_id", "seq")
             .GetAsync<MailRewardRow>(tx);
@@ -395,7 +403,7 @@ public sealed class MailRepository : IMailRepository
         return rows.GroupBy(r => r.MailId).ToDictionary(
             g => g.Key,
             g => (IReadOnlyList<MailAttachment>)g
-                .Select(r => new MailAttachment(r.RewardType, r.RewardCode, r.Quantity)).ToList());
+                .Select(r => new MailAttachment(r.RewardType, r.RewardCode, r.Quantity, r.EnhanceLevel)).ToList());
     }
 
     /// <summary>메일 1건의 첨부를 seq 순으로 로드한다.</summary>
@@ -403,11 +411,11 @@ public sealed class MailRepository : IMailRepository
         QueryFactory db, DbTransaction tx, long mailId)
     {
         var rows = await db.Query("player_mail_reward")
-            .Select("mail_id", "seq", "reward_type", "reward_code", "quantity")
+            .Select("mail_id", "seq", "reward_type", "reward_code", "quantity", "enhance_level")
             .Where("mail_id", mailId)
             .OrderBy("seq")
             .GetAsync<MailRewardRow>(tx);
-        return rows.Select(r => new MailAttachment(r.RewardType, r.RewardCode, r.Quantity)).ToList();
+        return rows.Select(r => new MailAttachment(r.RewardType, r.RewardCode, r.Quantity, r.EnhanceLevel)).ToList();
     }
 
     /// <summary>
@@ -423,8 +431,9 @@ public sealed class MailRepository : IMailRepository
 
         // 아이템/재료는 코드별로 합산해 적재(같은 코드 첨부가 여러 건이어도 스택 병합이 한 번에 이뤄진다).
         var itemGroups = rewards.Where(r => r.RewardType != RewardTypeGold)
-            .GroupBy(r => new { r.RewardType, r.RewardCode })
-            .Select(g => new MailAttachment(g.Key.RewardType, g.Key.RewardCode, g.Sum(r => r.Quantity)))
+            .GroupBy(r => new { r.RewardType, r.RewardCode, r.EnhanceLevel })
+            .Select(g => new MailAttachment(
+                g.Key.RewardType, g.Key.RewardCode, g.Sum(r => r.Quantity), g.Key.EnhanceLevel))
             .ToList();
 
         int capacity = await LoadCapacityAsync(db, tx, userId);
@@ -433,7 +442,8 @@ public sealed class MailRepository : IMailRepository
         {
             var (itemType, stackMax) = itemLookup(item.RewardCode);
             bool stored = await StoreItemAsync(
-                db, tx, userId, item.RewardCode, item.Quantity, itemType, stackMax, capacity, used, nowUnix);
+                db, tx, userId, item.RewardCode, item.Quantity, itemType, stackMax,
+                item.EnhanceLevel, capacity, used, nowUnix);
             if (!stored)
             {
                 return (false, 0, Array.Empty<MailAttachment>(), 0);
@@ -509,15 +519,16 @@ public sealed class MailRepository : IMailRepository
     /// </summary>
     private static async Task<bool> StoreItemAsync(
         QueryFactory db, DbTransaction tx, long userId, int itemCode, int quantity,
-        int itemType, int stackMax, int capacity, HashSet<int> used, long nowUnix)
+        int itemType, int stackMax, int enhanceLevel, int capacity, HashSet<int> used, long nowUnix)
     {
         long remaining = quantity;
 
         // 재료(스택 가능): 기존 스택의 여유부터 채운다(새 칸 불필요).
-        if (itemType == ItemTypeMaterial && stackMax > 1)
+        if (itemType == ItemTypeMaterial && stackMax > 1 && enhanceLevel == 0)
         {
             var stacks = await db.Query("player_item").Select("player_item_id", "quantity")
                 .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", itemCode)
+                .Where("enhance_level", 0)
                 .Where("quantity", "<", stackMax)
                 .GetAsync<ItemIdQtyRow>(tx);
 
@@ -554,7 +565,7 @@ public sealed class MailRepository : IMailRepository
                 item_code = itemCode,
                 quantity = put,
                 slot = slot,
-                enhance_level = 0,
+                enhance_level = enhanceLevel,
                 acquired_at = nowUnix,
             }, tx);
             used.Add(slot);

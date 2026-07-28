@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
+using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.Battle
 {
@@ -35,7 +36,7 @@ namespace TaskbarHero.Client.Battle
 
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 300; // 클리어 연출과 동일 최상단
+            canvas.sortingOrder = UiSortingOrder.BattleResult; // 클리어 연출과 같은 띠(기능 패널보다 아래)
             var scaler = gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080f, 1920f);

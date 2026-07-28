@@ -17,8 +17,11 @@ public sealed record StageRewardDef(long Gold, long Exp, double[] GradeProbs);
 /// <summary>드롭 추첨 결과(전리품 1개).</summary>
 public sealed record DroppedItem(int ItemCode, long Quantity, int ItemType, int StackMax);
 
-/// <summary>아이템 정의(item_master). 장착 검증(타입·슬롯·클래스·레벨)과 드롭/스택에 사용한다.</summary>
-public sealed record ItemDef(int ItemCode, int ItemType, int Grade, int StackMax, int EquipSlot, int ClassReq, int LevelReq);
+/// <summary>아이템 정의(item_master). 장착 검증(타입·슬롯·클래스·레벨)·드롭/스택·거래 검증에 사용한다.
+/// Name은 서버가 만드는 문구(거래 메일 제목·본문 등)에 아이템을 사람이 읽는 이름으로 표기하기 위해 적재한다.</summary>
+public sealed record ItemDef(
+    int ItemCode, string Name, int ItemType, int Grade, int StackMax, int EquipSlot, int ClassReq, int LevelReq,
+    int Sellable, long BasePrice);
 
 /// <summary>스킬 정의(skill_master). 성장 검증(직업 소속·액티브/패시브·최대 레벨)에 사용한다. SkillType 1:액티브 2:패시브.</summary>
 public sealed record SkillDef(int SkillCode, int ClassCode, int SkillType, int MaxLevel);
@@ -154,12 +157,15 @@ file sealed class CubeRecipeIngredientRow
 file sealed class ItemMasterRow
 {
     public int ItemCode { get; set; }
+    public string Name { get; set; } = string.Empty;
     public int ItemType { get; set; }
     public int Grade { get; set; }
     public int StackMax { get; set; }
     public int EquipSlot { get; set; }
     public int ClassReq { get; set; }
     public int LevelReq { get; set; }
+    public int Sellable { get; set; }
+    public long BasePrice { get; set; }
 }
 
 file sealed class AttendanceMasterRow
@@ -674,7 +680,8 @@ public sealed class MasterDataProvider
     {
         // 드롭 대상은 장비(1)·재료(2)만. 재화(3, 골드)는 제외. 장착 검증용으로 슬롯·클래스/레벨 제한도 함께 적재.
         var rows = await db.Query("item_master")
-            .Select("item_code", "item_type", "grade", "stack_max", "equip_slot", "class_req", "level_req")
+            .Select("item_code", "name", "item_type", "grade", "stack_max", "equip_slot", "class_req", "level_req",
+                    "sellable", "base_price")
             .WhereIn("item_type", new[] { 1, 2 })
             .GetAsync<ItemMasterRow>();
 
@@ -684,12 +691,15 @@ public sealed class MasterDataProvider
         {
             byCode[row.ItemCode] = new ItemDef(
                 row.ItemCode,
+                row.Name,
                 row.ItemType,
                 row.Grade,
                 row.StackMax,
                 row.EquipSlot,
                 row.ClassReq,
-                row.LevelReq);
+                row.LevelReq,
+                row.Sellable,
+                row.BasePrice);
 
             if (!byGrade.TryGetValue(row.Grade, out var list))
             {

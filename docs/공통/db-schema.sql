@@ -225,6 +225,7 @@ CREATE TABLE player_mail_reward (
     reward_type TINYINT NOT NULL          COMMENT '1:골드 2:아이템 3:재료',
     reward_code INT     NOT NULL DEFAULT 0 COMMENT '대상 코드(item_master). 골드면 0',
     quantity    INT     NOT NULL          COMMENT '지급 수량',
+    enhance_level INT   NOT NULL DEFAULT 0 COMMENT '장비 강화 단계(거래소 구매·만료 반송이 보존). 골드/재료는 0',
     PRIMARY KEY (mail_id, seq),
     CONSTRAINT fk_mailreward_mail FOREIGN KEY (mail_id)
         REFERENCES player_mail (mail_id) ON DELETE CASCADE

@@ -9,14 +9,6 @@ namespace TaskbarHero.Client.UI
     /// </summary>
     public static class RedDotConditions
     {
-        /// <summary>HUD 기능 버튼(메일·가방 등)의 알림 중 하나라도 켜져 있으면 true.
-        /// 햄버거 메뉴가 접혀 있으면 개별 버튼의 레드닷이 보이지 않으므로, 이 조건을 햄버거에 붙여
-        /// 알림을 놓치지 않게 한다. 새 기능 버튼에 레드닷을 추가하면 여기에도 함께 넣는다.</summary>
-        public static bool HasAnyMenuNotification()
-        {
-            return HasUnclaimedMailReward() || HasUnspentSkillPoints();
-        }
-
         /// <summary>수령하지 않은 보상(첨부)이 남은 메일이 하나라도 있으면 true — "만료 전에 받아 가라"는 알림이다.
         /// 열람 여부와는 무관하며(조회 ≠ 수령), 판정은 <see cref="MailNotifier.HasUnclaimedReward"/>가 캐싱된
         /// 우편함 스냅샷으로 수행한다(첨부 있음 + 미수령 + 미만료).</summary>

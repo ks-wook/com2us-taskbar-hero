@@ -4,8 +4,10 @@ using GameServer.Repositories;
 namespace GameServer.Batch;
 
 /// <summary>
-/// 메일 보관 GC 배치(mail 기획서 6.5). 열람·수령 여부와 무관하게 발급(수신) 시각 기준 7일이 지난 메일을
-/// 주기적으로 삭제한다(player_mail DELETE — 첨부 player_mail_reward는 FK CASCADE로 함께 삭제).
+/// 메일 보관 GC 배치(mail 기획서 6.5). 발급(수신) 시각 기준 7일이 지난 메일을 주기적으로 삭제한다
+/// (player_mail DELETE — 첨부 player_mail_reward는 FK CASCADE로 함께 삭제).
+/// 단 <b>미수령 무기한 메일(expires_at=0)은 보관</b>한다 — 거래소 구매 아이템처럼 만료를 두지 않기로 한
+/// 메일까지 지우면 무기한 발급이 무의미해지기 때문이다(수령 후에는 보관 기한이 지나면 정리된다).
 /// 전용 삭제 API는 두지 않으며, 1회 처리 건수를 제한해 밀린 분량은 다음 주기로 이월한다.
 /// 설정: appsettings "MailGcBatch" 섹션(IntervalSeconds 기본 3600 · BatchSize 기본 500, 잠정).
 /// </summary>
@@ -41,8 +43,8 @@ public sealed class MailGcBatchService : PeriodicBatchService
     protected override string BatchKey => "mail-gc";
 
     /// <summary>
-    /// 1주기 작업: 보관 기한(now − 7일) 이전에 발급된 메일을 상한(BatchSize)까지 삭제하고 요약을 남긴다.
-    /// 대상 0건이면 로그를 남기지 않는다(소음 방지).
+    /// 1주기 작업: 보관 기한(now − 7일) 이전에 발급된 메일 중 <b>미수령 무기한 메일을 제외</b>하고
+    /// 상한(BatchSize)까지 삭제한 뒤 요약을 남긴다. 대상 0건이면 로그를 남기지 않는다(소음 방지).
     /// </summary>
     protected override async Task RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
     {

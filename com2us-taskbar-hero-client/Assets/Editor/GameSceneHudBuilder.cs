@@ -17,7 +17,9 @@ namespace TaskbarHero.ClientEditor
         private const string IconDir = "Assets/Art/Icon";
         private const string MailIconPath = "Assets/Art/UI/Mail/메일.png";
         private const string AttendanceIconPath = IconDir + "/출석부.png";
-        private const string MenuToggleIconPath = "Assets/Art/UI/햄버거메뉴.png";
+        private const string UiBackgroundPath = "Assets/Art/UI/ui_bg.png";
+        // ui_bg(2048×731) 9-slice 경계: 나무 테두리 + 모서리 금장식이 온전히 남는 크기(L,B,R,T).
+        private static readonly Vector4 UiBackgroundBorder = new Vector4(230f, 250f, 230f, 250f);
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
 
         [MenuItem("TaskbarHero/UI/게임 HUD 아이콘·씬 배선")]
@@ -29,7 +31,7 @@ namespace TaskbarHero.ClientEditor
             ReimportSingle("인벤토리");
             ReimportSingle("출석부");
             ReimportSingleAt(MailIconPath);
-            ReimportSingleAt(MenuToggleIconPath);
+            ImportUiBackground();
             AssetDatabase.Refresh();
 
             var scene = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
@@ -47,12 +49,42 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("stageIcon").objectReferenceValue = LoadSprite("스테이지");
             so.FindProperty("inventoryIcon").objectReferenceValue = LoadSprite("인벤토리");
             so.FindProperty("attendanceIcon").objectReferenceValue = LoadSpriteAt(AttendanceIconPath);
-            so.FindProperty("menuToggleIcon").objectReferenceValue = LoadSpriteAt(MenuToggleIconPath);
+            so.FindProperty("uiBackgroundSprite").objectReferenceValue = LoadSpriteAt(UiBackgroundPath);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             Debug.Log("[GameSceneHudBuilder] 완료: GameScene HUD(햄버거·출석부·메일·편성·스테이지·가방) 아이콘 배선.");
+        }
+
+        /// <summary>하단 UI 뒷배경(ui_bg)을 9-slice로 쓸 수 있게 교정한다
+        /// (Sprite/Single · Full Rect · Border). Full Rect가 아니면 Sliced 렌더가 깨진다.</summary>
+        private static void ImportUiBackground()
+        {
+            var ti = AssetImporter.GetAtPath(UiBackgroundPath) as TextureImporter;
+            if (ti == null)
+            {
+                Debug.LogWarning($"[GameSceneHudBuilder] 텍스처 임포터를 찾지 못했습니다: {UiBackgroundPath}");
+                return;
+            }
+            bool changed = false;
+            if (ti.textureType != TextureImporterType.Sprite) { ti.textureType = TextureImporterType.Sprite; changed = true; }
+            if (ti.spriteImportMode != SpriteImportMode.Single) { ti.spriteImportMode = SpriteImportMode.Single; changed = true; }
+            if (ti.spriteBorder != UiBackgroundBorder) { ti.spriteBorder = UiBackgroundBorder; changed = true; }
+
+            var settings = new TextureImporterSettings();
+            ti.ReadTextureSettings(settings);
+            if (settings.spriteMeshType != SpriteMeshType.FullRect)
+            {
+                settings.spriteMeshType = SpriteMeshType.FullRect;
+                ti.SetTextureSettings(settings);
+                changed = true;
+            }
+            if (changed)
+            {
+                ti.SaveAndReimport();
+                Debug.Log($"[GameSceneHudBuilder] ui_bg 9-slice 임포트 교정 완료(border {UiBackgroundBorder}).");
+            }
         }
 
         /// <summary>아이콘 텍스처를 Sprite/Single 모드로 교정한다(이미 그렇다면 무시).</summary>

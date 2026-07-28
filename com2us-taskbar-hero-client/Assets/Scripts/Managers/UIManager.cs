@@ -24,6 +24,7 @@ namespace TaskbarHero.Client.Managers
             OfflineReward,
             Mail,
             Attendance,
+            Trade,
         }
 
         public static UIManager Instance { get; private set; }
@@ -49,6 +50,8 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private GameObject mailPanelPrefab;
         [Tooltip("Assets/Prefabs/UI/AttendancePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject attendancePanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/TradePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject tradePanelPrefab;
 
         [Header("시작 설정")]
         [Tooltip("Start 시 자동으로 표시할 패널. 자동 표시를 원치 않으면 비활성화한다.")]
@@ -223,6 +226,22 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
+        /// <summary>거래소 패널을 표시한다.</summary>
+        public void ShowTrade() => Show(PanelType.Trade);
+
+        /// <summary>거래소 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleTrade()
+        {
+            if (Current == PanelType.Trade)
+            {
+                Hide(PanelType.Trade);
+            }
+            else
+            {
+                Show(PanelType.Trade);
+            }
+        }
+
         /// <summary>파티 편성 패널을 표시한다.</summary>
         public void ShowParty() => Show(PanelType.Party);
 
@@ -340,6 +359,8 @@ namespace TaskbarHero.Client.Managers
                     return mailPanelPrefab;
                 case PanelType.Attendance:
                     return attendancePanelPrefab;
+                case PanelType.Trade:
+                    return tradePanelPrefab;
                 default:
                     return null;
             }

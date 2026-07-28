@@ -14,7 +14,8 @@ namespace TaskbarHero.ClientEditor
     /// BattleDevScene에서 전투를 개발한 뒤 이 빌더를 재실행하면 GameScene이 그 구성을 그대로 따라간다.
     /// - 완성된 <see cref="BattleDevController"/>(파티·스킬·이펙트 포함)를 복사하고 서버 구동 모드로 전환.
     /// - BattleDevScene의 비(非)개발용 씬 구성을 복제: Global Light 2D(URP 2D 조명), 스폰 앵커(PlayerSpawn·MonsterSpawn),
-    ///   스크롤 배경 설정.
+    ///   스크롤 배경 설정. 단 배경·스폰은 <see cref="GameSceneBattleLiftY"/>만큼 위로 올려 화면 맨 아래에
+    ///   하단 HUD 아이콘 줄이 들어갈 빈 띠를 남긴다(카메라는 BattleDevScene과 동일하게 유지).
     /// - <see cref="DungeonBattleFlow"/>를 붙이고 monster_{code}.prefab 맵을 채운다.
     /// - <b>개발용 UI는 제외한다</b>: 초상화·아군 스킬 슬롯·아군 HP바(SkillCooldownUI)와 적 HP바·하네스 IMGUI는
     ///   GameScene에 복제하지 않는다(serverMode에서 <c>OnGUI</c>가 비활성, SkillUICanvas는 미복제).
@@ -27,6 +28,15 @@ namespace TaskbarHero.ClientEditor
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string MonsterDir = "Assets/Prefabs/Character/Monster";
         private const string LightGoName = "Global Light 2D";
+
+        /// <summary>
+        /// GameScene 전용 전투 띠 상향 오프셋(월드 단위). BattleDevScene은 배경 띠가 화면 바닥에 붙어 있는데,
+        /// GameScene은 그 자리에 하단 HUD 아이콘 줄이 놓이므로 배경·스폰을 통째로 이만큼 위로 올려
+        /// 화면 맨 아래에 아이콘 줄이 들어갈 빈 띠를 만든다(카메라는 그대로 두어 시야는 유지).
+        /// GameScene 창(정사각형) 기준 1 월드 단위 ≈ 캔버스 180 단위 → 1.2는 약 216 단위,
+        /// 아이콘 줄(하단 40~190)보다 위에서 배경이 시작된다.
+        /// </summary>
+        private const float GameSceneBattleLiftY = 1.2f;
 
         [MenuItem("TaskbarHero/UI/던전 전투 배선")]
         public static void Build()
@@ -41,13 +51,16 @@ namespace TaskbarHero.ClientEditor
             }
 
             // 스폰 앵커 위치(없으면 컨트롤러 폴백과 동일한 기본값).
+            // GameScene은 하단 HUD 자리를 비우기 위해 배경과 함께 통째로 위로 올린다(GameSceneBattleLiftY).
             Vector3 playerSpawnPos = src.playerSpawn != null ? src.playerSpawn.position : new Vector3(-4.5f, -1.6f, 0f);
             Vector3 monsterSpawnPos = src.monsterSpawn != null ? src.monsterSpawn.position : new Vector3(2.5f, -1.6f, 0f);
+            playerSpawnPos.y += GameSceneBattleLiftY;
+            monsterSpawnPos.y += GameSceneBattleLiftY;
 
             // 스크롤 배경 설정(높이/중심/정렬/타일/하단 노출 비율).
             var srcBg = Object.FindAnyObjectByType<ScrollingBackground>(FindObjectsInactive.Include);
             float bgWorldHeight = srcBg != null ? srcBg.worldHeight : 8f;
-            float bgCenterY = srcBg != null ? srcBg.centerY : 1f;
+            float bgCenterY = (srcBg != null ? srcBg.centerY : 1f) + GameSceneBattleLiftY;
             int bgSorting = srcBg != null ? srcBg.sortingOrder : -100;
             int bgTiles = srcBg != null ? srcBg.tileCount : 3;
             float bgVisibleFrac = srcBg != null ? srcBg.visibleBottomFrac : 1f / 3f;

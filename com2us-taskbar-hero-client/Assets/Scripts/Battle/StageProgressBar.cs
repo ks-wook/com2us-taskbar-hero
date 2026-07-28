@@ -1,10 +1,11 @@
 using UnityEngine;
 using UnityEngine.UI;
+using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.Battle
 {
     /// <summary>
-    /// 화면 우측 하단에 현재 스테이지 진행도(처치 몬스터 ÷ 전체 몬스터)를 표시하는 진행 바.
+    /// <b>던전 배경 띠의 우측 하단</b>에 현재 스테이지 진행도(처치 몬스터 ÷ 전체 몬스터)를 표시하는 진행 바.
     /// 스테이지 입장 시 0%에서 시작해 몬스터를 처치할수록 상승하고, 전멸(클리어) 시 100%가 된다.
     /// 현재 진행 위치는 바 아래의 위쪽 화살표(straight_up)가 따라가며 가리키고, 바 우측 끝에는
     /// 보스(boss) 아이콘을 두어 "어디까지 왔는지 → 목표(보스)"가 한눈에 읽히게 한다(스프라이트 미배선 시 생략).
@@ -15,16 +16,18 @@ namespace TaskbarHero.Client.Battle
     /// </summary>
     public class StageProgressBar : MonoBehaviour
     {
-        // HUD 메뉴 버튼(편성·스테이지·가방, 우하단 y 40~190 영역)을 가리지 않도록
-        // 그 아래 최하단 영역(바 y 22~40 + 아래 화살표 y 0~20)에 들어가는 작은 크기로 유지한다.
-        private const float BarWidth = 220f;
-        private const float BarHeight = 18f;
-        private const float FillInset = 2f;   // 배경 테두리 안쪽 여백
-        private const float ArrowSize = 30f;  // 진행 위치 화살표 크기
-        private const float BossSize = 44f;   // 우측 끝 보스(목표) 아이콘 크기
-        // 화살표 y 오프셋(바 하단 기준): 화살표 하단이 화면 바닥(y=0)에 닿도록 = ArrowSize - 바 하단 높이(22).
-        // 커진 화살표의 위 꼭짓점은 트랙 안쪽으로 살짝 파고들어 현재 위치를 가리킨다.
-        private const float ArrowYOffset = ArrowSize - 22f;
+        // 던전 배경 띠(캔버스 y 216~576) 안쪽 우측 하단에 놓는다. 화면 최하단은 하단 UI(아이콘 줄 +
+        // ui_bg 배경, y 10~196)가 쓰므로 그 위로 올려 겹치지 않게 하고, 눈에 들어오도록 크게 잡는다.
+        private const float BarWidth = 420f;
+        private const float BarHeight = 34f;
+        private const float BarRightMargin = -32f; // 화면 우측에서 띄우는 거리
+        private const float BarBottomY = 270f;     // 바 하단 y(아래 화살표까지 던전 띠 안에 들어가는 높이)
+        private const float FillInset = 3f;        // 배경 테두리 안쪽 여백
+        private const float ArrowSize = 46f;       // 진행 위치 화살표 크기
+        private const float BossSize = 64f;        // 우측 끝 보스(목표) 아이콘 크기
+        // 화살표 y 오프셋(바 하단 기준, pivot=위 꼭짓점): 양수면 위 꼭짓점이 트랙 안쪽으로 파고들어
+        // 현재 위치를 가리키고, 몸통은 바 아래로 내려온다(아래 끝 = 바 하단 − ArrowSize + 이 값).
+        private const float ArrowYOffset = 8f;
 
         private static StageProgressBar s_instance;
 
@@ -97,7 +100,7 @@ namespace TaskbarHero.Client.Battle
 
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 20; // HUD(10) 위, 패널(100) 아래
+            canvas.sortingOrder = UiSortingOrder.StageProgress; // HUD 위, 전투 연출·패널 아래
             var scaler = gameObject.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080f, 1920f);
@@ -110,7 +113,7 @@ namespace TaskbarHero.Client.Battle
             var rootRt = (RectTransform)_root.transform;
             rootRt.anchorMin = rootRt.anchorMax = new Vector2(1f, 0f);
             rootRt.pivot = new Vector2(1f, 0f);
-            rootRt.anchoredPosition = new Vector2(-24f, 22f); // HUD 버튼(y 40~) 아래, 화살표가 바 밑(y 0~20)에 들어갈 자리 확보
+            rootRt.anchoredPosition = new Vector2(BarRightMargin, BarBottomY); // 던전 배경 띠 안쪽 우측 하단
             rootRt.sizeDelta = new Vector2(BarWidth, BarHeight);
 
             // 배경(어두운 트랙)
@@ -132,7 +135,7 @@ namespace TaskbarHero.Client.Battle
             _label = txtGo.GetComponent<Text>();
             _label.font = font;
             _label.text = "0%";
-            _label.fontSize = 14;
+            _label.fontSize = 24;
             _label.fontStyle = FontStyle.Bold;
             _label.alignment = TextAnchor.MiddleCenter;
             _label.color = Color.black;
