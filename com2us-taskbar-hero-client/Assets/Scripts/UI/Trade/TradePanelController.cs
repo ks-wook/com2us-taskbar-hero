@@ -43,7 +43,8 @@ namespace TaskbarHero.Client.UI.Trade
         private const float TabGap = 12f;         // 탭 사이 간격
         private const float RowHeight = 96f;
         private const int PageSize = 8;          // 한 페이지에 보여줄 등록 수(서버 상한 이하)
-        private const int GoldCurrencyType = 1;
+        private const int GoldCurrencyType = 1;  // 재화 타입 1 = 골드
+        private const int GoldItemCode = 1;      // item_master 골드 코드(아이콘 item_1)
         private const float PriceMinRate = 0.8f; // 기준가 ±20%(기획서 §3) — 안내용, 최종 판정은 서버
         private const float PriceMaxRate = 1.2f;
 
@@ -92,6 +93,8 @@ namespace TaskbarHero.Client.UI.Trade
         [SerializeField] private Button _registerButton;
         [SerializeField] private Text _sellHintText;
         [SerializeField] private Text _messageText;
+        [SerializeField] private Image _goldIcon;   // 보유 골드 아이콘(item_1, 런타임 배정)
+        [SerializeField] private Text _goldText;    // 보유 골드량
 
         private Font _font;
         private bool _busy;
@@ -133,6 +136,7 @@ namespace TaskbarHero.Client.UI.Trade
             if (Application.isPlaying && AlreadyBuilt)
             {
                 SetMessage(string.Empty);
+                RefreshGold();
                 ShowListTab(); // 열 때는 항상 구매 가능 목록부터(첫 페이지 조회 포함)
             }
         }
@@ -150,6 +154,7 @@ namespace TaskbarHero.Client.UI.Trade
             BuildDim();
             var panel = BuildPanel();
             BuildHeader(panel);
+            BuildGoldArea(panel); // 보유 골드 표시(좌상단, 인벤토리와 동일 규격)
             BuildTabs(panel);
             BuildListTab(panel);
             BuildSellTab(panel);
@@ -231,6 +236,39 @@ namespace TaskbarHero.Client.UI.Trade
                 Stretch(xt.rectTransform);
             }
             _closeButton = close.gameObject.AddComponent<Button>();
+        }
+
+        /// <summary>좌상단 보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 인벤토리 패널과 같은 규격·표기이며,
+        /// 아이콘·수량은 런타임에 세션 재화에서 채운다(<see cref="RefreshGold"/>).
+        /// 탭 줄(y 96~162) 위에 놓이도록 높이를 84까지만 쓴다.</summary>
+        private void BuildGoldArea(RectTransform panel)
+        {
+            var area = NewImage("GoldArea", panel, new Color(0f, 0f, 0f, 0.35f));
+            var art = area.rectTransform;
+            art.anchorMin = art.anchorMax = new Vector2(0f, 1f);
+            art.pivot = new Vector2(0f, 1f);
+            art.anchoredPosition = new Vector2(36f, -28f);
+            art.sizeDelta = new Vector2(280f, 56f);
+            area.raycastTarget = false;
+
+            _goldIcon = NewImage("GoldIcon", art, Color.white); // 스프라이트는 RefreshGold에서 item_1로 배정
+            _goldIcon.raycastTarget = false;
+            _goldIcon.preserveAspect = true;
+            _goldIcon.enabled = false; // 아이콘을 찾기 전에는 빈 사각형을 보이지 않게
+            var irt = _goldIcon.rectTransform;
+            irt.anchorMin = irt.anchorMax = new Vector2(0f, 0.5f);
+            irt.pivot = new Vector2(0f, 0.5f);
+            irt.anchoredPosition = new Vector2(8f, 0f);
+            irt.sizeDelta = new Vector2(44f, 44f);
+
+            _goldText = NewText("GoldText", art, "0", 32, TextAnchor.MiddleLeft);
+            _goldText.fontStyle = FontStyle.Bold;
+            _goldText.color = new Color(1f, 0.90f, 0.55f);
+            var grt = _goldText.rectTransform;
+            grt.anchorMin = grt.anchorMax = new Vector2(0f, 0.5f);
+            grt.pivot = new Vector2(0f, 0.5f);
+            grt.anchoredPosition = new Vector2(62f, 0f);
+            grt.sizeDelta = new Vector2(206f, 44f);
         }
 
         /// <summary>상단 탭 3개: [판매 목록] [판매 등록] [판매 현황]. 가운데 정렬로 나란히 놓는다.</summary>
@@ -988,6 +1026,7 @@ namespace TaskbarHero.Client.UI.Trade
                     Session.RaiseInventoryChanged(); // 골드·아이템 표시(HUD·패널) 갱신 트리거
                 }
                 _busy = false;
+                RefreshGold(); // 구매·등록·취소로 골드가 바뀌었을 수 있다
                 MailNotifier.Refresh(); // 판매 대금·반송 메일이 도착할 수 있으므로 알림 갱신
                 RequestList();
                 if (_sellTabRoot != null && _sellTabRoot.activeSelf)
@@ -1024,6 +1063,37 @@ namespace TaskbarHero.Client.UI.Trade
             if (_messageText != null)
             {
                 _messageText.text = message ?? string.Empty;
+            }
+        }
+
+        /// <summary>보유 골드량과 골드 아이콘(item_1)을 세션 재화에서 갱신한다(인벤토리 패널과 동일 규칙).</summary>
+        private void RefreshGold()
+        {
+            long gold = 0;
+            var currencies = Session.GameData != null ? Session.GameData.currencies : null;
+            if (currencies != null)
+            {
+                foreach (var c in currencies)
+                {
+                    if (c != null && c.currencyType == GoldCurrencyType)
+                    {
+                        gold = c.amount;
+                    }
+                }
+            }
+            if (_goldText != null)
+            {
+                _goldText.text = gold.ToString("N0");
+            }
+            if (_goldIcon != null && _goldIcon.sprite == null)
+            {
+                var iconDb = ItemIconDatabase.Load();
+                var sp = iconDb != null ? iconDb.Get(GoldItemCode) : null;
+                if (sp != null)
+                {
+                    _goldIcon.sprite = sp;
+                    _goldIcon.enabled = true;
+                }
             }
         }
 

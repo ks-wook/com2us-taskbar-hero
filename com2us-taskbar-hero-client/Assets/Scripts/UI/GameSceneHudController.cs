@@ -27,6 +27,12 @@ namespace TaskbarHero.Client.UI
         [Tooltip("하단 아이콘 줄 뒷배경 프레임(Assets/Art/UI/ui_bg.png, 9-slice). 없으면 배경 없이 아이콘만 표시.")]
         [SerializeField] private Sprite uiBackgroundSprite;
 
+        [Header("ESC 메뉴 리소스 (Assets/Art/UI/System — 에디터 빌더가 배선)")]
+        [Tooltip("ESC 메뉴 패널 배경(system_bg.png, 9-slice). 없으면 단색 패널.")]
+        [SerializeField] private Sprite systemBackgroundSprite;
+        [Tooltip("ESC 메뉴 버튼 배경(system_slot.png, 9-slice). 없으면 단색 버튼.")]
+        [SerializeField] private Sprite systemSlotSprite;
+
         [Header("알림(레드닷)")]
         [Tooltip("미수령 보상 메일 확인을 위한 우편함 재조회 주기(초). 0 이하면 진입 시 1회만 조회한다.")]
         [SerializeField] private float mailPollIntervalSeconds = 60f;
@@ -52,6 +58,11 @@ namespace TaskbarHero.Client.UI
         // 9-slice 원본(2048×731)의 테두리(상하 250px)가 두꺼워 그대로 쓰면 바 높이(186)를 넘는다
         // → 배율로 줄여 쓴다(250/4 = 62.5씩, 상하 합 125 < 186).
         private const float UiBackPixelsPerUnitMultiplier = 4f;
+
+        // ESC 메뉴 버튼: system_slot 원본(2048×731) 테두리 상하 128px → 배율 4로 32씩(합 64 < 100).
+        private const float EscButtonWidth = 440f;
+        private const float EscButtonHeight = 100f;
+        private const float SystemSlotPixelsPerUnitMultiplier = 4f;
 
         private GameObject _escMenuRoot; // ESC로 토글하는 메뉴(타이틀 복귀)
 
@@ -391,10 +402,18 @@ namespace TaskbarHero.Client.UI
             prt.pivot = new Vector2(0.5f, 0.5f);
             prt.sizeDelta = new Vector2(560f, 540f);
             prt.anchoredPosition = Vector2.zero;
-            panel.GetComponent<Image>().color = new Color(0.10f, 0.12f, 0.18f, 0.98f);
+            var panelImg = panel.GetComponent<Image>();
+            panelImg.color = new Color(0.10f, 0.12f, 0.18f, 0.98f); // 아트 미배선 시 단색 폴백
+            if (systemBackgroundSprite != null)
+            {
+                panelImg.sprite = systemBackgroundSprite;
+                panelImg.type = Image.Type.Sliced;
+                panelImg.color = Color.white;
+            }
 
             var title = MakeMenuText(font, panel.transform, "메뉴", 48, new Vector2(0f, 200f), 480f);
             title.fontStyle = FontStyle.Bold;
+            title.color = new Color(1f, 0.92f, 0.72f); // 나무 배경 위 금색 톤
 
             MakeMenuButton(font, panel.transform, "타이틀로 돌아가기", new Vector2(0f, 70f), OnReturnToTitle);
             MakeMenuButton(font, panel.transform, "계속하기", new Vector2(0f, -50f), HideEscMenu);
@@ -481,8 +500,10 @@ namespace TaskbarHero.Client.UI
             return t;
         }
 
-        /// <summary>ESC 메뉴용 중앙 버튼(라벨 텍스트를 버튼 전체에 채움)을 만든다.</summary>
-        private static void MakeMenuButton(Font font, Transform parent, string label, Vector2 pos,
+        /// <summary>ESC 메뉴용 중앙 버튼(라벨 텍스트를 버튼 전체에 채움)을 만든다.
+        /// 배경은 system_slot 9-slice를 쓰고, 원본 테두리(상하 128px)가 버튼 높이(100)를 넘으므로
+        /// <see cref="SystemSlotPixelsPerUnitMultiplier"/>로 줄여 그린다.</summary>
+        private void MakeMenuButton(Font font, Transform parent, string label, Vector2 pos,
             UnityEngine.Events.UnityAction onClick)
         {
             var go = new GameObject($"{label}Button", typeof(RectTransform), typeof(Image));
@@ -491,10 +512,19 @@ namespace TaskbarHero.Client.UI
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = pos;
-            rt.sizeDelta = new Vector2(440f, 100f);
-            go.GetComponent<Image>().color = new Color(0.25f, 0.28f, 0.4f, 1f);
+            rt.sizeDelta = new Vector2(EscButtonWidth, EscButtonHeight);
+            var img = go.GetComponent<Image>();
+            img.color = new Color(0.25f, 0.28f, 0.4f, 1f); // 아트 미배선 시 단색 폴백
+            if (systemSlotSprite != null)
+            {
+                img.sprite = systemSlotSprite;
+                img.type = Image.Type.Sliced;
+                img.pixelsPerUnitMultiplier = SystemSlotPixelsPerUnitMultiplier;
+                img.color = Color.white;
+            }
 
             var t = MakeMenuText(font, go.transform, label, 36, Vector2.zero, 420f);
+            t.color = new Color(1f, 0.94f, 0.80f); // 짙은 남색 슬롯 위 밝은 미색
             var trt = (RectTransform)t.transform;
             trt.anchorMin = Vector2.zero;
             trt.anchorMax = Vector2.one;

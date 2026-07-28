@@ -20,6 +20,13 @@ namespace TaskbarHero.ClientEditor
         private const string UiBackgroundPath = "Assets/Art/UI/ui_bg.png";
         // ui_bg(2048×731) 9-slice 경계: 나무 테두리 + 모서리 금장식이 온전히 남는 크기(L,B,R,T).
         private static readonly Vector4 UiBackgroundBorder = new Vector4(230f, 250f, 230f, 250f);
+
+        // ESC 메뉴 아트(Assets/Art/UI/System).
+        private const string SystemBackgroundPath = "Assets/Art/UI/System/system_bg.png";
+        private const string SystemSlotPath = "Assets/Art/UI/System/system_slot.png";
+        // system_bg(512×384): 나무 테두리 + 모서리 장식이 남는 크기. system_slot(2048×731)은 ui_bg와 같은 형태.
+        private static readonly Vector4 SystemBackgroundBorder = new Vector4(30f, 30f, 30f, 30f);
+        private static readonly Vector4 SystemSlotBorder = new Vector4(191f, 128f, 191f, 128f);
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
 
         [MenuItem("TaskbarHero/UI/게임 HUD 아이콘·씬 배선")]
@@ -31,7 +38,9 @@ namespace TaskbarHero.ClientEditor
             ReimportSingle("인벤토리");
             ReimportSingle("출석부");
             ReimportSingleAt(MailIconPath);
-            ImportUiBackground();
+            ImportSliced(UiBackgroundPath, UiBackgroundBorder);
+            ImportSliced(SystemBackgroundPath, SystemBackgroundBorder);
+            ImportSliced(SystemSlotPath, SystemSlotBorder);
             AssetDatabase.Refresh();
 
             var scene = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
@@ -50,27 +59,29 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("inventoryIcon").objectReferenceValue = LoadSprite("인벤토리");
             so.FindProperty("attendanceIcon").objectReferenceValue = LoadSpriteAt(AttendanceIconPath);
             so.FindProperty("uiBackgroundSprite").objectReferenceValue = LoadSpriteAt(UiBackgroundPath);
+            so.FindProperty("systemBackgroundSprite").objectReferenceValue = LoadSpriteAt(SystemBackgroundPath);
+            so.FindProperty("systemSlotSprite").objectReferenceValue = LoadSpriteAt(SystemSlotPath);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
-            Debug.Log("[GameSceneHudBuilder] 완료: GameScene HUD(햄버거·출석부·메일·편성·스테이지·가방) 아이콘 배선.");
+            Debug.Log("[GameSceneHudBuilder] 완료: GameScene HUD 아이콘 + 하단 배경 + ESC 메뉴 아트 배선.");
         }
 
-        /// <summary>하단 UI 뒷배경(ui_bg)을 9-slice로 쓸 수 있게 교정한다
-        /// (Sprite/Single · Full Rect · Border). Full Rect가 아니면 Sliced 렌더가 깨진다.</summary>
-        private static void ImportUiBackground()
+        /// <summary>프레임 텍스처를 9-slice로 쓸 수 있게 교정한다(Sprite/Single · Full Rect · Border).
+        /// Full Rect가 아니면(기본 Tight) Sliced 렌더가 깨지고, Multiple 모드면 스프라이트를 통째로 못 쓴다.</summary>
+        private static void ImportSliced(string path, Vector4 border)
         {
-            var ti = AssetImporter.GetAtPath(UiBackgroundPath) as TextureImporter;
+            var ti = AssetImporter.GetAtPath(path) as TextureImporter;
             if (ti == null)
             {
-                Debug.LogWarning($"[GameSceneHudBuilder] 텍스처 임포터를 찾지 못했습니다: {UiBackgroundPath}");
+                Debug.LogWarning($"[GameSceneHudBuilder] 텍스처 임포터를 찾지 못했습니다: {path}");
                 return;
             }
             bool changed = false;
             if (ti.textureType != TextureImporterType.Sprite) { ti.textureType = TextureImporterType.Sprite; changed = true; }
             if (ti.spriteImportMode != SpriteImportMode.Single) { ti.spriteImportMode = SpriteImportMode.Single; changed = true; }
-            if (ti.spriteBorder != UiBackgroundBorder) { ti.spriteBorder = UiBackgroundBorder; changed = true; }
+            if (ti.spriteBorder != border) { ti.spriteBorder = border; changed = true; }
 
             var settings = new TextureImporterSettings();
             ti.ReadTextureSettings(settings);
@@ -83,7 +94,7 @@ namespace TaskbarHero.ClientEditor
             if (changed)
             {
                 ti.SaveAndReimport();
-                Debug.Log($"[GameSceneHudBuilder] ui_bg 9-slice 임포트 교정 완료(border {UiBackgroundBorder}).");
+                Debug.Log($"[GameSceneHudBuilder] 9-slice 임포트 교정: {System.IO.Path.GetFileName(path)} (border {border})");
             }
         }
 

@@ -490,6 +490,8 @@ MonoBehaviour:
   attendanceIcon: {fileID: 21300000, guid: ab51841b0e3ef8a41bb6f10fe2cd74bd, type: 3}
   tradeIcon: {fileID: 21300000, guid: a851c259d51f9204fac1993594ca9f4f, type: 3}
   uiBackgroundSprite: {fileID: 21300000, guid: 5a7d925cc2fedcf4383acbe2dc857cba, type: 3}
+  systemBackgroundSprite: {fileID: 21300000, guid: bc0d2e30484693b4d8076bb0020cb4f3, type: 3}
+  systemSlotSprite: {fileID: 21300000, guid: 0dd82755c31b84e4099a16001ad10f6b, type: 3}
   mailPollIntervalSeconds: 60
   autoOpenAttendance: 1
 --- !u!4 &499822581
