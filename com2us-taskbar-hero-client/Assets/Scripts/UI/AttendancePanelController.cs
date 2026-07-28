@@ -8,26 +8,42 @@ using TaskbarHero.Common.Dto;
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// 출석부 보상 패널(attendance 기획서 §2·§5). 열릴 때마다 서버에서 이번달 출석 현황을 조회해
-    /// 1~31일 달력 칸에 그날의 보상(공용 아이템 슬롯)과 수령 여부(체크 표시)를 그리고,
+    /// 출석부 보상 패널(attendance 기획서 §2·§5). 열릴 때마다 서버에서 이번달 출석 진행도를 조회해
+    /// <b>1~30일차 보상 사다리</b>에 각 일차의 보상(공용 아이템 슬롯)과 수령 여부(체크 표시)를 그리고,
     /// '오늘 보상 받기'로 오늘자 보상을 획득한다(즉시 지급이 아니라 우편함으로 발송됨을 안내).
+    /// <b>일차는 날짜(day-of-month)가 아니라 이번달 누적 출석 순번</b>이다 — 월중 첫 접속이어도 1일차부터
+    /// 순서대로 받으며, 앞에서부터 채워진다. 수령 가능 여부는 서버가 판정한 <c>canClaim</c>을 따른다
+    /// (30일차까지 모두 받으면 그 달에는 더 받을 수 없다 — <c>AttendanceAllClaimed(9002)</c>).
     /// 오늘 처음 받는 순간에만 그 칸의 체크 표시가 작아졌다가 원래 크기로 돌아오는 연출을 재생한다
     /// (<see cref="ItemSlotView.PlayClaimedPopAnimation"/>). 이미 수령한 과거 일자는 연출 없이 체크만 표시한다.
-    /// 정적 계층(캔버스·패널·헤더·달력 그리드 31칸·버튼)은 에디터 빌더(AttendanceUiBuilder)가 프리팹에 굽는다.
+    /// 외형은 <c>Assets/Art/UI/Attendance</c>의 전용 아트를 쓴다 — 게시판 배경 <c>attendance_board</c>(상단 리본이
+    /// 제목 역할), 사다리 칸 슬롯 프레임 <c>attendance_item_slot</c>, 수령 표시 <c>check</c>.
+    /// 정적 계층(캔버스·패널·헤더·보상 사다리 30칸·버튼)은 에디터 빌더(AttendanceUiBuilder)가 프리팹에 굽고,
+    /// 구워진 칸은 런타임에 <see cref="RebindCells"/>가 목록에 다시 연결한다.
     /// </summary>
     public class AttendancePanelController : MonoBehaviour
     {
         private const float CanvasRefWidth = 1080f;
         private const float CanvasRefHeight = 1920f;
-        private const int TotalDays = 31;
-        private const int Columns = 7;
-        private const float CellWidth = 108f;
-        private const float CellHeight = 126f;
-        private const float CellSpacing = 10f;
+        private const int TotalDays = 30; // 보상 사다리 길이(1~30일차, attendance_master)
+        private const int Columns = 6;    // 6열 × 5행 = 30칸 — 사다리 길이와 정확히 맞아 빈 칸이 남지 않는다
+
+        // 패널 크기는 게시판 아트(attendance_board 546x484)의 비율을 유지한다.
+        private const float PanelWidth = 1000f;
+        private const float PanelHeight = 886f;
+        private const float BoardContentTop = 168f;   // 상단 리본(DAILY ATTENDANCE) + 오늘 날짜 줄 아래
+        private const float CellWidth = 130f;
+        private const float CellHeight = 98f;
+        private const float CellSpacing = 8f;
+        private const float SlotSize = 74f;
 
         [Header("UI 리소스 (에디터 빌더가 배선)")]
-        [Tooltip("공용 아이템 슬롯 프리팹(Assets/Prefabs/UI/ItemSlot). 일자별 보상 표시에 사용하며, 없으면 단색 칸 폴백.")]
+        [Tooltip("공용 아이템 슬롯 프리팹(Assets/Prefabs/UI/ItemSlot). 일차별 보상 표시에 사용하며, 없으면 단색 칸 폴백.")]
         [SerializeField] private GameObject _itemSlotPrefab;
+        [Tooltip("출석부 게시판 배경(Assets/Art/UI/Attendance/attendance_board). 없으면 단색 패널.")]
+        [SerializeField] private Sprite _boardSprite;
+        [Tooltip("출석부 사다리 칸 슬롯 프레임(Assets/Art/UI/Attendance/attendance_item_slot). 없으면 공용 슬롯 프레임 유지.")]
+        [SerializeField] private Sprite _slotFrameSprite;
         [Tooltip("받기 버튼 배경(Assets/Art/UI/pixel_rpg_button). 없으면 단색 버튼.")]
         [SerializeField] private Sprite _buttonSprite;
 
@@ -42,13 +58,13 @@ namespace TaskbarHero.Client.UI
 
         private Font _font;
         private bool _busy;
-        private int _todayDay;
-        private bool _todayClaimed;
+        private int _todayDay;   // 오늘 해당하는 출석 일차(1~30). 이번 달 사다리를 다 채웠으면 0
+        private bool _canClaim;  // 서버 판정 수령 가능 여부(오늘 미수령 && 남은 일차 있음)
         private readonly List<DayCell> _cells = new List<DayCell>();
 
         private bool AlreadyBuilt => _gridContent != null;
 
-        /// <summary>달력 칸 1개(1~31일). 정적 계층 생성 시 31칸을 미리 만들어두고, 조회 결과로 채운다.</summary>
+        /// <summary>보상 사다리 칸 1개(1~30일차). 정적 계층 생성 시 30칸을 미리 만들어두고, 조회 결과로 채운다.</summary>
         private class DayCell
         {
             public int day;
@@ -60,11 +76,50 @@ namespace TaskbarHero.Client.UI
         private void Awake()
         {
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            if (!AlreadyBuilt)
+            if (AlreadyBuilt)
+            {
+                RebindCells(); // 프리팹에 구워진 30칸을 런타임 목록에 다시 연결
+            }
+            else
             {
                 Construct(); // 폴백(프리팹 미배선 시)
             }
             WireRuntime();
+        }
+
+        /// <summary>
+        /// 프리팹에 구워진 사다리 칸(Day01~Day30)을 런타임 <see cref="_cells"/> 목록에 다시 연결한다.
+        /// 칸 오브젝트는 프리팹에 <b>비활성</b>으로 저장되고 조회 결과가 있는 날만 켜지는데,
+        /// 목록을 채우는 <see cref="BuildGrid"/>는 에디터 빌드(<see cref="Construct"/>) 때만 실행된다.
+        /// 이 재연결이 없으면 런타임에 목록이 비어 <see cref="FindCell"/>이 항상 null을 돌려주고,
+        /// 결과적으로 어떤 칸도 켜지지 않아 보상 목록이 하나도 보이지 않는다.
+        /// </summary>
+        private void RebindCells()
+        {
+            _cells.Clear();
+            for (int i = 0; i < _gridContent.childCount; i++)
+            {
+                var cellGo = _gridContent.GetChild(i).gameObject;
+                var dayLabel = cellGo.transform.Find("DayLabel");
+                _cells.Add(new DayCell
+                {
+                    day = ParseDay(cellGo.name, i),
+                    root = cellGo,
+                    dayLabel = dayLabel != null ? dayLabel.GetComponent<Text>() : null,
+                    slotView = cellGo.GetComponentInChildren<ItemSlotView>(true),
+                });
+            }
+        }
+
+        /// <summary>칸 오브젝트 이름("Day07")에서 일자를 얻는다. 이름이 규약과 다르면 자식 순서(1부터)를 쓴다.</summary>
+        private static int ParseDay(string cellName, int index)
+        {
+            if (cellName != null && cellName.StartsWith("Day") &&
+                int.TryParse(cellName.Substring(3), out int day))
+            {
+                return day;
+            }
+            return index + 1;
         }
 
         /// <summary>패널이 표시될 때마다 이번달 출석 현황을 새로 조회한다.</summary>
@@ -77,7 +132,7 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>에디터 빌드 전용: 전체 정적 계층(달력 31칸 포함)을 생성해 프리팹에 굽는다.</summary>
+        /// <summary>에디터 빌드 전용: 전체 정적 계층(사다리 30칸 포함)을 생성해 프리팹에 굽는다.</summary>
         public void EditorConstruct() => Construct();
 
         // ── 정적 계층 구성 ──
@@ -126,48 +181,63 @@ namespace TaskbarHero.Client.UI
             _dimButton.transition = Selectable.Transition.None;
         }
 
-        /// <summary>출석부 패널 본체(전용 배경 아트가 없어 단색 패널).</summary>
+        /// <summary>출석부 패널 본체. 게시판 아트(attendance_board)를 원본 비율 그대로 배경으로 쓰고,
+        /// 아트가 없으면 기존 단색 패널로 폴백한다.</summary>
         private RectTransform BuildPanel()
         {
             var img = NewImage("PanelRoot", (RectTransform)transform, new Color(0.10f, 0.12f, 0.18f, 0.98f));
+            if (_boardSprite != null)
+            {
+                img.sprite = _boardSprite;
+                img.type = Image.Type.Simple;
+                img.color = Color.white;
+            }
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(900f, 1040f);
+            rt.sizeDelta = new Vector2(PanelWidth, PanelHeight);
             rt.anchoredPosition = Vector2.zero;
             return rt;
         }
 
+        /// <summary>헤더: 오늘 날짜 줄과 닫기 버튼. 제목은 게시판 아트 상단 리본("DAILY ATTENDANCE")이
+        /// 대신하므로 별도 텍스트를 두지 않는다(아트가 없을 때만 제목 텍스트를 표시).</summary>
         private void BuildHeader(RectTransform panel)
         {
-            var title = NewText("Title", panel, "출석부", 44, TextAnchor.MiddleCenter);
-            title.fontStyle = FontStyle.Bold;
-            var trt = title.rectTransform;
-            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
-            trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -26f);
-            trt.sizeDelta = new Vector2(400f, 56f);
+            if (_boardSprite == null)
+            {
+                var title = NewText("Title", panel, "출석부", 44, TextAnchor.MiddleCenter);
+                title.fontStyle = FontStyle.Bold;
+                var trt = title.rectTransform;
+                trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
+                trt.pivot = new Vector2(0.5f, 1f);
+                trt.anchoredPosition = new Vector2(0f, -26f);
+                trt.sizeDelta = new Vector2(400f, 56f);
+            }
 
+            // 오늘 날짜 줄 — 리본 아래 게시판 안쪽 상단. 게시판의 어두운 갈색 위라 밝은 미색으로 쓴다.
             _todayText = NewText("TodayText", panel, string.Empty, 26, TextAnchor.MiddleCenter);
-            _todayText.color = new Color(1f, 1f, 1f, 0.75f);
+            _todayText.color = new Color(1f, 0.93f, 0.78f, 0.9f);
             var ttrt = _todayText.rectTransform;
             ttrt.anchorMin = ttrt.anchorMax = new Vector2(0.5f, 1f);
             ttrt.pivot = new Vector2(0.5f, 1f);
-            ttrt.anchoredPosition = new Vector2(0f, -80f);
-            ttrt.sizeDelta = new Vector2(700f, 36f);
+            ttrt.anchoredPosition = new Vector2(0f, -112f);
+            ttrt.sizeDelta = new Vector2(600f, 36f);
 
-            var close = NewImage("CloseButton", panel, new Color(0.25f, 0.28f, 0.4f, 1f));
+            // 닫기 버튼 — 게시판 안쪽 우측 상단(리본·나무 테두리를 가리지 않는 위치).
+            var close = NewImage("CloseButton", panel, new Color(0.32f, 0.20f, 0.13f, 0.95f));
             var crt = close.rectTransform;
             crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
             crt.pivot = new Vector2(1f, 1f);
-            crt.anchoredPosition = new Vector2(-24f, -24f);
-            crt.sizeDelta = new Vector2(60f, 60f);
-            var xt = NewText("X", close.rectTransform, "X", 32, TextAnchor.MiddleCenter);
+            crt.anchoredPosition = new Vector2(-56f, -108f);
+            crt.sizeDelta = new Vector2(48f, 48f);
+            var xt = NewText("X", close.rectTransform, "X", 28, TextAnchor.MiddleCenter);
+            xt.color = new Color(1f, 0.93f, 0.78f);
             Stretch(xt.rectTransform);
             _closeButton = close.gameObject.AddComponent<Button>();
         }
 
-        /// <summary>1~31일 달력 그리드(7열 고정, 공용 아이템 슬롯 31칸을 미리 만들어둔다).</summary>
+        /// <summary>1~30일차 보상 사다리 그리드(6열 × 5행 = 30칸, 공용 아이템 슬롯을 미리 만들어둔다).</summary>
         private void BuildGrid(RectTransform panel)
         {
             int rows = Mathf.CeilToInt(TotalDays / (float)Columns);
@@ -180,7 +250,7 @@ namespace TaskbarHero.Client.UI
             _gridContent.anchorMin = _gridContent.anchorMax = new Vector2(0.5f, 1f);
             _gridContent.pivot = new Vector2(0.5f, 1f);
             _gridContent.sizeDelta = new Vector2(gridW, gridH);
-            _gridContent.anchoredPosition = new Vector2(0f, -190f); // 헤더 아래
+            _gridContent.anchoredPosition = new Vector2(0f, -BoardContentTop); // 리본·오늘 날짜 줄 아래
 
             var layout = gridGo.AddComponent<GridLayoutGroup>();
             layout.cellSize = new Vector2(CellWidth, CellHeight);
@@ -198,21 +268,21 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>달력 칸 1개(일자 라벨 + 공용 아이템 슬롯). 조회 결과가 채워지기 전까지는 숨겨둔다
-        /// (마스터에 정의되지 않은 여분 일자 대비 — 이달에 없는 날은 계속 숨김).</summary>
+        /// <summary>사다리 칸 1개(일차 라벨 + 공용 아이템 슬롯). 조회 결과가 채워지기 전까지는 숨겨둔다
+        /// (서버가 주지 않은 일차는 계속 숨김).</summary>
         private DayCell BuildDayCell(int day)
         {
             var cellGo = new GameObject($"Day{day:00}", typeof(RectTransform));
             cellGo.transform.SetParent(_gridContent, false); // 크기·위치는 GridLayoutGroup이 제어
 
-            var dayLabel = NewText("DayLabel", cellGo.transform, day.ToString(), 22, TextAnchor.UpperCenter);
+            var dayLabel = NewText("DayLabel", cellGo.transform, DayLabelText(day), 20, TextAnchor.UpperCenter);
             dayLabel.fontStyle = FontStyle.Bold;
             var lrt = dayLabel.rectTransform;
             lrt.anchorMin = new Vector2(0f, 1f);
             lrt.anchorMax = new Vector2(1f, 1f);
             lrt.pivot = new Vector2(0.5f, 1f);
             lrt.anchoredPosition = Vector2.zero;
-            lrt.sizeDelta = new Vector2(0f, 26f);
+            lrt.sizeDelta = new Vector2(0f, 22f);
 
             GameObject slotGo;
             ItemSlotView slotView = null;
@@ -220,6 +290,10 @@ namespace TaskbarHero.Client.UI
             {
                 slotGo = Instantiate(_itemSlotPrefab, cellGo.transform);
                 slotView = slotGo.GetComponent<ItemSlotView>();
+                if (slotView != null)
+                {
+                    slotView.SetFrameSprite(_slotFrameSprite); // 출석부 전용 슬롯 프레임
+                }
             }
             else
             {
@@ -229,7 +303,7 @@ namespace TaskbarHero.Client.UI
             srt.anchorMin = srt.anchorMax = new Vector2(0.5f, 0f);
             srt.pivot = new Vector2(0.5f, 0f);
             srt.anchoredPosition = Vector2.zero;
-            srt.sizeDelta = new Vector2(96f, 96f);
+            srt.sizeDelta = new Vector2(SlotSize, SlotSize);
 
             cellGo.SetActive(false);
             return new DayCell { day = day, root = cellGo, dayLabel = dayLabel, slotView = slotView };
@@ -243,8 +317,8 @@ namespace TaskbarHero.Client.UI
             var brt = btn.rectTransform;
             brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0f);
             brt.pivot = new Vector2(0.5f, 0f);
-            brt.anchoredPosition = new Vector2(0f, 44f);
-            brt.sizeDelta = new Vector2(360f, 92f);
+            brt.anchoredPosition = new Vector2(0f, 56f);   // 게시판 하단 나무 테두리 위
+            brt.sizeDelta = new Vector2(340f, 80f);
             _claimButtonLabel = NewText("Label", btn.rectTransform, "오늘 보상 받기", 32, TextAnchor.MiddleCenter);
             _claimButtonLabel.fontStyle = FontStyle.Bold;
             Stretch(_claimButtonLabel.rectTransform);
@@ -255,8 +329,8 @@ namespace TaskbarHero.Client.UI
             var mrt = _messageText.rectTransform;
             mrt.anchorMin = mrt.anchorMax = new Vector2(0.5f, 0f);
             mrt.pivot = new Vector2(0.5f, 0f);
-            mrt.anchoredPosition = new Vector2(0f, 146f);
-            mrt.sizeDelta = new Vector2(780f, 36f);
+            mrt.anchoredPosition = new Vector2(0f, 148f);
+            mrt.sizeDelta = new Vector2(780f, 32f);
         }
 
         private void WireRuntime()
@@ -283,7 +357,7 @@ namespace TaskbarHero.Client.UI
             }, OnStatusError);
         }
 
-        /// <summary>조회 결과로 31개 달력 칸을 채운다(정의된 일자만 표시, 나머지는 숨김).</summary>
+        /// <summary>조회 결과로 보상 사다리 칸(1~30일차)을 채운다(서버가 준 일차만 표시, 나머지는 숨김).</summary>
         private void ApplyStatus(AttendanceStatusResultData data)
         {
             foreach (var cell in _cells)
@@ -299,7 +373,7 @@ namespace TaskbarHero.Client.UI
             }
 
             _todayDay = data.todayDay;
-            _todayClaimed = data.todayClaimed;
+            _canClaim = data.canClaim;
 
             if (data.days != null)
             {
@@ -313,14 +387,29 @@ namespace TaskbarHero.Client.UI
                 }
             }
 
-            _todayText.text = FormatYearMonth(data.yearMonth) + $" · 오늘 {data.todayDay}일" +
-                (data.todayClaimed ? " (오늘 보상 수령 완료)" : string.Empty);
+            _todayText.text = FormatProgress(data);
 
             UpdateClaimButton();
             SetMessage(string.Empty);
         }
 
-        /// <summary>달력 칸 1개에 그날의 보상(공용 아이템 슬롯)과 수령 여부(체크 표시)를 반영한다.</summary>
+        /// <summary>상단 진행도 문구. 일차는 날짜가 아니라 누적 출석 순번이므로 "n일차"와 누적 진행도를 보여준다.
+        /// 오늘 받을 수 있으면 그 일차를, 이미 받았으면 오늘 받은 일차를, 사다리를 다 채웠으면 완료 문구를 쓴다.</summary>
+        private static string FormatProgress(AttendanceStatusResultData data)
+        {
+            string month = FormatYearMonth(data.yearMonth);
+            string progress = $"출석 {data.attendedCount}/{TotalDays}일차";
+            if (data.todayDay <= 0)
+            {
+                return $"{month} · {progress} · 이번 달 보상을 모두 받았습니다";
+            }
+            return data.todayClaimed
+                ? $"{month} · {progress} · 오늘 {data.todayDay}일차 보상 수령 완료"
+                : $"{month} · {progress} · 오늘 받을 보상: {data.todayDay}일차";
+        }
+
+        /// <summary>사다리 칸 1개에 그 일차의 보상(공용 아이템 슬롯)과 수령 여부(체크 표시)를 반영한다.
+        /// 오늘 해당하는 일차는 라벨을 강조해 다음에 받을 칸을 알려준다.</summary>
         private void ApplyDay(DayCell cell, AttendanceDayDto day)
         {
             if (cell.slotView != null)
@@ -337,9 +426,12 @@ namespace TaskbarHero.Client.UI
             }
 
             bool isToday = day.day == _todayDay;
-            cell.dayLabel.text = day.day.ToString();
-            cell.dayLabel.color = isToday ? new Color(1f, 0.85f, 0.35f) : Color.white;
+            cell.dayLabel.text = DayLabelText(day.day);
+            cell.dayLabel.color = isToday ? new Color(1f, 0.82f, 0.30f) : new Color(0.96f, 0.90f, 0.78f);
         }
+
+        /// <summary>칸 라벨 문구. 날짜가 아니라 출석 순번임을 드러내기 위해 "n일차"로 쓴다.</summary>
+        private static string DayLabelText(int day) => $"{day}일차";
 
         private DayCell FindCell(int day)
         {
@@ -353,15 +445,24 @@ namespace TaskbarHero.Client.UI
             return null;
         }
 
+        /// <summary>수령 버튼 상태를 갱신한다. 활성 조건은 서버 판정값 <c>canClaim</c>(오늘 미수령 &amp;&amp; 남은 일차 있음)이며,
+        /// 비활성 사유(오늘 수령 완료 / 이번 달 사다리 소진)에 따라 라벨을 달리 표시한다.</summary>
         private void UpdateClaimButton()
         {
             if (_claimButton != null)
             {
-                _claimButton.interactable = !_todayClaimed && !_busy;
+                _claimButton.interactable = _canClaim && !_busy;
             }
             if (_claimButtonLabel != null)
             {
-                _claimButtonLabel.text = _todayClaimed ? "오늘 보상 수령 완료" : "오늘 보상 받기";
+                if (_canClaim)
+                {
+                    _claimButtonLabel.text = "오늘 보상 받기";
+                }
+                else
+                {
+                    _claimButtonLabel.text = _todayDay <= 0 ? "이번 달 보상 모두 수령" : "오늘 보상 수령 완료";
+                }
             }
         }
 
@@ -373,11 +474,12 @@ namespace TaskbarHero.Client.UI
 
         // ── 오늘자 보상 획득 ──
 
-        /// <summary>오늘자 출석 보상을 획득한다(POST /api/game/attendance/claim). 즉시 지급이 아니라
-        /// 우편함으로 발송되므로 안내 모달로 알리고, 오늘 칸의 체크 표시에 획득 연출을 재생한다.</summary>
+        /// <summary>오늘자 출석 보상을 획득한다(POST /api/game/attendance/claim). 오늘 칸의 체크 표시에 획득
+        /// 연출을 재생하고, <b>연출이 끝난 뒤</b> 안내 모달을 띄운다(모달이 연출을 가리지 않도록 하는 순서다).
+        /// 보상은 즉시 지급이 아니라 우편함으로 발송되므로 모달로 그 사실을 알린다.</summary>
         private void OnClaim()
         {
-            if (_busy || _todayClaimed || NetworkManager.Instance == null || !Session.IsLoggedIn)
+            if (_busy || !_canClaim || NetworkManager.Instance == null || !Session.IsLoggedIn)
             {
                 return;
             }
@@ -388,31 +490,34 @@ namespace TaskbarHero.Client.UI
             NetworkManager.Instance.PostToGame<AttendanceClaimResponse>("/api/game/attendance/claim", req, resp =>
             {
                 _busy = false;
-                _todayClaimed = true;
+                _canClaim = false; // 오늘은 더 받을 수 없다(다음 조회에서 서버 판정으로 갱신)
                 var data = resp != null ? resp.data : null;
                 Debug.Log($"[Attendance] 출석 보상 획득 완료 day={(data != null ? data.day : 0)} mailId={(data != null ? data.mailId : 0)}");
 
+                UpdateClaimButton();
+                MailNotifier.Refresh(); // 보상이 메일로 발급됐으므로 미수령 메일 레드닷을 즉시 갱신
+
+                // 오늘 칸에 획득 연출(축소→확대)을 재생하고, 끝난 뒤에 안내 모달을 띄운다.
                 var cell = data != null ? FindCell(data.day) : null;
-                if (cell != null)
+                if (cell != null && cell.slotView != null)
                 {
                     cell.root.SetActive(true);
-                    if (cell.slotView != null)
-                    {
-                        cell.slotView.PlayClaimedPopAnimation(); // 방금 획득: 축소→확대 연출
-                    }
+                    cell.slotView.PlayClaimedPopAnimation(() => ShowClaimedModal(data));
                 }
-
-                UpdateClaimButton();
-                ShowClaimedModal(data);
-                MailNotifier.Refresh(); // 보상이 메일로 발급됐으므로 미수령 메일 레드닷을 즉시 갱신
+                else
+                {
+                    if (cell != null) cell.root.SetActive(true);
+                    ShowClaimedModal(data); // 연출할 슬롯이 없으면 곧바로 안내
+                }
             }, OnClaimError);
         }
 
-        /// <summary>출석 보상이 메일로 발송됐음을 모달로 안내한다(즉시 지급이 아님을 명확히 알림).</summary>
+        /// <summary>출석 보상이 메일로 발송됐음을 모달로 안내한다(즉시 지급이 아님을 명확히 알림).
+        /// 받은 일차는 날짜가 아니라 누적 출석 순번이므로 "n일차"로 표기한다.</summary>
         private static void ShowClaimedModal(AttendanceClaimResultData data)
         {
             string body = data != null
-                ? $"오늘의 출석 보상이 우편함으로 발송되었습니다.\n{RewardSummary(data.reward)}\n우편함에서 수령해야 계정에 반영됩니다."
+                ? $"{data.day}일차 출석 보상이 우편함으로 발송되었습니다.\n{RewardSummary(data.reward)}\n우편함에서 수령해야 계정에 반영됩니다."
                 : "출석 보상이 우편함으로 발송되었습니다.";
             ModalManager.Instance?.ShowConfirm("출석 체크 완료", body);
         }

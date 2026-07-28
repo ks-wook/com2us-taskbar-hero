@@ -37,7 +37,8 @@ public sealed record RecipeDef(
     int RecipeCode, int ResultItemCode, int ResultQuantity, int ReqCubeLevel, long CostGold,
     IReadOnlyList<RecipeIngredient> Ingredients);
 
-/// <summary>출석부 일자별 보상 정의(attendance_master). RewardType 1:골드 2:아이템 3:재료(메일 첨부와 동일 enum), 골드는 RewardCode 0.</summary>
+/// <summary>출석부 일차별 보상 정의(attendance_master). Day는 날짜가 아니라 이번달 누적 출석 순번(1~30).
+/// RewardType 1:골드 2:아이템 3:재료(메일 첨부와 동일 enum), 골드는 RewardCode 0.</summary>
 public sealed record AttendanceRewardDef(int Day, int RewardType, int RewardCode, int Quantity);
 
 /// <summary>메일 발급 문구 템플릿(mail_master). 발급 메일의 category·제목/본문 형식·만료 일수를 확정한다(mail 기획서 §4·§6.4).</summary>
@@ -223,7 +224,7 @@ public sealed class MasterDataProvider
     // 배열 길이 = 확장 가능한 총 칸 수이며, 상한 용량 = BaseInventoryCapacity + 길이.
     private IReadOnlyList<long> _expandCosts = new List<long>();
 
-    // 출석부: day(1~31) → 그날 보상 정의(attendance_master).
+    // 출석부: day(출석 일차 1~30, 누적 출석 순번) → 그 일차 보상 정의(attendance_master).
     private IReadOnlyDictionary<int, AttendanceRewardDef> _attendanceByDay = new Dictionary<int, AttendanceRewardDef>();
 
     // 메일 발급 템플릿: mail_template_code → 정의(mail_master, 서버 전용 마스터).
@@ -305,12 +306,17 @@ public sealed class MasterDataProvider
     public RecipeDef? GetRecipe(int recipeCode)
         => _recipesByCode.TryGetValue(recipeCode, out var r) ? r : null;
 
-    /// <summary>이달 day(1~31)일차의 출석 보상 정의(attendance_master). 미정의 일자는 null(호출측이 MasterDataNotLoaded로 거부).</summary>
+    /// <summary>출석 day일차(1~30, 이번달 누적 출석 순번 — 날짜가 아님)의 보상 정의(attendance_master).
+    /// 미정의 일차는 null(호출측이 MasterDataNotLoaded로 거부).</summary>
     public AttendanceRewardDef? GetAttendanceReward(int day)
         => _attendanceByDay.TryGetValue(day, out var r) ? r : null;
 
-    /// <summary>attendance_master에 정의된 일자(day) 목록(오름차순). 이번달 출석 달력 구성에 사용한다.</summary>
+    /// <summary>attendance_master에 정의된 일차(day) 목록(오름차순). 출석 보상 사다리 구성에 사용한다.</summary>
     public IReadOnlyCollection<int> AttendanceDays => _attendanceByDay.Keys.OrderBy(d => d).ToList();
+
+    /// <summary>출석 보상 사다리의 마지막 일차(= attendance_master의 최대 day, 현재 30). 이번달 이 일차까지
+    /// 모두 받으면 더 받을 보상이 없다(호출측이 AttendanceAllClaimed로 거부). 정의가 비었으면 0.</summary>
+    public int MaxAttendanceDay => _attendanceByDay.Count == 0 ? 0 : _attendanceByDay.Keys.Max();
 
     /// <summary>메일 발급 템플릿(mail_master). 없으면 null(호출측이 MasterDataNotLoaded로 거부).</summary>
     public MailTemplateDef? GetMailTemplate(int templateCode)
@@ -697,7 +703,7 @@ public sealed class MasterDataProvider
         return (byGrade, byCode);
     }
 
-    /// <summary>attendance_master를 day → 보상 정의로 적재한다(정상 운영에선 1~31 전부 정의).</summary>
+    /// <summary>attendance_master를 day(출석 일차) → 보상 정의로 적재한다(정상 운영에선 1~30 전부 정의).</summary>
     private static async Task<Dictionary<int, AttendanceRewardDef>> LoadAttendanceAsync(QueryFactory db)
     {
         var rows = await db.Query("attendance_master")

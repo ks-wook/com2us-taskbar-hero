@@ -199,6 +199,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: TaskbarHero.Client.Battle::TaskbarHero.Client.Battle.StageClearOverlay
   _dimButton: {fileID: 1836761809413638034}
   _fanfareImage: {fileID: 5837556303959139892}
+  _titleText: {fileID: 2113548610426712520}
   _rewardsRow: {fileID: 4736096354305251332}
 --- !u!223 &5671766734879713617
 Canvas:

@@ -65,7 +65,7 @@ erDiagram
     monster_master   ||--o{ stage_spawn        : "등장 몬스터"
     stage_master     ||--|| stage_reward       : "클리어 보상(1:1)"
     item_master      ||--o{ box_master         : "지급 아이템 풀(등급)"
-    item_master      ||--o{ attendance_master  : "일자별 보상"
+    item_master      ||--o{ attendance_master  : "일차별 보상"
     equip_slot_master||--o{ item_master        : "장착 슬롯"
     grade_master     ||--o{ item_master        : "등급(1~5)"
     item_master      ||--o{ enhance_master     : "소모 재화(골드)"
@@ -111,7 +111,7 @@ erDiagram
 | `stage_reward` | 스테이지 클리어 보상(골드·경험치·등급별 아이템 확률) | 스테이지 수만큼 |
 | `cube_master` | 큐브 레벨별 규칙·레시피 | 레벨 수만큼 |
 | `box_master` | 랜덤 상자별 등급 확률·지급 아이템 풀 | 상자 종류 수만큼 |
-| `attendance_master` | 출석부 일자별(day-of-month) 보상 정의 | 최대 31 |
+| `attendance_master` | 출석부 일차별(누적 출석 순번) 보상 정의 | 30 |
 
 ## 5. 테이블별 상세 (필드 + 담기는 데이터)
 
@@ -502,24 +502,24 @@ erDiagram
 
 > 오픈 비용·다연속 오픈 정책, 등급 추첨 후 아이템 선택 방식, 지급 아이템 풀 범위 등 세부는 [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 8장 미결과 함께 확정한다.
 
-### 5.14 `attendance_master` — 출석부 일자별 보상
+### 5.14 `attendance_master` — 출석부 일차별 보상
 
-출석부([출석부 보상 시스템 기획서](../attendance-기획서.md))가 참조하는 **이달 일자별(day-of-month) 보상 정의**. 서버는 출석 획득 시 오늘의 `day`(1~31)로 이 테이블을 조회해 보상을 확정하고 메일로 발급한다.
+출석부([출석부 보상 시스템 기획서](../attendance-기획서.md))가 참조하는 **출석 일차별 보상 정의**. `day`는 **날짜(day-of-month)가 아니라 이번달 누적 출석 순번**이다 — 서버는 출석 획득 시 `이번달 출석 횟수 + 1`을 일차로 산출해 이 테이블을 조회하고 보상을 확정한 뒤 메일로 발급한다. 월중에 처음 접속해도 **1일차 보상부터** 순서대로 받는다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `day` | int PK | 이달 며칠차(1~31) |
+| `day` | int PK | 출석 일차(1~30, 이번달 누적 출석 순번 — 날짜가 아님) |
 | `reward_type` | int | 1:골드 2:아이템 3:재료 |
 | `reward_code` | int | 아이템/재료 코드(골드면 0) |
 | `quantity` | int | 지급 수량 |
 
 **담기는 데이터 예시**
 
-| day | reward_type | reward_code | quantity |
+| day(일차) | reward_type | reward_code | quantity |
 |---|---|---|---|
 | 1 | 1 | 0 | 1000 |
-| 7 | 2 | 41001 | 5 |
-| 15 | 2 | 41001 | 5 |
+| 7 | 3 | 41002 | 3 |
+| 30 | 2 | 33051 | 1 |
 
 ### 공통 규칙
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -128,6 +129,19 @@ namespace TaskbarHero.Client.Managers
             ResetClaimedOverlay();
         }
 
+        /// <summary>슬롯 테두리 프레임을 화면 전용 아트로 교체한다(예: 출석부 달력 칸 = attendance_item_slot).
+        /// null을 넘기면 공용 프레임(item_slot)을 그대로 둔다. 구성(Setup)과 무관하게 유지된다.</summary>
+        public void SetFrameSprite(Sprite frameSprite)
+        {
+            if (frameSprite == null || _frameImage == null)
+            {
+                return;
+            }
+            _frameImage.sprite = frameSprite;
+            _frameImage.type = Image.Type.Simple;
+            _frameImage.color = Color.white;
+        }
+
         /// <summary>획득 완료 표시(check)를 켜고 끈다(연출 없이 즉시 반영, 예: 출석부 현황 새로고침).</summary>
         public void SetClaimed(bool claimed)
         {
@@ -144,11 +158,15 @@ namespace TaskbarHero.Client.Managers
         }
 
         /// <summary>방금 획득했음을 알리는 연출: 획득 완료 표시(check)가 원래 크기에서 작아졌다가
-        /// 다시 커지면서 원래 크기로 돌아온다(예: 출석부에서 오늘자 보상을 처음 받는 순간).</summary>
-        public void PlayClaimedPopAnimation()
+        /// 다시 커지면서 원래 크기로 돌아온다(예: 출석부에서 오늘자 보상을 처음 받는 순간).
+        /// <paramref name="onComplete"/>는 연출이 끝난 뒤 호출된다(획득 안내 모달처럼 연출 후에 이어질 처리용).
+        /// 표시할 오버레이가 없으면 연출 없이 즉시 호출한다. 연출 도중 <see cref="SetClaimed"/> 등으로
+        /// 상태가 덮어써지면 호출되지 않는다(그 처리가 무효가 된 것이므로).</summary>
+        public void PlayClaimedPopAnimation(Action onComplete = null)
         {
             if (_claimedOverlay == null)
             {
+                onComplete?.Invoke();
                 return;
             }
             _claimedOverlay.gameObject.SetActive(true);
@@ -156,10 +174,10 @@ namespace TaskbarHero.Client.Managers
             {
                 StopCoroutine(_claimedPopRoutine);
             }
-            _claimedPopRoutine = StartCoroutine(ClaimedPopRoutine());
+            _claimedPopRoutine = StartCoroutine(ClaimedPopRoutine(onComplete));
         }
 
-        private IEnumerator ClaimedPopRoutine()
+        private IEnumerator ClaimedPopRoutine(Action onComplete)
         {
             var rt = _claimedOverlay.rectTransform;
             float half = ClaimedPopDuration * 0.5f;
@@ -184,6 +202,7 @@ namespace TaskbarHero.Client.Managers
 
             rt.localScale = Vector3.one;
             _claimedPopRoutine = null;
+            onComplete?.Invoke();
         }
 
         /// <summary>Setup 호출 시 획득 완료 표시를 기본 숨김 상태로 되돌린다(호출측이 필요 시 SetClaimed로 재설정).</summary>

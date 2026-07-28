@@ -856,21 +856,23 @@ INSERT INTO stage_reward_drop (stage_id, grade, drop_prob) VALUES
 
 
 -- =====================================================================
--- 13. attendance_master — 출석부 일자별(day-of-month) 보상 (값 문서 §13)
+-- 13. attendance_master — 출석부 일차별(누적 출석 순번) 보상 (값 문서 §13)
 --    출처: master-data-값.md §13, 기획서 5.14
 --    reward_type: 1=골드 2=아이템 3=재료 (item_master.item_type와 별개의 enum).
 --    골드는 reward_code=0(수량이 골드량), 아이템·재료는 reward_code가 item_master.item_code.
 --      reward_code는 0 센티널(골드)이 섞이므로 FK를 걸지 않고 애플리케이션에서 검증한다.
---    day 1~31 전부 정의. 주간 마일스톤(7·14·21·28)과 15·31일에 고가치 보상 배치.
+--    ⚠️ day는 **날짜(day-of-month)가 아니라 이번달 누적 출석 순번**이다. 첫 출석이 1일차, 다음 출석이 2일차…
+--       (예: 7월 28일에 이번달 처음 접속하면 28일차가 아니라 1일차 보상을 받는다.)
+--    day 1~30 전부 정의. 주간 마일스톤(7·14·21·28)과 15일(중간)·30일(최종)에 고가치 보상 배치.
 -- =====================================================================
 DROP TABLE IF EXISTS attendance_master;
 CREATE TABLE attendance_master (
-    day          TINYINT NOT NULL COMMENT '이달 며칠차(1~31)',
+    day          TINYINT NOT NULL COMMENT '출석 일차(1~30, 이번달 누적 출석 순번 — 날짜가 아님)',
     reward_type  TINYINT NOT NULL COMMENT '보상 종류(1=골드 2=아이템 3=재료)',
     reward_code  INT     NOT NULL DEFAULT 0 COMMENT '아이템/재료 코드(item_master.item_code, 골드면 0)',
     quantity     BIGINT  NOT NULL COMMENT '지급 수량(골드면 골드량)',
     PRIMARY KEY (day)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='출석부 일자별 보상 정의';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='출석부 일차별 보상 정의(누적 출석 순번 1~30)';
 
 INSERT INTO attendance_master (day, reward_type, reward_code, quantity) VALUES
     (1,  1, 0,     1000),
@@ -901,9 +903,8 @@ INSERT INTO attendance_master (day, reward_type, reward_code, quantity) VALUES
     (26, 1, 0,     8500),
     (27, 3, 41010, 3),
     (28, 3, 41020, 1),
-    (29, 1, 0,     9000),
-    (30, 3, 41010, 5),
-    (31, 2, 33051, 1);
+    (29, 3, 41010, 5),
+    (30, 2, 33051, 1);
 
 
 -- inventory_expand_master — 인벤토리 용량 확장 비용(칸별).

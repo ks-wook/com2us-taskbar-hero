@@ -73,6 +73,8 @@ namespace TaskbarHero.Client.UI
                 // 출석부 도메인(attendance 기획서 §7)
                 case ErrorCode.AttendanceAlreadyClaimed:
                     return "이미 수령한 출석 보상입니다.";
+                case ErrorCode.AttendanceAllClaimed:
+                    return "이번 달 출석 보상을 모두 받았습니다.";
                 default:
                     return string.IsNullOrEmpty(fallback) ? ("오류가 발생했습니다. (" + code + ")") : fallback;
             }

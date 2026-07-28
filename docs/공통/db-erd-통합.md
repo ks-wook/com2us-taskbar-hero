@@ -278,7 +278,7 @@ erDiagram
 
 ### player_attendance
 
-- **역할**: 계정의 **출석 수령 기록**(일자별). 하루 1회 중복 수령 방지의 근거가 된다. 실제 보상 내용은 `attendance_master`가 정의하고 지급은 메일로 발급된다.
+- **역할**: 계정의 **출석 수령 기록**(일자별). 하루 1회 중복 수령 방지의 근거이자, **이번달 행 수(COUNT)가 곧 진행한 출석 일차**가 된다(일차 컬럼을 따로 두지 않는다). 실제 보상 내용은 `attendance_master`가 정의하고 지급은 메일로 발급된다.
 - **저장 데이터**: `(user_id, attend_date)` 키(`attend_date`=YYYYMMDD, KST 기준), `claimed_at`(출석/발급 시각, Unix ts).
 
 ### trade_listing
@@ -305,7 +305,7 @@ erDiagram
 | `stage_reward_drop` | `stage_id`+`grade` | `stage_reward.stage_id`의 자식(등급별 드롭 확률, 1:N) |
 | `cube_master` | `cube_level` | `player_cube.cube_level` |
 | `box_master` | `box_code` | (골드 가챠 상자 열기 API 입력 · 골드 차감·지급 모두 `player_item`, 상자 자체는 저장 안 함) |
-| `attendance_master` | `day` | (출석부 일자별 보상 정의 · 지급은 메일 발급, `player_attendance`는 수령 일자 기록) |
+| `attendance_master` | `day` | (출석부 **일차별**(누적 출석 순번 1~30) 보상 정의 · 지급은 메일 발급, `player_attendance`는 수령 일자 기록) |
 
 **테이블별 역할·정의 데이터** (모두 정적·읽기 전용 정의이며 유저가 변경하지 않는다. 실제 값은 [마스터 데이터 값](../세부/master-data/master-data-값.md))
 
@@ -376,8 +376,8 @@ erDiagram
 
 ### attendance_master
 
-- **역할**: 출석부 일자별(1~31) 보상 정의. 출석 시 오늘의 `day`로 조회해 보상을 확정하고 메일로 발급한다(수령 기록은 `player_attendance`).
-- **정의 데이터**: `day`, `reward_type`(1:골드 2:아이템 3:재료), `reward_code`(골드면 0), `quantity`.
+- **역할**: 출석부 **일차별(1~30)** 보상 정의. `day`는 날짜가 아니라 **이번달 누적 출석 순번**이며, 출석 시 `이번달 출석 수 + 1`로 조회해 보상을 확정하고 메일로 발급한다(수령 기록은 `player_attendance`).
+- **정의 데이터**: `day`(출석 일차 1~30), `reward_type`(1:골드 2:아이템 3:재료), `reward_code`(골드면 0), `quantity`.
 
 - 마스터 데이터는 **클라이언트 빌드에 번들**되고 서버도 같은 원천을 기동 시 자체 로드한다(런타임 다운로드·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 6·8장).
 
@@ -387,7 +387,7 @@ erDiagram
 - [세이브 데이터 기획서](../세부/save-data-기획서.md) — `game_player`·`player_character`·`player_item`(아이템·재화 통합)·`player_item_equipped`(장착 상태)·`player_skill`·`player_rune`·`player_cube`·`player_mail`·`player_mail_reward`
 - [거래소 / 교역선 기획서](../세부/trade-기획서.md) — `trade_listing` 거래 등록(에스크로), 대금은 메일 지급
 - [메일 기획서](../세부/mail-기획서.md) — `player_mail`·`player_mail_reward` 우편함·첨부
-- [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — `player_attendance`·`attendance_master` 출석 기록·일자별 보상
+- [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — `player_attendance`·`attendance_master` 출석 기록·일차별 보상
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 인벤토리·장비·큐브 세부 규칙
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 캐릭터·스킬·룬 세부 규칙
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) — 경험치·골드 지급(세이브 테이블 사용)

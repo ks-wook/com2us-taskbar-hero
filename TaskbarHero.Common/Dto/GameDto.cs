@@ -794,7 +794,8 @@ namespace TaskbarHero.Common.Dto
         public int quantity;
     }
 
-    /// <summary>이번달 출석 달력의 일자 1칸(5.1 목록 항목). day = 이달 며칠차(1~31), claimed = 그날 수령 여부.</summary>
+    /// <summary>출석 보상 사다리의 일차 1칸(5.1 목록 항목). day = 출석 일차(1~30, 이번달 누적 출석 순번 — 날짜가 아님),
+    /// claimed = 그 일차를 이미 받았는지(앞에서부터 순서대로 채워진다).</summary>
     [Serializable]
     public class AttendanceDayDto
     {
@@ -805,14 +806,17 @@ namespace TaskbarHero.Common.Dto
         public bool claimed;
     }
 
-    /// <summary>이번달 출석 현황 조회 결과(5.1 응답 data). yearMonth/today는 서버 KST 판정 값.</summary>
+    /// <summary>이번달 출석 진행도 조회 결과(5.1 응답 data). yearMonth/today는 서버 KST 판정 값이며,
+    /// 보상 일차는 날짜가 아니라 이번달 누적 출석 순번이다(첫 출석 = 1일차).</summary>
     [Serializable]
     public class AttendanceStatusResultData
     {
         public int yearMonth;      // 이번달 YYYYMM(KST)
         public int today;          // 오늘 YYYYMMDD(KST)
-        public int todayDay;       // 오늘의 일(day-of-month)
+        public int attendedCount;  // 이번달 누적 출석 횟수(= 수령 완료한 일차 수, 0~30)
+        public int todayDay;       // 오늘 해당하는 출석 일차(미수령이면 attendedCount+1, 수령했으면 오늘 받은 일차, 소진 시 0)
         public bool todayClaimed;  // 오늘자 출석을 이미 수령했는지
+        public bool canClaim;      // 오늘 수령 가능 여부(!todayClaimed && todayDay >= 1)
         public List<AttendanceDayDto> days = new List<AttendanceDayDto>();
     }
 
@@ -821,7 +825,7 @@ namespace TaskbarHero.Common.Dto
     public class AttendanceClaimResultData
     {
         public int attendDate; // 출석 일자 YYYYMMDD(KST)
-        public int day;        // 이달 며칠차
+        public int day;        // 이번에 받은 출석 일차(1~30, 이번달 누적 출석 순번 — attendDate와 무관)
         public AttendanceRewardDto reward = new AttendanceRewardDto();
         public long mailId;    // 발급된 보상 메일
     }

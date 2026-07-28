@@ -137,9 +137,10 @@
 
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
-| `POST /api/game/attendance/status` | 이번달 출석 현황 조회(읽기 전용) | `{}` | `yearMonth`, `today`, `todayClaimed`, `days[]` | `MasterDataNotLoaded(10001)` |
-| `POST /api/game/attendance/claim` | 오늘자 출석 보상 획득(보상 **메일 발급**) | `{}` | `attendDate`, `day`, `reward`, `mailId` | `AttendanceAlreadyClaimed(9001)`, `MasterDataNotLoaded(10001)` |
+| `POST /api/game/attendance/status` | 이번달 출석 진행도 조회(읽기 전용) | `{}` | `yearMonth`, `today`, `attendedCount`, `todayDay`, `todayClaimed`, `canClaim`, `days[]`(1~30일차) | `MasterDataNotLoaded(10001)` |
+| `POST /api/game/attendance/claim` | 오늘자 출석 보상 획득(보상 **메일 발급**) | `{}` | `attendDate`, `day`, `reward`, `mailId` | `AttendanceAlreadyClaimed(9001)`, `AttendanceAllClaimed(9002)`, `SaveNotFound(2001)`, `MasterDataNotLoaded(10001)` |
 
+- 보상 **일차(`day`)는 날짜가 아니라 이번달 누적 출석 순번**(`이번달 출석 수 + 1`, 1~30)이다. 월중에 처음 접속해도 1일차 보상부터 순서대로 받으며, 달이 바뀌면 1일차로 리셋된다.
 - 날짜 경계는 서버 KST 자정, 하루 1회(`(user_id, attend_date)` 유니크). 획득 보상은 즉시 지급이 아니라 **메일(3.6)로 발급**되어 우편함 수령 시 계정 반영.
 
 > **마스터(기획) 데이터 다운로드 API는 두지 않는다.** 본 프로젝트는 학습 목적이므로 마스터 데이터는 **클라이언트에 번들로 포함**되고, 서버도 같은 원천을 기동 시 자체 로드한다(런타임 배포·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md)).

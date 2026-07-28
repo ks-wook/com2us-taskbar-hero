@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using TaskbarHero.Client.Managers;
+using TaskbarHero.Common.Dto;
 
 namespace TaskbarHero.Client.UI
 {
@@ -21,6 +22,10 @@ namespace TaskbarHero.Client.UI
         [Header("알림(레드닷)")]
         [Tooltip("미수령 보상 메일 확인을 위한 우편함 재조회 주기(초). 0 이하면 진입 시 1회만 조회한다.")]
         [SerializeField] private float mailPollIntervalSeconds = 60f;
+
+        [Header("접속 시 자동 표시")]
+        [Tooltip("접속 시 오늘자 출석 보상이 아직 남아 있으면 출석부 패널을 자동으로 연다.")]
+        [SerializeField] private bool autoOpenAttendance = true;
 
         private GameObject _escMenuRoot; // ESC로 토글하는 메뉴(타이틀 복귀)
 
@@ -42,7 +47,7 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>GameScene 진입 시 대기 중인 오프라인 보상 정산 결과가 있으면 팝업으로 표시하고,
-        /// 메일 레드닷 판정을 위한 우편함 조회 루프를 시작한다.</summary>
+        /// 메일 레드닷 판정을 위한 우편함 조회 루프와 출석부 자동 표시 판정을 시작한다.</summary>
         private void Start()
         {
             if (Session.PendingOfflineReward != null && UIManager.Instance != null)
@@ -50,6 +55,43 @@ namespace TaskbarHero.Client.UI
                 UIManager.Instance.ShowOfflineReward();
             }
             StartCoroutine(MailNotifyLoop());
+            if (autoOpenAttendance)
+            {
+                StartCoroutine(AutoOpenAttendanceRoutine());
+            }
+        }
+
+        /// <summary>접속 직후 오늘자 출석 보상이 아직 남아 있으면 출석부를 자동으로 연다.
+        /// <see cref="UIManager.Show"/>는 다른 패널을 모두 숨기므로, 먼저 뜬 오프라인 보상 팝업 등을
+        /// 덮지 않도록 열려 있는 패널이 모두 닫힌 뒤에 조회하고, 조회 사이에 사용자가 다른 패널을 열었으면
+        /// 표시를 포기한다. 조회 실패는 경고만 남기고 자동 표시를 생략한다(수동으로 열 수 있으므로).</summary>
+        private IEnumerator AutoOpenAttendanceRoutine()
+        {
+            yield return new WaitUntil(() => UIManager.Instance != null && !UIManager.Instance.IsAnyPanelVisible());
+
+            if (NetworkManager.Instance == null || !Session.IsLoggedIn)
+            {
+                yield break;
+            }
+
+            bool? claimable = null;
+            var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
+            NetworkManager.Instance.PostToGame<AttendanceStatusResponse>("/api/game/attendance/status", req,
+                // canClaim = 오늘 미수령 && 남은 일차 있음(30일차까지 다 받은 달에는 자동으로 열지 않는다).
+                resp => claimable = resp != null && resp.data != null && resp.data.canClaim,
+                error =>
+                {
+                    Debug.LogWarning($"[HUD] 출석 현황 조회 실패 — 출석부 자동 표시 생략: {error}");
+                    claimable = false;
+                });
+
+            yield return new WaitUntil(() => claimable.HasValue);
+
+            if (claimable.Value && !UIManager.Instance.IsAnyPanelVisible())
+            {
+                Debug.Log("[HUD] 오늘자 출석 보상 미수령 — 출석부 자동 표시");
+                UIManager.Instance.ShowAttendance();
+            }
         }
 
         /// <summary>미수령 보상 메일 레드닷용 우편함 스냅샷을 진입 직후 1회 조회하고, 주기가 설정돼 있으면

@@ -8,7 +8,7 @@ namespace TaskbarHero.ClientEditor
 {
     /// <summary>
     /// 출석부 패널 프리팹 생성 + Title/GameScene UIManager 배선 도구.
-    /// 패널 정적 계층(달력 31칸 포함)은 코드로 구성되므로(AttendancePanelController.EditorConstruct)
+    /// 패널 정적 계층(보상 사다리 30칸 포함)은 코드로 구성되므로(AttendancePanelController.EditorConstruct)
     /// 프리팹은 컨트롤러 + 정적 계층 + 공용 아이템 슬롯/버튼 스프라이트 참조만 담는다.
     /// 메뉴: TaskbarHero/UI/출석부 패널·씬 배선
     /// </summary>
@@ -17,6 +17,8 @@ namespace TaskbarHero.ClientEditor
         private const string PrefabPath = "Assets/Prefabs/UI/AttendancePanel.prefab";
         private const string ItemSlotPrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
         private const string ButtonSpritePath = "Assets/Art/UI/pixel_rpg_button.png";
+        private const string BoardSpritePath = "Assets/Art/UI/Attendance/attendance_board.png";
+        private const string SlotFrameSpritePath = "Assets/Art/UI/Attendance/attendance_item_slot.png";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
 
@@ -44,14 +46,16 @@ namespace TaskbarHero.ClientEditor
             var root = new GameObject("AttendancePanel");
             var ctrl = root.AddComponent<AttendancePanelController>();
 
-            // EditorConstruct 전에 배선해 달력 칸(BuildDayCell)이 공용 아이템 슬롯을 바로 사용하게 한다.
+            // EditorConstruct 전에 배선해, 사다리 칸(BuildDayCell)과 패널 배경이 아트를 바로 반영하게 한다.
             var so = new SerializedObject(ctrl);
             so.FindProperty("_itemSlotPrefab").objectReferenceValue =
                 AssetDatabase.LoadAssetAtPath<GameObject>(ItemSlotPrefabPath);
+            so.FindProperty("_boardSprite").objectReferenceValue = LoadSpriteAt(BoardSpritePath);
+            so.FindProperty("_slotFrameSprite").objectReferenceValue = LoadSpriteAt(SlotFrameSpritePath);
             so.FindProperty("_buttonSprite").objectReferenceValue = LoadSpriteAt(ButtonSpritePath);
             so.ApplyModifiedPropertiesWithoutUndo();
 
-            ctrl.EditorConstruct(); // 정적 계층(달력 31칸 포함)을 프리팹에 굽는다
+            ctrl.EditorConstruct(); // 정적 계층(보상 사다리 30칸 포함)을 프리팹에 굽는다
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
             Object.DestroyImmediate(root);

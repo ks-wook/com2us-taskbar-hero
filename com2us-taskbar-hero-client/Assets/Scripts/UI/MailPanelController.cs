@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TaskbarHero.Client.Battle;
 using TaskbarHero.Client.Managers;
 using TaskbarHero.Client.MasterData;
 using TaskbarHero.Common.Dto;
@@ -11,8 +12,9 @@ namespace TaskbarHero.Client.UI
     /// <summary>
     /// 우편함(메일) 패널(mail 기획서 §2·§5). 열릴 때마다 서버에서 메일 목록을 조회해
     /// (조회 = 서버가 읽음 처리) 메일별 봉투 아이콘(미열람/열람)·제목·본문·첨부 요약·만료를 표시하고,
-    /// '받기'(단건 수령)·'모두 받기'(일괄 수령)를 제공한다. 수령 성공 시 지급 내역을 모달로 안내하고
-    /// 세이브 스냅샷을 재로드해 골드·인벤토리를 최신화한다.
+    /// '받기'(단건 수령)·'모두 받기'(일괄 수령)를 제공한다. 수령 성공 시 지급 내역을 <b>스테이지 클리어
+    /// 연출 UI를 재활용해</b>(<see cref="StageClearOverlay.ShowRewards"/>) 보여주고, 세이브 스냅샷을
+    /// 재로드해 골드·인벤토리를 최신화한다.
     /// 정적 계층(캔버스·패널·헤더·스크롤·버튼)은 에디터 빌더(MailUiBuilder)가 프리팹에 굽고,
     /// 메일 행은 목록 조회 결과로 런타임에 생성한다.
     /// </summary>
@@ -511,7 +513,7 @@ namespace TaskbarHero.Client.UI
             NetworkManager.Instance.PostToGame<MailClaimResponse>("/api/game/mail/claim", req, resp =>
             {
                 Debug.Log($"[Mail] 수령 완료 mailId={mailId}");
-                ShowGainedModal(resp != null && resp.data != null ? resp.data.gained : null);
+                ShowGainedRewards(resp != null && resp.data != null ? resp.data.gained : null);
                 ReloadSessionAndList();
             }, OnClaimError);
         }
@@ -535,40 +537,55 @@ namespace TaskbarHero.Client.UI
                     return;
                 }
                 Debug.Log($"[Mail] 일괄 수령 완료 {data.claimedMailIds.Count}건");
-                ShowGainedModal(data.gained);
+                ShowGainedRewards(data.gained);
                 ReloadSessionAndList();
             }, OnClaimError);
         }
 
-        /// <summary>지급된 첨부(골드·아이템) 내역을 모달로 안내한다(골드는 노란색 강조 규칙).</summary>
-        private static void ShowGainedModal(MailGainedDto gained)
+        /// <summary>지급된 첨부(골드·아이템)를 <b>스테이지 클리어 연출 UI를 재활용</b>해 보여준다
+        /// (<see cref="StageClearOverlay.ShowRewards"/> — 팡파레 + 보상 칸이 왼쪽부터 하나씩 등장).
+        /// 첨부가 없는 안내 메일을 수령한 경우엔 보여줄 보상이 없으므로 기존 텍스트 모달로 안내한다.</summary>
+        private static void ShowGainedRewards(MailGainedDto gained)
         {
-            var lines = new List<string>();
-            if (gained != null)
+            var rewards = ToStageRewards(gained);
+            if (rewards.gold <= 0 && rewards.items.Count == 0)
             {
-                if (gained.currencies != null)
+                ModalManager.Instance?.ShowConfirm("우편 수령", "첨부가 없는 메일입니다.");
+                return;
+            }
+            StageClearOverlay.ShowRewards("보상 획득!", rewards);
+        }
+
+        /// <summary>메일 지급 내역을 클리어 연출이 쓰는 보상 DTO로 옮긴다(골드 = 재화 타입 1, 나머지는 아이템).
+        /// 메일 첨부에는 경험치가 없으므로 exp는 채우지 않는다.</summary>
+        private static StageRewardsDto ToStageRewards(MailGainedDto gained)
+        {
+            var rewards = new StageRewardsDto();
+            if (gained == null)
+            {
+                return rewards;
+            }
+            if (gained.currencies != null)
+            {
+                foreach (var c in gained.currencies)
                 {
-                    foreach (var c in gained.currencies)
+                    if (c != null && c.currencyType == 1 && c.amount > 0)
                     {
-                        if (c != null && c.amount > 0)
-                        {
-                            lines.Add($"골드 {GoldFormat.Highlight(c.amount)}");
-                        }
-                    }
-                }
-                if (gained.items != null)
-                {
-                    foreach (var it in gained.items)
-                    {
-                        if (it != null)
-                        {
-                            lines.Add($"{ItemName(it.itemCode)} x{it.quantity}");
-                        }
+                        rewards.gold += c.amount;
                     }
                 }
             }
-            string body = lines.Count > 0 ? string.Join("\n", lines) : "첨부가 없는 메일입니다.";
-            ModalManager.Instance?.ShowConfirm("우편 수령", body);
+            if (gained.items != null)
+            {
+                foreach (var it in gained.items)
+                {
+                    if (it != null && it.quantity > 0)
+                    {
+                        rewards.items.Add(new RewardItemDto { itemCode = it.itemCode, quantity = it.quantity });
+                    }
+                }
+            }
+            return rewards;
         }
 
         /// <summary>수령 후 세이브 스냅샷을 재로드해 세션(골드·인벤토리)을 최신화하고 목록을 다시 그린다.</summary>

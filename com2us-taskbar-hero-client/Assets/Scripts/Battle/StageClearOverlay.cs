@@ -13,6 +13,8 @@ namespace TaskbarHero.Client.Battle
     /// - 보상(골드·경험치·전리품 아이템 아이콘+수량) 노출. 세 종류 모두 공용 아이템 슬롯
     ///   프리팹(ItemSlot, <see cref="ItemSlotView"/>)을 사용해 수량/획득량이 슬롯 안쪽에
     ///   동일하게 노출되도록 통일한다(경험치는 아이콘 대신 "EXP" 라벨을 표시하는 SetupLabel 사용).
+    ///   보상 칸은 한꺼번에 나타나지 않고 <b>왼쪽 칸부터 하나씩</b> 없던 상태에서 커지며 등장한다
+    ///   (<see cref="StartRewardPopIn"/>).
     /// - 화면 클릭 또는 5초 경과 시 자동으로 닫히며, 닫힐 때 게임 속도를 정상으로 복원한다.
     /// 정적 계층(Canvas·팡파레·타이틀·보상 행 컨테이너·안내 문구)은 <see cref="EditorConstruct"/>가
     /// 구성해 <c>Assets/Prefabs/UI/StageClearOverlay.prefab</c>으로 저장되고(StageClearOverlayBuilder),
@@ -24,22 +26,51 @@ namespace TaskbarHero.Client.Battle
         private const float AutoCloseSeconds = 5f;
         private const float FanfareFps = 24f;
 
+        // 보상 칸 등장 연출: 왼쪽 칸부터 차례로, 없던 상태(스케일 0)에서 원래 크기로 커진다.
+        private const float RewardPopDuration = 0.22f;  // 칸 하나가 다 커지는 데 걸리는 시간
+        private const float RewardPopInterval = 0.11f;  // 다음 칸이 등장하기까지의 간격
+
         [Tooltip("전체화면 클릭 시 닫기 처리할 투명 차단막 버튼.")]
         [SerializeField] private Button _dimButton;
         [Tooltip("클리어 팡파레 프레임 시퀀스를 그리는 이미지.")]
         [SerializeField] private Image _fanfareImage;
+        [Tooltip("상단 타이틀 텍스트. 재활용 시 호출측이 문구를 바꾼다(클리어/우편 수령 등).")]
+        [SerializeField] private Text _titleText;
         [Tooltip("보상 칸(공용 아이템 슬롯)이 채워지는 가로 정렬 컨테이너.")]
         [SerializeField] private RectTransform _rewardsRow;
+
+        private const string StageClearTitle = "STAGE CLEAR!";
 
         private StageClearAssets _assets;
         private Sprite[] _frames;
         private int _frameIndex;
         private float _frameTimer;
         private bool _dismissed;
+        private bool _restoreTimeScale;
         private Action _onClosed;
 
-        /// <summary>클리어 응답 데이터로 오버레이를 생성·표시한다. onClosed는 닫힐 때(클릭/자동) 1회 호출된다.</summary>
+        /// <summary>클리어 응답 데이터로 오버레이를 생성·표시한다. onClosed는 닫힐 때(클릭/자동) 1회 호출된다.
+        /// 전투 종료 슬로우모션 상태에서 열리므로 닫을 때 게임 속도를 정상으로 되돌린다.</summary>
         public static void Show(StageClearData data, Action onClosed = null)
+        {
+            ShowRewards(StageClearTitle, data != null ? data.rewards : null, true, onClosed);
+        }
+
+        /// <summary>
+        /// 클리어 연출 UI(팡파레 + 보상 칸 순차 등장)를 <b>보상 획득 연출로 재활용</b>한다.
+        /// 우편함 첨부 수령처럼 "무엇을 얼마나 받았는지"를 같은 방식으로 보여줄 때 쓴다.
+        /// 전투와 무관한 화면에서 호출되므로 게임 속도에는 손대지 않는다.
+        /// </summary>
+        /// <param name="title">상단에 표시할 문구(예: "보상 획득!").</param>
+        /// <param name="rewards">표시할 보상(골드·경험치·아이템). 비어 있으면 보상 칸 없이 연출만 나온다.</param>
+        public static void ShowRewards(string title, StageRewardsDto rewards, Action onClosed = null)
+        {
+            ShowRewards(title, rewards, false, onClosed);
+        }
+
+        /// <summary>오버레이를 만들어 표시하는 공통 경로(클리어·보상 획득 재활용 양쪽).
+        /// 프리팹이 없으면 런타임 구성으로 폴백한다.</summary>
+        private static void ShowRewards(string title, StageRewardsDto rewards, bool restoreTimeScale, Action onClosed)
         {
             var assets = StageClearAssets.Load();
             StageClearOverlay overlay;
@@ -60,7 +91,18 @@ namespace TaskbarHero.Client.Battle
 
             overlay._assets = assets;
             overlay._onClosed = onClosed;
-            overlay.Populate(data);
+            overlay._restoreTimeScale = restoreTimeScale;
+            overlay.SetTitle(title);
+            overlay.Populate(rewards);
+        }
+
+        /// <summary>상단 타이틀 문구를 바꾼다(빈 값이면 프리팹에 구워진 기본 문구를 유지).</summary>
+        private void SetTitle(string title)
+        {
+            if (_titleText != null && !string.IsNullOrEmpty(title))
+            {
+                _titleText.text = title;
+            }
         }
 
 #if UNITY_EDITOR
@@ -127,10 +169,11 @@ namespace TaskbarHero.Client.Battle
             _fanfareImage.raycastTarget = false;
             _fanfareImage.preserveAspect = true; // 전체 프레임을 잘림 없이 표시
 
-            // "STAGE CLEAR" 타이틀(상단).
-            var title = CreateText("Title", transform, font, "STAGE CLEAR!", 96, TextAnchor.MiddleCenter);
+            // 타이틀(상단). 기본은 "STAGE CLEAR!"이며, 재활용 시 호출측이 SetTitle로 문구를 바꾼다.
+            var title = CreateText("Title", transform, font, StageClearTitle, 96, TextAnchor.MiddleCenter);
             title.color = new Color(1f, 0.92f, 0.4f);
             title.fontStyle = FontStyle.Bold;
+            _titleText = title;
             var trt = (RectTransform)title.transform;
             trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 0.5f);
             trt.sizeDelta = new Vector2(900f, 160f);
@@ -158,8 +201,8 @@ namespace TaskbarHero.Client.Battle
             hrt.anchoredPosition = new Vector2(0f, 70f);
         }
 
-        /// <summary>클리어 응답 데이터로 팡파레·보상 칸을 채우고 자동 닫기 타이머를 시작한다.</summary>
-        private void Populate(StageClearData data)
+        /// <summary>보상 데이터로 팡파레·보상 칸을 채우고 자동 닫기 타이머를 시작한다.</summary>
+        private void Populate(StageRewardsDto rewards)
         {
             _frames = _assets != null ? _assets.fanfareFrames : null;
             if (_fanfareImage != null)
@@ -172,13 +215,60 @@ namespace TaskbarHero.Client.Battle
                 }
             }
 
-            BuildRewards(data);
+            BuildRewards(rewards);
+            StartRewardPopIn();
 
             StartCoroutine(AutoCloseAfter(AutoCloseSeconds));
         }
 
+        /// <summary>
+        /// 보상 칸 등장 연출을 시작한다. 만들어진 칸을 <b>같은 프레임에</b> 스케일 0으로 감춰
+        /// (한 프레임 통째로 보였다 사라지는 깜빡임 방지) 왼쪽부터 하나씩 커지게 한다.
+        /// 가로 레이아웃은 칸의 크기(sizeDelta)로 자리를 잡고 스케일은 보지 않으므로,
+        /// 등장 중에도 각 칸의 위치는 흔들리지 않는다.
+        /// </summary>
+        private void StartRewardPopIn()
+        {
+            if (_rewardsRow == null || _rewardsRow.childCount == 0)
+            {
+                return;
+            }
+
+            var slots = new RectTransform[_rewardsRow.childCount];
+            for (int i = 0; i < slots.Length; i++)
+            {
+                slots[i] = (RectTransform)_rewardsRow.GetChild(i); // 자식 순서 = 화면 왼쪽부터의 순서
+                slots[i].localScale = Vector3.zero;
+            }
+            StartCoroutine(RewardPopInSequence(slots));
+        }
+
+        /// <summary>보상 칸을 왼쪽부터 <see cref="RewardPopInterval"/> 간격으로 하나씩 등장시킨다.</summary>
+        private IEnumerator RewardPopInSequence(RectTransform[] slots)
+        {
+            for (int i = 0; i < slots.Length; i++)
+            {
+                StartCoroutine(RewardPopIn(slots[i]));
+                yield return new WaitForSecondsRealtime(RewardPopInterval);
+            }
+        }
+
+        /// <summary>칸 하나를 스케일 0 → 원래 크기로 키운다(슬로우모션과 무관하게 unscaled 시간 사용).</summary>
+        private static IEnumerator RewardPopIn(RectTransform slot)
+        {
+            float elapsed = 0f;
+            while (elapsed < RewardPopDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float k = Mathf.Clamp01(elapsed / RewardPopDuration);
+                slot.localScale = Vector3.one * Mathf.SmoothStep(0f, 1f, k);
+                yield return null;
+            }
+            slot.localScale = Vector3.one;
+        }
+
         /// <summary>골드·경험치·전리품 아이템을 보상 행에 채운다(모두 공용 아이템 슬롯으로 통일).</summary>
-        private void BuildRewards(StageClearData data)
+        private void BuildRewards(StageRewardsDto rewards)
         {
             if (_rewardsRow == null)
             {
@@ -186,7 +276,6 @@ namespace TaskbarHero.Client.Battle
             }
 
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            var rewards = data != null ? data.rewards : null;
 
             // 경험치 — 공용 슬롯(ItemSlot 프리팹)에 아이콘 대신 "EXP" 라벨을 표시해 골드·아이템과 동일하게
             // 슬롯 안쪽(우하단)에 획득량이 노출되도록 통일한다.
@@ -409,7 +498,10 @@ namespace TaskbarHero.Client.Battle
                 return;
             }
             _dismissed = true;
-            Time.timeScale = 1f;
+            if (_restoreTimeScale)
+            {
+                Time.timeScale = 1f; // 전투 종료 슬로우모션 복원(클리어 연출 전용 — 재활용 호출은 속도에 손대지 않는다)
+            }
             var cb = _onClosed;
             _onClosed = null;
             Destroy(gameObject);
