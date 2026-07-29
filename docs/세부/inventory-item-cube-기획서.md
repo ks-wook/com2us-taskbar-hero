@@ -121,7 +121,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 5.1 장착 — `POST /api/game/inventory/equip`
 
-지정 캐릭터에게 아이템을 장착한다. 장착 슬롯은 아이템의 `item_master.equip_slot`에서 파생하며, 서버는 `player_item_equipped`에 대상 아이템의 장착 행(`equipped_character_id`/`equipped_slot`)을 INSERT한다. 그 캐릭터의 같은 슬롯에 이미 장착된 장비가 있으면 그 장착 행을 DELETE해 스왑한다. 장비의 **클래스 제한**(`item_master.class_req`, `0`은 전 클래스 공용)이 **대상 캐릭터의 직업**(`player_character.class_code`, 기사/레인저/마법사)과 일치해야 하고, 그 캐릭터 `level`이 **요구 레벨**(`item_master.level_req`, **5레벨 단위**, `0`은 제한 없음) 이상이어야 하며, 어느 하나라도 위반하면 `ItemNotEquippable(4003)`로 거부한다.
+지정 캐릭터에게 아이템을 장착한다. 장착 슬롯은 아이템의 `item_master.equip_slot`에서 파생하며, 서버는 `player_item_equipped`에 대상 아이템의 장착 행(`equipped_character_id`/`equipped_slot`)을 INSERT한다. 그 캐릭터의 같은 슬롯에 이미 장착된 장비가 있으면 그 장착 행을 DELETE해 스왑한다. 장비의 **클래스 제한**(`item_master.class_req`, `0`은 전 클래스 공용)이 **대상 캐릭터의 직업**(`player_character.class_code`, 기사/레인저/마법사/슬레이어)과 일치해야 하고, 그 캐릭터 `level`이 **요구 레벨**(`item_master.level_req`, **5레벨 단위**, `0`은 제한 없음) 이상이어야 하며, 어느 하나라도 위반하면 `ItemNotEquippable(4003)`로 거부한다.
 
 **가방 칸 반납(확정)**: 장착과 동시에 그 아이템의 `player_item.slot`을 **NULL로 비운다**. 장착한 장비는 가방을 차지하지 않으므로 인벤토리 용량과 가방 페이지 조회에서 빠진다. 스왑이 일어나면 밀려난 기존 장비가 **방금 비운 그 칸**으로 들어가므로 점유 칸 수가 상쇄되어, 스왑 장착은 가방이 가득 차 있어도 실패하지 않는다.
 
@@ -516,7 +516,7 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
   - **합성 결과 아이템 선정**: **(입력 등급+1) 장비 중 서버 무작위 1개**(슬롯·클래스 무관, 확률 개입 없음, 균등). 입력은 같은 등급이면 되고 **슬롯·클래스는 서로 달라도 된다**. 등급 5는 상위 없음 → `CubeRecipeNotMet`.
   - **큐브 경험치 획득량**: 합성 `50 × 입력 등급`, 분해 `20 × 등급 × 개수`, 제작 `20`(고정). 학습용 임시값(스키마 불변, 값만 조정).
   - **`cube_level` 효과·성장**: `cube_exp` 누적이 `cube_master.required_exp(cube_level)` 이상이면 레벨업(초과분 이월, 최대 5). 레벨은 분해 골드 계수(`gold_per_scrap`)와 제작 요구 레벨(`req_cube_level`) 게이팅에 작용한다(합성 개수는 현재 전 레벨 3 고정).
-- **장비 클래스 제한 (확정)**: 장비는 착용 가능한 **클래스 제한**을 가진다. 현재 클래스는 **기사·레인저·마법사 3종으로 확정**([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.1 `class_master`)이며, **추후 확인 후 클래스를 추가할 예정**이다. 각 장비가 어느 클래스용인지는 `item_master.class_req`로 정의한다(`0`이면 전 클래스 공용, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.3에 반영 완료). 장착(5.1) 시 서버가 `class_req`(≠0)을 **대상 캐릭터 클래스**(`player_character.class_code`)와 대조해 불일치면 `ItemNotEquippable(4003)`로 거부한다.
+- **장비 클래스 제한 (확정)**: 장비는 착용 가능한 **클래스 제한**을 가진다. 현재 클래스는 **기사·레인저·마법사·슬레이어 4종으로 확정**([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.1 `class_master`)이며, **추후 확인 후 클래스를 더 추가할 예정**이다. 각 장비가 어느 클래스용인지는 `item_master.class_req`로 정의한다(`0`이면 전 클래스 공용, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.3에 반영 완료). 장착(5.1) 시 서버가 `class_req`(≠0)을 **대상 캐릭터 클래스**(`player_character.class_code`)와 대조해 불일치면 `ItemNotEquippable(4003)`로 거부한다.
 - **다연속 오픈(10연차) — 예정**: 요청 `count`와 응답 `rewards` 배열은 **다연속 확장을 위해 계약에 미리 반영**했다(5.9). 현재 서버 로직은 `count`=1(단발)만 처리하며, 추후 10연차 등 다연속 오픈 로직을 구현할 때 `count`>1 처리(비용 `오픈 비용 × count`)와 묶음 할인·등급 보장(천장) 여부를 함께 확정한다.
 - **상자 오픈 비용·등급 확률·지급 아이템 풀 (`box_master`)**: 오픈 비용(`open_cost`, 골드), `grade_weights`(등급별 추첨 가중치), 지급 대상 아이템 풀 — 전체 `item_master.grade` 필터로 할지 상자별 화이트리스트로 할지, 등급 내 아이템 선택이 균등인지 가중치인지 — 및 수량 규칙은 [마스터 데이터 기획서](master-data/master-data-기획서.md)에서 확정한다.
 - **오픈 상자 종류의 노출 방식**: 어떤 상자(`box_code`)를 어디서(상점/특정 UI) 열 수 있는지, 상자별 해금 조건이 있는지.
