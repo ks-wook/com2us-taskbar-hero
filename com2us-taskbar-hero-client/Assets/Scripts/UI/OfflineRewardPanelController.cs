@@ -395,11 +395,13 @@ namespace TaskbarHero.Client.UI
                 if (slot != null) slot.gameObject.SetActive(true);
 
                 int classCode = ClassCodeOf(state.characterId);
-                var prefab = PrefabForClass(classCode);
-                if (_portraits != null && i < _portraits.Length && _portraits[i] != null && _portraitClassCode[i] != classCode)
+                int gender = GenderOf(state.characterId);
+                var prefab = PrefabForClass(classCode, gender);
+                int portraitKey = classCode * 10 + gender;
+                if (_portraits != null && i < _portraits.Length && _portraits[i] != null && _portraitClassCode[i] != portraitKey)
                 {
                     _portraits[i].SetCharacter(prefab);
-                    _portraitClassCode[i] = classCode;
+                    _portraitClassCode[i] = portraitKey;
                 }
                 if (render != null)
                 {
@@ -446,9 +448,35 @@ namespace TaskbarHero.Client.UI
             return -1;
         }
 
-        /// <summary>classCode에 해당하는 초상화 캐릭터 프리팹을 반환한다(없으면 null).</summary>
-        private GameObject PrefabForClass(int classCode)
+        /// <summary>정산 대상 캐릭터(characterId)의 성별을 세션 세이브에서 조회한다(없으면 1:남).</summary>
+        private static int GenderOf(int characterId)
         {
+            var chars = Session.GameData != null ? Session.GameData.characters : null;
+            if (chars != null)
+            {
+                foreach (var c in chars)
+                {
+                    if (c != null && c.characterId == characterId)
+                    {
+                        return c.gender > 0 ? c.gender : CharacterPrefabDatabase.DefaultGender;
+                    }
+                }
+            }
+            return CharacterPrefabDatabase.DefaultGender;
+        }
+
+        /// <summary>
+        /// 직업·성별에 해당하는 초상화 캐릭터 프리팹을 반환한다(없으면 null).
+        /// 공용 <see cref="CharacterPrefabDatabase"/>(Resources)를 먼저 보고, 없으면 인스펙터에 배선된
+        /// 직업별 프리팹 목록으로 폴백한다(성별 구분 없음).
+        /// </summary>
+        private GameObject PrefabForClass(int classCode, int gender)
+        {
+            var fromDb = CharacterPrefabDatabase.PrefabOf(classCode, gender);
+            if (fromDb != null)
+            {
+                return fromDb;
+            }
             if (_classCharacters != null)
             {
                 foreach (var e in _classCharacters)

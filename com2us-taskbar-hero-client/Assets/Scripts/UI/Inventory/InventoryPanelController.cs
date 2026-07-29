@@ -1002,7 +1002,7 @@ namespace TaskbarHero.Client.UI
             _expText.text = $"EXP  {cur:N0} / {required:N0}  (남은 {remain:N0})";
         }
 
-        /// <summary>선택된 캐릭터의 직업 프리팹을 초상화 렌더러에 반영한다(직업이 바뀔 때만 재생성).</summary>
+        /// <summary>선택된 캐릭터의 직업·성별 프리팹을 초상화 렌더러에 반영한다(외형이 바뀔 때만 재생성).</summary>
         private void UpdatePortrait(List<CharacterDto> chars)
         {
             EnsurePortraitStage();
@@ -1011,14 +1011,19 @@ namespace TaskbarHero.Client.UI
                 return;
             }
 
-            int classCode = chars != null && _selectedCharacter < chars.Count ? chars[_selectedCharacter].classCode : -1;
-            if (classCode == _portraitClassCode)
+            bool hasChar = chars != null && _selectedCharacter < chars.Count && chars[_selectedCharacter] != null;
+            int classCode = hasChar ? chars[_selectedCharacter].classCode : -1;
+            int gender = hasChar && chars[_selectedCharacter].gender > 0
+                ? chars[_selectedCharacter].gender
+                : CharacterPrefabDatabase.DefaultGender;
+            int portraitKey = classCode * 10 + gender;
+            if (portraitKey == _portraitClassCode)
             {
-                return; // 동일 직업이면 인스턴스를 재생성하지 않음
+                return; // 동일 직업·성별이면 인스턴스를 재생성하지 않음
             }
-            _portraitClassCode = classCode;
+            _portraitClassCode = portraitKey;
 
-            var prefab = PrefabForClass(classCode);
+            var prefab = PrefabForClass(classCode, gender);
             _portrait.SetCharacter(prefab);
             if (_portraitImage != null)
             {
@@ -1039,9 +1044,18 @@ namespace TaskbarHero.Client.UI
             _portrait.Initialize(_portraitImage, PortraitLayer, 440, 600, PortraitOrtho, PortraitAim, PortraitBg, PortraitStageOrigin);
         }
 
-        /// <summary>classCode에 해당하는 초상화 캐릭터 프리팹을 반환한다(없으면 null).</summary>
-        private GameObject PrefabForClass(int classCode)
+        /// <summary>
+        /// 직업·성별에 해당하는 초상화 캐릭터 프리팹을 반환한다(없으면 null).
+        /// 공용 <see cref="CharacterPrefabDatabase"/>(Resources)를 먼저 보고, 없으면 인스펙터에 배선된
+        /// 직업별 프리팹 목록으로 폴백한다(성별 구분 없음).
+        /// </summary>
+        private GameObject PrefabForClass(int classCode, int gender)
         {
+            var fromDb = CharacterPrefabDatabase.PrefabOf(classCode, gender);
+            if (fromDb != null)
+            {
+                return fromDb;
+            }
             if (_classCharacters != null)
             {
                 foreach (var e in _classCharacters)

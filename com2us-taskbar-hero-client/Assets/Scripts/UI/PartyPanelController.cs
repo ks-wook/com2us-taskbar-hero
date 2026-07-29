@@ -307,11 +307,12 @@ namespace TaskbarHero.Client.UI
                 {
                     if (addRoot != null) addRoot.SetActive(false);
 
-                    var prefab = PrefabForClass(c.classCode);
-                    if (_portraits != null && i < _portraits.Length && _portraits[i] != null && _portraitClassCode[i] != c.classCode)
+                    var prefab = PrefabForClass(c.classCode, c.gender);
+                    int portraitKey = PortraitKeyOf(c.classCode, c.gender);
+                    if (_portraits != null && i < _portraits.Length && _portraits[i] != null && _portraitClassCode[i] != portraitKey)
                     {
                         _portraits[i].SetCharacter(prefab);
-                        _portraitClassCode[i] = c.classCode;
+                        _portraitClassCode[i] = portraitKey;
                     }
                     if (render != null)
                     {
@@ -339,9 +340,24 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>classCode에 해당하는 초상화 캐릭터 프리팹을 반환한다(없으면 null).</summary>
-        private GameObject PrefabForClass(int classCode)
+        /// <summary>초상화 캐시 키(직업+성별). 성별이 다르면 다른 외형이므로 프리팹을 다시 심어야 한다.</summary>
+        private static int PortraitKeyOf(int classCode, int gender)
         {
+            return classCode * 10 + gender;
+        }
+
+        /// <summary>
+        /// 직업·성별에 해당하는 초상화 캐릭터 프리팹을 반환한다(없으면 null).
+        /// 공용 <see cref="CharacterPrefabDatabase"/>(Resources)를 먼저 보고, 없으면 인스펙터에 배선된
+        /// 직업별 프리팹 목록으로 폴백한다(성별 구분 없음).
+        /// </summary>
+        private GameObject PrefabForClass(int classCode, int gender)
+        {
+            var fromDb = CharacterPrefabDatabase.PrefabOf(classCode, gender);
+            if (fromDb != null)
+            {
+                return fromDb;
+            }
             if (_classCharacters != null)
             {
                 foreach (var e in _classCharacters)

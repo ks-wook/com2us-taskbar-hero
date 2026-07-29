@@ -18,8 +18,11 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Button selectButton;
         [SerializeField] private Button backButton;
 
-        [Header("기본 능력치(class_master)")]
-        [SerializeField] private CharacterStatRow[] statRows;
+        [Header("기본 능력치(class_master) — 5각형 레이더")]
+        [Tooltip("체력·공격력·공격속도·이동속도·방어력 5축 차트(ClassStatInfo.DisplayKinds 순서).")]
+        [SerializeField] private StatRadarChart statRadar;
+        [Tooltip("각 꼭짓점의 수치 텍스트. ClassStatInfo.DisplayKinds 와 같은 순서로 배선한다.")]
+        [SerializeField] private Text[] statValueTexts;
 
         public event Action Selected;
         public event Action Backed;
@@ -81,17 +84,12 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>
-        /// 선택한 직업(class_master)의 기본 능력치를 스탯 행 UI에 채운다.
-        /// 각 행의 게이지는 전체 직업 중 그 능력치의 최대값 대비 비율이라 직업 간 강점이 비교된다.
-        /// 마스터 데이터에 직업이 없으면 행을 모두 '-'로 비운다.
+        /// 선택한 직업(class_master)의 기본 능력치를 5각형 레이더와 꼭짓점 수치 텍스트에 채운다.
+        /// 각 축의 길이는 전체 직업 중 그 능력치의 최대값 대비 비율이라 직업 간 강점이 한눈에 비교된다.
+        /// 마스터 데이터에 직업이 없으면 차트를 0으로 접고 수치를 '-'로 비운다.
         /// </summary>
         public void SetStats(int classCode)
         {
-            if (statRows == null || statRows.Length == 0)
-            {
-                return;
-            }
-
             MasterDataManager.EnsureLoaded();
             var db = MasterDataManager.Db;
             ClassMaster cls = null;
@@ -100,21 +98,26 @@ namespace TaskbarHero.Client.UI
                 db.Classes.TryGetValue(classCode, out cls);
             }
 
-            foreach (var row in statRows)
+            var kinds = ClassStatInfo.DisplayKinds;
+            var ratios = new float[kinds.Length];
+            for (int i = 0; i < kinds.Length; i++)
             {
-                if (row == null)
+                if (cls != null)
                 {
-                    continue;
-                }
-                if (cls == null)
-                {
-                    row.Set("-", 0f);
-                    continue;
+                    float raw = ClassStatInfo.RawOf(cls.baseStats, kinds[i]);
+                    float max = MaxAmongClasses(kinds[i]);
+                    ratios[i] = max > 0f ? raw / max : 0f;
                 }
 
-                float raw = ClassStatInfo.RawOf(cls.baseStats, row.Kind);
-                float max = MaxAmongClasses(row.Kind);
-                row.Set(ClassStatInfo.FormatOf(cls.baseStats, row.Kind), max > 0f ? raw / max : 0f);
+                if (statValueTexts != null && i < statValueTexts.Length && statValueTexts[i] != null)
+                {
+                    statValueTexts[i].text = cls != null ? ClassStatInfo.FormatOf(cls.baseStats, kinds[i]) : "-";
+                }
+            }
+
+            if (statRadar != null)
+            {
+                statRadar.SetValues(ratios);
             }
         }
 

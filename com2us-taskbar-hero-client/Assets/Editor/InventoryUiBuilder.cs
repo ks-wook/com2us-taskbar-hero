@@ -158,9 +158,9 @@ namespace TaskbarHero.ClientEditor
                 return;
             }
             prop.arraySize = 3;
-            SetClassCharacter(prop, 0, 1, "Assets/Prefabs/Character/Knight.prefab");
-            SetClassCharacter(prop, 1, 2, "Assets/Prefabs/Character/Archer.prefab");
-            SetClassCharacter(prop, 2, 3, "Assets/Prefabs/Character/Mage.prefab");
+            SetClassCharacter(prop, 0, 1, "Assets/Prefabs/Character/Knight_Male.prefab");
+            SetClassCharacter(prop, 1, 2, "Assets/Prefabs/Character/Archer_Male.prefab");
+            SetClassCharacter(prop, 2, 3, "Assets/Prefabs/Character/Mage_Female.prefab");
         }
 
         /// <summary>_classCharacters 배열의 index번째 요소에 classCode와 프리팹을 지정한다.</summary>

@@ -66,9 +66,9 @@ namespace TaskbarHero.ClientEditor
                 return;
             }
             prop.arraySize = 3;
-            SetClassCharacter(prop, 0, 1, "Assets/Prefabs/Character/Knight.prefab");
-            SetClassCharacter(prop, 1, 2, "Assets/Prefabs/Character/Archer.prefab");
-            SetClassCharacter(prop, 2, 3, "Assets/Prefabs/Character/Mage.prefab");
+            SetClassCharacter(prop, 0, 1, "Assets/Prefabs/Character/Knight_Male.prefab");
+            SetClassCharacter(prop, 1, 2, "Assets/Prefabs/Character/Archer_Male.prefab");
+            SetClassCharacter(prop, 2, 3, "Assets/Prefabs/Character/Mage_Female.prefab");
             so.ApplyModifiedPropertiesWithoutUndo();
         }
 

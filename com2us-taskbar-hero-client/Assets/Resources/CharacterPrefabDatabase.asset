@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 88c84d844bbb1a64e9903b887c9593b5, type: 3}
+  m_Name: CharacterPrefabDatabase
+  m_EditorClassIdentifier: TaskbarHero.Client.Managers::TaskbarHero.Client.Managers.CharacterPrefabDatabase
+  entries:
+  - classCode: 1
+    gender: 1
+    prefab: {fileID: 7715552558439874258, guid: aec85af960a9b5641a641a8fb6bb0cb0, type: 3}
+  - classCode: 1
+    gender: 2
+    prefab: {fileID: 992518889194338473, guid: 19c060f9f7e7f194ca2e044b8bbdc9be, type: 3}
+  - classCode: 2
+    gender: 1
+    prefab: {fileID: 7127064250040410633, guid: 0c939ae22cd427141a2f3bc74c582d40, type: 3}
+  - classCode: 2
+    gender: 2
+    prefab: {fileID: 9158167135536924216, guid: d685301b6bca37b4ea66fd45dbcd2a14, type: 3}
+  - classCode: 3
+    gender: 1
+    prefab: {fileID: 6108469982049807281, guid: e35d8593b09d9b148b9503589db474ce, type: 3}
+  - classCode: 3
+    gender: 2
+    prefab: {fileID: 2832778511305924686, guid: 5971c58743c2dc348b4edbd551c61325, type: 3}

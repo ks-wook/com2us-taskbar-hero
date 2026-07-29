@@ -8,7 +8,10 @@ namespace TaskbarHero.ClientEditor
     /// <summary>
     /// 캐릭터 선택 패널(CharacterSelectPanel.prefab)에 class_master 기본 능력치 블록을 심는 도구.
     /// 기존 계층(Title·Description·Select/Back 버튼·픽셀 스프라이트)은 유지하고 위치만 재배치한 뒤,
-    /// 'StatsHeader' + 'Stats'(CharacterStatRow 7행)를 다시 생성한다(멱등 — 재실행 시 기존 블록 제거 후 재생성).
+    /// 'StatsHeader' + 'StatRadar'(5각형 레이더 + 꼭짓점 라벨/수치)를 다시 생성한다
+    /// (멱등 — 재실행 시 기존 블록 제거 후 재생성).
+    /// 표시 능력치는 <see cref="ClassStatInfo.DisplayKinds"/>(체력·공격력·공격속도·이동속도·방어력) 5종이며
+    /// 치명확률·치명피해는 표시하지 않는다.
     /// 패널 크기는 그대로 둔다(1920x1080 기준 CanvasScaler 논리 높이가 약 360px이라 더 키우면 화면을 벗어남).
     /// 메뉴: TaskbarHero/UI/캐릭터 선택 패널 능력치 배선
     /// </summary>
@@ -16,15 +19,11 @@ namespace TaskbarHero.ClientEditor
     {
         private const string PrefabPath = "Assets/Prefabs/UI/CharacterSelectPanel.prefab";
 
-        private const float RowHeight = 18f;   // 행 간격(행 높이 17 + 여백 1)
-        private const float RowInner = 17f;
-        private const float StatsTop = 114f;   // 패널 상단에서 능력치 블록까지의 거리
-
-        private static readonly ClassStatKind[] Kinds =
-        {
-            ClassStatKind.Hp, ClassStatKind.Atk, ClassStatKind.Def, ClassStatKind.AttackSpeed,
-            ClassStatKind.CritChance, ClassStatKind.CritDamage, ClassStatKind.MoveSpeed,
-        };
+        private const float RadarCenterY = 178f;  // 패널 상단에서 레이더 중심까지의 거리
+        private const float RadarRadius = 34f;    // 바깥 링 반지름
+        private const float LabelRadius = 52f;    // 꼭짓점 라벨(이름+수치) 중심까지의 거리
+        private const float LabelWidth = 44f;
+        private const float LabelHeight = 24f;
 
         [MenuItem("TaskbarHero/UI/캐릭터 선택 패널 능력치 배선")]
         public static void Build()
@@ -46,13 +45,13 @@ namespace TaskbarHero.ClientEditor
                 }
 
                 Relayout(panel);
-                var rows = BuildStatsBlock(panel);
-                WireController(root, rows);
+                var radar = BuildRadarBlock(panel, out var valueTexts);
+                WireController(root, radar, valueTexts);
                 BakePreview(root);
 
                 PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
                 AssetDatabase.SaveAssets();
-                Debug.Log($"[CharacterSelectUiBuilder] 완료: 기본 능력치 {rows.Length}행 배선 → {PrefabPath}");
+                Debug.Log($"[CharacterSelectUiBuilder] 완료: 5각형 능력치 레이더({valueTexts.Length}축) 배선 → {PrefabPath}");
             }
             finally
             {
@@ -100,11 +99,15 @@ namespace TaskbarHero.ClientEditor
             }
         }
 
-        /// <summary>'기본 능력치' 헤더와 능력치 7행을 생성해 돌려준다(기존 블록은 제거).</summary>
-        private static CharacterStatRow[] BuildStatsBlock(RectTransform panel)
+        /// <summary>
+        /// '기본 능력치' 헤더와 5각형 레이더(축별 이름 + 수치 라벨)를 생성한다(기존 블록은 제거).
+        /// 꼭짓점 순서는 <see cref="ClassStatInfo.DisplayKinds"/>와 같고, 맨 위에서 시계 방향으로 배치된다.
+        /// </summary>
+        private static StatRadarChart BuildRadarBlock(RectTransform panel, out Text[] valueTexts)
         {
             DestroyIfExists(panel, "StatsHeader");
-            DestroyIfExists(panel, "Stats");
+            DestroyIfExists(panel, "Stats");      // 구버전(7행 게이지) 블록 제거
+            DestroyIfExists(panel, "StatRadar");
 
             var header = CreateText(panel, "StatsHeader", "기본 능력치", 11, FontStyle.Bold,
                 new Color(0.68f, 0.65f, 0.56f), TextAnchor.MiddleCenter);
@@ -113,71 +116,58 @@ namespace TaskbarHero.ClientEditor
             header.anchoredPosition = new Vector2(0f, -98f);
             header.sizeDelta = new Vector2(130f, 14f);
 
-            var block = CreateRect(panel, "Stats");
-            block.anchorMin = block.anchorMax = new Vector2(0.5f, 1f);
-            block.pivot = new Vector2(0.5f, 1f);
-            block.anchoredPosition = new Vector2(0f, -StatsTop);
-            block.sizeDelta = new Vector2(130f, Kinds.Length * RowHeight);
+            // 레이더 본체(스프라이트 없이 메시로 그리는 Graphic).
+            var chartRect = CreateRect(panel, "StatRadar");
+            chartRect.anchorMin = chartRect.anchorMax = new Vector2(0.5f, 1f);
+            chartRect.pivot = new Vector2(0.5f, 0.5f);
+            chartRect.anchoredPosition = new Vector2(0f, -RadarCenterY);
+            chartRect.sizeDelta = new Vector2(RadarRadius * 2f, RadarRadius * 2f);
 
-            var rows = new CharacterStatRow[Kinds.Length];
-            for (int i = 0; i < Kinds.Length; i++)
+            // Graphic 은 CanvasRenderer 가 있어야 메시가 실제로 출력된다(없으면 오각형이 안 보인다).
+            if (chartRect.GetComponent<CanvasRenderer>() == null)
             {
-                rows[i] = CreateRow(block, Kinds[i], i);
+                chartRect.gameObject.AddComponent<CanvasRenderer>();
             }
-            return rows;
+            var radar = chartRect.gameObject.AddComponent<StatRadarChart>();
+            radar.raycastTarget = false;
+            var radarSo = new SerializedObject(radar);
+            radarSo.FindProperty("axisCount").intValue = ClassStatInfo.DisplayKinds.Length;
+            radarSo.FindProperty("radius").floatValue = RadarRadius;
+            radarSo.ApplyModifiedPropertiesWithoutUndo();
+
+            // 꼭짓점 라벨(이름 + 수치). 레이더와 같은 각도 계산을 써서 축과 정확히 맞춘다.
+            var kinds = ClassStatInfo.DisplayKinds;
+            valueTexts = new Text[kinds.Length];
+            for (int i = 0; i < kinds.Length; i++)
+            {
+                Vector2 dir = radar.DirectionOf(i);
+                var label = CreateRect(chartRect, "Label_" + kinds[i]);
+                label.anchorMin = label.anchorMax = new Vector2(0.5f, 0.5f);
+                label.pivot = new Vector2(0.5f, 0.5f);
+                label.anchoredPosition = new Vector2(dir.x * LabelRadius, dir.y * LabelRadius);
+                label.sizeDelta = new Vector2(LabelWidth, LabelHeight);
+
+                var name = CreateText(label, "Name", ClassStatInfo.LabelOf(kinds[i]), 9, FontStyle.Normal,
+                    ClassStatInfo.ColorOf(kinds[i]), TextAnchor.MiddleCenter);
+                name.anchorMin = new Vector2(0f, 0.5f);
+                name.anchorMax = new Vector2(1f, 1f);
+                name.offsetMin = Vector2.zero;
+                name.offsetMax = Vector2.zero;
+
+                var value = CreateText(label, "Value", "-", 9, FontStyle.Bold, Color.white, TextAnchor.MiddleCenter);
+                value.anchorMin = new Vector2(0f, 0f);
+                value.anchorMax = new Vector2(1f, 0.5f);
+                value.offsetMin = Vector2.zero;
+                value.offsetMax = Vector2.zero;
+
+                valueTexts[i] = value.GetComponent<Text>();
+            }
+
+            return radar;
         }
 
-        /// <summary>능력치 한 행(배경 + 게이지 + 라벨 + 수치)을 만들고 CharacterStatRow를 배선한다.</summary>
-        private static CharacterStatRow CreateRow(RectTransform parent, ClassStatKind kind, int index)
-        {
-            var row = CreateRect(parent, "Row_" + kind);
-            row.anchorMin = new Vector2(0f, 1f);
-            row.anchorMax = new Vector2(1f, 1f);
-            row.pivot = new Vector2(0.5f, 1f);
-            row.anchoredPosition = new Vector2(0f, -index * RowHeight);
-            row.sizeDelta = new Vector2(0f, RowInner);
-
-            var bg = row.gameObject.AddComponent<Image>();
-            bg.color = new Color(1f, 1f, 1f, 0.06f);
-            bg.raycastTarget = false;
-
-            // 게이지: 행 전체를 채우는 Filled 이미지(가로 방향). fillAmount 는 런타임에 비율로 갱신된다.
-            var fillRect = CreateRect(row, "BarFill");
-            Stretch(fillRect);
-            var fill = fillRect.gameObject.AddComponent<Image>();
-            fill.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-            fill.type = Image.Type.Filled;
-            fill.fillMethod = Image.FillMethod.Horizontal;
-            fill.fillOrigin = (int)Image.OriginHorizontal.Left;
-            fill.fillAmount = 0f;
-            fill.color = ClassStatInfo.ColorOf(kind);
-            fill.raycastTarget = false;
-
-            var label = CreateText(row, "Label", ClassStatInfo.LabelOf(kind), 11, FontStyle.Normal,
-                new Color(0.80f, 0.78f, 0.70f), TextAnchor.MiddleLeft);
-            label.anchorMin = new Vector2(0f, 0f);
-            label.anchorMax = new Vector2(0.55f, 1f);
-            label.offsetMin = new Vector2(5f, 0f);
-            label.offsetMax = Vector2.zero;
-
-            var value = CreateText(row, "Value", "-", 11, FontStyle.Bold, Color.white, TextAnchor.MiddleRight);
-            value.anchorMin = new Vector2(0.45f, 0f);
-            value.anchorMax = new Vector2(1f, 1f);
-            value.offsetMin = Vector2.zero;
-            value.offsetMax = new Vector2(-5f, 0f);
-
-            var component = row.gameObject.AddComponent<CharacterStatRow>();
-            var so = new SerializedObject(component);
-            so.FindProperty("kind").enumValueIndex = (int)kind;
-            so.FindProperty("labelText").objectReferenceValue = label.GetComponent<Text>();
-            so.FindProperty("valueText").objectReferenceValue = value.GetComponent<Text>();
-            so.FindProperty("barFill").objectReferenceValue = fill;
-            so.ApplyModifiedPropertiesWithoutUndo();
-            return component;
-        }
-
-        /// <summary>컨트롤러의 statRows 배열에 생성한 행들을 배선한다.</summary>
-        private static void WireController(GameObject root, CharacterStatRow[] rows)
+        /// <summary>컨트롤러에 레이더와 축별 수치 텍스트를 배선한다.</summary>
+        private static void WireController(GameObject root, StatRadarChart radar, Text[] valueTexts)
         {
             var controller = root.GetComponent<CharacterSelectPanelController>();
             if (controller == null)
@@ -187,11 +177,12 @@ namespace TaskbarHero.ClientEditor
             }
 
             var so = new SerializedObject(controller);
-            var prop = so.FindProperty("statRows");
-            prop.arraySize = rows.Length;
-            for (int i = 0; i < rows.Length; i++)
+            so.FindProperty("statRadar").objectReferenceValue = radar;
+            var prop = so.FindProperty("statValueTexts");
+            prop.arraySize = valueTexts.Length;
+            for (int i = 0; i < valueTexts.Length; i++)
             {
-                prop.GetArrayElementAtIndex(i).objectReferenceValue = rows[i];
+                prop.GetArrayElementAtIndex(i).objectReferenceValue = valueTexts[i];
             }
             so.ApplyModifiedPropertiesWithoutUndo();
         }
@@ -245,14 +236,6 @@ namespace TaskbarHero.ClientEditor
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             return rect;
-        }
-
-        private static void Stretch(RectTransform rect)
-        {
-            rect.anchorMin = Vector2.zero;
-            rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
         }
     }
 }

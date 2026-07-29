@@ -400,10 +400,46 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
+        /// <summary>
+        /// 스폰에 쓸 캐릭터 프리팹을 고른다. 서버 모드에서는 세이브의 성별(1:남 2:여)에 맞는 프리팹을
+        /// 공용 <see cref="CharacterPrefabDatabase"/>에서 찾아 쓰고, 개발 하네스(BattleDevScene)나
+        /// 등록된 프리팹이 없을 때는 인스펙터에 배선된 프리팹을 그대로 쓴다.
+        /// </summary>
+        private GameObject PrefabFor(PartyMemberConfig cfg)
+        {
+            if (cfg == null)
+            {
+                return null;
+            }
+            if (!serverMode)
+            {
+                return cfg.prefab;
+            }
+            var byGender = CharacterPrefabDatabase.PrefabOf(cfg.classCode, GenderOfClass(cfg.classCode));
+            return byGender != null ? byGender : cfg.prefab;
+        }
+
+        /// <summary>계정 세이브에서 해당 직업 캐릭터의 성별을 찾는다(없으면 1:남).</summary>
+        private static int GenderOfClass(int classCode)
+        {
+            var chars = Session.GameData != null ? Session.GameData.characters : null;
+            if (chars != null)
+            {
+                foreach (var c in chars)
+                {
+                    if (c != null && c.classCode == classCode && c.gender > 0)
+                    {
+                        return c.gender;
+                    }
+                }
+            }
+            return CharacterPrefabDatabase.DefaultGender;
+        }
+
         /// <summary>아군 1인을 ObjectManager로 생성하고 SPUM 애니메이터/방향/전투 컴포넌트를 배선해 반환한다.</summary>
         private PlayerCombatant SpawnAlly(PartyMemberConfig cfg, Vector3 pos)
         {
-            var go = _om.Spawn(CatAlly, cfg.prefab, pos, Quaternion.identity);
+            var go = _om.Spawn(CatAlly, PrefabFor(cfg), pos, Quaternion.identity);
             if (go == null) return null;
             EnsureSpumAnimator(go);
             SetFacingRight(go, true); // 아군은 오른쪽(적)을 바라봄
