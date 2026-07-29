@@ -54,9 +54,10 @@ namespace TaskbarHero.Common.Dto
     }
 
     /// <summary>
-    /// 캐릭터 생성 결과(create-character 응답 data). 2·3번 슬롯은 골드를 소모하며 cost·balance로 소모/잔액을 회신한다.
-    /// 최초 생성(1번 슬롯, 계정 초기화)은 무료라 cost.amount=0, balance는 빈 목록이다.
-    /// 생성 전 안내 비용은 클라이언트가 마스터(character_create_cost) 번들에서 다음 슬롯 값으로 조회한다.
+    /// 캐릭터 생성 결과(create-character 응답 data). 2번째 이후 생성은 정액 골드를 소모하며 cost·balance로 소모/잔액을 회신한다.
+    /// 최초 생성(계정 초기화)은 무료라 cost.amount=0, balance는 빈 목록이다.
+    /// 생성 전 안내 비용은 클라이언트가 마스터(character_create_cost) 번들에서 다음 생성 순번 값으로 조회한다.
+    /// slot은 서버가 배정한 파티 자리(빈 자리가 없으면 0=미편성)다.
     /// </summary>
     [Serializable]
     public class CreateCharacterResultData
@@ -64,10 +65,46 @@ namespace TaskbarHero.Common.Dto
         public long userId;
         public int characterId;
         public int classCode;
+        public int slot;                                             // 배정된 파티 자리(0=미편성, 1~3)
         public int gender;                                           // 1:남 2:여(생성 시 확정, 이후 변경 없음)
         public int level;
         public CurrencyDto cost = new CurrencyDto();                 // 소모 골드(최초 생성은 amount 0)
         public List<CurrencyDto> balance = new List<CurrencyDto>();  // 차감 후 잔액(최초 생성은 빈 목록)
+    }
+
+    /// <summary>파티 편성 저장 요청 body(인증). { userId, token, data:{ members:[{ characterId, slot }] } }</summary>
+    [Serializable]
+    public class ArrangePartyRequest
+    {
+        public long userId;
+        public string token;
+        public ArrangePartyData data;
+    }
+
+    /// <summary>
+    /// 파티 편성 저장 요청 data. 이동 절차가 아니라 <b>저장 후의 파티 전체(스냅샷)</b>를 보낸다
+    /// (세이브 데이터 기획서 5.5). 클라이언트 편성 UI의 "저장"이 그대로 1회 호출이 된다.
+    /// members에 없는 보유 캐릭터는 자동으로 미편성(slot 0)이 되므로 추가·추방·교체·자리 바꾸기가 모두 이 하나로 표현된다.
+    /// </summary>
+    [Serializable]
+    public class ArrangePartyData
+    {
+        public List<PartyMemberDto> members = new List<PartyMemberDto>();  // 저장 후 파티 전체(1~3명)
+    }
+
+    /// <summary>파티 편성 1자리. characterId(캐릭터 고유 식별자)를 slot(1~3) 자리에 세운다.</summary>
+    [Serializable]
+    public class PartyMemberDto
+    {
+        public int characterId;
+        public int slot;   // 파티 자리(1~3). 0(미편성)은 목록에 담지 않는 것으로 표현한다
+    }
+
+    /// <summary>파티 편성 저장 결과(party/arrange 응답 data). 갱신된 보유 캐릭터 전체를 자리 순으로 회신한다.</summary>
+    [Serializable]
+    public class ArrangePartyResultData
+    {
+        public List<CharacterDto> characters = new List<CharacterDto>();
     }
 
     // ── load 스냅샷 DTO ──
@@ -84,11 +121,16 @@ namespace TaskbarHero.Common.Dto
         public long lastActiveAt;
     }
 
+    /// <summary>
+    /// 보유 캐릭터 1명. characterId는 캐릭터 고유 식별자(생성 순번, 불변)이고 파티 자리는 slot이 담는다
+    /// — slot 0은 미편성(보유만 하고 전투에 나가지 않음, 성장·장비는 보존), 1~3은 파티 내 위치다.
+    /// </summary>
     [Serializable]
     public class CharacterDto
     {
         public int characterId;
         public int classCode;
+        public int slot;     // 파티 자리(0=미편성, 1~3)
         public int gender;   // 1:남 2:여(외형 전용)
         public int level;
         public long exp;

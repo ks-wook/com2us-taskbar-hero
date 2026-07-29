@@ -5,15 +5,15 @@ using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories;
 
-/// <summary>기존 캐릭터 슬롯 정보(슬롯 배정·직업 중복 검사용).</summary>
-public sealed record CharacterSlot(int CharacterId, int ClassCode);
+/// <summary>보유 캐릭터 요약(식별자 배정·직업 중복 검사·파티 자리 배정용). Slot은 파티 자리(0=미편성, 1~3).</summary>
+public sealed record CharacterSlot(int CharacterId, int ClassCode, int Slot);
 
 /// <summary>캐릭터 추가 생성 트랜잭션 결과 상태.</summary>
 public enum AddCharacterStatus
 {
     Ok,
     InsufficientCurrency, // 생성 비용 골드 부족
-    DuplicateConflict,    // 슬롯/직업 유니크 경합(동시 생성)
+    DuplicateConflict,    // 식별자/직업 유니크 경합(동시 생성)
 }
 
 /// <summary>캐릭터 추가 생성 트랜잭션 결과. Cost=차감 골드, GoldBalance=차감 후 잔액.</summary>
@@ -22,12 +22,25 @@ public sealed record AddCharacterOutcome(AddCharacterStatus Status, long Cost, l
     public static AddCharacterOutcome Fail(AddCharacterStatus status) => new(status, 0, 0);
 }
 
+/// <summary>파티 편성 저장 트랜잭션 결과 상태.</summary>
+public enum ArrangePartyStatus
+{
+    Ok,
+    CharacterNotFound, // 편성 목록에 계정이 보유하지 않은 캐릭터가 있음
+}
+
+/// <summary>파티 편성 저장 트랜잭션 결과. Characters=갱신된 보유 캐릭터 전체(파티 자리 순).</summary>
+public sealed record ArrangePartyOutcome(ArrangePartyStatus Status, List<CharacterDto> Characters)
+{
+    public static ArrangePartyOutcome Fail(ArrangePartyStatus status) => new(status, new List<CharacterDto>());
+}
+
 public interface ISaveRepository
 {
     /// <summary>game_player 1행을 세이브 응답용 DTO로 조회한다(계정 세이브 없으면 null).</summary>
     Task<PlayerDto?> GetPlayerAsync(long userId);
 
-    /// <summary>계정의 캐릭터 목록(슬롯 순)을 조회한다.</summary>
+    /// <summary>계정의 보유 캐릭터 목록(편성된 파티 자리 순 → 미편성 순)을 조회한다.</summary>
     Task<List<CharacterDto>> GetCharactersAsync(long userId);
 
     /// <summary>코어 로드용 재화 목록(player_item의 row_type=2 행)을 조회한다.</summary>
@@ -48,14 +61,18 @@ public interface ISaveRepository
     /// <summary>계정의 큐브 상태(레벨·경험치)를 조회한다(행 없으면 null).</summary>
     Task<CubeDto?> GetCubeAsync(long userId);
 
-    /// <summary>캐릭터 추가 생성 시 슬롯 배정·직업 중복 검사에 쓸 기존 슬롯 목록(슬롯 번호 + 직업)을 조회한다.</summary>
+    /// <summary>캐릭터 추가 생성 시 식별자·파티 자리 배정과 직업 중복 검사에 쓸 보유 캐릭터 목록(식별자 + 직업 + 파티 자리)을 조회한다.</summary>
     Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId);
 
-    /// <summary>최초 접속: game_player + 1번 슬롯 캐릭터(직업·성별) + 큐브를 한 트랜잭션으로 초기화한다.</summary>
+    /// <summary>최초 접속: game_player + 첫 캐릭터(직업·성별, 파티 1번 자리) + 큐브를 한 트랜잭션으로 초기화한다.</summary>
     Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix);
 
-    /// <summary>기존 계정에 캐릭터 1개 추가. 생성 비용(goldCost)을 골드에서 확인·차감하고 캐릭터를 삽입하는 한 트랜잭션.</summary>
-    Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, int gender, long goldCost);
+    /// <summary>기존 계정에 캐릭터 1개 추가. 생성 비용(goldCost)을 골드에서 확인·차감하고 지정 파티 자리(slot, 빈 자리 없으면 0)로 삽입하는 한 트랜잭션.</summary>
+    Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, int slot, int gender, long goldCost);
+
+    /// <summary>클라이언트가 보낸 파티 편성 스냅샷(자리별 캐릭터)을 그대로 저장한다.
+    /// 목록에 없는 보유 캐릭터는 미편성(slot 0)이 되는 한 트랜잭션.</summary>
+    Task<ArrangePartyOutcome> SavePartyAsync(long userId, IReadOnlyList<PartyMemberDto> members);
 
     /// <summary>last_active_at 갱신. 갱신된 행 수(0이면 계정 없음) 반환.</summary>
     Task<int> UpdateLastActiveAsync(long userId, long nowUnix);
@@ -78,9 +95,39 @@ file sealed class PlayerCharacterRow
 {
     public int CharacterId { get; set; }
     public int ClassCode { get; set; }
+    public int Slot { get; set; }
     public int Gender { get; set; }
     public int Level { get; set; }
     public long Exp { get; set; }
+}
+
+/// <summary>
+/// player_character 행 → 응답 DTO 변환. 행 POCO가 file 로컬 타입이라 리포지토리(공개 타입)의 메서드 시그니처에
+/// 그대로 쓸 수 없어(CS9051) 변환 로직을 이 file 로컬 헬퍼로 분리한다.
+/// </summary>
+file static class PlayerCharacterMapper
+{
+    private const int PartySlotUnassigned = 0;
+
+    /// <summary>행 하나를 캐릭터 DTO로 변환한다(파티 자리 slot 포함).</summary>
+    public static CharacterDto ToDto(PlayerCharacterRow row) => new CharacterDto
+    {
+        characterId = row.CharacterId,
+        classCode = row.ClassCode,
+        slot = row.Slot,
+        gender = row.Gender,
+        level = row.Level,
+        exp = row.Exp,
+    };
+
+    /// <summary>보유 캐릭터 행을 응답 순서(편성된 자리 1~3 순 → 미편성은 식별자 순)로 정렬해 DTO 목록으로 만든다.</summary>
+    public static List<CharacterDto> SortForResponse(IEnumerable<PlayerCharacterRow> rows)
+        => rows
+            .OrderBy(r => r.Slot == PartySlotUnassigned ? 1 : 0)
+            .ThenBy(r => r.Slot)
+            .ThenBy(r => r.CharacterId)
+            .Select(ToDto)
+            .ToList();
 }
 
 file sealed class CurrencyRow
@@ -132,6 +179,9 @@ public sealed class SaveRepository : ISaveRepository
     private const int GoldItemCode = 1;
     private const int MySqlDuplicateEntry = 1062;
 
+    /// <summary>player_character.slot의 "미편성"(파티에 속하지 않음) 값. 1~3은 파티 자리다.</summary>
+    private const int PartySlotUnassigned = 0;
+
     private readonly GameDbFactory _dbFactory;
 
     /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
@@ -163,22 +213,18 @@ public sealed class SaveRepository : ISaveRepository
     }
 
     /// <summary>
-    /// 계정의 player_character 전 행을 슬롯 번호(character_id) 순으로 조회해 캐릭터 DTO 목록으로 변환한다.
+    /// 계정의 player_character 전 행(보유 캐릭터)을 조회해 캐릭터 DTO 목록으로 변환한다.
+    /// 편성된 캐릭터(slot 1~3)를 자리 순으로 먼저 두고, 미편성(slot 0)은 뒤에 식별자 순으로 붙인다
+    /// — 클라이언트 파티 UI가 정렬 없이 그대로 그릴 수 있게 하기 위함이다.
     /// 읽기 전용이므로 트랜잭션 없이 자체 커넥션을 쓴다.
     /// </summary>
     public async Task<List<CharacterDto>> GetCharactersAsync(long userId)
     {
         using var db = _dbFactory.Create();
-        var rows = await db.Query("player_character").Where("user_id", userId).OrderBy("character_id")
+        var rows = await db.Query("player_character").Where("user_id", userId)
+            .OrderByRaw("CASE WHEN slot = 0 THEN 1 ELSE 0 END, slot, character_id")
             .GetAsync<PlayerCharacterRow>();
-        return rows.Select(r => new CharacterDto
-        {
-            characterId = r.CharacterId,
-            classCode = r.ClassCode,
-            gender = r.Gender,
-            level = r.Level,
-            exp = r.Exp,
-        }).ToList();
+        return PlayerCharacterMapper.SortForResponse(rows);
     }
 
     /// <summary>
@@ -292,15 +338,15 @@ public sealed class SaveRepository : ISaveRepository
     }
 
     /// <summary>
-    /// 캐릭터 추가 생성 시 필요한 기존 슬롯 정보(character_id·class_code)만 조회한다.
-    /// 서비스가 빈 슬롯 배정과 직업 중복 검사에 사용하며, 읽기 전용이므로 트랜잭션을 쓰지 않는다.
+    /// 캐릭터 추가 생성 시 필요한 보유 캐릭터 정보(character_id·class_code·slot)만 조회한다.
+    /// 서비스가 다음 식별자 배정·직업 중복 검사·빈 파티 자리 배정에 사용하며, 읽기 전용이므로 트랜잭션을 쓰지 않는다.
     /// </summary>
     public async Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId)
     {
         using var db = _dbFactory.Create();
-        var rows = await db.Query("player_character").Select("character_id", "class_code").Where("user_id", userId)
+        var rows = await db.Query("player_character").Select("character_id", "class_code", "slot").Where("user_id", userId)
             .GetAsync<PlayerCharacterRow>();
-        return rows.Select(r => new CharacterSlot(r.CharacterId, r.ClassCode)).ToList();
+        return rows.Select(r => new CharacterSlot(r.CharacterId, r.ClassCode, r.Slot)).ToList();
     }
 
     /// <summary>
@@ -311,7 +357,7 @@ public sealed class SaveRepository : ISaveRepository
     /// <remarks>
     /// 한 트랜잭션으로 묶는 작업(캐릭터·큐브·출석 진행도가 없는 반쪽 세이브가 남지 않게 한다):
     /// <para>1) game_player INSERT — 닉네임·시작 좌표(1-1-1)·최고 클리어 0·초기 인벤 용량·활동/생성/갱신 시각</para>
-    /// <para>2) player_character INSERT — 1번 슬롯에 선택 직업·성별 캐릭터를 레벨 1·경험치 0으로 생성</para>
+    /// <para>2) player_character INSERT — 첫 캐릭터(식별자 1)를 선택 직업·성별로, 파티 1번 자리에 레벨 1·경험치 0으로 생성</para>
     /// <para>3) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
     /// <para>4) player_attendance INSERT — 출석 진행도를 0(누적 0·마지막 획득 일자 0)으로 초기화.
     ///     출석 수령은 이 행의 조건부 갱신으로 처리하므로 계정 생성 시 함께 만들어 둔다(attendance 기획서 §4)</para>
@@ -345,6 +391,7 @@ public sealed class SaveRepository : ISaveRepository
                 user_id = userId,
                 character_id = 1,
                 class_code = classCode,
+                slot = 1, // 첫 캐릭터는 파티 1번 자리에 편성된 상태로 시작
                 gender,
                 level = 1,
                 exp = 0,
@@ -382,10 +429,11 @@ public sealed class SaveRepository : ISaveRepository
     /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 골드만 차감되고 캐릭터가 안 생기는 상태를 막는다):
     /// <para>1) player_item(재화 행) SELECT — 골드 잔액 확인(행이 없으면 잔액 0, 비용 미달 → InsufficientCurrency)</para>
     /// <para>2) player_item UPDATE — 비용이 0보다 클 때만 골드 차감</para>
-    /// <para>3) player_character INSERT — 지정 슬롯에 캐릭터(직업·성별)를 레벨 1·경험치 0으로 생성.
-    ///     유니크 제약(슬롯 PK·계정 내 직업 중복) 위반(MySQL 1062)은 동시 생성 경합으로 보고 롤백 → DuplicateConflict</para>
+    /// <para>3) player_character INSERT — 지정 식별자·파티 자리(slot, 빈 자리 없으면 0=미편성)로 캐릭터(직업·성별)를
+    ///     레벨 1·경험치 0으로 생성. 유니크 제약(식별자 PK·계정 내 직업 중복) 위반(MySQL 1062)은
+    ///     동시 생성 경합으로 보고 롤백 → DuplicateConflict</para>
     /// </remarks>
-    public async Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, int gender, long goldCost)
+    public async Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, int slot, int gender, long goldCost)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -424,6 +472,7 @@ public sealed class SaveRepository : ISaveRepository
                     user_id = userId,
                     character_id = characterId,
                     class_code = classCode,
+                    slot,
                     gender,
                     level = 1,
                     exp = 0,
@@ -437,6 +486,70 @@ public sealed class SaveRepository : ISaveRepository
 
             await transaction.CommitAsync();
             return new AddCharacterOutcome(AddCharacterStatus.Ok, goldCost, newBalance);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 클라이언트가 보낸 <b>파티 편성 스냅샷</b>(저장 후의 파티 전체)을 단일 커넥션의 단일 트랜잭션으로 저장한다.
+    /// 이동 절차가 아니라 결과 상태를 기록하는 방식이라 추가·추방·교체·자리 바꾸기가 한 번에 반영되고,
+    /// 같은 요청을 반복해도 결과가 같다(멱등). 캐릭터의 성장·장비는 건드리지 않고 player_character.slot만 쓰므로
+    /// 파티에서 내려도 레벨·스킬·장착 장비는 그대로 보존된다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 편성이 반만 반영된 상태를 막는다):
+    /// <para>1) player_character SELECT — 계정의 보유 캐릭터 전량을 읽어 요청 목록이 전부 보유 캐릭터인지 확인한다.
+    ///     하나라도 없으면 CharacterNotFound로 롤백한다(요청 값 자체의 형식·중복 검증은 서비스가 선처리)</para>
+    /// <para>2) player_character UPDATE — 계정의 편성을 먼저 전부 미편성(slot 0)으로 되돌린다.
+    ///     이렇게 비우고 다시 세우면 두 캐릭터가 같은 자리를 스쳐 가는 중간 상태가 없어,
+    ///     (user_id, slot) 부분 유니크 인덱스를 걸 수 없는 제약에도 자리 중복이 발생하지 않는다</para>
+    /// <para>3) player_character UPDATE ×N — 요청 목록대로 각 캐릭터에 자리(1~3)를 부여한다</para>
+    /// <para>4) player_character SELECT — 갱신된 보유 캐릭터 전체를 자리 순으로 다시 읽어 응답에 싣는다</para>
+    /// </remarks>
+    public async Task<ArrangePartyOutcome> SavePartyAsync(long userId, IReadOnlyList<PartyMemberDto> members)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var db = _dbFactory.Create(connection);
+
+            // 1) 보유 캐릭터 확인 — 요청 목록에 보유하지 않은 캐릭터가 섞여 있으면 거부한다.
+            var owned = (await db.Query("player_character").Where("user_id", userId)
+                .GetAsync<PlayerCharacterRow>(transaction)).ToList();
+
+            var ownedIds = owned.Select(r => r.CharacterId).ToHashSet();
+            if (members.Any(m => !ownedIds.Contains(m.characterId)))
+            {
+                await transaction.RollbackAsync();
+                return ArrangePartyOutcome.Fail(ArrangePartyStatus.CharacterNotFound);
+            }
+
+            // 2) 편성을 전부 비운다(중간 자리 충돌 방지).
+            await db.Query("player_character")
+                .Where("user_id", userId).Where("slot", "!=", PartySlotUnassigned)
+                .UpdateAsync(new { slot = PartySlotUnassigned }, transaction);
+
+            // 3) 스냅샷대로 자리를 다시 부여한다.
+            foreach (var member in members)
+            {
+                await db.Query("player_character")
+                    .Where("user_id", userId).Where("character_id", member.characterId)
+                    .UpdateAsync(new { slot = member.slot }, transaction);
+            }
+
+            // 4) 갱신 결과를 다시 읽어 응답 목록으로 만든다.
+            var updated = (await db.Query("player_character").Where("user_id", userId)
+                .GetAsync<PlayerCharacterRow>(transaction)).ToList();
+
+            await transaction.CommitAsync();
+            return new ArrangePartyOutcome(ArrangePartyStatus.Ok, PlayerCharacterMapper.SortForResponse(updated));
         }
         catch
         {

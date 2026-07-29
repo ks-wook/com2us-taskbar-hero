@@ -15,6 +15,7 @@
   - [5.2 인벤토리 페이지 조회 — `POST /api/game/inventory/list`](#52-인벤토리-페이지-조회--post-apigameinventorylist)
   - [5.3 캐릭터 생성 — `POST /api/game/create-character`](#53-캐릭터-생성--post-apigamecreate-character)
   - [5.4 접속 시각 갱신(heartbeat) — `POST /api/game/update-last-active`](#54-접속-시각-갱신heartbeat--post-apigameupdate-last-active)
+  - [5.5 파티 편성 저장 — `POST /api/game/party/arrange`](#55-파티-편성-저장--post-apigamepartyarrange)
 - [6. 에러 코드 (신규 제안)](#6-에러-코드-신규-제안)
 - [7. 미결 사항 / TODO](#7-미결-사항--todo)
 - [8. 참고](#8-참고)
@@ -44,17 +45,17 @@ GameServer
   | 구분 | 항목 | 행 수 | 조회 |
   |---|---|---|---|
   | 고정 크기 | `player` | 1 | `/api/game/load` |
-  | 고정 크기 | `characters` | ≤3 (캐릭터 슬롯) | `/api/game/load` |
+  | 고정 크기 | `characters` | ≤ 직업 수(현재 4, 보유 캐릭터) | `/api/game/load` |
   | 고정 크기 | `cube` | 1 | `/api/game/load` |
   | 고정 크기 | `currencies` | 재화 종류 수 | `/api/game/load` |
   | 고정 크기 | `runes` | `rune_master` 정의 수 | `/api/game/load` |
-  | 고정 상한 | `skills` | 3 × 직업별 스킬 수 | `/api/game/load` |
-  | 고정 상한 | `equipped` | ≤ 3캐릭터 × 6슬롯 = 18 | `/api/game/load` |
+  | 고정 상한 | `skills` | 보유 캐릭터 수 × 직업별 스킬 수 | `/api/game/load` |
+  | 고정 상한 | `equipped` | ≤ 보유 캐릭터 수 × 6슬롯(현재 4 × 6 = 24) | `/api/game/load` |
   | **가변** | **가방 아이템** | **`game_player.inventory_capacity`만큼(확장으로 증가)** | **`/api/game/inventory/list` (페이징)** |
 
   `player_item`만 무한히 커지므로 **이 하나만** 분리·페이징한다. 나머지를 항목별로 쪼개면 왕복만 늘고 이득이 없다.
 - **페이지 간 정합성 장치를 두지 않는다(확정)**: 페이징 도중 인벤토리가 바뀌는지를 서버가 감지하는 장치(변경 카운터·버전 토큰)는 두지 않는다. 단일 세션 정책상 그 경합을 일으킬 수 있는 주체가 사실상 같은 클라이언트뿐이고, 최악의 경우도 창고를 다시 열면 사라지는 표시 오차다. 반면 장치를 두면 **아이템을 건드리는 모든 트랜잭션이 그 장치와 결합**되어, 새 기능을 붙일 때 한 곳만 빠뜨려도 아무 오류 없이 검증이 무력화된다. 비용이 편익을 넘어선다고 판단해 두지 않으며, 대신 클라이언트가 `itemId` 기준 병합으로 흡수한다(5.2).
-- **장착 정보는 코어에 포함(확정)**: 장착 행은 최대 18개로 고정이고, 캐릭터 스탯 계산의 입력이라 **전투 시작 전에 반드시 있어야 한다.** 별도 요청으로 빼면 코어 로드 후에도 전투를 시작하지 못하므로, `/api/game/load` 응답에 `equipped` 배열로 함께 내린다. 가방 아이템 페이징 결과와는 겹치지 않는다(장착 아이템은 인벤 칸을 점유하지 않으므로 페이징 대상에서 제외).
+- **장착 정보는 코어에 포함(확정)**: 장착 행은 보유 캐릭터 수 × 6슬롯(현재 최대 24개)으로 상한이 고정이고, 캐릭터 스탯 계산의 입력이라 **전투 시작 전에 반드시 있어야 한다.** 별도 요청으로 빼면 코어 로드 후에도 전투를 시작하지 못하므로, `/api/game/load` 응답에 `equipped` 배열로 함께 내린다. 가방 아이템 페이징 결과와는 겹치지 않는다(장착 아이템은 인벤 칸을 점유하지 않으므로 페이징 대상에서 제외).
 - **액션 단위 저장(확정)**: 게임 상태 변경은 **각 기능 API가 처리하는 그 시점에** 서버가 검증·반영한다. 클라이언트가 진행 상태를 모아 보내는 **범용 일괄 저장 API(`/api/game/save`)는 두지 않는다.** 저장 시점·값은 클라이언트가 아니라 각 액션의 서버 로직이 결정한다.
 - **MySQL 단일 저장소(확정)**: 세이브 데이터는 **MySQL에만** 저장한다. 3장 ERD의 정규화 테이블 구조를 그대로 사용하며, JSON 스냅샷 컬럼 등 별도 저장 방식은 쓰지 않는다. 계정 도메인과 동일하게 시간 값은 **Unix timestamp(BIGINT, 초)**로 저장.
 - **Redis 미도입(확정)**: 세이브 데이터에는 Redis 캐시 계층을 두지 않고 MySQL에 직접 읽고 쓴다. (인증 토큰 검증용 Redis는 별개 용도이며 세이브 저장과 무관하다.)
@@ -62,7 +63,7 @@ GameServer
 
 ## 3. 데이터 모델 (ERD)
 
-`GameServer` 전용 MySQL 데이터베이스. 모든 테이블의 `user_id`는 계정(`AccountServer`의 `users.user_id`)과 동일한 식별자를 사용한다(서버 간 공유 키). 계정은 **캐릭터 슬롯 3개**를 가지며(3인 파티가 함께 전투, [성장 시스템 기획서](growth-기획서.md)), **직업·레벨·경험치·스킬·장비는 캐릭터별**, **인벤토리·골드·큐브는 계정 공유**다.
+`GameServer` 전용 MySQL 데이터베이스. 모든 테이블의 `user_id`는 계정(`AccountServer`의 `users.user_id`)과 동일한 식별자를 사용한다(서버 간 공유 키). 계정은 **파티 자리 3개**를 가지며(3인 파티가 함께 전투, [성장 시스템 기획서](growth-기획서.md)), 직업 중복이 불가하므로 **보유 캐릭터는 직업 수(현재 4)까지** 가질 수 있고 그중 3명을 편성한다(미편성은 `player_character.slot=0`, 5.5). **직업·레벨·경험치·스킬·장비는 캐릭터별**, **인벤토리·골드·큐브는 계정 공유**다.
 
 ```mermaid
 erDiagram
@@ -93,8 +94,9 @@ erDiagram
 
     player_character {
         bigint  user_id FK
-        int     character_id "캐릭터 슬롯(1~3)"
-        int     class_code "직업"
+        int     character_id "캐릭터 고유 식별자(생성 순번), 불변"
+        int     class_code "직업(중복 불가)"
+        int     slot "파티 자리(0=미편성, 1~3)"
         int     gender "성별 1:남 2:여 (기본 1:남)"
         int     level
         bigint  exp
@@ -116,13 +118,13 @@ erDiagram
         bigint  user_id FK
         int     item_code "item_master.item_code (어떤 아이템인지)"
         int     enhance_level "장비 강화 단계"
-        int     equipped_character_id "장착 캐릭터(1~3)"
+        int     equipped_character_id "장착 캐릭터(character_id)"
         int     equipped_slot "장착 슬롯(equip_slot_master)"
     }
 
     player_skill {
         bigint  user_id FK
-        int     character_id "캐릭터 슬롯(1~3)"
+        int     character_id "캐릭터 고유 식별자"
         int     skill_code "스킬 코드(skill_master)"
         int     level "스킬 레벨"
         int     equipped "액티브 장착 여부(0/1), 캐릭터당 최대 2개"
@@ -183,7 +185,7 @@ erDiagram
 ```
 
 - **PK/유니크**:
-  - `player_character`: `(user_id, character_id)` 복합 PK. `character_id`는 1~3. `gender`(성별 1:남 2:여)는 **캐릭터 생성 시 선택**해 저장하고 이후 변경하지 않으며, 외형(남/여 스프라이트)만 가르는 표현용 값이라 직업·레벨·스탯 계산에는 관여하지 않는다. 컬럼 기본값이 `1`(남)이므로 **성별 도입 이전에 생성된 캐릭터는 모두 남자**가 된다.
+  - `player_character`: `(user_id, character_id)` 복합 PK. `character_id`는 **캐릭터 고유 식별자**(생성 순번)이며 파티 자리가 아니다 — 파티 자리는 `slot`(0=미편성, 1~3)이 담고, `(user_id, class_code)` 유니크로 계정 내 직업 중복을 막는다. `slot` 1~3의 유일성은 MySQL 부분 유니크 인덱스 미지원으로 **서버가 트랜잭션에서 보장**한다(5.5). `gender`(성별 1:남 2:여)는 **캐릭터 생성 시 선택**해 저장하고 이후 변경하지 않으며, 외형(남/여 스프라이트)만 가르는 표현용 값이라 직업·레벨·스탯 계산에는 관여하지 않는다. 컬럼 기본값이 `1`(남)이므로 **성별 도입 이전에 생성된 캐릭터는 모두 남자**가 된다.
   - `player_skill`: `(user_id, character_id, skill_code)` 복합 PK. 캐릭터별 스킬 레벨·액티브 장착.
   - `player_rune`: `(user_id, rune_code)` 복합 PK. 룬은 **계정 공용**이라 `character_id`를 두지 않는다.
   - `player_mail`: `mail_id` PK, `user_id` 조회 인덱스. 계정 우편함.
@@ -220,6 +222,7 @@ erDiagram
 - [5.2 인벤토리 페이지 조회 — `POST /api/game/inventory/list`](#52-인벤토리-페이지-조회--post-apigameinventorylist)
 - [5.3 캐릭터 생성 — `POST /api/game/create-character`](#53-캐릭터-생성--post-apigamecreate-character)
 - [5.4 접속 시각 갱신(heartbeat) — `POST /api/game/update-last-active`](#54-접속-시각-갱신heartbeat--post-apigameupdate-last-active)
+- [5.5 파티 편성 저장 — `POST /api/game/party/arrange`](#55-파티-편성-저장--post-apigamepartyarrange)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`를 사용한다(토큰은 body, [계정/로그인 기획서](account-login-기획서.md) 5장 참고). 응답은 `{ success, errorCode, message, data }` 형식이며, `errorCode`는 `TaskbarHero.Common`의 `ErrorCode`(6장) 값이고 `success`는 `errorCode == 0`과 동치다(계정·마스터 기획서와 동일한 응답 규약).
 
@@ -273,9 +276,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
       "lastActiveAt": 1752300000
     },
     "characters": [
-      { "characterId": 1, "classCode": 1, "gender": 1, "level": 42, "exp": 128500 },
-      { "characterId": 2, "classCode": 2, "gender": 2, "level": 40, "exp": 90000 },
-      { "characterId": 3, "classCode": 3, "gender": 1, "level": 38, "exp": 60000 }
+      { "characterId": 1, "classCode": 1, "slot": 1, "gender": 1, "level": 42, "exp": 128500 },
+      { "characterId": 2, "classCode": 2, "slot": 2, "gender": 2, "level": 40, "exp": 90000 },
+      { "characterId": 3, "classCode": 3, "slot": 3, "gender": 1, "level": 38, "exp": 60000 },
+      { "characterId": 4, "classCode": 4, "slot": 0, "gender": 1, "level": 15, "exp": 2400 }
     ],
     "currencies": [
       { "currencyType": 1, "amount": 9875421 }
@@ -296,7 +300,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- `player`는 계정/파티 공용 값, `characters`는 3인 파티 각 캐릭터의 직업·성별(`gender` 1:남 2:여, 외형 전용)·레벨·경험치다. `skills`는 `characterId`로 소속 캐릭터를 표시하며(스킬 행의 `equipped=1`은 액티브 장착, 캐릭터당 최대 2개), `runes`는 계정 공용이다. `currencies`·`equipped`·`cube`도 계정 공유(장착 위치만 캐릭터별).
+- `player`는 계정/파티 공용 값, `characters`는 **보유 캐릭터 전체**(파티 편성 여부와 무관)의 직업·파티 자리(`slot` **0=미편성**, 1~3=파티 위치)·성별(`gender` 1:남 2:여, 외형 전용)·레벨·경험치다. 편성된 캐릭터(`slot` 1~3)가 앞에 자리 순으로, 미편성 캐릭터가 뒤에 온다(5.5). `skills`는 `characterId`로 소속 캐릭터를 표시하며(스킬 행의 `equipped=1`은 액티브 장착, 캐릭터당 최대 2개), `runes`는 계정 공용이다. `currencies`·`equipped`·`cube`도 계정 공유(장착 위치만 캐릭터별).
 - **`currencies`의 저장 출처**: `player_item`의 `row_type=2`(재화) 행을 `{currencyType(=item_code), amount(=quantity)}`로 투영한 결과다. 재화 행은 `slot`이 NULL이라 가방 페이징(5.2) 대상에서 자동으로 빠지므로, **재화는 코어에서만 내려간다.**
 - **`equipped`(장착 장비)**: `player_item_equipped` 행을 그대로 내려준다. 장착 중에는 `player_item.slot`이 NULL이라 가방 칸을 점유하지 않으므로 5.2의 페이지 결과와 **중복되지 않는다.** 클라이언트는 이 배열만으로 캐릭터별 장비 렌더링과 스탯 계산을 끝낼 수 있고, 가방을 로드하지 않은 상태에서도 전투를 시작할 수 있다.
 - **가방 아이템은 포함하지 않는다**: 총 개수(`inventoryTotal`)만 내려준다. 실제 아이템 목록은 창고/인벤토리 UI를 열 때 5.2로 조회한다.
@@ -382,7 +386,9 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 5.3 캐릭터 생성 — `POST /api/game/create-character`
 
-캐릭터를 **한 번에 1개** 생성한다. 계정당 최대 3개(3인 파티)이며 **직업은 서로 중복될 수 없다**. 최초 호출 시 계정 세이브(`game_player`)가 함께 초기화되고, 서버가 **빈 슬롯에 `characterId`(1~3)를 배정**한다. **1번 슬롯(최초 생성=계정 초기화)은 무료이나, 2·3번 슬롯 추가 생성은 골드를 소모**한다(비용은 마스터 `character_create_cost` 명시값, [마스터 데이터 기획서](master-data/master-data-기획서.md)). 골드 확인·차감·캐릭터 삽입은 한 트랜잭션으로 원자적으로 처리한다.
+캐릭터를 **한 번에 1개** 생성한다. **생성 가능 조건은 직업 중복 금지 하나뿐**이며(보유 수 상한을 따로 두지 않는다 — 직업 중복이 불가하므로 보유 상한은 자연히 직업 수, 현재 4가 된다), 최초 호출 시 계정 세이브(`game_player`)가 함께 초기화된다. 서버가 **`characterId`(캐릭터 고유 식별자, 생성 순번)를 배정**하고 **빈 파티 자리가 있으면 가장 앞자리에 자동 편성**한다(파티가 이미 3명이면 `slot=0` 미편성 상태로 보유만 하며, 이후 5.5로 편성한다). **최초 생성(계정 초기화)은 무료이고, 2번째 이후 생성은 정액 골드를 소모**한다(비용은 마스터 `character_create_cost`의 **생성 순번**별 명시값, 현재 전 순번 500,000골드 — [마스터 데이터 기획서](master-data/master-data-기획서.md)). 골드 확인·차감·캐릭터 삽입은 한 트랜잭션으로 원자적으로 처리한다.
+
+> **`characterId`는 파티 자리가 아니다(중요)**: `characterId`는 캐릭터를 가리키는 **고유 식별자**로 생성 후 바뀌지 않으며(`player_skill`·`player_item_equipped`가 이 값을 참조), 파티 자리는 별도 값 `slot`이 담는다. 편성 변경은 5.5가 담당한다.
 
 ![캐릭터 생성 화면 — 직업 선택과 닉네임 입력](../images/save-data-캐릭터생성화면.png)
 
@@ -413,9 +419,11 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- `characterId`: 서버가 배정한 슬롯(1~3).
-- `cost`·`balance`: 소모한 골드와 차감 후 잔액. **최초 생성(1번 슬롯)은 무료라 `cost.amount=0`, `balance`는 빈 목록**이다. 생성 **전** 안내 비용은 클라이언트가 마스터 `character_create_cost` 번들에서 다음 슬롯 값을 조회해 표시한다.
-- 오류: `InvalidClassCode(2005)`(존재하지 않는 직업), `InvalidGender(2007)`(1·2 외의 성별 값), `InvalidCharacterId(2006)`(이미 보유한 직업과 중복), `PlayerAlreadyExists(2004)`(슬롯 3개가 모두 차 더 이상 생성 불가), `InsufficientCurrency(4005)`(2·3번 슬롯 생성 골드 부족).
+- `characterId`: 서버가 배정한 캐릭터 고유 식별자(생성 순번).
+- `slot`: 서버가 자동 배정한 파티 자리. 빈 자리가 없으면 **`0`(미편성)** 으로 생성되며, 이 경우 클라이언트는 5.5로 편성을 유도한다.
+- `cost`·`balance`: 소모한 골드와 차감 후 잔액. **최초 생성은 무료라 `cost.amount=0`, `balance`는 빈 목록**이다. 생성 **전** 안내 비용은 클라이언트가 마스터 `character_create_cost` 번들에서 다음 생성 순번 값을 조회해 표시한다.
+- 오류: `InvalidClassCode(2005)`(존재하지 않는 직업), `InvalidGender(2007)`(1·2 외의 성별 값), `InvalidCharacterId(2006)`(**이미 보유한 직업과 중복** — 전 직업을 보유한 상태의 생성 요청도 반드시 중복이므로 이 코드로 걸린다), `InsufficientCurrency(4005)`(생성 골드 부족).
+- **파티가 가득 차 있어도 생성은 가능하다** — 보유와 편성이 분리되어 있으므로 새 캐릭터는 미편성(`slot=0`)으로 들어간다. 따라서 본 엔드포인트는 `PlayerAlreadyExists(2004)`를 반환하지 않는다.
 
 ---
 
@@ -446,6 +454,68 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 - `lastActiveAt`: 서버가 기록한 접속 시각(Unix ts). 클라이언트가 보낸 시각이 아니라 **서버 시각**을 사용한다(치트 방지).
 
+---
+
+### 5.5 파티 편성 저장 — `POST /api/game/party/arrange`
+
+클라이언트 편성 UI에서 자리를 배치하고 **"저장"을 누른 결과를 1회 호출로 반영**한다. 요청은 "누구를 어디로 옮겨라"라는 **이동 절차가 아니라 저장 후의 파티 전체(스냅샷)** 다.
+
+- **`members`가 곧 최종 파티다.** 목록에 담긴 캐릭터는 지정한 자리에 서고, **목록에 없는 보유 캐릭터는 자동으로 미편성(`slot=0`)** 이 된다. 그래서 추가·추방·교체·자리 바꾸기가 전부 이 하나로 표현된다 — 클라이언트는 "추가" 버튼을 눌렀을 때도 **이미 편성돼 있던 캐릭터까지 포함한 전체 목록**을 보낸다.
+- **부분 이동 API를 두지 않는 이유**: 이동을 여러 번 나눠 보내면 중간 단계에서 자리 밀림이 생겨 최종 배치가 사용자 의도와 달라지고, 전원 교체처럼 파티가 잠시 비는 편성은 중간 단계에서 거부된다. 스냅샷은 최종 상태만 검증하므로 이런 문제가 없다.
+- **골드를 소모하지 않는다.** 비용은 캐릭터 **생성 시에만** 발생한다(5.3).
+- **캐릭터를 삭제하지 않는다.** 파티에서 내려도 행은 남고 레벨·경험치·스킬·장착 장비가 그대로 유지되므로 언제든 되돌릴 수 있다. 계정에서 캐릭터를 영구 삭제하는 수단은 제공하지 않는다.
+- **미편성 캐릭터는 전투에 참가하지 않는다.** 스테이지 클리어·오프라인 보상의 **경험치는 편성된 캐릭터에게만** 지급된다(골드·아이템은 계정 공유라 영향 없음).
+- **파티는 최소 1명**이다. `members`가 비어 있으면 전투를 시작할 수 없으므로 `CannotRemoveLastCharacter(2008)`로 거부한다.
+- **멱등**: 같은 스냅샷을 몇 번 보내도 결과가 같다. 저장 버튼 연타·재전송에 안전하다.
+- **원자성**: 한 트랜잭션에서 **계정의 편성을 전부 비운 뒤 목록대로 다시 세운다.** 두 캐릭터가 같은 자리를 스쳐 가는 중간 상태가 없으므로, `(user_id, slot)`에 부분 유니크 인덱스를 걸 수 없는 제약에도 자리 중복이 생기지 않는다.
+
+**Request**
+```json
+{
+  "userId": 1,
+  "token": "MToxNzAwMDAwMDAwOmFCM2RFNmZHOWhKMWtM...",
+  "data": {
+    "members": [
+      { "characterId": 3, "slot": 1 },
+      { "characterId": 4, "slot": 2 },
+      { "characterId": 1, "slot": 3 }
+    ]
+  }
+}
+```
+
+- `members`: 저장 후의 파티 전체(**1~3개**). 순서는 무관하며 `slot` 값이 자리를 정한다.
+- `members[].characterId`: 보유 캐릭터의 **고유 식별자**(파티 자리가 아니다).
+- `members[].slot`: 파티 자리(**1~3**). 미편성은 값 `0`을 보내는 것이 아니라 **목록에서 빼는 것**으로 표현한다.
+- 2명·1명만 담아도 된다(나머지는 미편성이 된다).
+
+**Response (성공, 200 OK)**
+```json
+{
+  "success": true,
+  "errorCode": 0,
+  "message": "Party arranged",
+  "data": {
+    "characters": [
+      { "characterId": 3, "classCode": 3, "slot": 1, "gender": 1, "level": 38, "exp": 60000 },
+      { "characterId": 4, "classCode": 4, "slot": 2, "gender": 1, "level": 15, "exp": 2400 },
+      { "characterId": 1, "classCode": 1, "slot": 3, "gender": 1, "level": 42, "exp": 128500 },
+      { "characterId": 2, "classCode": 2, "slot": 0, "gender": 2, "level": 40, "exp": 90000 }
+    ]
+  }
+}
+```
+
+- `characters`: 갱신된 **보유 캐릭터 전체**를 편성 자리 순(미편성은 뒤)으로 회신한다. 클라이언트는 이 배열로 편성 패널을 다시 그리면 되고 별도의 재조회가 필요 없다.
+- 오류:
+
+  | 코드 | 조건 |
+  |---|---|
+  | `CannotRemoveLastCharacter(2008)` | `members`가 비어 있음(파티를 비울 수 없음) |
+  | `CharacterNotFound(2009)` | 보유하지 않은 캐릭터가 목록에 있음 |
+  | `PartySlotOccupied(2010)` | 인원 3명 초과 · `slot`이 1~3 범위 밖 · 같은 자리를 둘 이상이 지정 |
+  | `InvalidCharacterId(2006)` | 같은 캐릭터를 두 자리에 지정 |
+
 ## 6. 에러 코드 (신규 제안)
 
 `TaskbarHero.Common/ErrorCode.cs`의 `ErrorCode`에 추가 제안. 계정 도메인(1001~1006, [계정/로그인 기획서](account-login-기획서.md) 6장)과 중복되지 않도록 **세이브 도메인은 2000번대**를 사용한다.
@@ -454,9 +524,12 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 |---|---|---|
 | SaveNotFound | 2001 | 세이브 데이터 없음 |
 | InvalidSaveData | 2002 | 액션 요청 값 검증 실패(불가능한 값·비정상 데이터) |
-| PlayerAlreadyExists | 2004 | 캐릭터 슬롯 3개가 모두 차 더 생성 불가 |
+| PlayerAlreadyExists | 2004 | 더 생성할 수 있는 캐릭터가 없음(현재 캐릭터 생성 경로에서는 사용하지 않음) |
 | InvalidClassCode | 2005 | 존재하지 않는 직업 코드 |
-| InvalidCharacterId | 2006 | 잘못된 캐릭터 슬롯(존재하지 않는 `characterId`, 생성 시 슬롯 개수 오류 또는 직업 중복) |
+| InvalidCharacterId | 2006 | 잘못된 캐릭터 식별자(존재하지 않는 `characterId` 또는 이미 보유한 직업 중복 생성) |
+| CannotRemoveLastCharacter | 2008 | 파티를 비울 수 없음(편성 목록이 비어 있음, 5.5) |
+| CharacterNotFound | 2009 | 편성 목록에 보유하지 않은 캐릭터가 있음(5.5) |
+| PartySlotOccupied | 2010 | 파티 자리 지정 오류(정원 초과·범위 밖·같은 자리 중복, 5.5) |
 
 > `2003`(구 `SaveVersionMismatch`)은 세이브 스키마 버전(`data_version`) 제거로 폐기했다. 값 혼선을 막기 위해 재사용하지 않고 **결번**으로 둔다.
 

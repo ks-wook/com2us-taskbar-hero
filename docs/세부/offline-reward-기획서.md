@@ -57,7 +57,7 @@
 | 입력(기준 시각) | `game_player.last_active_at` | 오프라인 시작점 |
 | 입력(파밍 기준) | `game_player.max_stage_cleared` / `stage`·`act`·`difficulty` | 산출율 결정 |
 | 산출 근거(정적) | `stage_reward`(reward_gold/reward_exp), `monster_master` | 시간당 골드·경험치 산출량 |
-| 출력(지급) | `player_item`(재화 행 골드 증가, 계정), **3캐릭터 각각의 `player_character.exp`/`level`**(모든 캐릭터에 **동일 경험치** 지급) | 정산 반영 |
+| 출력(지급) | `player_item`(재화 행 골드 증가, 계정), **파티에 편성된 캐릭터(`slot`≠0) 각각의 `player_character.exp`/`level`**(편성 캐릭터에 **동일 경험치** 지급, 미편성은 제외) | 정산 반영 |
 | 기준 시각 리셋 | `game_player.last_active_at = now` | 중복 정산 방지 |
 
 - **아이템 미지급(확정)**: 오프라인 보상은 `player_item`를 건드리지 않는다. `stage_reward`의 **아이템 드롭(등급별 확률)** 은 온라인 전투에서만 적용하고, 오프라인은 골드·경험치만 산출한다.
@@ -118,7 +118,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 인증 요청 공통 형
 | `offlineElapsedSec` | 실제 경과 시간(`now - last_active_at`) |
 | `effectiveSec` | 상한(cap) 적용 후 보상 산정에 쓴 시간 |
 | `capped` | 상한에 걸렸는지 여부 |
-| `rewards.gold` / `rewards.exp` | 지급된 골드(계정) · 경험치(**3캐릭터 각각에 동일하게** 지급, 아이템은 없음) |
+| `rewards.gold` / `rewards.exp` | 지급된 골드(계정) · 경험치(**파티에 편성된 캐릭터 각각에 동일하게** 지급, 미편성 캐릭터·아이템은 없음) |
 | `characters[]` | 경험치 반영 후 각 캐릭터의 갱신된 레벨·잔여 경험치(`characterId`별). 같은 경험치를 받아도 시작 레벨이 달라 결과는 캐릭터마다 다르다 |
 | `lastActiveAt` | 정산 기준 시각을 현재 서버 시각으로 리셋한 값 |
 
@@ -222,8 +222,8 @@ return { elapsed, effective, gold, exp, characters[], ... }
 | `rewards` | `OfflineRewardAmount` | O | 이번 정산으로 **지급된** 골드·경험치. |
 | `rewards.gold` | `long` | O | 지급 골드(`floor(effective × goldPerSec × 0.5)`). |
 | `rewards.exp` | `long` | O | 지급 경험치(`floor(effective × expPerSec × 0.5)`). |
-| `characters` | `OfflineCharacterState[]` | O | 경험치 반영 **후** 3캐릭터 각각의 상태(모두 같은 `exp`를 받음). |
-| `characters[].characterId` | `int` | O | 캐릭터 슬롯(1~3). |
+| `characters` | `OfflineCharacterState[]` | O | 경험치 반영 **후** 파티 편성 캐릭터 각각의 상태(모두 같은 `exp`를 받음). |
+| `characters[].characterId` | `int` | O | 캐릭터 고유 식별자(파티에 편성된 캐릭터만 포함). |
 | `characters[].level` | `int` | O | 반영 후 레벨(여러 레벨 동시 상승 가능, 6.3). |
 | `characters[].exp` | `long` | O | 반영 후 현재 레벨의 **잔여 경험치**(누적 총량 아님). |
 | `lastActiveAt` | `long` | O | 중복 정산 방지를 위해 현재 서버 시각으로 리셋한 기준 시각(Unix ts, 초). |
@@ -260,7 +260,7 @@ namespace TaskbarHero.Common.Dto
     [Serializable]
     public class OfflineCharacterState
     {
-        public int characterId; // 캐릭터 슬롯(1~3)
+        public int characterId; // 캐릭터 고유 식별자(파티 편성 캐릭터)
         public int level;
         public long exp;        // 현재 레벨의 잔여 경험치
     }

@@ -25,6 +25,15 @@ public sealed class GameSaveController(ISaveService saveService) : GameApiContro
         return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
     }
 
+    /// <summary>파티 편성 저장(클라이언트가 보낸 파티 전체 스냅샷). POST /api/game/party/arrange — 인증 필요.</summary>
+    [HttpPost("party/arrange")]
+    public async Task<IActionResult> ArrangeParty([FromBody] ArrangePartyRequest request)
+    {
+        var data = request.data ?? new ArrangePartyData();
+        var result = await saveService.ArrangePartyAsync(AuthenticatedUserId(), data.members);
+        return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
+    }
+
     /// <summary>접속 시각 갱신(heartbeat). POST /api/game/update-last-active — 인증 필요.</summary>
     [HttpPost("update-last-active")]
     public async Task<IActionResult> UpdateLastActive()

@@ -44,6 +44,22 @@ Content-Type: application/json
   "data": { "nickname": "hero", "classCode": 1, "gender": 1 }
 }
 
+### 파티 편성 저장 — 저장 후의 파티 전체(스냅샷)를 1회로 반영. 목록에 없는 보유 캐릭터는 미편성이 된다
+POST {{GameServer_HostAddress}}/api/game/party/arrange
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": {
+    "members": [
+      { "characterId": 3, "slot": 1 },
+      { "characterId": 4, "slot": 2 },
+      { "characterId": 1, "slot": 3 }
+    ]
+  }
+}
+
 ### 접속 시각 갱신(heartbeat, 클라가 5분 주기 호출)
 POST {{GameServer_HostAddress}}/api/game/update-last-active
 Content-Type: application/json

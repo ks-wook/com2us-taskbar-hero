@@ -91,9 +91,9 @@ namespace TaskbarHero.Common.MasterData
     public struct SkillCoef
     {
         public int skillLevel;   // 1~maxLevel
-        public int coefType;     // 1:공격 2:버프 3:디버프
-        public float coef;       // 공격=데미지 배율, 버프/디버프=대상 스탯 배율
-        public float duration;   // 버프/디버프 지속(초). 공격/상시 패시브는 0
+        public int coefType;     // 1:공격 2:버프 3:디버프 4:자원 소모(체력) 5:흡혈
+        public float coef;       // 공격=데미지 배율, 버프/디버프=대상 스탯 배율, 자원 소모=현재 체력 대비 소모 비율, 흡혈=가한 피해 대비 회복 비율
+        public float duration;   // 효과 지속(초). 공격·자원 소모(즉시 1회)·상시 패시브는 0
     }
 
     /// <summary>스킬(skill_master). player_skill.skill_code 가 참조한다.</summary>
@@ -105,8 +105,9 @@ namespace TaskbarHero.Common.MasterData
         public string name;
         public string description; // 스킬 설명(클라 표시용)
         public int skillType;     // 1:액티브 2:패시브
-        public int statType;      // 버프/디버프가 올리는 대상 능력치(rune 동일 enum 1~7). 순수 공격 데미지 스킬은 0
-        public SkillCoef[] coefs; // 레벨·타입별 계수(개수 = 타입 수 × maxLevel)
+        public int statType;      // 버프/디버프가 작용하는 대상 능력치(rune 동일 enum 1~7). 순수 공격 데미지 스킬은 0.
+                                  // coefType 4(자원 소모)·5(흡혈)는 대상이 타입으로 확정돼 이 값을 쓰지 않는다
+        public SkillCoef[] coefs; // 레벨·타입별 계수(개수 = 타입 수 × maxLevel). 광전사의 힘(402)처럼 한 레벨에 여러 타입을 가질 수 있다
         public int maxLevel;
         public float cooldown;    // 스킬 재사용 대기시간(초). 패시브는 0
     }

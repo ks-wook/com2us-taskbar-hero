@@ -84,7 +84,7 @@
 
 ![골드(재화) 표시 — player_item에 통합 저장되는 골드](../images/inventory-item-cube-골드.png)
 
-- **캐릭터별/계정 공유**: 계정은 캐릭터 슬롯 3개(3인 파티, [성장 시스템 기획서](growth-기획서.md))를 가진다. **인벤토리·골드·큐브는 계정 공유**(위 표 `user_id` 단위)이고, **장비 장착만 캐릭터별**이다(`equipped_character_id` 1~3). 한 아이템 행(`player_item_id`)은 계정 공용이지만 **동시에 한 캐릭터·한 슬롯에만 장착**된다.
+- **캐릭터별/계정 공유**: 계정은 파티 자리 3개(3인 파티, [성장 시스템 기획서](growth-기획서.md))를 가지며 보유 캐릭터는 직업 수(현재 4)까지다. **인벤토리·골드·큐브는 계정 공유**(위 표 `user_id` 단위)이고, **장비 장착만 캐릭터별**이다(`equipped_character_id` = 캐릭터 고유 식별자). 파티에서 내려도 장착 상태는 유지된다. 한 아이템 행(`player_item_id`)은 계정 공용이지만 **동시에 한 캐릭터·한 슬롯에만 장착**된다.
 
 **보관/스택 규칙 (확정)**
 - **배치 위치(`slot`)**: 각 행은 인벤토리 UI의 특정 칸(`slot`, 0-based)에 놓인다. `(user_id, slot)`은 유니크하며 한 칸에는 한 행만 존재한다. 재접속 시 [인벤토리 페이지 조회](save-data-기획서.md#52-인벤토리-페이지-조회--post-apigameinventorylist)가 `slot`을 함께 내려 **마지막 접속과 동일한 배치를 복원**한다. `slot`은 **페이징 커서이자 정렬키**이므로 `(user_id, slot)` 유니크 인덱스를 그대로 커버 인덱스로 쓴다. 획득 시 서버는 빈 `slot`에 배치하고, 빈 칸이 없으면(용량 초과) `InventoryFull(4002)`. `player_item_equipped.equipped_slot`(장착 슬롯)과는 별개 개념이다.
@@ -130,7 +130,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 { "userId": 1, "token": "...", "data": { "characterId": 1, "itemId": 5001 } }
 ```
 
-- `characterId`: 장착할 캐릭터 슬롯(1~3). `itemId`: 장착할 아이템(`player_item.player_item_id`).
+- `characterId`: 장착할 캐릭터의 고유 식별자(파티 편성 여부와 무관). `itemId`: 장착할 아이템(`player_item.player_item_id`).
 
 **Response (성공, 200 OK)**
 ```json

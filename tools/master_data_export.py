@@ -136,6 +136,8 @@ def export_class(conn):
     return [{
         "classCode": _i(r["class_code"]),
         "name": _s(r["name"]),
+        # 클라 표시 전용(캐릭터 생성 화면 직업 설명). skill_master.description 과 동일 취급.
+        "description": _s(r["description"]),
         "unlockType": _i(r["unlock_type"]),
         "baseStats": stats(r),
     } for r in rows]

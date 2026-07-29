@@ -40,6 +40,8 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.PlayerAlreadyExists => StatusCodes.Status409Conflict,
         ErrorCode.MasterDataNotLoaded => StatusCodes.Status503ServiceUnavailable,
         ErrorCode.SaveNotFound => StatusCodes.Status404NotFound,
+        // 파티 편성: 보유하지 않은 캐릭터 지정은 404.
+        ErrorCode.CharacterNotFound => StatusCodes.Status404NotFound,
         ErrorCode.StageNotFound => StatusCodes.Status404NotFound,
         ErrorCode.ItemNotFound => StatusCodes.Status404NotFound,
         // 메일: 없음/타인 메일은 404, 중복 수령(동시 요청 경합 포함)은 409, 만료는 400(기본 매핑).
@@ -67,6 +69,9 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.InvalidClassCode => "Invalid class code",
         ErrorCode.InvalidCharacterId => "Invalid character id",
         ErrorCode.InvalidGender => "Invalid gender",
+        ErrorCode.CannotRemoveLastCharacter => "Cannot remove the last party character",
+        ErrorCode.CharacterNotFound => "Character not found",
+        ErrorCode.PartySlotOccupied => "Invalid party slot",
         ErrorCode.SaveNotFound => "Save not found",
         ErrorCode.NoOfflineReward => "No offline reward",
         ErrorCode.OfflineRewardAlreadyClaimed => "Offline reward already claimed",

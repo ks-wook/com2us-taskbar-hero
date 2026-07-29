@@ -7,7 +7,7 @@
 | 기능 | 처리 컨트롤러 | 서버 | 주요 엔드포인트 |
 |---|---|---|---|
 | [**로그인/인증**](#로그인인증) (회원가입·로그인·로그아웃) | AuthController | Account | `POST /api/auth/signup` · `login` · `logout` |
-| [**세이브 데이터/캐릭터 생성**](#세이브-데이터캐릭터-생성) (코어 로드 · 가방 페이지 조회 · 생성 · heartbeat) | GameSaveController · GameInventoryController(가방 조회) | Game | `POST /api/game/load` · `inventory/list` · `create-character` · `update-last-active` |
+| [**세이브 데이터/캐릭터 생성**](#세이브-데이터캐릭터-생성) (코어 로드 · 가방 페이지 조회 · 생성 · 파티 편성 저장 · heartbeat) | GameSaveController · GameInventoryController(가방 조회) | Game | `POST /api/game/load` · `inventory/list` · `create-character` · `party/arrange` · `update-last-active` |
 | [**스테이지**](#스테이지) (던전 입장·클리어 보상) | GameStageController | Game | `POST /api/game/stage/enter` · `clear` |
 | [**방치형 오프라인 보상**](#방치형-오프라인-보상) | GameOfflineController | Game | `POST /api/game/offline/claim` |
 | [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장. 가방 조회는 세이브 데이터 섹션) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
@@ -143,7 +143,7 @@ sequenceDiagram
 
 ## 세이브 데이터/캐릭터 생성
 
-세이브 로드·캐릭터 생성·접속 시각 갱신 (GameSaveController, `/api/game`, GameServer). 저장소: MySQL `taskbar_hero_game`(`game_player`·`player_character`·`player_item`·`player_cube` 등).
+세이브 로드·캐릭터 생성·파티 편성 저장·접속 시각 갱신 (GameSaveController, `/api/game`, GameServer). 저장소: MySQL `taskbar_hero_game`(`game_player`·`player_character`·`player_item`·`player_cube` 등).
 
 ### POST /api/game/load — 코어 세이브 로드
 
@@ -211,17 +211,49 @@ sequenceDiagram
     else 유효
         S->>DB: 플레이어 세이브 데이터 확인
         alt 신규 계정(최초 생성)
-            S->>DB: 단일 트랜잭션 — 플레이어·1번 슬롯 캐릭터(직업·성별)·큐브·출석 진행도 데이터 적재
-            S-->>C: 성공 { 무료, cost 0 }
-        else 기존 계정(2·3번 슬롯 추가)
-            S->>DB: 기존 캐릭터 슬롯 데이터 확인
-            S->>S: 슬롯 여유(≤3)·직업 중복 검사 + 마스터에서 해당 슬롯의 생성 비용 조회
-            S->>DB: 단일 트랜잭션 — 골드 데이터 확인·차감 + 캐릭터(직업·성별) 데이터 적재
-            alt 골드 부족 / 슬롯·직업 경합
-                S-->>C: 실패 { errorCode: InsufficientCurrency(4005) / InvalidCharacterId(2006) }
-            else 성공
-                S-->>C: 성공 { 생성 비용, 잔액 }
+            S->>DB: 단일 트랜잭션 — 플레이어·첫 캐릭터(직업·성별, 파티 1번 자리)·큐브·출석 진행도 데이터 적재
+            S-->>C: 성공 { characterId 1, slot 1, 무료 cost 0 }
+        else 기존 계정(추가 생성)
+            S->>DB: 보유 캐릭터 데이터 확인(식별자·직업·파티 자리)
+            S->>S: 직업 중복만 검사(보유 수 상한 없음) + 새 식별자·빈 파티 자리 배정(없으면 slot 0) + 마스터에서 생성 순번의 정액 비용 조회
+            alt 이미 보유한 직업
+                S-->>C: 실패 { errorCode: InvalidCharacterId(2006) }
+            else 생성 가능
+                S->>DB: 단일 트랜잭션 — 골드 데이터 확인·차감 + 캐릭터(직업·성별·파티 자리) 데이터 적재
+                alt 골드 부족 / 식별자·직업 경합
+                    S-->>C: 실패 { errorCode: InsufficientCurrency(4005) / InvalidCharacterId(2006) }
+                else 성공
+                    S-->>C: 성공 { characterId, slot(0=미편성), 생성 비용, 잔액 }
+                end
             end
+        end
+    end
+```
+
+### POST /api/game/party/arrange — 파티 편성 저장(스냅샷)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /party/arrange { userId, token, data:{ members:[{ characterId, slot }] } }
+    Note over C,S: members = 저장 후의 파티 전체(스냅샷). 목록에 없는 보유 캐릭터는 미편성이 된다
+    S->>S: 요청 형식 검증 — 빈 목록 / 정원 3명 초과 / 자리 범위(1~3) / 자리 중복 / 같은 캐릭터 중복
+    alt 형식 위반
+        S-->>C: 실패 { errorCode: CannotRemoveLastCharacter(2008) / PartySlotOccupied(2010) / InvalidCharacterId(2006) }
+    else 유효
+        Note over S,DB: 단일 트랜잭션 — 편성 전체를 비우고 스냅샷대로 다시 세운다(성장·장비는 건드리지 않음)
+        S->>DB: 보유 캐릭터 전량 조회(목록이 모두 보유 캐릭터인지 확인)
+        alt 보유하지 않은 캐릭터가 목록에 있음
+            S-->>C: 실패 { errorCode: CharacterNotFound(2009) }
+        else 전부 보유
+            S->>DB: 편성 초기화(계정의 모든 캐릭터 파티 자리 → 미편성)
+            S->>DB: 스냅샷대로 자리 부여(목록 각 캐릭터에 1~3 배정)
+            S->>DB: 갱신된 보유 캐릭터 전체 재조회(편성 자리 순 → 미편성)
+            S-->>C: 성공 { characters }
         end
     end
 ```
@@ -295,7 +327,7 @@ sequenceDiagram
         Note over S,DB: 단일 트랜잭션
         S->>DB: 진입 스테이지 데이터 확인(재검증)
         S->>DB: 골드 재화 데이터 적립
-        S->>DB: 3캐릭터 경험치·레벨 데이터 갱신(레벨별 요구 경험치 기준)
+        S->>DB: 파티 편성 캐릭터(slot≠0) 경험치·레벨 데이터 갱신(레벨별 요구 경험치 기준)
         S->>DB: 전리품 아이템 데이터 적재(스택/용량 규칙)
         S->>DB: 진행도 데이터 갱신(프런티어면 다음 스테이지 전진)
         alt 미진입 / 용량 초과
@@ -338,7 +370,7 @@ sequenceDiagram
             else 정산권 선점
                 S->>S: 방치 12시간 상한 적용 후 골드·경험치 산출(산출율 × 유효 시간 × 50%)
                 S->>DB: 골드 재화 데이터 적립
-                S->>DB: 전 캐릭터 경험치·레벨 데이터 갱신(레벨별 요구 경험치 기준)
+                S->>DB: 파티 편성 캐릭터(slot≠0) 경험치·레벨 데이터 갱신(레벨별 요구 경험치 기준)
                 S-->>C: 성공 { 경과·유효 시간·상한 여부·보상·캐릭터·기준 시각 }
             end
         end

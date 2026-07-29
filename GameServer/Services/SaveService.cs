@@ -14,12 +14,18 @@ public interface ISaveService
 {
     Task<SaveResult> LoadAsync(long userId);
     Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode, int gender);
+    Task<SaveResult> ArrangePartyAsync(long userId, IReadOnlyList<PartyMemberDto>? members);
     Task<SaveResult> UpdateLastActiveAsync(long userId);
 }
 
 public sealed class SaveService : ISaveService
 {
-    private const int MaxCharacterSlots = 3;
+    /// <summary>파티에 세울 수 있는 인원(전투 참가 인원). 보유 캐릭터 수 상한이 아니다 — 보유는 직업 수만큼 가능하다.</summary>
+    private const int MaxPartySlots = 3;
+
+    /// <summary>player_character.slot의 "미편성"(보유하지만 파티에 없음) 값.</summary>
+    private const int PartySlotUnassigned = 0;
+
     private const int MySqlDuplicateEntry = 1062;
     private const int GoldCurrencyType = 1;
 
@@ -43,10 +49,10 @@ public sealed class SaveService : ISaveService
     /// <remarks>
     /// 반환 항목(세이브 데이터 기획서 5.1의 표와 1:1로 대응한다. 항목을 늘리거나 줄이면 그 표도 함께 고친다):
     /// <para><c>player</c> — game_player 1행: 닉네임·진행 좌표(act/stage/difficulty)·최고 클리어·인벤 용량·마지막 활동 시각</para>
-    /// <para><c>characters</c> — player_character(≤3행): 캐릭터 슬롯별 직업·성별·레벨·경험치</para>
+    /// <para><c>characters</c> — player_character(보유 캐릭터, ≤직업 수): 캐릭터별 직업·파티 자리(slot, 0=미편성)·성별·레벨·경험치</para>
     /// <para><c>currencies</c> — player_item의 재화 행(row_type=2): 재화 종류별 보유량(골드 포함)</para>
-    /// <para><c>equipped</c> — player_item_equipped(≤18행 = 3캐릭터 × 6슬롯): 장착 장비. 캐릭터 스탯 계산의
-    ///   입력이라 가방 로딩을 기다리지 않도록 코어에 넣는다</para>
+    /// <para><c>equipped</c> — player_item_equipped(≤ 보유 캐릭터 수 × 6슬롯): 장착 장비. 미편성 캐릭터도 장비를
+    ///   그대로 착용한 채 대기하므로 함께 내려간다. 캐릭터 스탯 계산의 입력이라 가방 로딩을 기다리지 않도록 코어에 넣는다</para>
     /// <para><c>skills</c> — player_skill 중 레벨 1 이상인 행: 캐릭터별 스킬 코드·레벨·액티브 장착 여부
     ///   (초기화로 레벨 0이 된 행은 미습득이라 제외한다)</para>
     /// <para><c>runes</c> — player_rune: 계정 공용 룬 코드·레벨</para>
@@ -90,8 +96,11 @@ public sealed class SaveService : ISaveService
     }
 
     /// <summary>
-    /// 캐릭터를 생성한다. 마스터 로드·직업 코드·성별 값 유효성을 확인하고, 계정이 없으면 game_player와 1번 슬롯을
-    /// 초기화하며, 기존 계정이면 슬롯 여유(최대 3)·직업 중복을 검사한 뒤 빈 슬롯에 추가한다.
+    /// 캐릭터를 생성한다. 마스터 로드·직업 코드·성별 값 유효성을 확인하고, 계정이 없으면 game_player와 첫 캐릭터를
+    /// 초기화하며, 기존 계정이면 <b>직업 중복만</b> 검사한 뒤 추가한다(보유 수 상한을 따로 두지 않는다 —
+    /// 직업 중복이 불가하므로 보유 상한은 자연히 직업 수가 된다).
+    /// 생성 비용은 마스터 character_create_cost의 <b>생성 순번(보유 수 + 1)</b> 값(현재 정액)이며 최초 생성은 무료다.
+    /// 파티 자리는 빈 자리가 있으면 가장 앞자리에 자동 편성하고, 파티가 이미 3명이면 미편성(slot 0)으로 보유만 한다.
     /// 성별(1:남 2:여)은 생성 시 확정되며 이후 변경 수단이 없다(외형 전용, 스탯 무관).
     /// 동시 초기화·중복 생성 경합은 UNIQUE 위반을 잡아 에러 코드로 변환한다.
     /// </summary>
@@ -139,38 +148,98 @@ public sealed class SaveService : ISaveService
             }
 
             _logger.ZLogInformation($"캐릭터 생성 성공(신규 계정): userId {userId:@UserId}, characterId {1:@CharacterId}, classCode {classCode:@ClassCode}, gender {gender:@Gender}");
-            // 최초 생성(1번 슬롯)은 계정 초기화라 무료.
-            return SuccessCharacter(userId, 1, classCode, gender, 0, null);
+            // 최초 생성은 계정 초기화라 무료이며 파티 1번 자리에 편성된다.
+            return SuccessCharacter(userId, 1, classCode, 1, gender, 0, null);
         }
 
-        // 기존 계정: 슬롯 여유·직업 중복 검사 후 추가.
-        var slots = await _saveRepository.GetCharacterSlotsAsync(userId);
-        if (slots.Count >= MaxCharacterSlots)
-        {
-            return new SaveResult(ErrorCode.PlayerAlreadyExists, string.Empty, null);
-        }
-
-        if (slots.Any(s => s.ClassCode == classCode))
+        // 기존 계정: 직업 중복만 검사한다(보유 수 상한 없음 — 직업 중복 불가가 곧 상한).
+        var owned = await _saveRepository.GetCharacterSlotsAsync(userId);
+        if (owned.Any(s => s.ClassCode == classCode))
         {
             return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
         }
 
-        var newSlot = FirstFreeSlot(slots);
-        // 2·3번 슬롯 추가 생성 비용(마스터 명시값). 골드 확인·차감·캐릭터 삽입은 리포지토리 트랜잭션에서 원자적으로 처리.
-        var cost = _masterData.CharacterCreateCost(newSlot);
+        var newCharacterId = NextCharacterId(owned);
+        var newSlot = FirstFreePartySlot(owned);
+        // 생성 비용은 "몇 번째로 만드는 캐릭터인가"(보유 수 + 1)로 찾는 마스터 명시값(현재 정액).
+        // 골드 확인·차감·캐릭터 삽입은 리포지토리 트랜잭션에서 원자적으로 처리한다.
+        var cost = _masterData.CharacterCreateCost(owned.Count + 1);
 
-        var outcome = await _saveRepository.AddCharacterAsync(userId, newSlot, classCode, gender, cost);
+        var outcome = await _saveRepository.AddCharacterAsync(userId, newCharacterId, classCode, newSlot, gender, cost);
         switch (outcome.Status)
         {
             case AddCharacterStatus.InsufficientCurrency:
                 return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
             case AddCharacterStatus.DuplicateConflict:
-                // 슬롯/직업 유니크 경합(동시 생성).
+                // 식별자/직업 유니크 경합(동시 생성).
                 return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
         }
 
-        _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newSlot:@CharacterId}, classCode {classCode:@ClassCode}, gender {gender:@Gender}, cost {outcome.Cost:@Cost}");
-        return SuccessCharacter(userId, newSlot, classCode, gender, outcome.Cost, outcome.GoldBalance);
+        _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newCharacterId:@CharacterId}, classCode {classCode:@ClassCode}, slot {newSlot:@Slot}, gender {gender:@Gender}, cost {outcome.Cost:@Cost}");
+        return SuccessCharacter(userId, newCharacterId, classCode, newSlot, gender, outcome.Cost, outcome.GoldBalance);
+    }
+
+    /// <summary>
+    /// 클라이언트가 보낸 <b>파티 편성 스냅샷</b>(저장 후의 파티 전체)을 저장한다. 편성 UI의 "저장"이 곧 1회 호출이며,
+    /// 목록에 없는 보유 캐릭터는 자동으로 미편성이 되므로 추가·추방·교체·자리 바꾸기가 이 하나로 처리된다.
+    /// 성장·장비는 건드리지 않고 파티 자리만 바꾸며, 골드도 소모하지 않는다(비용은 캐릭터 생성 시에만 발생).
+    /// 요청 목록의 형식(인원 수·자리 범위·자리 중복·캐릭터 중복)을 먼저 검증하고,
+    /// 보유 여부 확인과 실제 저장은 리포지토리 트랜잭션이 수행한다.
+    /// </summary>
+    public async Task<SaveResult> ArrangePartyAsync(long userId, IReadOnlyList<PartyMemberDto>? members)
+    {
+        var invalid = ValidatePartySnapshot(members);
+        if (invalid is not null)
+        {
+            return new SaveResult(invalid.Value, string.Empty, null);
+        }
+
+        var outcome = await _saveRepository.SavePartyAsync(userId, members!);
+        if (outcome.Status == ArrangePartyStatus.CharacterNotFound)
+        {
+            return new SaveResult(ErrorCode.CharacterNotFound, string.Empty, null);
+        }
+
+        _logger.ZLogInformation($"파티 편성 저장: userId {userId:@UserId}, memberCount {members!.Count:@MemberCount}");
+        return new SaveResult(ErrorCode.Success, "Party arranged", new ArrangePartyResultData { characters = outcome.Characters });
+    }
+
+    /// <summary>
+    /// 파티 편성 스냅샷 요청의 형식을 검증한다. 위반이면 그 에러 코드를, 정상이면 null을 반환한다.
+    /// 검사 항목: 빈 목록(파티는 최소 1명), 정원 초과(3명), 자리 범위(1~3), 자리 중복, 같은 캐릭터 중복 지정.
+    /// 보유 여부는 DB를 봐야 하므로 여기서 검사하지 않는다(리포지토리 트랜잭션에서 확인).
+    /// </summary>
+    private static ErrorCode? ValidatePartySnapshot(IReadOnlyList<PartyMemberDto>? members)
+    {
+        // 파티가 비면 전투를 시작할 수 없다.
+        if (members is null || members.Count == 0)
+        {
+            return ErrorCode.CannotRemoveLastCharacter;
+        }
+
+        if (members.Count > MaxPartySlots)
+        {
+            return ErrorCode.PartySlotOccupied;
+        }
+
+        var usedSlots = new HashSet<int>();
+        var usedCharacters = new HashSet<int>();
+        foreach (var member in members)
+        {
+            // 미편성(0)은 "목록에 담지 않는 것"으로 표현하므로 자리 값은 1~3만 허용한다.
+            if (member.slot < 1 || member.slot > MaxPartySlots || !usedSlots.Add(member.slot))
+            {
+                return ErrorCode.PartySlotOccupied;
+            }
+
+            // 한 캐릭터를 두 자리에 세울 수 없다.
+            if (!usedCharacters.Add(member.characterId))
+            {
+                return ErrorCode.InvalidCharacterId;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>접속 시각(last_active_at)을 현재로 갱신한다(heartbeat). 계정 세이브가 없으면 SaveNotFound.</summary>
@@ -187,15 +256,16 @@ public sealed class SaveService : ISaveService
         return new SaveResult(ErrorCode.Success, "Heartbeat OK", new { lastActiveAt = now });
     }
 
-    /// <summary>캐릭터 생성 성공 응답(userId·characterId·classCode·gender·초기 레벨 1 + 소모 골드·잔액)을 만든다.
-    /// 무료 생성(최초 1번 슬롯)이면 goldBalance=null로 넘겨 cost 0·빈 잔액으로 회신한다.</summary>
-    private static SaveResult SuccessCharacter(long userId, int characterId, int classCode, int gender, long cost, long? goldBalance)
+    /// <summary>캐릭터 생성 성공 응답(userId·characterId·classCode·배정 파티 자리·gender·초기 레벨 1 + 소모 골드·잔액)을 만든다.
+    /// 무료 생성(최초 캐릭터)이면 goldBalance=null로 넘겨 cost 0·빈 잔액으로 회신한다.</summary>
+    private static SaveResult SuccessCharacter(long userId, int characterId, int classCode, int slot, int gender, long cost, long? goldBalance)
     {
         var data = new CreateCharacterResultData
         {
             userId = userId,
             characterId = characterId,
             classCode = classCode,
+            slot = slot,
             gender = gender,
             level = 1,
             cost = new CurrencyDto { currencyType = GoldCurrencyType, amount = cost },
@@ -210,11 +280,25 @@ public sealed class SaveService : ISaveService
     private static bool IsValidGender(int gender) =>
         gender == (int)CharacterGender.Male || gender == (int)CharacterGender.Female;
 
-    /// <summary>1~3 슬롯 중 사용되지 않은 가장 작은 번호.</summary>
-    private static int FirstFreeSlot(IReadOnlyCollection<CharacterSlot> slots)
+    /// <summary>새 캐릭터에 배정할 고유 식별자(사용되지 않은 가장 작은 번호). 캐릭터 삭제가 없으므로 사실상 보유 수 + 1이지만,
+    /// 빈 번호를 찾는 방식이라 향후 삭제가 생겨도 식별자가 겹치지 않는다.</summary>
+    private static int NextCharacterId(IReadOnlyCollection<CharacterSlot> owned)
     {
-        var used = slots.Select(s => s.CharacterId).ToHashSet();
-        for (var slot = 1; slot <= MaxCharacterSlots; slot++)
+        var used = owned.Select(c => c.CharacterId).ToHashSet();
+        var id = 1;
+        while (used.Contains(id))
+        {
+            id++;
+        }
+
+        return id;
+    }
+
+    /// <summary>새 캐릭터를 자동 편성할 빈 파티 자리(1~3 중 사용되지 않은 가장 작은 번호). 파티가 가득 차 있으면 0(미편성).</summary>
+    private static int FirstFreePartySlot(IReadOnlyCollection<CharacterSlot> owned)
+    {
+        var used = owned.Select(c => c.Slot).ToHashSet();
+        for (var slot = 1; slot <= MaxPartySlots; slot++)
         {
             if (!used.Contains(slot))
             {
@@ -222,7 +306,6 @@ public sealed class SaveService : ISaveService
             }
         }
 
-        // 슬롯이 가득 찬 경우는 호출 전에 걸러지므로 도달하지 않는다.
-        throw new InvalidOperationException("빈 캐릭터 슬롯이 없습니다.");
+        return PartySlotUnassigned;
     }
 }

@@ -34,7 +34,7 @@
 - **스테이지 구조**: 5 Act × 2 난이도 × 3 스테이지(=30)([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master`). 각 Act·난이도는 스테이지 1~2 일반, 스테이지 3 보스다. 파티(3인)가 함께 하나의 스테이지를 진행한다. 진행도(현재 act/stage/difficulty)는 **계정/파티 단위**다.
 - **스테이지 진입**: 플레이어가 특정 스테이지에 진입해 자동 전투를 시작한다. 아직 도달하지 못한 스테이지(앞 스테이지 미클리어)로는 **건너뛸 수 없다**. 이미 클리어한 스테이지는 **재파밍**을 위해 다시 진입할 수 있다(하드월 없음, [개요](../서버-시스템-전체-개요.md) 3장).
 - **스테이지 클리어**: 자동 전투로 스테이지를 클리어하면 클라이언트가 서버에 클리어를 알린다. 서버는 타당성을 검증하고 **해당 스테이지의 보상(골드·경험치·드롭)을 산출·지급**하며, 최고 도달 스테이지(`max_stage_cleared`)와 현재 진행도를 갱신한다.
-- **보상**: `stage_reward`가 정의한 **골드·경험치**와 **등급별 아이템 드롭 확률**로 서버가 보상을 산출한다(스테이지 단위 일원화, 몬스터 개별 드롭 없음). 경험치는 오프라인 보상과 동일하게 **3캐릭터 모두에게 같은 값**으로 지급한다([오프라인 보상 정산 기획서](offline-reward-기획서.md)와 동일 원칙).
+- **보상**: `stage_reward`가 정의한 **골드·경험치**와 **등급별 아이템 드롭 확률**로 서버가 보상을 산출한다(스테이지 단위 일원화, 몬스터 개별 드롭 없음). 경험치는 오프라인 보상과 동일하게 **파티에 편성된 캐릭터(`player_character.slot`≠0) 모두에게 같은 값**으로 지급한다(미편성 캐릭터는 전투에 참가하지 않으므로 받지 않는다)([오프라인 보상 정산 기획서](offline-reward-기획서.md)와 동일 원칙).
 
 ## 3. 요구사항
 
@@ -57,7 +57,7 @@
 | 테이블 | 본 도메인에서의 역할 | 참조 마스터 |
 |---|---|---|
 | `game_player`(`act`, `stage`, `difficulty`, `max_stage_cleared`) | 파티 현재 진행도·최고 도달 스테이지 | `stage_master` |
-| `player_character`(`exp`, `level`) | 클리어 경험치 반영(3캐릭터 동일) | `level_master` |
+| `player_character`(`exp`, `level`) | 클리어 경험치 반영(파티 편성 캐릭터 동일) | `level_master` |
 | `player_item`(재화 행 `row_type=2`) | 클리어 골드 반영(`quantity` UPDATE, 계정 공유) | `item_master`(재화 `item_type=3`) |
 | `player_item` | 전리품(아이템·재료) 적재(계정 공유) | `item_master`·`stage_reward` |
 
@@ -161,7 +161,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- `rewards.gold`/`exp`는 `stage_reward`의 골드·경험치, `rewards.items`는 `stage_reward`의 **등급별 확률로 서버가 추첨한** 전리품이다. `exp`는 **3캐릭터 모두에게 동일** 적용되어 `characters`에 반영 후 값이 담긴다.
+- `rewards.gold`/`exp`는 `stage_reward`의 골드·경험치, `rewards.items`는 `stage_reward`의 **등급별 확률로 서버가 추첨한** 전리품이다. `exp`는 **파티에 편성된 캐릭터 모두에게 동일** 적용되어 `characters`에 반영 후 값이 담긴다(미편성 캐릭터는 제외).
 - `characters[].isLevelUp`: 이번 클리어 경험치로 **그 캐릭터가 레벨업 했는지** 여부(`true`/`false`). 같은 `exp`를 받아도 캐릭터마다 시작 레벨·잔여 경험치가 달라 일부만 레벨업할 수 있다.
 - `progress`: 갱신된 진행도. 프런티어(최고 도달) 스테이지를 클리어했으면 `stage`가 다음으로 전진하고 `maxStageCleared`가 증가한다. **재파밍**(이미 클리어한 스테이지)일 경우 보상만 지급되고 `maxStageCleared`는 그대로다. 재파밍 보상은 **프런티어와 동일**(골드·경험치·드롭 확률 감산 없음, 8장 확정).
 - 오류: `StageNotEntered(6003)`(진입하지 않았거나 현재 진입 스테이지와 불일치), `StageClearTooFast(6004)`(최소 소요 시간 미충족, 임계값 8장 미결), 전리품이 인벤토리 용량을 초과하면 `InventoryFull(4002)`.
@@ -191,7 +191,7 @@ COMMIT → { act, difficulty, stage, stageId, enteredAt }
      gold = sr.reward_gold; exp = sr.reward_exp
      items = rollGradeDrop(stage_reward_drop[stage_id])   # 등급별 drop_prob로 추첨 → 해당 등급 item_master 아이템 1개(서버 RNG)
   4) 지급: player_item(재화, item_code=골드).quantity += gold
-           for c in player_character(3인): c.exp += exp → level 재계산   # 3캐릭터 동일
+           for c in player_character(slot≠0): c.exp += exp → level 재계산   # 파티 편성 캐릭터 동일
            items를 player_item에 적재(스택/용량 규칙; 초과 시 InventoryFull(4002))
   5) 진행도: 프런티어 클리어면 stage 전진(act/difficulty 롤오버) + max_stage_cleared 갱신
              재파밍이면 보상만, 진행도 유지
@@ -239,5 +239,5 @@ COMMIT → { cleared, rewards, characters, balance, progress }
 - [세이브 데이터 기획서](save-data-기획서.md) — `game_player`(진행도)·`player_character`(경험치) 저장, 액션 단위 저장
 - [마스터 데이터 기획서](master-data/master-data-기획서.md) — `stage_master`·`stage_reward`·`monster_master`·`level_master`
 - [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 전리품 적재·`InventoryFull(4002)`
-- [오프라인 보상 정산 기획서](offline-reward-기획서.md) — 오프라인 진행(경험치 3캐릭터 동일 지급 원칙 공유)
+- [오프라인 보상 정산 기획서](offline-reward-기획서.md) — 오프라인 진행(경험치를 파티 편성 캐릭터에 동일 지급하는 원칙 공유)
 - [ErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(6000번대 스테이지/전투)

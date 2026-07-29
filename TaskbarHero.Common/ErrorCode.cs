@@ -26,6 +26,9 @@ namespace TaskbarHero.Common
         InvalidClassCode = 2005,
         InvalidCharacterId = 2006,
         InvalidGender = 2007,
+        CannotRemoveLastCharacter = 2008,
+        CharacterNotFound = 2009,
+        PartySlotOccupied = 2010,
 
         // 오프라인 보상 정산 (3000번대)
         NoOfflineReward = 3001,

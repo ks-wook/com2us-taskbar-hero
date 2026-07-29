@@ -83,6 +83,9 @@ public sealed class OfflineRepository : IOfflineRepository
     private const int RowTypeCurrency = 2;
     private const int GoldItemCode = 1;
 
+    /// <summary>player_character.slot의 "미편성"(파티에 없어 전투에 참가하지 않음) 값.</summary>
+    private const int PartySlotUnassigned = 0;
+
     private readonly GameDbFactory _dbFactory;
 
     /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
@@ -121,7 +124,7 @@ public sealed class OfflineRepository : IOfflineRepository
     ///     0행이면 동시 요청이 먼저 정산한 것이므로 롤백(AlreadyClaimed). 중복 지급을 막는 핵심 게이트다.</para>
     /// <para>3) computeReward 델리게이트 — 경과 시간에 상한을 적용해 골드·경험치 산출(서버 권위, DB 접근 없음)</para>
     /// <para>4) player_item(재화 행) upsert — 정산 골드 적립, 갱신 후 잔액 산출</para>
-    /// <para>5) player_character SELECT + 캐릭터별 UPDATE — 전 캐릭터에 동일 경험치 지급 후 applyExp 델리게이트로 레벨 재계산</para>
+    /// <para>5) player_character SELECT + 캐릭터별 UPDATE — <b>파티에 편성된(slot≠0)</b> 캐릭터에만 동일 경험치 지급 후 applyExp 델리게이트로 레벨 재계산</para>
     /// </remarks>
     public async Task<OfflineClaimOutcome> ClaimAsync(
         long userId,
@@ -176,11 +179,12 @@ public sealed class OfflineRepository : IOfflineRepository
             // 4) 골드 적립(재화 행 upsert).
             long goldBalance = await UpsertGoldAsync(db, transaction, userId, gold, nowUnix);
 
-            // 5) 경험치 지급(3캐릭터 동일) + 레벨 재계산.
+            // 5) 경험치 지급(파티 편성 캐릭터 동일) + 레벨 재계산.
+            //    미편성(slot=0) 캐릭터는 방치 전투에 참가하지 않았으므로 경험치를 받지 않는다(세이브 데이터 기획서 5.5).
             var charRows = await db.Query("player_character")
                 .Select("character_id", "level", "exp")
-                .Where("user_id", userId)
-                .OrderBy("character_id")
+                .Where("user_id", userId).Where("slot", "!=", PartySlotUnassigned)
+                .OrderBy("slot")
                 .GetAsync<CharProgressRow>(transaction);
 
             var characters = new List<OfflineCharacterState>();

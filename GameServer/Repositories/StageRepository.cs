@@ -80,6 +80,9 @@ public sealed class StageRepository : IStageRepository
     private const int RowTypeCurrency = 2;
     private const int GoldItemCode = 1;
 
+    /// <summary>player_character.slot의 "미편성"(파티에 없어 전투에 참가하지 않음) 값.</summary>
+    private const int PartySlotUnassigned = 0;
+
     private readonly GameDbFactory _dbFactory;
 
     /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
@@ -125,7 +128,7 @@ public sealed class StageRepository : IStageRepository
     /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 보상만 들어가고 진행도가 안 오르는 부분 반영을 막는다):
     /// <para>1) game_player SELECT — 현재 진입 좌표·max_stage_cleared·inventory_capacity 확보 후 요청 좌표와 일치 검증(불일치 → NotEntered)</para>
     /// <para>2) player_item(재화 행) upsert — 클리어 보상 골드 적립, 갱신 후 잔액 산출</para>
-    /// <para>3) player_character SELECT + 캐릭터별 UPDATE — 전 캐릭터에 동일 경험치 지급 후 levelUp 델리게이트로 레벨 재계산</para>
+    /// <para>3) player_character SELECT + 캐릭터별 UPDATE — <b>파티에 편성된(slot≠0)</b> 캐릭터에만 동일 경험치 지급 후 levelUp 델리게이트로 레벨 재계산</para>
     /// <para>4) player_item 전리품 적재 — 스택 가능하면 기존 스택 병합, 아니면 빈 칸에 INSERT(용량 초과 → InventoryFull)</para>
     /// <para>5) game_player 진행도 UPDATE — 프런티어 클리어면 max_stage_cleared 갱신 + 다음 스테이지로 전진, 재파밍이면 updated_at만 갱신</para>
     /// ⚠️ 원자성은 보장하지만 game_player 행에 잠금(FOR UPDATE 등)을 걸지 않으므로, 동일 userId의 동시 요청은
@@ -173,11 +176,12 @@ public sealed class StageRepository : IStageRepository
             // 2) 골드 지급(재화 행 upsert).
             long goldBalance = await UpsertGoldAsync(db, transaction, userId, gold, nowUnix);
 
-            // 3) 경험치 지급(3캐릭터 동일) + 레벨 재계산.
+            // 3) 경험치 지급(파티 편성 캐릭터 동일) + 레벨 재계산.
+            //    미편성(slot=0) 캐릭터는 전투에 나가지 않았으므로 경험치를 받지 않는다(세이브 데이터 기획서 5.5).
             var charRows = await db.Query("player_character")
                 .Select("character_id", "level", "exp")
-                .Where("user_id", userId)
-                .OrderBy("character_id")
+                .Where("user_id", userId).Where("slot", "!=", PartySlotUnassigned)
+                .OrderBy("slot")
                 .GetAsync<CharProgressRow>(transaction);
 
             var characters = new List<CharacterProgressDto>();
