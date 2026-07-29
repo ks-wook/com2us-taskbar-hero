@@ -127,6 +127,7 @@ erDiagram
         bigint  user_id FK
         int     character_id "캐릭터 슬롯(1~3)"
         int     class_code "직업(중복 불가)"
+        int     gender "성별 1:남 2:여 (기본 1:남)"
         int     level
         bigint  exp
     }
@@ -240,7 +241,8 @@ erDiagram
 ### player_character
 
 - **역할**: 계정이 보유한 캐릭터(슬롯 1~3, 3인 파티)별 진행 상태. 직업·레벨·경험치는 **캐릭터별**이다.
-- **저장 데이터**: `(user_id, character_id)` 키, `class_code`(직업 — 파티 내 중복 불가, `class_master` 참조), `level`, `exp`.
+- **저장 데이터**: `(user_id, character_id)` 키, `class_code`(직업 — 파티 내 중복 불가, `class_master` 참조), `gender`(성별 1:남 2:여 — 캐릭터 생성 시 선택, 이후 변경 없음. 기본값 1:남), `level`, `exp`.
+- **`gender`**: 캐릭터 외형(남/여)을 가르는 값이며 직업·스탯 등 전투 계산에는 영향을 주지 않는 표현용 값이다. 생성 시 클라이언트가 선택해 전달하고 서버가 1·2 범위만 검증한다. 컬럼 기본값이 `1`(남)이라 **기존 캐릭터 행은 모두 남자로 간주**된다.
 
 ### player_item
 

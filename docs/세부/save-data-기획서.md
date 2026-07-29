@@ -95,6 +95,7 @@ erDiagram
         bigint  user_id FK
         int     character_id "캐릭터 슬롯(1~3)"
         int     class_code "직업"
+        int     gender "성별 1:남 2:여 (기본 1:남)"
         int     level
         bigint  exp
     }
@@ -182,7 +183,7 @@ erDiagram
 ```
 
 - **PK/유니크**:
-  - `player_character`: `(user_id, character_id)` 복합 PK. `character_id`는 1~3.
+  - `player_character`: `(user_id, character_id)` 복합 PK. `character_id`는 1~3. `gender`(성별 1:남 2:여)는 **캐릭터 생성 시 선택**해 저장하고 이후 변경하지 않으며, 외형(남/여 스프라이트)만 가르는 표현용 값이라 직업·레벨·스탯 계산에는 관여하지 않는다. 컬럼 기본값이 `1`(남)이므로 **성별 도입 이전에 생성된 캐릭터는 모두 남자**가 된다.
   - `player_skill`: `(user_id, character_id, skill_code)` 복합 PK. 캐릭터별 스킬 레벨·액티브 장착.
   - `player_rune`: `(user_id, rune_code)` 복합 PK. 룬은 **계정 공용**이라 `character_id`를 두지 않는다.
   - `player_mail`: `mail_id` PK, `user_id` 조회 인덱스. 계정 우편함.
@@ -235,7 +236,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | 필드 | 내용 | 출처 테이블 | 크기 |
 |---|---|---|---|
 | `player` | 닉네임·진행 좌표(act/stage/difficulty)·최고 클리어·인벤 용량·마지막 활동 시각 | `game_player` | 1행 |
-| `characters` | 파티 캐릭터의 슬롯·직업·레벨·경험치 | `player_character` | ≤3행 |
+| `characters` | 파티 캐릭터의 슬롯·직업·성별·레벨·경험치 | `player_character` | ≤3행 |
 | `currencies` | 재화 종류별 보유량(골드 포함) | `player_item` (`row_type=2`) | 재화 종류 수 |
 | `equipped` | 캐릭터별 장착 장비(아이템 식별자·코드·강화 단계·장착 캐릭터/슬롯) | `player_item_equipped` (단독 — `item_code`·`enhance_level`을 함께 보관하므로 조인 불필요) | ≤18행 |
 | `skills` | 캐릭터별 보유 스킬 코드·레벨·액티브 장착 여부 | `player_skill` | 3 × 직업 스킬 수 |
@@ -272,9 +273,9 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
       "lastActiveAt": 1752300000
     },
     "characters": [
-      { "characterId": 1, "classCode": 1, "level": 42, "exp": 128500 },
-      { "characterId": 2, "classCode": 2, "level": 40, "exp": 90000 },
-      { "characterId": 3, "classCode": 3, "level": 38, "exp": 60000 }
+      { "characterId": 1, "classCode": 1, "gender": 1, "level": 42, "exp": 128500 },
+      { "characterId": 2, "classCode": 2, "gender": 2, "level": 40, "exp": 90000 },
+      { "characterId": 3, "classCode": 3, "gender": 1, "level": 38, "exp": 60000 }
     ],
     "currencies": [
       { "currencyType": 1, "amount": 9875421 }
@@ -295,7 +296,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- `player`는 계정/파티 공용 값, `characters`는 3인 파티 각 캐릭터의 직업·레벨·경험치다. `skills`는 `characterId`로 소속 캐릭터를 표시하며(스킬 행의 `equipped=1`은 액티브 장착, 캐릭터당 최대 2개), `runes`는 계정 공용이다. `currencies`·`equipped`·`cube`도 계정 공유(장착 위치만 캐릭터별).
+- `player`는 계정/파티 공용 값, `characters`는 3인 파티 각 캐릭터의 직업·성별(`gender` 1:남 2:여, 외형 전용)·레벨·경험치다. `skills`는 `characterId`로 소속 캐릭터를 표시하며(스킬 행의 `equipped=1`은 액티브 장착, 캐릭터당 최대 2개), `runes`는 계정 공용이다. `currencies`·`equipped`·`cube`도 계정 공유(장착 위치만 캐릭터별).
 - **`currencies`의 저장 출처**: `player_item`의 `row_type=2`(재화) 행을 `{currencyType(=item_code), amount(=quantity)}`로 투영한 결과다. 재화 행은 `slot`이 NULL이라 가방 페이징(5.2) 대상에서 자동으로 빠지므로, **재화는 코어에서만 내려간다.**
 - **`equipped`(장착 장비)**: `player_item_equipped` 행을 그대로 내려준다. 장착 중에는 `player_item.slot`이 NULL이라 가방 칸을 점유하지 않으므로 5.2의 페이지 결과와 **중복되지 않는다.** 클라이언트는 이 배열만으로 캐릭터별 장비 렌더링과 스탯 계산을 끝낼 수 있고, 가방을 로드하지 않은 상태에서도 전투를 시작할 수 있다.
 - **가방 아이템은 포함하지 않는다**: 총 개수(`inventoryTotal`)만 내려준다. 실제 아이템 목록은 창고/인벤토리 UI를 열 때 5.2로 조회한다.
@@ -390,12 +391,13 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 {
   "userId": 1,
   "token": "MToxNzAwMDAwMDAwOmFCM2RFNmZHOWhKMWtM...",
-  "data": { "nickname": "hero", "classCode": 1 }
+  "data": { "nickname": "hero", "classCode": 1, "gender": 1 }
 }
 ```
 
 - `nickname`: **최초 캐릭터 생성(계정 초기화) 시에만** 사용하며, 이후 호출에서는 무시한다.
 - `classCode`: 생성할 캐릭터의 직업. **이미 보유한 캐릭터의 직업과 중복될 수 없다.**
+- `gender`: 캐릭터 성별(`1`:남 `2`:여). **캐릭터마다 따로 고르며 중복 제약이 없다**(파티 3인이 모두 같은 성별이어도 된다). 외형(남/여 스프라이트)만 가르는 값이라 스탯·생성 비용에는 영향을 주지 않고, **생성 시 확정되어 이후 변경 API를 두지 않는다**. 그 외 값은 `InvalidGender(2007)`이며, 필드를 보내지 않으면 `1`(남)로 저장된다.
 
 **Response (성공, 200 OK)**
 ```json
@@ -404,7 +406,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "errorCode": 0,
   "message": "Character created",
   "data": {
-    "userId": 1, "characterId": 2, "classCode": 2, "level": 1,
+    "userId": 1, "characterId": 2, "classCode": 2, "gender": 2, "level": 1,
     "cost": { "currencyType": 1, "amount": 100000 },
     "balance": [ { "currencyType": 1, "amount": 900000 } ]
   }
@@ -413,7 +415,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 - `characterId`: 서버가 배정한 슬롯(1~3).
 - `cost`·`balance`: 소모한 골드와 차감 후 잔액. **최초 생성(1번 슬롯)은 무료라 `cost.amount=0`, `balance`는 빈 목록**이다. 생성 **전** 안내 비용은 클라이언트가 마스터 `character_create_cost` 번들에서 다음 슬롯 값을 조회해 표시한다.
-- 오류: `InvalidClassCode(2005)`(존재하지 않는 직업), `InvalidCharacterId(2006)`(이미 보유한 직업과 중복), `PlayerAlreadyExists(2004)`(슬롯 3개가 모두 차 더 이상 생성 불가), `InsufficientCurrency(4005)`(2·3번 슬롯 생성 골드 부족).
+- 오류: `InvalidClassCode(2005)`(존재하지 않는 직업), `InvalidGender(2007)`(1·2 외의 성별 값), `InvalidCharacterId(2006)`(이미 보유한 직업과 중복), `PlayerAlreadyExists(2004)`(슬롯 3개가 모두 차 더 이상 생성 불가), `InsufficientCurrency(4005)`(2·3번 슬롯 생성 골드 부족).
 
 ---
 

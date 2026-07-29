@@ -51,11 +51,11 @@ public interface ISaveRepository
     /// <summary>캐릭터 추가 생성 시 슬롯 배정·직업 중복 검사에 쓸 기존 슬롯 목록(슬롯 번호 + 직업)을 조회한다.</summary>
     Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId);
 
-    /// <summary>최초 접속: game_player + 1번 슬롯 캐릭터 + 큐브를 한 트랜잭션으로 초기화한다.</summary>
-    Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int inventoryCapacity, long nowUnix);
+    /// <summary>최초 접속: game_player + 1번 슬롯 캐릭터(직업·성별) + 큐브를 한 트랜잭션으로 초기화한다.</summary>
+    Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix);
 
     /// <summary>기존 계정에 캐릭터 1개 추가. 생성 비용(goldCost)을 골드에서 확인·차감하고 캐릭터를 삽입하는 한 트랜잭션.</summary>
-    Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, long goldCost);
+    Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, int gender, long goldCost);
 
     /// <summary>last_active_at 갱신. 갱신된 행 수(0이면 계정 없음) 반환.</summary>
     Task<int> UpdateLastActiveAsync(long userId, long nowUnix);
@@ -78,6 +78,7 @@ file sealed class PlayerCharacterRow
 {
     public int CharacterId { get; set; }
     public int ClassCode { get; set; }
+    public int Gender { get; set; }
     public int Level { get; set; }
     public long Exp { get; set; }
 }
@@ -174,6 +175,7 @@ public sealed class SaveRepository : ISaveRepository
         {
             characterId = r.CharacterId,
             classCode = r.ClassCode,
+            gender = r.Gender,
             level = r.Level,
             exp = r.Exp,
         }).ToList();
@@ -305,12 +307,12 @@ public sealed class SaveRepository : ISaveRepository
     /// <remarks>
     /// 한 트랜잭션으로 묶는 작업(캐릭터·큐브·출석 진행도가 없는 반쪽 세이브가 남지 않게 한다):
     /// <para>1) game_player INSERT — 닉네임·시작 좌표(1-1-1)·최고 클리어 0·초기 인벤 용량·활동/생성/갱신 시각</para>
-    /// <para>2) player_character INSERT — 1번 슬롯에 선택 직업 캐릭터를 레벨 1·경험치 0으로 생성</para>
+    /// <para>2) player_character INSERT — 1번 슬롯에 선택 직업·성별 캐릭터를 레벨 1·경험치 0으로 생성</para>
     /// <para>3) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
     /// <para>4) player_attendance INSERT — 출석 진행도를 0(누적 0·마지막 획득 일자 0)으로 초기화.
     ///     출석 수령은 이 행의 조건부 갱신으로 처리하므로 계정 생성 시 함께 만들어 둔다(attendance 기획서 §4)</para>
     /// </remarks>
-    public async Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int inventoryCapacity, long nowUnix)
+    public async Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -339,6 +341,7 @@ public sealed class SaveRepository : ISaveRepository
                 user_id = userId,
                 character_id = 1,
                 class_code = classCode,
+                gender,
                 level = 1,
                 exp = 0,
             }, transaction);
@@ -375,10 +378,10 @@ public sealed class SaveRepository : ISaveRepository
     /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 골드만 차감되고 캐릭터가 안 생기는 상태를 막는다):
     /// <para>1) player_item(재화 행) SELECT — 골드 잔액 확인(행이 없으면 잔액 0, 비용 미달 → InsufficientCurrency)</para>
     /// <para>2) player_item UPDATE — 비용이 0보다 클 때만 골드 차감</para>
-    /// <para>3) player_character INSERT — 지정 슬롯에 캐릭터를 레벨 1·경험치 0으로 생성.
+    /// <para>3) player_character INSERT — 지정 슬롯에 캐릭터(직업·성별)를 레벨 1·경험치 0으로 생성.
     ///     유니크 제약(슬롯 PK·계정 내 직업 중복) 위반(MySQL 1062)은 동시 생성 경합으로 보고 롤백 → DuplicateConflict</para>
     /// </remarks>
-    public async Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, long goldCost)
+    public async Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, int gender, long goldCost)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -417,6 +420,7 @@ public sealed class SaveRepository : ISaveRepository
                     user_id = userId,
                     character_id = characterId,
                     class_code = classCode,
+                    gender,
                     level = 1,
                     exp = 0,
                 }, transaction);

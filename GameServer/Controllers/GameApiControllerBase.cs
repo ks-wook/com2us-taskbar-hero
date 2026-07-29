@@ -66,6 +66,7 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.PlayerAlreadyExists => "Player already exists",
         ErrorCode.InvalidClassCode => "Invalid class code",
         ErrorCode.InvalidCharacterId => "Invalid character id",
+        ErrorCode.InvalidGender => "Invalid gender",
         ErrorCode.SaveNotFound => "Save not found",
         ErrorCode.NoOfflineReward => "No offline reward",
         ErrorCode.OfflineRewardAlreadyClaimed => "Offline reward already claimed",

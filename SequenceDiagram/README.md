@@ -204,19 +204,19 @@ sequenceDiagram
     participant S as GameServer
     participant DB as MySQL(game)
 
-    C->>S: POST /create-character { userId, token, data:{ nickname, classCode } }
-    S->>S: 마스터 데이터 확인(인메모리) — 로드 상태·직업 코드 유효성
-    alt 마스터 미로드 or 잘못된 직업
-        S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) / InvalidClassCode(2005) }
+    C->>S: POST /create-character { userId, token, data:{ nickname, classCode, gender } }
+    S->>S: 마스터 데이터 확인(인메모리) — 로드 상태·직업 코드 유효성 + 성별 값(1:남 2:여) 검증
+    alt 마스터 미로드 or 잘못된 직업 or 잘못된 성별
+        S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) / InvalidClassCode(2005) / InvalidGender(2007) }
     else 유효
         S->>DB: 플레이어 세이브 데이터 확인
         alt 신규 계정(최초 생성)
-            S->>DB: 단일 트랜잭션 — 플레이어·1번 슬롯 캐릭터·큐브 데이터 적재 + [테스트용] 초기 골드 적립
+            S->>DB: 단일 트랜잭션 — 플레이어·1번 슬롯 캐릭터(직업·성별)·큐브·출석 진행도 데이터 적재
             S-->>C: 성공 { 무료, cost 0 }
         else 기존 계정(2·3번 슬롯 추가)
             S->>DB: 기존 캐릭터 슬롯 데이터 확인
             S->>S: 슬롯 여유(≤3)·직업 중복 검사 + 마스터에서 해당 슬롯의 생성 비용 조회
-            S->>DB: 단일 트랜잭션 — 골드 데이터 확인·차감 + 캐릭터 데이터 적재
+            S->>DB: 단일 트랜잭션 — 골드 데이터 확인·차감 + 캐릭터(직업·성별) 데이터 적재
             alt 골드 부족 / 슬롯·직업 경합
                 S-->>C: 실패 { errorCode: InsufficientCurrency(4005) / InvalidCharacterId(2006) }
             else 성공

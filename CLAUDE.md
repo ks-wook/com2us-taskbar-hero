@@ -50,9 +50,15 @@
   - **컨트롤러 공통 보조 메서드**(인증 userId 추출, 공통 응답 변환, ErrorCode ↔ HTTP 상태/메시지 매핑 등)는 **베이스 컨트롤러 클래스**(`ControllerBase`를 상속한 추상 클래스, 예: `GameApiControllerBase`·`AccountApiControllerBase`)에 `protected`/`private static`으로 구현하고, 각 컨트롤러가 이를 **상속**해 사용한다.
   - 컨트롤러 작업 시 이 규칙을 매번 확인한다.
 - **기능 구현 시 빌드 및 테스트 진행**: 기능을 구현하면 반드시 빌드(`dotnet build`)로 컴파일을 확인하고, 실제 동작을 테스트로 검증한다. 빌드 성공과 테스트 통과를 확인하기 전에는 작업을 완료로 간주하지 않는다.
-- **서버를 어시스턴트가 절대 띄우지 않는다 (예외 없음)**: 서버(`GameServer`·`AccountServer`) 기동은 **사용자만** 한다. 어시스턴트는 `dotnet run`·`Start-Process`(숨김 포함)·`Start-Job`·harness `run_in_background`·`&`·`nohup` 등 **어떤 방식으로도 서버를 주도적으로 띄우려 시도하지 않는다.** 숨겨진 서버는 세션이 끝나도 남아 `bin/` 파일을 잠그고(MSB3021/MSB3027), 다음 테스트가 **옛 바이너리를 검증**하게 만든다.
-  - **실테스트는 "사용자가 서버를 올린 뒤 테스트를 진행하라고 지시했을 때만" 수행한다.** 서버가 내려가 있으면 **직접 띄우지도, 대신 띄워달라고 조르지도 말고** 그 사실만 알리고 멈춘다. 사용자가 프롬프트에서 `! dotnet run --project GameServer` 형태로 직접 실행한다.
-  - 테스트 스크립트도 서버를 스스로 띄우지 않는다. **강제 종료 → 빌드 → (사용자가 띄운 서버 확인) → 시나리오** 순서로 구성한다.
+- **어시스턴트는 서버를 포어그라운드로만 띄운다**: 서버(`GameServer`·`AccountServer`)를 어시스턴트가 띄울 수 있으나, **반드시 사용자가 볼 수 있는 별도 콘솔 창(포어그라운드)** 으로만 띄운다. **숨김·백그라운드 기동은 금지**한다 — `Start-Process -WindowStyle Hidden`·`Start-Job`·harness `run_in_background`·`&`·`nohup` 등. 숨겨진 서버는 세션이 끝나도 남아 `bin/` 파일을 잠그고(MSB3021/MSB3027), 다음 테스트가 **옛 바이너리를 검증**하게 만든다.
+  - 기동 명령(창이 뜨고 로그가 사용자에게 그대로 보인다):
+    ```powershell
+    Start-Process powershell -ArgumentList '-NoExit','-Command','dotnet run --project GameServer'
+    Start-Process powershell -ArgumentList '-NoExit','-Command','dotnet run --project AccountServer'
+    ```
+  - 기동 후에는 헬스 체크(예: `http://localhost:5247/openapi/v1.json`)로 **준비 완료를 확인한 뒤** 시나리오를 시작한다.
+  - **테스트가 끝나면 어시스턴트가 띄운 서버는 반드시 강제 종료**하고 잔여 프로세스 0을 확인한다(아래 「테스트 전후 기존 서버 강제 종료」). 세션에 서버를 남기지 않는다.
+  - 테스트 스크립트는 **강제 종료 → 빌드 → 포어그라운드 기동 → 헬스 체크 → 시나리오 → 강제 종료·잔여 0 확인** 순서로 구성한다.
 - **테스트 전후 기존 서버 강제 종료**: 테스트를 시작하기 전에 **이미 떠 있는 서버가 있으면 확인 없이 강제 종료한다.** 끝난 뒤에도 잔여 프로세스가 0인지 반드시 확인한다.
   - 종료는 **앱 프로세스와 `dotnet run` 래퍼를 모두** 잡는다. 래퍼가 살아 있으면 자식(`GameServer.exe`·`AccountServer.exe`)을 다시 띄워 "0건" 확인 직후에 서버가 되살아난다.
     ```powershell

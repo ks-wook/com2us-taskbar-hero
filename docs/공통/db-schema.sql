@@ -99,11 +99,14 @@ CREATE TABLE game_player (
 
 
 -- 캐릭터 슬롯. 계정당 최대 3개(3인 파티). 직업(class_code)은 계정 내 중복 불가.
+--   * gender는 외형(남/여) 표현용 값이며 스탯·전투 계산에 영향을 주지 않는다.
+--     DEFAULT 1(남)이라 기존 행/미지정 생성은 모두 남자가 된다.
 DROP TABLE IF EXISTS player_character;
 CREATE TABLE player_character (
     user_id      BIGINT NOT NULL          COMMENT '계정 user_id',
     character_id INT    NOT NULL          COMMENT '캐릭터 슬롯(1~3)',
     class_code   INT    NOT NULL          COMMENT '직업(class_master 참조). 계정 내 중복 불가',
+    gender       TINYINT NOT NULL DEFAULT 1 COMMENT '성별(1:남 2:여). 외형 전용, 기본 1:남',
     level        INT    NOT NULL DEFAULT 1 COMMENT '캐릭터 레벨',
     exp          BIGINT NOT NULL DEFAULT 0 COMMENT '누적 경험치',
     PRIMARY KEY (user_id, character_id),

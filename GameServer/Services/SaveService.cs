@@ -13,7 +13,7 @@ public readonly record struct SaveResult(ErrorCode ErrorCode, string SuccessMess
 public interface ISaveService
 {
     Task<SaveResult> LoadAsync(long userId);
-    Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode);
+    Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode, int gender);
     Task<SaveResult> UpdateLastActiveAsync(long userId);
 }
 
@@ -43,7 +43,7 @@ public sealed class SaveService : ISaveService
     /// <remarks>
     /// 반환 항목(세이브 데이터 기획서 5.1의 표와 1:1로 대응한다. 항목을 늘리거나 줄이면 그 표도 함께 고친다):
     /// <para><c>player</c> — game_player 1행: 닉네임·진행 좌표(act/stage/difficulty)·최고 클리어·인벤 용량·마지막 활동 시각</para>
-    /// <para><c>characters</c> — player_character(≤3행): 캐릭터 슬롯별 직업·레벨·경험치</para>
+    /// <para><c>characters</c> — player_character(≤3행): 캐릭터 슬롯별 직업·성별·레벨·경험치</para>
     /// <para><c>currencies</c> — player_item의 재화 행(row_type=2): 재화 종류별 보유량(골드 포함)</para>
     /// <para><c>equipped</c> — player_item_equipped(≤18행 = 3캐릭터 × 6슬롯): 장착 장비. 캐릭터 스탯 계산의
     ///   입력이라 가방 로딩을 기다리지 않도록 코어에 넣는다</para>
@@ -89,11 +89,12 @@ public sealed class SaveService : ISaveService
     }
 
     /// <summary>
-    /// 캐릭터를 생성한다. 마스터 로드·직업 코드 유효성을 확인하고, 계정이 없으면 game_player와 1번 슬롯을
+    /// 캐릭터를 생성한다. 마스터 로드·직업 코드·성별 값 유효성을 확인하고, 계정이 없으면 game_player와 1번 슬롯을
     /// 초기화하며, 기존 계정이면 슬롯 여유(최대 3)·직업 중복을 검사한 뒤 빈 슬롯에 추가한다.
+    /// 성별(1:남 2:여)은 생성 시 확정되며 이후 변경 수단이 없다(외형 전용, 스탯 무관).
     /// 동시 초기화·중복 생성 경합은 UNIQUE 위반을 잡아 에러 코드로 변환한다.
     /// </summary>
-    public async Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode)
+    public async Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode, int gender)
     {
         // 마스터 미로드 시 직업 검증 불가.
         if (!_masterData.IsLoaded)
@@ -105,6 +106,12 @@ public sealed class SaveService : ISaveService
         if (!_masterData.IsValidClass(classCode))
         {
             return new SaveResult(ErrorCode.InvalidClassCode, string.Empty, null);
+        }
+
+        // 정의되지 않은 성별 값(1:남 2:여 외).
+        if (!IsValidGender(gender))
+        {
+            return new SaveResult(ErrorCode.InvalidGender, string.Empty, null);
         }
 
         var player = await _saveRepository.GetPlayerAsync(userId);
@@ -120,7 +127,7 @@ public sealed class SaveService : ISaveService
             try
             {
                 await _saveRepository.CreatePlayerWithFirstCharacterAsync(
-                    userId, nickname.Trim(), classCode, MasterDataProvider.BaseInventoryCapacity,
+                    userId, nickname.Trim(), classCode, gender, MasterDataProvider.BaseInventoryCapacity,
                     DateTimeOffset.UtcNow.ToUnixTimeSeconds());
             }
             catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
@@ -130,9 +137,9 @@ public sealed class SaveService : ISaveService
                 return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
             }
 
-            _logger.ZLogInformation($"캐릭터 생성 성공(신규 계정): userId {userId:@UserId}, characterId {1:@CharacterId}, classCode {classCode:@ClassCode}");
+            _logger.ZLogInformation($"캐릭터 생성 성공(신규 계정): userId {userId:@UserId}, characterId {1:@CharacterId}, classCode {classCode:@ClassCode}, gender {gender:@Gender}");
             // 최초 생성(1번 슬롯)은 계정 초기화라 무료.
-            return SuccessCharacter(userId, 1, classCode, 0, null);
+            return SuccessCharacter(userId, 1, classCode, gender, 0, null);
         }
 
         // 기존 계정: 슬롯 여유·직업 중복 검사 후 추가.
@@ -151,7 +158,7 @@ public sealed class SaveService : ISaveService
         // 2·3번 슬롯 추가 생성 비용(마스터 명시값). 골드 확인·차감·캐릭터 삽입은 리포지토리 트랜잭션에서 원자적으로 처리.
         var cost = _masterData.CharacterCreateCost(newSlot);
 
-        var outcome = await _saveRepository.AddCharacterAsync(userId, newSlot, classCode, cost);
+        var outcome = await _saveRepository.AddCharacterAsync(userId, newSlot, classCode, gender, cost);
         switch (outcome.Status)
         {
             case AddCharacterStatus.InsufficientCurrency:
@@ -161,8 +168,8 @@ public sealed class SaveService : ISaveService
                 return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
         }
 
-        _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newSlot:@CharacterId}, classCode {classCode:@ClassCode}, cost {outcome.Cost:@Cost}");
-        return SuccessCharacter(userId, newSlot, classCode, outcome.Cost, outcome.GoldBalance);
+        _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newSlot:@CharacterId}, classCode {classCode:@ClassCode}, gender {gender:@Gender}, cost {outcome.Cost:@Cost}");
+        return SuccessCharacter(userId, newSlot, classCode, gender, outcome.Cost, outcome.GoldBalance);
     }
 
     /// <summary>접속 시각(last_active_at)을 현재로 갱신한다(heartbeat). 계정 세이브가 없으면 SaveNotFound.</summary>
@@ -179,15 +186,16 @@ public sealed class SaveService : ISaveService
         return new SaveResult(ErrorCode.Success, "Heartbeat OK", new { lastActiveAt = now });
     }
 
-    /// <summary>캐릭터 생성 성공 응답(userId·characterId·classCode·초기 레벨 1 + 소모 골드·잔액)을 만든다.
+    /// <summary>캐릭터 생성 성공 응답(userId·characterId·classCode·gender·초기 레벨 1 + 소모 골드·잔액)을 만든다.
     /// 무료 생성(최초 1번 슬롯)이면 goldBalance=null로 넘겨 cost 0·빈 잔액으로 회신한다.</summary>
-    private static SaveResult SuccessCharacter(long userId, int characterId, int classCode, long cost, long? goldBalance)
+    private static SaveResult SuccessCharacter(long userId, int characterId, int classCode, int gender, long cost, long? goldBalance)
     {
         var data = new CreateCharacterResultData
         {
             userId = userId,
             characterId = characterId,
             classCode = classCode,
+            gender = gender,
             level = 1,
             cost = new CurrencyDto { currencyType = GoldCurrencyType, amount = cost },
             balance = goldBalance.HasValue
@@ -196,6 +204,10 @@ public sealed class SaveService : ISaveService
         };
         return new SaveResult(ErrorCode.Success, "Character created", data);
     }
+
+    /// <summary>성별 값이 정의된 범위(1:남 2:여)인지 검사한다. 그 외 값은 InvalidGender로 거절한다.</summary>
+    private static bool IsValidGender(int gender) =>
+        gender == (int)CharacterGender.Male || gender == (int)CharacterGender.Female;
 
     /// <summary>1~3 슬롯 중 사용되지 않은 가장 작은 번호.</summary>
     private static int FirstFreeSlot(IReadOnlyCollection<CharacterSlot> slots)

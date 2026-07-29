@@ -25,6 +25,7 @@ namespace TaskbarHero.Common
         PlayerAlreadyExists = 2004,
         InvalidClassCode = 2005,
         InvalidCharacterId = 2006,
+        InvalidGender = 2007,
 
         // 오프라인 보상 정산 (3000번대)
         NoOfflineReward = 3001,

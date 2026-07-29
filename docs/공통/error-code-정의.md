@@ -60,6 +60,7 @@
 | PlayerAlreadyExists | 2004 | 캐릭터 슬롯 3개가 모두 차 더 생성 불가 |
 | InvalidClassCode | 2005 | 존재하지 않는 직업 코드 |
 | InvalidCharacterId | 2006 | 잘못된 캐릭터 슬롯(존재하지 않는 characterId·슬롯 개수 오류·직업 중복) |
+| InvalidGender | 2007 | 정의되지 않은 성별 값(1:남 2:여 외) |
 
 - `2003`(구 `SaveVersionMismatch`)은 세이브 스키마 버전(`data_version`) 제거로 폐기했다. 결번으로 두고 재사용하지 않는다.
 
@@ -191,6 +192,7 @@ namespace TaskbarHero.Common
         PlayerAlreadyExists = 2004,
         InvalidClassCode = 2005,
         InvalidCharacterId = 2006,
+        InvalidGender = 2007,
 
         // 오프라인 보상 정산 (3000번대)
         NoOfflineReward = 3001,

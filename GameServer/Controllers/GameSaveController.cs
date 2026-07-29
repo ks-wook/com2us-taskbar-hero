@@ -21,7 +21,7 @@ public sealed class GameSaveController(ISaveService saveService) : GameApiContro
     public async Task<IActionResult> CreateCharacter([FromBody] CreateCharacterRequest request)
     {
         var data = request.data ?? new CreateCharacterData();
-        var result = await saveService.CreateCharacterAsync(AuthenticatedUserId(), data.nickname, data.classCode);
+        var result = await saveService.CreateCharacterAsync(AuthenticatedUserId(), data.nickname, data.classCode, data.gender);
         return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
     }
 

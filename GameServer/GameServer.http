@@ -34,14 +34,14 @@ Content-Type: application/json
   "data": { "cursor": 199, "limit": 200 }
 }
 
-### 캐릭터 생성(최초는 nickname+classCode, 이후는 classCode만)
+### 캐릭터 생성(최초는 nickname+classCode+gender, 이후는 classCode+gender만. gender 1:남 2:여, 생략 시 1)
 POST {{GameServer_HostAddress}}/api/game/create-character
 Content-Type: application/json
 
 {
   "userId": {{userId}},
   "token": "{{token}}",
-  "data": { "nickname": "hero", "classCode": 1 }
+  "data": { "nickname": "hero", "classCode": 1, "gender": 1 }
 }
 
 ### 접속 시각 갱신(heartbeat, 클라가 5분 주기 호출)

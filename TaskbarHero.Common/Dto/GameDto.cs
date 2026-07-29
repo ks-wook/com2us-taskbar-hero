@@ -26,7 +26,17 @@ namespace TaskbarHero.Common.Dto
         public string token;
     }
 
-    /// <summary>캐릭터 생성 요청 body(인증). { userId, token, data:{ nickname, classCode } }</summary>
+    /// <summary>
+    /// 캐릭터 성별. 외형(남/여)만 가르는 표현용 값이며 직업·스탯·전투 계산에는 영향을 주지 않는다.
+    /// DB player_character.gender와 같은 값이며, DTO 필드는 JsonUtility 호환을 위해 int로 둔다.
+    /// </summary>
+    public enum CharacterGender
+    {
+        Male = 1,
+        Female = 2,
+    }
+
+    /// <summary>캐릭터 생성 요청 body(인증). { userId, token, data:{ nickname, classCode, gender } }</summary>
     [Serializable]
     public class CreateCharacterRequest
     {
@@ -40,6 +50,7 @@ namespace TaskbarHero.Common.Dto
     {
         public string nickname;
         public int classCode;
+        public int gender = (int)CharacterGender.Male;  // 1:남 2:여. 요청에 필드가 없으면 이 초기값(남)이 쓰인다
     }
 
     /// <summary>
@@ -53,6 +64,7 @@ namespace TaskbarHero.Common.Dto
         public long userId;
         public int characterId;
         public int classCode;
+        public int gender;                                           // 1:남 2:여(생성 시 확정, 이후 변경 없음)
         public int level;
         public CurrencyDto cost = new CurrencyDto();                 // 소모 골드(최초 생성은 amount 0)
         public List<CurrencyDto> balance = new List<CurrencyDto>();  // 차감 후 잔액(최초 생성은 빈 목록)
@@ -77,6 +89,7 @@ namespace TaskbarHero.Common.Dto
     {
         public int characterId;
         public int classCode;
+        public int gender;   // 1:남 2:여(외형 전용)
         public int level;
         public long exp;
     }
