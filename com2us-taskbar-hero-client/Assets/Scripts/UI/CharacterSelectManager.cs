@@ -235,6 +235,7 @@ namespace TaskbarHero.Client.UI
             {
                 _panel.SetTitle(sc.DisplayName);
                 _panel.SetDescription(ClassDescriptionOf(sc.ClassCode));
+                _panel.SetStats(sc.ClassCode); // class_master 기본 능력치(체력·공격·방어·공격속도 등) 표시
                 _panel.Show(true);
             }
 
