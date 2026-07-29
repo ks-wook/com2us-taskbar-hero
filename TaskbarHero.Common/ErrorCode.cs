@@ -42,8 +42,7 @@ namespace TaskbarHero.Common
         InvalidInventorySlot = 4009,
         CubeRecipeNotMet = 4010,
         CubeLevelInsufficient = 4011,
-        // 인벤토리 페이지 조회 도중 인벤토리가 변경됨 → 클라이언트는 /api/game/load부터 재조회
-        InventoryRevisionChanged = 4012,
+        // 4012(구 InventoryRevisionChanged): 가방 페이지 조회의 정합성 검증 장치를 제거하며 폐기(결번, 재사용 금지)
 
         // 성장 (5000번대)
         InvalidGrowthTarget = 5001,

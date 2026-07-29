@@ -52,7 +52,7 @@
 
 **비기능 요구사항**
 - (N1) **서버 권위**: 장착 성립·스왑·수량은 서버 응답으로만 확정한다. 클라이언트는 낙관적 갱신을 하지 않거나, 하더라도 실패 응답 시 즉시 롤백한다(기본: 응답 후 갱신).
-- (N2) **로컬 상태 일관성**: 서버 액션 성공 시 `Session.GameData`(로컬 캐시)의 해당 항목도 함께 갱신해, 패널을 닫았다 다시 열어도 동일 상태가 보이게 한다.
+- (N2) **로컬 상태 일관성**: 서버 액션 성공 시 로컬 캐시(`Session.GameData` 코어 + `Session.Bag` 가방)도 같은 상태로 맞춘다 — 배치 이동처럼 결과가 확정적인 변경은 캐시를 직접 패치하고, 아이템 구성이 바뀌는 변경(장착·해제·큐브·거래)은 `InventoryLoader.ReloadAll()`로 다시 받는다. 패널을 닫았다 다시 열어도 동일 상태가 보여야 한다.
 - (N3) **네트워크 검증 범위**: 실서버 연동 검증은 [클라 규칙](../../CLAUDE.md)에 따라 명시 요청 시에만 수행한다. 그 외에는 컴파일·씬 배선·패널 On/Off·데이터 바인딩(로컬 스냅샷 기준)까지만 확인한다.
 - (N4) 기존 UI 관례 준수: 레거시 `UnityEngine.UI`(`Button`/`Text`/`Image`), `[SerializeField] private` 인스펙터 배선, `Awake` 리스너 등록.
 
@@ -110,20 +110,25 @@
 
 ## 5. 데이터 바인딩 (표시용 소스)
 
-인벤토리 UI는 **새 조회 API를 쓰지 않는다**. 표시 데이터는 두 소스를 조인한다(서버 기획서 3장: 조회는 `POST /api/game/load` 스냅샷 사용).
+로드는 **2단계**다([세이브 데이터 기획서](../../../docs/세부/save-data-기획서.md) 5.1·5.2). 고정 크기 데이터(장착 장비 포함)는 코어 로드(`POST /api/game/load`) 스냅샷에서 오고, **가방 아이템만** 창고를 열 때 `POST /api/game/inventory/list`로 페이징 조회해 세션에 캐싱한다.
 
 | 표시 항목 | 소스 |
 |---|---|
-| 보유 아이템 목록·slot·수량·강화·장착여부 | `Session.GameData.inventory` (`List<InventoryItemDto>`) |
+| 가방 아이템 목록·slot·수량·강화 | `Session.Bag` (`List<InventoryItemDto>`, `InventoryLoader`가 페이징으로 채움) |
+| 캐릭터별 장착 장비(장비 6슬롯) | `Session.Equipped` (`List<EquippedItemDto>`, 코어 로드의 `equipped`) |
 | 인벤토리 칸 수 | `Session.GameData.player.inventoryCapacity` |
 | 캐릭터 목록(장비 영역 대상) | `Session.GameData.characters` (`List<CharacterDto>`) |
 | 아이템 정의(이름·타입·등급·부위·요구·스탯) | `MasterDataManager.Db.Items[itemCode]` (`ItemMaster`) |
 | 장착 슬롯 이름 | `MasterDataManager.Db.EquipSlots[slot]` (`EquipSlotMaster`) |
 | 등급 이름 | `MasterDataManager.Db.Grades[grade]` (`GradeMaster`) |
 
-- 조인 키: `InventoryItemDto.itemCode` ↔ `ItemMaster.itemCode`.
-- 장비 영역 매핑: `inventory` 중 `equippedCharacterId == 선택 캐릭터 && equippedSlot == s`인 항목을 슬롯 `s`(1~6)에 배치. 없으면 빈 슬롯.
-- 인벤토리 격자 매핑: `slot != null`인 항목을 해당 칸에 배치. 장착 중(`equippedCharacterId != null`) 항목의 격자 표시 여부는 10장 미결(원작 다수는 장착 중에도 인벤토리에 유지 — 서버 데이터 모델도 그대로 보유).
+- 조인 키: `itemCode` ↔ `ItemMaster.itemCode`(가방·장착 양쪽 동일).
+- 장비 영역 매핑: `Session.Equipped` 중 `equippedCharacterId == 선택 캐릭터 && equippedSlot == s`인 항목을 슬롯 `s`(1~6)에 배치. 없으면 빈 슬롯.
+- 인벤토리 격자 매핑: `Session.Bag`의 각 항목을 `slot`(0-based) 칸에 배치. **장착 중인 아이템은 인벤 칸을 점유하지 않아 가방 목록에 없고**(장비 슬롯에서만 보인다), 재화도 코어 로드의 `currencies`로 분리돼 격자에 오지 않는다.
+- 가방 캐시 수명: 인벤토리를 바꾸는 액션(장착·해제·이동·큐브·거래·전리품 등) 뒤에는 `Session.InvalidateBag()`으로 무효화되고, 가방을 쓰는 화면이 열릴 때 `InventoryLoader.EnsureBag()`이 다시 페이징 조회한다.
+- **페이지 병합은 클라이언트 책임(계약)**: 서버는 페이지 사이의 인벤토리 변경을 감지하지 않는다(변경 카운터·버전 토큰 없음). `InventoryLoader`가 페이지를 이어붙일 때 **`itemId`를 키로 중복을 제거하고 나중 페이지를 우선**하며, 최종 목록을 `slot` 오름차순으로 정리한다. 이동으로 같은 아이템이 두 페이지에 걸쳐도 최종 위치 하나만 남는다.
+- **남는 오차와 해소**: 이미 지나간 칸으로 이동한 아이템은 이번 조회에서 빠지고, 읽은 뒤 소모된 아이템은 유령으로 남는다. 창고를 다시 열면 해소되며, 유령 아이템을 조작하면 서버가 `ItemNotFound(4001)`로 거부한다 → **각 패널의 실패 핸들러가 그 코드를 받으면 가방을 새로 고친다**(인벤토리/큐브는 `ReloadAndRefresh`, 거래는 `ReloadBag`).
+- **전리품 직후**: 스테이지 클리어로 아이템을 받으면(`DungeonBattleFlow.OnClear`) 그 자리에서 `Session.InvalidateBag()`을 호출해, 다음에 창고를 열 때 첫 페이지부터 다시 받게 한다.
 - 마스터데이터는 `MasterDataManager.EnsureLoaded()`로 최초 1회 로드 후 사용. **아이콘 스프라이트 매핑**(`itemCode` → 아이템 아이콘)은 아직 규약이 없어 10장 미결(현재 `item_master`에 아이콘 키 없음).
 
 ## 6. UIManager 연동 및 On/Off 정책
@@ -174,7 +179,9 @@ HUD 인벤토리 버튼 클릭 → UIManager.ToggleInventory()
      → (최초) 프리팹 인스턴스화 → OnEnable에서 Rebuild()
      → Rebuild(): MasterDataManager.EnsureLoaded()
                   → 캐릭터 네비게이션(◀ N/M ▶) 구성(기본=첫 캐릭터)
-                  → 장비 6슬롯 채우기 + 인벤토리 격자 생성/채우기
+                  → 장비 6슬롯 채우기(코어 로드의 equipped — 즉시 표시)
+                  → InventoryLoader.EnsureBag() → 가방 페이지 도착 후 격자 채우기
+                    (캐시가 유효하면 요청 없이 즉시 그린다)
   Current == Inventory → Hide(Inventory)
 ```
 
@@ -199,14 +206,14 @@ ItemSlot에 커서 진입(PointerEnter) → 컨트롤러.ShowTooltip(itemDto, �
 ```
 [장착] → data { characterId(선택 캐릭터), itemId(=player_item_id) }
         → NetworkManager.PostToGame(/api/game/inventory/equip, ...)
-   성공: 응답 equipped/unequipped 반영
-         → 로컬 Session.GameData.inventory의 해당 항목 equipped* 갱신(스왑분 포함)
-         → 장비 영역·격자·상세 재갱신
+   성공: InventoryLoader.ReloadAll() — 코어 로드(equipped 최신) + 가방 재페이징
+         (아이템이 가방↔장비로 이동하므로 두 소스를 함께 다시 받아야 맞는다)
+         → 장비 영역·격자·상세 재갱신 + Session.RaiseInventoryChanged()(전투 스탯 재계산)
    실패: ErrorMessages.ToKorean(error) 표시(4001 없음 / 4003 장착불가 / 4007 타 캐릭터 장착중 / 2006 캐릭터ID)
 
 [해제] → data { characterId, slot(장착 슬롯 1~6) }
         → /api/game/inventory/unequip
-   성공: 해당 항목 equipped* = null 로 갱신 후 재갱신
+   성공: 장착과 동일하게 InventoryLoader.ReloadAll() 후 재갱신
 ```
 
 ### 8.4 예외 / 엣지

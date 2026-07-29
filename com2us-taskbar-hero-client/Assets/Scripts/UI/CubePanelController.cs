@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
 using TaskbarHero.Client.MasterData;
+using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using TaskbarHero.Common.MasterData;
 
@@ -79,6 +80,8 @@ namespace TaskbarHero.Client.UI
             WireRuntime();
         }
 
+        /// <summary>패널 표시 시 세션 데이터로 갱신한다. 합성·분해 후보는 가방 아이템이라, 가방 캐시가 없으면
+        /// (코어 로드에는 없다) 페이징으로 조회한 뒤 목록을 다시 그린다.</summary>
         private void OnEnable()
         {
             if (!AlreadyBuilt)
@@ -87,6 +90,23 @@ namespace TaskbarHero.Client.UI
             }
             SetMessage(string.Empty);
             RefreshFromSession();
+            InventoryLoader.EnsureBag(RefreshIfOpen, OnBagLoadError);
+        }
+
+        /// <summary>가방 조회 완료 후 목록을 다시 그린다(그 사이 패널이 닫혔으면 아무것도 하지 않는다).</summary>
+        private void RefreshIfOpen()
+        {
+            if (this != null && gameObject.activeInHierarchy)
+            {
+                RefreshFromSession();
+            }
+        }
+
+        /// <summary>가방 조회 실패: 후보 목록은 비워 둔 채 메시지로 알린다.</summary>
+        private void OnBagLoadError(NetworkError error)
+        {
+            Debug.LogWarning($"[Cube] 가방 조회 실패: {error}");
+            SetMessage(ErrorMessages.ToKorean(error));
         }
 
         /// <summary>에디터 빌드 전용: 전체 정적 계층을 생성하고 참조를 배선한다(프리팹 저장용).</summary>
@@ -661,16 +681,12 @@ namespace TaskbarHero.Client.UI
                 OnActionError);
         }
 
-        /// <summary>액션 성공 후 세이브 스냅샷을 재로드해 세션·UI·전투를 최신화한다(선택 초기화).</summary>
+        /// <summary>액션 성공 후 코어 스냅샷과 가방을 함께 재로드해 세션·UI·전투를 최신화한다(선택 초기화).
+        /// 합성/분해/제작은 가방 아이템을 소모·지급하므로 가방까지 다시 받아야 목록이 맞는다.</summary>
         private void ReloadAndRefresh()
         {
-            var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
-            NetworkManager.Instance.PostToGame<LoadResponse>("/api/game/load", req, resp =>
+            InventoryLoader.ReloadAll(() =>
             {
-                if (resp != null && resp.data != null)
-                {
-                    Session.SetGameData(resp.data);
-                }
                 _busy = false;
                 _selCombine.Clear();
                 _selDismantle.Clear();
@@ -679,11 +695,17 @@ namespace TaskbarHero.Client.UI
             }, OnActionError);
         }
 
+        /// <summary>큐브 액션 실패. 재료가 이미 사라진 경우(<see cref="ErrorCode.ItemNotFound"/>)는 페이징 이후
+        /// 소모된 '유령' 행을 고른 것이므로 계약대로 가방을 새로 고친다(세이브 기획서 5.2).</summary>
         private void OnActionError(NetworkError error)
         {
             _busy = false;
             Debug.LogWarning($"[Cube] 액션 실패: {error}");
             SetMessage(ErrorMessages.ToKorean(error));
+            if (error != null && error.ErrorCode == ErrorCode.ItemNotFound)
+            {
+                ReloadAndRefresh();
+            }
         }
 
         private void ShowResult(string title, string message)
@@ -747,18 +769,18 @@ namespace TaskbarHero.Client.UI
             return 100;
         }
 
-        /// <summary>합성 후보: 미장착 장비(item_type=1) 중 등급 1~4(등급 5는 상위 없음).</summary>
+        /// <summary>합성 후보: 가방 장비(item_type=1) 중 등급 1~4(등급 5는 상위 없음). 가방 캐시는 장착품을 포함하지 않는다.</summary>
         private static IEnumerable<InventoryItemDto> EligibleCombineItems()
         {
-            var inv = Session.GameData != null ? Session.GameData.inventory : null;
+            var bag = Session.Bag;
             var db = MasterDataManager.Db;
-            if (inv == null || db == null)
+            if (bag == null || db == null)
             {
                 yield break;
             }
-            foreach (var it in inv)
+            foreach (var it in bag)
             {
-                if (it == null || it.equippedCharacterId != 0)
+                if (it == null)
                 {
                     continue;
                 }
@@ -769,18 +791,18 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>분해 후보: 미장착 아이템(장비·재료, 재화 제외).</summary>
+        /// <summary>분해 후보: 가방 아이템(장비·재료). 재화는 코어 로드의 currencies로 분리돼 가방에 없다.</summary>
         private static IEnumerable<InventoryItemDto> EligibleDismantleItems()
         {
-            var inv = Session.GameData != null ? Session.GameData.inventory : null;
+            var bag = Session.Bag;
             var db = MasterDataManager.Db;
-            if (inv == null || db == null)
+            if (bag == null || db == null)
             {
                 yield break;
             }
-            foreach (var it in inv)
+            foreach (var it in bag)
             {
-                if (it == null || it.equippedCharacterId != 0)
+                if (it == null)
                 {
                     continue;
                 }
@@ -838,16 +860,16 @@ namespace TaskbarHero.Client.UI
             return it != null ? it.itemCode : 0;
         }
 
-        /// <summary>재료 코드의 계정 보유 총 수량(같은 코드 행 합산).</summary>
+        /// <summary>재료 코드의 계정 보유 총 수량(가방의 같은 코드 행 합산).</summary>
         private static int MaterialCount(int itemCode)
         {
-            var inv = Session.GameData != null ? Session.GameData.inventory : null;
+            var bag = Session.Bag;
             int total = 0;
-            if (inv != null)
+            if (bag != null)
             {
-                foreach (var it in inv)
+                foreach (var it in bag)
                 {
-                    if (it != null && it.itemCode == itemCode && it.equippedCharacterId == 0)
+                    if (it != null && it.itemCode == itemCode)
                     {
                         total += (int)it.quantity;
                     }
@@ -856,12 +878,13 @@ namespace TaskbarHero.Client.UI
             return total;
         }
 
+        /// <summary>가방 캐시에서 아이템 행을 찾는다(선택 목록은 itemId로만 들고 있다).</summary>
         private static InventoryItemDto FindInventoryItem(long itemId)
         {
-            var inv = Session.GameData != null ? Session.GameData.inventory : null;
-            if (inv != null)
+            var bag = Session.Bag;
+            if (bag != null)
             {
-                foreach (var it in inv)
+                foreach (var it in bag)
                 {
                     if (it != null && it.itemId == itemId)
                     {

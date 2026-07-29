@@ -245,12 +245,6 @@ public sealed class StageRepository : IStageRepository
                     .UpdateAsync(new { updated_at = nowUnix }, transaction);
             }
 
-            // 6) 전리품을 적재했을 때만 페이지 조회 정합성 카운터를 올린다(골드·경험치만이면 가방 불변).
-            if (dropped is not null)
-            {
-                await InventoryRevision.BumpAsync(db, transaction, userId);
-            }
-
             await transaction.CommitAsync();
             return new ClearOutcome(ClearStatus.Ok, characters, goldBalance, newAct, newDiff, newStage, newMax);
         }

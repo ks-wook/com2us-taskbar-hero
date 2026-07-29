@@ -42,8 +42,6 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.SaveNotFound => StatusCodes.Status404NotFound,
         ErrorCode.StageNotFound => StatusCodes.Status404NotFound,
         ErrorCode.ItemNotFound => StatusCodes.Status404NotFound,
-        // 인벤토리 페이지 조회: 페이징 도중 인벤토리가 바뀐 정상 경합이므로 409(재조회하면 해소된다).
-        ErrorCode.InventoryRevisionChanged => StatusCodes.Status409Conflict,
         // 메일: 없음/타인 메일은 404, 중복 수령(동시 요청 경합 포함)은 409, 만료는 400(기본 매핑).
         ErrorCode.MailNotFound => StatusCodes.Status404NotFound,
         ErrorCode.MailAlreadyClaimed => StatusCodes.Status409Conflict,
@@ -82,7 +80,6 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.InvalidInventorySlot => "Invalid inventory slot",
         ErrorCode.InsufficientCurrency => "Insufficient currency",
         ErrorCode.InventoryCapacityMax => "Inventory capacity max",
-        ErrorCode.InventoryRevisionChanged => "Inventory changed during paging",
         // 성장(스킬·룬)
         ErrorCode.InvalidGrowthTarget => "Invalid growth target",
         ErrorCode.SkillMaxLevel => "Skill max level",

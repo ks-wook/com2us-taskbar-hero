@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
 using TaskbarHero.Client.MasterData;
+using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 
 namespace TaskbarHero.Client.UI.Trade
@@ -850,9 +851,14 @@ namespace TaskbarHero.Client.UI.Trade
 
         // ── 판매 등록 ──
 
-        /// <summary>인벤토리에서 판매 가능한 아이템(미장착 · sellable=1 · 기준가 있음)을 나열한다.</summary>
+        /// <summary>가방에서 판매 가능한 아이템(sellable=1 · 기준가 있음)을 나열한다.
+        /// 가방 캐시가 없으면 페이징 조회 후 다시 그린다(코어 로드에는 가방 아이템이 없다).</summary>
         private void RebuildSellRows()
         {
+            if (!Session.BagLoaded)
+            {
+                InventoryLoader.EnsureBag(RebuildSellRowsIfOpen, OnListError);
+            }
             foreach (var row in _sellRows)
             {
                 if (row != null) Destroy(row);
@@ -862,17 +868,18 @@ namespace TaskbarHero.Client.UI.Trade
             _selectedItemCode = 0;
             UpdateSellHint();
 
-            var inventory = Session.GameData != null ? Session.GameData.inventory : null;
-            if (inventory == null)
+            // 가방 캐시(장착품·재화 제외)가 등록 후보다. 장착 중인 장비는 애초에 가방에 없어 등록 대상이 아니다(기획서 §2).
+            var bag = Session.Bag;
+            if (bag == null)
             {
                 return;
             }
             int index = 0;
-            foreach (var item in inventory)
+            foreach (var item in bag)
             {
-                if (item == null || item.equippedCharacterId != 0)
+                if (item == null)
                 {
-                    continue; // 장착 중인 장비는 등록 불가(기획서 §2)
+                    continue;
                 }
                 var def = FindItem(item.itemCode);
                 if (def == null || def.sellable != 1 || def.basePrice <= 0)
@@ -881,6 +888,15 @@ namespace TaskbarHero.Client.UI.Trade
                 }
                 _sellRows.Add(BuildSellRow(item, def, index));
                 index++;
+            }
+        }
+
+        /// <summary>가방 조회 완료 후 판매 등록 후보를 다시 그린다(판매 탭이 열려 있을 때만).</summary>
+        private void RebuildSellRowsIfOpen()
+        {
+            if (this != null && gameObject.activeInHierarchy && _sellTabRoot != null && _sellTabRoot.activeSelf)
+            {
+                RebuildSellRows();
             }
         }
 
@@ -1023,17 +1039,13 @@ namespace TaskbarHero.Client.UI.Trade
 
         // ── 공통 후처리 ──
 
-        /// <summary>거래 후 세이브 스냅샷을 재로드해 세션(골드·인벤토리)을 최신화하고 화면을 다시 그린다.</summary>
+        /// <summary>거래 후 코어 스냅샷과 가방을 함께 재로드해 세션(골드·인벤토리)을 최신화하고 화면을 다시 그린다.
+        /// 등록/구매/취소는 가방 아이템이 빠지거나 돌아오므로 가방까지 다시 받아야 판매 후보가 맞는다.</summary>
         private void ReloadSessionAndList()
         {
-            var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
-            NetworkManager.Instance.PostToGame<LoadResponse>("/api/game/load", req, resp =>
+            InventoryLoader.ReloadAll(() =>
             {
-                if (resp != null && resp.data != null)
-                {
-                    Session.SetGameData(resp.data);
-                    Session.RaiseInventoryChanged(); // 골드·아이템 표시(HUD·패널) 갱신 트리거
-                }
+                Session.RaiseInventoryChanged(); // 골드·아이템 표시(HUD·패널) 갱신 트리거
                 _busy = false;
                 RefreshGold(); // 구매·등록·취소로 골드가 바뀌었을 수 있다
                 MailNotifier.Refresh(); // 판매 대금·반송 메일이 도착할 수 있으므로 알림 갱신
@@ -1055,12 +1067,18 @@ namespace TaskbarHero.Client.UI.Trade
         }
 
         /// <summary>등록/구매/취소 실패: 메시지를 표시하고, 상태 어긋남(이미 팔림 등) 복구를 위해
-        /// 서버 응답이 있는 오류일 때만 목록을 1회 재조회한다(연결 실패는 재조회 안 함).</summary>
+        /// 서버 응답이 있는 오류일 때만 목록을 1회 재조회한다(연결 실패는 재조회 안 함).
+        /// 등록하려던 아이템이 이미 사라진 경우(<see cref="ErrorCode.ItemNotFound"/>)는 가방 캐시가 낡은 것이므로
+        /// 계약대로 가방을 새로 고친다(세이브 기획서 5.2).</summary>
         private void OnActionError(NetworkError error)
         {
             _busy = false;
             Debug.LogWarning($"[Trade] 거래 요청 실패: {error}");
             SetMessage(ErrorMessages.ToKorean(error));
+            if (error.ErrorCode == ErrorCode.ItemNotFound)
+            {
+                InventoryLoader.ReloadBag(RebuildSellRowsIfOpen);
+            }
             if (!error.IsTransportError)
             {
                 RequestList();

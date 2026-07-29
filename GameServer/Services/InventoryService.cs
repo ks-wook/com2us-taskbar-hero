@@ -8,7 +8,7 @@ namespace GameServer.Services;
 
 public interface IInventoryService
 {
-    Task<SaveResult> GetPageAsync(long userId, int cursor, int limit, long revision);
+    Task<SaveResult> GetPageAsync(long userId, int cursor, int limit);
     Task<SaveResult> EquipAsync(long userId, int characterId, long itemId);
     Task<SaveResult> UnequipAsync(long userId, int characterId, int slot);
     Task<SaveResult> MoveAsync(long userId, long itemId, int toSlot);
@@ -47,24 +47,19 @@ public sealed class InventoryService : IInventoryService
     /// <summary>
     /// 가방 아이템 한 페이지를 조회한다(코어 로드에서 빠진 가변 크기 데이터의 지연 로딩).
     /// 페이지 크기를 1~<see cref="MaxPageLimit"/>으로 클램프하고(0 이하이면 기본값), 리포지토리가 slot 커서
-    /// keyset 페이징으로 읽은 결과를 응답 DTO로 변환한다. revision이 0보다 크고 현재 인벤토리 변경 카운터와
-    /// 다르면 페이징 도중 인벤토리가 바뀐 것이므로 InventoryRevisionChanged로 거부해 코어 로드부터 재조회하게 한다.
+    /// keyset 페이징으로 읽은 결과를 응답 DTO로 변환한다. 페이지 사이의 인벤토리 변경은 감지하지 않으며,
+    /// 클라이언트가 itemId 기준으로 병합해 흡수한다(세이브 데이터 기획서 5.2).
     /// </summary>
-    public async Task<SaveResult> GetPageAsync(long userId, int cursor, int limit, long revision)
+    public async Task<SaveResult> GetPageAsync(long userId, int cursor, int limit)
     {
         // 클라 버전 차이로 로드가 아예 실패하지 않도록 거부하지 않고 클램프한다(기획서 5.2).
         int effectiveLimit = limit <= 0 ? DefaultPageLimit : Math.Min(limit, MaxPageLimit);
 
-        var outcome = await _inventoryRepository.GetPageAsync(userId, cursor, effectiveLimit, revision);
+        var outcome = await _inventoryRepository.GetPageAsync(userId, cursor, effectiveLimit);
 
-        switch (outcome.Status)
+        if (outcome.Status == InventoryPageStatus.NoPlayer)
         {
-            case InventoryPageStatus.NoPlayer:
-                return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
-            case InventoryPageStatus.RevisionChanged:
-                // 사용자 실수가 아닌 정상 경합이라 로깅하지 않는다. 클라이언트가 현재 값을 기준으로 재조회한다.
-                return new SaveResult(
-                    ErrorCode.InventoryRevisionChanged, string.Empty, new { revision = outcome.Revision });
+            return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
         }
 
         var items = outcome.Items.ToList();
@@ -75,7 +70,6 @@ public sealed class InventoryService : IInventoryService
             nextCursor = items.Count > 0 ? items[^1].slot : cursor,
             hasMore = outcome.HasMore,
             total = outcome.Total,
-            revision = outcome.Revision,
         };
 
         return new SaveResult(ErrorCode.Success, "Inventory page", data);
@@ -84,6 +78,7 @@ public sealed class InventoryService : IInventoryService
     /// <summary>
     /// 장착을 처리한다. 마스터 로드를 확인하고, 리포지토리 트랜잭션으로 캐릭터·아이템 검증과 스왑 장착을 수행한다.
     /// 장비/슬롯/클래스/레벨 정합은 ValidateEquip(마스터 조회)으로 판정하며, 결과 상태를 에러 코드로 매핑한다.
+    /// 장착한 아이템은 가방 칸을 반납하고, 스왑으로 밀려난 기존 장비는 그 칸으로 되돌아간다.
     /// </summary>
     public async Task<SaveResult> EquipAsync(long userId, int characterId, long itemId)
     {
@@ -104,6 +99,9 @@ public sealed class InventoryService : IInventoryService
                 return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
             case EquipStatus.NotEquippable:
                 return new SaveResult(ErrorCode.ItemNotEquippable, string.Empty, null);
+            case EquipStatus.InventoryFull:
+                // 스왑된 장비를 되돌릴 칸이 없는 예외 상황(반납할 칸 자체가 없던 경우).
+                return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
         }
 
         var data = new EquipResultData
@@ -113,13 +111,18 @@ public sealed class InventoryService : IInventoryService
             unequipped = outcome.UnequippedItemId is null
                 ? null
                 : new SlotItemDto { slot = outcome.Slot, itemId = outcome.UnequippedItemId.Value },
+            unequippedBagSlot = outcome.UnequippedBagSlot ?? -1,
         };
 
         _logger.ZLogDebug($"장착 성공: userId {userId:@UserId}, characterId {characterId:@CharacterId}, itemId {itemId:@ItemId}, slot {outcome.Slot:@Slot}");
         return new SaveResult(ErrorCode.Success, "Equipped", data);
     }
 
-    /// <summary>장착 해제를 처리한다. 리포지토리 트랜잭션으로 지정 캐릭터-슬롯 장비를 DELETE하고, 결과를 에러 코드로 매핑한다.</summary>
+    /// <summary>
+    /// 장착 해제를 처리한다. 리포지토리 트랜잭션으로 지정 캐릭터-슬롯 장비를 가방 빈 칸에 되돌리고 장착 행을
+    /// DELETE한 뒤, 결과를 에러 코드로 매핑한다. 장착 중에는 가방 칸을 쓰지 않으므로 가방이 가득 차 있으면
+    /// InventoryFull로 거부한다.
+    /// </summary>
     public async Task<SaveResult> UnequipAsync(long userId, int characterId, int slot)
     {
         var outcome = await _inventoryRepository.ApplyUnequipAsync(userId, characterId, slot);
@@ -130,10 +133,18 @@ public sealed class InventoryService : IInventoryService
                 return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
             case UnequipStatus.NotEquipped:
                 return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
+            case UnequipStatus.InventoryFull:
+                return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
         }
 
-        var data = new UnequipResultData { characterId = characterId, slot = slot, itemId = outcome.ItemId };
-        _logger.ZLogDebug($"장착 해제 성공: userId {userId:@UserId}, characterId {characterId:@CharacterId}, slot {slot:@Slot}, itemId {outcome.ItemId:@ItemId}");
+        var data = new UnequipResultData
+        {
+            characterId = characterId,
+            slot = slot,
+            itemId = outcome.ItemId,
+            bagSlot = outcome.BagSlot,
+        };
+        _logger.ZLogDebug($"장착 해제 성공: userId {userId:@UserId}, characterId {characterId:@CharacterId}, slot {slot:@Slot}, itemId {outcome.ItemId:@ItemId}, bagSlot {outcome.BagSlot:@BagSlot}");
         return new SaveResult(ErrorCode.Success, "Unequipped", data);
     }
 

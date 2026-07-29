@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
 using TaskbarHero.Client.MasterData;
+using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using TaskbarHero.Common.MasterData;
 
@@ -109,7 +110,8 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>패널이 표시될 때마다 세션 실데이터(골드·보유 아이템·장착)로 갱신한다.
-        /// (UIManager가 인스턴스를 캐싱·재사용하므로 활성화 시점마다 최신 데이터를 반영해야 한다.)</summary>
+        /// (UIManager가 인스턴스를 캐싱·재사용하므로 활성화 시점마다 최신 데이터를 반영해야 한다.)
+        /// 가방 아이템은 코어 로드에 없으므로, 캐시가 없으면 창고를 여는 이 시점에 페이징 조회한다(세이브 기획서 5.2).</summary>
         private void OnEnable()
         {
             if (!AlreadyBuilt && _tooltip == null)
@@ -125,7 +127,23 @@ namespace TaskbarHero.Client.UI
             {
                 _tooltip.HideImmediate();
             }
-            RefreshFromSession();
+            RefreshFromSession(); // 코어 데이터(골드·장착·능력치)는 즉시 표시
+            InventoryLoader.EnsureBag(RefreshGridIfOpen, OnBagLoadError); // 가방은 도착한 뒤 격자에 채운다
+        }
+
+        /// <summary>가방 조회가 끝났을 때 격자를 다시 그린다(조회 도중 패널이 닫혔으면 아무것도 하지 않는다).</summary>
+        private void RefreshGridIfOpen()
+        {
+            if (this != null && gameObject.activeInHierarchy)
+            {
+                RefreshGrid();
+            }
+        }
+
+        /// <summary>가방 조회 실패: 격자는 비워 둔 채 로그만 남긴다(코어 데이터 표시는 유지).</summary>
+        private void OnBagLoadError(NetworkError error)
+        {
+            Debug.LogWarning($"[Inventory] 가방 조회 실패: {error}");
         }
 
         /// <summary>패널이 숨겨지면 초상화 렌더러(카메라)를 꺼 불필요한 렌더를 막고, 툴팁을 닫는다.
@@ -313,7 +331,9 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>세션 인벤토리(비장착 아이템)를 가방 격자에 채운다. 용량만큼 슬롯을 확보한다.</summary>
+        /// <summary>세션 가방 캐시(비장착 아이템)를 가방 격자에 채운다. 용량만큼 슬롯을 확보한다.
+        /// 가방은 코어 로드에 없고 페이징으로 받는 데이터라, 캐시가 비어 있으면 격자만 비운 채 그린다
+        /// (조회는 <see cref="OnEnable"/>·<see cref="ReloadAndRefresh"/>가 담당).</summary>
         private void RefreshGrid()
         {
             // 기존 표시 아이템 제거(재오픈 대비).
@@ -331,16 +351,16 @@ namespace TaskbarHero.Client.UI
             capacity = Mathf.Clamp(capacity, initialItemSlots, 200);
             EnsureGridSlots(capacity);
 
-            var inv = Session.GameData != null ? Session.GameData.inventory : null;
-            if (inv == null)
+            var bag = Session.Bag;
+            if (bag == null)
             {
                 return;
             }
-            foreach (var item in inv)
+            foreach (var item in bag)
             {
-                if (item == null || item.equippedCharacterId != 0)
+                if (item == null)
                 {
-                    continue; // 장착 중(equippedCharacterId≠0)인 아이템은 장비 슬롯에서 표시
+                    continue;
                 }
                 int idx = item.slot;
                 if (idx < 0 || idx >= _gridSlots.Count)
@@ -1119,17 +1139,17 @@ namespace TaskbarHero.Client.UI
             return total;
         }
 
-        /// <summary>이 캐릭터에 장착된 장비 스탯 합산(가산분).</summary>
+        /// <summary>이 캐릭터에 장착된 장비 스탯 합산(가산분). 장착 정보는 코어 로드의 equipped가 정본이다.</summary>
         private static Stats EquipStats(CharacterDto c)
         {
             var db = MasterDataManager.Db;
             var total = new Stats();
-            var inv = Session.GameData != null ? Session.GameData.inventory : null;
-            if (db == null || inv == null)
+            var equipped = Session.Equipped;
+            if (db == null || equipped == null)
             {
                 return total;
             }
-            foreach (var item in inv)
+            foreach (var item in equipped)
             {
                 if (item != null && item.equippedCharacterId == c.characterId
                     && db.Items.TryGetValue(item.itemCode, out var im))
@@ -1226,50 +1246,60 @@ namespace TaskbarHero.Client.UI
             return $"{cls} Lv.{c.level}";
         }
 
-        /// <summary>선택된 캐릭터의 6부위 장착 상태를 세션 인벤토리(장착품)에서 장비 슬롯에 반영한다.</summary>
+        /// <summary>선택된 캐릭터의 6부위 장착 상태를 코어 로드의 장착 목록(equipped)에서 장비 슬롯에 반영한다.</summary>
         private void RefreshEquip(List<CharacterDto> chars)
         {
             CharacterDto cur = chars != null && _selectedCharacter < chars.Count ? chars[_selectedCharacter] : null;
-            var inv = Session.GameData != null ? Session.GameData.inventory : null;
+            var equipped = Session.Equipped;
 
             for (int slot = 0; slot < _equipSlots.Count; slot++)
             {
-                InventoryItemView.Display? equipped = null;
-                if (cur != null && inv != null)
+                InventoryItemView.Display? display = null;
+                if (cur != null && equipped != null)
                 {
-                    foreach (var item in inv)
+                    foreach (var item in equipped)
                     {
                         if (item != null
                             && item.equippedCharacterId == cur.characterId
                             && item.equippedSlot == slot + 1)
                         {
-                            equipped = BuildDisplay(item);
+                            display = BuildDisplay(item);
                             break;
                         }
                     }
                 }
-                _equipSlots[slot].SetEquipped(equipped, _font);
+                _equipSlots[slot].SetEquipped(display, _font);
             }
         }
 
-        /// <summary>인벤토리 아이템 DTO를 마스터 데이터로 표시 정보(이름·등급·부위·요구·스탯·아이콘)로 변환한다.</summary>
+        /// <summary>가방 아이템(비장착)을 표시 정보로 변환한다. 가방 아이템은 장착 슬롯이 없다(0).</summary>
         private InventoryItemView.Display BuildDisplay(InventoryItemDto item)
+            => BuildDisplay(item.itemId, item.itemCode, item.quantity, item.enhanceLevel, 0);
+
+        /// <summary>장착 장비(equipped)를 표시 정보로 변환한다. 장비는 항상 수량 1이며 장착 슬롯(1~6)을 가진다.</summary>
+        private InventoryItemView.Display BuildDisplay(EquippedItemDto item)
+            => BuildDisplay(item.itemId, item.itemCode, 1L, item.enhanceLevel, item.equippedSlot);
+
+        /// <summary>아이템 식별 정보를 마스터 데이터로 표시 정보(이름·등급·부위·요구·스탯·아이콘)로 변환한다.
+        /// 가방 아이템과 장착 장비가 서로 다른 DTO라 공통 필드만 받아 한 곳에서 만든다.</summary>
+        private InventoryItemView.Display BuildDisplay(long itemId, int itemCode, long quantity, int enhanceLevel,
+            int equippedSlot)
         {
             var db = MasterDataManager.Db;
             ItemMaster im = null;
             if (db != null)
             {
-                db.Items.TryGetValue(item.itemCode, out im);
+                db.Items.TryGetValue(itemCode, out im);
             }
 
             // 상세 문구(등급명·종류·요구조건·설명)는 공용 헬퍼로 통일한다 — 스테이지 클리어 보상·우편함·
             // (추후) 거래소의 아이템 상세 팝업(ItemDetailPopup)과 완전히 같은 텍스트가 나오도록 한다.
-            var info = ItemInfoText.Build(item.itemCode, item.quantity);
+            var info = ItemInfoText.Build(itemCode, quantity);
 
             string name = info.name;
-            if (item.enhanceLevel > 0)
+            if (enhanceLevel > 0)
             {
-                name += $" +{item.enhanceLevel}";
+                name += $" +{enhanceLevel}";
             }
 
             // 착용 가능 판정: 장비이면서 (공용이거나 현재 캐릭터의 직업과 클래스 제한 일치) + (요구 레벨 이하)여야 한다.
@@ -1293,9 +1323,9 @@ namespace TaskbarHero.Client.UI
                 stats = ItemInfoText.Stats(im),
                 description = info.description,
                 iconColor = GradeColor(info.gradeValue),
-                icon = _iconDb != null ? _iconDb.Get(item.itemCode) : null,
-                itemId = item.itemId,
-                equippedSlot = item.equippedSlot,
+                icon = _iconDb != null ? _iconDb.Get(itemCode) : null,
+                itemId = itemId,
+                equippedSlot = equippedSlot,
                 equippable = isEquip && classOk && levelOk,
                 equipLocked = equipLocked,
             };
@@ -1363,25 +1393,27 @@ namespace TaskbarHero.Client.UI
             NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/inventory/unequip", req, _ => ReloadAndRefresh(), OnActionError);
         }
 
-        /// <summary>장착/해제 후 세이브 스냅샷을 재로드해 세션·UI·전투 스탯을 최신화한다.</summary>
+        /// <summary>장착/해제 후 코어 스냅샷과 가방을 함께 재로드해 세션·UI·전투 스탯을 최신화한다.
+        /// (장착/해제는 아이템이 가방↔장비로 오가므로 코어만 받으면 가방 표시가 낡는다.)</summary>
         private void ReloadAndRefresh()
         {
-            var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
-            NetworkManager.Instance.PostToGame<LoadResponse>("/api/game/load", req, resp =>
+            InventoryLoader.ReloadAll(() =>
             {
-                if (resp != null && resp.data != null)
-                {
-                    Session.SetGameData(resp.data);
-                }
                 RequestHideTooltip();
                 RefreshFromSession();          // 인벤토리 UI 갱신
                 Session.RaiseInventoryChanged(); // 전투 스탯 재계산 트리거
             }, OnActionError);
         }
 
+        /// <summary>장착/해제 실패. 대상이 이미 사라진 아이템(<see cref="ErrorCode.ItemNotFound"/>)이면
+        /// 페이징 이후 소모된 '유령' 행을 조작한 것이므로 계약대로 목록을 새로 고친다(세이브 기획서 5.2).</summary>
         private void OnActionError(NetworkError error)
         {
             Debug.LogWarning($"[Inventory] 장착/해제 실패: {error}");
+            if (error != null && error.ErrorCode == ErrorCode.ItemNotFound)
+            {
+                ReloadAndRefresh();
+            }
         }
 
         // ── 아이템 이동 ──
@@ -1443,15 +1475,15 @@ namespace TaskbarHero.Client.UI
             }, OnMoveError);
         }
 
-        /// <summary>캐시된 세이브 스냅샷에서 해당 아이템의 가방 칸 번호를 갱신한다(서버가 확정한 값과 동일하게).</summary>
+        /// <summary>캐시된 가방에서 해당 아이템의 칸 번호를 갱신한다(서버가 확정한 값과 동일하게).</summary>
         private static void ApplyMovedSlotToCache(long itemId, int slot)
         {
-            var inventory = Session.GameData != null ? Session.GameData.inventory : null;
-            if (inventory == null)
+            var bag = Session.Bag;
+            if (bag == null)
             {
                 return;
             }
-            foreach (var item in inventory)
+            foreach (var item in bag)
             {
                 if (item != null && item.itemId == itemId)
                 {

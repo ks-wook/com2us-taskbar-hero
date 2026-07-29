@@ -14,24 +14,24 @@ Content-Type: application/json
   "data": {}
 }
 
-### 가방 아이템 첫 페이지(cursor=-1, revision=0 → 정합성 검증 생략)
+### 가방 아이템 첫 페이지(cursor=-1)
 POST {{GameServer_HostAddress}}/api/game/inventory/list
 Content-Type: application/json
 
 {
   "userId": {{userId}},
   "token": "{{token}}",
-  "data": { "cursor": -1, "limit": 200, "revision": 0 }
+  "data": { "cursor": -1, "limit": 200 }
 }
 
-### 가방 아이템 다음 페이지(직전 응답의 nextCursor·revision을 그대로 넣는다. 불일치면 4012(409) → load부터 재조회)
+### 가방 아이템 다음 페이지(직전 응답의 nextCursor를 그대로 넣는다. hasMore=false면 끝)
 POST {{GameServer_HostAddress}}/api/game/inventory/list
 Content-Type: application/json
 
 {
   "userId": {{userId}},
   "token": "{{token}}",
-  "data": { "cursor": 199, "limit": 200, "revision": 1 }
+  "data": { "cursor": 199, "limit": 200 }
 }
 
 ### 캐릭터 생성(최초는 nickname+classCode, 이후는 classCode만)

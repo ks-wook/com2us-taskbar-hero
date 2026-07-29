@@ -227,9 +227,6 @@ public sealed class CubeRepository : ICubeRepository
             var (newLevel, newExp) = advanceCube(cubeLevel, cubeExp, decision.CubeExpGain);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
 
-            // 7) 입력 삭제·결과 적재로 가방이 바뀌었으므로 페이지 조회 정합성 카운터를 올린다.
-            await InventoryRevision.BumpAsync(db, transaction, userId);
-
             await transaction.CommitAsync();
             return new CombineOutcome(CombineStatus.Ok, resultItemId, decision.ResultItemCode, decision.ResultGrade, newLevel, newExp);
         }
@@ -332,9 +329,6 @@ public sealed class CubeRepository : ICubeRepository
             // 5) 큐브 경험치 반영.
             var (newLevel, newExp) = advanceCube(cubeLevel, cubeExp, reward.TotalCubeExp);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
-
-            // 6) 분해로 가방 아이템이 줄었으므로 페이지 조회 정합성 카운터를 올린다.
-            await InventoryRevision.BumpAsync(db, transaction, userId);
 
             await transaction.CommitAsync();
             return new DismantleOutcome(DismantleStatus.Ok, reward.TotalGold, reward.TotalCubeExp);
@@ -439,9 +433,6 @@ public sealed class CubeRepository : ICubeRepository
             // 7) 큐브 경험치 반영.
             var (newLevel, newExp) = advanceCube(cubeLevel, cubeExp, cubeExpGain);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
-
-            // 8) 재료 차감·결과 지급으로 가방이 바뀌었으므로 페이지 조회 정합성 카운터를 올린다.
-            await InventoryRevision.BumpAsync(db, transaction, userId);
 
             await transaction.CommitAsync();
             return new CraftOutcome(CraftStatus.Ok, newLevel, newExp);

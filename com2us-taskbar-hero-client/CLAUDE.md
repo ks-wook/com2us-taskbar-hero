@@ -40,4 +40,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **모달에서 골드 수치는 노란색·볼드로 강조한다.** 모달(`ModalManager`/`ModalController`)의 메시지에 골드 금액을 표시할 때는 반드시 `GoldFormat.Highlight(long)`(namespace `TaskbarHero.Client.Managers`)로 감싸 **노란색 볼드 리치텍스트**로 출력한다(예: `$"소모 골드: {GoldFormat.Highlight(cost)}"`). 문자열에 직접 `{cost:N0}`만 넣지 말 것. Unity UI `Text`는 리치텍스트가 기본 활성이므로 태그가 그대로 렌더링된다.
 - HTTP 통신은 Unity의 `UnityWebRequest`(manifest에 포함됨)를 사용한다.
 - **네트워크 테스트는 명시적으로 요청받지 않는 한 하지 않는다.** 클라이언트 기능 구현 시 실제 서버(AccountServer·GameServer)로의 API 호출 검증은 사용자가 명시적으로 요청한 경우에만 수행한다. 그 외에는 컴파일·씬 구성·UI 흐름·씬 전환 등 서버 없이 확인 가능한 부분만 검증하고, 네트워크 연동 코드는 작성·배선까지만 하고 라이브 호출 검증은 생략한다.
+- **서버는 어시스턴트가 절대 띄우지 않는다 (예외 없음).** 서버(`GameServer`·`AccountServer`) 기동은 **사용자만** 한다. 어시스턴트는 `dotnet run`·`Start-Process`(숨김 포함)·`Start-Job`·harness `run_in_background` 등 **어떤 방법으로도 서버를 주도적으로 띄우려 시도하지 않는다.** 테스트 스크립트도 서버를 스스로 기동하지 않는다.
+  - **실테스트는 "사용자가 서버를 올린 뒤 테스트를 진행하라고 지시했을 때만" 수행한다.** 서버가 내려가 있으면 **직접 띄우지도, 대신 띄워달라고 조르지도 말고** 그 사실만 알리고 멈춘다(사용자가 `! dotnet run --project GameServer` 형태로 직접 실행한다).
+  - 이미 떠 있는 서버는 어시스턴트가 임의로 종료하지 않는다(사용자가 테스트용으로 올려 둔 프로세스일 수 있다).
 - **클라이언트 기능 완료 시 README 현황판 갱신.** 클라이언트 측 기능 구현이 완료되면 상위 저장소 `README.md`「개발 현황」 체크리스트에서 해당 기능의 **`클라 실연동`** 칸 상태 기호를 갱신한다(☐ 미착수 → ◐ 진행 중 → ☑ 완료). 서버 실연동까지 검증된 기능만 ☑로 표시하고, 코드 배선만 된 경우는 ◐로 둔다.

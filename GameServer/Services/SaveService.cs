@@ -51,7 +51,6 @@ public sealed class SaveService : ISaveService
     /// <para><c>runes</c> — player_rune: 계정 공용 룬 코드·레벨</para>
     /// <para><c>cube</c> — player_cube 1행: 큐브 레벨·경험치(행이 없으면 레벨 1·경험치 0)</para>
     /// <para><c>inventoryTotal</c> — 가방 아이템 총 행 수(페이징 진행률·용량 UI 표시용)</para>
-    /// <para><c>inventoryRevision</c> — 인벤토리 변경 카운터. 가방 페이지 조회가 이 값을 대조해 정합성을 확인한다</para>
     /// <para><c>offlineElapsedSec</c> — 현재 서버 시각 − last_active_at(오프라인 보상 계산 입력값)</para>
     /// </remarks>
     public async Task<SaveResult> LoadAsync(long userId)
@@ -70,10 +69,6 @@ public sealed class SaveService : ISaveService
         var cube = await _saveRepository.GetCubeAsync(userId) ?? new CubeDto { cubeLevel = 1, cubeExp = 0 };
         var inventoryTotal = await _saveRepository.GetBagItemCountAsync(userId);
 
-        // 정합성 기준값은 위 조회를 모두 마친 뒤 읽는다. 중간에 인벤토리가 바뀌었다면 클라이언트가 받는
-        // 기준값이 그 변경 이후 값이 되어, 이어지는 페이지 조회가 최신 상태와 일치한다.
-        var inventoryRevision = await _saveRepository.GetInventoryRevisionAsync(userId);
-
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var offlineElapsed = Math.Max(0, now - player.lastActiveAt);
 
@@ -87,7 +82,6 @@ public sealed class SaveService : ISaveService
             runes = runes,
             cube = cube,
             inventoryTotal = inventoryTotal,
-            inventoryRevision = inventoryRevision,
             offlineElapsedSec = offlineElapsed,
         };
 

@@ -50,9 +50,18 @@
   - **컨트롤러 공통 보조 메서드**(인증 userId 추출, 공통 응답 변환, ErrorCode ↔ HTTP 상태/메시지 매핑 등)는 **베이스 컨트롤러 클래스**(`ControllerBase`를 상속한 추상 클래스, 예: `GameApiControllerBase`·`AccountApiControllerBase`)에 `protected`/`private static`으로 구현하고, 각 컨트롤러가 이를 **상속**해 사용한다.
   - 컨트롤러 작업 시 이 규칙을 매번 확인한다.
 - **기능 구현 시 빌드 및 테스트 진행**: 기능을 구현하면 반드시 빌드(`dotnet build`)로 컴파일을 확인하고, 실제 동작을 테스트로 검증한다. 빌드 성공과 테스트 통과를 확인하기 전에는 작업을 완료로 간주하지 않는다.
-- **테스트 전 기존 서버 강제 종료**: 테스트를 시작하기 전에 **이미 떠 있는 서버가 있으면 확인 없이 강제 종료하고 새로 띄운다**. 옛 바이너리가 남아 있으면 방금 구현한 코드가 아닌 것을 테스트하게 되고, `bin/` 파일 잠김으로 `dotnet build`가 MSB3021/MSB3027로 실패한다.
-  - 종료는 **프로세스 이름 기준**으로 한다: `Get-Process -Name GameServer,AccountServer -ErrorAction SilentlyContinue | Stop-Process -Force`. `dotnet run`은 실제 앱을 자식 프로세스(`GameServer.exe`·`AccountServer.exe`)로 띄우므로, `dotnet.exe` 래퍼만 죽이면 앱이 그대로 살아남는다.
-  - 테스트 스크립트는 **시작 시 강제 종료 → 빌드 → 기동 → 시나리오 → 종료(`trap ... EXIT`)** 순서로 구성하고, 끝난 뒤 잔여 프로세스가 0인지 확인한다.
+- **서버를 어시스턴트가 절대 띄우지 않는다 (예외 없음)**: 서버(`GameServer`·`AccountServer`) 기동은 **사용자만** 한다. 어시스턴트는 `dotnet run`·`Start-Process`(숨김 포함)·`Start-Job`·harness `run_in_background`·`&`·`nohup` 등 **어떤 방식으로도 서버를 주도적으로 띄우려 시도하지 않는다.** 숨겨진 서버는 세션이 끝나도 남아 `bin/` 파일을 잠그고(MSB3021/MSB3027), 다음 테스트가 **옛 바이너리를 검증**하게 만든다.
+  - **실테스트는 "사용자가 서버를 올린 뒤 테스트를 진행하라고 지시했을 때만" 수행한다.** 서버가 내려가 있으면 **직접 띄우지도, 대신 띄워달라고 조르지도 말고** 그 사실만 알리고 멈춘다. 사용자가 프롬프트에서 `! dotnet run --project GameServer` 형태로 직접 실행한다.
+  - 테스트 스크립트도 서버를 스스로 띄우지 않는다. **강제 종료 → 빌드 → (사용자가 띄운 서버 확인) → 시나리오** 순서로 구성한다.
+- **테스트 전후 기존 서버 강제 종료**: 테스트를 시작하기 전에 **이미 떠 있는 서버가 있으면 확인 없이 강제 종료한다.** 끝난 뒤에도 잔여 프로세스가 0인지 반드시 확인한다.
+  - 종료는 **앱 프로세스와 `dotnet run` 래퍼를 모두** 잡는다. 래퍼가 살아 있으면 자식(`GameServer.exe`·`AccountServer.exe`)을 다시 띄워 "0건" 확인 직후에 서버가 되살아난다.
+    ```powershell
+    Get-Process -Name GameServer,AccountServer -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-CimInstance Win32_Process -Filter "Name='dotnet.exe'" |
+      Where-Object { $_.CommandLine -match 'GameServer|AccountServer' } |
+      ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force } catch {} }
+    ```
+  - 잔여 확인도 **두 가지를 모두** 센다(앱 프로세스만 세면 래퍼를 놓친다).
   - 배치(`PeriodicBatchService` 파생)를 검증할 때는 Redis 리더 락(`batch:lock:{배치키}`)이 이전 실행의 TTL로 남아 스킵될 수 있으므로, 주기를 바꿔 테스트하면 해당 락 키를 먼저 지운다.
 - **서비스 클래스 메서드 주석 필수**: 서비스 클래스(`*Service`, 예: `AuthService`·`SaveService`·`StageService`)에 속한 **모든 메서드**(public·private 헬퍼·생성자 포함)에는 그 메서드가 **어떤 로직을 수행하는지** 설명하는 `/// <summary>` 주석을 반드시 작성한다. 새 서비스 메서드를 추가하거나 기존 메서드를 수정할 때 이 규칙을 매번 확인한다.
 - **로깅 규칙 준수**: 서버에 로그를 추가·수정할 때는 [`docs/공통/로깅-규칙.md`](docs/공통/로깅-규칙.md)를 따른다. 로거는 `ILogger<T>` 생성자 주입, 기록은 **ZLogger 확장 메서드**(`logger.ZLogInformation($"... {userId:@UserId}")` — 값마다 `:@PascalCase`로 필드 이름 지정, 표준 `Log*` 직접 호출·문자열 `+` 연결 금지), 레벨 기준(사용자 실수는 로깅 안 함, 경합은 Warning, 서버 결함은 Error), 로깅은 서비스/미들웨어에서(컨트롤러 금지), 비밀번호·토큰·PII 미노출을 매번 확인한다.

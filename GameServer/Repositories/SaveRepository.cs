@@ -39,9 +39,6 @@ public interface ISaveRepository
     /// <summary>가방 아이템(row_type=1, 배치된 행) 총 개수를 센다. 페이징 진행률 표시용.</summary>
     Task<int> GetBagItemCountAsync(long userId);
 
-    /// <summary>현재 인벤토리 변경 카운터를 읽는다(계정 세이브 없으면 0). 페이지 조회 정합성 기준값.</summary>
-    Task<long> GetInventoryRevisionAsync(long userId);
-
     /// <summary>계정의 전 캐릭터 보유 스킬(레벨·장착 여부)을 조회한다.</summary>
     Task<List<SkillDto>> GetSkillsAsync(long userId);
 
@@ -237,21 +234,6 @@ public sealed class SaveRepository : ISaveRepository
     }
 
     /// <summary>
-    /// game_player.inventory_revision(인벤토리 변경 카운터)을 읽는다. 코어 로드가 이 값을 내려주고
-    /// 인벤토리 페이지 조회가 페이지마다 대조해, 값이 달라졌으면 찢어진 스냅샷으로 보고 거부한다.
-    /// 계정 세이브가 없으면 0. 읽기 전용이라 트랜잭션을 쓰지 않는다.
-    /// </summary>
-    public async Task<long> GetInventoryRevisionAsync(long userId)
-    {
-        using var db = _dbFactory.Create();
-        var revision = await db.Query("game_player")
-            .Select("inventory_revision")
-            .Where("user_id", userId)
-            .FirstOrDefaultAsync<long?>();
-        return revision ?? 0;
-    }
-
-    /// <summary>
     /// 계정의 player_skill 전 행(캐릭터별 스킬 코드·레벨·장착 여부)을 조회해 DTO 목록으로 변환한다.
     /// 읽기 전용이므로 트랜잭션 없이 자체 커넥션을 쓴다.
     /// </summary>
@@ -347,8 +329,6 @@ public sealed class SaveRepository : ISaveRepository
                 difficulty = 1,
                 max_stage_cleared = 0,
                 inventory_capacity = inventoryCapacity,
-                // 1부터 시작한다(0은 요청의 "기준값 없음" 예약값이라 계정 값으로 쓰지 않는다).
-                inventory_revision = 1,
                 last_active_at = nowUnix,
                 created_at = nowUnix,
                 updated_at = nowUnix,

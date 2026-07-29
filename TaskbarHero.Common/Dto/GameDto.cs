@@ -157,12 +157,11 @@ namespace TaskbarHero.Common.Dto
         public List<SkillDto> skills = new List<SkillDto>();
         public List<RuneDto> runes = new List<RuneDto>();
         public CubeDto cube = new CubeDto();
-        public int inventoryTotal;      // 가방 아이템 행 수(페이징 진행률·용량 UI)
-        public long inventoryRevision;  // 인벤토리 변경 카운터(페이지 조회 정합성 기준값). 1부터 시작
+        public int inventoryTotal;      // 가방 아이템 행 수(페이징 진행률·용량 UI). 조회 시점 기준 근사치
         public long offlineElapsedSec;
     }
 
-    /// <summary>인벤토리 페이지 조회 요청 body(인증). { userId, token, data:{ cursor, limit, revision } }</summary>
+    /// <summary>인벤토리 페이지 조회 요청 body(인증). { userId, token, data:{ cursor, limit } }</summary>
     [Serializable]
     public class InventoryListRequest
     {
@@ -178,12 +177,13 @@ namespace TaskbarHero.Common.Dto
         public int cursor = -1;
         // 페이지 크기. 서버가 1~500으로 클램프하며 0 이하이면 기본값(200)을 쓴다.
         public int limit;
-        // 코어 로드에서 받은 inventoryRevision. 0은 "기준값 없음"이라 검증을 건너뛴다(첫 페이지).
-        // 계정의 실제 카운터는 1부터 시작하므로 0과 겹치지 않는다.
-        public long revision;
     }
 
-    /// <summary>인벤토리 페이지 조회 응답 data. slot 오름차순 keyset 페이징 결과.</summary>
+    /// <summary>
+    /// 인벤토리 페이지 조회 응답 data. slot 오름차순 keyset 페이징 결과.
+    /// 서버는 페이지 사이의 인벤토리 변경을 감지하지 않으므로, 클라이언트는 페이지를 이어붙일 때
+    /// itemId를 키로 중복을 제거하고 나중 페이지를 우선한다(세이브 데이터 기획서 5.2).
+    /// </summary>
     [Serializable]
     public class InventoryPageDto
     {
@@ -191,7 +191,6 @@ namespace TaskbarHero.Common.Dto
         public int nextCursor;    // 이 페이지 마지막 항목의 slot(hasMore=false면 의미 없음)
         public bool hasMore;
         public int total;         // 가방 아이템 총 행 수
-        public long revision;     // 이 페이지를 읽은 시점의 inventory_revision
     }
 
     /// <summary>인벤토리 페이지 조회 응답 { success, errorCode, message, data(InventoryPageDto) }.</summary>
@@ -391,22 +390,28 @@ namespace TaskbarHero.Common.Dto
         public long itemId;
     }
 
-    /// <summary>장착 결과(5.1). unequipped는 스왑으로 밀려난 기존 장비(없으면 null).</summary>
+    /// <summary>
+    /// 장착 결과(5.1). unequipped는 스왑으로 밀려난 기존 장비(없으면 null).
+    /// 장착한 아이템은 가방 칸을 반납하므로 클라이언트는 가방 목록에서 제거하고,
+    /// 스왑된 기존 장비는 unequippedBagSlot 칸에 다시 그린다.
+    /// </summary>
     [Serializable]
     public class EquipResultData
     {
         public int characterId;
-        public SlotItemDto equipped;
-        public SlotItemDto unequipped;   // 스왑 없으면 null
+        public SlotItemDto equipped;     // slot = 장착 슬롯(equip_slot_master)
+        public SlotItemDto unequipped;   // 스왑 없으면 null. slot = 비운 장착 슬롯
+        public int unequippedBagSlot;    // 스왑된 장비가 되돌아간 가방 칸. 스왑 없으면 -1
     }
 
-    /// <summary>장착 해제 결과(5.2).</summary>
+    /// <summary>장착 해제 결과(5.2). 해제한 장비는 bagSlot 칸으로 되돌아간다.</summary>
     [Serializable]
     public class UnequipResultData
     {
         public int characterId;
-        public int slot;
+        public int slot;      // 비운 장착 슬롯
         public long itemId;
+        public int bagSlot;   // 가방으로 되돌아간 칸(0-based)
     }
 
     /// <summary>배치 이동 결과(5.5). swapped는 목표 칸에 있던 아이템(비어 있었으면 null).</summary>

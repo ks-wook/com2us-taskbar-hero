@@ -199,10 +199,12 @@ namespace TaskbarHero.Client.Battle
             long hp = _baseMaxHp;
             long def = _baseDef;
             var db = MasterDataManager.Db;
-            var inv = Session.GameData != null ? Session.GameData.inventory : null;
-            if (_characterId != 0 && inv != null && db != null)
+            // 장착 장비는 코어 로드(equipped)에만 있다 — 가방 아이템(페이징 조회)과 겹치지 않으므로
+            // 가방을 아직 받지 않은 상태(접속 직후)에도 전투 스탯을 온전히 계산할 수 있다.
+            var equipped = Session.Equipped;
+            if (_characterId != 0 && equipped != null && db != null)
             {
-                foreach (var it in inv)
+                foreach (var it in equipped)
                 {
                     if (it != null && it.equippedCharacterId == _characterId
                         && db.Items.TryGetValue(it.itemCode, out ItemMaster im))

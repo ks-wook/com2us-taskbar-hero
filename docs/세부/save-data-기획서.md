@@ -53,6 +53,7 @@ GameServer
   | **가변** | **가방 아이템** | **`game_player.inventory_capacity`만큼(확장으로 증가)** | **`/api/game/inventory/list` (페이징)** |
 
   `player_item`만 무한히 커지므로 **이 하나만** 분리·페이징한다. 나머지를 항목별로 쪼개면 왕복만 늘고 이득이 없다.
+- **페이지 간 정합성 장치를 두지 않는다(확정)**: 페이징 도중 인벤토리가 바뀌는지를 서버가 감지하는 장치(변경 카운터·버전 토큰)는 두지 않는다. 단일 세션 정책상 그 경합을 일으킬 수 있는 주체가 사실상 같은 클라이언트뿐이고, 최악의 경우도 창고를 다시 열면 사라지는 표시 오차다. 반면 장치를 두면 **아이템을 건드리는 모든 트랜잭션이 그 장치와 결합**되어, 새 기능을 붙일 때 한 곳만 빠뜨려도 아무 오류 없이 검증이 무력화된다. 비용이 편익을 넘어선다고 판단해 두지 않으며, 대신 클라이언트가 `itemId` 기준 병합으로 흡수한다(5.2).
 - **장착 정보는 코어에 포함(확정)**: 장착 행은 최대 18개로 고정이고, 캐릭터 스탯 계산의 입력이라 **전투 시작 전에 반드시 있어야 한다.** 별도 요청으로 빼면 코어 로드 후에도 전투를 시작하지 못하므로, `/api/game/load` 응답에 `equipped` 배열로 함께 내린다. 가방 아이템 페이징 결과와는 겹치지 않는다(장착 아이템은 인벤 칸을 점유하지 않으므로 페이징 대상에서 제외).
 - **액션 단위 저장(확정)**: 게임 상태 변경은 **각 기능 API가 처리하는 그 시점에** 서버가 검증·반영한다. 클라이언트가 진행 상태를 모아 보내는 **범용 일괄 저장 API(`/api/game/save`)는 두지 않는다.** 저장 시점·값은 클라이언트가 아니라 각 액션의 서버 로직이 결정한다.
 - **MySQL 단일 저장소(확정)**: 세이브 데이터는 **MySQL에만** 저장한다. 3장 ERD의 정규화 테이블 구조를 그대로 사용하며, JSON 스냅샷 컬럼 등 별도 저장 방식은 쓰지 않는다. 계정 도메인과 동일하게 시간 값은 **Unix timestamp(BIGINT, 초)**로 저장.
@@ -85,7 +86,6 @@ erDiagram
         int     difficulty "난이도 티어"
         int     max_stage_cleared "최고 클리어 스테이지"
         int     inventory_capacity "인벤토리 최대 용량(slot 수), 골드로 확장"
-        bigint  inventory_revision "인벤토리 변경 카운터, 페이징 정합성 검증용"
         bigint  last_active_at "Unix ts, 5분 주기 갱신, 오프라인 보상 기준"
         bigint  created_at
         bigint  updated_at
@@ -105,7 +105,7 @@ erDiagram
         int     row_type "1:아이템 2:재화"
         int     item_code "item_master.item_code (재화 item_type=3 포함, 골드=1)"
         bigint  quantity "수량/재화 금액(재화가 커 bigint)"
-        int     slot "인벤토리 배치(0-based). 재화는 NULL(용량 미집계)"
+        int     slot "인벤토리 배치(0-based). 재화·장착 중 장비는 NULL(용량 미집계)"
         int     enhance_level "장비 강화/각인 단계. 재화/비장비는 0"
         bigint  acquired_at
     }
@@ -189,13 +189,12 @@ erDiagram
   - `player_mail_reward`: `(mail_id, seq)` 복합 PK. 메일 첨부(0~N).
   - `player_attendance`: `user_id` PK로 **계정당 1행**(출석 진행도). `attend_count`(누적 출석일수)로 일차를 산출하고(`% 30 + 1`, 30일 순환) `last_attend_date`로 하루 1회를 보장한다. 일자별 출석 이력은 저장하지 않는다([출석부 보상 시스템 기획서](attendance-기획서.md)).
   - `trade_listing`: `listing_id` PK, `(status, item_code, price)`·`(status, price)`·`(seller_user_id, status)`·`(status, expires_at)` 인덱스. 전역 거래소 등록(에스크로), 등록 아이템은 `player_item`에서 빠져 여기 스냅샷으로 보관([거래소 / 교역선 기획서](trade-기획서.md)). 목록 조회는 전역 공유 읽기이므로 Redis 목록 캐시를 상시 사용하고, 동시 구매는 Redis 락 + 조건부 갱신으로 직렬화한다(같은 기획서 7장).
-  - `player_item`: `player_item_id` PK. `(user_id, slot)` 유니크 — 한 인벤토리 칸(slot)에는 아이템(스택) 한 행만 존재한다(재화 행은 `slot`이 NULL이라 무제한 공존). 이 유니크 인덱스는 **인벤토리 페이지 조회(5.2)의 keyset 커서 인덱스로 그대로 재사용**한다(추가 인덱스 불필요).
+  - `player_item`: `player_item_id` PK. `(user_id, slot)` 유니크 — 한 인벤토리 칸(slot)에는 아이템(스택) 한 행만 존재한다(재화 행은 `slot`이 NULL이라 무제한 공존). 이 유니크 인덱스는 **인벤토리 페이지 조회(5.2)의 keyset 커서 인덱스로 그대로 재사용**하므로, 페이징을 위해 추가하는 컬럼·인덱스가 없다.
   - `player_item_equipped`: `player_item_id` PK — 장착 중인 아이템만 행으로 존재하며 아이템당 최대 1행이라 한 아이템은 동시에 한 곳에만 장착된다. `(user_id, equipped_character_id, equipped_slot)` 유니크 — **한 캐릭터-장착슬롯에 아이템 하나**를 보장한다. 장착=INSERT, 해제=DELETE.
 - **아이템·재화 통합(`row_type`)**: `player_item`은 `row_type`(1:아이템 2:재화)으로 아이템과 재화(골드 등)를 **한 테이블에** 담는다. `item_code`는 **모든 행이 `item_master.item_code`를 참조**하며(재화는 `item_master`의 `item_type=3` 항목, 골드=`item_code` 1 — 별도 `currency_master` 없음), `quantity`가 수량/재화 금액(재화가 커 `bigint`)이다. **재화 행은 계정에 재화 종류당 1행**이어야 하므로 `(user_id, row_type=2, item_code)` 유일성을 **서버가 보장**한다(MySQL 부분 유니크 인덱스 미지원. 아이템 행은 스택 분할로 `(user_id, item_code)`가 중복될 수 있어 전역 유니크를 걸 수 없다). 재화 행은 `slot`/`enhance_level`을 쓰지 않고 장착 대상도 아니며(`player_item_equipped`에 행이 생기지 않음) **인벤토리 용량 집계에서 제외**한다.
 - **캐릭터별 vs 계정 공유**: `player_character`·`player_skill`은 **캐릭터별**, `player_item`(아이템·재화)·`player_cube`·`player_rune`은 **계정 공유**다. 스킬은 캐릭터마다 다르게 찍고 룬은 계정 전체에 적용되므로 테이블을 분리한다. 아이템은 계정 공용 행(`player_item`)이되 장착만 캐릭터별이다 — 장착 상태는 자식 테이블 `player_item_equipped`(`player_item`과 1:0..1)에 분리해, 그 행의 `equipped_character_id`/`equipped_slot`으로 **어느 캐릭터의 어느 슬롯에 장착됐는지**를 표기하며, 한 아이템은 최대 한 캐릭터·한 슬롯에만 장착된다.
 - **인벤토리 배치 위치(`player_item.slot`)**: 아이템(스택)이 인벤토리 UI의 몇 번 칸에 있는지를 나타내는 위치 값(0-based)이다. 클라이언트 재접속 시 인벤토리 페이지 조회(5.2)가 내려준 `slot`으로 **마지막 접속과 동일한 배치**를 복원한다. `slot`은 배치 값인 동시에 **페이징 정렬키이자 커서**다. 플레이어가 드래그로 칸을 옮기면 그 변경은 배치 변경 API로 반영한다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.5). `player_item_equipped.equipped_slot`(장착 슬롯)과는 다른 개념이다. 배치는 UI 레이아웃 값이므로 서버 권위 검증 대상은 아니나, 용량(`game_player.inventory_capacity`) 범위 안이고 칸이 중복되지 않는지는 검증한다.
-- **인벤토리 변경 카운터(`game_player.inventory_revision`, bigint)**: 인벤토리를 여러 페이지로 나눠 조회하는 동안(5.2) 내용이 바뀌면 같은 아이템을 두 번 받거나 아예 놓친 **찢어진 스냅샷**이 만들어진다. 이를 감지하기 위해 인벤토리를 바꾸는 모든 트랜잭션이 **같은 트랜잭션 안에서** 이 값을 `+1` 한다(획득·소모·이동·장착/해제·강화·분해·거래 체결/취소·메일 첨부 수령·전리품 지급·오프라인 보상 지급). 클라이언트는 첫 응답의 값과 이후 페이지의 값이 다르면 처음부터 다시 조회한다. **계정 생성 시 `1`로 초기화한다** — 요청에서 `0`은 "기준값 없음(검증 생략)"을 뜻하는 예약값이므로, 계정의 실제 카운터가 `0`을 가지면 정상 계정의 첫 변경을 검증에서 놓친다.
-
+- **`slot`이 NULL인 행(확정)**: **재화 행**(계정당 종류별 1행)과 **장착 중인 장비**다. 둘 다 가방 칸을 점유하지 않으므로 용량 집계와 가방 페이지 조회(5.2)에서 함께 빠진다. 장착 중 장비의 `slot`이 NULL이라는 점이 "장착한 장비는 가방을 차지하지 않는다"는 규칙을 저장 구조로 표현한 것이며, 조회 쿼리에 별도 제외 조건을 두지 않아도 되게 한다. 장착/해제 시의 칸 반납·재배치 규칙은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.1·5.2에 있다.
 ![창고/인벤토리 화면 — 슬롯 격자에 배치된 아이템과 인벤토리 용량](../images/save-data-창고_인벤토리.png)
 
 - **아이템/스킬/룬 등의 코드 값**은 마스터(기획) 데이터를 참조한다([마스터 데이터 기획서](master-data/master-data-기획서.md), 도메인 4.10). 각 코드 컬럼이 어느 마스터 테이블을 참조하는지는 해당 문서 3장의 매핑 표를 참고한다.
@@ -211,7 +210,6 @@ erDiagram
 - **오프라인 기준 시각**: `last_active_at`(마지막 접속 시각)이 오프라인 보상 정산의 기준. 오프라인 보상 계산 규칙은 [오프라인 보상 정산 기획서](offline-reward-기획서.md) 참고.
 - **서버 권위 검증**: 각 액션의 값은 서버 규칙·마스터 데이터로 재계산/검증 후 반영한다. 불가능한 증가폭·음수 재화 등은 거부한다(클라이언트 보고 불신).
 - **동시성**: 동일 계정 단일 세션 정책([계정/로그인 기획서](account-login-기획서.md))에 따라 세이브 경합은 제한적이나, 각 액션 저장은 `user_id` 단위 트랜잭션으로 처리한다.
-- **인벤토리 변경 시 revision 증가(확정)**: `player_item`·`player_item_equipped`를 바꾸는 트랜잭션은 **커밋 전에 같은 트랜잭션 안에서** `game_player.inventory_revision`을 `+1` 한다. 별도 트랜잭션으로 미루면 페이징 정합성 검증(5.2)이 무의미해진다. 적용 대상은 인벤토리 액션([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5장) 전부와, 아이템을 지급·회수하는 다른 도메인(전리품, 메일 첨부 수령, 오프라인 보상, 거래소 등록/체결/취소)이다.
 
 ## 5. API 명세
 
@@ -244,7 +242,6 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | `runes` | 계정 공용 룬 코드·레벨 | `player_rune` | 룬 마스터 수 |
 | `cube` | 큐브 레벨·경험치 | `player_cube` | 1행 |
 | `inventoryTotal` | 가방 아이템 행 수(용량 UI 표시·페이징 진행률용) | `player_item` (`row_type=1`) COUNT | 스칼라 |
-| `inventoryRevision` | 인벤토리 변경 카운터(5.2 정합성 기준값) | `game_player` | 스칼라 |
 | `offlineElapsedSec` | `현재 서버 시각 - lastActiveAt` | 산출값 | 스칼라 |
 
 > **구현 규칙**: 위 목록은 `GameServer/Services/SaveService.cs`의 `LoadAsync` **XML 주석(`/// <summary>`)에 항목별로 그대로 기재**한다. 반환 항목을 추가·제거할 때 이 표와 그 주석을 함께 갱신한다(서비스 메서드 주석 규칙, `CLAUDE.md`).
@@ -293,7 +290,6 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
     ],
     "cube": { "cubeLevel": 4, "cubeExp": 1200 },
     "inventoryTotal": 3872,
-    "inventoryRevision": 1041,
     "offlineElapsedSec": 43200
   }
 }
@@ -301,8 +297,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 - `player`는 계정/파티 공용 값, `characters`는 3인 파티 각 캐릭터의 직업·레벨·경험치다. `skills`는 `characterId`로 소속 캐릭터를 표시하며(스킬 행의 `equipped=1`은 액티브 장착, 캐릭터당 최대 2개), `runes`는 계정 공용이다. `currencies`·`equipped`·`cube`도 계정 공유(장착 위치만 캐릭터별).
 - **`currencies`의 저장 출처**: `player_item`의 `row_type=2`(재화) 행을 `{currencyType(=item_code), amount(=quantity)}`로 투영한 결과다. 재화 행은 `slot`이 NULL이라 가방 페이징(5.2) 대상에서 자동으로 빠지므로, **재화는 코어에서만 내려간다.**
-- **`equipped`(장착 장비)**: `player_item_equipped` 행을 그대로 내려준다. 장착 아이템은 인벤토리 칸을 점유하지 않으므로 5.2의 페이지 결과와 **중복되지 않는다.** 클라이언트는 이 배열만으로 캐릭터별 장비 렌더링과 스탯 계산을 끝낼 수 있고, 가방을 로드하지 않은 상태에서도 전투를 시작할 수 있다.
-- **가방 아이템은 포함하지 않는다**: `inventoryTotal`(총 개수)과 `inventoryRevision`(변경 카운터)만 내려준다. 실제 아이템 목록은 창고/인벤토리 UI를 열 때 5.2로 조회한다.
+- **`equipped`(장착 장비)**: `player_item_equipped` 행을 그대로 내려준다. 장착 중에는 `player_item.slot`이 NULL이라 가방 칸을 점유하지 않으므로 5.2의 페이지 결과와 **중복되지 않는다.** 클라이언트는 이 배열만으로 캐릭터별 장비 렌더링과 스탯 계산을 끝낼 수 있고, 가방을 로드하지 않은 상태에서도 전투를 시작할 수 있다.
+- **가방 아이템은 포함하지 않는다**: 총 개수(`inventoryTotal`)만 내려준다. 실제 아이템 목록은 창고/인벤토리 UI를 열 때 5.2로 조회한다.
 - `offlineElapsedSec`: `현재 서버 시각 - lastActiveAt`. 오프라인 보상 계산의 입력값(정산 규칙은 [오프라인 보상 정산 기획서](offline-reward-기획서.md)).
 
 **Response (세이브 없음 — 최초 접속, 200 OK)**
@@ -328,13 +324,12 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 {
   "userId": 1,
   "token": "MToxNzAwMDAwMDAwOmFCM2RFNmZHOWhKMWtM...",
-  "data": { "cursor": -1, "limit": 200, "revision": 1041 }
+  "data": { "cursor": -1, "limit": 200 }
 }
 ```
 
 - `cursor`: 직전 페이지에서 받은 `nextCursor`. **첫 페이지는 `-1`**(`slot`이 0-based이므로 `slot > -1`이 곧 처음부터).
 - `limit`: 페이지 크기. 서버가 **1~500으로 클램프**하며 기본값 200. 범위 밖 값은 거부하지 않고 클램프한다(클라 버전 차이로 로드가 실패하지 않게).
-- `revision`: 5.1에서 받은 `inventoryRevision`. **첫 페이지 요청에서는 `0`**(= 기준값 없음, 검증 생략)을 보내고, 두 번째 페이지부터 직전 응답의 `revision`을 그대로 실어 보낸다. 계정의 실제 카운터는 1부터 시작하므로 예약값 `0`과 겹치지 않는다.
 
 **Response (성공, 200 OK)**
 ```json
@@ -349,16 +344,16 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
     ],
     "nextCursor": 199,
     "hasMore": true,
-    "total": 3872,
-    "revision": 1041
+    "total": 3872
   }
 }
 ```
 
-- `items`: `slot` 오름차순. **가방 아이템(`row_type=1` 이면서 `slot`이 있는 행)만** 담는다 — 재화 행(`slot` NULL)과 장착 아이템(인벤 칸 미점유)은 코어 로드(5.1)의 `currencies`·`equipped`로 이미 내려갔으므로 제외한다. 그래서 항목에 장착 필드가 없다.
+- `items`: `slot` 오름차순. **가방 아이템(`row_type=1` 이면서 `slot`이 있는 행)만** 담는다 — 재화 행과 장착 중인 장비는 `slot`이 NULL이라 `slot > cursor` 비교에서 자동으로 빠지며, 각각 코어 로드(5.1)의 `currencies`·`equipped`로 내려간다. **같은 아이템이 가방 목록과 `equipped`에 동시에 나오지 않는다.** 그래서 항목에 장착 필드가 없다.
 - `nextCursor`: 이 페이지 마지막 항목의 `slot`. `hasMore=false`면 의미 없다.
 - `hasMore`: 다음 페이지 존재 여부.
-- `total`: 가방 아이템 총 행 수(진행률 표시용). 페이지마다 같은 `revision` 기준값이다.
+- `total`: 가방 아이템 총 행 수(진행률 표시용). 그 페이지를 읽은 시점 기준의 **근사치**다.
+- 세이브가 없는 계정이면 `SaveNotFound(2001)`.
 
 **조회 규칙 (확정)**
 
@@ -371,20 +366,16 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   ```
 
 - **정렬·필터는 서버가 제공하지 않는다.** 정렬키를 늘리면 인덱스가 커버하지 못해 페이징 성능 이점이 사라진다. 등급/종류별 정렬·필터는 클라이언트가 받은 페이지에 대해 로컬로 처리한다.
-- **정합성 검증**: 요청의 `revision`이 있고 현재 `game_player.inventory_revision`과 다르면 `InventoryRevisionChanged(4012)`로 거부한다. 클라이언트는 이 코드를 받으면 **5.1부터 다시 조회**한다(부분 재시도 금지 — 이미 받은 페이지가 낡았기 때문). `revision`을 생략한 첫 페이지 요청은 검증을 건너뛰고 현재 값을 응답에 실어 기준을 세운다.
-- 세이브가 없는 계정이면 `SaveNotFound(2001)`.
+- **한 페이지 안의 목록과 `total`은 같은 스냅샷이다.** 서버가 두 쿼리를 하나의 읽기 트랜잭션(REPEATABLE READ)에서 처리하므로 페이지 내부는 항상 정합적이다.
 
-**Response (정합성 깨짐, 409 Conflict)**
-```json
-{
-  "success": false,
-  "errorCode": 4012,
-  "message": "Inventory changed during paging",
-  "data": { "revision": 1042 }
-}
-```
+**페이지 사이의 정합성 — 서버는 검증하지 않는다 (확정)**
 
-재시도로 해소되는 경합이므로 HTTP 409를 쓴다(거래소 `TradeBusy`·출석 중복 수령과 같은 규약). `data.revision`은 서버의 현재 값이며, 클라이언트는 이를 신뢰하지 말고 5.1부터 다시 받는다.
+페이지와 페이지 사이에 인벤토리가 바뀌어도 서버는 감지하지 않는다. 변경 카운터·버전 토큰 같은 장치를 두지 않으며, **클라이언트가 병합 규칙으로 흡수한다.**
+
+- **근거**: 단일 세션 정책([계정/로그인 기획서](account-login-기획서.md))상 한 계정의 클라이언트는 하나다. 거래 체결·만료 반송은 아이템이 **메일**로 가고, 메일 수령·큐브·장착·이동·거래 등록은 전부 유저 행동이라 페이징 요청과 순차다. 배치(`MailGcBatchService`·`TradeExpireBatchService`)는 가방을 건드리지 않는다. 남는 경합은 **방치 전투 전리품**뿐인데, 그것을 발생시키는 주체도 같은 클라이언트라 자기가 바꿨다는 사실을 이미 안다.
+- **클라이언트 병합 규칙(계약)**: 페이지를 이어붙일 때 **`itemId`를 키로 중복을 제거하고 나중 페이지를 우선**한다. 이동으로 같은 아이템이 두 페이지에 걸쳐도 최종 위치 하나만 남는다.
+- **남는 오차와 해소**: 이미 지나간 칸으로 아이템이 이동하면 이번 조회에서 안 보이고, 읽은 뒤 소모된 아이템은 유령으로 남는다. 둘 다 **창고를 다시 열면 해소**되며, 유령 아이템을 조작해도 서버가 `ItemNotFound(4001)`로 거부하므로 데이터가 깨지지 않는다. 클라이언트는 그 에러를 받으면 목록을 새로 고친다.
+- **전리품을 직접 받은 직후**: 클라이언트가 페이징 중에 `/api/game/stage/clear` 응답으로 아이템 획득을 확인했다면, 그 페이징을 첫 페이지부터 다시 받는 편이 정확하다. 서버 지원 없이 클라이언트 판단으로 처리한다.
 
 ---
 
@@ -467,11 +458,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 > `2003`(구 `SaveVersionMismatch`)은 세이브 스키마 버전(`data_version`) 제거로 폐기했다. 값 혼선을 막기 위해 재사용하지 않고 **결번**으로 둔다.
 
-인벤토리 페이지 조회(5.2)의 정합성 실패는 인벤토리 도메인 코드를 사용한다. 값 정의는 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 7장에 있으며, 여기서는 재정의하지 않고 재사용한다.
-
-| 이름 | 값 | 의미 |
-|---|---|---|
-| InventoryRevisionChanged | 4012 | 페이징 도중 인벤토리가 변경됨(5.1부터 재조회 필요) |
+인벤토리 페이지 조회(5.2)는 세이브 없음(`SaveNotFound(2001)`) 외에 전용 에러 코드를 쓰지 않는다. 페이지 간 정합성을 검증하지 않으므로 그에 대응하는 코드도 없다.
 
 ## 7. 미결 사항 / TODO
 
@@ -484,4 +471,4 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 - [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) — 도메인 4.2(저장/로드), 4.3(오프라인 보상)
 - [계정/로그인 기획서](account-login-기획서.md) — 인증 토큰(body 전달)·단일 세션·`user_id` 공유 키
-- [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 인벤토리 액션(장착·강화·이동·용량 확장)과 `InventoryRevisionChanged(4012)` 정의
+- [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 인벤토리 액션(장착·강화·이동·용량 확장)과 아이템 도메인 에러 코드

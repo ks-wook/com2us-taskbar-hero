@@ -76,7 +76,7 @@
 | `player_item`(`player_item_id` PK, `user_id`, `row_type`, `item_code`, `quantity`, `slot`, `enhance_level`, `acquired_at`) | 보유 **아이템·재화 통합** 테이블 (**계정 공유**). `row_type`(1:아이템 2:재화)로 구분, `item_code`는 **모든 행이 `item_master.item_code`**(재화는 `item_type=3`, 골드=1), `quantity`는 수량/재화 금액(`bigint`). 보유 상태만 담고 장착 여부는 `player_item_equipped`로 분리 | `item_master`, `enhance_master` |
 | `player_item_equipped`(`player_item_id` PK, `user_id`, `item_code`, `enhance_level`, `equipped_character_id`, `equipped_slot`) | **장착 중 아이템**만 담는 자식 테이블(`player_item`과 1:0..1). 행이 존재하면 장착 중 | `item_master`, `enhance_master`, `equip_slot_master` |
 | `player_cube`(`user_id` PK, `cube_level`, `cube_exp`) | 큐브 성장 상태 (**계정 공유**) | `cube_master` |
-| `game_player`(`inventory_capacity`·`inventory_revision` 컬럼) | 계정 인벤토리 최대 용량(골드로 확장)과 인벤토리 변경 카운터(페이징 정합성 검증용) | — |
+| `game_player`(`inventory_capacity` 신규 컬럼) | 계정 인벤토리 최대 용량(골드로 확장) | — |
 
 > **장착 상태는 별도 테이블(`player_item_equipped`)로 분리한다.** 아이템 보유(`player_item`)와 장착 위치는 관심사가 다르고, 아이템 행에 장착 컬럼을 두면 대다수 미장착 행에 NULL이 깔려 의미가 흐려진다. 장착 중인 아이템만 `player_item_equipped`에 행으로 두어 **장착=INSERT / 해제=DELETE**로 처리하고, PK `player_item_id`로 "한 아이템은 한 곳에만 장착", `(user_id, equipped_character_id, equipped_slot)` 유니크 인덱스로 "한 캐릭터-슬롯당 아이템 하나"를 보장한다([세이브 데이터 기획서](save-data-기획서.md) 3장).
 
@@ -90,7 +90,7 @@
 - **배치 위치(`slot`)**: 각 행은 인벤토리 UI의 특정 칸(`slot`, 0-based)에 놓인다. `(user_id, slot)`은 유니크하며 한 칸에는 한 행만 존재한다. 재접속 시 [인벤토리 페이지 조회](save-data-기획서.md#52-인벤토리-페이지-조회--post-apigameinventorylist)가 `slot`을 함께 내려 **마지막 접속과 동일한 배치를 복원**한다. `slot`은 **페이징 커서이자 정렬키**이므로 `(user_id, slot)` 유니크 인덱스를 그대로 커버 인덱스로 쓴다. 획득 시 서버는 빈 `slot`에 배치하고, 빈 칸이 없으면(용량 초과) `InventoryFull(4002)`. `player_item_equipped.equipped_slot`(장착 슬롯)과는 별개 개념이다.
 - **장비(`item_type=1`)**: `stack_max=1`. 개체마다 `enhance_level`이 다를 수 있으므로 **1개당 1 행(row)**으로 저장하며 겹치지 않는다. `player_item_id`가 개체 식별자다.
 - **비장비(`item_type=2`)**: 동일 `item_code`는 `stack_max`까지 한 행에 `quantity`로 누적한다. 초과분은 새 행으로 분할한다.
-- **장착 중 아이템**: `player_item_equipped`에 행이 있는 아이템이 "장착 중"이다. 장착 중 아이템은 인벤토리(계정 공용)에 그대로 존재하되 분해·거래 대상에서 제외한다(해제 후 가능). `player_item_equipped`의 PK가 `player_item_id`라 같은 아이템을 둘 이상의 캐릭터가 동시에 장착할 수 없다.
+- **장착 중 아이템(확정)**: `player_item_equipped`에 행이 있는 아이템이 "장착 중"이다. **장착 중에는 가방 칸을 차지하지 않는다** — 장착 시 `player_item.slot`을 NULL로 비우고(칸 반납), 해제 시 빈 칸을 찾아 다시 배치한다(5.1·5.2). 따라서 장착 장비는 인벤토리 용량 집계와 가방 페이지 조회에서 빠지며, 같은 아이템이 가방 목록과 코어 로드의 `equipped`에 동시에 나오지 않는다. 아이템 행 자체(`player_item`)는 계정에 남아 있으나 분해·거래 대상에서는 제외한다(해제 후 가능). `player_item_equipped`의 PK가 `player_item_id`라 같은 아이템을 둘 이상의 캐릭터가 동시에 장착할 수 없다.
 
 **공유 enum / DTO (TaskbarHero.Common)**
 - `item_type`(1:장비 2:재료 3:재화), `reward_type`(1:골드 2:아이템 3:재료), `equip_slot` 등 분류 코드는 [마스터 데이터 기획서](master-data/master-data-기획서.md) 5장 공통 규칙에 따라 `TaskbarHero.Common`에 enum으로 고정한다(값 변경 금지).
@@ -123,6 +123,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 지정 캐릭터에게 아이템을 장착한다. 장착 슬롯은 아이템의 `item_master.equip_slot`에서 파생하며, 서버는 `player_item_equipped`에 대상 아이템의 장착 행(`equipped_character_id`/`equipped_slot`)을 INSERT한다. 그 캐릭터의 같은 슬롯에 이미 장착된 장비가 있으면 그 장착 행을 DELETE해 스왑한다. 장비의 **클래스 제한**(`item_master.class_req`, `0`은 전 클래스 공용)이 **대상 캐릭터의 직업**(`player_character.class_code`, 기사/레인저/마법사)과 일치해야 하고, 그 캐릭터 `level`이 **요구 레벨**(`item_master.level_req`, **5레벨 단위**, `0`은 제한 없음) 이상이어야 하며, 어느 하나라도 위반하면 `ItemNotEquippable(4003)`로 거부한다.
 
+**가방 칸 반납(확정)**: 장착과 동시에 그 아이템의 `player_item.slot`을 **NULL로 비운다**. 장착한 장비는 가방을 차지하지 않으므로 인벤토리 용량과 가방 페이지 조회에서 빠진다. 스왑이 일어나면 밀려난 기존 장비가 **방금 비운 그 칸**으로 들어가므로 점유 칸 수가 상쇄되어, 스왑 장착은 가방이 가득 차 있어도 실패하지 않는다.
+
 **Request**
 ```json
 { "userId": 1, "token": "...", "data": { "characterId": 1, "itemId": 5001 } }
@@ -139,17 +141,23 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "data": {
     "characterId": 1,
     "equipped": { "slot": 1, "itemId": 5001 },
-    "unequipped": { "slot": 1, "itemId": 4900 }
+    "unequipped": { "slot": 1, "itemId": 4900 },
+    "unequippedBagSlot": 12
   }
 }
 ```
 
+- `equipped.slot`·`unequipped.slot`: **장착 슬롯**(`equip_slot_master`)이다. 가방 칸이 아니다.
 - `unequipped`: 스왑으로 미장착 상태로 되돌아온 기존 장비(없으면 `null`).
-- 오류: `ItemNotFound(4001)`(인벤토리에 없음), `ItemNotEquippable(4003)`(장비가 아니거나 슬롯·클래스·레벨 부적합), `ItemEquipped(4007)`(다른 캐릭터가 이미 장착 중), `InvalidCharacterId(2006)`(잘못된 `characterId`).
+- `unequippedBagSlot`: 그 기존 장비가 되돌아간 **가방 칸**(스왑이 없으면 `-1`). 장착한 아이템이 비운 칸을 그대로 물려받는다.
+- 클라이언트는 장착한 아이템(`equipped.itemId`)을 가방 목록에서 제거하고, `unequipped`가 있으면 `unequippedBagSlot` 칸에 그린다.
+- 오류: `ItemNotFound(4001)`(인벤토리에 없음), `ItemNotEquippable(4003)`(장비가 아니거나 슬롯·클래스·레벨 부적합), `ItemEquipped(4007)`(다른 캐릭터가 이미 장착 중), `InvalidCharacterId(2006)`(잘못된 `characterId`), `InventoryFull(4002)`(스왑 장비를 되돌릴 칸이 없는 예외 상황 — 칸을 반납하지 못한 경우에만 발생).
 
 ### 5.2 장착 해제 — `POST /api/game/inventory/unequip`
 
-지정 캐릭터의 지정 장착 슬롯 장비를 해제해 미장착 상태로 되돌린다(`player_item_equipped`의 해당 장착 행을 DELETE).
+지정 캐릭터의 지정 장착 슬롯 장비를 해제해 가방으로 되돌린다(`player_item_equipped`의 해당 장착 행을 DELETE).
+
+**가방 칸 재배치(확정)**: 장착 중에는 가방 칸을 쓰지 않으므로(5.1), 해제하려면 **되돌릴 빈 칸이 있어야 한다.** 서버가 `[0, inventory_capacity)`에서 **가장 작은 빈 칸**을 찾아 `player_item.slot`에 기록하며, 빈 칸이 없으면 `InventoryFull(4002)`로 거부한다(장비를 잃지 않도록 전체 롤백). 원래 있던 칸으로 돌아가는 것이 아니라 그 시점의 빈 칸으로 들어간다.
 
 **Request**
 ```json
@@ -160,10 +168,11 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 **Response (성공, 200 OK)**
 ```json
-{ "success": true, "errorCode": 0, "message": "Unequipped", "data": { "characterId": 1, "slot": 1, "itemId": 5001 } }
+{ "success": true, "errorCode": 0, "message": "Unequipped", "data": { "characterId": 1, "slot": 1, "itemId": 5001, "bagSlot": 7 } }
 ```
 
-- 해당 캐릭터의 슬롯이 비어 있으면 `ItemNotFound(4001)`, 잘못된 `characterId`는 `InvalidCharacterId(2006)`.
+- `slot`: 비운 **장착 슬롯**. `bagSlot`: 장비가 되돌아간 **가방 칸**(0-based). 클라이언트는 이 칸에 아이템을 그린다.
+- 해당 캐릭터의 슬롯이 비어 있으면 `ItemNotFound(4001)`, 잘못된 `characterId`는 `InvalidCharacterId(2006)`, 가방에 빈 칸이 없으면 `InventoryFull(4002)`.
 
 ### 5.3 강화 — `POST /api/game/inventory/enhance`
 
@@ -394,33 +403,59 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
      └ 위반 시 ROLLBACK + 해당 ErrorCode 반환
   4) (RNG 연산) 큐브 합성 결과를 서버가 산출
   5) 반영: 재화 차감/적립, 인벤토리 증감(스택 병합/분할), 장착·큐브 상태 갱신
-  6) game_player.inventory_revision += 1     # player_item / player_item_equipped를 바꿨을 때
 COMMIT → 변경된 상태를 응답 data로 반환
 ```
 
 - 4·5단계 결과는 전부 서버가 확정한 값이며, 클라이언트는 응답으로만 인벤토리를 갱신한다.
-- **6단계는 생략하지 않는다.** `player_item`·`player_item_equipped`를 건드린 트랜잭션은 커밋 전에 반드시 `inventory_revision`을 올린다. 이 값이 인벤토리 페이지 조회의 정합성 기준이므로, 별도 트랜잭션으로 미루거나 빠뜨리면 클라이언트가 찢어진 인벤토리를 받는다([세이브 데이터 기획서](save-data-기획서.md) 4장·5.2). 재화만 바뀌는 경우(`row_type=2` 행의 `quantity` UPDATE)는 페이징 대상이 아니므로 증가시키지 않아도 되지만, 판정을 단순하게 유지하려면 함께 올려도 무방하다(오탐 재조회 1회 비용).
+- 인벤토리를 바꿨다고 해서 별도의 변경 카운터·버전 값을 갱신하지 않는다. 가방 페이지 조회는 페이지 간 정합성을 검증하지 않으며, 클라이언트가 `itemId` 기준 병합으로 흡수한다([세이브 데이터 기획서](save-data-기획서.md) 2장·5.2).
 
 ### 6.2 장착 스왑 순서
 
 ```
 equip(characterId, itemId):
   char = player_character[user_id, characterId]     # 없으면 InvalidCharacterId(2006)
-  item = player_item[itemId]
+  item = player_item[itemId]                        # slot = 현재 가방 칸(장착 중이면 NULL)
   if item 없음: ItemNotFound(4001)
   if player_item_equipped[itemId] 존재: ItemEquipped(4007)   # 이미 어딘가에 장착 중
   if item.item_type != 장비 or 슬롯 부적합
      or (class_req≠0 and class_req≠char.class_code) or char.level < level_req: ItemNotEquippable(4003)
   slot = item_master[item.item_code].equip_slot
   prev = player_item_equipped[user_id, equipped_character_id=characterId, equipped_slot=slot]  # 있으면 스왑 대상
-  if prev: DELETE player_item_equipped[prev.player_item_id]   # 미장착으로 복귀(장착 행 삭제)
-  INSERT player_item_equipped(player_item_id=itemId, user_id, item_code=item.item_code, enhance_level=item.enhance_level, characterId, slot)  # 장착
-  return { characterId, equipped: {slot, itemId}, unequipped: prev }
+  if prev: DELETE player_item_equipped[prev.player_item_id]   # 장착 행 삭제
+
+  freedSlot = item.slot
+  if freedSlot != NULL:
+      UPDATE player_item[itemId] SET slot = NULL              # 가방 칸 반납(먼저 비워야 유니크 (user_id, slot) 위반 회피)
+
+  if prev:
+      prevBagSlot = freedSlot ?? 빈 칸 탐색                    # 통상 반납한 칸을 그대로 물려줌(칸 수 상쇄)
+      if prevBagSlot == NULL: InventoryFull(4002)             # 예외 상황
+      UPDATE player_item[prev.player_item_id] SET slot = prevBagSlot
+
+  INSERT player_item_equipped(player_item_id=itemId, user_id, item_code=item.item_code, enhance_level=item.enhance_level, characterId, slot)
+  return { characterId, equipped: {slot, itemId}, unequipped: prev, unequippedBagSlot: prevBagSlot ?? -1 }
+```
+
+### 6.2.1 장착 해제 순서
+
+```
+unequip(characterId, slot):
+  char = player_character[user_id, characterId]     # 없으면 InvalidCharacterId(2006)
+  itemId = player_item_equipped[user_id, equipped_character_id=characterId, equipped_slot=slot]
+  if itemId 없음: ItemNotFound(4001)
+  bagSlot = [0, inventory_capacity) 중 가장 작은 빈 칸        # 점유 칸 = slot NOT NULL 인 player_item
+  if bagSlot == NULL: InventoryFull(4002)                    # 전체 롤백(장비를 잃지 않는다)
+  UPDATE player_item[itemId] SET slot = bagSlot              # 가방 복귀
+  DELETE player_item_equipped[itemId]
+  return { characterId, slot, itemId, bagSlot }
 ```
 
 ### 6.3 예외 / 엣지 케이스
 
 - **장착 중 아이템 분해/거래 시도**: `ItemEquipped(4007)`로 거부. 해제 후 처리한다.
+- **가방이 가득 찬 상태에서 장착 해제**: 되돌릴 빈 칸이 없으므로 `InventoryFull(4002)`로 거부하고 전체 롤백한다(장비가 어디에도 없는 상태를 만들지 않는다). 플레이어는 가방을 정리하거나 용량을 확장(5.4)한 뒤 해제한다.
+- **가방이 가득 찬 상태에서 스왑 장착**: 장착 아이템이 반납한 칸을 밀려난 장비가 그대로 물려받아 점유 칸 수가 그대로이므로 **정상 처리된다**.
+- **장착 중 아이템 이동(`move`) 시도**: 장착 중에는 `slot`이 NULL이라 배치 대상이 아니므로 `ItemNotFound(4001)`로 거부한다.
 - **스택 초과 획득**: 지급 시 `stack_max`까지 채우고 초과분은 새 행으로 분할. 인벤토리 용량(`game_player.inventory_capacity`)을 초과하면 `InventoryFull(4002)`. 용량은 골드로 확장할 수 있다(5.4).
 - **최대 강화 초과**: 다음 `enhance_level`이 `enhance_master`에 없으면 `MaxEnhanceReached(4004)`.
 - **재화/재료 부족**: 비용 재화 부족은 `InsufficientCurrency(4005)`, 아이템/재료 수량 부족은 `InsufficientQuantity(4006)`. 검증은 반영 전에 수행하고 부족 시 롤백.
@@ -466,10 +501,10 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 | InvalidInventorySlot | 4009 | 인벤토리 칸(slot) 번호가 잘못됨(용량 범위 밖 등) |
 | CubeRecipeNotMet | 4010 | 큐브 합성/제작 조건(등급·개수·재료) 미충족 |
 | CubeLevelInsufficient | 4011 | 큐브 레벨이 해당 연산 요구치 미만 |
-| InventoryRevisionChanged | 4012 | 인벤토리 페이지 조회 도중 인벤토리가 변경됨(코어 로드부터 재조회 필요) |
 
-- `4001~4009`는 인벤토리/아이템, `4010~4019`는 큐브에 할당한다. `4012`는 큐브 구간에 걸치지만 이미 확정된 `4010`·`4011` 값을 옮길 수 없으므로(값은 계약) 인벤토리 코드로 이어 붙인다.
-- **`InventoryRevisionChanged(4012)`**: 가방 아이템을 페이지로 나눠 받는 도중 `game_player.inventory_revision`이 바뀌면 반환한다. 사용자 실수가 아니라 정상적인 경합이므로 클라이언트는 오류 팝업 없이 `POST /api/game/load`부터 재조회한다. 규칙은 [세이브 데이터 기획서](save-data-기획서.md#52-인벤토리-페이지-조회--post-apigameinventorylist) 5.2 참고.
+- `4001~4009`는 인벤토리/아이템, `4010~4019`는 큐브에 할당한다.
+- `4012`(구 `InventoryRevisionChanged`)는 가방 페이지 조회의 정합성 검증 장치를 제거하며 **폐기**했다. 결번으로 두고 재사용하지 않는다.
+- **가방 페이지 조회**([세이브 데이터 기획서](save-data-기획서.md#52-인벤토리-페이지-조회--post-apigameinventorylist) 5.2)는 전용 에러 코드를 쓰지 않고 세이브 없음(`SaveNotFound(2001)`)만 반환한다.
 - `InsufficientCurrency(4005)`는 재화 부족을 처음 다루는 도메인으로서 본 블록에 정의한다. 재화 부족이 필요한 다른 도메인(예: 성장의 룬 업그레이드)은 이 코드를 **재정의하지 않고 그대로 재사용**한다(코드 값은 계약이므로 이동 금지).
 - **랜덤 상자 열기(5.9)**는 신규 에러 코드를 추가하지 않고 `InsufficientCurrency(4005)`(골드 부족)·`InvalidSaveData(2002)`(잘못된 `boxCode`)·`InventoryFull(4002)`·`MasterDataNotLoaded(10001)`를 재사용한다.
 

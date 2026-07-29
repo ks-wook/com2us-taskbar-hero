@@ -18,8 +18,7 @@ public sealed class GameInventoryController(IInventoryService inventoryService) 
     public async Task<IActionResult> List([FromBody] InventoryListRequest request)
     {
         var data = request?.data ?? new InventoryListData();
-        var result = await inventoryService.GetPageAsync(
-            AuthenticatedUserId(), data.cursor, data.limit, data.revision);
+        var result = await inventoryService.GetPageAsync(AuthenticatedUserId(), data.cursor, data.limit);
         return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
     }
 

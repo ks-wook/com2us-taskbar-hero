@@ -118,7 +118,6 @@ erDiagram
         int     difficulty "난이도 티어"
         int     max_stage_cleared "최고 클리어 스테이지"
         int     inventory_capacity "인벤토리 최대 용량(slot 수), 골드로 확장"
-        bigint  inventory_revision "인벤토리 변경 카운터, 페이지 조회 정합성 검증용"
         bigint  last_active_at "5분 주기 갱신, 오프라인 보상 기준"
         bigint  created_at
         bigint  updated_at
@@ -138,7 +137,7 @@ erDiagram
         int     row_type "1:아이템 2:재화"
         int     item_code "item_master.item_code (재화 item_type=3 포함, 골드=1)"
         bigint  quantity "수량/재화 금액(bigint)"
-        int     slot "인벤토리 배치(0-based). 재화는 NULL(용량 미집계)"
+        int     slot "인벤토리 배치(0-based). 재화·장착 중 장비는 NULL(용량 미집계)"
         int     enhance_level "장비 강화 단계. 재화/비장비는 0"
         bigint  acquired_at
     }
@@ -236,7 +235,7 @@ erDiagram
 ### game_player
 
 - **역할**: 계정(파티)의 세이브 루트. 아래 모든 세이브 하위 테이블이 이 `user_id`에 매달린다. 파티 공용 진행도와 오프라인 보상 정산의 기준 시각을 보관한다.
-- **저장 데이터**: 현재 `act`/`stage`/`difficulty`(파티 공용 진행 위치), `max_stage_cleared`(최고 클리어 스테이지), `inventory_capacity`(인벤토리 최대 슬롯 수, 골드로 확장), `inventory_revision`(인벤토리 변경 카운터 — 가방 페이지 조회 정합성 검증용, 아이템/장착을 바꾸는 트랜잭션이 같은 트랜잭션에서 +1), `last_active_at`(5분 주기 갱신 — 오프라인 보상 계산 기준점), `nickname`, 생성/수정 시각.
+- **저장 데이터**: 현재 `act`/`stage`/`difficulty`(파티 공용 진행 위치), `max_stage_cleared`(최고 클리어 스테이지), `inventory_capacity`(인벤토리 최대 슬롯 수, 골드로 확장), `last_active_at`(5분 주기 갱신 — 오프라인 보상 계산 기준점), `nickname`, 생성/수정 시각.
 
 ### player_character
 
@@ -246,7 +245,7 @@ erDiagram
 ### player_item
 
 - **역할**: 계정이 보유한 **아이템과 재화를 통합 저장**하는 인벤토리 테이블(계정 공유). 장비는 개체별 1행, 재료는 스택으로, 재화(골드)도 하나의 행으로 둔다. 보유 상태만 담고, 장착 여부·위치는 자식 테이블 `player_item_equipped`로 분리한다.
-- **저장 데이터**: `player_item_id`(PK), `row_type`(1:아이템 2:재화), `item_code`(`item_master.item_code`), `quantity`(수량/재화 금액), `slot`(인벤토리 배치 칸, 재화는 NULL), `enhance_level`(장비 강화 단계), `acquired_at`.
+- **저장 데이터**: `player_item_id`(PK), `row_type`(1:아이템 2:재화), `item_code`(`item_master.item_code`), `quantity`(수량/재화 금액), `slot`(인벤토리 배치 칸 — 재화와 **장착 중인 장비**는 NULL이라 용량·가방 조회에서 빠진다), `enhance_level`(장비 강화 단계), `acquired_at`.
 
 ### player_item_equipped
 

@@ -1,3 +1,4 @@
+using System.Data.Common;
 using GameServer.Data;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
@@ -12,12 +13,16 @@ public enum EquipStatus
     ItemNotFound,     // 인벤토리에 해당 아이템 없음
     ItemEquipped,     // 이미 어딘가에 장착 중
     NotEquippable,    // 장비 아님·슬롯/클래스/레벨 부적합
+    InventoryFull,    // 스왑으로 밀려난 기존 장비를 되돌릴 빈 칸이 없음(방어적, 통상 발생하지 않음)
 }
 
-/// <summary>장착 트랜잭션 결과. Slot=장착 슬롯, UnequippedItemId=스왑으로 밀려난 기존 장비(없으면 null).</summary>
-public sealed record EquipOutcome(EquipStatus Status, int Slot, long? UnequippedItemId)
+/// <summary>
+/// 장착 트랜잭션 결과. Slot=장착 슬롯, UnequippedItemId=스왑으로 밀려난 기존 장비(없으면 null),
+/// UnequippedBagSlot=그 장비가 되돌아간 가방 칸(없으면 null).
+/// </summary>
+public sealed record EquipOutcome(EquipStatus Status, int Slot, long? UnequippedItemId, int? UnequippedBagSlot)
 {
-    public static EquipOutcome Fail(EquipStatus status) => new(status, 0, null);
+    public static EquipOutcome Fail(EquipStatus status) => new(status, 0, null, null);
 }
 
 /// <summary>장착 해제 트랜잭션 결과 상태.</summary>
@@ -26,12 +31,13 @@ public enum UnequipStatus
     Ok,
     InvalidCharacter, // player_character 슬롯 없음
     NotEquipped,      // 해당 캐릭터-슬롯에 장착된 장비 없음
+    InventoryFull,    // 가방에 되돌릴 빈 칸이 없음
 }
 
-/// <summary>장착 해제 트랜잭션 결과.</summary>
-public sealed record UnequipOutcome(UnequipStatus Status, long ItemId)
+/// <summary>장착 해제 트랜잭션 결과. BagSlot=장비가 되돌아간 가방 칸.</summary>
+public sealed record UnequipOutcome(UnequipStatus Status, long ItemId, int BagSlot)
 {
-    public static UnequipOutcome Fail(UnequipStatus status) => new(status, 0);
+    public static UnequipOutcome Fail(UnequipStatus status) => new(status, 0, 0);
 }
 
 /// <summary>배치 이동 트랜잭션 결과 상태.</summary>
@@ -67,28 +73,21 @@ public sealed record ExpandOutcome(ExpandStatus Status, int InventoryCapacity, l
 public enum InventoryPageStatus
 {
     Ok,
-    NoPlayer,        // game_player 없음(세이브 미생성)
-    RevisionChanged, // 페이징 도중 인벤토리가 변경됨
+    NoPlayer, // game_player 없음(세이브 미생성)
 }
 
-/// <summary>
-/// 인벤토리 페이지 조회 결과. Items는 slot 오름차순 가방 아이템, Revision은 읽은 시점의 변경 카운터.
-/// RevisionChanged일 때도 클라이언트가 재조회 기준을 잡도록 현재 Revision을 함께 담는다.
-/// </summary>
+/// <summary>인벤토리 페이지 조회 결과. Items는 slot 오름차순 가방 아이템.</summary>
 public sealed record InventoryPageOutcome(
-    InventoryPageStatus Status, IReadOnlyList<InventoryItemDto> Items, bool HasMore, int Total, long Revision)
+    InventoryPageStatus Status, IReadOnlyList<InventoryItemDto> Items, bool HasMore, int Total)
 {
-    public static InventoryPageOutcome Fail(InventoryPageStatus status, long revision) =>
-        new(status, Array.Empty<InventoryItemDto>(), false, 0, revision);
+    public static InventoryPageOutcome Fail(InventoryPageStatus status) =>
+        new(status, Array.Empty<InventoryItemDto>(), false, 0);
 }
 
 public interface IInventoryRepository
 {
-    /// <summary>
-    /// 가방 아이템 한 페이지를 slot 커서 keyset 페이징으로 조회한다. expectedRevision이 0보다 크고 현재
-    /// inventory_revision과 다르면 RevisionChanged로 거부한다.
-    /// </summary>
-    Task<InventoryPageOutcome> GetPageAsync(long userId, int cursor, int limit, long expectedRevision);
+    /// <summary>가방 아이템 한 페이지를 slot 커서 keyset 페이징으로 조회한다.</summary>
+    Task<InventoryPageOutcome> GetPageAsync(long userId, int cursor, int limit);
 
     /// <summary>
     /// 장착을 한 트랜잭션으로 적용한다: 캐릭터·아이템 존재/미장착 확인 → validate(마스터 검증)로 장착 가능 여부·대상 슬롯 판정
@@ -118,10 +117,11 @@ file sealed class CharClassLevelRow
     public int Level { get; set; }
 }
 
-file sealed class ItemCodeEnhanceRow
+file sealed class ItemCodeEnhanceSlotRow
 {
     public int ItemCode { get; set; }
     public int EnhanceLevel { get; set; }
+    public int? Slot { get; set; } // 장착 중이면 NULL(가방 칸 미점유)
 }
 
 file sealed class ItemRowTypeSlotRow
@@ -158,19 +158,23 @@ public sealed class InventoryRepository : IInventoryRepository
     public InventoryRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
     /// <summary>
-    /// 가방 아이템 한 페이지를 조회한다. 정합성 기준값(expectedRevision)을 먼저 대조하고, 통과하면
-    /// slot 커서 기준으로 limit+1건을 읽어 다음 페이지 존재 여부(HasMore)를 판정한 뒤 limit건만 돌려준다.
-    /// 읽기 전용이지만 revision·목록·총계를 한 시점으로 묶어야 하므로 단일 커넥션의 스냅샷 트랜잭션에서 읽는다.
+    /// 가방 아이템 한 페이지를 조회한다. slot 커서 기준으로 limit+1건을 읽어 다음 페이지 존재 여부(HasMore)를
+    /// 판정한 뒤 limit건만 돌려준다.
     /// </summary>
     /// <remarks>
-    /// 한 트랜잭션(REPEATABLE READ 스냅샷)으로 묶는 읽기 — 세 쿼리가 서로 다른 시점을 보면 revision은
-    /// 그대로인데 목록·총계가 어긋난 응답이 나갈 수 있다:
-    /// <para>1) game_player SELECT — 현재 inventory_revision 확인(행 없으면 NoPlayer, 기대값과 다르면 RevisionChanged)</para>
+    /// 한 트랜잭션(REPEATABLE READ 스냅샷)으로 묶는 읽기 — 목록과 총계가 서로 다른 시점을 보면 진행률이
+    /// 어긋난 응답이 나간다:
+    /// <para>1) game_player SELECT — 계정 세이브 존재 확인(행 없으면 NoPlayer)</para>
     /// <para>2) player_item SELECT — row_type=1이고 slot &gt; cursor인 행을 slot 오름차순 limit+1건.
     ///     (user_id, slot) 유니크 인덱스가 이 범위 스캔을 커버한다(OFFSET 미사용)</para>
     /// <para>3) player_item COUNT — 가방 아이템 총 행 수(진행률 표시용)</para>
     /// </remarks>
-    public async Task<InventoryPageOutcome> GetPageAsync(long userId, int cursor, int limit, long expectedRevision)
+    /// <remarks>
+    /// 페이지 사이에 인벤토리가 바뀌어도 서버는 감지하지 않는다. 단일 세션 정책상 페이징 도중 가방을 바꿀 수
+    /// 있는 주체는 같은 클라이언트뿐이고(방치 전투 전리품 등), 그 클라이언트는 자기가 바꿨다는 것을 이미 안다.
+    /// 최악의 경우도 표시 오차이며 창고를 다시 열면 해소된다(세이브 데이터 기획서 5.2).
+    /// </remarks>
+    public async Task<InventoryPageOutcome> GetPageAsync(long userId, int cursor, int limit)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -180,28 +184,19 @@ public sealed class InventoryRepository : IInventoryRepository
         {
             var db = _dbFactory.Create(connection);
 
-            // 1) 정합성 기준값 확인. 계정 세이브가 없으면 인벤토리도 없다.
-            var revisionVal = await db.Query("game_player")
-                .Select("inventory_revision")
+            // 1) 계정 세이브 확인. 없으면 인벤토리도 없다.
+            var playerId = await db.Query("game_player")
+                .Select("user_id")
                 .Where("user_id", userId)
                 .FirstOrDefaultAsync<long?>(transaction);
-            if (revisionVal is null)
+            if (playerId is null)
             {
                 await transaction.RollbackAsync();
-                return InventoryPageOutcome.Fail(InventoryPageStatus.NoPlayer, 0);
-            }
-
-            long revision = revisionVal.Value;
-            // expectedRevision=0은 "기준값 없음"(첫 페이지)이라 검증을 건너뛴다. 계정의 실제 카운터는
-            // 생성 시 1부터 시작하므로 0과 겹치지 않는다.
-            if (expectedRevision > 0 && expectedRevision != revision)
-            {
-                await transaction.RollbackAsync();
-                return InventoryPageOutcome.Fail(InventoryPageStatus.RevisionChanged, revision);
+                return InventoryPageOutcome.Fail(InventoryPageStatus.NoPlayer);
             }
 
             // 2) keyset 페이징. 다음 페이지 존재 여부를 알려고 limit+1건을 읽는다.
-            //    재화 행은 slot이 NULL이라 slot > cursor 비교에서 자동으로 빠진다.
+            //    재화 행과 장착 중인 장비는 slot이 NULL이라 slot > cursor 비교에서 자동으로 빠진다.
             var rows = (await db.Query("player_item")
                 .Select("player_item_id", "slot", "item_code", "quantity", "enhance_level")
                 .Where("user_id", userId).Where("row_type", RowTypeItem).Where("slot", ">", cursor)
@@ -231,7 +226,7 @@ public sealed class InventoryRepository : IInventoryRepository
                 enhanceLevel = r.EnhanceLevel,
             }).ToList();
 
-            return new InventoryPageOutcome(InventoryPageStatus.Ok, items, hasMore, total, revision);
+            return new InventoryPageOutcome(InventoryPageStatus.Ok, items, hasMore, total);
         }
         catch
         {
@@ -242,17 +237,23 @@ public sealed class InventoryRepository : IInventoryRepository
 
     /// <summary>
     /// 장비 장착(같은 슬롯에 기존 장비가 있으면 스왑)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
-    /// 검증 실패(InvalidCharacter·ItemNotFound·ItemEquipped·NotEquippable)는 즉시 롤백 후 Fail 상태로 반환하고,
-    /// 예외는 롤백 후 전파한다.
+    /// 장착하는 아이템은 **가방 칸을 반납**하고(<c>player_item.slot = NULL</c>), 스왑으로 밀려난 기존 장비는
+    /// 그 반납된 칸으로 들어간다(칸 수가 상쇄되므로 스왑은 용량 부족으로 실패하지 않는다).
+    /// 검증 실패(InvalidCharacter·ItemNotFound·ItemEquipped·NotEquippable·InventoryFull)는 즉시 롤백 후
+    /// Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
     /// </summary>
     /// <remarks>
     /// 한 트랜잭션으로 묶는 작업(해제와 장착을 함께 커밋해 슬롯이 비거나 유니크 제약(user_id, 캐릭터, 슬롯)이 깨지지 않게 한다):
     /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인 및 직업·레벨 확보(장착 검증 입력)</para>
-    /// <para>2) player_item SELECT — 대상 아이템의 계정 소유 확인 및 item_code·enhance_level 확보</para>
+    /// <para>2) player_item SELECT — 대상 아이템의 계정 소유 확인 및 item_code·enhance_level·현재 가방 칸 확보</para>
     /// <para>3) player_item_equipped SELECT — 이미 어딘가에 장착 중이면 거부(ItemEquipped)</para>
     /// <para>4) validate 델리게이트 — 마스터 검증(장비 여부·슬롯·클래스·레벨 제한)과 대상 장착 슬롯 산출(DB 접근 없음)</para>
     /// <para>5) player_item_equipped SELECT + DELETE — 같은 캐릭터·슬롯의 기존 장비가 있으면 장착 해제(스왑)</para>
-    /// <para>6) player_item_equipped INSERT — 새 장착 행 생성</para>
+    /// <para>6) player_item UPDATE — 장착 아이템의 slot을 NULL로(가방 칸 반납). 유니크 (user_id, slot) 위반을
+    ///     피하려고 기존 장비를 그 칸에 넣기 전에 먼저 비운다</para>
+    /// <para>7) player_item UPDATE — 스왑으로 밀려난 기존 장비를 6)에서 비운 칸에 배치(그 칸이 없으면 빈 칸 탐색,
+    ///     그마저 없으면 InventoryFull)</para>
+    /// <para>8) player_item_equipped INSERT — 새 장착 행 생성</para>
     /// </remarks>
     public async Task<EquipOutcome> ApplyEquipAsync(
         long userId, int characterId, long itemId,
@@ -277,11 +278,11 @@ public sealed class InventoryRepository : IInventoryRepository
                 return EquipOutcome.Fail(EquipStatus.InvalidCharacter);
             }
 
-            // 2) 대상 아이템 존재 확인(계정 소유).
+            // 2) 대상 아이템 존재 확인(계정 소유). slot은 장착 시 반납할 가방 칸이다.
             var itemRow = await db.Query("player_item")
-                .Select("item_code", "enhance_level")
+                .Select("item_code", "enhance_level", "slot")
                 .Where("player_item_id", itemId).Where("user_id", userId)
-                .FirstOrDefaultAsync<ItemCodeEnhanceRow>(transaction);
+                .FirstOrDefaultAsync<ItemCodeEnhanceSlotRow>(transaction);
             if (itemRow is null)
             {
                 await transaction.RollbackAsync();
@@ -323,7 +324,32 @@ public sealed class InventoryRepository : IInventoryRepository
                 await db.Query("player_item_equipped").Where("player_item_id", prevItemId.Value).DeleteAsync(transaction);
             }
 
-            // 6) 장착 행 INSERT.
+            // 6) 장착 아이템의 가방 칸 반납. 7)에서 기존 장비를 이 칸에 넣으므로 먼저 비워야
+            //    유니크 (user_id, slot)에 걸리지 않는다.
+            int? freedSlot = itemRow.Slot;
+            if (freedSlot is not null)
+            {
+                await db.Query("player_item").Where("player_item_id", itemId)
+                    .UpdateAsync(new { slot = (int?)null }, transaction);
+            }
+
+            // 7) 스왑으로 밀려난 기존 장비를 가방으로 되돌린다. 방금 반납한 칸을 그대로 물려주므로
+            //    점유 칸 수가 상쇄되어 통상 실패하지 않는다(반납할 칸이 없던 예외 상황만 빈 칸을 찾는다).
+            int? prevBagSlot = null;
+            if (prevItemId is not null)
+            {
+                prevBagSlot = freedSlot ?? await FindFreeSlotAsync(db, transaction, userId);
+                if (prevBagSlot is null)
+                {
+                    await transaction.RollbackAsync();
+                    return EquipOutcome.Fail(EquipStatus.InventoryFull);
+                }
+
+                await db.Query("player_item").Where("player_item_id", prevItemId.Value)
+                    .UpdateAsync(new { slot = prevBagSlot.Value }, transaction);
+            }
+
+            // 8) 장착 행 INSERT.
             await db.Query("player_item_equipped").InsertAsync(new
             {
                 player_item_id = itemId,
@@ -334,11 +360,8 @@ public sealed class InventoryRepository : IInventoryRepository
                 equipped_slot = slot,
             }, transaction);
 
-            // 7) 장착 상태가 바뀌었으므로 페이지 조회 정합성 카운터를 올린다.
-            await InventoryRevision.BumpAsync(db, transaction, userId);
-
             await transaction.CommitAsync();
-            return new EquipOutcome(EquipStatus.Ok, slot, prevItemId);
+            return new EquipOutcome(EquipStatus.Ok, slot, prevItemId, prevBagSlot);
         }
         catch
         {
@@ -349,13 +372,17 @@ public sealed class InventoryRepository : IInventoryRepository
 
     /// <summary>
     /// 지정 캐릭터·장착 슬롯의 장비 해제를 단일 커넥션의 단일 트랜잭션으로 적용한다.
-    /// 검증 실패(InvalidCharacter·NotEquipped)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// 장착 중에는 가방 칸을 쓰지 않으므로(<c>slot = NULL</c>), 해제하려면 **되돌릴 빈 칸이 필요**하다.
+    /// 검증 실패(InvalidCharacter·NotEquipped·InventoryFull)는 즉시 롤백 후 Fail 상태로 반환하고,
+    /// 예외는 롤백 후 전파한다.
     /// </summary>
     /// <remarks>
-    /// 한 트랜잭션으로 묶는 작업(검증과 삭제 사이에 대상이 바뀌지 않도록 같은 트랜잭션에서 읽고 지운다):
+    /// 한 트랜잭션으로 묶는 작업(장착 해제와 가방 배치를 함께 커밋해 어느 쪽에도 없는 아이템이 생기지 않게 한다):
     /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인</para>
     /// <para>2) player_item_equipped SELECT — 해당 캐릭터·슬롯의 장착 행 조회(없으면 NotEquipped)</para>
-    /// <para>3) player_item_equipped DELETE — 장착 행 삭제(아이템 자체는 player_item에 남아 인벤토리로 복귀)</para>
+    /// <para>3) game_player + player_item SELECT — 용량과 점유 칸을 읽어 가장 작은 빈 칸 산출(없으면 InventoryFull)</para>
+    /// <para>4) player_item UPDATE — 그 빈 칸에 아이템 배치(가방 복귀)</para>
+    /// <para>5) player_item_equipped DELETE — 장착 행 삭제</para>
     /// </remarks>
     public async Task<UnequipOutcome> ApplyUnequipAsync(long userId, int characterId, int slot)
     {
@@ -389,13 +416,21 @@ public sealed class InventoryRepository : IInventoryRepository
                 return UnequipOutcome.Fail(UnequipStatus.NotEquipped);
             }
 
+            // 가방에 되돌릴 빈 칸 확보. 장착 중에는 칸을 쓰지 않으므로 해제하려면 자리가 있어야 한다.
+            var bagSlot = await FindFreeSlotAsync(db, transaction, userId);
+            if (bagSlot is null)
+            {
+                await transaction.RollbackAsync();
+                return UnequipOutcome.Fail(UnequipStatus.InventoryFull);
+            }
+
+            await db.Query("player_item").Where("player_item_id", itemId.Value)
+                .UpdateAsync(new { slot = bagSlot.Value }, transaction);
+
             await db.Query("player_item_equipped").Where("player_item_id", itemId.Value).DeleteAsync(transaction);
 
-            // 장착 상태가 바뀌었으므로 페이지 조회 정합성 카운터를 올린다.
-            await InventoryRevision.BumpAsync(db, transaction, userId);
-
             await transaction.CommitAsync();
-            return new UnequipOutcome(UnequipStatus.Ok, itemId.Value);
+            return new UnequipOutcome(UnequipStatus.Ok, itemId.Value, bagSlot.Value);
         }
         catch
         {
@@ -484,18 +519,12 @@ public sealed class InventoryRepository : IInventoryRepository
                 await db.Query("player_item").Where("player_item_id", occupantId).UpdateAsync(new { slot = fromSlot }, transaction);
                 await db.Query("player_item").Where("player_item_id", itemId).UpdateAsync(new { slot = toSlot }, transaction);
 
-                // 두 아이템의 slot(=페이징 커서)이 바뀌었으므로 정합성 카운터를 올린다.
-                await InventoryRevision.BumpAsync(db, transaction, userId);
-
                 await transaction.CommitAsync();
                 return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, occupantId, fromSlot);
             }
 
             // 빈 칸으로 이동.
             await db.Query("player_item").Where("player_item_id", itemId).UpdateAsync(new { slot = toSlot }, transaction);
-
-            // slot(=페이징 커서)이 바뀌었으므로 정합성 카운터를 올린다.
-            await InventoryRevision.BumpAsync(db, transaction, userId);
 
             await transaction.CommitAsync();
             return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null);
@@ -575,9 +604,6 @@ public sealed class InventoryRepository : IInventoryRepository
             await db.Query("game_player").Where("user_id", userId)
                 .UpdateAsync(new { inventory_capacity = newCapacity, updated_at = nowUnix }, transaction);
 
-            // 용량이 늘어 인벤토리 뷰 자체가 달라지므로 정합성 카운터를 올린다(진행 중인 페이징은 재조회).
-            await InventoryRevision.BumpAsync(db, transaction, userId);
-
             await transaction.CommitAsync();
             return new ExpandOutcome(ExpandStatus.Ok, newCapacity, cost, newGold);
         }
@@ -586,5 +612,37 @@ public sealed class InventoryRepository : IInventoryRepository
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    /// <summary>
+    /// 계정 인벤토리에서 [0, inventory_capacity) 범위의 **가장 작은 빈 칸**을 찾는다. 빈 칸이 없거나
+    /// 계정 세이브가 없으면 null. 장착 중인 장비와 재화 행은 slot이 NULL이라 점유 칸에 잡히지 않는다.
+    /// 호출측 트랜잭션 안에서 읽어, 판정과 배치 사이에 다른 요청이 칸을 채우지 못하게 한다.
+    /// </summary>
+    private static async Task<int?> FindFreeSlotAsync(QueryFactory db, DbTransaction transaction, long userId)
+    {
+        var capacity = await db.Query("game_player")
+            .Select("inventory_capacity")
+            .Where("user_id", userId)
+            .FirstOrDefaultAsync<int?>(transaction);
+        if (capacity is null)
+        {
+            return null;
+        }
+
+        var used = (await db.Query("player_item")
+            .Select("slot")
+            .Where("user_id", userId).WhereNotNull("slot")
+            .GetAsync<int>(transaction)).ToHashSet();
+
+        for (var i = 0; i < capacity.Value; i++)
+        {
+            if (!used.Contains(i))
+            {
+                return i;
+            }
+        }
+
+        return null;
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using TaskbarHero.Common.Dto;
 
 namespace TaskbarHero.Client.Managers
@@ -19,8 +20,20 @@ namespace TaskbarHero.Client.Managers
         /// <summary>계정 닉네임(회원가입 시 입력값 또는 세이브의 player.nickname).</summary>
         public static string Nickname { get; set; }
 
-        /// <summary>/api/game/load로 가져온 게임 세이브 스냅샷(플레이어·캐릭터·재화 등).</summary>
+        /// <summary>/api/game/load로 가져온 <b>코어</b> 세이브 스냅샷(플레이어·캐릭터·재화·장착 장비·스킬·룬·큐브).
+        /// 가방 아이템은 여기 없다 — 크기가 가변이라 <see cref="Bag"/>(페이징 조회)로 따로 받는다(세이브 기획서 2장).</summary>
         public static LoadDataDto GameData { get; private set; }
+
+        /// <summary>캐릭터별 장착 장비(코어 로드의 equipped). 스탯 계산·장비 슬롯 표시의 입력이다.</summary>
+        public static List<EquippedItemDto> Equipped => GameData != null ? GameData.equipped : null;
+
+        /// <summary>가방(비장착) 아이템 캐시. /api/game/inventory/list 전체 페이지를 이어 붙인 결과다.
+        /// 장착 장비·재화는 코어 로드로 내려오므로 여기 포함되지 않는다.</summary>
+        public static List<InventoryItemDto> Bag { get; private set; } = new List<InventoryItemDto>();
+
+        /// <summary>가방 캐시가 유효한지(한 번 이상 페이징 조회를 끝냈고, 그 뒤 인벤토리를 바꾸는 액션이 없었는지).
+        /// false면 가방을 쓰는 화면은 열 때 다시 조회해야 한다.</summary>
+        public static bool BagLoaded { get; private set; }
 
         /// <summary>Login→GameScene 전환 시 정산한 오프라인 보상 결과. GameScene 진입 팝업이 소비(표시 후 <see cref="ConsumePendingOfflineReward"/>)한다.
         /// 정산할 오프라인이 없거나(3001) 이미 팝업을 띄운 뒤에는 null이다.</summary>
@@ -46,7 +59,11 @@ namespace TaskbarHero.Client.Managers
             Token = token;
         }
 
-        /// <summary>load 응답으로 받은 세이브 스냅샷을 캐싱한다(닉네임도 있으면 갱신).</summary>
+        /// <summary>
+        /// 코어 로드 응답을 캐싱한다(닉네임도 있으면 갱신). 코어 로드에는 가방 아이템이 없으므로
+        /// 가방 캐시는 여기서 <b>무효화</b>한다 — 재로드를 유발한 액션이 인벤토리를 바꿨을 수 있고,
+        /// 낡은 가방 캐시를 그대로 두면 사라진 아이템이 계속 보인다.
+        /// </summary>
         public static void SetGameData(LoadDataDto data)
         {
             GameData = data;
@@ -54,6 +71,75 @@ namespace TaskbarHero.Client.Managers
             {
                 Nickname = data.player.nickname;
             }
+            InvalidateBag();
+        }
+
+        /// <summary>
+        /// 페이징으로 모두 받은(itemId 기준 병합이 끝난) 가방 아이템을 캐싱한다.
+        /// 계약(세이브 기획서 5.2)상 장착 아이템은 인벤 칸을 점유하지 않아 페이지 결과에 오지 않아야 하지만,
+        /// 섞여 오면 가방 격자와 장비 슬롯에 같은 아이템이 중복 표시되므로 여기서 한 번 걸러낸다(방어).
+        /// </summary>
+        public static void SetBag(List<InventoryItemDto> items)
+        {
+            Bag = ExcludeEquipped(items);
+            BagLoaded = true;
+        }
+
+        /// <summary>가방 목록에서 현재 장착 중인 아이템(itemId 일치)을 제외한다. 제외가 생기면 계약 위반이라 경고를 남긴다.</summary>
+        private static List<InventoryItemDto> ExcludeEquipped(List<InventoryItemDto> items)
+        {
+            var result = new List<InventoryItemDto>();
+            if (items == null)
+            {
+                return result;
+            }
+
+            var equipped = Equipped;
+            int dropped = 0;
+            foreach (var item in items)
+            {
+                if (item == null)
+                {
+                    continue;
+                }
+                if (IsEquipped(item.itemId, equipped))
+                {
+                    dropped++;
+                    continue;
+                }
+                result.Add(item);
+            }
+
+            if (dropped > 0)
+            {
+                UnityEngine.Debug.LogWarning(
+                    $"[Inventory] 가방 페이지에 장착 아이템 {dropped}건이 포함돼 제외했다(서버 계약: 장착품은 페이징 대상 아님).");
+            }
+            return result;
+        }
+
+        /// <summary>해당 itemId가 장착 목록에 있는지.</summary>
+        private static bool IsEquipped(long itemId, List<EquippedItemDto> equipped)
+        {
+            if (equipped == null)
+            {
+                return false;
+            }
+            foreach (var e in equipped)
+            {
+                if (e != null && e.itemId == itemId)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>가방 캐시를 무효화한다(인벤토리를 바꾼 액션·코어 재로드 후). 다음에 가방을 쓸 화면이 다시 조회한다.</summary>
+        public static void InvalidateBag()
+        {
+            Bag = new List<InventoryItemDto>();
+            BagLoaded = false;
         }
 
         /// <summary>
@@ -122,6 +208,7 @@ namespace TaskbarHero.Client.Managers
             Nickname = null;
             GameData = null;
             PendingOfflineReward = null;
+            InvalidateBag();
         }
     }
 }

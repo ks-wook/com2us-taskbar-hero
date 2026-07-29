@@ -91,11 +91,6 @@ CREATE TABLE game_player (
     difficulty         INT    NOT NULL DEFAULT 1 COMMENT '난이도 티어(1~2)',
     max_stage_cleared  INT    NOT NULL DEFAULT 0 COMMENT '최고 클리어 스테이지',
     inventory_capacity INT    NOT NULL          COMMENT '인벤토리 최대 용량(점유 slot 수). 골드로 확장',
-    -- 가방 아이템은 페이지로 나눠 조회하므로(/api/game/inventory/list), 페이지 사이에 인벤토리가 바뀌면
-    -- 찢어진 스냅샷이 만들어진다. player_item/player_item_equipped를 바꾸는 트랜잭션이 같은 트랜잭션에서
-    -- 이 값을 +1 하고, 클라이언트는 값이 달라지면 코어 로드부터 재조회한다.
-    -- 1부터 시작한다. 0은 요청에서 "기준값 없음(첫 페이지)"을 뜻하는 예약값이라 실제 계정 값으로 쓰지 않는다.
-    inventory_revision BIGINT NOT NULL DEFAULT 1 COMMENT '인벤토리 변경 카운터(페이지 조회 정합성 검증용, 1부터)',
     last_active_at     BIGINT NOT NULL          COMMENT '마지막 활동 시각(Unix ts). 5분 주기 갱신, 오프라인 보상 기준',
     created_at         BIGINT NOT NULL          COMMENT '생성 시각(Unix ts)',
     updated_at         BIGINT NOT NULL          COMMENT '최종 수정 시각(Unix ts)',
@@ -121,6 +116,8 @@ CREATE TABLE player_character (
 -- 보유 아이템·재화 통합 테이블(계정 공유). row_type으로 아이템/재화를 구분한다.
 --   * 보유 상태만 담고, 장착 여부·위치는 자식 테이블 player_item_equipped로 분리한다.
 --   * 재화(row_type=2)는 slot=NULL(용량 미집계), item_code=재화 item_code(골드=1), quantity=잔액.
+--   * 장착 중인 장비도 slot=NULL이다(장착 시 가방 칸 반납, 해제 시 빈 칸 재배치).
+--     따라서 slot NOT NULL 인 행이 곧 "가방에 있는 아이템"이며 용량 집계·가방 조회 대상이다.
 --   * 재화의 (user_id, item_code) "계정당 종류별 1행" 유일성은 MySQL 부분 유니크 인덱스 미지원으로
 --     인덱스가 아닌 애플리케이션(서버)이 보장한다. 아이템은 스택 분할로 (user_id, item_code) 중복 가능.
 DROP TABLE IF EXISTS player_item;
@@ -130,7 +127,7 @@ CREATE TABLE player_item (
     row_type              TINYINT NOT NULL          COMMENT '1:아이템 2:재화',
     item_code             INT    NOT NULL          COMMENT 'item_master.item_code(재화 item_type=3 포함, 골드=1)',
     quantity              BIGINT NOT NULL DEFAULT 1 COMMENT '수량(아이템) / 잔액(재화). 재화가 커 BIGINT',
-    slot                  INT    NULL              COMMENT '인벤토리 배치 칸(0-based). 재화는 NULL(용량 미집계)',
+    slot                  INT    NULL              COMMENT '인벤토리 배치 칸(0-based). 재화·장착 중 장비는 NULL(용량 미집계)',
     enhance_level         INT    NOT NULL DEFAULT 0 COMMENT '장비 강화 단계. 재화/비장비는 0',
     acquired_at           BIGINT NOT NULL          COMMENT '획득 시각(Unix ts)',
     PRIMARY KEY (player_item_id),

@@ -262,9 +262,6 @@ public sealed class TradeRepository : ITradeRepository
                 closed_at = 0,
             }, transaction);
 
-            // 6) 에스크로로 가방에서 아이템이 빠졌으므로 페이지 조회 정합성 카운터를 올린다.
-            await InventoryRevision.BumpAsync(db, transaction, userId);
-
             await transaction.CommitAsync();
             return new TradeRegisterOutcome(
                 TradeRegisterStatus.Ok,
@@ -431,9 +428,6 @@ public sealed class TradeRepository : ITradeRepository
                 await transaction.RollbackAsync();
                 return TradeCancelOutcome.Fail(TradeCloseStatus.InventoryFull);
             }
-
-            // 취소 반환으로 가방에 아이템이 돌아왔으므로 페이지 조회 정합성 카운터를 올린다.
-            await InventoryRevision.BumpAsync(db, transaction, userId);
 
             await transaction.CommitAsync();
             return new TradeCancelOutcome(TradeCloseStatus.Ok, snapshot);

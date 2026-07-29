@@ -7,10 +7,10 @@
 | 기능 | 처리 컨트롤러 | 서버 | 주요 엔드포인트 |
 |---|---|---|---|
 | [**로그인/인증**](#로그인인증) (회원가입·로그인·로그아웃) | AuthController | Account | `POST /api/auth/signup` · `login` · `logout` |
-| [**세이브 데이터/캐릭터 생성**](#세이브-데이터캐릭터-생성) (로드·생성·heartbeat) | GameSaveController | Game | `POST /api/game/load` · `create-character` · `update-last-active` |
+| [**세이브 데이터/캐릭터 생성**](#세이브-데이터캐릭터-생성) (코어 로드 · 가방 페이지 조회 · 생성 · heartbeat) | GameSaveController · GameInventoryController(가방 조회) | Game | `POST /api/game/load` · `inventory/list` · `create-character` · `update-last-active` |
 | [**스테이지**](#스테이지) (던전 입장·클리어 보상) | GameStageController | Game | `POST /api/game/stage/enter` · `clear` |
 | [**방치형 오프라인 보상**](#방치형-오프라인-보상) | GameOfflineController | Game | `POST /api/game/offline/claim` |
-| [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
+| [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장. 가방 조회는 세이브 데이터 섹션) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
 | [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchService(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
@@ -145,7 +145,9 @@ sequenceDiagram
 
 세이브 로드·캐릭터 생성·접속 시각 갱신 (GameSaveController, `/api/game`, GameServer). 저장소: MySQL `taskbar_hero_game`(`game_player`·`player_character`·`player_item`·`player_cube` 등).
 
-### POST /api/game/load — 세이브 로드
+### POST /api/game/load — 코어 세이브 로드
+
+크기가 고정된 데이터만 한 번에 내려준다. 무한히 커질 수 있는 가방 아이템은 여기 없고 `/api/game/inventory/list`로 지연 로딩한다(세이브 데이터 기획서 2장). 장착 장비는 최대 18행으로 고정이고 캐릭터 스탯 계산의 입력이라 코어에 포함해, 가방 로딩 없이도 전투를 시작할 수 있다.
 
 ```mermaid
 sequenceDiagram
@@ -160,10 +162,36 @@ sequenceDiagram
     alt 신규 계정(세이브 없음)
         S-->>C: 성공 { isNew: true }
     else 기존 계정
-        S->>DB: 캐릭터·아이템·스킬·룬·큐브 데이터 확인
-        DB-->>S: 세이브 스냅샷
+        S->>DB: 캐릭터·재화·장착 장비·스킬·룬·큐브 데이터 확인
+        DB-->>S: 코어 스냅샷(가방 아이템 제외)
+        S->>DB: 가방 아이템 개수 확인
         S->>S: 방치 경과 시간 계산(현재 시각 − 마지막 활동 시각)
-        S-->>C: 성공 { 세이브 전체 스냅샷 }
+        S-->>C: 성공 { 코어 스냅샷, inventoryTotal }
+    end
+```
+
+### POST /api/game/inventory/list — 가방 아이템 페이지 조회
+
+창고/인벤토리 UI를 열 때 호출한다. `slot` 커서 keyset 페이징이며(OFFSET 미사용, `(user_id, slot)` 유니크 인덱스가 범위 스캔을 커버), 페이지 사이의 인벤토리 변경은 서버가 검증하지 않고 클라이언트가 `itemId` 기준 병합으로 흡수한다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /inventory/list { userId, token, data:{ cursor, limit } }
+    S->>S: 페이지 크기 클램프(1~500, 미지정 200)
+    Note over S,DB: 단일 트랜잭션(스냅샷) — 목록과 총계를 한 시점으로 묶는다
+    S->>DB: 계정 세이브 존재 확인
+    alt 계정 세이브 없음
+        S-->>C: 실패 { errorCode: SaveNotFound(2001) }
+    else 존재
+        S->>DB: 가방 아이템 조회(slot > cursor, slot 오름차순, limit+1건)
+        S->>DB: 가방 아이템 총 개수 확인
+        S->>S: limit+1번째 행 유무로 hasMore 판정 후 잘라내기
+        S-->>C: 성공 { items, nextCursor, hasMore, total }
     end
 ```
 
@@ -323,6 +351,8 @@ sequenceDiagram
 
 ### POST /api/game/inventory/equip — 장착(스왑)
 
+장착한 장비는 **가방 칸을 반납**한다(`player_item.slot = NULL`). 스왑이면 밀려난 기존 장비가 그 칸을 그대로 물려받아 점유 칸 수가 상쇄되므로, 가방이 가득 차 있어도 스왑 장착은 성공한다.
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -333,17 +363,21 @@ sequenceDiagram
     C->>S: POST /equip { userId, token, data:{ characterId, itemId } }
     S->>S: 마스터 데이터 확인(인메모리) — 아이템 정의(타입·장착 슬롯·직업 제한·레벨 제한)
     Note over S,DB: 단일 트랜잭션
-    S->>DB: 대상 아이템·캐릭터 데이터 확인(소유·직업·레벨)
+    S->>DB: 대상 아이템·캐릭터 데이터 확인(소유·현재 가방 칸·직업·레벨)
     alt 미보유 / 장비 아님·슬롯·클래스·레벨 부적합 / 이미 장착 중 / 잘못된 캐릭터
         S-->>C: 실패 { errorCode: ItemNotFound(4001) / ItemNotEquippable(4003) / ItemEquipped(4007) / InvalidCharacterId(2006) }
     else 장착 가능
         S->>DB: (기존 슬롯 장비 있으면) 장착 데이터 삭제(스왑)
+        S->>DB: 장착 아이템의 가방 칸 반납(slot → NULL)
+        S->>DB: (스왑이면) 밀려난 장비를 반납된 칸에 배치
         S->>DB: 장착 데이터 적재(대상 캐릭터·슬롯)
-        S-->>C: 성공 { 장착된 아이템, 밀려난 아이템 }
+        S-->>C: 성공 { 장착된 아이템, 밀려난 아이템, 밀려난 장비의 가방 칸 }
     end
 ```
 
 ### POST /api/game/inventory/unequip — 장착 해제
+
+장착 중에는 가방 칸을 쓰지 않으므로, 해제하려면 **되돌릴 빈 칸이 필요**하다. 없으면 전체 롤백하고 거부한다(장비를 잃지 않는다).
 
 ```mermaid
 sequenceDiagram
@@ -353,12 +387,19 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>S: POST /unequip { userId, token, data:{ characterId, slot } }
+    Note over S,DB: 단일 트랜잭션
     S->>DB: 해당 캐릭터·슬롯의 장착 데이터 확인
     alt 슬롯 비어 있음 / 잘못된 캐릭터
         S-->>C: 실패 { errorCode: ItemNotFound(4001) / InvalidCharacterId(2006) }
     else 장착 중
-        S->>DB: 장착 데이터 삭제(아이템은 인벤토리에 잔존)
-        S-->>C: 성공 { 해제된 캐릭터·슬롯·아이템 }
+        S->>DB: 인벤토리 용량·점유 칸 확인 → 가장 작은 빈 칸 산출
+        alt 빈 칸 없음
+            S-->>C: 실패 { errorCode: InventoryFull(4002) }
+        else 빈 칸 있음
+            S->>DB: 아이템을 그 칸에 배치(가방 복귀)
+            S->>DB: 장착 데이터 삭제
+            S-->>C: 성공 { 해제된 캐릭터·장착 슬롯·아이템, 복귀한 가방 칸 }
+        end
     end
 ```
 
