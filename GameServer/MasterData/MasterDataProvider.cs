@@ -48,6 +48,10 @@ public sealed record AttendanceRewardDef(int Day, int RewardType, int RewardCode
 /// <summary>메일 발급 문구 템플릿(mail_master). 발급 메일의 category·제목/본문 형식·만료 일수를 확정한다(mail 기획서 §4·§6.4).</summary>
 public sealed record MailTemplateDef(int TemplateCode, int Category, string TitleFormat, string BodyFormat, int ValidDays);
 
+/// <summary>신규 가입 지원금 첨부 1건(newbie_reward_master). 계정 초기화 시 발급하는 환영 메일에 그대로 담긴다.
+/// RewardType 1:골드 2:아이템 3:재료(메일 첨부·출석 보상과 동일 enum), 골드는 RewardCode 0.</summary>
+public sealed record NewbieRewardDef(int Seq, int RewardType, int RewardCode, long Quantity);
+
 // ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑.
 //    DECIMAL 컬럼은 decimal로 받아 float/double로 캐스팅한다. ──
 file sealed class ClassMasterRow
@@ -177,6 +181,14 @@ file sealed class AttendanceMasterRow
     public int Quantity { get; set; }
 }
 
+file sealed class NewbieRewardRow
+{
+    public int Seq { get; set; }
+    public int RewardType { get; set; }
+    public int RewardCode { get; set; }
+    public long Quantity { get; set; }
+}
+
 file sealed class MailMasterRow
 {
     public int MailTemplateCode { get; set; }
@@ -236,6 +248,9 @@ public sealed class MasterDataProvider
 
     // 메일 발급 템플릿: mail_template_code → 정의(mail_master, 서버 전용 마스터).
     private IReadOnlyDictionary<int, MailTemplateDef> _mailTemplates = new Dictionary<int, MailTemplateDef>();
+
+    // 신규 가입 지원금 첨부(newbie_reward_master, seq 오름차순). 계정 초기화 시 환영 메일에 담는다.
+    private IReadOnlyList<NewbieRewardDef> _newbieRewards = new List<NewbieRewardDef>();
 
     public MasterDataProvider(MasterDbFactory masterDbFactory, ILogger<MasterDataProvider> logger)
     {
@@ -329,6 +344,9 @@ public sealed class MasterDataProvider
     public MailTemplateDef? GetMailTemplate(int templateCode)
         => _mailTemplates.TryGetValue(templateCode, out var t) ? t : null;
 
+    /// <summary>신규 가입 지원금 첨부 목록(newbie_reward_master, seq 오름차순). 정의가 없으면 빈 목록(지급 없음).</summary>
+    public IReadOnlyList<NewbieRewardDef> NewbieRewards => _newbieRewards;
+
     /// <summary>
     /// 합성 결과 아이템 코드를 서버가 산출한다: (입력 등급 + 1) 장비 중 하나를 무작위 선택(슬롯·클래스 무관).
     /// 상위 등급 후보가 없으면(최대 등급 등) null → 호출측이 CubeRecipeNotMet으로 거부한다.
@@ -393,6 +411,7 @@ public sealed class MasterDataProvider
             _recipesByCode = await LoadRecipesAsync(db);
             _attendanceByDay = await LoadAttendanceAsync(db);
             _mailTemplates = await LoadMailTemplatesAsync(db);
+            _newbieRewards = await LoadNewbieRewardsAsync(db);
 
             // 인벤토리 확장은 부가 기능이라 별도 try로 감싼다(테이블 부재 시 다른 마스터 적재까지 실패하지 않도록).
             _expandCosts = await LoadExpandCostsAsync(db);
@@ -403,7 +422,7 @@ public sealed class MasterDataProvider
             }
 
             IsLoaded = true;
-            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · dropGrades {_itemsByGrade.Count:@Grades} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates}");
+            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · dropGrades {_itemsByGrade.Count:@Grades} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates} · newbieReward {_newbieRewards.Count:@NewbieRewards}");
         }
         catch (Exception ex)
         {
@@ -743,6 +762,18 @@ public sealed class MasterDataProvider
         }
 
         return byCode;
+    }
+
+    /// <summary>newbie_reward_master(신규 가입 지원금 첨부)를 seq 오름차순으로 적재한다.
+    /// 계정 초기화 시 발급하는 환영 메일의 첨부가 되며, 행이 없으면 지원금 없이 계정만 생성된다.</summary>
+    private static async Task<List<NewbieRewardDef>> LoadNewbieRewardsAsync(QueryFactory db)
+    {
+        var rows = await db.Query("newbie_reward_master")
+            .Select("seq", "reward_type", "reward_code", "quantity")
+            .OrderBy("seq")
+            .GetAsync<NewbieRewardRow>();
+
+        return rows.Select(r => new NewbieRewardDef(r.Seq, r.RewardType, r.RewardCode, r.Quantity)).ToList();
     }
 
     /// <summary>

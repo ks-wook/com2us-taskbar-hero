@@ -64,8 +64,10 @@ public interface ISaveRepository
     /// <summary>캐릭터 추가 생성 시 식별자·파티 자리 배정과 직업 중복 검사에 쓸 보유 캐릭터 목록(식별자 + 직업 + 파티 자리)을 조회한다.</summary>
     Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId);
 
-    /// <summary>최초 접속: game_player + 첫 캐릭터(직업·성별, 파티 1번 자리) + 큐브를 한 트랜잭션으로 초기화한다.</summary>
-    Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix);
+    /// <summary>최초 접속: game_player + 첫 캐릭터(직업·성별, 파티 1번 자리) + 큐브 + 신규 가입 지원금 메일을
+    /// 한 트랜잭션으로 초기화한다. welcomeMail이 null이면 메일을 발급하지 않는다.</summary>
+    Task CreatePlayerWithFirstCharacterAsync(
+        long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix, MailDraft? welcomeMail);
 
     /// <summary>기존 계정에 캐릭터 1개 추가. 생성 비용(goldCost)을 골드에서 확인·차감하고 지정 파티 자리(slot, 빈 자리 없으면 0)로 삽입하는 한 트랜잭션.</summary>
     Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, int slot, int gender, long goldCost);
@@ -361,8 +363,12 @@ public sealed class SaveRepository : ISaveRepository
     /// <para>3) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
     /// <para>4) player_attendance INSERT — 출석 진행도를 0(누적 0·마지막 획득 일자 0)으로 초기화.
     ///     출석 수령은 이 행의 조건부 갱신으로 처리하므로 계정 생성 시 함께 만들어 둔다(attendance 기획서 §4)</para>
+    /// <para>5) player_mail(+player_mail_reward) INSERT — 신규 가입 지원금 메일 발급(welcomeMail이 있을 때만).
+    ///     game_player가 계정당 1행이라 이 트랜잭션은 계정 생애에 한 번만 성공하므로, 지급 여부 플래그 없이
+    ///     중복 지급이 원천 차단된다(세이브 데이터 기획서 5.3)</para>
     /// </remarks>
-    public async Task CreatePlayerWithFirstCharacterAsync(long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix)
+    public async Task CreatePlayerWithFirstCharacterAsync(
+        long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix, MailDraft? welcomeMail)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -410,6 +416,11 @@ public sealed class SaveRepository : ISaveRepository
                 attend_count = 0,
                 last_attend_date = 0,
             }, transaction);
+
+            if (welcomeMail is not null)
+            {
+                await MailRepository.InsertMailAsync(db, transaction, userId, welcomeMail, nowUnix);
+            }
 
             await transaction.CommitAsync();
         }

@@ -29,6 +29,9 @@ public sealed class SaveService : ISaveService
     private const int MySqlDuplicateEntry = 1062;
     private const int GoldCurrencyType = 1;
 
+    /// <summary>신규 가입 지원금 메일의 문구 템플릿(mail_master). 계정 초기화 시 1회 발급한다.</summary>
+    private const int NewbieRewardMailTemplateCode = 101;
+
     private readonly ISaveRepository _saveRepository;
     private readonly MasterDataProvider _masterData;
     private readonly ILogger<SaveService> _logger;
@@ -134,11 +137,14 @@ public sealed class SaveService : ISaveService
                 return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
             }
 
+            var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var welcomeMail = ComposeNewbieRewardMail(nickname.Trim(), nowUnix);
+
             try
             {
                 await _saveRepository.CreatePlayerWithFirstCharacterAsync(
                     userId, nickname.Trim(), classCode, gender, MasterDataProvider.BaseInventoryCapacity,
-                    DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                    nowUnix, welcomeMail);
             }
             catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
             {
@@ -274,6 +280,34 @@ public sealed class SaveService : ISaveService
                 : new List<CurrencyDto>(),
         };
         return new SaveResult(ErrorCode.Success, "Character created", data);
+    }
+
+    /// <summary>
+    /// 신규 가입 지원금 메일의 초안을 만든다(마스터 newbie_reward_master 첨부 + mail_master 101 문구).
+    /// 계정 초기화 트랜잭션 안에서 함께 적재되므로 계정당 정확히 1회만 발급된다.
+    /// 지급 정의(첨부)가 비어 있으면 발급하지 않고 null을 반환하며, 문구 템플릿이 없으면
+    /// 마스터 결함이므로 Error 로그를 남기고 계정 생성 자체는 그대로 진행한다(지원금만 누락).
+    /// </summary>
+    private MailDraft? ComposeNewbieRewardMail(string nickname, long nowUnix)
+    {
+        var rewards = _masterData.NewbieRewards;
+        if (rewards.Count == 0)
+        {
+            return null; // 지급 정의 없음 = 지원금 미운영
+        }
+
+        var template = _masterData.GetMailTemplate(NewbieRewardMailTemplateCode);
+        if (template is null)
+        {
+            _logger.ZLogError($"신규 가입 지원금 메일 템플릿 미정의: templateCode {NewbieRewardMailTemplateCode:@TemplateCode} — mail_master 확인 필요");
+            return null;
+        }
+
+        var attachments = rewards
+            .Select(r => new MailAttachment(r.RewardType, r.RewardCode, r.Quantity))
+            .ToList();
+
+        return MailComposer.Compose(template, nickname, nowUnix, attachments);
     }
 
     /// <summary>성별 값이 정의된 범위(1:남 2:여)인지 검사한다. 그 외 값은 InvalidGender로 거절한다.</summary>
