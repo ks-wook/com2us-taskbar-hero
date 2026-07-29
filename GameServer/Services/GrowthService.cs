@@ -106,8 +106,8 @@ public sealed class GrowthService : IGrowthService
     }
 
     /// <summary>
-    /// 스킬 초기화를 처리한다. 마스터 로드를 확인하고, 리포지토리 트랜잭션으로 대상 캐릭터의 모든 스킬 행을 삭제해
-    /// 포인트를 전량 회수한다(무료). 초기화 후 사용 가능 포인트(레벨 비례 총량 전액)를 함께 반환한다.
+    /// 스킬 초기화를 처리한다. 마스터 로드를 확인하고, 리포지토리 트랜잭션으로 대상 캐릭터의 스킬 행을 삭제하지 않고
+    /// 레벨 0·미장착으로 되돌려 포인트를 전량 회수한다(무료). 초기화 후 사용 가능 포인트(레벨 비례 총량 전액)를 함께 반환한다.
     /// </summary>
     public async Task<SaveResult> SkillResetAsync(long userId, int characterId)
     {

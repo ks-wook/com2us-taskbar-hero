@@ -165,6 +165,8 @@ CREATE TABLE player_item_equipped (
 
 
 -- 캐릭터별 스킬 레벨·액티브 장착 여부.
+-- 스킬 초기화는 행 삭제가 아니라 level=0·equipped=0 UPDATE로 처리하며, 레벨 0 행은 미습득으로 보아
+-- 클라이언트에 반환하는 조회에서 level > 0으로 거른다(docs/세부/growth-기획서.md 4장).
 DROP TABLE IF EXISTS player_skill;
 CREATE TABLE player_skill (
     user_id      BIGINT  NOT NULL          COMMENT '계정 user_id',

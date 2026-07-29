@@ -256,8 +256,8 @@ erDiagram
 
 ### player_skill
 
-- **역할**: 캐릭터별 보유 스킬의 투자 레벨과 액티브 장착 여부.
-- **저장 데이터**: `(user_id, character_id, skill_code)` 키(`skill_master` 참조), `level`(스킬 레벨), `equipped`(액티브 장착 0/1 — 캐릭터당 최대 2개).
+- **역할**: 캐릭터별 보유 스킬의 투자 레벨과 액티브 장착 여부. **스킬 초기화는 행을 삭제하지 않고 `level=0`·`equipped=0`으로 되돌린다** — 레벨 0 행은 행이 없는 것과 같은 미습득 상태이므로, 클라이언트에 스킬 목록을 반환하는 조회는 `level > 0`으로 거른다([성장 기획서](../세부/growth-기획서.md) 4장).
+- **저장 데이터**: `(user_id, character_id, skill_code)` 키(`skill_master` 참조), `level`(스킬 레벨, 0=미습득), `equipped`(액티브 장착 0/1 — 캐릭터당 최대 2개).
 
 ### player_rune
 

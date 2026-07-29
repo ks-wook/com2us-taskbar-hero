@@ -28,7 +28,7 @@ public enum SkillResetStatus
     InvalidCharacter,
 }
 
-/// <summary>스킬 초기화 트랜잭션 결과. ResetCount=삭제된 스킬 행 수, AvailablePoints=초기화 후 사용 가능 포인트(전액).</summary>
+/// <summary>스킬 초기화 트랜잭션 결과. ResetCount=레벨 0으로 되돌린 스킬 수, AvailablePoints=초기화 후 사용 가능 포인트(전액).</summary>
 public sealed record SkillResetOutcome(SkillResetStatus Status, int ResetCount, int AvailablePoints)
 {
     public static SkillResetOutcome Fail(SkillResetStatus status) => new(status, 0, 0);
@@ -78,7 +78,10 @@ public interface IGrowthRepository
         long userId, int characterId, int skillCode,
         Func<int, int, int, int, (SkillLevelUpStatus status, int availableAfter)> decide);
 
-    /// <summary>대상 캐릭터의 player_skill 행을 모두 삭제해 스킬을 초기화한다(무료). totalPoints=(charLevel)→레벨 비례 총량.</summary>
+    /// <summary>
+    /// 대상 캐릭터의 player_skill 행을 삭제하지 않고 level=0·equipped=0으로 되돌려 스킬을 초기화한다(무료).
+    /// totalPoints=(charLevel)→레벨 비례 총량.
+    /// </summary>
     Task<SkillResetOutcome> ApplySkillResetAsync(long userId, int characterId, Func<int, int> totalPoints);
 
     /// <summary>
@@ -138,7 +141,7 @@ public sealed class GrowthRepository : IGrowthRepository
     /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인 및 직업·레벨 확보(검증 입력)</para>
     /// <para>2) player_skill SELECT — 해당 캐릭터의 보유 스킬 레벨 집계(대상 스킬 현재 레벨 + 사용한 총 포인트)</para>
     /// <para>3) decide 델리게이트 — 마스터 검증(스킬 존재·직업 소속·최대 레벨·잔여 포인트)과 반영 후 잔여 포인트 산출(DB 접근 없음)</para>
-    /// <para>4) player_skill UPDATE 또는 INSERT — 기존 행이면 레벨 +1, 첫 습득이면 레벨 1·미장착으로 새 행 생성</para>
+    /// <para>4) player_skill UPDATE 또는 INSERT — 기존 행(초기화로 레벨 0이 된 행 포함)이면 레벨 +1, 행 자체가 없으면 레벨 1·미장착으로 새 행 생성</para>
     /// </remarks>
     public async Task<SkillLevelUpOutcome> ApplySkillLevelUpAsync(
         long userId, int characterId, int skillCode,
@@ -218,7 +221,7 @@ public sealed class GrowthRepository : IGrowthRepository
     /// <remarks>
     /// 한 트랜잭션으로 묶는 작업(재화 변동은 없다):
     /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인 및 레벨 확보(회수 후 총 포인트 산출 입력)</para>
-    /// <para>2) player_skill DELETE — 해당 캐릭터의 스킬 행 전량 삭제(포인트 전액 회수 + 장착 상태 해제가 동시에 이루어짐)</para>
+    /// <para>2) player_skill UPDATE — 레벨 1 이상인 스킬 행을 level=0·equipped=0으로 갱신(포인트 전액 회수 + 장착 해제). 행은 삭제하지 않고 남기며, 레벨 0 행은 미습득으로 보아 세이브 조회에서 제외한다(SaveRepository.GetSkillsAsync)</para>
     /// <para>3) totalPoints 델리게이트 — 캐릭터 레벨 기준 총 스킬 포인트 산출(DB 접근 없음)</para>
     /// </remarks>
     public async Task<SkillResetOutcome> ApplySkillResetAsync(long userId, int characterId, Func<int, int> totalPoints)
@@ -242,10 +245,10 @@ public sealed class GrowthRepository : IGrowthRepository
                 return SkillResetOutcome.Fail(SkillResetStatus.InvalidCharacter);
             }
 
-            // 2) 해당 캐릭터의 스킬 행 전부 삭제(포인트 전량 회수·장착 해제). 재화 변동 없음.
+            // 2) 해당 캐릭터의 투자된 스킬 행을 레벨 0·미장착으로 되돌린다(행 삭제 없음, 포인트 전량 회수). 재화 변동 없음.
             int resetCount = await db.Query("player_skill")
-                .Where("user_id", userId).Where("character_id", characterId)
-                .DeleteAsync(transaction);
+                .Where("user_id", userId).Where("character_id", characterId).Where("level", ">", 0)
+                .UpdateAsync(new { level = 0, equipped = 0 }, transaction);
 
             await transaction.CommitAsync();
             return new SkillResetOutcome(SkillResetStatus.Ok, resetCount, totalPoints(charRow.Level));

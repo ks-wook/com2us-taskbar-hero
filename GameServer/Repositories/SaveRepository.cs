@@ -236,13 +236,17 @@ public sealed class SaveRepository : ISaveRepository
     }
 
     /// <summary>
-    /// 계정의 player_skill 전 행(캐릭터별 스킬 코드·레벨·장착 여부)을 조회해 DTO 목록으로 변환한다.
+    /// 계정의 player_skill 행 중 습득한 스킬(레벨 1 이상)만 조회해 DTO 목록으로 변환한다.
+    /// 스킬 초기화는 행을 삭제하지 않고 레벨 0으로 되돌리므로(GrowthRepository.ApplySkillResetAsync),
+    /// 레벨 0 행은 미습득으로 보아 여기서 걸러 클라이언트에는 행이 없는 것과 동일하게 보인다.
     /// 읽기 전용이므로 트랜잭션 없이 자체 커넥션을 쓴다.
     /// </summary>
     public async Task<List<SkillDto>> GetSkillsAsync(long userId)
     {
         using var db = _dbFactory.Create();
-        var rows = await db.Query("player_skill").Where("user_id", userId).GetAsync<PlayerSkillRow>();
+        var rows = await db.Query("player_skill")
+            .Where("user_id", userId).Where("level", ">", 0)
+            .GetAsync<PlayerSkillRow>();
         return rows.Select(r => new SkillDto
         {
             characterId = r.CharacterId,

@@ -239,7 +239,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | `characters` | 파티 캐릭터의 슬롯·직업·성별·레벨·경험치 | `player_character` | ≤3행 |
 | `currencies` | 재화 종류별 보유량(골드 포함) | `player_item` (`row_type=2`) | 재화 종류 수 |
 | `equipped` | 캐릭터별 장착 장비(아이템 식별자·코드·강화 단계·장착 캐릭터/슬롯) | `player_item_equipped` (단독 — `item_code`·`enhance_level`을 함께 보관하므로 조인 불필요) | ≤18행 |
-| `skills` | 캐릭터별 보유 스킬 코드·레벨·액티브 장착 여부 | `player_skill` | 3 × 직업 스킬 수 |
+| `skills` | 캐릭터별 보유 스킬 코드·레벨·액티브 장착 여부 | `player_skill` (`level > 0` — 초기화로 레벨 0이 된 행은 미습득으로 제외, [성장 기획서](growth-기획서.md) 4장) | 3 × 직업 스킬 수 |
 | `runes` | 계정 공용 룬 코드·레벨 | `player_rune` | 룬 마스터 수 |
 | `cube` | 큐브 레벨·경험치 | `player_cube` | 1행 |
 | `inventoryTotal` | 가방 아이템 행 수(용량 UI 표시·페이징 진행률용) | `player_item` (`row_type=1`) COUNT | 스칼라 |

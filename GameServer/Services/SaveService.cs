@@ -47,7 +47,8 @@ public sealed class SaveService : ISaveService
     /// <para><c>currencies</c> — player_item의 재화 행(row_type=2): 재화 종류별 보유량(골드 포함)</para>
     /// <para><c>equipped</c> — player_item_equipped(≤18행 = 3캐릭터 × 6슬롯): 장착 장비. 캐릭터 스탯 계산의
     ///   입력이라 가방 로딩을 기다리지 않도록 코어에 넣는다</para>
-    /// <para><c>skills</c> — player_skill: 캐릭터별 스킬 코드·레벨·액티브 장착 여부</para>
+    /// <para><c>skills</c> — player_skill 중 레벨 1 이상인 행: 캐릭터별 스킬 코드·레벨·액티브 장착 여부
+    ///   (초기화로 레벨 0이 된 행은 미습득이라 제외한다)</para>
     /// <para><c>runes</c> — player_rune: 계정 공용 룬 코드·레벨</para>
     /// <para><c>cube</c> — player_cube 1행: 큐브 레벨·경험치(행이 없으면 레벨 1·경험치 0)</para>
     /// <para><c>inventoryTotal</c> — 가방 아이템 총 행 수(페이징 진행률·용량 UI 표시용)</para>
