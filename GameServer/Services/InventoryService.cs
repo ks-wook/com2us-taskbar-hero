@@ -8,6 +8,7 @@ namespace GameServer.Services;
 
 public interface IInventoryService
 {
+    Task<SaveResult> GetPageAsync(long userId, int cursor, int limit, long revision);
     Task<SaveResult> EquipAsync(long userId, int characterId, long itemId);
     Task<SaveResult> UnequipAsync(long userId, int characterId, int slot);
     Task<SaveResult> MoveAsync(long userId, long itemId, int toSlot);
@@ -25,6 +26,12 @@ public sealed class InventoryService : IInventoryService
     private const int ItemTypeEquip = 1;
     private const int GoldCurrencyType = 1;
 
+    /// <summary>가방 페이지 크기 기본값(요청이 0 이하일 때).</summary>
+    private const int DefaultPageLimit = 200;
+
+    /// <summary>가방 페이지 크기 상한. 한 요청이 인벤토리 전체를 끌어오지 못하게 막는다.</summary>
+    private const int MaxPageLimit = 500;
+
     private readonly IInventoryRepository _inventoryRepository;
     private readonly MasterDataProvider _masterData;
     private readonly ILogger<InventoryService> _logger;
@@ -35,6 +42,43 @@ public sealed class InventoryService : IInventoryService
         _inventoryRepository = inventoryRepository;
         _masterData = masterData;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// 가방 아이템 한 페이지를 조회한다(코어 로드에서 빠진 가변 크기 데이터의 지연 로딩).
+    /// 페이지 크기를 1~<see cref="MaxPageLimit"/>으로 클램프하고(0 이하이면 기본값), 리포지토리가 slot 커서
+    /// keyset 페이징으로 읽은 결과를 응답 DTO로 변환한다. revision이 0보다 크고 현재 인벤토리 변경 카운터와
+    /// 다르면 페이징 도중 인벤토리가 바뀐 것이므로 InventoryRevisionChanged로 거부해 코어 로드부터 재조회하게 한다.
+    /// </summary>
+    public async Task<SaveResult> GetPageAsync(long userId, int cursor, int limit, long revision)
+    {
+        // 클라 버전 차이로 로드가 아예 실패하지 않도록 거부하지 않고 클램프한다(기획서 5.2).
+        int effectiveLimit = limit <= 0 ? DefaultPageLimit : Math.Min(limit, MaxPageLimit);
+
+        var outcome = await _inventoryRepository.GetPageAsync(userId, cursor, effectiveLimit, revision);
+
+        switch (outcome.Status)
+        {
+            case InventoryPageStatus.NoPlayer:
+                return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+            case InventoryPageStatus.RevisionChanged:
+                // 사용자 실수가 아닌 정상 경합이라 로깅하지 않는다. 클라이언트가 현재 값을 기준으로 재조회한다.
+                return new SaveResult(
+                    ErrorCode.InventoryRevisionChanged, string.Empty, new { revision = outcome.Revision });
+        }
+
+        var items = outcome.Items.ToList();
+        var data = new InventoryPageDto
+        {
+            items = items,
+            // 다음 페이지 커서는 이 페이지 마지막 항목의 slot. 빈 페이지면 요청 커서를 그대로 돌려준다.
+            nextCursor = items.Count > 0 ? items[^1].slot : cursor,
+            hasMore = outcome.HasMore,
+            total = outcome.Total,
+            revision = outcome.Revision,
+        };
+
+        return new SaveResult(ErrorCode.Success, "Inventory page", data);
     }
 
     /// <summary>

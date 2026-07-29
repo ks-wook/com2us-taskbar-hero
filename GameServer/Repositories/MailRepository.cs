@@ -237,6 +237,13 @@ public sealed class MailRepository : IMailRepository
                 return MailClaimOutcome.Fail(MailClaimStatus.InventoryFull);
             }
 
+            // 6) 아이템 첨부를 실제로 적재한 경우에만 페이지 조회 정합성 카운터를 올린다
+            //    (골드만 든 메일은 가방이 그대로라 재조회를 강요할 필요가 없다).
+            if (grant.items.Count > 0)
+            {
+                await InventoryRevision.BumpAsync(db, transaction, userId);
+            }
+
             await transaction.CommitAsync();
             return new MailClaimOutcome(MailClaimStatus.Ok, grant.gold, grant.items, grant.goldBalance);
         }
@@ -300,6 +307,12 @@ public sealed class MailRepository : IMailRepository
             {
                 await transaction.RollbackAsync();
                 return MailClaimAllOutcome.Fail(MailClaimStatus.InventoryFull);
+            }
+
+            // 5) 아이템 첨부를 실제로 적재한 경우에만 페이지 조회 정합성 카운터를 올린다.
+            if (grant.items.Count > 0)
+            {
+                await InventoryRevision.BumpAsync(db, transaction, userId);
             }
 
             await transaction.CommitAsync();

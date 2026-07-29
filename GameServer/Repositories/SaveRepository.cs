@@ -30,8 +30,17 @@ public interface ISaveRepository
     /// <summary>계정의 캐릭터 목록(슬롯 순)을 조회한다.</summary>
     Task<List<CharacterDto>> GetCharactersAsync(long userId);
 
-    /// <summary>player_item을 재화 목록과 인벤토리 아이템 목록으로 분리해 조회한다(장착 정보 결합).</summary>
-    Task<(List<CurrencyDto> currencies, List<InventoryItemDto> inventory)> GetInventoryAsync(long userId);
+    /// <summary>코어 로드용 재화 목록(player_item의 row_type=2 행)을 조회한다.</summary>
+    Task<List<CurrencyDto>> GetCurrenciesAsync(long userId);
+
+    /// <summary>코어 로드용 장착 장비 목록(player_item_equipped 전 행, 최대 18개)을 조회한다.</summary>
+    Task<List<EquippedItemDto>> GetEquippedAsync(long userId);
+
+    /// <summary>가방 아이템(row_type=1, 배치된 행) 총 개수를 센다. 페이징 진행률 표시용.</summary>
+    Task<int> GetBagItemCountAsync(long userId);
+
+    /// <summary>현재 인벤토리 변경 카운터를 읽는다(계정 세이브 없으면 0). 페이지 조회 정합성 기준값.</summary>
+    Task<long> GetInventoryRevisionAsync(long userId);
 
     /// <summary>계정의 전 캐릭터 보유 스킬(레벨·장착 여부)을 조회한다.</summary>
     Task<List<SkillDto>> GetSkillsAsync(long userId);
@@ -76,19 +85,17 @@ file sealed class PlayerCharacterRow
     public long Exp { get; set; }
 }
 
-file sealed class PlayerItemRow
+file sealed class CurrencyRow
 {
-    public long PlayerItemId { get; set; }
-    public int RowType { get; set; }
     public int ItemCode { get; set; }
     public long Quantity { get; set; }
-    public int? Slot { get; set; }
-    public int EnhanceLevel { get; set; }
 }
 
 file sealed class PlayerItemEquippedRow
 {
     public long PlayerItemId { get; set; }
+    public int ItemCode { get; set; }
+    public int EnhanceLevel { get; set; }
     public int EquippedCharacterId { get; set; }
     public int EquippedSlot { get; set; }
 }
@@ -122,6 +129,7 @@ file sealed class ItemIdQtyRow
 /// <summary>세이브(taskbar_hero_game) 접근 계층. SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class SaveRepository : ISaveRepository
 {
+    private const int RowTypeItem = 1;
     private const int RowTypeCurrency = 2;
     private const int GoldItemCode = 1;
     private const int MySqlDuplicateEntry = 1062;
@@ -175,57 +183,72 @@ public sealed class SaveRepository : ISaveRepository
     }
 
     /// <summary>
-    /// player_item과 player_item_equipped를 각각 조회해, 재화 행(row_type=2)은 재화 목록으로, 아이템 행은
-    /// 장착 정보(장착 캐릭터·장착 슬롯)를 결합한 인벤토리 목록으로 나눠 반환한다.
-    /// 장착 중이라 인벤 칸이 없는 행은 slot을 -1로, 미장착은 장착 필드를 0으로 표기한다.
-    /// 읽기 전용 두 건이므로 트랜잭션 없이 한 커넥션에서 연달아 읽는다.
+    /// 계정의 재화 행(player_item의 row_type=2)만 조회해 재화 DTO 목록으로 변환한다. 재화는 종류당 1행이라
+    /// 크기가 고정이므로 코어 로드에 포함한다(가방 아이템 페이징 대상에서는 slot이 NULL이라 자동 제외된다).
+    /// 읽기 전용이므로 트랜잭션 없이 자체 커넥션을 쓴다.
     /// </summary>
-    public async Task<(List<CurrencyDto>, List<InventoryItemDto>)> GetInventoryAsync(long userId)
+    public async Task<List<CurrencyDto>> GetCurrenciesAsync(long userId)
     {
         using var db = _dbFactory.Create();
-
-        var itemRows = await db.Query("player_item").Where("user_id", userId).GetAsync<PlayerItemRow>();
-        var equippedRows = await db.Query("player_item_equipped").Where("user_id", userId).GetAsync<PlayerItemEquippedRow>();
-
-        // player_item_id → (장착 캐릭터, 장착 슬롯)
-        var equipped = equippedRows.ToDictionary(e => e.PlayerItemId, e => (charId: e.EquippedCharacterId, slot: e.EquippedSlot));
-
-        var currencies = new List<CurrencyDto>();
-        var inventory = new List<InventoryItemDto>();
-
-        foreach (var r in itemRows)
+        var rows = await db.Query("player_item")
+            .Select("item_code", "quantity")
+            .Where("user_id", userId).Where("row_type", RowTypeCurrency)
+            .GetAsync<CurrencyRow>();
+        return rows.Select(r => new CurrencyDto
         {
-            if (r.RowType == RowTypeCurrency)
-            {
-                currencies.Add(new CurrencyDto
-                {
-                    currencyType = r.ItemCode,
-                    amount = r.Quantity,
-                });
-                continue;
-            }
+            currencyType = r.ItemCode,
+            amount = r.Quantity,
+        }).ToList();
+    }
 
-            int equippedCharacterId = 0; // 0 = 미장착
-            int equippedSlot = 0;
-            if (equipped.TryGetValue(r.PlayerItemId, out var eq))
-            {
-                equippedCharacterId = eq.charId;
-                equippedSlot = eq.slot;
-            }
+    /// <summary>
+    /// 계정의 장착 장비 전 행(player_item_equipped)을 조회해 DTO 목록으로 변환한다. 이 테이블이 item_code·
+    /// enhance_level을 함께 보관하므로 player_item 조인이 필요 없다. 행 수가 최대 18개(3캐릭터 × 6슬롯)로
+    /// 고정이고 캐릭터 스탯 계산의 입력이라 코어 로드에 포함한다.
+    /// 읽기 전용이므로 트랜잭션 없이 자체 커넥션을 쓴다.
+    /// </summary>
+    public async Task<List<EquippedItemDto>> GetEquippedAsync(long userId)
+    {
+        using var db = _dbFactory.Create();
+        var rows = await db.Query("player_item_equipped")
+            .Where("user_id", userId)
+            .OrderBy("equipped_character_id", "equipped_slot")
+            .GetAsync<PlayerItemEquippedRow>();
+        return rows.Select(r => new EquippedItemDto
+        {
+            itemId = r.PlayerItemId,
+            itemCode = r.ItemCode,
+            enhanceLevel = r.EnhanceLevel,
+            equippedCharacterId = r.EquippedCharacterId,
+            equippedSlot = r.EquippedSlot,
+        }).ToList();
+    }
 
-            inventory.Add(new InventoryItemDto
-            {
-                itemId = r.PlayerItemId,
-                slot = r.Slot ?? -1, // -1 = 슬롯 없음(장착 중)
-                itemCode = r.ItemCode,
-                quantity = r.Quantity,
-                enhanceLevel = r.EnhanceLevel,
-                equippedCharacterId = equippedCharacterId,
-                equippedSlot = equippedSlot,
-            });
-        }
+    /// <summary>
+    /// 가방 아이템(row_type=1이면서 인벤 칸에 배치된 행) 총 개수를 센다. 코어 로드가 페이징 진행률·용량 UI용으로
+    /// 내려보내는 값이며, 재화 행(slot NULL)은 제외된다. 읽기 전용이라 트랜잭션을 쓰지 않는다.
+    /// </summary>
+    public async Task<int> GetBagItemCountAsync(long userId)
+    {
+        using var db = _dbFactory.Create();
+        return await db.Query("player_item")
+            .Where("user_id", userId).Where("row_type", RowTypeItem).WhereNotNull("slot")
+            .CountAsync<int>();
+    }
 
-        return (currencies, inventory);
+    /// <summary>
+    /// game_player.inventory_revision(인벤토리 변경 카운터)을 읽는다. 코어 로드가 이 값을 내려주고
+    /// 인벤토리 페이지 조회가 페이지마다 대조해, 값이 달라졌으면 찢어진 스냅샷으로 보고 거부한다.
+    /// 계정 세이브가 없으면 0. 읽기 전용이라 트랜잭션을 쓰지 않는다.
+    /// </summary>
+    public async Task<long> GetInventoryRevisionAsync(long userId)
+    {
+        using var db = _dbFactory.Create();
+        var revision = await db.Query("game_player")
+            .Select("inventory_revision")
+            .Where("user_id", userId)
+            .FirstOrDefaultAsync<long?>();
+        return revision ?? 0;
     }
 
     /// <summary>
@@ -324,6 +347,8 @@ public sealed class SaveRepository : ISaveRepository
                 difficulty = 1,
                 max_stage_cleared = 0,
                 inventory_capacity = inventoryCapacity,
+                // 1부터 시작한다(0은 요청의 "기준값 없음" 예약값이라 계정 값으로 쓰지 않는다).
+                inventory_revision = 1,
                 last_active_at = nowUnix,
                 created_at = nowUnix,
                 updated_at = nowUnix,

@@ -4,7 +4,7 @@
 @userId = 1
 @token = <AccountServer 로그인 응답의 token 붙여넣기>
 
-### 세이브 로드(신규는 { isNew:true }, 기존은 전체 스냅샷)
+### 코어 세이브 로드(신규는 { isNew:true }. 고정 크기 데이터 전량 — 가방 아이템은 제외)
 POST {{GameServer_HostAddress}}/api/game/load
 Content-Type: application/json
 
@@ -12,6 +12,26 @@ Content-Type: application/json
   "userId": {{userId}},
   "token": "{{token}}",
   "data": {}
+}
+
+### 가방 아이템 첫 페이지(cursor=-1, revision=0 → 정합성 검증 생략)
+POST {{GameServer_HostAddress}}/api/game/inventory/list
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": { "cursor": -1, "limit": 200, "revision": 0 }
+}
+
+### 가방 아이템 다음 페이지(직전 응답의 nextCursor·revision을 그대로 넣는다. 불일치면 4012(409) → load부터 재조회)
+POST {{GameServer_HostAddress}}/api/game/inventory/list
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": { "cursor": 199, "limit": 200, "revision": 1 }
 }
 
 ### 캐릭터 생성(최초는 nickname+classCode, 이후는 classCode만)

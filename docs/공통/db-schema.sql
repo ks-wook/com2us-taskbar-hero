@@ -91,6 +91,11 @@ CREATE TABLE game_player (
     difficulty         INT    NOT NULL DEFAULT 1 COMMENT '난이도 티어(1~2)',
     max_stage_cleared  INT    NOT NULL DEFAULT 0 COMMENT '최고 클리어 스테이지',
     inventory_capacity INT    NOT NULL          COMMENT '인벤토리 최대 용량(점유 slot 수). 골드로 확장',
+    -- 가방 아이템은 페이지로 나눠 조회하므로(/api/game/inventory/list), 페이지 사이에 인벤토리가 바뀌면
+    -- 찢어진 스냅샷이 만들어진다. player_item/player_item_equipped를 바꾸는 트랜잭션이 같은 트랜잭션에서
+    -- 이 값을 +1 하고, 클라이언트는 값이 달라지면 코어 로드부터 재조회한다.
+    -- 1부터 시작한다. 0은 요청에서 "기준값 없음(첫 페이지)"을 뜻하는 예약값이라 실제 계정 값으로 쓰지 않는다.
+    inventory_revision BIGINT NOT NULL DEFAULT 1 COMMENT '인벤토리 변경 카운터(페이지 조회 정합성 검증용, 1부터)',
     last_active_at     BIGINT NOT NULL          COMMENT '마지막 활동 시각(Unix ts). 5분 주기 갱신, 오프라인 보상 기준',
     created_at         BIGINT NOT NULL          COMMENT '생성 시각(Unix ts)',
     updated_at         BIGINT NOT NULL          COMMENT '최종 수정 시각(Unix ts)',

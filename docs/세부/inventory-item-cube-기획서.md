@@ -57,7 +57,7 @@
 ## 3. 요구사항
 
 **기능 요구사항**
-- 인벤토리 조회는 별도 API를 두지 않고 [세이브 로드](save-data-기획서.md)(`POST /api/game/load`)가 전체 인벤토리·장비·큐브 스냅샷을 반환한다. 본 문서는 **상태를 바꾸는 액션**만 전용 엔드포인트로 제공한다.
+- 조회는 **로드 2단계 분리**를 따른다([세이브 데이터 기획서](save-data-기획서.md) 2장·5.1·5.2). 장비(`equipped`)·재화(`currencies`)·큐브는 크기가 고정이라 코어 로드(`POST /api/game/load`)가 반환하고, **가방 아이템만** `POST /api/game/inventory/list`가 `slot` 커서 페이징으로 반환한다. 본 문서는 그 외 **상태를 바꾸는 액션**을 전용 엔드포인트로 제공한다.
 - 장착/해제, 강화, 상자 개봉, 큐브 합성/분해/제작을 각각 처리하고, 결과(변경된 인벤토리·재화·큐브 상태)를 응답한다.
 - 큐브 합성 등 **결과가 확률/규칙에 따라 결정되는 연산은 서버가 산출**하고 클라이언트는 결과만 받는다.
 - 모든 재화 소모·아이템 증감은 마스터 데이터 제약(존재 여부, `stack_max`, 최대 강화 단계, 슬롯-아이템 타입 정합성, 장비 클래스·레벨 제한)을 서버가 검증한 뒤 반영한다.
@@ -76,7 +76,7 @@
 | `player_item`(`player_item_id` PK, `user_id`, `row_type`, `item_code`, `quantity`, `slot`, `enhance_level`, `acquired_at`) | 보유 **아이템·재화 통합** 테이블 (**계정 공유**). `row_type`(1:아이템 2:재화)로 구분, `item_code`는 **모든 행이 `item_master.item_code`**(재화는 `item_type=3`, 골드=1), `quantity`는 수량/재화 금액(`bigint`). 보유 상태만 담고 장착 여부는 `player_item_equipped`로 분리 | `item_master`, `enhance_master` |
 | `player_item_equipped`(`player_item_id` PK, `user_id`, `item_code`, `enhance_level`, `equipped_character_id`, `equipped_slot`) | **장착 중 아이템**만 담는 자식 테이블(`player_item`과 1:0..1). 행이 존재하면 장착 중 | `item_master`, `enhance_master`, `equip_slot_master` |
 | `player_cube`(`user_id` PK, `cube_level`, `cube_exp`) | 큐브 성장 상태 (**계정 공유**) | `cube_master` |
-| `game_player`(`inventory_capacity` 신규 컬럼) | 계정 인벤토리 최대 용량(골드로 확장) | — |
+| `game_player`(`inventory_capacity`·`inventory_revision` 컬럼) | 계정 인벤토리 최대 용량(골드로 확장)과 인벤토리 변경 카운터(페이징 정합성 검증용) | — |
 
 > **장착 상태는 별도 테이블(`player_item_equipped`)로 분리한다.** 아이템 보유(`player_item`)와 장착 위치는 관심사가 다르고, 아이템 행에 장착 컬럼을 두면 대다수 미장착 행에 NULL이 깔려 의미가 흐려진다. 장착 중인 아이템만 `player_item_equipped`에 행으로 두어 **장착=INSERT / 해제=DELETE**로 처리하고, PK `player_item_id`로 "한 아이템은 한 곳에만 장착", `(user_id, equipped_character_id, equipped_slot)` 유니크 인덱스로 "한 캐릭터-슬롯당 아이템 하나"를 보장한다([세이브 데이터 기획서](save-data-기획서.md) 3장).
 
@@ -87,7 +87,7 @@
 - **캐릭터별/계정 공유**: 계정은 캐릭터 슬롯 3개(3인 파티, [성장 시스템 기획서](growth-기획서.md))를 가진다. **인벤토리·골드·큐브는 계정 공유**(위 표 `user_id` 단위)이고, **장비 장착만 캐릭터별**이다(`equipped_character_id` 1~3). 한 아이템 행(`player_item_id`)은 계정 공용이지만 **동시에 한 캐릭터·한 슬롯에만 장착**된다.
 
 **보관/스택 규칙 (확정)**
-- **배치 위치(`slot`)**: 각 행은 인벤토리 UI의 특정 칸(`slot`, 0-based)에 놓인다. `(user_id, slot)`은 유니크하며 한 칸에는 한 행만 존재한다. 재접속 시 [세이브 로드](save-data-기획서.md)가 `slot`을 함께 내려 **마지막 접속과 동일한 배치를 복원**한다. 획득 시 서버는 빈 `slot`에 배치하고, 빈 칸이 없으면(용량 초과) `InventoryFull(4002)`. `player_item_equipped.equipped_slot`(장착 슬롯)과는 별개 개념이다.
+- **배치 위치(`slot`)**: 각 행은 인벤토리 UI의 특정 칸(`slot`, 0-based)에 놓인다. `(user_id, slot)`은 유니크하며 한 칸에는 한 행만 존재한다. 재접속 시 [인벤토리 페이지 조회](save-data-기획서.md#52-인벤토리-페이지-조회--post-apigameinventorylist)가 `slot`을 함께 내려 **마지막 접속과 동일한 배치를 복원**한다. `slot`은 **페이징 커서이자 정렬키**이므로 `(user_id, slot)` 유니크 인덱스를 그대로 커버 인덱스로 쓴다. 획득 시 서버는 빈 `slot`에 배치하고, 빈 칸이 없으면(용량 초과) `InventoryFull(4002)`. `player_item_equipped.equipped_slot`(장착 슬롯)과는 별개 개념이다.
 - **장비(`item_type=1`)**: `stack_max=1`. 개체마다 `enhance_level`이 다를 수 있으므로 **1개당 1 행(row)**으로 저장하며 겹치지 않는다. `player_item_id`가 개체 식별자다.
 - **비장비(`item_type=2`)**: 동일 `item_code`는 `stack_max`까지 한 행에 `quantity`로 누적한다. 초과분은 새 행으로 분할한다.
 - **장착 중 아이템**: `player_item_equipped`에 행이 있는 아이템이 "장착 중"이다. 장착 중 아이템은 인벤토리(계정 공용)에 그대로 존재하되 분해·거래 대상에서 제외한다(해제 후 가능). `player_item_equipped`의 PK가 `player_item_id`라 같은 아이템을 둘 이상의 캐릭터가 동시에 장착할 수 없다.
@@ -113,7 +113,9 @@
 - [5.8 큐브 제작 — `POST /api/game/cube/craft`](#58-큐브-제작--post-apigamecubecraft)
 - [5.9 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`](#59-랜덤-상자-열기-골드-가챠--post-apigameboxopen)
 
-Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약, `success`는 `errorCode == 0`과 동치). 아래 엔드포인트는 모두 **상태 변경 액션**이며, 조회는 `POST /api/game/load`를 사용한다.
+Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약, `success`는 `errorCode == 0`과 동치). 아래 엔드포인트는 모두 **상태 변경 액션**이다.
+
+> **조회 엔드포인트는 본 장에 명세하지 않는다.** 장비·재화·큐브는 `POST /api/game/load`([세이브 데이터 기획서](save-data-기획서.md) 5.1), 가방 아이템은 `POST /api/game/inventory/list`([같은 문서 5.2](save-data-기획서.md#52-인벤토리-페이지-조회--post-apigameinventorylist))가 담당한다. 후자는 경로상 인벤토리 컨트롤러(`GameInventoryController`)에 배치되지만 규칙은 세이브 로드 정책에 속하므로 그쪽에서 관리한다.
 
 > 이 액션 엔드포인트들은 **RNG·비용을 수반하는 서버 권위 연산**이며, 각 액션이 자기 변경분을 그 요청 트랜잭션에서 직접 저장한다(별도의 일괄 저장 API는 없음, [세이브 데이터 기획서](save-data-기획서.md) 4장). 예를 들어 큐브 합성 결과는 클라이언트가 보고하는 것이 아니라 서버가 산출해 반영한다.
 
@@ -309,7 +311,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | `cubeExp` | 이번 분해로 **획득한 큐브 경험치**(증가분) |
 
 - **산출 공식(확정·구현)**: 아이템당 골드 = `gold_per_scrap(현재 큐브 레벨) × 아이템 등급 × 개수`, 큐브 경험치 = `20 × 아이템 등급 × 개수`. 여러 아이템은 합산한다. `items[].count`는 장비(스택 1)는 1, 재료 스택은 보유 수량 이하. 장착 중 아이템은 `ItemEquipped(4007)`로 거부한다.
-- 소모된 아이템·재화 잔액·큐브 누적 상태는 응답에 담지 않는다. 클라이언트는 획득분만 표시하고, 최신 인벤토리/큐브 스냅샷이 필요하면 `POST /api/game/load`로 재조회한다.
+- 소모된 아이템·재화 잔액·큐브 누적 상태는 응답에 담지 않는다. 클라이언트는 획득분만 표시하고, 최신 스냅샷이 필요하면 `POST /api/game/load`(장비·재화·큐브)와 `POST /api/game/inventory/list`(가방)로 재조회한다.
 - 오류: `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)`.
 
 ### 5.8 큐브 제작 — `POST /api/game/cube/craft`
@@ -392,10 +394,12 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
      └ 위반 시 ROLLBACK + 해당 ErrorCode 반환
   4) (RNG 연산) 큐브 합성 결과를 서버가 산출
   5) 반영: 재화 차감/적립, 인벤토리 증감(스택 병합/분할), 장착·큐브 상태 갱신
+  6) game_player.inventory_revision += 1     # player_item / player_item_equipped를 바꿨을 때
 COMMIT → 변경된 상태를 응답 data로 반환
 ```
 
 - 4·5단계 결과는 전부 서버가 확정한 값이며, 클라이언트는 응답으로만 인벤토리를 갱신한다.
+- **6단계는 생략하지 않는다.** `player_item`·`player_item_equipped`를 건드린 트랜잭션은 커밋 전에 반드시 `inventory_revision`을 올린다. 이 값이 인벤토리 페이지 조회의 정합성 기준이므로, 별도 트랜잭션으로 미루거나 빠뜨리면 클라이언트가 찢어진 인벤토리를 받는다([세이브 데이터 기획서](save-data-기획서.md) 4장·5.2). 재화만 바뀌는 경우(`row_type=2` 행의 `quantity` UPDATE)는 페이징 대상이 아니므로 증가시키지 않아도 되지만, 판정을 단순하게 유지하려면 함께 올려도 무방하다(오탐 재조회 1회 비용).
 
 ### 6.2 장착 스왑 순서
 
@@ -462,8 +466,10 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 | InvalidInventorySlot | 4009 | 인벤토리 칸(slot) 번호가 잘못됨(용량 범위 밖 등) |
 | CubeRecipeNotMet | 4010 | 큐브 합성/제작 조건(등급·개수·재료) 미충족 |
 | CubeLevelInsufficient | 4011 | 큐브 레벨이 해당 연산 요구치 미만 |
+| InventoryRevisionChanged | 4012 | 인벤토리 페이지 조회 도중 인벤토리가 변경됨(코어 로드부터 재조회 필요) |
 
-- `4001~4009`는 인벤토리/아이템, `4010~4019`는 큐브에 할당한다.
+- `4001~4009`는 인벤토리/아이템, `4010~4019`는 큐브에 할당한다. `4012`는 큐브 구간에 걸치지만 이미 확정된 `4010`·`4011` 값을 옮길 수 없으므로(값은 계약) 인벤토리 코드로 이어 붙인다.
+- **`InventoryRevisionChanged(4012)`**: 가방 아이템을 페이지로 나눠 받는 도중 `game_player.inventory_revision`이 바뀌면 반환한다. 사용자 실수가 아니라 정상적인 경합이므로 클라이언트는 오류 팝업 없이 `POST /api/game/load`부터 재조회한다. 규칙은 [세이브 데이터 기획서](save-data-기획서.md#52-인벤토리-페이지-조회--post-apigameinventorylist) 5.2 참고.
 - `InsufficientCurrency(4005)`는 재화 부족을 처음 다루는 도메인으로서 본 블록에 정의한다. 재화 부족이 필요한 다른 도메인(예: 성장의 룬 업그레이드)은 이 코드를 **재정의하지 않고 그대로 재사용**한다(코드 값은 계약이므로 이동 금지).
 - **랜덤 상자 열기(5.9)**는 신규 에러 코드를 추가하지 않고 `InsufficientCurrency(4005)`(골드 부족)·`InvalidSaveData(2002)`(잘못된 `boxCode`)·`InventoryFull(4002)`·`MasterDataNotLoaded(10001)`를 재사용한다.
 

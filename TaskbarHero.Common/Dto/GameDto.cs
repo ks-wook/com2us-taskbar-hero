@@ -88,17 +88,33 @@ namespace TaskbarHero.Common.Dto
         public long amount;
     }
 
+    /// <summary>
+    /// 가방(인벤토리) 아이템 1개. 인벤토리 페이지 조회(/api/game/inventory/list) 응답 항목이며,
+    /// 코어 로드에는 포함되지 않는다. 장착 중인 아이템은 인벤 칸을 점유하지 않아 여기 나오지 않고
+    /// <see cref="EquippedItemDto"/>로만 내려간다(재화도 currencies로 분리).
+    /// </summary>
     [Serializable]
     public class InventoryItemDto
     {
-        // ⚠️ Unity JsonUtility는 Nullable(int?)를 파싱하지 못하므로 non-nullable + 센티넬로 표현한다.
         public long itemId;
-        public int slot;                // 가방 칸(0-based). -1 = 슬롯 없음(장착 중)
+        public int slot;      // 가방 칸(0-based). 페이징 정렬키이자 커서
         public int itemCode;
         public long quantity;
         public int enhanceLevel;
-        public int equippedCharacterId; // 0 = 미장착
-        public int equippedSlot;        // 0 = 미장착(장착 시 1~6)
+    }
+
+    /// <summary>
+    /// 장착 중인 장비 1개(계정 전체 최대 3캐릭터 × 6슬롯 = 18개). 크기가 고정이고 캐릭터 스탯 계산의
+    /// 입력이라 코어 로드(/api/game/load) 응답에 포함한다.
+    /// </summary>
+    [Serializable]
+    public class EquippedItemDto
+    {
+        public long itemId;
+        public int itemCode;
+        public int enhanceLevel;
+        public int equippedCharacterId; // 1~3
+        public int equippedSlot;        // 1~6(equip_slot_master)
     }
 
     [Serializable]
@@ -124,6 +140,11 @@ namespace TaskbarHero.Common.Dto
         public long cubeExp;
     }
 
+    /// <summary>
+    /// 코어 세이브 스냅샷(/api/game/load 응답 data). **크기가 고정된 데이터만** 담는다 —
+    /// 무한히 커질 수 있는 가방 아이템은 여기 없고 /api/game/inventory/list로 지연 로딩한다
+    /// (세이브 데이터 기획서 2장·5.1).
+    /// </summary>
     [Serializable]
     public class LoadDataDto
     {
@@ -132,11 +153,55 @@ namespace TaskbarHero.Common.Dto
         public PlayerDto player = new PlayerDto();
         public List<CharacterDto> characters = new List<CharacterDto>();
         public List<CurrencyDto> currencies = new List<CurrencyDto>();
-        public List<InventoryItemDto> inventory = new List<InventoryItemDto>();
+        public List<EquippedItemDto> equipped = new List<EquippedItemDto>();
         public List<SkillDto> skills = new List<SkillDto>();
         public List<RuneDto> runes = new List<RuneDto>();
         public CubeDto cube = new CubeDto();
+        public int inventoryTotal;      // 가방 아이템 행 수(페이징 진행률·용량 UI)
+        public long inventoryRevision;  // 인벤토리 변경 카운터(페이지 조회 정합성 기준값). 1부터 시작
         public long offlineElapsedSec;
+    }
+
+    /// <summary>인벤토리 페이지 조회 요청 body(인증). { userId, token, data:{ cursor, limit, revision } }</summary>
+    [Serializable]
+    public class InventoryListRequest
+    {
+        public long userId;
+        public string token;
+        public InventoryListData data;
+    }
+
+    [Serializable]
+    public class InventoryListData
+    {
+        // 직전 페이지의 nextCursor. 첫 페이지는 -1(slot이 0-based라 slot > -1이 곧 처음부터).
+        public int cursor = -1;
+        // 페이지 크기. 서버가 1~500으로 클램프하며 0 이하이면 기본값(200)을 쓴다.
+        public int limit;
+        // 코어 로드에서 받은 inventoryRevision. 0은 "기준값 없음"이라 검증을 건너뛴다(첫 페이지).
+        // 계정의 실제 카운터는 1부터 시작하므로 0과 겹치지 않는다.
+        public long revision;
+    }
+
+    /// <summary>인벤토리 페이지 조회 응답 data. slot 오름차순 keyset 페이징 결과.</summary>
+    [Serializable]
+    public class InventoryPageDto
+    {
+        public List<InventoryItemDto> items = new List<InventoryItemDto>();
+        public int nextCursor;    // 이 페이지 마지막 항목의 slot(hasMore=false면 의미 없음)
+        public bool hasMore;
+        public int total;         // 가방 아이템 총 행 수
+        public long revision;     // 이 페이지를 읽은 시점의 inventory_revision
+    }
+
+    /// <summary>인벤토리 페이지 조회 응답 { success, errorCode, message, data(InventoryPageDto) }.</summary>
+    [Serializable]
+    public class InventoryListResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public InventoryPageDto data = new InventoryPageDto();
     }
 
     /// <summary>세이브 로드 응답 { success, errorCode, message, data(LoadDataDto) }.</summary>

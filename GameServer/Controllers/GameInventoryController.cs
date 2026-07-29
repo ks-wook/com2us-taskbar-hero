@@ -5,13 +5,24 @@ using TaskbarHero.Common.Dto;
 namespace GameServer.Controllers;
 
 /// <summary>
-/// 인벤토리/아이템 액션 API(inventory-item-cube 기획서 §5.1·5.2·5.5). 인증 필요.
-/// 장착·해제·배치 이동만 제공하며 강화·용량 확장·큐브·상자는 범위 밖이다.
+/// 인벤토리 API(inventory-item-cube 기획서 §5.1·5.2·5.5). 인증 필요.
+/// 가방 아이템 페이지 조회(세이브 데이터 기획서 §5.2)와 장착·해제·배치 이동·용량 확장을 제공하며,
+/// 강화·큐브·상자는 범위 밖이다.
 /// </summary>
 [ApiController]
 [Route("api/game/inventory")]
 public sealed class GameInventoryController(IInventoryService inventoryService) : GameApiControllerBase
 {
+    /// <summary>가방 아이템 페이지 조회(slot 커서 페이징). POST /api/game/inventory/list</summary>
+    [HttpPost("list")]
+    public async Task<IActionResult> List([FromBody] InventoryListRequest request)
+    {
+        var data = request?.data ?? new InventoryListData();
+        var result = await inventoryService.GetPageAsync(
+            AuthenticatedUserId(), data.cursor, data.limit, data.revision);
+        return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
+    }
+
     /// <summary>장비 장착. POST /api/game/inventory/equip</summary>
     [HttpPost("equip")]
     public async Task<IActionResult> Equip([FromBody] EquipRequest request)

@@ -118,6 +118,7 @@ erDiagram
         int     difficulty "난이도 티어"
         int     max_stage_cleared "최고 클리어 스테이지"
         int     inventory_capacity "인벤토리 최대 용량(slot 수), 골드로 확장"
+        bigint  inventory_revision "인벤토리 변경 카운터, 페이지 조회 정합성 검증용"
         bigint  last_active_at "5분 주기 갱신, 오프라인 보상 기준"
         bigint  created_at
         bigint  updated_at
@@ -235,7 +236,7 @@ erDiagram
 ### game_player
 
 - **역할**: 계정(파티)의 세이브 루트. 아래 모든 세이브 하위 테이블이 이 `user_id`에 매달린다. 파티 공용 진행도와 오프라인 보상 정산의 기준 시각을 보관한다.
-- **저장 데이터**: 현재 `act`/`stage`/`difficulty`(파티 공용 진행 위치), `max_stage_cleared`(최고 클리어 스테이지), `inventory_capacity`(인벤토리 최대 슬롯 수, 골드로 확장), `last_active_at`(5분 주기 갱신 — 오프라인 보상 계산 기준점), `nickname`, 생성/수정 시각.
+- **저장 데이터**: 현재 `act`/`stage`/`difficulty`(파티 공용 진행 위치), `max_stage_cleared`(최고 클리어 스테이지), `inventory_capacity`(인벤토리 최대 슬롯 수, 골드로 확장), `inventory_revision`(인벤토리 변경 카운터 — 가방 페이지 조회 정합성 검증용, 아이템/장착을 바꾸는 트랜잭션이 같은 트랜잭션에서 +1), `last_active_at`(5분 주기 갱신 — 오프라인 보상 계산 기준점), `nickname`, 생성/수정 시각.
 
 ### player_character
 

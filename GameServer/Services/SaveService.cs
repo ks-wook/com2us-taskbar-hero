@@ -36,9 +36,24 @@ public sealed class SaveService : ISaveService
     }
 
     /// <summary>
-    /// 계정 세이브 스냅샷을 로드한다. game_player가 없으면 신규 계정({ isNew:true })으로 응답하고,
-    /// 있으면 캐릭터·인벤토리(재화 포함)·스킬·룬·큐브를 모아 오프라인 경과 시간과 함께 반환한다.
+    /// 코어 세이브 스냅샷을 로드한다. game_player가 없으면 신규 계정({ isNew:true })으로 응답한다.
+    /// **크기가 고정된 데이터만** 담으며, 무한히 커질 수 있는 가방 아이템은 포함하지 않는다
+    /// (창고 UI를 열 때 <see cref="IInventoryService.GetPageAsync"/>로 지연 로딩).
     /// </summary>
+    /// <remarks>
+    /// 반환 항목(세이브 데이터 기획서 5.1의 표와 1:1로 대응한다. 항목을 늘리거나 줄이면 그 표도 함께 고친다):
+    /// <para><c>player</c> — game_player 1행: 닉네임·진행 좌표(act/stage/difficulty)·최고 클리어·인벤 용량·마지막 활동 시각</para>
+    /// <para><c>characters</c> — player_character(≤3행): 캐릭터 슬롯별 직업·레벨·경험치</para>
+    /// <para><c>currencies</c> — player_item의 재화 행(row_type=2): 재화 종류별 보유량(골드 포함)</para>
+    /// <para><c>equipped</c> — player_item_equipped(≤18행 = 3캐릭터 × 6슬롯): 장착 장비. 캐릭터 스탯 계산의
+    ///   입력이라 가방 로딩을 기다리지 않도록 코어에 넣는다</para>
+    /// <para><c>skills</c> — player_skill: 캐릭터별 스킬 코드·레벨·액티브 장착 여부</para>
+    /// <para><c>runes</c> — player_rune: 계정 공용 룬 코드·레벨</para>
+    /// <para><c>cube</c> — player_cube 1행: 큐브 레벨·경험치(행이 없으면 레벨 1·경험치 0)</para>
+    /// <para><c>inventoryTotal</c> — 가방 아이템 총 행 수(페이징 진행률·용량 UI 표시용)</para>
+    /// <para><c>inventoryRevision</c> — 인벤토리 변경 카운터. 가방 페이지 조회가 이 값을 대조해 정합성을 확인한다</para>
+    /// <para><c>offlineElapsedSec</c> — 현재 서버 시각 − last_active_at(오프라인 보상 계산 입력값)</para>
+    /// </remarks>
     public async Task<SaveResult> LoadAsync(long userId)
     {
         var player = await _saveRepository.GetPlayerAsync(userId);
@@ -48,10 +63,16 @@ public sealed class SaveService : ISaveService
         }
 
         var characters = await _saveRepository.GetCharactersAsync(userId);
-        var (currencies, inventory) = await _saveRepository.GetInventoryAsync(userId);
+        var currencies = await _saveRepository.GetCurrenciesAsync(userId);
+        var equipped = await _saveRepository.GetEquippedAsync(userId);
         var skills = await _saveRepository.GetSkillsAsync(userId);
         var runes = await _saveRepository.GetRunesAsync(userId);
         var cube = await _saveRepository.GetCubeAsync(userId) ?? new CubeDto { cubeLevel = 1, cubeExp = 0 };
+        var inventoryTotal = await _saveRepository.GetBagItemCountAsync(userId);
+
+        // 정합성 기준값은 위 조회를 모두 마친 뒤 읽는다. 중간에 인벤토리가 바뀌었다면 클라이언트가 받는
+        // 기준값이 그 변경 이후 값이 되어, 이어지는 페이지 조회가 최신 상태와 일치한다.
+        var inventoryRevision = await _saveRepository.GetInventoryRevisionAsync(userId);
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var offlineElapsed = Math.Max(0, now - player.lastActiveAt);
@@ -61,10 +82,12 @@ public sealed class SaveService : ISaveService
             player = player,
             characters = characters,
             currencies = currencies,
-            inventory = inventory,
+            equipped = equipped,
             skills = skills,
             runes = runes,
             cube = cube,
+            inventoryTotal = inventoryTotal,
+            inventoryRevision = inventoryRevision,
             offlineElapsedSec = offlineElapsed,
         };
 

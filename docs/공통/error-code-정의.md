@@ -85,6 +85,9 @@
 | InvalidInventorySlot | 4009 | 인벤토리 칸(slot) 번호가 잘못됨(용량 범위 밖 등) |
 | CubeRecipeNotMet | 4010 | 큐브 합성/제작 조건(등급·개수·재료) 미충족 |
 | CubeLevelInsufficient | 4011 | 큐브 레벨이 해당 연산 요구치 미만 |
+| InventoryRevisionChanged | 4012 | 인벤토리 페이지 조회 도중 인벤토리가 변경됨(코어 로드부터 재조회 필요) |
+
+- `InventoryRevisionChanged(4012)`는 가방 아이템 페이징(`POST /api/game/inventory/list`) 중 `game_player.inventory_revision`이 바뀌었을 때 반환한다([세이브 데이터 기획서](../세부/save-data-기획서.md) 5.2). 사용자 실수가 아닌 정상 경합이므로 클라이언트는 `POST /api/game/load`부터 재조회한다.
 
 ### 2.6 성장 (5000번대)
 
@@ -206,6 +209,7 @@ namespace TaskbarHero.Common
         InvalidInventorySlot = 4009,
         CubeRecipeNotMet = 4010,
         CubeLevelInsufficient = 4011,
+        InventoryRevisionChanged = 4012,
 
         // 성장 (5000번대)
         InvalidGrowthTarget = 5001,
