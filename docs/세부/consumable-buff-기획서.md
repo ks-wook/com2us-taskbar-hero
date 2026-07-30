@@ -1,0 +1,395 @@
+# 소모품 아이템 / 계정 버프 기획서
+
+> 상위 문서: [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) · 관련 도메인 4.4(인벤토리/아이템)의 확장
+>
+> 본 문서는 플레이어가 **소모품 아이템(`item_type=4`)을 사용하는 규칙**을 다루는 **소모품 도메인의 정본**이며, 현재 확정 범위는 계정 단위 획득량 버프(경험치 부스터·골드 부스터)다. **추후 추가되는 소모품은 별도 문서를 만들지 않고 이 문서에 이어서 정리한다**(1장 「문서 범위와 확장 원칙」). 아이템 보관·소모의 공통 규칙은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md), 소모품·버프의 정적 정의는 [마스터 데이터 기획서](master-data/master-data-기획서.md)(`item_master`·`consumable_master`), 버프가 적용되는 획득 경로는 [스테이지/전투 결과 기획서](stage-battle-기획서.md)·[오프라인 보상 정산 기획서](offline-reward-기획서.md)를 참고한다.
+
+## 목차
+
+- [1. 개요](#1-개요)
+- [2. 기능 설명](#2-기능-설명)
+- [3. 요구사항](#3-요구사항)
+- [4. 데이터 모델](#4-데이터-모델)
+  - [4.1 저장 위치 결정 — MySQL 정본(확정)](#41-저장-위치-결정--mysql-정본확정)
+  - [4.2 `player_buff` (신규 테이블)](#42-player_buff-신규-테이블)
+  - [4.3 마스터 데이터 변경](#43-마스터-데이터-변경)
+  - [4.4 공유 DTO / enum](#44-공유-dto--enum)
+- [5. API 명세](#5-api-명세)
+  - [5.1 소모품 사용 — `POST /api/game/consumable/use`](#51-소모품-사용--post-apigameconsumableuse)
+  - [5.2 활성 버프 조회 — 코어 로드에 포함](#52-활성-버프-조회--코어-로드에-포함)
+- [6. 처리 흐름](#6-처리-흐름)
+  - [6.1 소모품 사용 (의사코드)](#61-소모품-사용-의사코드)
+  - [6.2 버프 적용 — 스테이지 클리어 보상](#62-버프-적용--스테이지-클리어-보상)
+  - [6.3 버프 적용 — 오프라인 보상 정산(구간 교집합)](#63-버프-적용--오프라인-보상-정산구간-교집합)
+  - [6.4 만료 버프 정리 배치](#64-만료-버프-정리-배치)
+  - [6.5 예외 / 엣지 케이스](#65-예외--엣지-케이스)
+- [7. 에러 코드](#7-에러-코드)
+- [8. 미결 사항 / TODO](#8-미결-사항--todo)
+- [9. 참고](#9-참고)
+
+
+## 1. 개요
+
+- **목적**: 인벤토리에 보관되는 **소모품 아이템**(`item_type=4`)을 도입하고, 이를 사용해 일정 시간 동안 **경험치·골드 획득량이 증가하는 계정 버프**를 부여한다. 버프 배율은 보상 지급액에 직접 작용하는 이득이므로 잔여 시간 판정과 배율 계산을 모두 **서버가 확정**한다(클라이언트 보고 불신).
+- **대상 서버**: `GameServer`(소모품 소모·버프 부여·보상 배율 반영), `TaskbarHero.Common`(`ItemType`·`BuffType` enum, 결과 DTO 공유). 인증은 AccountServer 발급 토큰을 GameServer 미들웨어가 검증한다.
+- **문서 범위와 확장 원칙(중요)**:
+  - **현재 확정 범위는 경험치 부스터·골드 부스터 2종**이다. 스탯 증가·드롭률 증가·즉시 회복 등 다른 효과는 아직 기획에 넣지 않았다(8장).
+  - **본 문서는 소모품 도메인의 정본이다.** 추후 다른 종류의 소모품을 추가할 때는 **새 기획서를 만들지 않고 이 문서에 절을 추가**해 정리한다. 소모품이 늘어도 사용 요청 창구(`POST /api/game/consumable/use`)·마스터 정의(`consumable_master`)·에러 코드 블록(`4020~4029`)이 공유되므로, 문서를 쪼개면 같은 계약이 여러 문서에 흩어진다.
+  - 확장 시 갱신 지점은 다음과 같다 — 4.3 마스터 데이터(신규 `item_code`·효과 종류), 4.4 공유 enum(`BuffType` 등 신규 값 **추가만**, 기존 값 변경 금지), 5.1 사용 API(응답 필드가 늘어나는 경우), 6장 처리 흐름(지속형이 아닌 **즉시 효과형**은 `player_buff`를 쓰지 않는 별도 흐름 절을 신설), 7장 에러 코드.
+  - **서버 전체 버프 이벤트(운영성 배율)는 범위 밖**이다. 도입 시에는 플레이어 버프와 **별도 마스터 테이블**로 정의하고 서버 인메모리로 들고 있는 구조를 따른다(8장 결정 기록).
+  - **소모품의 *획득* 경로는 본 문서 밖**이다. 상자·메일·출석 등 기존 지급 경로가 소모품을 지급하면 그 결과가 본 문서의 인벤토리 행으로 적재된다.
+  - 버프가 **어떤 값에 곱해지는지**만 본 문서가 정하고, 골드·경험치 산출 원식 자체는 각 도메인 기획서(스테이지·오프라인)를 따른다.
+- **관련 기획서**: [[inventory-item-cube-기획서]] (아이템 보관·소모 공통 규칙), [[master-data-기획서]] (`item_master`·`consumable_master`), [[stage-battle-기획서]] (클리어 보상 배율), [[offline-reward-기획서]] (오프라인 정산 배율), [[save-data-기획서]] (코어 로드 스냅샷)
+
+## 2. 기능 설명
+
+- 플레이어는 인벤토리에서 **경험치 부스터** 또는 **골드 부스터**를 사용한다. 사용하면 아이템이 1개 소모되고, 그 즉시부터 마스터 데이터가 정의한 **지속시간 동안** 해당 획득량에 배율이 적용된다.
+- 버프는 **계정 단위**다. 인벤토리·골드가 계정 공유인 것과 같은 범위이며, 경험치 버프도 특정 캐릭터가 아니라 **그 계정이 획득하는 모든 경험치**(파티 편성 캐릭터 전원)에 적용된다.
+- **버프 시간은 벽시계(wall-clock)로 흐른다(확정).** 접속을 끊어도 시간이 계속 소모되며, 접속 중에만 흐르는 방식(정지·재개)은 채택하지 않는다.
+- 방치형 특성 고려 — **오프라인 정산은 소급 계산이므로 이미 만료된 버프도 그 유효 구간만큼 반영한다.** 30분 버프를 쓰고 로그아웃한 뒤 12시간 후 재접속하면, 정산 구간 중 버프가 살아 있던 30분분에 배율이 적용된다(6.3). 이것이 만료 시각을 **값으로 영속 저장하는** 이유다(4.1).
+- 서로 다른 종류의 버프(경험치·골드)는 **동시에 활성**될 수 있다. 같은 종류를 다시 사용하면 남은 시간에 **누적 연장**된다(4.2).
+
+## 3. 요구사항
+
+**기능 요구사항**
+- 소모품 아이템 타입(`item_type=4`)을 도입하고, 소모품별 버프 효과(종류·배율·지속시간)를 마스터 데이터로 정의한다.
+- 소모품 사용 요청을 받아 **아이템 1개 차감 + 버프 부여**를 하나의 트랜잭션으로 처리하고, 부여 결과와 계정의 활성 버프 전체를 응답한다.
+- 활성 버프는 재접속 시 **코어 로드 응답에 포함**해 클라이언트가 잔여 시간을 UI에 표시할 수 있게 한다.
+- 스테이지 클리어 보상(골드·경험치)과 오프라인 정산 보상(골드·경험치)에 활성 버프 배율을 반영한다.
+- 만료된 버프 행은 주기 배치로 정리한다. 단, 오프라인 정산이 소급 참조하는 구간은 보존한다(6.4).
+
+**비기능 요구사항**
+- **서버 권위**: 버프 활성 여부·잔여 시간·배율은 모두 **서버 시각과 마스터 데이터**로 판정한다. 클라이언트가 보낸 배율·잔여 시간은 사용하지 않는다.
+- **원자성**: "아이템 차감 + 버프 부여"는 `user_id` 단위 하나의 트랜잭션이다. 중도 실패 시 전체 롤백해 **아이템만 사라지거나 버프만 생기는 상태**를 만들지 않는다.
+- **영속성**: 소모품은 인벤토리에서 이미 차감된 대가이므로, 그 결과인 버프 상태는 **유실되면 복구할 수 없다.** 휘발성 저장소에 단독으로 두지 않는다(4.1).
+- **동시성/멱등성**: 같은 계정의 중복 사용 요청은 `player_buff` 행 잠금(PK `(user_id, buff_type)`)으로 직렬화되어 아이템 이중 차감·버프 이중 연장이 발생하지 않는다. 별도 분산 락은 두지 않는다 — 전역 공유 자원을 다투는 구조가 아니라 자기 행만 갱신하기 때문이다.
+
+## 4. 데이터 모델
+
+### 4.1 저장 위치 결정 — MySQL 정본(확정)
+
+버프 상태는 **MySQL을 정본으로 저장한다.** Redis TTL 단독 저장은 채택하지 않는다. 근거:
+
+| 판단 근거 | 내용 |
+|---|---|
+| **소급 정산이 만료된 버프를 요구** | 오프라인 정산은 `last_active_at` ~ now 구간을 소급 계산한다([오프라인 보상 정산 기획서](offline-reward-기획서.md) 6.1). 버프 시간이 벽시계로 흐르므로 **재접속 시 이미 만료된 상태가 기본 경로**이고, 그 유효 구간을 계산하려면 `started_at`·`expires_at`이 만료 후에도 남아 있어야 한다. TTL은 그 근거가 가장 필요한 순간에 키를 지운다. |
+| **유실 시 복구 불가** | 버프는 인벤토리에서 아이템을 차감한 결과다. 저장소 재시작으로 사라지면 플레이어 손실이 되고, 사후 검증 근거도 남지 않는다. |
+| **정본-캐시 원칙 준수** | 본 프로젝트는 "캐시는 파생 데이터이며 정합성 정본은 항상 MySQL, Redis 실패 시 MySQL 폴백"을 원칙으로 한다(`GameServer/Services/TradeCache.cs`, [거래소 기획서](trade-기획서.md) 7.5). 버프를 Redis 단독으로 두면 폴백 대상이 없다. |
+| **트랜잭션 경계 일치** | 보상 지급은 이미 `user_id` 단위 MySQL 트랜잭션에서 일어난다. 버프가 같은 DB에 있으면 배율 판정이 그 트랜잭션에 포함되어 별도 락 없이 정합성이 확보된다. |
+
+- **Redis는 사용하지 않는다(확정).** 버프 조회는 항상 `user_id` 단건이고 전역 공유 읽기가 아니어서 거래소 목록과 같은 캐시 이점이 없다. 읽기 부하가 실제로 문제가 되면 그때 캐시를 얹되, 그 경우에도 캐시 값은 TTL이 아니라 `expires_at`이어야 한다.
+- **만료 행 정리는 TTL이 아니라 배치가 담당한다.** 조회가 `expires_at > now`로 필터하므로 정리가 늦어도 정확성에 영향이 없다(6.4).
+
+### 4.2 `player_buff` (신규 테이블)
+
+계정의 활성 버프 상태. [세이브 데이터 기획서](save-data-기획서.md) 3장 ERD에 신규 테이블로 추가한다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `user_id` | bigint PK | 계정 식별자(FK `game_player.user_id`) |
+| `buff_type` | int PK | 버프 종류(1:경험치 획득량 2:골드 획득량). `consumable_master.buff_type`과 동일 enum |
+| `buff_value` | decimal(5,3) | 적용 배율(`1.500` = 획득량 150%). 사용한 소모품의 `consumable_master.buff_value` |
+| `started_at` | bigint | 버프 시작 Unix ts(초). **소급 구간 계산의 하한** |
+| `expires_at` | bigint | 버프 만료 Unix ts(초). **소급 구간 계산의 상한** |
+
+- **PK `(user_id, buff_type)`** — 계정당 버프 종류별 1행. 이 PK가 행 잠금 단위이자 중복 사용 직렬화 장치다. 종류가 다른 버프(경험치·골드)는 서로 다른 행이라 **동시 활성**된다.
+- **JSON 컬럼을 쓰지 않는다** — 버프는 반복 구조이므로 `game_player`에 JSON 컬럼으로 넣지 않고 별도 자식 테이블로 둔다(프로젝트 스키마 규칙).
+- **활성 판정**: `expires_at > now`인 행만 활성이다. 만료 행은 남아 있어도 조회에서 걸러지므로 무해하며, 오프라인 정산은 이 만료 행을 **의도적으로 참조**한다(6.3).
+- **인덱스**: PK만으로 충분하다(모든 조회가 `user_id` 단건). 정리 배치용으로 `expires_at` 보조 인덱스를 둔다.
+
+**중첩(재사용) 규칙 — 기준안**
+
+같은 `buff_type`의 버프를 다시 사용하면 **남은 시간에 누적 연장**한다.
+
+```
+newExpiresAt = max(now, 기존 expires_at) + consumable_master.duration_sec
+```
+
+- 기존 버프가 만료 전이면 잔여 시간에 더해지고(연장), 이미 만료됐으면 `now` 기준으로 새로 시작한다.
+- `started_at`은 **기존 버프가 활성이면 유지**하고, 만료 상태에서 새로 시작하면 `now`로 갱신한다. 유지하는 이유는 오프라인 정산의 구간 하한이 흔들리면 안 되기 때문이다(6.3).
+- **누적 상한 24시간**: `newExpiresAt - now > 86400`이면 `BuffDurationLimitExceeded(4021)`로 거부하고 아이템을 차감하지 않는다(무한 축적 방지).
+- `buff_value`는 사용한 소모품 값으로 **덮어쓴다**. 현재 버프 종류당 소모품이 1종이라 값이 항상 같으므로 충돌이 없다. 배율이 다른 상·하위 부스터를 추가하면 이 규칙을 재정의해야 한다(8장).
+
+### 4.3 마스터 데이터 변경
+
+**(1) `item_master.item_type`에 소모품(4) 추가**
+
+기존 `1:장비 2:재료 3:재화`에 **`4:소모품`**을 추가한다. enum 신규 값 추가이므로 기존 계약을 깨지 않는다.
+
+- 소모품 아이템 코드는 **`42xxx`** 대역을 쓴다(재료 `41xxx`에 이어지는 비장비 대역).
+- 소모품은 장착·스탯 개념이 없어 `equip_slot`/`class_req`/`level_req`는 0, 스탯 컬럼(`hp`~`cooldown`)도 0이다. `grade`는 FK(`grade_master`) 제약을 만족시키기 위한 값이며 소모품 로직에는 쓰지 않는다.
+- 스택 보관 대상이므로 `stack_max > 1`이다(재료와 동일 규칙, [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 4장 "비장비" 규칙에 소모품을 포함시킨다).
+
+| item_code | name | item_type | grade | stack_max | sellable | base_price |
+|---|---|---|---|---|---|---|
+| 42001 | 경험치 부스터 | 4 | 1 | 99 | 0 | 0 |
+| 42002 | 골드 부스터 | 4 | 1 | 99 | 0 | 0 |
+
+> `sellable=0`(거래소 등록 불가)은 **기준안**이다. 버프 아이템이 거래 가능해지면 경제 영향이 커지므로 초기에는 거래를 막는다(8장).
+
+**(2) `consumable_master` (신규 마스터 테이블)**
+
+소모품 아이템이 부여하는 버프 효과 정의. `item_master`의 소모품 행과 1:1로 대응한다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `item_code` | int PK | 소모품 아이템 코드(FK `item_master.item_code`, `item_type=4`) |
+| `buff_type` | int | 버프 종류(1:경험치 획득량 2:골드 획득량) |
+| `buff_value` | decimal(5,3) | 획득량 배율(`1.500` = 150%) |
+| `duration_sec` | int | 지속시간(초) |
+
+**담기는 데이터 (학습용 임시값)**
+
+| item_code | name | buff_type | buff_value | duration_sec |
+|---|---|---|---|---|
+| 42001 | 경험치 부스터 | 1 (경험치 획득량) | 1.500 | 1800 (30분) |
+| 42002 | 골드 부스터 | 2 (골드 획득량) | 1.500 | 1800 (30분) |
+
+- 배율·지속시간은 스키마를 바꾸지 않고 **값만 조정**할 수 있다. 밸런스 확정은 8장.
+- 소모품 효과를 `item_master`의 컬럼으로 넣지 않고 별도 테이블로 분리한 이유는, 장비 스탯 컬럼과 성격이 달라 대다수 아이템 행에 의미 없는 컬럼이 깔리기 때문이다(`enhance_master`·`cube_master`와 같은 분리 방식).
+
+### 4.4 공유 DTO / enum
+
+`TaskbarHero.Common`에 정의해 서버-클라이언트가 공유한다. 다른 게임 DTO와 동일한 규약(`[Serializable]` + public camelCase 필드)을 따른다.
+
+```csharp
+namespace TaskbarHero.Common
+{
+    // 획득량 버프 종류. 숫자 값은 클라이언트와의 계약이므로 변경 금지(신규 값 추가는 허용).
+    public enum BuffType
+    {
+        ExpGain = 1,   // 경험치 획득량
+        GoldGain = 2,  // 골드 획득량
+    }
+}
+```
+
+```csharp
+namespace TaskbarHero.Common.Dto
+{
+    // 활성 버프 1건. 코어 로드(activeBuffs)·소모품 사용 응답이 공유한다.
+    [Serializable]
+    public class ActiveBuff
+    {
+        public int   buffType;   // BuffType (1:경험치 2:골드)
+        public float buffValue;  // 획득량 배율(1.5 = 150%)
+        public long  startedAt;  // 시작 Unix ts(초)
+        public long  expiresAt;  // 만료 Unix ts(초)
+    }
+
+    // 소모품 사용 결과 (POST /api/game/consumable/use 성공 응답 data)
+    [Serializable]
+    public class ConsumableUseResult
+    {
+        public long itemId;            // 사용한 인벤토리 행(player_item_id)
+        public int  itemCode;          // 사용한 소모품 코드
+        public long remainingQuantity; // 차감 후 남은 수량(0이면 행 삭제됨)
+        public ActiveBuff buff = new ActiveBuff();                       // 이번 사용으로 갱신된 버프
+        public List<ActiveBuff> activeBuffs = new List<ActiveBuff>();    // 갱신 후 계정의 활성 버프 전체
+    }
+}
+```
+
+- `buff_value`는 DB에서 `DECIMAL(5,3)`이므로 리포지토리 POCO에서 `decimal`로 받아 DTO의 `float`로 캐스팅한다(프로젝트 DB 매핑 규칙).
+- `item_type`은 기존 공유 enum에 `Consumable = 4`를 추가한다([마스터 데이터 기획서](master-data/master-data-기획서.md) 5장 공통 규칙).
+
+## 5. API 명세
+
+**API 목록**
+
+- [5.1 소모품 사용 — `POST /api/game/consumable/use`](#51-소모품-사용--post-apigameconsumableuse)
+- [5.2 활성 버프 조회 — 코어 로드에 포함](#52-활성-버프-조회--코어-로드에-포함)
+
+Base URL(개발): `http://localhost:5247` (GameServer). 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약, `success`는 `errorCode == 0`과 동치).
+
+### 5.1 소모품 사용 — `POST /api/game/consumable/use`
+
+인벤토리의 소모품 1개를 소모해 버프를 부여(또는 연장)한다. 배율·지속시간은 전적으로 마스터 데이터에서 서버가 읽는다(클라이언트 입력 없음).
+
+**Request**
+```json
+{ "userId": 1, "token": "...", "data": { "itemId": 7001 } }
+```
+
+- `itemId`: 사용할 소모품이 담긴 인벤토리 행(`player_item.player_item_id`).
+- **1회 호출당 1개 고정**이다. 수량 지정(`count`) 필드는 두지 않는다 — 인벤토리 용량 확장([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md#54-인벤토리-용량-확장--post-apigameinventoryexpand) 5.4)과 동일한 방침이며, 여러 개를 쓰려면 여러 번 호출한다.
+
+**Response (성공, 200 OK)**
+```json
+{
+  "success": true,
+  "errorCode": 0,
+  "message": "Consumable used",
+  "data": {
+    "itemId": 7001,
+    "itemCode": 42001,
+    "remainingQuantity": 4,
+    "buff": { "buffType": 1, "buffValue": 1.5, "startedAt": 1752350000, "expiresAt": 1752351800 },
+    "activeBuffs": [
+      { "buffType": 1, "buffValue": 1.5, "startedAt": 1752350000, "expiresAt": 1752351800 },
+      { "buffType": 2, "buffValue": 1.5, "startedAt": 1752349000, "expiresAt": 1752350800 }
+    ]
+  }
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `itemId` / `itemCode` | 사용한 인벤토리 행과 소모품 코드 |
+| `remainingQuantity` | 1 차감 후 남은 수량. `0`이면 해당 행이 삭제되어 가방 칸이 비었음을 뜻한다 |
+| `buff` | 이번 사용으로 부여·연장된 버프의 최종 상태(연장이면 `expiresAt`만 늘어나고 `startedAt`은 유지) |
+| `activeBuffs` | 갱신 후 계정의 **활성 버프 전체**(`expires_at > now`). 클라이언트가 이 배열만으로 버프 UI를 다시 그릴 수 있다 |
+
+- 오류: `ItemNotFound(4001)`(인벤토리에 없거나 본인 아이템이 아님), `ItemNotConsumable(4020)`(`item_type≠4`), `InsufficientQuantity(4006)`(수량 0), `BuffDurationLimitExceeded(4021)`(누적 24시간 초과), `MasterDataNotLoaded(10001)`(`consumable_master` 미로드), `SaveNotFound(2001)`(세이브 없음).
+
+### 5.2 활성 버프 조회 — 코어 로드에 포함
+
+**전용 조회 엔드포인트를 두지 않는다.** 활성 버프는 계정당 최대 버프 종류 수(현재 2행)로 **크기가 고정**이므로, 고정 크기 데이터를 코어 로드가 전량 반환하는 정책([세이브 데이터 기획서](save-data-기획서.md) 2장)에 따라 `POST /api/game/load` 응답에 `activeBuffs` 항목으로 포함한다.
+
+```json
+"activeBuffs": [
+  { "buffType": 1, "buffValue": 1.5, "startedAt": 1752350000, "expiresAt": 1752351800 }
+]
+```
+
+- `expires_at > now`인 행만 담는다. 활성 버프가 없으면 빈 배열이다.
+- 클라이언트는 `expiresAt - 서버 시각`으로 잔여 시간을 표시하고, 만료 후에는 서버 판정을 신뢰해 다음 응답에서 배열이 비는 것으로 확인한다(클라이언트가 만료를 확정하지 않는다).
+- 재접속 흐름상 **오프라인 정산(`/api/game/offline/claim`)보다 로드가 먼저 호출**되므로([오프라인 보상 정산 기획서](offline-reward-기획서.md) 6.2), 로드 시점의 `activeBuffs`는 정산 전 상태다. 정산은 만료 버프까지 소급 참조하므로 이 순서가 결과에 영향을 주지 않는다.
+
+## 6. 처리 흐름
+
+### 6.1 소모품 사용 (의사코드)
+
+```
+요청 수신 → 토큰 검증(미들웨어)
+BUFF_DURATION_CAP_SEC = 86400          # 누적 상한 24시간
+
+트랜잭션(BEGIN, user_id 잠금)
+  1) item = player_item[itemId] (행 잠금)
+     if 없음 or item.user_id != userId: ItemNotFound(4001)
+     if item.quantity < 1:              InsufficientQuantity(4006)
+  2) master = item_master[item.item_code]
+     if master.item_type != 4(소모품):   ItemNotConsumable(4020)
+     cm = consumable_master[item.item_code]
+     if 없음:                           MasterDataNotLoaded(10001)
+  3) prev = player_buff[userId, cm.buff_type] (행 잠금)
+     base       = max(now, prev?.expires_at ?? 0)      # 활성이면 잔여에 누적, 만료면 now부터
+     newExpires = base + cm.duration_sec
+     newStarted = (prev != null and prev.expires_at > now) ? prev.started_at : now
+     if newExpires - now > BUFF_DURATION_CAP_SEC: BuffDurationLimitExceeded(4021)   # 아이템 미차감
+  4) 아이템 차감: quantity -= 1
+     if quantity == 0: DELETE player_item[itemId]      # 가방 칸 반납
+  5) UPSERT player_buff(userId, cm.buff_type, cm.buff_value, newStarted, newExpires)
+COMMIT → { itemId, itemCode, remainingQuantity, buff, activeBuffs }
+```
+
+- 3단계의 상한 검사를 **차감 전에** 둔다. 차감 후 검사하면 거부된 요청에서 아이템만 사라진다.
+- 5단계는 `INSERT ... ON DUPLICATE KEY UPDATE`로 처리한다. PK `(user_id, buff_type)`가 중복 요청을 직렬화하므로 별도 락이 불필요하다(3장).
+- 소모품은 스택 아이템이므로 수량이 0이 된 행은 삭제해 가방 칸을 반납한다(비장비 스택 규칙, [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 4장).
+
+### 6.2 버프 적용 — 스테이지 클리어 보상
+
+클리어는 **시점 이벤트**이므로 구간 계산이 없다. 지급 트랜잭션에서 활성 버프를 읽어 배율만 곱한다([스테이지/전투 결과 기획서](stage-battle-기획서.md) 5.2·6장 지급 단계).
+
+```
+gold = floor(stage_reward.reward_gold × multiplier(GoldGain))
+exp  = floor(stage_reward.reward_exp  × multiplier(ExpGain))
+
+multiplier(type):
+    b = player_buff[userId, type]
+    return (b != null and b.expires_at > now) ? b.buff_value : 1.0
+```
+
+- 버프 조회는 보상 지급과 **같은 트랜잭션**에서 수행한다. 배율 판정과 지급이 갈라지지 않는다.
+- 경험치는 기존 규칙대로 **파티 편성 캐릭터 전원에게 동일 값**으로 지급하며, 배율은 그 값에 한 번 적용된다(캐릭터 수만큼 곱하지 않는다).
+- 버프가 클리어 처리 **중간에** 만료되는 경우는 트랜잭션 시작 시각(`now`) 기준 단일 판정으로 처리한다(초 단위 경계는 플레이어에게 유리하게 반올림하지 않는다).
+
+### 6.3 버프 적용 — 오프라인 보상 정산(구간 교집합)
+
+오프라인 정산은 **소급 구간 계산**이므로 만료된 버프도 참조한다. 정산 구간과 버프 구간의 **교집합 시간**에만 배율을 적용한다([오프라인 보상 정산 기획서](offline-reward-기획서.md) 6.1의 지급 계산에 결합).
+
+```
+effectiveSec = min(now - last_active_at, OFFLINE_CAP_SEC)   # 기존 규칙(최대 12시간)
+windowStart  = now - effectiveSec                           # cap 적용 후의 실제 정산 구간 시작
+
+buffedSec(type):
+    b = player_buff[userId, type]                # 만료 행도 조회 대상(expires_at 필터 없음)
+    if b == null: return 0
+    return max(0, min(now, b.expires_at) - max(windowStart, b.started_at))
+
+weightedSec(type):
+    bs = buffedSec(type)
+    return (effectiveSec - bs) + bs × buff_value(type)      # 버프 구간만 배율
+
+gold = floor(weightedSec(GoldGain) × goldPerSec × OFFLINE_EFFICIENCY)
+exp  = floor(weightedSec(ExpGain)  × expPerSec  × OFFLINE_EFFICIENCY)
+```
+
+- **`windowStart`는 `last_active_at`이 아니라 cap 적용 후 시각**이다. 12시간 상한에 걸린 경우 버려진 초과 구간의 버프까지 세면 지급이 과다해진다.
+- 버프 구간이 정산 구간을 완전히 벗어나면 `buffedSec = 0`이 되어 배율이 적용되지 않는다(정상 동작).
+- 예시: `effectiveSec = 43200`(12시간), 골드 버프가 정산 구간 초반 1800초 동안 유효(`buff_value=1.5`) → `weightedSec = (43200 - 1800) + 1800 × 1.5 = 44100`. 버프 없을 때 대비 골드 +2.08%.
+- 이 계산이 성립하려면 정산 시점에 **만료 버프 행이 아직 존재**해야 한다. 그래서 정리 배치가 보존 하한을 지켜야 한다(6.4).
+
+### 6.4 만료 버프 정리 배치
+
+만료 행은 조회 필터(`expires_at > now`)로 이미 걸러지므로 정리는 **저장 공간 회수 목적**이다. 기존 메일 GC(`GameServer/Batch/MailGcBatchService.cs`)와 동일한 `PeriodicBatchService` 파생 배치로 둔다.
+
+```
+DELETE FROM player_buff
+ WHERE expires_at < now - (OFFLINE_CAP_SEC + BUFF_GC_MARGIN_SEC)
+```
+
+- **보존 하한이 정확성 요건이다.** 만료 즉시 지우면 6.3이 참조할 근거가 사라져, "오프라인 중 만료된 버프분이 조용히 누락되는" 결함이 된다(Redis TTL을 쓰지 않는 이유와 같은 문제, 4.1).
+- `OFFLINE_CAP_SEC`(12시간)를 상수로 참조해 계산한다. 오프라인 상한을 조정하면 이 보존 기간도 함께 따라가야 하므로 값을 복제하지 않는다. `BUFF_GC_MARGIN_SEC`는 여유분(기준안 1시간)이다.
+- 배치 주기는 하루 1회로 충분하다(행 수가 계정당 최대 버프 종류 수라 압박이 없다).
+
+### 6.5 예외 / 엣지 케이스
+
+- **소모품이 아닌 아이템 사용 시도**: `ItemNotConsumable(4020)`으로 거부한다. 장비·재료·재화 행 모두 해당한다.
+- **누적 상한 초과**: 남은 시간 + 신규 지속시간이 24시간을 넘으면 `BuffDurationLimitExceeded(4021)`로 거부하고 **아이템을 차감하지 않는다.** 플레이어는 버프를 소모한 뒤 다시 사용한다.
+- **동시 중복 사용 요청**: `player_buff` PK 행 잠금과 `player_item` 행 잠금으로 직렬화된다. 두 요청이 모두 성공하면 아이템 2개가 차감되고 지속시간이 2배 연장된 상태가 되며(정상), 재전송으로 인한 이중 차감은 트랜잭션 순서에 따라 하나씩 순차 반영된다.
+- **버프 중 로그아웃 → 상한 초과 후 재접속**: 오프라인 경과가 12시간을 넘으면 정산 구간이 cap으로 잘리고, 잘려나간 구간의 버프는 계산에 포함되지 않는다(6.3). 정산 상한과 동일한 취급으로 초과분은 버려진다.
+- **정산보다 heartbeat가 먼저 도착**: 기존 규칙대로 오프라인 경과가 사라져 보상이 0이 되며, 버프분도 함께 사라진다([오프라인 보상 정산 기획서](offline-reward-기획서.md) 6.3). 클라이언트가 호출 순서로 방지한다.
+- **버프 적용 대상이 아닌 획득 경로**: 아래는 **배율을 적용하지 않는다(확정)**. 확률·정액 보상이거나 플레이어 간 이전이라 배율이 경제를 왜곡한다.
+  - 메일 첨부 수령(거래 대금·운영 지급), 출석부 보상, 큐브 분해 골드, 랜덤 상자 결과, 거래소 판매 대금, 신규 가입 지원금.
+- **버프 종류가 늘어난 경우**: `activeBuffs`는 배열이므로 계약 변경 없이 행이 추가된다. 클라이언트는 알 수 없는 `buffType`을 무시하도록 구현한다.
+
+## 7. 에러 코드
+
+소모품/버프는 아이템 도메인의 확장이므로 **4000번대 블록 안에서 `4020~4029`를 소모품/버프에 할당**한다(기존 할당: `4001~4009` 인벤토리/아이템, `4010~4019` 큐브). 새 1000번 블록을 열지 않는다. 추가 시 [통합 정의](../공통/error-code-정의.md)도 함께 갱신한다.
+
+| 이름 | 값 | 의미 |
+|---|---|---|
+| ItemNotConsumable | 4020 | 소모품이 아닌 아이템에 사용을 시도(`item_type≠4`) |
+| BuffDurationLimitExceeded | 4021 | 버프 누적 지속시간이 상한(24시간)을 초과 |
+
+**재사용하는 기존 코드** — 새 코드를 만들지 않는다.
+
+| 코드 | 사용 상황 |
+|---|---|
+| `ItemNotFound(4001)` | 사용 대상 아이템이 인벤토리에 없거나 본인 아이템이 아님 |
+| `InsufficientQuantity(4006)` | 소모품 수량 부족(0개) |
+| `MasterDataNotLoaded(10001)` | `consumable_master`에 해당 소모품 정의가 없음/미로드 |
+| `SaveNotFound(2001)` | 세이브 데이터 없음 |
+
+## 8. 미결 사항 / TODO
+
+- **버프 배율·지속시간 밸런스**: 현재 `1.500` 배율 / `1800`초(30분)는 **학습용 임시값**이다. 스키마를 바꾸지 않고 `consumable_master` 값만 조정해 확정한다. → [마스터 데이터 값](master-data/master-data-값.md) §15.
+- **누적 상한(24시간)·GC 여유(1시간)**: 기준안이다. 상한을 바꿀 경우 5.1 에러 응답 조건과 6.1 의사코드의 상수를 함께 갱신한다.
+- **중첩(재사용) 규칙**: "누적 연장 + `buff_value` 덮어쓰기"는 버프 종류당 소모품이 1종이라는 현재 전제에서 성립한다. **배율이 다른 상·하위 부스터**(예: 1.5배 / 2.0배)를 추가하면 정책을 재정의해야 한다 — 높은 배율 우선 / 별도 행 허용 / 낮은 배율 사용 거부 중 선택.
+- **소모품 거래 가능 여부**: 현재 `sellable=0`(거래소 등록 불가)이 기준안이다. 버프 아이템의 거래 허용은 골드 경제에 직접 영향을 주므로 별도 판단이 필요하다.
+- **소모품 획득 경로**: 어떤 경로로 소모품을 지급할지(상자 풀 포함 여부·출석 보상·상점 판매) 미정. 현재는 기존 지급 경로가 `item_code` 42xxx를 지급하면 그대로 적재되는 상태다.
+- **소모품 종류 확장**: 스탯 증가·드롭률 증가·즉시 회복 등 다른 효과의 소모품은 아직 범위 밖이다. 도입 시 `consumable_master.buff_type`에 값을 추가하고(기존 값 변경 금지), 즉시 효과형(지속시간 0)은 `player_buff`를 쓰지 않는 별도 흐름이 필요하다. **추가 작업은 새 기획서가 아니라 본 문서에 절을 이어 붙이는 방식으로 한다**(1장 「문서 범위와 확장 원칙」의 갱신 지점 참고).
+- **서버 전체 버프 이벤트 (범위 밖 · 방향 결정)**: 본 기획에는 넣지 않는다. 도입 시에는 플레이어 버프(`player_buff`)와 **분리**해 `global_buff_event`(`event_code`, `buff_type`, `starts_at`, `ends_at`) 형태의 **마스터/운영 테이블**로 정의하고, 행 수가 적으므로 **서버 인메모리로 들고** 주기 갱신한다. 계정마다 `player_buff` 행으로 뿌리지 않는다(계정 수만큼 쓰기 + 신규 가입자 누락). 이 구조를 택하는 이유는 `starts_at`을 미래 시각으로 **사전 등록**할 수 있어야 하기 때문이다. 개인 버프와의 합산 방식(곱연산/합연산)은 도입 시 확정한다.
+- **클라이언트 잔여 시간 표시**: 서버-클라 시각 오차 보정 방식(로드 응답에 서버 시각을 함께 내릴지) 미정. 현재는 `expiresAt`(절대 시각)만 내려주고 클라이언트가 자체 시계로 카운트다운한다.
+
+## 9. 참고
+
+- [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) — 도메인 4.4(인벤토리/아이템)
+- [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 아이템 보관·스택·소모 공통 규칙, 4000번대 에러 코드 블록
+- [마스터 데이터 기획서](master-data/master-data-기획서.md) — `item_master`(`item_type=4`)·`consumable_master`
+- [세이브 데이터 기획서](save-data-기획서.md) — `player_buff` 저장, 코어 로드 `activeBuffs`
+- [스테이지/전투 결과 기획서](stage-battle-기획서.md) — 클리어 보상에 버프 배율 반영
+- [오프라인 보상 정산 기획서](offline-reward-기획서.md) — 소급 정산 구간 교집합 계산
+- [거래소 / 교역선 기획서](trade-기획서.md) — 7.5 축소 운전(정본=MySQL, 캐시=파생) 원칙
+- [ErrorCode 통합 정의](../공통/error-code-정의.md) — 4020~4029 소모품/버프 할당
