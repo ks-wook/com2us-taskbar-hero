@@ -35,6 +35,7 @@ namespace TaskbarHero.Client.Battle
             public float scale;    // 발동 이펙트 크기 배율(1=기본)
             public Vector2 offset; // 발동 이펙트 위치 보정(월드, x+는 적 방향)
             public bool weaponAfterimage; // 버프 지속 동안 무기 끝 붉은 잔상 추가
+            public float hitTimeRatio;    // 데미지 타격 시점(이펙트 재생 구간 비율, 1=이펙트 종료 시점)
         }
 
         private BattleDevController _ctrl;
@@ -413,6 +414,7 @@ namespace TaskbarHero.Client.Battle
                     scale = _cfg != null ? _cfg.ScaleFor(s.skillCode) : 1f,
                     offset = _cfg != null ? _cfg.OffsetFor(s.skillCode) : Vector2.zero,
                     weaponAfterimage = _cfg != null && _cfg.WeaponAfterimageFor(s.skillCode),
+                    hitTimeRatio = _cfg != null ? _cfg.HitTimeRatioFor(s.skillCode) : 1f,
                 };
                 _skills.Add(sk);
                 if (sk.code == _chargeSkillCode) _chargeSkill = sk;
@@ -774,6 +776,9 @@ namespace TaskbarHero.Client.Battle
             {
                 long dmg = Damage(sk.coef);
                 float motion = EffectDuration(sk.effect);
+                // 데미지 타격 시점 — 기본은 이펙트 종료 시점(비율 1)이고, 이펙트가 빠르게 터지는 스킬은
+                // 멤버 설정의 hitTimeRatio로 앞당긴다(모션·쿨타임은 motion 그대로 유지).
+                float hitDelay = motion * (sk.hitTimeRatio > 0f ? sk.hitTimeRatio : 1f);
                 string label = $"[{_name}] 스킬 {sk.name} ×{sk.coef:0.##}";
 
                 if (_rainSkillCode != 0 && sk.code == _rainSkillCode)
@@ -783,7 +788,7 @@ namespace TaskbarHero.Client.Battle
                     _moving = false;
                     SendMessage("PlayArrowRain", motion, SendMessageOptions.DontRequireReceiver);
                     SpawnEffectAt(sk.effect, ArrowRainTargetPos(), sk.scale);
-                    DealDamage(motion, dmg, label);
+                    DealDamage(hitDelay, dmg, label);
                     _busyTimer = motion + 0.4f; // 점프+홀드+착지 동안 대기
                 }
                 else if (_slamSkillCode != 0 && sk.code == _slamSkillCode)
@@ -804,7 +809,7 @@ namespace TaskbarHero.Client.Battle
                         PlayAttackAnim();
                     Vector3 center = SelfEffectPos(sk.offset);
                     var fx = SpawnEffectAt(sk.effect, center, sk.scale);
-                    DealAreaDamage(motion, dmg, label, center, EffectRadius(fx));
+                    DealAreaDamage(hitDelay, dmg, label, center, EffectRadius(fx));
                     _busyTimer = motion;
                 }
                 else if (_ranged && sk.effect != null && _ctrl.MonsterTransform != null)
@@ -832,12 +837,12 @@ namespace TaskbarHero.Client.Battle
                     if (_aoeSkillCodes.Contains(sk.code))
                     {
                         // 광역(강타·강한일격 등): 이펙트 범위 내 모든 적에게 데미지.
-                        DealAreaDamage(motion, dmg, label,
+                        DealAreaDamage(hitDelay, dmg, label,
                             EffectCenter(fx, SelfEffectPos(sk.offset)), EffectRadius(fx));
                     }
                     else
                     {
-                        DealDamage(motion, dmg, label);
+                        DealDamage(hitDelay, dmg, label);
                     }
                     _busyTimer = motion;
                 }

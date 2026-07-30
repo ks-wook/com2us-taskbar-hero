@@ -26,6 +26,12 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("초상화 프레임 Image 템플릿")]
         public RectTransform portraitFrameTemplate;
 
+        [Header("슬롯 배경 프레임")]
+        [Tooltip("스킬 아이콘 뒤에 깔리는 슬롯 프레임(Assets/Art/UI/skill_slot). 없으면 프레임 없이 아이콘만 표시.")]
+        public Sprite slotFrameSprite;
+        [Tooltip("프레임 테두리가 보이도록 아이콘을 슬롯 안쪽으로 줄이는 여백(캔버스 단위). skill_slot의 테두리 두께 비율(약 12%)에 맞춘 값.")]
+        public float slotIconInset = 10f;
+
         [Header("레이아웃(우상단 앵커 기준, 음수 = 좌/하)")]
         public float slotStartX = -204f;
         public float slotStepX = 92f;
@@ -234,15 +240,19 @@ namespace TaskbarHero.Client.Battle
                     }
                     _hoverSlots.Add(new HoverSlot { rect = rt, member = member, skillCode = code });
 
+                    AddSlotFrame(slotGo.transform); // 아이콘 뒤에 깔리는 슬롯 프레임
+
                     var iconT = FindChild(slotGo.transform, "Icon");
                     if (iconT != null)
                     {
                         var img = iconT.GetComponent<Image>();
                         var icon = member.SkillIconAt(j);
                         if (img != null && icon != null) img.sprite = icon;
+                        InsetToFrame(iconT as RectTransform); // 프레임 테두리 안쪽으로
                     }
 
                     var fillT = FindChild(slotGo.transform, "CooldownFill");
+                    InsetToFrame(fillT as RectTransform);     // 쿨타임 오버레이도 아이콘과 같은 영역
                     var textT = FindChild(slotGo.transform, "Remaining");
                     _slots.Add(new SlotRT
                     {
@@ -255,6 +265,48 @@ namespace TaskbarHero.Client.Battle
             }
 
             MeasureBlockBottom();
+        }
+
+        /// <summary>
+        /// 슬롯 아이콘 뒤에 깔리는 배경 프레임(skill_slot)을 만든다.
+        /// <b>첫 자식</b>으로 넣어 Icon·CooldownFill·Remaining보다 먼저(=아래에) 그려지게 하고,
+        /// 레이캐스트는 받지 않게 해 슬롯 루트의 hover 판정을 방해하지 않는다.
+        /// </summary>
+        private void AddSlotFrame(Transform slot)
+        {
+            if (slotFrameSprite == null || slot == null)
+            {
+                return;
+            }
+
+            var go = new GameObject("SlotFrame", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            var rt = (RectTransform)go.transform;
+            rt.SetParent(slot, false);
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            rt.localScale = Vector3.one;
+
+            var img = go.GetComponent<Image>();
+            img.sprite = slotFrameSprite;
+            img.type = Image.Type.Simple;   // 정사각 슬롯 아트(9-slice 경계 없음)
+            img.color = Color.white;
+            img.raycastTarget = false;
+            rt.SetAsFirstSibling();
+        }
+
+        /// <summary>슬롯 프레임 테두리가 가려지지 않도록 대상 rect를 안쪽으로 줄인다(프레임이 없으면 그대로 둔다).</summary>
+        private void InsetToFrame(RectTransform rt)
+        {
+            if (rt == null || slotFrameSprite == null || slotIconInset <= 0f)
+            {
+                return;
+            }
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(slotIconInset, slotIconInset);
+            rt.offsetMax = new Vector2(-slotIconInset, -slotIconInset);
         }
 
         /// <summary>

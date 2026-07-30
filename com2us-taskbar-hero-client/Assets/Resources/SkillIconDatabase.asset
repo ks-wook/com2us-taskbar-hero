@@ -49,3 +49,15 @@ MonoBehaviour:
     sprite: {fileID: 1315568854401279024, guid: 302bdd4c63ccc4046a7e15e379df55e0, type: 3}
   - skillCode: 312
     sprite: {fileID: 8533117060127289180, guid: ddb613849b68f4744b8ec8b688f45cd9, type: 3}
+  - skillCode: 401
+    sprite: {fileID: 4264714366617519430, guid: 844546fe711c49b4aa65d2943e8543a0, type: 3}
+  - skillCode: 402
+    sprite: {fileID: 1458260262148479802, guid: d68aae11708e8834cafd0f2410cecc1a, type: 3}
+  - skillCode: 403
+    sprite: {fileID: 8624705271358520548, guid: ddbbef65d28326546bbe9d468b5541fb, type: 3}
+  - skillCode: 410
+    sprite: {fileID: -2739675882379241496, guid: c2427213f2a09c649ad04857878ec965, type: 3}
+  - skillCode: 411
+    sprite: {fileID: 2074283581932026930, guid: e5324f35d04b0a94bad7f995383eeb32, type: 3}
+  - skillCode: 412
+    sprite: {fileID: -1376789689202978063, guid: 77baea97f26d7ad41b48706f773beac6, type: 3}

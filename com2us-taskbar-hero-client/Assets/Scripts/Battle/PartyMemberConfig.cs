@@ -21,6 +21,11 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("버프 스킬 전용. 버프가 켜져 있는 동안 무기 잔상을 붉은색으로 바꾸고 무기 끝에 붉은 발광점을 "
                  + "추가한다(기사의 분노·광전사의 힘). 멤버의 weaponTrail이 켜져 있어야 효과가 있다")]
         public bool weaponAfterimage = false;
+        [Range(0.05f, 1f)]
+        [Tooltip("데미지가 들어가는 시점(이펙트 재생 구간 비율). 1 = 이펙트가 끝나는 순간(기본), "
+                 + "0.35 = 재생 35% 지점. 이펙트가 빠르게 터지는 스킬(예: 강한일격)은 값을 낮춰 타격감을 맞춘다. "
+                 + "모션/쿨타임은 그대로이고 데미지 연산 시점만 앞당겨진다")]
+        public float hitTimeRatio = 1f;
     }
 
     /// <summary>
@@ -115,6 +120,22 @@ namespace TaskbarHero.Client.Battle
                     if (s != null && s.skillCode == skillCode)
                     {
                         return s.effectScale > 0f ? s.effectScale : 1f;
+                    }
+                }
+            }
+            return 1f;
+        }
+
+        /// <summary>스킬 코드의 데미지 타격 시점 비율(이펙트 재생 구간 대비). 미지정이면 1(이펙트 종료 시점).</summary>
+        public float HitTimeRatioFor(int skillCode)
+        {
+            if (skills != null)
+            {
+                foreach (var s in skills)
+                {
+                    if (s != null && s.skillCode == skillCode)
+                    {
+                        return s.hitTimeRatio > 0f ? Mathf.Clamp(s.hitTimeRatio, 0.05f, 1f) : 1f;
                     }
                 }
             }

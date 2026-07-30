@@ -1028,7 +1028,7 @@ namespace TaskbarHero.Client.Battle
         /// <summary>소환할 캐릭터를 고르는 토글 + 재시작 버튼(구현된 직업만 선택 가능).</summary>
         private void DrawSelectionPanel()
         {
-            GUILayout.Label("<b>소환 캐릭터 선택</b> (구현: 기사·레인저·마법사)");
+            GUILayout.Label("<b>소환 캐릭터 선택</b> (구현: 기사·레인저·마법사·슬레이어)");
             if (_selected == null || _selected.Length != party.Count) InitSelection();
 
             int chosen = 0;
