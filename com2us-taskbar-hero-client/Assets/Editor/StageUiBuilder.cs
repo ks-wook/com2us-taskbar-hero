@@ -14,6 +14,8 @@ namespace TaskbarHero.ClientEditor
     public static class StageUiBuilder
     {
         private const string ArtDir = "Assets/Art/UI/Stage";
+        // 지역 창 배경은 공용 모달 배경을 재사용한다(Stage 전용 아트가 없어 팝업 톤을 맞춘다).
+        private const string RegionWindowBgPath = "Assets/Art/UI/modal_bg.png";
         private const string PrefabPath = "Assets/Prefabs/UI/StagePanel.prefab";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
@@ -59,6 +61,7 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("pathConnector").objectReferenceValue = LoadSprite("ui_path_connector");
             so.FindProperty("nameplateBar").objectReferenceValue = LoadSprite("ui_nameplate_bar");
             so.FindProperty("mapBackground").objectReferenceValue = LoadSprite("dungeon_map_bg");
+            so.FindProperty("regionWindowBackground").objectReferenceValue = LoadSpriteAt(RegionWindowBgPath);
             so.FindProperty("iconCleared").objectReferenceValue = LoadSprite("stage_cleared");
             so.FindProperty("iconInProgress").objectReferenceValue = LoadSprite("stage_ing");
             so.ApplyModifiedPropertiesWithoutUndo();
@@ -129,7 +132,12 @@ namespace TaskbarHero.ClientEditor
 
         private static Sprite LoadSprite(string fileName)
         {
-            string path = $"{ArtDir}/{fileName}.png";
+            return LoadSpriteAt($"{ArtDir}/{fileName}.png");
+        }
+
+        /// <summary>지정 경로에서 스프라이트를 로드한다(Multiple 임포트면 첫 서브 스프라이트로 폴백 — 임포트 설정은 바꾸지 않는다).</summary>
+        private static Sprite LoadSpriteAt(string path)
+        {
             var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
             if (sprite != null)
             {

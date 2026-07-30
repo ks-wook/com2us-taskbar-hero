@@ -48,7 +48,7 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite _buttonSprite;
 
         [Header("구성 참조 (에디터 빌더가 배선)")]
-        [SerializeField] private Button _closeButton;
+        // 닫기(X) 버튼은 두지 않는다(미관상 제거) — 패널 닫기는 아래 딤(바깥 영역) 클릭이 담당한다.
         [SerializeField] private Button _dimButton;
         [SerializeField] private Button _claimButton;
         [SerializeField] private Text _claimButtonLabel;
@@ -200,7 +200,7 @@ namespace TaskbarHero.Client.UI
             return rt;
         }
 
-        /// <summary>헤더: 오늘 날짜 줄과 닫기 버튼. 제목은 게시판 아트 상단 리본("DAILY ATTENDANCE")이
+        /// <summary>헤더: 오늘 날짜 줄. 제목은 게시판 아트 상단 리본("DAILY ATTENDANCE")이
         /// 대신하므로 별도 텍스트를 두지 않는다(아트가 없을 때만 제목 텍스트를 표시).</summary>
         private void BuildHeader(RectTransform panel)
         {
@@ -224,17 +224,8 @@ namespace TaskbarHero.Client.UI
             ttrt.anchoredPosition = new Vector2(0f, -112f);
             ttrt.sizeDelta = new Vector2(600f, 36f);
 
-            // 닫기 버튼 — 게시판 안쪽 우측 상단(리본·나무 테두리를 가리지 않는 위치).
-            var close = NewImage("CloseButton", panel, new Color(0.32f, 0.20f, 0.13f, 0.95f));
-            var crt = close.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
-            crt.pivot = new Vector2(1f, 1f);
-            crt.anchoredPosition = new Vector2(-56f, -108f);
-            crt.sizeDelta = new Vector2(48f, 48f);
-            var xt = NewText("X", close.rectTransform, "X", 28, TextAnchor.MiddleCenter);
-            xt.color = new Color(1f, 0.93f, 0.78f);
-            Stretch(xt.rectTransform);
-            _closeButton = close.gameObject.AddComponent<Button>();
+            // 닫기(X) 버튼은 두지 않는다(미관상 제거) — 게시판 아트 위에 얹히면 화면을 해쳐,
+            // 닫기는 패널 바깥(딤) 클릭이 담당한다.
         }
 
         /// <summary>1~30일차 보상 사다리 그리드(6열 × 5행 = 30칸, 공용 아이템 슬롯을 미리 만들어둔다).</summary>
@@ -335,7 +326,6 @@ namespace TaskbarHero.Client.UI
 
         private void WireRuntime()
         {
-            if (_closeButton != null) _closeButton.onClick.AddListener(Close);
             if (_dimButton != null) _dimButton.onClick.AddListener(Close);
             if (_claimButton != null) _claimButton.onClick.AddListener(OnClaim);
         }

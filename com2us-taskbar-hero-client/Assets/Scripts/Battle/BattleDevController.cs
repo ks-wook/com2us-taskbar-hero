@@ -411,6 +411,105 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>
+        /// 새 스테이지 전투를 시작할 때, 이전 전투에서 전사해 사라진 파티원을 다시 스폰한다(전체 체력으로 부활).
+        /// 살아남은 멤버는 그대로 두고(위치·남은 체력 유지) 빠진 자리만 채운 뒤, 파티 순서를 원래 편성 순서로
+        /// 되돌려 대형·전투 UI를 다시 구성한다. 파티는 직업 중복이 없으므로 <see cref="PlayerCombatant.ClassCode"/>로
+        /// 생존 여부를 판정한다.
+        /// </summary>
+        private void RestoreFallenMembers()
+        {
+            if (party == null || _om == null)
+            {
+                return;
+            }
+            _members.RemoveAll(m => m == null); // 파괴 대기 중이던 참조 정리
+
+            bool restored = false;
+            for (int i = 0; i < party.Count; i++)
+            {
+                var cfg = party[i];
+                if (cfg == null || cfg.prefab == null || !IsImplemented(cfg)) continue;
+                if (_selected != null && i < _selected.Length && !_selected[i]) continue; // 편성되지 않은 직업
+                if (HasLiveMember(cfg.classCode)) continue;                               // 이미 살아 있음
+
+                // 대형 목표는 아래에서 다시 계산되므로, 우선 현재 파티 라인에 세운다.
+                var pc = SpawnAlly(cfg, new Vector3(_partyX, _pathY, 0f));
+                if (pc == null) continue;
+                _members.Add(pc);
+                restored = true;
+                Log($"재합류 — {pc.DisplayName}(이전 전투 전사)");
+            }
+
+            if (!restored)
+            {
+                return;
+            }
+
+            SortMembersByPartyOrder();
+            _partySpeed = _members.Count > 0 ? Mathf.Max(0.1f, _members[0].MoveSpeed) : fallbackMoveSpeed;
+            ComputeFormation();
+
+            // 아군 HP바·스킬 슬롯(전투 UI)을 새 파티 구성으로 다시 만든다(전사 시 Rebuild와 짝).
+            var ui = FindAnyObjectByType<SkillCooldownUI>();
+            if (ui != null) ui.Rebuild();
+        }
+
+        /// <summary>파티 전원의 체력을 최대치로 되돌린다(스테이지 시작 시 무조건 회복).
+        /// 스테이지를 넘겨도 체력이 누적 소모되어 뒤 스테이지가 부당하게 어려워지는 것을 막는다.</summary>
+        private void HealPartyFull()
+        {
+            foreach (var m in _members)
+            {
+                if (m != null && m.Alive)
+                {
+                    m.RestoreFullHp();
+                }
+            }
+        }
+
+        /// <summary>해당 직업의 살아 있는 파티원이 있는지.</summary>
+        private bool HasLiveMember(int classCode)
+        {
+            foreach (var m in _members)
+            {
+                if (m != null && m.Alive && m.ClassCode == classCode)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>파티 목록을 편성(party 인스펙터) 순서로 정렬한다. 대형 계산이 이 순서를 전제로 한다.</summary>
+        private void SortMembersByPartyOrder()
+        {
+            var ordered = new List<PlayerCombatant>(_members.Count);
+            for (int i = 0; i < party.Count; i++)
+            {
+                var cfg = party[i];
+                if (cfg == null) continue;
+                foreach (var m in _members)
+                {
+                    if (m != null && m.ClassCode == cfg.classCode)
+                    {
+                        ordered.Add(m);
+                        break;
+                    }
+                }
+            }
+            // 편성 목록에 없는(예외) 멤버는 뒤에 붙여 유실을 막는다.
+            foreach (var m in _members)
+            {
+                if (m != null && !ordered.Contains(m))
+                {
+                    ordered.Add(m);
+                }
+            }
+            _members.Clear();
+            _members.AddRange(ordered);
+        }
+
+        /// <summary>
         /// 스폰에 쓸 캐릭터 프리팹을 고른다. 서버 모드에서는 세이브의 성별(1:남 2:여)에 맞는 프리팹을
         /// 공용 <see cref="CharacterPrefabDatabase"/>에서 찾아 쓰고, 개발 하네스(BattleDevScene)나
         /// 등록된 프리팹이 없을 때는 인스펙터에 배선된 프리팹을 그대로 쓴다.
@@ -573,6 +672,11 @@ namespace TaskbarHero.Client.Battle
                                       int bossCode = 0, System.Action onDefeat = null)
         {
             serverMode = true;
+            // 이전 스테이지에서 전사해 사라진 파티원을 새 전투 시작 시 다시 세운다.
+            // (전사자는 OnAllyKilled에서 목록에서 빠지고 오브젝트도 파괴되므로, 이 복구가 없으면
+            //  전멸로 리셋되기 전까지 다음 스테이지들에 계속 나타나지 않는다.)
+            RestoreFallenMembers();
+            HealPartyFull(); // 스테이지 시작 시 파티 전원 체력 회복(부활한 멤버와 생존 멤버의 체력을 같은 기준으로 맞춘다)
             _prefabResolver = prefabResolver;
             _onAllCleared = onAllCleared;
             _onDefeat = onDefeat;

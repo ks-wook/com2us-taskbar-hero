@@ -65,7 +65,8 @@ namespace TaskbarHero.Client.Battle
         private readonly List<int> _pendingLevelUps = new List<int>(); // 이번 클리어에서 레벨업한 캐릭터 id(오버레이 종료 후 글로우 재생)
 
         // 지역당 스테이지 수(난이도1 기준 클리어 시퀀스 계산용 — 스테이지 UI/서버 규칙과 동일).
-        private const int StagesPerRegion = 3;
+        // 서버 GameServer/MasterData/StageCoords.StagesPerAct(=10)와 같은 값이어야 프론티어 판정이 맞는다.
+        private const int StagesPerRegion = 10;
 
         /// <summary>현재 진행 중인 스테이지 좌표(외부 관찰/디버그용).</summary>
         public int CurrentAct => _act;

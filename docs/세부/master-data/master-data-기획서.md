@@ -383,14 +383,14 @@ erDiagram
 
 ### 5.9 `stage_master` — 스테이지 구성
 
-`game_player`의 `act`/`stage`/`difficulty`가 참조. **5 Act × 2 난이도 × 3 스테이지(=30)** 구성이며(각 Act·난이도는 스테이지 1~2 일반, 스테이지 3 보스) **스폰·보스 구성**을 정의한다. **클리어 보상은 분리**되어 `stage_reward`(5.10)가 담당한다.
+`game_player`의 `act`/`stage`/`difficulty`가 참조. **5 Act(지역) × 2 난이도 × 10 스테이지(=100)** 구성이며(한 지역은 10 스테이지 — 각 Act·난이도는 스테이지 1~9 일반, 스테이지 10 보스) **스폰·보스 구성**을 정의한다. **클리어 보상은 분리**되어 `stage_reward`(5.10)가 담당한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `stage_id` | int PK | `(act, difficulty, stage)`를 인코딩한 키(`act×1000000+difficulty×10000+stage`) |
 | `act` | int | Act 번호(1~5) |
 | `difficulty` | int | 난이도 티어(1~2) |
-| `stage` | int | 스테이지 번호(1~3) |
+| `stage` | int | 스테이지 번호(1~10, **10이 보스 스테이지**) |
 | `boss_monster_code` | int | **스테이지 보스 몬스터**(`monster_master`). 없으면 0 |
 | `background_type` | int | **스테이지 배경 타입(1~5)**. 클라이언트가 이 코드로 배경 아트(배경 세트 `dungeon_bg_1~5`)를 선택한다. 별도 마스터 테이블 없이 `coef_type`·`stat_type`처럼 int enum으로 둔다 |
 

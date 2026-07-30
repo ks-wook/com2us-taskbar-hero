@@ -8,8 +8,9 @@ namespace TaskbarHero.Client.UI
 {
     /// <summary>
     /// 입장 스테이지 선택 패널(2단계). 1단계: 월드맵 배경에서 5개 지역을 hover하면 노랗게 빛나고
-    /// 클릭하면 지역 창이 열린다. 2단계: 지역 창에 그 지역의 스테이지 3개(경로 연결)가 표시되어
-    /// 선택·입장한다. 총 5지역 × 3스테이지 = 15스테이지(1-1 ~ 5-3). 서버 실데이터 미연동(데모).
+    /// 클릭하면 지역 창이 열린다. 2단계: 지역 창에 그 지역의 스테이지 10개가 뱀 모양(위 줄 1→5, 아래 줄 6→10)
+    /// 경로로 표시되어 선택·입장한다. 총 5지역 × 10스테이지 = 50스테이지(1-1 ~ 5-10, 난이도1).
+    /// 진행도는 서버 세이브(maxStageCleared) 실데이터로 판정한다.
     /// 계층은 에디터 빌드 시 프리팹에 정적 저장된다. 리소스: Assets/Art/UI/Stage.
     /// </summary>
     public class StagePanelController : MonoBehaviour
@@ -24,6 +25,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite pathConnector;  // ui_path_connector
         [SerializeField] private Sprite nameplateBar;   // ui_nameplate_bar
         [SerializeField] private Sprite mapBackground;  // dungeon_map_bg(월드맵)
+        [Tooltip("지역 스테이지 창 배경(Assets/Art/UI/modal_bg.png). 없으면 단색 패널로 폴백.")]
+        [SerializeField] private Sprite regionWindowBackground; // modal_bg(지역 창)
         [SerializeField] private Sprite iconCleared;    // stage_cleared(별) — 지역 전부 클리어
         [SerializeField] private Sprite iconInProgress; // stage_ing(해골) — 진행 중 지역
 
@@ -36,12 +39,12 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Text _nameplateText;
         [SerializeField] private List<StageNodeView> _regionNodes = new List<StageNodeView>();
         [SerializeField] private Button _enterButton;
-        [SerializeField] private Button _backButton;
+        // 닫기(X)·뒤로(X) 버튼은 두지 않는다(미관상 제거) — 지역 창은 창 바깥(_windowDimButton) 클릭으로 지도에 돌아가고,
+        // 패널 전체는 지도 바깥(_dimButton) 클릭으로 닫는다.
         [SerializeField] private Button _windowDimButton;
-        [SerializeField] private Button _closeButton;
         [SerializeField] private Button _dimButton;
 
-        // 5개 지역. 각 지역 3스테이지.
+        // 5개 지역. 각 지역 10스테이지(stage_master 기준, 10스테이지가 보스).
         private static readonly string[] RegionNames = { "평원", "얼음", "화산", "사막", "묘지" };
         // 지역 클릭 영역(cx,cy 중심 · w,h 폭·높이, 정규화). 이미지 각 지역에 대응.
         private static readonly Vector4[] RegionRects =
@@ -53,11 +56,27 @@ namespace TaskbarHero.Client.UI
             new Vector4(0.80f, 0.24f, 0.38f, 0.42f), // 5 묘지(우하)
         };
 
-        private const int StagesPerRegion = 3;
+        // 지역당 스테이지 수. 서버 GameServer/MasterData/StageCoords.StagesPerAct(=10)·stage_master와 같은 값이어야
+        // 클리어 시퀀스((지역-1)×10 + 스테이지) 판정이 서버와 일치한다.
+        private const int StagesPerRegion = 10;
+        private const int StageNodeColumns = 5;   // 한 줄에 5칸(위 줄 1~5, 아래 줄 6~10)
+        private const int BossStage = 10;         // 각 지역 마지막(10) 스테이지가 보스
+
         private const float CanvasRefWidth = 1080f;
         private const float CanvasRefHeight = 1920f;
         private const float PanelWidth = 1040f;
         private const float PanelHeight = 580f;
+
+        // 지역 창(2단계). 스테이지가 3개에서 10개로 늘어 창을 넓히고 노드를 두 줄로 나눴다.
+        private const float RegionWindowWidth = 900f;
+        private const float RegionWindowHeight = 600f;
+        // 배경(modal_bg)은 나무 테두리가 두꺼워, 콘텐츠는 프레임 안쪽(대략 세로 0.14~0.86)에만 둔다.
+        private const float NodeLeftX = 0.16f;    // 노드 줄의 좌우 끝(창 폭 정규화)
+        private const float NodeRightX = 0.84f;
+        private const float TopRowY = 0.66f;      // 위 줄(1~5) · 아래 줄(6~10)의 세로 위치
+        private const float BottomRowY = 0.45f;
+        private const float NodeSize = 84f;
+        private const float BossNodeSize = 100f;  // 보스(10스테이지)는 조금 크게
 
         private static readonly Color DarkText = new Color(0.20f, 0.14f, 0.06f, 1f);
 
@@ -165,24 +184,18 @@ namespace TaskbarHero.Client.UI
             content.offsetMin = Vector2.zero;
             content.offsetMax = Vector2.zero;
 
-            // 제목(지도 위) + 닫기(우상단)
-            var title = NewText("Title", content, "지역 선택", 40, TextAnchor.MiddleCenter);
-            var trt = title.rectTransform;
+            // 제목(지도 위). 글씨만 두면 배경 위에서 읽기 어려워 이름표 바(하단 지역명 바·스테이지 이름표와 같은 아트)를
+            // 깔고 그 위에 텍스트를 올린다. 닫기(X) 버튼은 두지 않는다 — 지도 아트 위에 얹히면 미관을 해쳐 제거했고,
+            // 닫기는 딤(바깥 영역) 클릭이 담당한다.
+            var titleBar = NewImage("TitleBar", content, nameplateBar);
+            titleBar.raycastTarget = false;
+            var trt = titleBar.rectTransform;
             trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
             trt.pivot = new Vector2(0.5f, 0f);
-            trt.anchoredPosition = new Vector2(0f, 16f);
-            trt.sizeDelta = new Vector2(360f, 56f);
-
-            var closeImg = NewImage("CloseButton", content, nodeUnlocked);
-            var crt = closeImg.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
-            crt.pivot = new Vector2(1f, 1f);
-            crt.anchoredPosition = new Vector2(-14f, -14f);
-            crt.sizeDelta = new Vector2(56f, 56f);
-            var xt = NewText("X", closeImg.rectTransform, "X", 30, TextAnchor.MiddleCenter);
-            xt.color = DarkText;
-            Stretch(xt.rectTransform);
-            _closeButton = closeImg.gameObject.AddComponent<Button>();
+            trt.anchoredPosition = new Vector2(0f, 10f);
+            trt.sizeDelta = new Vector2(360f, 64f);
+            var title = NewText("Title", titleBar.rectTransform, "지역 선택", 36, TextAnchor.MiddleCenter);
+            Stretch(title.rectTransform);
 
             // 지역 핫스팟 5개
             for (int r = 0; r < RegionRects.Length; r++)
@@ -246,7 +259,8 @@ namespace TaskbarHero.Client.UI
             hs.EditorInit(region, glow.gameObject);
         }
 
-        /// <summary>2단계: 지역 스테이지 창(딤 + 패널 + 3노드 + 경로 + 이름표 + 입장/뒤로).</summary>
+        /// <summary>2단계: 지역 스테이지 창(딤 + 패널 + 10노드 + 경로 + 이름표 + 입장/뒤로).
+        /// 노드는 5칸씩 두 줄의 뱀 모양 경로(위 줄 1→5, 아래 줄 6→10)로 배치하고, 두 줄은 우측 세로 경로로 잇는다.</summary>
         private void BuildRegionWindow()
         {
             _regionWindow = NewRect("RegionWindow", _rootRect).gameObject;
@@ -262,12 +276,17 @@ namespace TaskbarHero.Client.UI
             _windowDimButton = dim.gameObject.AddComponent<Button>();
             _windowDimButton.transition = Selectable.Transition.None;
 
-            var panel = NewImage("WinPanel", winRt, null);
-            panel.color = new Color(0.10f, 0.12f, 0.18f, 0.98f);
+            // 배경: 공용 모달 배경(modal_bg)을 그대로 써 다른 팝업과 톤을 맞춘다.
+            // 테두리 값이 없는 텍스처라 9-slice가 아니라 Simple로 늘려 쓴다(공용 모달 ModalController와 동일 취급).
+            var panel = NewImage("WinPanel", winRt, regionWindowBackground);
+            panel.type = Image.Type.Simple;
+            panel.color = regionWindowBackground != null
+                ? Color.white
+                : new Color(0.10f, 0.12f, 0.18f, 0.98f); // 아트 미배선 시 단색 폴백
             var prt = panel.rectTransform;
             prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0.5f);
             prt.pivot = new Vector2(0.5f, 0.5f);
-            prt.sizeDelta = new Vector2(760f, 440f);
+            prt.sizeDelta = new Vector2(RegionWindowWidth, RegionWindowHeight);
             prt.anchoredPosition = Vector2.zero;
 
             var content = NewRect("WinContent", prt);
@@ -276,58 +295,18 @@ namespace TaskbarHero.Client.UI
             content.offsetMin = Vector2.zero;
             content.offsetMax = Vector2.zero;
 
-            _regionTitle = NewText("RegionTitle", content, "", 34, TextAnchor.MiddleCenter);
-            PlaceCenter(_regionTitle.rectTransform, 0.5f, 0.9f, 400f, 52f);
+            // 지역 이름표(바 + 텍스트). 지도 제목과 같은 아트를 써 두 화면의 제목 표기를 통일한다.
+            // 지도로 돌아가는 X(뒤로) 버튼은 두지 않는다(미관상 제거) — 창 바깥(WinDim) 클릭이 지도 복귀를 담당한다.
+            var titleBar = NewImage("RegionTitleBar", content, nameplateBar);
+            titleBar.raycastTarget = false;
+            PlaceCenter(titleBar.rectTransform, 0.5f, 0.84f, 400f, 64f);
+            _regionTitle = NewText("RegionTitle", titleBar.rectTransform, "", 32, TextAnchor.MiddleCenter);
+            Stretch(_regionTitle.rectTransform);
 
-            var back = NewImage("BackButton", content, nodeUnlocked);
-            PlaceCenter(back.rectTransform, 0.93f, 0.9f, 52f, 52f);
-            var bt = NewText("X", back.rectTransform, "X", 28, TextAnchor.MiddleCenter);
-            bt.color = DarkText;
-            Stretch(bt.rectTransform);
-            _backButton = back.gameObject.AddComponent<Button>();
-
-            // 3노드 위치와 경로 연결선(노드보다 먼저 생성)
-            float[] fx = { 0.25f, 0.5f, 0.75f };
-            const float rowY = 0.58f;
-            BuildWindowConnector(content, fx[0], fx[1], rowY, 0);
-            BuildWindowConnector(content, fx[1], fx[2], rowY, 1);
-
-            for (int i = 0; i < StagesPerRegion; i++)
-            {
-                int stage = i + 1;
-                var nodeGo = NewImage($"StageNode{stage}", content, nodeUnlocked);
-                PlaceCenter(nodeGo.rectTransform, fx[i], rowY, 96f, 96f);
-
-                var hl = NewImage("Highlight", nodeGo.rectTransform, nodeHighlight);
-                hl.raycastTarget = false;
-                var hrt = hl.rectTransform;
-                hrt.anchorMin = Vector2.zero;
-                hrt.anchorMax = Vector2.one;
-                hrt.offsetMin = new Vector2(-10f, -10f);
-                hrt.offsetMax = new Vector2(10f, 10f);
-                hl.gameObject.SetActive(false);
-
-                var num = NewText("Num", nodeGo.rectTransform, stage.ToString(), 30, TextAnchor.MiddleCenter);
-                num.color = DarkText;
-                num.raycastTarget = false;
-                Stretch(num.rectTransform);
-
-                var lockImg = NewImage("Lock", nodeGo.rectTransform, iconLock);
-                lockImg.raycastTarget = false;
-                var lrt = lockImg.rectTransform;
-                lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 0.5f);
-                lrt.pivot = new Vector2(0.5f, 0.5f);
-                lrt.sizeDelta = new Vector2(44f, 44f);
-                lrt.anchoredPosition = Vector2.zero;
-                lockImg.gameObject.SetActive(false);
-
-                var view = nodeGo.gameObject.AddComponent<StageNodeView>();
-                view.EditorInit(stage, nodeGo, lockImg.gameObject, hl.gameObject);
-                _regionNodes.Add(view);
-            }
+            BuildStageNodes(content);
 
             var plate = NewImage("Nameplate", content, nameplateBar);
-            PlaceCenter(plate.rectTransform, 0.5f, 0.32f, 440f, 60f);
+            PlaceCenter(plate.rectTransform, 0.5f, 0.28f, 440f, 60f);
             _nameplateText = NewText("NameplateText", plate.rectTransform, "", 28, TextAnchor.MiddleCenter);
             Stretch(_nameplateText.rectTransform);
 
@@ -341,30 +320,98 @@ namespace TaskbarHero.Client.UI
             _regionWindow.SetActive(false);
         }
 
+        /// <summary>
+        /// 지역 창의 스테이지 노드 10개와 경로를 뱀 모양으로 배치한다 —
+        /// 위 줄에 1→5(좌→우), 아래 줄에 6→10(우→좌)을 두고, 두 줄은 우측 끝 세로 경로로 잇는다.
+        /// 경로선은 노드보다 먼저 만들어 노드 아래에 깔리게 한다(같은 부모에서는 자식 순서 = 그리기 순서).
+        /// </summary>
+        private void BuildStageNodes(RectTransform content)
+        {
+            // 줄 안 노드가 5개라 좌우 여백을 남기고 균등 배치한다.
+            var fx = new float[StageNodeColumns];
+            for (int c = 0; c < StageNodeColumns; c++)
+            {
+                fx[c] = NodeLeftX + (NodeRightX - NodeLeftX) * c / (StageNodeColumns - 1);
+            }
+
+            // 각 줄의 인접 노드를 잇는 수평 경로 + 위/아래 줄을 잇는 우측 세로 경로.
+            int path = 0;
+            for (int c = 0; c < StageNodeColumns - 1; c++)
+            {
+                BuildWindowConnector(content, fx[c], fx[c + 1], TopRowY, path++);
+                BuildWindowConnector(content, fx[c], fx[c + 1], BottomRowY, path++);
+            }
+            BuildWindowConnectorVertical(content, fx[StageNodeColumns - 1], BottomRowY, TopRowY, path);
+
+            for (int i = 0; i < StagesPerRegion; i++)
+            {
+                int stage = i + 1;
+                bool topRow = i < StageNodeColumns;
+                // 아래 줄은 오른쪽에서 왼쪽으로 진행한다(6번이 5번 바로 아래).
+                int col = topRow ? i : StagesPerRegion - 1 - i;
+                float fy = topRow ? TopRowY : BottomRowY;
+                float size = stage == BossStage ? BossNodeSize : NodeSize; // 보스(10)는 조금 크게
+
+                var nodeGo = NewImage($"StageNode{stage}", content, nodeUnlocked);
+                PlaceCenter(nodeGo.rectTransform, fx[col], fy, size, size);
+
+                var hl = NewImage("Highlight", nodeGo.rectTransform, nodeHighlight);
+                hl.raycastTarget = false;
+                var hrt = hl.rectTransform;
+                hrt.anchorMin = Vector2.zero;
+                hrt.anchorMax = Vector2.one;
+                hrt.offsetMin = new Vector2(-10f, -10f);
+                hrt.offsetMax = new Vector2(10f, 10f);
+                hl.gameObject.SetActive(false);
+
+                var num = NewText("Num", nodeGo.rectTransform, stage.ToString(), 28, TextAnchor.MiddleCenter);
+                num.color = DarkText;
+                num.raycastTarget = false;
+                Stretch(num.rectTransform);
+
+                var lockImg = NewImage("Lock", nodeGo.rectTransform, iconLock);
+                lockImg.raycastTarget = false;
+                var lrt = lockImg.rectTransform;
+                lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 0.5f);
+                lrt.pivot = new Vector2(0.5f, 0.5f);
+                lrt.sizeDelta = new Vector2(40f, 40f);
+                lrt.anchoredPosition = Vector2.zero;
+                lockImg.gameObject.SetActive(false);
+
+                var view = nodeGo.gameObject.AddComponent<StageNodeView>();
+                view.EditorInit(stage, nodeGo, lockImg.gameObject, hl.gameObject);
+                _regionNodes.Add(view);
+            }
+        }
+
         /// <summary>지역 창의 인접 노드 사이 수평 경로 연결선.</summary>
         private void BuildWindowConnector(RectTransform content, float fx1, float fx2, float fy, int idx)
         {
             var img = NewImage($"Path{idx}", content, pathConnector);
             img.type = Image.Type.Tiled;
             img.raycastTarget = false;
-            PlaceBox(img.rectTransform, (fx1 + fx2) * 0.5f, fy, fx2 - fx1, 0.05f);
+            PlaceBox(img.rectTransform, (fx1 + fx2) * 0.5f, fy, fx2 - fx1, 0.045f);
+        }
+
+        /// <summary>위/아래 줄을 잇는 세로 경로 연결선. 가로 타일 스프라이트를 90° 돌려 쓴다.</summary>
+        private void BuildWindowConnectorVertical(RectTransform content, float fx, float fy1, float fy2, int idx)
+        {
+            var img = NewImage($"Path{idx}", content, pathConnector);
+            img.type = Image.Type.Tiled;
+            img.raycastTarget = false;
+            var rt = img.rectTransform;
+            // 회전은 크기 계산 뒤 적용해야 하므로, 먼저 '가로 막대'로 잡고 90° 돌린다.
+            PlaceCenter(rt, fx, (fy1 + fy2) * 0.5f, RegionWindowHeight * (fy2 - fy1), RegionWindowHeight * 0.045f);
+            rt.localRotation = Quaternion.Euler(0f, 0f, 90f);
         }
 
         // ── 런타임 배선 ──
 
         private void WireRuntime()
         {
-            if (_closeButton != null)
-            {
-                _closeButton.onClick.AddListener(Close);
-            }
             if (_dimButton != null)
             {
                 _dimButton.onClick.AddListener(Close);
-            }
-            if (_backButton != null)
-            {
-                _backButton.onClick.AddListener(CloseRegion);
             }
             if (_windowDimButton != null)
             {
@@ -425,7 +472,7 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>지역 전체 상태: 3스테이지 모두 클리어=Cleared, 잠기지 않은 스테이지가 있으면 Current, 아니면 Locked.</summary>
+        /// <summary>지역 전체 상태: 10스테이지 모두 클리어=Cleared, 잠기지 않은 스테이지가 있으면 Current, 아니면 Locked.</summary>
         private StageState RegionStatus(int region)
         {
             bool allCleared = true;
@@ -490,7 +537,7 @@ namespace TaskbarHero.Client.UI
             return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
 
-        /// <summary>지역 창을 열고 그 지역의 3스테이지 상태를 채운다.</summary>
+        /// <summary>지역 창을 열고 그 지역의 10스테이지 상태를 채운다.</summary>
         public void OpenRegion(int region)
         {
             _openRegion = region;
@@ -549,7 +596,10 @@ namespace TaskbarHero.Client.UI
 
             if (_nameplateText != null)
             {
-                _nameplateText.text = $"{_openRegion}-{stage}";
+                // 각 지역의 10스테이지는 보스전이라 이름표에 함께 표시한다(stage_master의 boss_monster_code).
+                _nameplateText.text = stage == BossStage
+                    ? $"{_openRegion}-{stage}  보스"
+                    : $"{_openRegion}-{stage}";
             }
             if (_enterButton != null)
             {
@@ -583,7 +633,7 @@ namespace TaskbarHero.Client.UI
                 return;
             }
 
-            // UI는 난이도 1(1~15스테이지)만 노출한다. 지역=act, 선택=stage로 매핑.
+            // UI는 난이도 1(시퀀스 1~50)만 노출한다. 지역=act, 선택=stage로 매핑.
             Debug.Log($"[Stage] 입장 요청: {_openRegion}-{_selectedStage} (처음부터)");
             flow.EnterSelectedStage(_openRegion, 1, _selectedStage);
             Close();
@@ -611,7 +661,7 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>스테이지 상태를 서버 진행도로 판정한다.
-        /// 난이도1 기준 시퀀스 = (지역-1)×3 + 스테이지(1~15). 클리어=seq≤maxCleared, 진행 중(프런티어)=seq==maxCleared+1, 그 외 잠금.
+        /// 난이도1 기준 시퀀스 = (지역-1)×10 + 스테이지(1~50). 클리어=seq≤maxCleared, 진행 중(프런티어)=seq==maxCleared+1, 그 외 잠금.
         /// (서버 EnterAsync의 도달 검증 규칙 seq≤maxCleared+1과 동일.)</summary>
         private StageState StageStateOf(int region, int stage)
         {

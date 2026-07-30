@@ -1796,7 +1796,6 @@ MonoBehaviour:
   signUpPanelPrefab: {fileID: 1000000000000000001, guid: 3b7f9b3f40f1a265ca0135ec2e7c75a0, type: 3}
   inventoryPanelPrefab: {fileID: 5191532114545604274, guid: 2253b60f3d18c314b9ba911f1c340ec5, type: 3}
   stagePanelPrefab: {fileID: 3694928218607994068, guid: dc757bd3da1f27b47a3a8566f92543a6, type: 3}
-  partyPanelPrefab: {fileID: 6505302392153319248, guid: b5da461db03db3d42b709b6a24289439, type: 3}
   skillPanelPrefab: {fileID: 278429524623337010, guid: a018bc9219d9837429eb4f0490c7cf4e, type: 3}
   runePanelPrefab: {fileID: 2424507622272419679, guid: 8619762bd64d86642946c3e055468565, type: 3}
   cubePanelPrefab: {fileID: 345033725727599519, guid: 2d6506590dbd84f4880138f6f753d3f7, type: 3}

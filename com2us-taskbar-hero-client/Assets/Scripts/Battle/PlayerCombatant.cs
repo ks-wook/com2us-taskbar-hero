@@ -127,6 +127,8 @@ namespace TaskbarHero.Client.Battle
         public void SetFormationTarget(Vector2 target) { _formTarget = target; _hasTarget = true; }
 
         public string DisplayName => _name;
+        /// <summary>이 멤버의 직업 코드(파티는 직업 중복이 없어 파티원 식별 키로 쓸 수 있다).</summary>
+        public int ClassCode => _classCode;
         public float AttackRange => _attackRange;
         public float MoveSpeed => _moveSpeed;
         /// <summary>현재 걷기(이동) 애니메이션이 재생 중인지. 걷기 먼지 이펙트 노출 판정에 사용.</summary>
@@ -693,6 +695,17 @@ namespace TaskbarHero.Client.Battle
             }
             _lifestealRatio = sk.lifestealRatio;
             _lifestealTimer = sk.lifestealDuration > 0f ? sk.lifestealDuration : Mathf.Max(0.1f, sk.duration);
+        }
+
+        /// <summary>체력을 최대치로 되돌린다(스테이지 시작 시 파티 전원 회복). 사망 상태에서는 무시한다 —
+        /// 전사자는 컨트롤러가 다시 스폰하므로 여기서 되살리지 않는다.</summary>
+        public void RestoreFullHp()
+        {
+            if (_dead)
+            {
+                return;
+            }
+            _hp = _maxHp;
         }
 
         /// <summary>체력을 회복한다(최대 체력 초과 없음, 사망 후에는 무시).</summary>
