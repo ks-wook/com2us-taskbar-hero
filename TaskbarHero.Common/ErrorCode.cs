@@ -63,7 +63,7 @@ namespace TaskbarHero.Common
         StageNotFound = 6001,
         StageLocked = 6002,
         StageNotEntered = 6003,
-        StageClearTooFast = 6004,
+        // 6004: 결번(재사용 금지)
 
         // 거래소 / 교역선 (7000번대)
         TradeListingNotFound = 7001,

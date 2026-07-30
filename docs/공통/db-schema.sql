@@ -70,7 +70,7 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- =====================================================================
 -- 2. GameServer — 세이브 데이터 DB
 --    출처: 세이브 데이터 기획서 3장(정본), db-erd-통합.md 3장,
---          인벤토리/성장/메일/출석부/거래소 각 기획서
+--          인벤토리/소모품·버프/성장/메일/출석부/거래소 각 기획서
 -- =====================================================================
 CREATE DATABASE IF NOT EXISTS taskbar_hero_game
     DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -98,22 +98,31 @@ CREATE TABLE game_player (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='계정/파티 루트(계정당 1행)';
 
 
--- 캐릭터 슬롯. 계정당 최대 3개(3인 파티). 직업(class_code)은 계정 내 중복 불가.
+-- 보유 캐릭터. 직업(class_code)은 계정 내 중복 불가라 보유 상한은 자연히 직업 수(현재 4)다.
+--   * character_id는 "캐릭터 고유 식별자(생성 순번 1~)"이며 파티 자리가 아니다. player_skill·
+--     player_item_equipped가 이 값으로 캐릭터를 가리키므로 생성 후 절대 바뀌지 않는다.
+--   * slot이 "파티 자리"다 — 0=미편성(보유만 함, 전투 불참), 1~3=파티 내 위치.
+--     같은 계정에서 1~3 값은 캐릭터 하나씩만 가질 수 있으나, 0은 여럿이 가질 수 있어
+--     부분 유니크 인덱스가 필요하다(MySQL 미지원). 따라서 이 유일성은 서버가 보장한다
+--     (파티 편성 저장 API가 단일 트랜잭션에서 편성을 비우고 스냅샷대로 재설정, 세이브 데이터 기획서 5.5).
+--     ⚠️ player_item.slot(가방 칸)과 이름만 같고 의미가 전혀 다르다.
 --   * gender는 외형(남/여) 표현용 값이며 스탯·전투 계산에 영향을 주지 않는다.
 --     DEFAULT 1(남)이라 기존 행/미지정 생성은 모두 남자가 된다.
 DROP TABLE IF EXISTS player_character;
 CREATE TABLE player_character (
     user_id      BIGINT NOT NULL          COMMENT '계정 user_id',
-    character_id INT    NOT NULL          COMMENT '캐릭터 슬롯(1~3)',
+    character_id INT    NOT NULL          COMMENT '캐릭터 고유 식별자(생성 순번 1~). 파티 자리가 아니며 불변',
     class_code   INT    NOT NULL          COMMENT '직업(class_master 참조). 계정 내 중복 불가',
+    slot         INT    NOT NULL DEFAULT 0 COMMENT '파티 자리(0=미편성, 1~3=파티 위치). 1~3 유일성은 서버가 보장',
     gender       TINYINT NOT NULL DEFAULT 1 COMMENT '성별(1:남 2:여). 외형 전용, 기본 1:남',
     level        INT    NOT NULL DEFAULT 1 COMMENT '캐릭터 레벨',
     exp          BIGINT NOT NULL DEFAULT 0 COMMENT '누적 경험치',
     PRIMARY KEY (user_id, character_id),
     UNIQUE KEY uq_char_class (user_id, class_code) COMMENT '한 계정에서 같은 직업 중복 생성 방지',
+    KEY idx_char_slot (user_id, slot) COMMENT '파티 편성 조회(편성 중인 캐릭터 찾기)',
     CONSTRAINT fk_char_player FOREIGN KEY (user_id)
         REFERENCES game_player (user_id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='캐릭터별 직업/레벨/경험치(계정당 3슬롯)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보유 캐릭터별 직업/파티 자리/레벨/경험치';
 
 
 -- 보유 아이템·재화 통합 테이블(계정 공유). row_type으로 아이템/재화를 구분한다.
@@ -152,7 +161,7 @@ CREATE TABLE player_item_equipped (
     user_id               BIGINT NOT NULL          COMMENT '계정 user_id',
     item_code             INT    NOT NULL          COMMENT 'item_master.item_code(어떤 아이템인지)',
     enhance_level         INT    NOT NULL DEFAULT 0 COMMENT '장비 강화 단계(enhance_master)',
-    equipped_character_id INT    NOT NULL          COMMENT '장착 캐릭터(1~3)',
+    equipped_character_id INT    NOT NULL          COMMENT '장착 캐릭터(player_character.character_id)',
     equipped_slot         INT    NOT NULL          COMMENT '장착 슬롯(equip_slot_master)',
     PRIMARY KEY (player_item_id),
     UNIQUE KEY uq_equip_slot (user_id, equipped_character_id, equipped_slot) COMMENT '한 캐릭터-슬롯당 아이템 하나',
@@ -170,7 +179,7 @@ CREATE TABLE player_item_equipped (
 DROP TABLE IF EXISTS player_skill;
 CREATE TABLE player_skill (
     user_id      BIGINT  NOT NULL          COMMENT '계정 user_id',
-    character_id INT     NOT NULL          COMMENT '캐릭터 슬롯(1~3)',
+    character_id INT     NOT NULL          COMMENT '캐릭터(player_character.character_id)',
     skill_code   INT     NOT NULL          COMMENT '스킬(skill_master 참조)',
     level        INT     NOT NULL DEFAULT 0 COMMENT '스킬 레벨(0=미습득)',
     equipped     TINYINT NOT NULL DEFAULT 0 COMMENT '액티브 장착 여부(0/1). 캐릭터당 최대 2개',
@@ -202,6 +211,27 @@ CREATE TABLE player_cube (
     CONSTRAINT fk_cube_player FOREIGN KEY (user_id)
         REFERENCES game_player (user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='큐브 성장 상태(계정당 1행)';
+
+
+-- 소모품 사용으로 부여된 계정 획득량 버프. 버프 종류당 1행(경험치·골드 동시 활성 가능).
+--   버프 시간은 벽시계로 흐른다(오프라인 중에도 소모). 그래서 만료 시각을 값으로 영속 저장한다 —
+--   오프라인 정산은 이미 만료된 버프의 유효 구간(정산 구간과의 교집합)까지 소급 계산하므로
+--   Redis TTL처럼 만료와 함께 근거가 사라지면 안 된다(소모품·버프 기획서 4.1·6.3).
+--   활성 판정은 expires_at > now. 만료 행은 조회에서 걸러지므로 즉시 삭제하지 않고,
+--   정리 배치가 오프라인 상한(12시간) + 여유를 지나서만 삭제한다(같은 문서 6.4).
+--   PK (user_id, buff_type)의 행 잠금이 같은 종류의 중복 사용 요청을 직렬화한다(분산 락 불필요).
+DROP TABLE IF EXISTS player_buff;
+CREATE TABLE player_buff (
+    user_id    BIGINT       NOT NULL COMMENT '계정 user_id',
+    buff_type  INT          NOT NULL COMMENT '버프 종류(1=경험치 획득량 2=골드 획득량, consumable_master.buff_type)',
+    buff_value DECIMAL(5,3) NOT NULL COMMENT '획득량 배율(1.500=150%)',
+    started_at BIGINT       NOT NULL COMMENT '버프 시작 Unix ts(초). 소급 구간 하한',
+    expires_at BIGINT       NOT NULL COMMENT '버프 만료 Unix ts(초). 소급 구간 상한',
+    PRIMARY KEY (user_id, buff_type),
+    KEY idx_buff_expires (expires_at),
+    CONSTRAINT fk_buff_player FOREIGN KEY (user_id)
+        REFERENCES game_player (user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='계정 획득량 버프(소모품 사용 결과)';
 
 
 -- 우편함 메일 1건(계정 소속). 첨부는 player_mail_reward에 0~N개.

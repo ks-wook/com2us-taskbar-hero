@@ -6,9 +6,10 @@
 --
 -- 범위: master-data-값.md에서 값이 확정된 테이블(1~6번 및 8·9·10·11·13·14번)을 담는다.
 --   1) equip_slot_master  1b) grade_master  2) class_master  3) level_master  4) skill_master  4b) skill_coefficient  5) rune_master  5b) rune_cost
---   6) item_master  8) cube_master  8b) cube_recipe  8c) cube_recipe_ingredient
+--   6) item_master  6b) consumable_master  8) cube_master  8b) cube_recipe  8c) cube_recipe_ingredient
 --   9) monster_master  10) stage_reward  10b) stage_reward_drop  11) stage_master  11b) stage_spawn
 --   13) attendance_master  14) grade_master  · inventory_expand_master(인벤토리 확장 비용)  · character_create_cost(캐릭터 추가 생성 비용)  · mail_master(메일 템플릿)
+--   · newbie_reward_master(신규 가입 지원금 메일 첨부)
 --   (7 enhance/12 box는 값 미확정이라 제외)
 --   * grade_master(값 문서 §14)는 item_master.grade가 FK로 참조하므로 물리적으로 item_master보다 앞(1b)에 생성한다.
 --
@@ -250,7 +251,7 @@ CREATE TABLE skill_master (
     name             VARCHAR(30)  NOT NULL COMMENT '스킬 이름',
     description      VARCHAR(100) NOT NULL DEFAULT '' COMMENT '스킬 설명(클라 표시용)',
     skill_type       TINYINT      NOT NULL COMMENT '1=액티브, 2=패시브',
-    stat_type        INT          NOT NULL DEFAULT 0 COMMENT '버프/디버프가 올리는 대상 능력치(rune stat_type 동일 enum 1~7). 순수 공격 데미지 스킬은 0(해당 없음)',
+    stat_type        INT          NOT NULL DEFAULT 0 COMMENT '버프/디버프가 작용하는 대상 능력치(rune stat_type 동일 enum 1~7). 순수 공격 데미지 스킬은 0(해당 없음). coef_type 4(자원 소모)·5(흡혈) 계수는 대상이 타입으로 확정돼 이 값을 쓰지 않는다',
     max_level        INT          NOT NULL COMMENT '최대 스킬 레벨(= skill_coefficient의 타입별 행 수)',
     cooldown         DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '재사용 대기시간(초). 액티브만 값, 패시브는 0. skill_coefficient.duration(효과 지속)과 별개',
     PRIMARY KEY (skill_code),
@@ -286,7 +287,7 @@ INSERT INTO skill_master (skill_code, class_code, name, description, skill_type,
     --   액티브 3종의 이름(내려찍기·광전사의 힘·강한일격)은 클라 아이콘/이펙트 에셋 이름과 맞춘 것이다
     --   (아이콘 매칭은 스킬명 ↔ Assets/Art/Icon/Combat/{직업}/{스킬명}.png 파일명 대조, 공백 무시).
     (401, 4, '내려찍기',     '도끼를 내리찍어 단일 대상에게 큰 피해를 준다.', 1, 0, 10, 7.0),
-    (402, 4, '광전사의 힘',  '6초간 자신의 치명타 확률을 크게 끌어올린다.',   1, 4, 5,  14.0),
+    (402, 4, '광전사의 힘',  '체력을 대가로 6초간 공격 속도와 흡혈을 얻는다.', 1, 7, 5,  14.0),
     (403, 4, '강한일격',     '도끼를 크게 휘둘러 주변의 적을 모두 벤다.',     1, 0, 10, 9.0),
     (410, 4, '살육 본능',    '살육 본능을 일깨워 공격력을 상시 높인다.',      2, 1, 5,  0),
     (411, 4, '유혈',         '적의 상처를 파고들어 치명타 피해를 상시 높인다.', 2, 5, 10, 0),
@@ -298,19 +299,20 @@ INSERT INTO skill_master (skill_code, class_code, name, description, skill_type,
 --    출처: master-data-값.md §4, 기획서 5.6
 --    스킬마다 필요한 계수 개수가 달라(= 타입 수 × max_level) 1:N 자식 테이블로 분리한다(JSON/고정컬럼 대신).
 --    (skill_code, skill_level, coef_type) 복합 PK.
---    coef_type: 계수 타입(1=공격 2=버프 3=디버프). 구 skill_master.category를 계수 행으로 내린 것으로,
---      계수가 어떤 성격의 효과인지 구분한다. 한 스킬이 레벨마다 여러 타입 효과를 가질 수도 있게 확장 가능.
+--    coef_type: 계수 타입(1=공격 2=버프 3=디버프 4=자원 소모 5=흡혈). 구 skill_master.category를 계수 행으로 내린 것으로,
+--      계수가 어떤 성격의 효과인지 구분한다. PK에 coef_type이 포함되므로 한 스킬·레벨이 타입당 1행씩 여러 효과를 가질 수 있고,
+--      실제로 광전사의 힘(402)이 버프+자원 소모+흡혈 3행을 쓴다.
 --    coef: 해당 레벨·타입 계수(공격=데미지 배율, 버프/디버프=대상 스탯 배율). 현재는 구 선형식을 전개한 값.
 --    duration: 버프(2)/디버프(3) 지속시간(초). 공격(1)은 0, 패시브 상시 버프도 0(무한). 현재는 레벨 무관 동일.
---    현재 데이터는 스킬당 1타입이라 총 205행(기존 95 + 패시브 x11·x12 6개 × 10레벨 = 60 + 슬레이어 6개 = 50).
+--    402(3타입)를 제외하면 스킬당 1타입이라 총 215행(기존 95 + 패시브 x11·x12 6개 × 10레벨 = 60 + 슬레이어 60).
 -- =====================================================================
 DROP TABLE IF EXISTS skill_coefficient;
 CREATE TABLE skill_coefficient (
     skill_code   INT          NOT NULL COMMENT '스킬(skill_master.skill_code)',
     skill_level  INT          NOT NULL COMMENT '스킬 레벨(1~max_level)',
-    coef_type    TINYINT      NOT NULL COMMENT '계수 타입(1=공격 2=버프 3=디버프)',
-    coef         DECIMAL(6,3) NOT NULL COMMENT '해당 레벨·타입 계수(공격=데미지 배율, 버프/디버프=대상 스탯 배율)',
-    duration     DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '버프/디버프 지속시간(초). 공격은 0, 패시브 상시 버프도 0',
+    coef_type    TINYINT      NOT NULL COMMENT '계수 타입(1=공격 2=버프 3=디버프 4=자원 소모 5=흡혈)',
+    coef         DECIMAL(6,3) NOT NULL COMMENT '해당 레벨·타입 계수(공격=데미지 배율, 버프/디버프=대상 스탯 배율, 자원 소모=현재 체력 대비 소모 비율, 흡혈=가한 피해 대비 회복 비율)',
+    duration     DECIMAL(5,2) NOT NULL DEFAULT 0 COMMENT '효과 지속시간(초). 공격·자원 소모(즉시 1회)는 0, 패시브 상시 버프도 0',
     PRIMARY KEY (skill_code, skill_level, coef_type),
     CONSTRAINT fk_skill_coef_skill FOREIGN KEY (skill_code)
         REFERENCES skill_master (skill_code) ON DELETE CASCADE
@@ -351,12 +353,17 @@ INSERT INTO skill_coefficient (skill_code, skill_level, coef_type, coef, duratio
     (212, 1, 2, 1.030, 0.00), (212, 2, 2, 1.060, 0.00), (212, 3, 2, 1.090, 0.00), (212, 4, 2, 1.120, 0.00), (212, 5, 2, 1.150, 0.00), (212, 6, 2, 1.180, 0.00), (212, 7, 2, 1.210, 0.00), (212, 8, 2, 1.240, 0.00), (212, 9, 2, 1.270, 0.00), (212, 10, 2, 1.300, 0.00),
     (312, 1, 2, 1.030, 0.00), (312, 2, 2, 1.060, 0.00), (312, 3, 2, 1.090, 0.00), (312, 4, 2, 1.120, 0.00), (312, 5, 2, 1.150, 0.00), (312, 6, 2, 1.180, 0.00), (312, 7, 2, 1.210, 0.00), (312, 8, 2, 1.240, 0.00), (312, 9, 2, 1.270, 0.00), (312, 10, 2, 1.300, 0.00);
 
--- 슬레이어(4xx) 계수 50행. 액티브 401(단일 공격)·403(광역 공격)은 coef_type=1, 402(치명확률 자기버프)는 coef_type=2·duration 6초.
+-- 슬레이어(4xx) 계수 60행. 액티브 401(단일 공격)·403(광역 공격)은 coef_type=1.
+--   402(광전사의 힘)은 레벨마다 3행 — 2(버프: 공격 주기 배율, stat_type=7이라 값이 작을수록 빠르다) +
+--   4(자원 소모: 시전 시 현재 체력 대비 소모 비율, 즉시 1회라 duration 0) + 5(흡혈: 가한 피해 대비 회복 비율).
+--   레벨이 오를수록 소모는 줄고(0.20→0.12) 공격 속도·흡혈은 강해진다(0.80→0.60배, 0.10→0.30).
 --   패시브 410(공격력)은 다른 직업 x10과 같은 1.15+0.03×(L-1), 411(치명피해)=1.00+0.05×L, 412(치명확률)=1.00+0.03×L(상시라 duration 0).
 INSERT INTO skill_coefficient (skill_code, skill_level, coef_type, coef, duration) VALUES
     (401, 1, 1, 1.500, 0.00), (401, 2, 1, 1.650, 0.00), (401, 3, 1, 1.800, 0.00), (401, 4, 1, 1.950, 0.00), (401, 5, 1, 2.100, 0.00),
     (401, 6, 1, 2.250, 0.00), (401, 7, 1, 2.400, 0.00), (401, 8, 1, 2.550, 0.00), (401, 9, 1, 2.700, 0.00), (401, 10, 1, 2.850, 0.00),
-    (402, 1, 2, 1.300, 6.00), (402, 2, 2, 1.400, 6.00), (402, 3, 2, 1.500, 6.00), (402, 4, 2, 1.600, 6.00), (402, 5, 2, 1.700, 6.00),
+    (402, 1, 2, 0.800, 6.00), (402, 2, 2, 0.750, 6.00), (402, 3, 2, 0.700, 6.00), (402, 4, 2, 0.650, 6.00), (402, 5, 2, 0.600, 6.00),
+    (402, 1, 4, 0.200, 0.00), (402, 2, 4, 0.180, 0.00), (402, 3, 4, 0.160, 0.00), (402, 4, 4, 0.140, 0.00), (402, 5, 4, 0.120, 0.00),
+    (402, 1, 5, 0.100, 6.00), (402, 2, 5, 0.150, 6.00), (402, 3, 5, 0.200, 6.00), (402, 4, 5, 0.250, 6.00), (402, 5, 5, 0.300, 6.00),
     (403, 1, 1, 0.800, 0.00), (403, 2, 1, 0.850, 0.00), (403, 3, 1, 0.900, 0.00), (403, 4, 1, 0.950, 0.00), (403, 5, 1, 1.000, 0.00),
     (403, 6, 1, 1.050, 0.00), (403, 7, 1, 1.100, 0.00), (403, 8, 1, 1.150, 0.00), (403, 9, 1, 1.200, 0.00), (403, 10, 1, 1.250, 0.00),
     (410, 1, 2, 1.150, 0.00), (410, 2, 2, 1.180, 0.00), (410, 3, 2, 1.210, 0.00), (410, 4, 2, 1.240, 0.00), (410, 5, 2, 1.270, 0.00),
@@ -432,9 +439,9 @@ INSERT INTO rune_cost (rune_code, level, cost) VALUES
 
 
 -- =====================================================================
--- 6. item_master — 아이템(장비·재료) + 재화(골드)
+-- 6. item_master — 아이템(장비·재료·소모품) + 재화(골드)
 --    출처: master-data-값.md §6, 기획서 5.3
---    item_type: 1=장비 2=재료 3=재화(골드=item_code 1). (소모품 타입 없음)
+--    item_type: 1=장비 2=재료 3=재화(골드=item_code 1) 4=소모품(42xxx, 효과는 consumable_master).
 --    장비 코드 체계(5자리): item_code = 30000 + 슬롯*1000 + 클래스*100 + 등급*10 + 순번.
 --      슬롯(1~6)=equip_slot_master, 클래스(0 공용/1 기사/2 레인저/3 마법사/4 슬레이어)=class_master, 등급(1~5)=grade_master.
 --      예: 31131=무기·기사·희귀·1(강철 대검), 31451=무기·슬레이어·전설·1(처형자의 도끼), 33051=투구·공용·전설·1(코스믹 투구). 재료=41xxx, 골드=1.
@@ -449,7 +456,7 @@ DROP TABLE IF EXISTS item_master;
 CREATE TABLE item_master (
     item_code    INT          NOT NULL COMMENT '아이템 코드(골드=1). 장비=3+슬롯+클래스+등급+순번',
     name         VARCHAR(40)  NOT NULL COMMENT '아이템 이름',
-    item_type    TINYINT      NOT NULL COMMENT '1=장비 2=재료 3=재화',
+    item_type    TINYINT      NOT NULL COMMENT '1=장비 2=재료 3=재화 4=소모품',
     grade        TINYINT      NOT NULL COMMENT '등급/희귀도(1~5, grade_master 참조)',
     equip_slot   TINYINT      NOT NULL DEFAULT 0 COMMENT '장착 슬롯(equip_slot_master, 비장비 0)',
     class_req    INT          NOT NULL DEFAULT 0 COMMENT '착용 가능 클래스(class_master, 0=공용)',
@@ -471,7 +478,7 @@ CREATE TABLE item_master (
         REFERENCES grade_master (grade) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='아이템·재화 정의';
 
--- 골드(1) → 장비(3xxxx, 코드 오름차순: 무기 31xxx → 보조 32xxx → 방어구 33~36xxx) → 재료(41xxx)
+-- 골드(1) → 장비(3xxxx, 코드 오름차순: 무기 31xxx → 보조 32xxx → 방어구 33~36xxx) → 재료(41xxx) → 소모품(42xxx)
 INSERT INTO item_master (item_code, name, item_type, grade, equip_slot, class_req, level_req, stack_max, hp, atk, def, move_speed, crit_chance, crit_damage, cooldown, sellable, base_price) VALUES
     (1, '골드', 3, 1, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.00, 0.0, 0.0, 0, 0),
     (31111, '낡은 검', 1, 1, 1, 1, 0, 1, 0, 10, 0, 0.0, 0.00, 0.0, 0.0, 1, 500),
@@ -568,7 +575,39 @@ INSERT INTO item_master (item_code, name, item_type, grade, equip_slot, class_re
     (41001, '강화석', 2, 2, 0, 0, 0, 999, 0, 0, 0, 0.0, 0.00, 0.0, 0.0, 1, 1000),
     (41002, '상급 강화석', 2, 3, 0, 0, 0, 999, 0, 0, 0, 0.0, 0.00, 0.0, 0.0, 1, 5000),
     (41010, '마력의 정수', 2, 4, 0, 0, 0, 999, 0, 0, 0, 0.0, 0.00, 0.0, 0.0, 1, 15000),
-    (41020, '용의 비늘', 2, 5, 0, 0, 0, 99, 0, 0, 0, 0.0, 0.00, 0.0, 0.0, 1, 40000);
+    (41020, '용의 비늘', 2, 5, 0, 0, 0, 99, 0, 0, 0, 0.0, 0.00, 0.0, 0.0, 1, 40000),
+    -- 소모품(42xxx): 사용 시 계정 획득량 버프 부여. 효과는 consumable_master(6b).
+    -- grade는 grade_master FK 충족용 값이며 소모품 로직에는 쓰지 않는다. 거래 불가(sellable=0, base_price=0) 기준안.
+    (42001, '경험치 부스터', 4, 1, 0, 0, 0, 99, 0, 0, 0, 0.0, 0.00, 0.0, 0.0, 0, 0),
+    (42002, '골드 부스터', 4, 1, 0, 0, 0, 99, 0, 0, 0, 0.0, 0.00, 0.0, 0.0, 0, 0);
+
+
+-- =====================================================================
+-- 6b. consumable_master — 소모품 버프 효과 (값 문서 §16)
+--    출처: master-data-값.md §16, 기획서 5.15 / 소모품·버프 기획서 4.3
+--    item_master의 소모품 행(item_type=4)과 1:1. 소모품 사용 API가 이 정의를 읽어
+--    세이브 player_buff(user_id, buff_type)에 버프를 기록한다.
+--    buff_type: 1=경험치 획득량 2=골드 획득량 (세이브 player_buff.buff_type과 동일 enum).
+--    buff_value: 획득량 배율(1.500=150%). duration_sec: 지속시간(초).
+--      버프 시간은 벽시계로 흐른다(오프라인 중에도 소모) — 그래서 만료 시각을 값으로 영속 저장하고
+--      오프라인 정산이 만료된 버프의 유효 구간까지 소급 계산한다(소모품·버프 기획서 4.1·6.3).
+--    배율·지속시간은 학습용 임시값이며 스키마 불변으로 값만 조정한다.
+-- =====================================================================
+DROP TABLE IF EXISTS consumable_master;
+CREATE TABLE consumable_master (
+    item_code    INT          NOT NULL COMMENT '소모품 아이템 코드(item_master, item_type=4)',
+    buff_type    TINYINT      NOT NULL COMMENT '버프 종류(1=경험치 획득량 2=골드 획득량)',
+    buff_value   DECIMAL(5,3) NOT NULL COMMENT '획득량 배율(1.500=150%)',
+    duration_sec INT          NOT NULL COMMENT '지속시간(초). 벽시계 경과',
+    PRIMARY KEY (item_code),
+    KEY idx_consumable_buff_type (buff_type),
+    CONSTRAINT fk_consumable_item FOREIGN KEY (item_code)
+        REFERENCES item_master (item_code) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='소모품 버프 효과 정의';
+
+INSERT INTO consumable_master (item_code, buff_type, buff_value, duration_sec) VALUES
+    (42001, 1, 1.500, 1800),   -- 경험치 부스터: 경험치 획득량 150%, 30분
+    (42002, 2, 1.500, 1800);   -- 골드 부스터: 골드 획득량 150%, 30분
 
 
 -- =====================================================================
@@ -968,21 +1007,28 @@ INSERT INTO inventory_expand_master (step, gold_cost) VALUES
     (16, 10000), (17, 10000), (18, 10000), (19, 10000), (20, 10000);
 
 
--- character_create_cost — 캐릭터 추가 생성 골드 비용(슬롯별).
---   * character_id = 생성하는 캐릭터 슬롯(2~3). 1번 슬롯은 계정 최초 생성(무료)이라 행이 없다.
---   * 계정당 캐릭터 최대 3개, 직업 중복 불가. 2·3번째 캐릭터 생성 시 이 골드를 차감한다.
+-- character_create_cost — 캐릭터 추가 생성 골드 비용(생성 순번별).
+--   * character_id = "몇 번째로 생성한 캐릭터인가"(보유 순번 2~). 최초 캐릭터(순번 1, 계정 초기화)는
+--     무료라 행이 없다(신규 계정은 골드 0으로 시작하므로 유료일 수 없다).
+--     ⚠️ 파티 자리(player_character.slot)가 아니다 — 슬롯은 0(미편성)이 될 수 있고 편성 변경으로 바뀌므로
+--     비용 키로 쓸 수 없다(세이브 데이터 기획서 5.5 파티 편성 API).
+--   * 비용은 순번 무관 정액 500,000골드(구 누진 10만→50만 폐기). 골드는 생성 시에만 소모하며
+--     파티 편성 저장(스냅샷)은 무료다.
+--   * 생성 가능 조건은 직업 중복 금지 하나뿐이라 보유 상한은 자연히 직업 수(현재 4)다.
+--     직업이 늘면 그 수만큼 순번 행을 추가한다.
 --   * 클라이언트는 이 테이블을 번들로 갖고 "다음 캐릭터 생성 N 골드" 안내에 사용, 서버도 동일 값으로 차감(서버 권위).
 --   * 값은 학습용 임시값(향후 밸런싱은 값만 조정, 스키마 불변).
 DROP TABLE IF EXISTS character_create_cost;
 CREATE TABLE character_create_cost (
-    character_id INT    NOT NULL COMMENT '생성 슬롯(2~3). 1번은 무료라 행 없음',
-    gold_cost    BIGINT NOT NULL COMMENT '해당 슬롯 캐릭터 생성 골드 비용',
+    character_id INT    NOT NULL COMMENT '생성 순번(2~). 순번 1(최초 생성)은 무료라 행 없음',
+    gold_cost    BIGINT NOT NULL COMMENT '해당 순번 캐릭터 생성 골드 비용(현재 정액)',
     PRIMARY KEY (character_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='캐릭터 추가 생성 비용(슬롯별, 골드)';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='캐릭터 추가 생성 비용(생성 순번별, 골드)';
 
 INSERT INTO character_create_cost (character_id, gold_cost) VALUES
-    (2, 100000),
-    (3, 500000);
+    (2, 500000),
+    (3, 500000),
+    (4, 500000);
 
 
 -- mail_master — 메일 발급 문구 템플릿 (값 문서 부록, 정본: 메일 기획서 4장·6.4)
@@ -1001,10 +1047,31 @@ CREATE TABLE mail_master (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='메일 발급 문구 템플릿(서버 전용)';
 
 INSERT INTO mail_master (mail_template_code, category, title_format, body_format, valid_days) VALUES
+    (101, 1, '신규 모험가 지원금',    '{0} 님, 환영합니다! 여정에 보탬이 될 지원금을 보내드립니다.', 0),   -- 0 = 무기한(첫 접속이 늦어도 잃지 않는다)
     (201, 2, '거래소 판매 대금',      '''{0}'' 판매 대금이 도착했습니다.', 0),   -- 0 = 무기한(판매 대금은 만료로 잃지 않는다)
     (202, 2, '거래소 판매 만료 반송', '판매 기간이 만료되어 ''{0}''이(가) 반송되었습니다.', 0),   -- 0 = 무기한(반송 아이템은 만료로 잃지 않는다)
     (203, 2, '거래소 구매 아이템',    '구매하신 ''{0}''이(가) 도착했습니다.', 0),   -- 0 = 무기한(구매 아이템은 만료로 잃지 않는다)
     (301, 3, '출석 보상',            '{0}일차 출석 보상이 도착했습니다.', 7);
+
+
+-- newbie_reward_master — 신규 가입 지원금(계정 초기화 시 자동 발급되는 환영 메일의 첨부 목록).
+--   * 계정 세이브가 처음 만들어질 때(= 최초 캐릭터 생성) 서버가 이 행들을 그대로 player_mail_reward로 적재한다.
+--     문구 템플릿은 mail_master 101(신규 모험가 지원금, 무기한).
+--   * 첨부 형식은 attendance_master·player_mail_reward와 동일 — reward_type 1:골드 2:아이템 3:재료,
+--     골드는 reward_code=0이고 quantity가 금액이다.
+--   * game_player가 계정당 1행이라 초기화 트랜잭션은 계정 생애에 한 번만 성공한다 → 중복 지급 방지 플래그 불필요.
+--   * 지급 품목을 늘리려면 seq 행만 추가한다(스키마·코드 불변). 서버 전용 마스터(클라 번들 제외).
+DROP TABLE IF EXISTS newbie_reward_master;
+CREATE TABLE newbie_reward_master (
+    seq          INT    NOT NULL COMMENT '첨부 순번(1~)',
+    reward_type  INT    NOT NULL COMMENT '보상 종류(1:골드 2:아이템 3:재료)',
+    reward_code  INT    NOT NULL DEFAULT 0 COMMENT '아이템/재료 코드(item_master.item_code, 골드면 0)',
+    quantity     BIGINT NOT NULL COMMENT '지급 수량(골드면 금액)',
+    PRIMARY KEY (seq)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='신규 가입 지원금 메일 첨부(서버 전용)';
+
+INSERT INTO newbie_reward_master (seq, reward_type, reward_code, quantity) VALUES
+    (1, 1, 0, 10000000);
 
 
 SET FOREIGN_KEY_CHECKS = 1;

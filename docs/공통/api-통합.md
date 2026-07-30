@@ -45,15 +45,17 @@
 
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
-| `POST /api/game/load` | 접속 시 코어 세이브 스냅샷 로드(고정 크기 데이터 전량, 가방 아이템 제외) | `{}` | `player`, `characters[]`, `currencies[]`, `equipped[]`, `skills[]`, `runes[]`, `cube`, `inventoryTotal`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
+| `POST /api/game/load` | 접속 시 코어 세이브 스냅샷 로드(고정 크기 데이터 전량, 가방 아이템 제외) | `{}` | `player`, `characters[]`, `currencies[]`, `equipped[]`, `skills[]`, `runes[]`, `cube`, `activeBuffs[]`, `inventoryTotal`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
 | `POST /api/game/inventory/list` | 가방 아이템 페이지 조회(`slot` 커서 keyset 페이징) | `{ cursor, limit }` | `items[]`, `nextCursor`, `hasMore`, `total` | `SaveNotFound(2001)` |
 | `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정) | `{ nickname, classCode, gender }` | `characterId`, `classCode`, `gender`, `level`, `cost`, `balance` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `InvalidGender(2007)`, `PlayerAlreadyExists(2004)`, `InsufficientCurrency(4005)` |
+| `POST /api/game/party/arrange` | 파티 편성 저장(저장 후 파티 **전체 스냅샷**) | `{ members:[{ characterId, slot }] }`(1~3개) | `characters[]`(보유 전체, 자리 순) | `CannotRemoveLastCharacter(2008)`, `CharacterNotFound(2009)`, `PartySlotOccupied(2010)`, `InvalidCharacterId(2006)` |
 | `POST /api/game/update-last-active` | 접속 시각 갱신(heartbeat, 오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
 
 - **로드는 2단계**다. 크기가 고정된 데이터(플레이어·캐릭터·재화·장착 장비·스킬·룬·큐브)는 `load`가 한 번에 내려주고, 무한히 커질 수 있는 **가방 아이템만** `inventory/list`가 페이징한다. 접속 직후에는 `load`만 호출하고 가방은 창고 UI를 열 때 조회한다.
 - **페이지 간 정합성은 서버가 검증하지 않는다.** 클라이언트가 페이지를 이어붙일 때 `itemId`를 키로 중복 제거하고 나중 페이지를 우선한다([세이브 데이터 기획서](../세부/save-data-기획서.md) 5.2).
 - 캐릭터는 **한 번에 1개씩** 생성(`create-character`), 계정당 최대 3개·**직업 중복 불가**. `nickname`은 최초 생성 시에만 사용. 캐릭터·성장 상태 조회는 별도 API 없이 `load` 스냅샷 사용.
 - **성별(`gender`)**: `1`(남)·`2`(여) 중 하나를 생성 시 함께 보내며, 그 외 값은 `InvalidGender(2007)`. 외형만 가르는 값이라 직업 중복 제약·스탯·비용에는 영향이 없고, 요청에 필드가 없으면 `1`(남)로 저장된다. **생성 이후 변경 API는 없다.** `load`의 `characters[]`에도 `gender`가 포함된다.
+- **파티 편성은 이동 절차가 아니라 스냅샷**이다(`party/arrange`). `members`가 곧 최종 파티이며 **목록에 없는 보유 캐릭터는 자동으로 미편성(`slot=0`)** 이 되므로, 추가·추방·교체·자리 바꾸기가 이 호출 하나로 표현된다. 멱등이고 골드를 쓰지 않으며 캐릭터를 삭제하지도 않는다. 응답의 `characters[]`로 편성 화면을 다시 그리면 되고 재조회가 필요 없다.
 - **생성 비용**: **1번 슬롯(최초 생성=계정 초기화)은 무료**, **2·3번 슬롯은 골드 소모**(비용은 마스터 `character_create_cost` 명시값, 서버 권위 차감). 골드 부족 시 `InsufficientCurrency(4005)`. 응답 `cost`(소모 골드)·`balance`(차감 후 잔액)를 회신하며, 클라이언트는 생성 전 안내 비용을 마스터 번들(`character_create_cost`의 다음 슬롯 값)로 표시한다.
 
 ### 3.2 오프라인 보상
@@ -81,8 +83,10 @@
 | `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{itemId,count}] }` | `gold`, `cubeExp` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
 | `POST /api/game/cube/craft` | 큐브 제작(레시피로 아이템 생성) | `{ recipeCode }` | `consumed`, `gained`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)` |
 | `POST /api/game/box/open` | 랜덤 상자 열기(골드 가챠, 등급 확률 추첨→랜덤 아이템 지급). 현재 단발(`count`=1)만 처리, 다연속 예정 | `{ boxCode, count? }` | `rewards`, `gained`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InvalidSaveData(2002)`, `InventoryFull(4002)`, `MasterDataNotLoaded(10001)` |
+| `POST /api/game/consumable/use` | 소모품 1개 사용 → 계정 획득량 버프 부여·연장(경험치·골드 부스터) | `{ itemId }` | `itemCode`, `remainingQuantity`, `buff`, `activeBuffs` | `ItemNotFound(4001)`, `ItemNotConsumable(4020)`, `InsufficientQuantity(4006)`, `BuffDurationLimitExceeded(4021)`, `MasterDataNotLoaded(10001)` |
 
 - 장비는 **캐릭터별**(장착 시 `characterId` 필수), 인벤토리·골드·큐브는 계정 공유. 큐브 합성·분해·제작(`cube/*`)은 **구현 완료**. `inventory/enhance`(장비 강화)는 `enhance_master` 값 미확정으로 **보류**.
+- `consumable/use`는 **1회 1개 고정**(수량 필드 없음)이며 버프도 **계정 단위**다. 활성 버프 조회 전용 엔드포인트는 없다 — 크기가 고정이라 코어 로드(`/api/game/load`)의 `activeBuffs`가 담당한다([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 5.2).
 
 ### 3.4 성장 (직업 / 스킬 / 룬)
 
@@ -104,7 +108,7 @@
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
 | `POST /api/game/stage/enter` | 스테이지 진입(진행 가능 검증) | `{ act, difficulty, stage }` | `stageId`, `monsters[]`, `boss`, `enteredAt` | `StageNotFound(6001)`, `StageLocked(6002)` |
-| `POST /api/game/stage/clear` | 스테이지 클리어 → 보상 지급·진행도 갱신 | `{ act, difficulty, stage }` | `rewards`, `characters[]`(각 `isLevelUp`), `balance`, `progress` | `StageNotEntered(6003)`, `StageClearTooFast(6004)`, `InventoryFull(4002)` |
+| `POST /api/game/stage/clear` | 스테이지 클리어 → 보상 지급·진행도 갱신 | `{ act, difficulty, stage }` | `rewards`, `characters[]`(각 `isLevelUp`), `balance`, `progress` | `StageNotEntered(6003)`, `InventoryFull(4002)` |
 
 - 진입 응답은 스테이지의 **몬스터 구성(`monsters`)·보스(`boss`)** 를 포함. 클리어 보상(골드·경험치·전리품)은 서버가 마스터로 산출, 경험치는 3캐릭터 동일 지급(캐릭터별 **`isLevelUp`**), 골드는 계정. 이미 클리어한 스테이지는 재파밍 가능(보상은 프런티어와 **동일**). 전리품이 인벤토리 용량을 초과하면 지급하지 않고 클리어를 `InventoryFull(4002)`로 거부(전체 롤백).
 
@@ -160,6 +164,7 @@
 - [세이브 데이터 기획서](../세부/save-data-기획서.md)
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md)
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md)
+- [소모품 아이템 / 계정 버프 기획서](../세부/consumable-buff-기획서.md)
 - [성장 시스템 기획서](../세부/growth-기획서.md)
 - [거래소 / 교역선 기획서](../세부/trade-기획서.md)
 - [메일 기획서](../세부/mail-기획서.md)

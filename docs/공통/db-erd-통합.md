@@ -52,7 +52,7 @@
 
 - **서버 간 공유 키**: 모든 게임 DB 테이블의 `user_id`는 `AccountServer`의 `users.user_id`와 **동일 식별자**다.
 - **시간 값**: 계정·세이브 공통으로 **Unix timestamp(BIGINT, 초)**.
-- **캐릭터 구조**: 계정당 **캐릭터 슬롯 3개**(3인 파티). 직업·레벨·경험치·스킬·장비는 **캐릭터별**, 인벤토리·골드·큐브·룬은 **계정 공유**.
+- **캐릭터 구조**: **파티 자리 3개**(3인 파티)에, 직업 중복이 불가하므로 **보유 캐릭터는 직업 수(현재 4)까지**. 편성되지 않은 캐릭터는 `player_character.slot=0`으로 남아 성장·장비를 그대로 보존한다. 직업·레벨·경험치·스킬·장비는 **캐릭터별**, 인벤토리·골드·큐브·룬은 **계정 공유**.
 
 ## 2. AccountServer — 계정/인증 MySQL
 
@@ -102,6 +102,7 @@ erDiagram
     game_player      ||--o{ player_item      : owns
     game_player      ||--o{ player_rune      : has
     game_player      ||--|| player_cube      : has
+    game_player      ||--o{ player_buff      : "has active"
     game_player      ||--o{ player_mail      : receives
     game_player      ||--|| player_attendance : progresses
     game_player      ||--o{ trade_listing    : sells
@@ -125,8 +126,9 @@ erDiagram
 
     player_character {
         bigint  user_id FK
-        int     character_id "캐릭터 슬롯(1~3)"
+        int     character_id "캐릭터 고유 식별자(생성 순번), 불변"
         int     class_code "직업(중복 불가)"
+        int     slot "파티 자리(0=미편성, 1~3)"
         int     gender "성별 1:남 2:여 (기본 1:남)"
         int     level
         bigint  exp
@@ -148,13 +150,13 @@ erDiagram
         bigint  user_id FK
         int     item_code "item_master.item_code (어떤 아이템인지)"
         int     enhance_level "장비 강화 단계"
-        int     equipped_character_id "장착 캐릭터(1~3)"
+        int     equipped_character_id "장착 캐릭터(character_id)"
         int     equipped_slot "장착 슬롯(equip_slot_master)"
     }
 
     player_skill {
         bigint  user_id FK
-        int     character_id "캐릭터 슬롯(1~3)"
+        int     character_id "캐릭터 고유 식별자"
         int     skill_code "스킬 ID(skill_master)"
         int     level "스킬 레벨"
         int     equipped "액티브 장착 여부(0/1), 캐릭터당 최대 2개"
@@ -170,6 +172,14 @@ erDiagram
         bigint  user_id PK,FK
         int     cube_level
         bigint  cube_exp
+    }
+
+    player_buff {
+        bigint  user_id PK,FK
+        int     buff_type PK "1:경험치 획득량 2:골드 획득량"
+        decimal buff_value "획득량 배율(1.500=150%)"
+        bigint  started_at "버프 시작 Unix ts(소급 구간 하한)"
+        bigint  expires_at "버프 만료 Unix ts(소급 구간 상한)"
     }
 
     player_mail {
@@ -220,12 +230,13 @@ erDiagram
 | 테이블 | PK / 유니크 | 범위 |
 |---|---|---|
 | `game_player` | `user_id` | 계정 공용(파티 루트) |
-| `player_character` | `(user_id, character_id)` | 캐릭터별(슬롯 1~3, 직업 중복 불가) |
+| `player_character` | `(user_id, character_id)` | 캐릭터별(보유 캐릭터, 직업 중복 불가. 파티 자리는 `slot` 0~3) |
 | `player_item` | `player_item_id` PK, `(user_id, slot)` 유니크. 재화 행의 `(user_id, item_code)` 유일성은 서버가 보장 | 계정 공유(아이템·재화 통합, 보유 상태) |
 | `player_item_equipped` | `player_item_id` PK(아이템당 최대 1행), `(user_id, equipped_character_id, equipped_slot)` 유니크 | 장착 상태(캐릭터별) |
 | `player_skill` | `(user_id, character_id, skill_code)` | 캐릭터별 |
 | `player_rune` | `(user_id, rune_code)` | 계정 공유 |
 | `player_cube` | `user_id` | 계정 공유 |
+| `player_buff` | `(user_id, buff_type)` PK(버프 종류당 1행 · 중복 사용 직렬화 단위), `expires_at` 보조 인덱스(정리 배치) | 계정 공유(활성 획득량 버프) |
 | `player_mail` | `mail_id` PK, `user_id` 인덱스 | 계정 우편함 |
 | `player_mail_reward` | `(mail_id, seq)` | 메일 첨부 |
 | `player_attendance` | `user_id` | 계정 출석 진행도(누적 카운터, 계정당 1행) |
@@ -240,8 +251,9 @@ erDiagram
 
 ### player_character
 
-- **역할**: 계정이 보유한 캐릭터(슬롯 1~3, 3인 파티)별 진행 상태. 직업·레벨·경험치는 **캐릭터별**이다.
-- **저장 데이터**: `(user_id, character_id)` 키, `class_code`(직업 — 파티 내 중복 불가, `class_master` 참조), `gender`(성별 1:남 2:여 — 캐릭터 생성 시 선택, 이후 변경 없음. 기본값 1:남), `level`, `exp`.
+- **역할**: 계정이 **보유한** 캐릭터별 진행 상태. 직업·레벨·경험치는 **캐릭터별**이다. 직업 중복이 불가하므로 보유 상한은 직업 수(현재 4)이며, 그중 최대 3명이 파티(3인 전투)에 편성된다.
+- **저장 데이터**: `(user_id, character_id)` 키, `class_code`(직업 — 계정 내 중복 불가, `class_master` 참조), `slot`(파티 자리), `gender`(성별 1:남 2:여 — 캐릭터 생성 시 선택, 이후 변경 없음. 기본값 1:남), `level`, `exp`.
+- **`character_id` vs `slot`(중요)**: `character_id`는 **캐릭터 고유 식별자**(생성 순번 1~)로 `player_skill`·`player_item_equipped`가 이 값으로 캐릭터를 가리키므로 **생성 후 절대 바뀌지 않는다**. 파티 자리는 별도 컬럼 `slot`이 담는다 — **`0`=미편성**(보유만 하고 전투에 나가지 않음, 레벨·스킬·장비는 그대로 보존), `1~3`=파티 내 위치. 편성 저장은 이 `slot` 값만 바꾸므로 성장·장비가 손실되지 않는다 — 클라이언트가 **저장 후의 파티 전체(스냅샷)** 를 보내면 서버가 편성을 비우고 그대로 다시 세운다([세이브 데이터 기획서](../세부/save-data-기획서.md) 5.5 파티 편성 저장). `1~3`의 계정 내 유일성은 MySQL 부분 유니크 인덱스 미지원으로 **서버가 단일 트랜잭션에서 보장**한다(재화 유일성과 같은 방식). ⚠️ `player_item.slot`(가방 칸)과 이름만 같고 의미가 다르다.
 - **`gender`**: 캐릭터 외형(남/여)을 가르는 값이며 직업·스탯 등 전투 계산에는 영향을 주지 않는 표현용 값이다. 생성 시 클라이언트가 선택해 전달하고 서버가 1·2 범위만 검증한다. 컬럼 기본값이 `1`(남)이라 **기존 캐릭터 행은 모두 남자로 간주**된다.
 
 ### player_item
@@ -268,6 +280,13 @@ erDiagram
 
 - **역할**: **계정 공유** 큐브(Hero-dric Cube)의 성장 상태. 계정당 1행.
 - **저장 데이터**: `user_id`(PK/FK), `cube_level`(`cube_master` 참조), `cube_exp`(현재 큐브 경험치).
+
+### player_buff
+
+- **역할**: 소모품 사용으로 부여된 **계정 단위 획득량 버프**의 활성 상태. 경험치·골드 획득량 배율을 스테이지 클리어 보상과 오프라인 정산에 적용할 근거다([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 4.2).
+- **저장 데이터**: `buff_type`(1:경험치 2:골드), `buff_value`(배율), `started_at`·`expires_at`(Unix ts, 초).
+- **MySQL에 저장하는 이유**: 버프 시간은 **벽시계로 흐르므로** 오프라인 정산이 이미 만료된 버프의 유효 구간을 소급 계산해야 한다. Redis TTL은 그 근거(`started_at`·`expires_at`)를 만료 순간 삭제하고, 소모된 아이템의 대가가 유실되면 복구할 수 없으므로 정본을 MySQL에 둔다(같은 문서 4.1).
+- **만료 행 처리**: 활성 판정은 `expires_at > now` 필터이므로 만료 행이 남아 있어도 무해하다. 정리는 주기 배치가 하되, 오프라인 정산 상한(12시간) + 여유만큼은 **반드시 보존**한다(같은 문서 6.4).
 
 ### player_mail
 
@@ -298,7 +317,8 @@ erDiagram
 | `class_master` | `class_code` | `player_character.class_code` |
 | `level_master` | `level` | `player_character.level` |
 | `equip_slot_master` | `slot` | `player_item_equipped.equipped_slot` / `item_master.equip_slot` |
-| `item_master` | `item_code` | `player_item.item_code`(아이템 `item_type` 1~2 및 재화 `item_type` 3, 골드=1) / `player_item_equipped.item_code` |
+| `item_master` | `item_code` | `player_item.item_code`(아이템 `item_type` 1~2, 재화 3, 소모품 4, 골드=1) / `player_item_equipped.item_code` |
+| `consumable_master` | `item_code` | `item_master`의 소모품 행(`item_type=4`)과 1:1 · `player_buff.buff_type`/`buff_value`의 원천 |
 | `enhance_master` | `enhance_level` | `player_item.enhance_level` / `player_item_equipped.enhance_level` |
 | `skill_master` | `skill_code` | `player_skill.skill_code` |
 | `rune_master` | `rune_code` | `player_rune.rune_code` |
@@ -315,7 +335,7 @@ erDiagram
 ### class_master
 
 - **역할**: 캐릭터 생성 시 고르는 직업(클래스) 정의. `player_character.class_code`가 참조.
-- **정의 데이터**: 직업 이름, 설명(`description`, 클라 표시용), 해금 방식(`unlock_type`), 기본 스탯(hp·atk·def·이동속도·치명확률·치명피해·쿨다운). 현재 4종(기사·레인저·마법사·슬레이어) — 캐릭터 슬롯 3개에 직업 중복이 불가하므로 4종 중 3종을 골라 파티를 구성한다.
+- **정의 데이터**: 직업 이름, 설명(`description`, 클라 표시용), 해금 방식(`unlock_type`), 기본 스탯(hp·atk·def·이동속도·치명확률·치명피해·쿨다운). 현재 4종(기사·레인저·마법사·슬레이어) — 4종을 모두 보유할 수 있고, 그중 3종을 파티(`player_character.slot` 1~3)에 편성한다.
 
 ### level_master
 
@@ -330,7 +350,12 @@ erDiagram
 ### item_master
 
 - **역할**: **아이템(장비·재료)과 재화(골드)를 통합 정의**. `player_item.item_code`·`player_item_equipped.item_code`가 참조하는 게임 내 모든 유형 아이템의 원장.
-- **정의 데이터**: 이름, `item_type`(1:장비 2:재료 3:재화), 등급, 장착 슬롯·클래스/레벨 제한, 스택 최대치, 장비 옵션 스탯(개별 컬럼), 거래 가능 여부·거래 기준가. 골드=`item_code` 1.
+- **정의 데이터**: 이름, `item_type`(1:장비 2:재료 3:재화 **4:소모품**), 등급, 장착 슬롯·클래스/레벨 제한, 스택 최대치, 장비 옵션 스탯(개별 컬럼), 거래 가능 여부·거래 기준가. 골드=`item_code` 1, 재료=`41xxx`, 소모품=`42xxx`.
+
+### consumable_master
+
+- **역할**: 소모품 아이템(`item_master.item_type=4`)이 부여하는 **획득량 버프 효과** 정의. 소모품 사용 API가 이 정의를 읽어 `player_buff`에 버프를 기록한다([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 4.3).
+- **정의 데이터**: `item_code`(PK, `item_master` 소모품 행), `buff_type`(1:경험치 획득량 2:골드 획득량), `buff_value`(획득량 배율, `1.500`=150%), `duration_sec`(지속시간 초). 현재 2종 — 경험치 부스터(`42001`)·골드 부스터(`42002`).
 
 ### enhance_master
 
@@ -340,7 +365,7 @@ erDiagram
 ### skill_master
 
 - **역할**: 직업별 액티브/패시브 스킬 정의. `player_skill.skill_code`가 참조.
-- **정의 데이터**: 소속 직업, 스킬 타입(액티브/패시브), 최대 스킬 레벨. 계수·성격(공격/버프/디버프)·지속시간은 스킬마다 개수가 달라 자식 테이블 `skill_coefficient`(`(skill_code, skill_level, coef_type, coef, duration)`)로 1:N 분리 — `coef_type`이 계수의 타입(공격/버프/디버프)이고 `duration`이 버프/디버프 지속시간이다.
+- **정의 데이터**: 소속 직업, 스킬 타입(액티브/패시브), 최대 스킬 레벨. 계수·성격(공격/버프/디버프/자원 소모/흡혈)·지속시간은 스킬마다 개수가 달라 자식 테이블 `skill_coefficient`(`(skill_code, skill_level, coef_type, coef, duration)`)로 1:N 분리 — `coef_type`이 계수의 타입(**1:공격 2:버프 3:디버프 4:자원 소모 5:흡혈**)이고 `duration`이 효과 지속시간이다. PK에 `coef_type`이 있어 한 스킬·레벨이 여러 효과를 동시에 가질 수 있다(예: 슬레이어 `광전사의 힘`=버프+체력 소모+흡혈).
 
 ### rune_master
 
@@ -392,6 +417,7 @@ erDiagram
 - [메일 기획서](../세부/mail-기획서.md) — `player_mail`·`player_mail_reward` 우편함·첨부
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — `player_attendance`·`attendance_master` 출석 기록·일차별 보상
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 인벤토리·장비·큐브 세부 규칙
+- [소모품 아이템 / 계정 버프 기획서](../세부/consumable-buff-기획서.md) — `player_buff`·`consumable_master`, 저장 위치(MySQL 정본) 근거
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 캐릭터·스킬·룬 세부 규칙
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) — 경험치·골드 지급(세이브 테이블 사용)
 - [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) — 마스터 테이블 정의

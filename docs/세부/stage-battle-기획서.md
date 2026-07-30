@@ -24,7 +24,7 @@
 - **목적**: 방치형 자동 전투의 결과(스테이지 클리어)를 **서버가 검증·확정**하고, 그에 대응하는 보상(골드·경험치·전리품)을 지급한다. 진행도·보상은 전투력·경제에 직결되는 이득이므로 **서버가 마스터 데이터로 최종 확정**하며, 클라이언트가 보고한 클리어·전리품을 그대로 신뢰하지 않는다.
 - **대상 서버**: `GameServer`(스테이지 진행·클리어 검증·보상 반영), `TaskbarHero.Common`(스테이지·전투 결과 DTO·에러 코드 공유). 인증은 AccountServer 발급 토큰을 GameServer 미들웨어가 검증.
 - **범위 경계**:
-  - **전투 시뮬레이션 자체**(데미지 계산·몬스터 AI)는 클라이언트 자동 전투가 담당한다. 서버는 전투를 재현하지 않고, **클리어 요청의 타당성(진입 여부·스킵 금지·플레이 시간 등)** 을 검증한 뒤 **보상만 서버 권위로 산출**한다.
+  - **전투 시뮬레이션 자체**(데미지 계산·몬스터 AI)는 클라이언트 자동 전투가 담당한다. 서버는 전투를 재현하지 않고, **클리어 요청의 타당성(진입 여부·스킵 금지)** 을 검증한 뒤 **보상만 서버 권위로 산출**한다.
   - **오프라인 진행 보상**은 본 문서 밖이다([오프라인 보상 정산 기획서](offline-reward-기획서.md), 도메인 4.3). 본 문서는 **온라인(접속 중) 스테이지 클리어**를 다룬다.
   - **드롭된 아이템의 인벤토리 적재 규칙**(스택·용량)은 [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md)를 따른다. 본 문서는 드롭 **산출**까지 책임진다.
 - **관련 기획서**: [[save-data-기획서]] (진행도 저장), [[master-data-기획서]] (스테이지·몬스터·드롭 정의), [[inventory-item-cube-기획서]] (전리품 적재), [[offline-reward-기획서]] (오프라인 진행), [[growth-기획서]] (경험치→레벨), [[서버-시스템-전체-개요]] (도메인 4.6)
@@ -47,7 +47,7 @@
 **비기능 요구사항**
 - **서버 권위**: 클리어 여부의 최종 판정과 보상 산출은 서버가 한다. 클라이언트는 "이 스테이지를 클리어했다"는 신호만 보내고, 무엇을 얼마나 받을지는 서버가 정한다.
 - **원자성**: "진행도 갱신 + 골드/경험치 지급 + 전리품 적재"는 하나의 `user_id` 단위 트랜잭션으로 처리한다. 중도 실패 시 전체 롤백.
-- **치트 방지(플레이 검증)**: 서버는 전투를 재현하지 않으므로, ①진입한 스테이지와 클리어 대상 일치, ②앞 스테이지 미클리어 스킵 금지, ③진입~클리어 최소 소요 시간(플레이 타당성) 등을 검증한다. 검증 강도·수치는 8장 미결.
+- **치트 방지(플레이 검증)**: 서버는 전투를 재현하지 않으므로, ①진입한 스테이지와 클리어 대상 일치, ②앞 스테이지 미클리어 스킵 금지를 검증한다.
 - **동시성**: 동일 계정 단일 세션 정책으로 경합은 제한적이나, 진행도 행(`game_player`)에 잠금을 걸어 중복 클리어 보상 지급을 막는다.
 
 ## 4. 데이터 모델
@@ -62,7 +62,6 @@
 | `player_item` | 전리품(아이템·재료) 적재(계정 공유) | `item_master`·`stage_reward` |
 
 - **현재 진입 스테이지**: 별도 컬럼을 두지 않고 `game_player.act`/`stage`/`difficulty`가 **현재 진입(진행 중) 스테이지**를 나타낸다. 진입 요청이 이 값을 설정하고, 클리어 요청이 이 값을 기준으로 검증·전진한다.
-- **진입 시각(플레이 검증용, 제안·미결)**: 진입~클리어 최소 소요 시간을 검증하려면 진입 시각이 필요하다. `game_player.stage_entered_at`(bigint) 추가를 **제안**한다(검증 도입 확정 시 [세이브 데이터 기획서](save-data-기획서.md) ERD 반영). 8장 미결.
 
 **공유 enum / DTO (TaskbarHero.Common)**
 - 클리어 결과 DTO(획득 골드·경험치·전리품·갱신 진행도)는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다. 필드는 5.2 응답 스키마를 따른다.
@@ -161,10 +160,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- `rewards.gold`/`exp`는 `stage_reward`의 골드·경험치, `rewards.items`는 `stage_reward`의 **등급별 확률로 서버가 추첨한** 전리품이다. `exp`는 **파티에 편성된 캐릭터 모두에게 동일** 적용되어 `characters`에 반영 후 값이 담긴다(미편성 캐릭터는 제외).
+- `rewards.gold`/`exp`는 `stage_reward`의 골드·경험치에 **활성 획득량 버프 배율을 적용한 최종 지급액**이다([소모품/버프 기획서](consumable-buff-기획서.md) 6.2). `rewards.items`는 `stage_reward`의 **등급별 확률로 서버가 추첨한** 전리품이다(드롭 확률에는 버프가 적용되지 않는다). `exp`는 **파티에 편성된 캐릭터 모두에게 동일** 적용되어 `characters`에 반영 후 값이 담긴다(미편성 캐릭터는 제외).
 - `characters[].isLevelUp`: 이번 클리어 경험치로 **그 캐릭터가 레벨업 했는지** 여부(`true`/`false`). 같은 `exp`를 받아도 캐릭터마다 시작 레벨·잔여 경험치가 달라 일부만 레벨업할 수 있다.
 - `progress`: 갱신된 진행도. 프런티어(최고 도달) 스테이지를 클리어했으면 `stage`가 다음으로 전진하고 `maxStageCleared`가 증가한다. **재파밍**(이미 클리어한 스테이지)일 경우 보상만 지급되고 `maxStageCleared`는 그대로다. 재파밍 보상은 **프런티어와 동일**(골드·경험치·드롭 확률 감산 없음, 8장 확정).
-- 오류: `StageNotEntered(6003)`(진입하지 않았거나 현재 진입 스테이지와 불일치), `StageClearTooFast(6004)`(최소 소요 시간 미충족, 임계값 8장 미결), 전리품이 인벤토리 용량을 초과하면 `InventoryFull(4002)`.
+- 오류: `StageNotEntered(6003)`(진입하지 않았거나 현재 진입 스테이지와 불일치), 전리품이 인벤토리 용량을 초과하면 `InventoryFull(4002)`.
 
 > 인증 오류(401), 마스터에 없는 코드 요청 등은 기존 미들웨어·`InvalidSaveData(2002)`/마스터 도메인 코드를 따른다.
 
@@ -177,7 +176,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   1) st = stage_master[act, difficulty, stage]      # 없으면 StageNotFound(6001)
   2) 도달 검증: 대상이 max_stage_cleared 범위 내이거나 (프런티어+1)인가?
      아니면 StageLocked(6002)   # 앞 스테이지 미클리어 스킵 금지
-  3) game_player.(act,difficulty,stage) = 대상; stage_entered_at = now(제안)
+  3) game_player.(act,difficulty,stage) = 대상
 COMMIT → { act, difficulty, stage, stageId, enteredAt }
 ```
 
@@ -186,14 +185,16 @@ COMMIT → { act, difficulty, stage, stageId, enteredAt }
 ```
 트랜잭션(BEGIN, user_id 잠금)
   1) 요청 스테이지가 game_player 현재 진입 스테이지와 일치?  아니면 StageNotEntered(6003)
-  2) (플레이 검증) now - stage_entered_at >= MIN_CLEAR_SEC ?  아니면 StageClearTooFast(6004)  # 임계값 미결
-  3) sr = stage_reward[현재 stage_id]
-     gold = sr.reward_gold; exp = sr.reward_exp
+  2) sr = stage_reward[현재 stage_id]
+     # 획득량 버프 배율(소모품 부스터). 같은 트랜잭션에서 player_buff를 읽어 활성 행만 적용한다.
+     goldMul = activeBuffValue(userId, 2:골드) ?? 1.0        # expires_at > now 인 행만, 없으면 1.0
+     expMul  = activeBuffValue(userId, 1:경험치) ?? 1.0
+     gold = floor(sr.reward_gold × goldMul); exp = floor(sr.reward_exp × expMul)
      items = rollGradeDrop(stage_reward_drop[stage_id])   # 등급별 drop_prob로 추첨 → 해당 등급 item_master 아이템 1개(서버 RNG)
-  4) 지급: player_item(재화, item_code=골드).quantity += gold
+  3) 지급: player_item(재화, item_code=골드).quantity += gold
            for c in player_character(slot≠0): c.exp += exp → level 재계산   # 파티 편성 캐릭터 동일
            items를 player_item에 적재(스택/용량 규칙; 초과 시 InventoryFull(4002))
-  5) 진행도: 프런티어 클리어면 stage 전진(act/difficulty 롤오버) + max_stage_cleared 갱신
+  4) 진행도: 프런티어 클리어면 stage 전진(act/difficulty 롤오버) + max_stage_cleared 갱신
              재파밍이면 보상만, 진행도 유지
 COMMIT → { cleared, rewards, characters, balance, progress }
 ```
@@ -201,9 +202,9 @@ COMMIT → { cleared, rewards, characters, balance, progress }
 ### 6.3 예외 / 엣지 케이스
 
 - **스킵 진입/클리어**: 도달하지 못한 스테이지는 `StageLocked(6002)`(진입)·`StageNotEntered(6003)`(클리어 불일치)로 거부.
-- **비정상적으로 빠른 클리어**: 진입~클리어 최소 시간 미만이면 `StageClearTooFast(6004)`. 임계값·도입 여부는 8장 미결.
 - **전리품 용량 초과**: `stack_max`까지 채우고 초과분은 새 행 분할, 적재할 공간이 없으면 클리어를 `InventoryFull(4002)`로 **거부**하고 트랜잭션 전체를 롤백한다(골드·경험치·전리품 모두 미반영). 초과 전리품은 **지급하지 않으며**(폐기, 메일 대체 없음, 8장 확정) 플레이어가 인벤토리를 정리한 뒤 재시도한다.
 - **동시 중복 클리어 요청**: `game_player` 행 잠금으로 직렬화해 같은 스테이지 보상 이중 지급 방지.
+- **획득량 버프 적용(확정)**: 소모품 부스터가 활성이면 골드·경험치에 배율을 적용한다([소모품/버프 기획서](consumable-buff-기획서.md) 6.2). 클리어는 **시점 이벤트**이므로 구간 계산 없이 트랜잭션 시작 시각(`now`) 기준으로 `expires_at > now`를 한 번 판정한다. 경험치 배율은 파티 편성 캐릭터 전원에게 지급되는 **동일 값에 한 번만** 곱한다(캐릭터 수만큼 곱하지 않는다). 전리품 드롭 확률에는 적용하지 않는다.
 - **Act/난이도 롤오버**: 한 Act·난이도의 마지막 스테이지 클리어 시 다음 Act/난이도로 넘어간다(전진 순서 상세는 8장 미결). **최종 스테이지**(마지막 Act·난이도의 보스 스테이지)를 클리어하면 다음이 없으므로 **그 최종 스테이지에 머물며 계속 재파밍**한다(8장 확정).
 
 ## 7. 에러 코드
@@ -215,13 +216,11 @@ COMMIT → { cleared, rewards, characters, balance, progress }
 | StageNotFound | 6001 | 스테이지가 마스터에 없음 |
 | StageLocked | 6002 | 아직 도달하지 못한 스테이지(스킵 진입 불가) |
 | StageNotEntered | 6003 | 진입하지 않았거나 현재 진입 스테이지와 불일치 |
-| StageClearTooFast | 6004 | 최소 소요 시간 미충족(플레이 타당성 검증) |
 
 - 전리품이 인벤토리 용량을 초과하면 신규 코드를 만들지 않고 `InventoryFull(4002)`([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 7장)를 재사용한다.
 
 ## 8. 미결 사항 / TODO
 
-- **플레이 타당성 검증(백로그로 이동)**: 진입~클리어 최소 소요 시간(`MIN_CLEAR_SEC`)·진입 시각 저장(`game_player.stage_entered_at`)·`StageClearTooFast(6004)` 검증은 **현재 스테이지 작업 범위에서 제외**하고 일정 미편성 백로그로 이관했다(README 「미편성 백로그」, fix 작업 조기 완료 시 착수). `6004`는 예약 코드로 유지한다.
 - **보상 수치·드롭 확률**: `stage_reward`의 `reward_gold`/`reward_exp`·등급별 확률 실제 값(밸런스). → [마스터 데이터 값](master-data/master-data-값.md) §10.
 - **경험치 곡선 연계**: 레벨업·스킬 포인트 파생은 [성장 시스템 기획서](growth-기획서.md)·`level_master`를 따른다.
 

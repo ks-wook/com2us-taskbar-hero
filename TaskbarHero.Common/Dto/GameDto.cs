@@ -107,6 +107,16 @@ namespace TaskbarHero.Common.Dto
         public List<CharacterDto> characters = new List<CharacterDto>();
     }
 
+    /// <summary>파티 편성 저장 응답 { success, errorCode, message, data(ArrangePartyResultData) }.</summary>
+    [Serializable]
+    public class ArrangePartyResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public ArrangePartyResultData data = new ArrangePartyResultData();
+    }
+
     // ── load 스냅샷 DTO ──
 
     [Serializable]

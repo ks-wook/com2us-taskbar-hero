@@ -78,7 +78,6 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.StageNotFound => "Stage not found",
         ErrorCode.StageLocked => "Stage locked",
         ErrorCode.StageNotEntered => "Stage not entered",
-        ErrorCode.StageClearTooFast => "Stage cleared too fast",
         ErrorCode.InventoryFull => "Inventory full",
         ErrorCode.ItemNotFound => "Item not found",
         ErrorCode.ItemNotEquippable => "Item not equippable",

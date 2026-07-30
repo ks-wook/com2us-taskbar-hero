@@ -71,6 +71,7 @@ erDiagram
     game_player      ||--o{ player_item      : owns
     game_player      ||--o{ player_rune      : has
     game_player      ||--|| player_cube      : has
+    game_player      ||--o{ player_buff      : "has active"
     player_item      ||--o| player_item_equipped : "equipped as"
     player_character ||--o{ player_item_equipped : equips
     player_character ||--o{ player_skill     : has
@@ -142,6 +143,14 @@ erDiagram
         bigint  cube_exp
     }
 
+    player_buff {
+        bigint  user_id PK,FK
+        int     buff_type PK "획득량 버프 종류 1:경험치 2:골드"
+        decimal buff_value "획득량 배율(1.500=150%)"
+        bigint  started_at "버프 시작 Unix ts(소급 구간 하한)"
+        bigint  expires_at "버프 만료 Unix ts(소급 구간 상한)"
+    }
+
     player_mail {
         bigint  mail_id PK
         bigint  user_id FK
@@ -188,6 +197,7 @@ erDiagram
   - `player_character`: `(user_id, character_id)` 복합 PK. `character_id`는 **캐릭터 고유 식별자**(생성 순번)이며 파티 자리가 아니다 — 파티 자리는 `slot`(0=미편성, 1~3)이 담고, `(user_id, class_code)` 유니크로 계정 내 직업 중복을 막는다. `slot` 1~3의 유일성은 MySQL 부분 유니크 인덱스 미지원으로 **서버가 트랜잭션에서 보장**한다(5.5). `gender`(성별 1:남 2:여)는 **캐릭터 생성 시 선택**해 저장하고 이후 변경하지 않으며, 외형(남/여 스프라이트)만 가르는 표현용 값이라 직업·레벨·스탯 계산에는 관여하지 않는다. 컬럼 기본값이 `1`(남)이므로 **성별 도입 이전에 생성된 캐릭터는 모두 남자**가 된다.
   - `player_skill`: `(user_id, character_id, skill_code)` 복합 PK. 캐릭터별 스킬 레벨·액티브 장착.
   - `player_rune`: `(user_id, rune_code)` 복합 PK. 룬은 **계정 공용**이라 `character_id`를 두지 않는다.
+  - `player_buff`: `(user_id, buff_type)` 복합 PK — 계정당 버프 **종류별 1행**이며, 이 PK 행 잠금이 같은 종류의 중복 사용 요청을 직렬화한다(별도 분산 락 없음). 종류가 다른 버프(경험치·골드)는 별도 행이라 동시 활성된다. 활성 판정은 `expires_at > now`이고 만료 행은 조회에서 걸러지므로 즉시 삭제하지 않는다 — 오프라인 정산이 만료 버프의 유효 구간을 **소급 참조**하기 때문이다([소모품/버프 기획서](consumable-buff-기획서.md) 4.2·6.3). 정리 배치용 `expires_at` 보조 인덱스를 둔다.
   - `player_mail`: `mail_id` PK, `user_id` 조회 인덱스. 계정 우편함.
   - `player_mail_reward`: `(mail_id, seq)` 복합 PK. 메일 첨부(0~N).
   - `player_attendance`: `user_id` PK로 **계정당 1행**(출석 진행도). `attend_count`(누적 출석일수)로 일차를 산출하고(`% 30 + 1`, 30일 순환) `last_attend_date`로 하루 1회를 보장한다. 일자별 출석 이력은 저장하지 않는다([출석부 보상 시스템 기획서](attendance-기획서.md)).
@@ -201,7 +211,7 @@ erDiagram
 ![창고/인벤토리 화면 — 슬롯 격자에 배치된 아이템과 인벤토리 용량](../images/save-data-창고_인벤토리.png)
 
 - **아이템/스킬/룬 등의 코드 값**은 마스터(기획) 데이터를 참조한다([마스터 데이터 기획서](master-data/master-data-기획서.md), 도메인 4.10). 각 코드 컬럼이 어느 마스터 테이블을 참조하는지는 해당 문서 3장의 매핑 표를 참고한다.
-- `player_character`/`player_item`/`player_item_equipped`/`player_skill`/`player_rune`/`player_cube`/`player_mail`/`player_attendance`/`trade_listing`의 **세부 필드·규칙**은 각 시스템 기획서(성장·인벤토리·[메일](mail-기획서.md)·[출석부](attendance-기획서.md)·[거래소](trade-기획서.md) 등)에서 확장한다. 본 ERD는 저장 골격이다.
+- `player_character`/`player_item`/`player_item_equipped`/`player_skill`/`player_rune`/`player_cube`/`player_buff`/`player_mail`/`player_attendance`/`trade_listing`의 **세부 필드·규칙**은 각 시스템 기획서(성장·인벤토리·[소모품/버프](consumable-buff-기획서.md)·[메일](mail-기획서.md)·[출석부](attendance-기획서.md)·[거래소](trade-기획서.md) 등)에서 확장한다. 본 ERD는 저장 골격이다.
 
 ## 4. 저장 정책
 
@@ -245,6 +255,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | `skills` | 캐릭터별 보유 스킬 코드·레벨·액티브 장착 여부 | `player_skill` (`level > 0` — 초기화로 레벨 0이 된 행은 미습득으로 제외, [성장 기획서](growth-기획서.md) 4장) | 3 × 직업 스킬 수 |
 | `runes` | 계정 공용 룬 코드·레벨 | `player_rune` | 룬 마스터 수 |
 | `cube` | 큐브 레벨·경험치 | `player_cube` | 1행 |
+| `activeBuffs` | 활성 획득량 버프(종류·배율·시작/만료 시각) | `player_buff` (`expires_at > now`) | ≤ 버프 종류 수(현재 2행) |
 | `inventoryTotal` | 가방 아이템 행 수(용량 UI 표시·페이징 진행률용) | `player_item` (`row_type=1`) COUNT | 스칼라 |
 | `offlineElapsedSec` | `현재 서버 시각 - lastActiveAt` | 산출값 | 스칼라 |
 
@@ -294,6 +305,9 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
       { "runeCode": 205, "level": 3 }
     ],
     "cube": { "cubeLevel": 4, "cubeExp": 1200 },
+    "activeBuffs": [
+      { "buffType": 1, "buffValue": 1.5, "startedAt": 1752350000, "expiresAt": 1752351800 }
+    ],
     "inventoryTotal": 3872,
     "offlineElapsedSec": 43200
   }
@@ -304,6 +318,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - **`currencies`의 저장 출처**: `player_item`의 `row_type=2`(재화) 행을 `{currencyType(=item_code), amount(=quantity)}`로 투영한 결과다. 재화 행은 `slot`이 NULL이라 가방 페이징(5.2) 대상에서 자동으로 빠지므로, **재화는 코어에서만 내려간다.**
 - **`equipped`(장착 장비)**: `player_item_equipped` 행을 그대로 내려준다. 장착 중에는 `player_item.slot`이 NULL이라 가방 칸을 점유하지 않으므로 5.2의 페이지 결과와 **중복되지 않는다.** 클라이언트는 이 배열만으로 캐릭터별 장비 렌더링과 스탯 계산을 끝낼 수 있고, 가방을 로드하지 않은 상태에서도 전투를 시작할 수 있다.
 - **가방 아이템은 포함하지 않는다**: 총 개수(`inventoryTotal`)만 내려준다. 실제 아이템 목록은 창고/인벤토리 UI를 열 때 5.2로 조회한다.
+- **`activeBuffs`(활성 획득량 버프)**: `player_buff`에서 `expires_at > now`인 행만 담는다(없으면 빈 배열). 계정당 버프 종류 수만큼(현재 최대 2행)으로 **크기가 고정**이라 코어 로드가 전량 내려주며, 전용 조회 엔드포인트를 두지 않는다. 클라이언트는 `expiresAt`(절대 시각)으로 잔여 시간을 표시하되 **만료를 자체 확정하지 않는다** — 배율 적용 여부는 항상 서버 판정이다([소모품/버프 기획서](consumable-buff-기획서.md) 5.2).
 - `offlineElapsedSec`: `현재 서버 시각 - lastActiveAt`. 오프라인 보상 계산의 입력값(정산 규칙은 [오프라인 보상 정산 기획서](offline-reward-기획서.md)).
 
 **Response (세이브 없음 — 최초 접속, 200 OK)**
@@ -388,7 +403,9 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 캐릭터를 **한 번에 1개** 생성한다. **생성 가능 조건은 직업 중복 금지 하나뿐**이며(보유 수 상한을 따로 두지 않는다 — 직업 중복이 불가하므로 보유 상한은 자연히 직업 수, 현재 4가 된다), 최초 호출 시 계정 세이브(`game_player`)가 함께 초기화된다. 서버가 **`characterId`(캐릭터 고유 식별자, 생성 순번)를 배정**하고 **빈 파티 자리가 있으면 가장 앞자리에 자동 편성**한다(파티가 이미 3명이면 `slot=0` 미편성 상태로 보유만 하며, 이후 5.5로 편성한다). **최초 생성(계정 초기화)은 무료이고, 2번째 이후 생성은 정액 골드를 소모**한다(비용은 마스터 `character_create_cost`의 **생성 순번**별 명시값, 현재 전 순번 500,000골드 — [마스터 데이터 기획서](master-data/master-data-기획서.md)). 골드 확인·차감·캐릭터 삽입은 한 트랜잭션으로 원자적으로 처리한다.
 
-> **`characterId`는 파티 자리가 아니다(중요)**: `characterId`는 캐릭터를 가리키는 **고유 식별자**로 생성 후 바뀌지 않으며(`player_skill`·`player_item_equipped`가 이 값을 참조), 파티 자리는 별도 값 `slot`이 담는다. 편성 변경은 5.5가 담당한다.
+> **`characterId`는 파티 자리가 아니다(중요)**: `characterId`는 캐릭터를 가리키는 **고유 식별자**로 생성 후 바뀌지 않으며(`player_skill`·`player_item_equipped`가 이 값을 참조), 파티 자리는 별도 값 `slot`이 담는다. 편성 저장은 5.5가 담당한다.
+
+> **신규 가입 지원금 자동 발급**: 계정 세이브가 처음 만들어질 때(= 최초 캐릭터 생성) 서버가 **환영 메일을 같은 트랜잭션에서 발급**한다 — 문구는 `mail_master` 101, 첨부는 `newbie_reward_master`(현재 골드 10,000,000)이며 **무기한**이라 첫 접속이 늦어도 사라지지 않는다([메일 기획서](mail-기획서.md) 4장). 플레이어는 우편함에서 수령한다. `game_player`가 계정당 1행이므로 이 트랜잭션은 계정 생애에 **정확히 1회만** 성공하며, 그래서 지급 여부를 저장하는 컬럼 없이 중복 지급이 원천 차단된다. 지원금 정의(`newbie_reward_master`)가 비어 있으면 메일 없이 계정만 생성된다.
 
 ![캐릭터 생성 화면 — 직업 선택과 닉네임 입력](../images/save-data-캐릭터생성화면.png)
 

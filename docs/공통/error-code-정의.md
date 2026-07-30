@@ -1,6 +1,6 @@
 # ErrorCode 통합 정의
 
-> 상위 문서: [서버 시스템 전체 개요](서버-시스템-전체-개요.md)
+> 상위 문서: [서버 시스템 전체 개요](../서버-시스템-전체-개요.md)
 >
 > 현재까지 작성된 기획서들에 등장한 **에러 코드를 한곳에 모은 참조 문서**다. 각 코드의 상세 맥락은 원 기획서를 따르며(아래 "출처"), 본 문서는 `TaskbarHero.Common`의 `ErrorCode` enum에 반영할 **단일 목록**을 제공한다. 서버-클라이언트가 공유하는 계약이므로 **숫자 값은 변경하지 않는다.**
 
@@ -23,7 +23,7 @@
 | 1000번대 | 계정 / 인증 | [계정/로그인 기획서](../세부/account-login-기획서.md) 6장 | 사용 중 |
 | 2000번대 | 세이브 데이터 | [세이브 데이터 기획서](../세부/save-data-기획서.md) 6장 | 사용 중 |
 | 3000번대 | 오프라인 보상 정산 | [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) 7장 | 사용 중 |
-| 4000번대 | 인벤토리 / 아이템 / 큐브 | [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 7장 | 사용 중 |
+| 4000번대 | 인벤토리 / 아이템 / 큐브 / 소모품·버프 | [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 7장, [소모품/버프 기획서](../세부/consumable-buff-기획서.md) 7장 | 사용 중 |
 | 5000번대 | 성장(직업 / 스킬 / 룬) | [성장 시스템 기획서](../세부/growth-기획서.md) 7장 | 사용 중 |
 | 6000번대 | 스테이지 / 전투 결과 | [스테이지/전투 결과 기획서](../세부/stage-battle-기획서.md) 7장 | 사용 중 |
 | 7000번대 | 거래소 / 교역선 | [거래소 / 교역선 기획서](../세부/trade-기획서.md) 8장 | 사용 중 |
@@ -57,10 +57,13 @@
 |---|---|---|
 | SaveNotFound | 2001 | 세이브 데이터 없음 |
 | InvalidSaveData | 2002 | 액션 요청 값 검증 실패(불가능한 값·비정상 데이터) |
-| PlayerAlreadyExists | 2004 | 캐릭터 슬롯 3개가 모두 차 더 생성 불가 |
+| PlayerAlreadyExists | 2004 | 더 생성할 수 있는 캐릭터가 없음(보유 직업이 전 직업을 채움) |
 | InvalidClassCode | 2005 | 존재하지 않는 직업 코드 |
-| InvalidCharacterId | 2006 | 잘못된 캐릭터 슬롯(존재하지 않는 characterId·슬롯 개수 오류·직업 중복) |
+| InvalidCharacterId | 2006 | 잘못된 캐릭터 식별자(존재하지 않는 characterId·이미 보유한 직업 중복) |
 | InvalidGender | 2007 | 정의되지 않은 성별 값(1:남 2:여 외) |
+| CannotRemoveLastCharacter | 2008 | 파티를 비울 수 없음(편성 저장 목록이 비어 있음) |
+| CharacterNotFound | 2009 | 편성 목록에 보유하지 않은 캐릭터가 있음 |
+| PartySlotOccupied | 2010 | 파티 자리 지정 오류(정원 초과·범위 밖·같은 자리 중복) |
 
 - `2003`(구 `SaveVersionMismatch`)은 세이브 스키마 버전(`data_version`) 제거로 폐기했다. 결번으로 두고 재사용하지 않는다.
 
@@ -86,8 +89,12 @@
 | InvalidInventorySlot | 4009 | 인벤토리 칸(slot) 번호가 잘못됨(용량 범위 밖 등) |
 | CubeRecipeNotMet | 4010 | 큐브 합성/제작 조건(등급·개수·재료) 미충족 |
 | CubeLevelInsufficient | 4011 | 큐브 레벨이 해당 연산 요구치 미만 |
+| ItemNotConsumable | 4020 | 소모품이 아닌 아이템에 사용을 시도(`item_type≠4`) |
+| BuffDurationLimitExceeded | 4021 | 버프 누적 지속시간이 상한(24시간)을 초과 |
 
+- 블록 내 할당: `4001~4009` 인벤토리/아이템, `4010~4019` 큐브, `4020~4029` **소모품/버프**([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 7장).
 - `4012`(구 `InventoryRevisionChanged`)는 가방 페이지 조회(`POST /api/game/inventory/list`)의 페이지 간 정합성 검증 장치를 제거하며 **폐기**했다. 결번으로 두고 재사용하지 않는다.
+- 소모품 사용은 위 2개 외에 신규 코드를 만들지 않고 `ItemNotFound(4001)`·`InsufficientQuantity(4006)`·`MasterDataNotLoaded(10001)`·`SaveNotFound(2001)`을 재사용한다.
 
 ### 2.6 성장 (5000번대)
 
@@ -110,8 +117,8 @@
 | StageNotFound | 6001 | 스테이지가 마스터에 없음 |
 | StageLocked | 6002 | 아직 도달하지 못한 스테이지(스킵 진입 불가) |
 | StageNotEntered | 6003 | 진입하지 않았거나 현재 진입 스테이지와 불일치 |
-| StageClearTooFast | 6004 | 최소 소요 시간 미충족(플레이 타당성 검증) |
 
+- `6004`는 결번이다. 결번으로 두고 재사용하지 않는다.
 - 전리품 인벤토리 초과는 신규 코드 없이 `InventoryFull(4002)`를 재사용한다.
 
 ### 2.8 거래소 / 교역선 (7000번대)
@@ -193,6 +200,9 @@ namespace TaskbarHero.Common
         InvalidClassCode = 2005,
         InvalidCharacterId = 2006,
         InvalidGender = 2007,
+        CannotRemoveLastCharacter = 2008,
+        CharacterNotFound = 2009,
+        PartySlotOccupied = 2010,
 
         // 오프라인 보상 정산 (3000번대)
         NoOfflineReward = 3001,
@@ -212,6 +222,10 @@ namespace TaskbarHero.Common
         CubeLevelInsufficient = 4011,
         // 4012(구 InventoryRevisionChanged): 가방 페이지 조회의 정합성 검증 장치 제거로 폐기(결번)
 
+        // 소모품 / 버프 (4020~4029)
+        ItemNotConsumable = 4020,
+        BuffDurationLimitExceeded = 4021,
+
         // 성장 (5000번대)
         InvalidGrowthTarget = 5001,
         SkillMaxLevel = 5002,
@@ -227,7 +241,7 @@ namespace TaskbarHero.Common
         StageNotFound = 6001,
         StageLocked = 6002,
         StageNotEntered = 6003,
-        StageClearTooFast = 6004,
+        // 6004: 결번(재사용 금지)
 
         // 거래소 / 교역선 (7000번대)
         TradeListingNotFound = 7001,
@@ -263,7 +277,8 @@ namespace TaskbarHero.Common
 - [계정/로그인 기획서](../세부/account-login-기획서.md) — 6장 에러 코드 (1000번대)
 - [세이브 데이터 기획서](../세부/save-data-기획서.md) — 6장 에러 코드 (2000번대)
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) — 7장 에러 코드 (3000번대)
-- [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 7장 에러 코드 (4000번대)
+- [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) — 7장 에러 코드 (4001~4019)
+- [소모품 아이템 / 계정 버프 기획서](../세부/consumable-buff-기획서.md) — 7장 에러 코드 (4020~4029)
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 7장 에러 코드 (5000번대)
 - [스테이지/전투 결과 기획서](../세부/stage-battle-기획서.md) — 7장 에러 코드 (6000번대)
 - [거래소 / 교역선 기획서](../세부/trade-기획서.md) — 8장 에러 코드 (7000번대), 7장 성능 설계(Redis 캐시·경합 제어)
