@@ -358,7 +358,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 5.9 랜덤 상자 열기 (골드 가챠) — `POST /api/game/box/open`
 
-플레이어가 **골드를 소모**해 원할 때 상자를 연다(가챠). 서버는 상자 정의(`box_master`)의 오픈 비용(골드)을 차감한 뒤, `grade_weights`로 등급을 추첨하고 뽑힌 등급에 속한 `item_master` 아이템 중 하나를 무작위로 선택해 **랜덤 등급의 랜덤 아이템**을 지급한다. 비용 차감·등급/아이템 추첨·지급은 하나의 트랜잭션으로 처리하며 전적으로 **서버가 산출**한다(클라이언트 입력 불신). 요청의 `count`로 오픈 횟수를 받도록 스키마를 **미리 정의**해 두었으며, **현재는 단발(`count`=1)만 처리**하고 다연속 오픈(10연차 등)은 예정 사항이다(8장).
+플레이어가 **골드를 소모**해 원할 때 상자를 연다(가챠). 서버는 상자 정의(`box_master`)의 오픈 비용(골드)을 차감한 뒤, `box_grade_weight`로 등급을 추첨하고 `box_item_pool`에 정의된 그 등급의 후보 중 하나를 무작위로 선택해 **랜덤 등급의 랜덤 아이템**을 지급한다. 후보는 `box_item_pool`이 **명시적으로 정의**하며 **소모품(`item_type=4`)도 포함**한다(스테이지 전리품 드롭은 장비·재료만 — 두 경로의 풀이 다르다, [소모품/버프 기획서](consumable-buff-기획서.md) 4.3-(3)). 비용 차감·등급/아이템 추첨·지급은 하나의 트랜잭션으로 처리하며 전적으로 **서버가 산출**한다(클라이언트 입력 불신). 요청의 `count`로 오픈 횟수를 받도록 스키마를 **미리 정의**해 두었으며, **현재는 단발(`count`=1)만 처리**하고 다연속 오픈(10연차 등)은 예정 사항이다(8장).
 
 ![랜덤 상자 열기(골드 가챠) 화면 — 골드를 소모해 랜덤 등급의 아이템을 획득](../images/inventory-item-cube-랜덤가챠기능.png)
 
@@ -474,8 +474,8 @@ count = 요청.count ?? 1        # 현재는 1만 처리(다연속은 예정)
      if player_item(재화, item_code=골드).quantity < cost: InsufficientCurrency(4005)
   3) 골드 차감: player_item(재화, item_code=골드).quantity -= cost
   4) for _ in 1..count:                              # 현재 count=1
-       grade = 가중치 추첨(box.grade_weights)         # 서버 RNG
-       item  = 무작위 선택(item_master where grade == grade [, 상자 지급 풀])  # 서버 RNG
+       grade = 가중치 추첨(box_grade_weight[boxCode])  # 서버 RNG
+       item  = 무작위 선택(box_item_pool[boxCode, grade])   # 서버 RNG, 소모품 포함. 후보 없으면 미지급
        rewards += { grade, itemCode, quantity }
   5) 지급: player_item 적재(스택/용량 규칙); 용량 초과 시 InventoryFull(4002)
 COMMIT → { boxCode, rewards, gained, cost, balance }
@@ -519,7 +519,7 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
   - **`cube_level` 효과·성장**: `cube_exp` 누적이 `cube_master.required_exp(cube_level)` 이상이면 레벨업(초과분 이월, 최대 5). 레벨은 분해 골드 계수(`gold_per_scrap`)와 제작 요구 레벨(`req_cube_level`) 게이팅에 작용한다(합성 개수는 현재 전 레벨 3 고정).
 - **장비 클래스 제한 (확정)**: 장비는 착용 가능한 **클래스 제한**을 가진다. 현재 클래스는 **기사·레인저·마법사·슬레이어 4종으로 확정**([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.1 `class_master`)이며, **추후 확인 후 클래스를 더 추가할 예정**이다. 각 장비가 어느 클래스용인지는 `item_master.class_req`로 정의한다(`0`이면 전 클래스 공용, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.3에 반영 완료). 장착(5.1) 시 서버가 `class_req`(≠0)을 **대상 캐릭터 클래스**(`player_character.class_code`)와 대조해 불일치면 `ItemNotEquippable(4003)`로 거부한다.
 - **다연속 오픈(10연차) — 예정**: 요청 `count`와 응답 `rewards` 배열은 **다연속 확장을 위해 계약에 미리 반영**했다(5.9). 현재 서버 로직은 `count`=1(단발)만 처리하며, 추후 10연차 등 다연속 오픈 로직을 구현할 때 `count`>1 처리(비용 `오픈 비용 × count`)와 묶음 할인·등급 보장(천장) 여부를 함께 확정한다.
-- **상자 오픈 비용·등급 확률·지급 아이템 풀 (`box_master`)**: 오픈 비용(`open_cost`, 골드), `grade_weights`(등급별 추첨 가중치), 지급 대상 아이템 풀 — 전체 `item_master.grade` 필터로 할지 상자별 화이트리스트로 할지, 등급 내 아이템 선택이 균등인지 가중치인지 — 및 수량 규칙은 [마스터 데이터 기획서](master-data/master-data-기획서.md)에서 확정한다.
+- **상자 오픈 비용·등급 확률·지급 후보 (`box_master` 계열)**: 구조는 **확정**됐다 — `box_master`(오픈 비용·재화) + 자식 `box_grade_weight`(등급별 가중치) + 자식 `box_item_pool`(등급 슬롯별 **지급 후보 화이트리스트**, 등급 내 선택은 균등, **소모품 포함**)([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.13). 남은 것은 **값**이다 — 상자 종류·오픈 비용·등급 가중치·후보 아이템 목록(소모품을 어느 등급 슬롯에 몇 개 넣을지 포함)·지급 수량 규칙은 [마스터 데이터 값](master-data/master-data-값.md) §12에서 확정한다.
 - **오픈 상자 종류의 노출 방식**: 어떤 상자(`box_code`)를 어디서(상점/특정 UI) 열 수 있는지, 상자별 해금 조건이 있는지.
 - **장비 레벨 제한 (확정)**: 장비는 착용 요구 레벨을 가지며, **레벨 단위는 5레벨(5의 배수)** 로 확정한다(예: 15, 40). `item_master.level_req`로 정의하고(`0`이면 제한 없음, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.3에 반영 완료), 장착(5.1) 시 **대상 캐릭터의 `level`**이 `level_req` 미만이면 `ItemNotEquippable(4003)`로 거부한다. 요구 레벨별 스탯 곡선 등 밸런스 수치는 아이템/직업 기획서에서 확정.
 

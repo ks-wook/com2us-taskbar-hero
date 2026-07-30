@@ -20,14 +20,21 @@ namespace TaskbarHero.Client.Battle
         {
             public int code;
             public string name;
-            public int coefType;   // 1=공격 2=버프 3=디버프
+            public int coefType;   // 주 효과 타입. 1=공격 2=버프 3=디버프
             public float coef;
             public float duration;
+            public int statType;   // 버프/디버프가 작용할 스탯(룬과 동일 enum). 1=공격력 … 7=재사용 대기시간
+            // 한 스킬이 여러 coef_type을 갖는 경우의 부가 효과(광전사의 힘 402: 버프 + 자원 소모 + 흡혈).
+            public float hpCostRatio;      // coefType 4(자원 소모): 시전 시 잃는 현재 체력 비율
+            public float lifestealRatio;   // coefType 5(흡혈): 가한 피해 중 회복 비율
+            public float lifestealDuration;
             public float cooldown;
             public float timer;
             public GameObject effect;
             public Sprite icon;
             public float scale;    // 발동 이펙트 크기 배율(1=기본)
+            public Vector2 offset; // 발동 이펙트 위치 보정(월드, x+는 적 방향)
+            public bool weaponAfterimage; // 버프 지속 동안 무기 끝 붉은 잔상 추가
         }
 
         private BattleDevController _ctrl;
@@ -45,7 +52,9 @@ namespace TaskbarHero.Client.Battle
         private float _chargeRange;
         private float _chargeSpeed;
         private int _rainSkillCode;   // 공중 화살비형 스킬 코드(0=없음)
-        private int _aoeSkillCode;    // 광역(범위) 스킬 코드(0=없음)
+        private int _slamSkillCode;   // 도약 내려찍기형 스킬 코드(0=없음)
+        private float _slamAirTime;   // 내려찍기 공중 체류 시간(상승+낙하)
+        private readonly HashSet<int> _aoeSkillCodes = new HashSet<int>(); // 광역(범위) 판정을 쓰는 스킬 코드
         private bool _basicAttackAoe; // true면 근접 기본공격이 사거리 내 모든 적에게 명중
         private float _selfEffectXOffset;   // 자기 위치 이펙트 X 오프셋(+=오른쪽)
         private GameObject _basicAttackProjectile; // 기본공격 투사체 프리팹(마법사 등, 없으면 근접/기존 방식)
@@ -99,8 +108,12 @@ namespace TaskbarHero.Client.Battle
         private float _attackTimer;
         private float _busyTimer;
         private float _atkBuffMult = 1f;
+        private float _cooldownBuffMult = 1f;   // 공격 주기 배율(statType 7 버프. <1 이면 그만큼 빨라짐)
+        private float _lifestealRatio;          // 흡혈 비율(0=없음)
+        private float _lifestealTimer;          // 흡혈 남은 시간
         private float _buffTimer;
         private GameObject _buffEffect;
+        private WeaponAfterimage _weaponTrail;  // 무기 끝 잔상(상시, 평소 노랑 / 버프 중 붉음)
 
         // 개별 이동(대형 목표를 자기 속도로 추격 — 칼같은 정렬이 아닌 동적 이동)
         private Vector2 _formTarget;
@@ -133,13 +146,28 @@ namespace TaskbarHero.Client.Battle
             _chargeRange = cfg.chargeRange;
             _chargeSpeed = cfg.chargeSpeed;
             _rainSkillCode = cfg.rainSkillCode;
-            _aoeSkillCode = cfg.aoeSkillCode;
+            _slamSkillCode = cfg.slamSkillCode;
+            _slamAirTime = cfg.slamAirTime > 0f ? cfg.slamAirTime : 0.46f;
+            _aoeSkillCodes.Clear();
+            if (cfg.aoeSkillCodes != null)
+            {
+                foreach (int c in cfg.aoeSkillCodes)
+                {
+                    if (c != 0) _aoeSkillCodes.Add(c);
+                }
+            }
             _basicAttackAoe = cfg.basicAttackAoe;
             _selfEffectXOffset = cfg.selfEffectXOffset;
             _basicAttackProjectile = cfg.basicAttackProjectile;
             _basicAttackProjectileScale = cfg.basicAttackProjectileScale;
             _allSkillsAoe = cfg.allSkillsAoe;
             _anim = GetComponentInChildren<Animator>();
+
+            // 근접 무기 잔상(기사·슬레이어): 스폰 시 1회 부착. 평소 노랑, 무기 강화 버프 중에는 붉은색.
+            if (cfg.weaponTrail && _weaponTrail == null)
+            {
+                _weaponTrail = WeaponAfterimage.Create(transform, () => IsAttackMotionPlaying());
+            }
 
             LoadStats();
             BuildSkills();
@@ -347,20 +375,44 @@ namespace TaskbarHero.Client.Battle
                     lv = Mathf.Clamp(devLevel, 1, Mathf.Max(1, s.maxLevel));
                 }
 
+                // 한 스킬이 레벨마다 여러 coef_type 행을 가질 수 있다(광전사의 힘 402 = 버프 + 자원 소모 + 흡혈).
+                // 첫 행만 읽고 break 하면 부가 효과가 통째로 버려지므로 해당 레벨의 모든 행을 타입별로 분류한다.
                 float coef = 0f, dur = 0f; int ct = 1;
+                float hpCost = 0f, steal = 0f, stealDur = 0f;
+                bool primaryFound = false;
                 if (s.coefs != null)
+                {
                     foreach (var c in s.coefs)
-                        if (c.skillLevel == lv) { coef = c.coef; dur = c.duration; ct = c.coefType; break; }
+                    {
+                        if (c.skillLevel != lv) continue;
+                        switch (c.coefType)
+                        {
+                            case 4: hpCost = c.coef; break;                          // 자원 소모(현재 체력 비율)
+                            case 5: steal = c.coef; stealDur = c.duration; break;    // 흡혈
+                            default:                                                  // 1 공격 · 2 버프 · 3 디버프
+                                if (!primaryFound)
+                                {
+                                    coef = c.coef; dur = c.duration; ct = c.coefType;
+                                    primaryFound = true;
+                                }
+                                break;
+                        }
+                    }
+                }
 
                 float cd = s.cooldown > 0f ? s.cooldown : (_ctrl != null ? _ctrl.SkillCooldownFallback : 10f);
                 float readyIn = added < initReadyIn.Length ? initReadyIn[added] : 2f;
                 var sk = new Skill
                 {
                     code = s.skillCode, name = s.name, coefType = ct, coef = coef, duration = dur,
+                    statType = s.statType,
+                    hpCostRatio = hpCost, lifestealRatio = steal, lifestealDuration = stealDur,
                     cooldown = cd, timer = Mathf.Max(0f, cd - readyIn),
                     effect = _cfg != null ? _cfg.EffectFor(s.skillCode) : null,
                     icon = _cfg != null ? _cfg.IconFor(s.skillCode) : null,
                     scale = _cfg != null ? _cfg.ScaleFor(s.skillCode) : 1f,
+                    offset = _cfg != null ? _cfg.OffsetFor(s.skillCode) : Vector2.zero,
+                    weaponAfterimage = _cfg != null && _cfg.WeaponAfterimageFor(s.skillCode),
                 };
                 _skills.Add(sk);
                 if (sk.code == _chargeSkillCode) _chargeSkill = sk;
@@ -457,7 +509,7 @@ namespace TaskbarHero.Client.Battle
                     if (_allSkillsAoe)
                     {
                         // 마법사: 준비된 스킬은 대상 유무·거리와 무관하게 자기 기준으로 시전(이펙트 보장).
-                        if (!TryCastSkill() && monsterInRange && _attackTimer >= Mathf.Max(0.05f, _cooldown))
+                        if (!TryCastSkill() && monsterInRange && _attackTimer >= AttackCooldown)
                         {
                             _attackTimer = 0f;
                             BasicAttack();
@@ -466,7 +518,7 @@ namespace TaskbarHero.Client.Battle
                     else if (monsterInRange)
                     {
                         // 근접/원거리: 대상이 사거리 안일 때만 스킬/기본공격.
-                        if (!TryCastSkill() && _attackTimer >= Mathf.Max(0.05f, _cooldown))
+                        if (!TryCastSkill() && _attackTimer >= AttackCooldown)
                         {
                             _attackTimer = 0f;
                             BasicAttack();
@@ -542,7 +594,19 @@ namespace TaskbarHero.Client.Battle
                 if (_buffTimer <= 0f)
                 {
                     _atkBuffMult = 1f;
+                    _cooldownBuffMult = 1f;
                     if (_buffEffect != null) { Destroy(_buffEffect); _buffEffect = null; }
+                    if (_weaponTrail != null) { _weaponTrail.SetBuffed(false); } // 평소의 노란 잔상으로 복귀
+                }
+            }
+
+            // 흡혈은 버프와 별도 지속시간을 가질 수 있어 따로 센다(광전사의 힘은 둘 다 6초).
+            if (_lifestealTimer > 0f)
+            {
+                _lifestealTimer -= Time.deltaTime;
+                if (_lifestealTimer <= 0f)
+                {
+                    _lifestealRatio = 0f;
                 }
             }
         }
@@ -573,20 +637,137 @@ namespace TaskbarHero.Client.Battle
                 SendMessage("PlayAttackByName", _attackAnim, SendMessageOptions.DontRequireReceiver);
         }
 
+        /// <summary>
+        /// 기본 공격 주기(초). 마스터 데이터의 cooldown에 statType 7 버프 배율을 곱한다 —
+        /// 광전사의 힘은 배율이 1보다 작아 평타가 그만큼 빨라진다.
+        /// </summary>
+        private float AttackCooldown => Mathf.Max(0.05f, _cooldown * _cooldownBuffMult);
+
+        /// <summary>
+        /// 자기 버프의 대상 스탯을 <c>skill_master.stat_type</c>으로 정해 적용한다(하드코딩 제거).
+        /// 1=공격력 배율(기사의 분노), 7=공격 주기 배율(광전사의 힘 — 값이 1보다 작아 주기 단축).
+        /// 그 외 스탯(방어·치명 등)은 이 개발 하네스의 전투 계산에 반영 대상이 없어 적용하지 않는다.
+        /// </summary>
+        private void ApplyStatBuff(Skill sk)
+        {
+            switch (sk.statType)
+            {
+                case 1:
+                    _atkBuffMult = Mathf.Max(1f, sk.coef);
+                    break;
+                case 7:
+                    _cooldownBuffMult = Mathf.Clamp(sk.coef, 0.1f, 1f);
+                    break;
+                default:
+                    // 계산 대상이 없는 스탯이면 지속시간·연출만 유지하고 수치는 건드리지 않는다.
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// 자원 소모(coefType 4). 시전 순간 <b>현재</b> 체력의 <paramref name="sk"/>.hpCostRatio 만큼을 잃는다.
+        /// 고정값이 아니라 현재 체력 비율이므로 체력이 낮을수록 손실도 줄고, 이 소모로 죽지는 않는다(최소 1 유지).
+        /// </summary>
+        private void PayHpCost(Skill sk)
+        {
+            if (sk.hpCostRatio <= 0f || _dead)
+            {
+                return;
+            }
+            long cost = (long)(_hp * sk.hpCostRatio);
+            if (cost <= 0)
+            {
+                return;
+            }
+            _hp = System.Math.Max(1L, _hp - cost);
+        }
+
+        /// <summary>흡혈(coefType 5)을 지속시간만큼 켠다. 지속시간이 없으면 버프 지속시간을 따른다.</summary>
+        private void StartLifesteal(Skill sk)
+        {
+            if (sk.lifestealRatio <= 0f)
+            {
+                return;
+            }
+            _lifestealRatio = sk.lifestealRatio;
+            _lifestealTimer = sk.lifestealDuration > 0f ? sk.lifestealDuration : Mathf.Max(0.1f, sk.duration);
+        }
+
+        /// <summary>체력을 회복한다(최대 체력 초과 없음, 사망 후에는 무시).</summary>
+        public void Heal(long amount)
+        {
+            if (_dead || amount <= 0)
+            {
+                return;
+            }
+            _hp = System.Math.Min(_maxHp, _hp + amount);
+        }
+
+        /// <summary>
+        /// 단일 대상 데미지를 컨트롤러에 넘기면서 흡혈을 함께 처리한다.
+        /// 모든 데미지 경로가 이 창구를 지나므로 기본공격·스킬·투사체·돌진 어디서든 흡혈이 동작한다.
+        /// </summary>
+        private void DealDamage(float delay, long dmg, string label)
+        {
+            _ctrl.DealDamageAfter(delay, dmg, label);
+            ScheduleLifesteal(delay, dmg);
+        }
+
+        /// <summary>광역 데미지 + 흡혈. 회복량은 대상 1기분 피해 기준이다(적중 수만큼 배로 늘리지 않는다).</summary>
+        private void DealAreaDamage(float delay, long dmg, string label, Vector3 center, float radius)
+        {
+            _ctrl.DealAreaDamageAfter(delay, dmg, label, center, radius);
+            ScheduleLifesteal(delay, dmg);
+        }
+
+        /// <summary>흡혈이 켜져 있으면 데미지가 들어가는 시점에 맞춰 회복시킨다.</summary>
+        private void ScheduleLifesteal(float delay, long dmg)
+        {
+            if (_lifestealTimer <= 0f || _lifestealRatio <= 0f || dmg <= 0)
+            {
+                return;
+            }
+            long heal = System.Math.Max(1L, (long)(dmg * _lifestealRatio));
+            if (delay <= 0f)
+            {
+                Heal(heal);
+            }
+            else
+            {
+                StartCoroutine(HealAfter(delay, heal));
+            }
+        }
+
+        private IEnumerator HealAfter(float delay, long heal)
+        {
+            yield return new WaitForSeconds(delay);
+            Heal(heal);
+        }
+
         private void CastSkill(Skill sk)
         {
             _moving = false; // 스킬 모션 후 idle 복귀 → 이후 이동 시 PlayMove 재전송
             if (sk.coefType == 2) // 버프(자기 강화)
             {
                 SendMessage("PlayRage", SendMessageOptions.DontRequireReceiver); // 분노/기합 자세
-                _atkBuffMult = Mathf.Max(1f, sk.coef);
+                ApplyStatBuff(sk);
                 _buffTimer = sk.duration > 0f ? sk.duration : 5f;
+                PayHpCost(sk);        // 자원 소모(coefType 4) — 광전사의 힘: 현재 체력의 일정 비율
+                StartLifesteal(sk);   // 흡혈(coefType 5)
                 if (_buffEffect != null) { Destroy(_buffEffect); _buffEffect = null; }
                 if (sk.effect != null)
                 {
                     _buffEffect = Instantiate(sk.effect, transform, false);
-                    _buffEffect.transform.localPosition = new Vector3(0f, _ctrl.EffectYOffset, 0f);
+                    _buffEffect.transform.localPosition =
+                        new Vector3(sk.offset.x, _ctrl.EffectYOffset + sk.offset.y, 0f);
                 }
+
+                // 무기 강화형 버프(기사의 분노·광전사의 힘): 지속 동안 무기 잔상을 붉은색으로 + 무기 끝 발광점.
+                if (_weaponTrail != null && sk.weaponAfterimage)
+                {
+                    _weaponTrail.SetBuffed(true);
+                }
+
                 _busyTimer = _ctrl.BasicHitDelay;
             }
             else // 공격 스킬
@@ -602,8 +783,16 @@ namespace TaskbarHero.Client.Battle
                     _moving = false;
                     SendMessage("PlayArrowRain", motion, SendMessageOptions.DontRequireReceiver);
                     SpawnEffectAt(sk.effect, ArrowRainTargetPos(), sk.scale);
-                    _ctrl.DealDamageAfter(motion, dmg, label);
+                    DealDamage(motion, dmg, label);
                     _busyTimer = motion + 0.4f; // 점프+홀드+착지 동안 대기
+                }
+                else if (_slamSkillCode != 0 && sk.code == _slamSkillCode)
+                {
+                    // 내려찍기: 공격 애니를 재생한 채 솟구쳐 올랐다 빠르게 낙하 →
+                    // **착지한 뒤에** 지면 이펙트와 데미지가 나간다(공중에서 터지지 않게).
+                    SendMessage("PlayGroundSlam", _slamAirTime, SendMessageOptions.DontRequireReceiver);
+                    StartCoroutine(SlamImpactAfter(_slamAirTime, sk, dmg, label));
+                    _busyTimer = _slamAirTime + motion; // 상승·낙하·이펙트 동안 이동/다음 행동 금지
                 }
                 else if (_allSkillsAoe && sk.effect != null)
                 {
@@ -613,11 +802,9 @@ namespace TaskbarHero.Client.Battle
                         SendMessage("PlayCastHold", motion, SendMessageOptions.DontRequireReceiver);
                     else
                         PlayAttackAnim();
-                    Vector3 center = transform.position
-                        + Vector3.up * _ctrl.EffectYOffset
-                        + Vector3.right * _selfEffectXOffset;
+                    Vector3 center = SelfEffectPos(sk.offset);
                     var fx = SpawnEffectAt(sk.effect, center, sk.scale);
-                    _ctrl.DealAreaDamageAfter(motion, dmg, label, center, EffectRadius(fx));
+                    DealAreaDamage(motion, dmg, label, center, EffectRadius(fx));
                     _busyTimer = motion;
                 }
                 else if (_ranged && sk.effect != null && _ctrl.MonsterTransform != null)
@@ -630,7 +817,7 @@ namespace TaskbarHero.Client.Battle
                     var proj = fx.GetComponent<ProjectileEffect>();
                     if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
                     proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
-                                () => _ctrl.DealDamageAfter(0f, dmg, label));
+                                () => DealDamage(0f, dmg, label));
                     _busyTimer = motion;
                 }
                 else
@@ -640,19 +827,17 @@ namespace TaskbarHero.Client.Battle
                         SendMessage("PlayCastHold", motion, SendMessageOptions.DontRequireReceiver);
                     else
                         PlayAttackAnim();
-                    var fx = SpawnEffectAtSelf(sk.effect);
+                    var fx = SpawnEffectAtSelf(sk.effect, sk.offset);
                     if (fx != null && sk.scale > 0f && sk.scale != 1f) fx.transform.localScale *= sk.scale;
-                    if (_aoeSkillCode != 0 && sk.code == _aoeSkillCode)
+                    if (_aoeSkillCodes.Contains(sk.code))
                     {
-                        // 광역(강타 등): 이펙트 범위 내 모든 적에게 데미지.
-                        Vector3 center = fx != null
-                            ? fx.transform.position
-                            : transform.position + Vector3.up * _ctrl.EffectYOffset + Vector3.right * _selfEffectXOffset;
-                        _ctrl.DealAreaDamageAfter(motion, dmg, label, center, EffectRadius(fx));
+                        // 광역(강타·강한일격 등): 이펙트 범위 내 모든 적에게 데미지.
+                        DealAreaDamage(motion, dmg, label,
+                            EffectCenter(fx, SelfEffectPos(sk.offset)), EffectRadius(fx));
                     }
                     else
                     {
-                        _ctrl.DealDamageAfter(motion, dmg, label);
+                        DealDamage(motion, dmg, label);
                     }
                     _busyTimer = motion;
                 }
@@ -677,7 +862,7 @@ namespace TaskbarHero.Client.Battle
                 if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
                 string label = $"[{_name}] → 몬스터";
                 proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
-                            () => _ctrl.DealDamageAfter(0f, dmg, label));
+                            () => DealDamage(0f, dmg, label));
                 _busyTimer = _ctrl.BasicHitDelay;
             }
             else if (_ranged && _arrowPrefab != null)
@@ -688,9 +873,9 @@ namespace TaskbarHero.Client.Battle
                 var arrow = arrowGo.GetComponent<ArrowProjectile>();
                 string label = $"[{_name}] 화살 → 몬스터";
                 if (arrow != null)
-                    arrow.Launch(monster, _arrowSpeed, _ctrl.EffectYOffset, () => _ctrl.DealDamageAfter(0f, dmg, label));
+                    arrow.Launch(monster, _arrowSpeed, _ctrl.EffectYOffset, () => DealDamage(0f, dmg, label));
                 else
-                    _ctrl.DealDamageAfter(_ctrl.BasicHitDelay, dmg, label);
+                    DealDamage(_ctrl.BasicHitDelay, dmg, label);
                 _busyTimer = _ctrl.BasicHitDelay;
             }
             else // 근접
@@ -702,11 +887,11 @@ namespace TaskbarHero.Client.Battle
                     Vector3 center = target != null
                         ? target.position
                         : transform.position + Vector3.right * Mathf.Max(1f, _attackRange * 0.5f) + Vector3.up * _ctrl.EffectYOffset;
-                    _ctrl.DealAreaDamageAfter(_ctrl.BasicHitDelay, dmg, $"[{_name}] 광역 → 적", center, _attackRange);
+                    DealAreaDamage(_ctrl.BasicHitDelay, dmg, $"[{_name}] 광역 → 적", center, _attackRange);
                 }
                 else
                 {
-                    _ctrl.DealDamageAfter(_ctrl.BasicHitDelay, dmg, $"[{_name}] → 몬스터");
+                    DealDamage(_ctrl.BasicHitDelay, dmg, $"[{_name}] → 몬스터");
                 }
                 _busyTimer = _ctrl.BasicHitDelay;
             }
@@ -771,7 +956,7 @@ namespace TaskbarHero.Client.Battle
                 // 도달(또는 발동 시점부터 사거리 안). 데미지는 자세가 끝나는 순간에 들어간다.
                 _chargeImpacted = true;
                 long dmg = Damage(_chargeSkill.coef);
-                _ctrl.DealDamageAfter(Mathf.Max(0f, _chargeMotion - _chargeElapsed), dmg,
+                DealDamage(Mathf.Max(0f, _chargeMotion - _chargeElapsed), dmg,
                     $"[{_name}] 돌진 {_chargeSkill.name} ×{_chargeSkill.coef:0.##}");
             }
 
@@ -796,15 +981,44 @@ namespace TaskbarHero.Client.Battle
             return System.Math.Max(1L, (long)(_atk * Mathf.Max(1f, _ctrl.DevDamageMultiplier) * coef * _atkBuffMult));
         }
 
-        /// <summary>스킬 이펙트를 자기 위치에서 발생시키고 생성된 인스턴스를 반환한다(없으면 null).
-        /// <see cref="_selfEffectXOffset"/>만큼 X로 밀어 발생 위치 보정(기사 강타 등).</summary>
-        private GameObject SpawnEffectAtSelf(GameObject effect)
+        /// <summary>
+        /// 내려찍기 착지 순간에 지면 이펙트를 띄우고 데미지를 적용한다(공중 체류 <paramref name="airTime"/> 뒤).
+        /// 착지 후에 스폰하므로 이펙트가 도약 전 발밑이 아니라 실제로 내리찍은 지점에 생긴다.
+        /// </summary>
+        private System.Collections.IEnumerator SlamImpactAfter(float airTime, Skill sk, long dmg, string label)
+        {
+            yield return new WaitForSeconds(Mathf.Max(0.05f, airTime));
+
+            var fx = SpawnEffectAtSelf(sk.effect, sk.offset);
+            if (fx != null && sk.scale > 0f && sk.scale != 1f) fx.transform.localScale *= sk.scale;
+            // 내리찍은 순간이 곧 타격. 광역 지정이면 먼지 이펙트 범위 안의 적 전부를 때린다.
+            if (_aoeSkillCodes.Contains(sk.code))
+            {
+                DealAreaDamage(0f, dmg, label,
+                    EffectCenter(fx, SelfEffectPos(sk.offset)), EffectRadius(fx));
+            }
+            else
+            {
+                DealDamage(0f, dmg, label);
+            }
+        }
+
+        /// <summary>
+        /// 자기 위치 기준 스킬 이펙트 발생 좌표. 멤버 공통 보정(<see cref="_selfEffectXOffset"/> — 기사 강타 등)에
+        /// 스킬별 보정(<paramref name="extra"/> — 지면에서 터지는 내려찍기 등)을 더한다.
+        /// </summary>
+        private Vector3 SelfEffectPos(Vector2 extra)
+        {
+            return transform.position
+                + Vector3.up * (_ctrl.EffectYOffset + extra.y)
+                + Vector3.right * (_selfEffectXOffset + extra.x);
+        }
+
+        /// <summary>스킬 이펙트를 자기 위치에서 발생시키고 생성된 인스턴스를 반환한다(없으면 null).</summary>
+        private GameObject SpawnEffectAtSelf(GameObject effect, Vector2 extraOffset)
         {
             if (effect == null) return null;
-            Vector3 pos = transform.position
-                + Vector3.up * _ctrl.EffectYOffset
-                + Vector3.right * _selfEffectXOffset;
-            return Instantiate(effect, pos, Quaternion.identity);
+            return Instantiate(effect, SelfEffectPos(extraOffset), Quaternion.identity);
         }
 
         /// <summary>광역 스킬 이펙트의 판정 반경(월드). **이펙트의 실제 렌더 크기에 맞춘다** — 이전에는
@@ -825,6 +1039,26 @@ namespace TaskbarHero.Client.Battle
             }
             // 이펙트 크기를 그대로 판정 반경으로 사용(과도한 광역 피격 방지). 크기 미상일 때만 사거리 폴백.
             return r > 0f ? r : _attackRange;
+        }
+
+        /// <summary>
+        /// 광역 판정의 중심. 이펙트의 <b>렌더 바운즈 중심</b>을 쓴다 — 스프라이트 피벗이 중앙이 아닌 이펙트
+        /// (강한일격 검기는 좌측 피벗)는 transform.position이 그림의 왼쪽 끝이라, 그대로 쓰면 판정이
+        /// 검기가 뻗는 방향과 어긋난다. 렌더러가 없으면 <paramref name="fallback"/>을 쓴다.
+        /// </summary>
+        private static Vector3 EffectCenter(GameObject fx, Vector3 fallback)
+        {
+            if (fx != null)
+            {
+                var rends = fx.GetComponentsInChildren<Renderer>();
+                if (rends != null && rends.Length > 0)
+                {
+                    var b = rends[0].bounds;
+                    for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                    return b.center;
+                }
+            }
+            return fallback;
         }
 
         /// <summary>지정 위치에 스킬 이펙트를 무조건 발생시키고 인스턴스를 반환한다(몬스터 생존 여부와 무관 —

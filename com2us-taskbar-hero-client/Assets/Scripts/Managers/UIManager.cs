@@ -17,7 +17,7 @@ namespace TaskbarHero.Client.Managers
             SignUp,
             Inventory,
             Stage,
-            Party,
+            // 파티 편성은 팝업 패널이 아니라 전용 씬(TeamListScene)으로 다루므로 패널 종류에 없다.
             Skill,
             Rune,
             Cube,
@@ -37,8 +37,6 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private GameObject inventoryPanelPrefab;
         [Tooltip("Assets/Prefabs/UI/StagePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject stagePanelPrefab;
-        [Tooltip("Assets/Prefabs/UI/PartyPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
-        [SerializeField] private GameObject partyPanelPrefab;
         [Tooltip("Assets/Prefabs/UI/SkillPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject skillPanelPrefab;
         [Tooltip("Assets/Prefabs/UI/RunePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
@@ -261,22 +259,6 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
-        /// <summary>파티 편성 패널을 표시한다.</summary>
-        public void ShowParty() => Show(PanelType.Party);
-
-        /// <summary>파티 편성 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
-        public void ToggleParty()
-        {
-            if (Current == PanelType.Party)
-            {
-                Hide(PanelType.Party);
-            }
-            else
-            {
-                Show(PanelType.Party);
-            }
-        }
-
         /// <summary>지정한 패널을 표시하고 나머지 패널은 모두 숨긴다.</summary>
         public void Show(PanelType type)
         {
@@ -367,8 +349,6 @@ namespace TaskbarHero.Client.Managers
                     return inventoryPanelPrefab;
                 case PanelType.Stage:
                     return stagePanelPrefab;
-                case PanelType.Party:
-                    return partyPanelPrefab;
                 case PanelType.Skill:
                     // 프리팹은 Assets/Prefabs/UI/에 두고 UIManager 인스턴스에 직접 배선한다.
                     // 지속 인스턴스가 생성되는 Title 씬과 사용 씬(GameScene) 양쪽에 참조를 지정한다.

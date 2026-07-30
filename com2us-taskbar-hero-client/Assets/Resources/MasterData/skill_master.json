@@ -1144,5 +1144,437 @@
     ],
     "maxLevel": 10,
     "cooldown": 0.0
+  },
+  {
+    "skillCode": 401,
+    "classCode": 4,
+    "name": "내려찍기",
+    "description": "도끼를 내리찍어 단일 대상에게 큰 피해를 준다.",
+    "skillType": 1,
+    "statType": 0,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 1,
+        "coef": 1.5,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 1,
+        "coef": 1.65,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 1,
+        "coef": 1.8,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 1,
+        "coef": 1.95,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 1,
+        "coef": 2.1,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 6,
+        "coefType": 1,
+        "coef": 2.25,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 7,
+        "coefType": 1,
+        "coef": 2.4,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 8,
+        "coefType": 1,
+        "coef": 2.55,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 9,
+        "coefType": 1,
+        "coef": 2.7,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 10,
+        "coefType": 1,
+        "coef": 2.85,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 10,
+    "cooldown": 7.0
+  },
+  {
+    "skillCode": 402,
+    "classCode": 4,
+    "name": "광전사의 힘",
+    "description": "체력을 대가로 6초간 공격 속도와 흡혈을 얻는다.",
+    "skillType": 1,
+    "statType": 7,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 2,
+        "coef": 0.8,
+        "duration": 6.0
+      },
+      {
+        "skillLevel": 1,
+        "coefType": 4,
+        "coef": 0.2,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 1,
+        "coefType": 5,
+        "coef": 0.1,
+        "duration": 6.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 2,
+        "coef": 0.75,
+        "duration": 6.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 4,
+        "coef": 0.18,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 5,
+        "coef": 0.15,
+        "duration": 6.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 2,
+        "coef": 0.7,
+        "duration": 6.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 4,
+        "coef": 0.16,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 5,
+        "coef": 0.2,
+        "duration": 6.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 2,
+        "coef": 0.65,
+        "duration": 6.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 4,
+        "coef": 0.14,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 5,
+        "coef": 0.25,
+        "duration": 6.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 2,
+        "coef": 0.6,
+        "duration": 6.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 4,
+        "coef": 0.12,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 5,
+        "coef": 0.3,
+        "duration": 6.0
+      }
+    ],
+    "maxLevel": 5,
+    "cooldown": 14.0
+  },
+  {
+    "skillCode": 403,
+    "classCode": 4,
+    "name": "강한일격",
+    "description": "도끼를 크게 휘둘러 주변의 적을 모두 벤다.",
+    "skillType": 1,
+    "statType": 0,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 1,
+        "coef": 0.8,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 1,
+        "coef": 0.85,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 1,
+        "coef": 0.9,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 1,
+        "coef": 0.95,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 1,
+        "coef": 1.0,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 6,
+        "coefType": 1,
+        "coef": 1.05,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 7,
+        "coefType": 1,
+        "coef": 1.1,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 8,
+        "coefType": 1,
+        "coef": 1.15,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 9,
+        "coefType": 1,
+        "coef": 1.2,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 10,
+        "coefType": 1,
+        "coef": 1.25,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 10,
+    "cooldown": 9.0
+  },
+  {
+    "skillCode": 410,
+    "classCode": 4,
+    "name": "살육 본능",
+    "description": "살육 본능을 일깨워 공격력을 상시 높인다.",
+    "skillType": 2,
+    "statType": 1,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 2,
+        "coef": 1.15,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 2,
+        "coef": 1.18,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 2,
+        "coef": 1.21,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 2,
+        "coef": 1.24,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 2,
+        "coef": 1.27,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 5,
+    "cooldown": 0.0
+  },
+  {
+    "skillCode": 411,
+    "classCode": 4,
+    "name": "유혈",
+    "description": "적의 상처를 파고들어 치명타 피해를 상시 높인다.",
+    "skillType": 2,
+    "statType": 5,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 2,
+        "coef": 1.05,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 2,
+        "coef": 1.1,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 2,
+        "coef": 1.15,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 2,
+        "coef": 1.2,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 2,
+        "coef": 1.25,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 6,
+        "coefType": 2,
+        "coef": 1.3,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 7,
+        "coefType": 2,
+        "coef": 1.35,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 8,
+        "coefType": 2,
+        "coef": 1.4,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 9,
+        "coefType": 2,
+        "coef": 1.45,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 10,
+        "coefType": 2,
+        "coef": 1.5,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 10,
+    "cooldown": 0.0
+  },
+  {
+    "skillCode": 412,
+    "classCode": 4,
+    "name": "무자비",
+    "description": "무자비한 손놀림으로 치명타 확률을 상시 높인다.",
+    "skillType": 2,
+    "statType": 4,
+    "coefs": [
+      {
+        "skillLevel": 1,
+        "coefType": 2,
+        "coef": 1.03,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 2,
+        "coefType": 2,
+        "coef": 1.06,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 3,
+        "coefType": 2,
+        "coef": 1.09,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 4,
+        "coefType": 2,
+        "coef": 1.12,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 5,
+        "coefType": 2,
+        "coef": 1.15,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 6,
+        "coefType": 2,
+        "coef": 1.18,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 7,
+        "coefType": 2,
+        "coef": 1.21,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 8,
+        "coefType": 2,
+        "coef": 1.24,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 9,
+        "coefType": 2,
+        "coef": 1.27,
+        "duration": 0.0
+      },
+      {
+        "skillLevel": 10,
+        "coefType": 2,
+        "coef": 1.3,
+        "duration": 0.0
+      }
+    ],
+    "maxLevel": 10,
+    "cooldown": 0.0
   }
 ]

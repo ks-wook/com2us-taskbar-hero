@@ -1,0 +1,546 @@
+fileFormatVersion: 2
+guid: e44ed5264108c2145b50da627ce1e5f0
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -1212131278451835129
+    second: GroundSlam_21_0
+  - first:
+      213: -7059976274540445701
+    second: GroundSlam_21_1
+  - first:
+      213: -951345176801969891
+    second: GroundSlam_21_2
+  - first:
+      213: -4315728104297139525
+    second: GroundSlam_21_3
+  - first:
+      213: -8334407855065124733
+    second: GroundSlam_21_4
+  - first:
+      213: -6577483847924851305
+    second: GroundSlam_21_5
+  - first:
+      213: 182388114486828126
+    second: GroundSlam_21_6
+  - first:
+      213: -1343161985354981587
+    second: GroundSlam_21_7
+  - first:
+      213: -8294596428897775113
+    second: GroundSlam_21_8
+  - first:
+      213: 6393202825883394945
+    second: GroundSlam_21_9
+  - first:
+      213: 6811532475473193597
+    second: GroundSlam_21_10
+  - first:
+      213: -5029484662326639894
+    second: GroundSlam_21_11
+  - first:
+      213: -261056891208464435
+    second: GroundSlam_21_12
+  - first:
+      213: 1115875667578726459
+    second: GroundSlam_21_13
+  - first:
+      213: -2348967321758090596
+    second: GroundSlam_21_14
+  - first:
+      213: 6575152063733658115
+    second: GroundSlam_21_15
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 1
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: GroundSlam_21_0
+      rect:
+        serializedVersion: 2
+        x: 463
+        y: 455
+        width: 42
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 70ffcbe3605ad2fe0800000000000000
+      internalID: -1212131278451835129
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_1
+      rect:
+        serializedVersion: 2
+        x: 767
+        y: 399
+        width: 66
+        height: 46
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bffb451dbfce50e90800000000000000
+      internalID: -7059976274540445701
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_2
+      rect:
+        serializedVersion: 2
+        x: 387
+        y: 371
+        width: 26
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d19ffe52a942cc2f0800000000000000
+      internalID: -951345176801969891
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_3
+      rect:
+        serializedVersion: 2
+        x: 607
+        y: 319
+        width: 70
+        height: 54
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bb2f234a7247b14c0800000000000000
+      internalID: -4315728104297139525
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_4
+      rect:
+        serializedVersion: 2
+        x: 475
+        y: 327
+        width: 46
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3803e91a63c365c80800000000000000
+      internalID: -8334407855065124733
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_5
+      rect:
+        serializedVersion: 2
+        x: 699
+        y: 295
+        width: 70
+        height: 46
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 79dd1901a4518b4a0800000000000000
+      internalID: -6577483847924851305
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_6
+      rect:
+        serializedVersion: 2
+        x: 471
+        y: 271
+        width: 42
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e5c9d371609f78200800000000000000
+      internalID: 182388114486828126
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_7
+      rect:
+        serializedVersion: 2
+        x: 559
+        y: 295
+        width: 30
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d2f9b1b6a412c5de0800000000000000
+      internalID: -1343161985354981587
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_8
+      rect:
+        serializedVersion: 2
+        x: 339
+        y: 195
+        width: 86
+        height: 62
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7f1135c9e7ca3ec80800000000000000
+      internalID: -8294596428897775113
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_9
+      rect:
+        serializedVersion: 2
+        x: 543
+        y: 211
+        width: 78
+        height: 78
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 183adc5f81839b850800000000000000
+      internalID: 6393202825883394945
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_10
+      rect:
+        serializedVersion: 2
+        x: 239
+        y: 35
+        width: 406
+        height: 146
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d7aed9882bc678e50800000000000000
+      internalID: 6811532475473193597
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_11
+      rect:
+        serializedVersion: 2
+        x: 551
+        y: 159
+        width: 34
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ae2ceb2d85ea33ab0800000000000000
+      internalID: -5029484662326639894
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_12
+      rect:
+        serializedVersion: 2
+        x: 627
+        y: 175
+        width: 30
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: dc70a5df32a806cf0800000000000000
+      internalID: -261056891208464435
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_13
+      rect:
+        serializedVersion: 2
+        x: 695
+        y: 139
+        width: 54
+        height: 38
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b38288be1036c7f00800000000000000
+      internalID: 1115875667578726459
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_14
+      rect:
+        serializedVersion: 2
+        x: 155
+        y: 139
+        width: 26
+        height: 30
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c9abb9d8aaac66fd0800000000000000
+      internalID: -2348967321758090596
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: GroundSlam_21_15
+      rect:
+        serializedVersion: 2
+        x: 171
+        y: 79
+        width: 34
+        height: 34
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 302750f17f1af3b50800000000000000
+      internalID: 6575152063733658115
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 5e97eb03825dee720800000000000000
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      GroundSlam_21_0: -1212131278451835129
+      GroundSlam_21_1: -7059976274540445701
+      GroundSlam_21_10: 6811532475473193597
+      GroundSlam_21_11: -5029484662326639894
+      GroundSlam_21_12: -261056891208464435
+      GroundSlam_21_13: 1115875667578726459
+      GroundSlam_21_14: -2348967321758090596
+      GroundSlam_21_15: 6575152063733658115
+      GroundSlam_21_2: -951345176801969891
+      GroundSlam_21_3: -4315728104297139525
+      GroundSlam_21_4: -8334407855065124733
+      GroundSlam_21_5: -6577483847924851305
+      GroundSlam_21_6: 182388114486828126
+      GroundSlam_21_7: -1343161985354981587
+      GroundSlam_21_8: -8294596428897775113
+      GroundSlam_21_9: 6393202825883394945
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

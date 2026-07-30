@@ -36,6 +36,8 @@
   - [stage_reward_drop](#stage_reward_drop)
   - [cube_master](#cube_master)
   - [box_master](#box_master)
+  - [box_grade_weight](#box_grade_weight)
+  - [box_item_pool](#box_item_pool)
   - [attendance_master](#attendance_master)
 - [5. 출처 문서](#5-출처-문서)
 
@@ -328,6 +330,8 @@ erDiagram
 | `stage_reward_drop` | `stage_id`+`grade` | `stage_reward.stage_id`의 자식(등급별 드롭 확률, 1:N) |
 | `cube_master` | `cube_level` | `player_cube.cube_level` |
 | `box_master` | `box_code` | (골드 가챠 상자 열기 API 입력 · 골드 차감·지급 모두 `player_item`, 상자 자체는 저장 안 함) |
+| `box_grade_weight` | `box_code`+`grade` | `box_master.box_code`의 자식(등급별 추첨 가중치, 1:N) |
+| `box_item_pool` | `box_code`+`grade`+`item_code` | `box_master`의 자식(등급별 지급 후보 화이트리스트) · `item_code`는 `item_master` 참조 |
 | `attendance_master` | `day` | (출석부 **일차별**(누적 출석 순번 1~30) 보상 정의 · 지급은 메일 발급, `player_attendance`는 진행도 보관) |
 
 **테이블별 역할·정의 데이터** (모두 정적·읽기 전용 정의이며 유저가 변경하지 않는다. 실제 값은 [마스터 데이터 값](../세부/master-data/master-data-값.md))
@@ -400,7 +404,17 @@ erDiagram
 ### box_master
 
 - **역할**: 골드 가챠 랜덤 상자 정의. 상자 열기 API의 입력이며 상자 자체는 저장하지 않는다(골드 차감·아이템 지급 모두 `player_item`).
-- **정의 데이터**: 오픈 비용·재화, 등급별 확률·지급 아이템 풀(등급 가중치·아이템 풀은 자식 테이블로 분리 설계). (값 미확정, 작성 예정)
+- **정의 데이터**: `box_code`·`name`·`open_cost`·`currency_type`. 등급별 추첨 가중치는 자식 `box_grade_weight`, 지급 후보는 자식 `box_item_pool`로 분리한다(JSON 컬럼 금지 규칙). (값 미확정, 작성 예정)
+
+### box_grade_weight
+
+- **역할**: 상자별 **등급 추첨 가중치**(`box_master`의 자식, 1:N). 확률은 그 상자의 가중치 합 대비 비율이다.
+- **정의 데이터**: `(box_code, grade)` → `weight`. 등급을 추가·제거할 때 스키마 변경 없이 행만 조정한다.
+
+### box_item_pool
+
+- **역할**: 상자별·등급별 **지급 후보 화이트리스트**(`box_master`의 자식). 가챠 후보를 **명시적으로 정의**하며, 스테이지 전리품 드롭이 쓰는 "해당 등급의 `item_master` 전체" 방식과 분리된다 — 상자 가챠는 **소모품(`item_type=4`)을 포함**하고 스테이지 전리품은 장비·재료만 지급한다([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 4.3-(3)).
+- **정의 데이터**: `(box_code, grade, item_code)`. `grade`는 **상자 안에서의 추첨 등급 슬롯**이며 `item_master.grade`와 일치할 필요가 없다 — 소모품처럼 `grade`가 FK 충족용 값인 아이템도 아이템 등급을 바꾸지 않고 원하는 슬롯에 배치해 출현 빈도를 조절한다. 등급 슬롯 내 선택은 균등이며, 후보 행이 없는 슬롯이 추첨되면 미지급이다.
 
 ### attendance_master
 

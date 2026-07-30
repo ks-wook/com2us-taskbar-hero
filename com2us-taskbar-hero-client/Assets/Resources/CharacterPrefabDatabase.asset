@@ -31,3 +31,9 @@ MonoBehaviour:
   - classCode: 3
     gender: 2
     prefab: {fileID: 2832778511305924686, guid: 5971c58743c2dc348b4edbd551c61325, type: 3}
+  - classCode: 4
+    gender: 1
+    prefab: {fileID: 8930912608245659456, guid: f833b56096cf861459e4c4f2f08c06af, type: 3}
+  - classCode: 4
+    gender: 2
+    prefab: {fileID: 1644508509184991853, guid: d076cee4aa927d54e986bf79a7e04794, type: 3}

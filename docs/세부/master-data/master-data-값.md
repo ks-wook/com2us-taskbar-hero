@@ -687,7 +687,7 @@
 - **구조(변경)**: 구 `stage_reward.grade1_prob~grade5_prob`(**등급마다 컬럼이 늘어나는 wide 구조**)는 **폐기**했다. "반복 구조는 별도(자식) 테이블로 분리"하는 설계 규칙에 따라 등급별 확률을 `stage_reward_drop(stage_id, grade, drop_prob)` 자식 테이블로 옮겼다(`stage_spawn`·`skill_coefficient`·`cube_recipe_ingredient`와 동일 패턴). **등급을 추가/제거해도 스키마 변경 없이 행만** 조정하면 된다(과거 6→5등급 통일 때 컬럼 DROP이 필요했던 문제 해소).
 - **`stage_reward` 필드**: `stage_id`(참조 스테이지, `stage_master` FK), `reward_gold`(획득 골드), `reward_exp`(획득 경험치).
 - **`stage_reward_drop` 필드**: `stage_id`(FK `stage_reward`), `grade`(등급, `grade_master`(§14) 1~5), `drop_prob`(그 등급 아이템 드롭 확률 0~1). `(stage_id, grade)` 복합 PK. **확률 0인 등급은 행을 두지 않는다(sparse)**.
-- **드롭 의미**: 클리어 시 서버가 등급을 추첨한 뒤 그 등급의 `item_master` 아이템 하나를 지급한다(상자 가챠와 동일 방식). 한 스테이지 `drop_prob` 합이 1 미만이면 나머지는 **아이템 미드롭**이다. 경험치는 3캐릭터 공통 지급([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
+- **드롭 의미**: 클리어 시 서버가 등급을 추첨한 뒤 그 등급의 `item_master` 아이템 하나를 지급한다(상자 가챠와 동일 방식, 후보 풀은 장비·재료만 — 재화·소모품 제외). 한 스테이지 `drop_prob` 합이 1 미만이면 나머지는 **아이템 미드롭**이다. 경험치는 3캐릭터 공통 지급([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
 
 **(A) 데이터 — `stage_reward` (스칼라 보상, 확정 · 임시값)**
 
@@ -897,9 +897,11 @@
 
 ## 12. box_master (랜덤 상자)
 
-- **무엇**: 골드 가챠 상자별 오픈 비용·등급 확률·지급 아이템 풀.
+- **무엇**: 골드 가챠 상자별 오픈 비용·등급 확률·지급 아이템 후보.
 - **규모**: 상자 종류 수만큼.
-- **채울 필드**: `box_code`, `name`, `open_cost`, `currency_type` (기획서 5.13). 등급별 가중치·지급 아이템 풀은 JSON 컬럼이 아니라 **별도 테이블**(예: `box_grade_weight`·`box_item_pool`)로 분리해 설계한다(설계 규칙).
+- **채울 필드**: `box_master`(`box_code`, `name`, `open_cost`, `currency_type`) + 자식 `box_grade_weight`(`(box_code, grade)` → `weight`) + 자식 `box_item_pool`(`(box_code, grade, item_code)`) (기획서 5.13). 등급 가중치·지급 후보는 JSON 컬럼이 아니라 자식 테이블로 분리한다(설계 규칙).
+- **가챠 후보는 `box_item_pool`에 명시한다**: 스테이지 드롭(§10)처럼 "해당 등급의 `item_master` 전체"를 암시적으로 쓰지 않는다. 상자 가챠는 **소모품(`item_type=4`, §15)을 포함**하고 스테이지 전리품은 장비·재료만 주기 때문에, 두 경로의 풀을 분리해야 한다.
+- `box_item_pool.grade`는 **상자 안에서의 추첨 등급 슬롯**이며 `item_master.grade`와 일치할 필요가 없다. 소모품의 `grade`는 FK 충족용 값(§6)이라 희귀도 의미가 없으므로, **아이템 등급을 바꾸지 않고** 이 테이블의 등급 슬롯 배치로 출현 빈도를 조절한다.
 
 > 🚧 데이터 미작성 — 작성 예정.
 

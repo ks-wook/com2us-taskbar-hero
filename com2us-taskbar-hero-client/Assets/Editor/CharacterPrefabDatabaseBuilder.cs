@@ -26,6 +26,7 @@ namespace TaskbarHero.ClientEditor
             { "Knight", 1 },
             { "Archer", 2 },
             { "Mage", 3 },
+            { "Slayer", 4 },
         };
 
         /// <summary>파일명 뒷부분(성별) → gender 값(1:남 2:여).</summary>
@@ -41,6 +42,7 @@ namespace TaskbarHero.ClientEditor
             { 1, "기사" },
             { 2, "궁수" },
             { 3, "마법사" },
+            { 4, "슬레이어" },
         };
 
         [MenuItem("TaskbarHero/캐릭터/캐릭터 프리팹 DB 배선")]

@@ -27,7 +27,7 @@
 --     반복 구조는 무조건 별도(자식) 테이블로 분리한다(예: stage_master 스폰 → stage_spawn).
 --     클라 번들 JSON은 이 컬럼/자식 행들을 baseStats·spawns 등 객체/배열로 묶어 직렬화한다(기획서 5.1·7장).
 --     cube의 제작 레시피도 자식 테이블(cube_recipe/cube_recipe_ingredient)로 분리했고,
---     앞으로 추가할 box(grade_weights/item_pool) 등도 같은 방식으로 설계한다.
+--     앞으로 추가할 box도 같은 방식이다 — box_master + 자식 box_grade_weight(등급 가중치)·box_item_pool(지급 후보).
 --   * skill_type: 1=액티브, 2=패시브.  unlock_type: 0=기본 선택(생성 시 선택 가능).
 --   * class_code는 class_master를, skill_master.class_code가 이를 참조한다(같은 DB이므로 FK를 건다).
 -- =====================================================================

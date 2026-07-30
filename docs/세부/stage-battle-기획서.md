@@ -190,7 +190,7 @@ COMMIT → { act, difficulty, stage, stageId, enteredAt }
      goldMul = activeBuffValue(userId, 2:골드) ?? 1.0        # expires_at > now 인 행만, 없으면 1.0
      expMul  = activeBuffValue(userId, 1:경험치) ?? 1.0
      gold = floor(sr.reward_gold × goldMul); exp = floor(sr.reward_exp × expMul)
-     items = rollGradeDrop(stage_reward_drop[stage_id])   # 등급별 drop_prob로 추첨 → 해당 등급 item_master 아이템 1개(서버 RNG)
+     items = rollGradeDrop(stage_reward_drop[stage_id])   # 등급별 drop_prob로 추첨 → 해당 등급 item_master 아이템 1개(장비·재료만, 서버 RNG)
   3) 지급: player_item(재화, item_code=골드).quantity += gold
            for c in player_character(slot≠0): c.exp += exp → level 재계산   # 파티 편성 캐릭터 동일
            items를 player_item에 적재(스택/용량 규칙; 초과 시 InventoryFull(4002))

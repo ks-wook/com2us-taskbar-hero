@@ -6,7 +6,7 @@ using UnityEngine;
 namespace TaskbarHero.ClientEditor
 {
     /// <summary>
-    /// 상단 메뉴에서 작업 씬을 바로 여는 도구. 메뉴: <b>TaskbarHero/씬/…</b> (단축키 Alt+1~4)
+    /// 상단 메뉴에서 작업 씬을 바로 여는 도구. 메뉴: <b>TaskbarHero/씬/…</b> (단축키 Alt+1~5)
     /// <para>
     /// 저장하지 않은 변경이 있으면 Unity 표준 저장 프롬프트를 먼저 띄우고(취소하면 전환하지 않음),
     /// 현재 열려 있는 씬에는 체크 표시를 단다. 플레이 중에는 에디터 씬을 열 수 없으므로 항목이 비활성화된다.
@@ -22,11 +22,13 @@ namespace TaskbarHero.ClientEditor
         private const string TitleItem = MenuRoot + "TitleScene";
         private const string CreateCharacterItem = MenuRoot + "CreateCharacterScene";
         private const string GameItem = MenuRoot + "GameScene";
+        private const string TeamListItem = MenuRoot + "TeamListScene (파티 편성)";
         private const string BattleDevItem = MenuRoot + "BattleDevScene (전투 개발용)";
 
         private const string TitlePath = SceneFolder + "TitleScene.unity";
         private const string CreateCharacterPath = SceneFolder + "CreateCharacterScene.unity";
         private const string GamePath = SceneFolder + "GameScene.unity";
+        private const string TeamListPath = SceneFolder + "TeamListScene.unity";
         private const string BattleDevPath = SceneFolder + "BattleDevScene.unity";
 
         // ── TitleScene ──
@@ -53,12 +55,20 @@ namespace TaskbarHero.ClientEditor
         [MenuItem(GameItem + " &3", true)]
         private static bool OpenGameValidate() => Validate(GameItem, GamePath);
 
+        // ── TeamListScene (파티 편성 전용 씬 — GameScene 하단 [편성]으로 진입) ──
+
+        [MenuItem(TeamListItem + " &4", false, 3)]
+        private static void OpenTeamList() => Open(TeamListPath);
+
+        [MenuItem(TeamListItem + " &4", true)]
+        private static bool OpenTeamListValidate() => Validate(TeamListItem, TeamListPath);
+
         // ── BattleDevScene (구분선 뒤: 빌드에 포함되지 않는 개발용 하네스) ──
 
-        [MenuItem(BattleDevItem + " &4", false, 20)]
+        [MenuItem(BattleDevItem + " &5", false, 20)]
         private static void OpenBattleDev() => Open(BattleDevPath);
 
-        [MenuItem(BattleDevItem + " &4", true)]
+        [MenuItem(BattleDevItem + " &5", true)]
         private static bool OpenBattleDevValidate() => Validate(BattleDevItem, BattleDevPath);
 
         /// <summary>저장 프롬프트를 거친 뒤 해당 씬을 단독(Single)으로 연다. 사용자가 저장을 취소하면 아무것도 하지 않는다.</summary>

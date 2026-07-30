@@ -23,6 +23,7 @@ namespace TaskbarHero.ClientEditor
             "Assets/Scenes/TitleScene.unity",
             "Assets/Scenes/CreateCharacterScene.unity",
             "Assets/Scenes/GameScene.unity",
+            "Assets/Scenes/TeamListScene.unity",   // 파티 편성 전용 씬(GameScene 하단 [편성] 버튼으로 진입)
         };
 
         [MenuItem("TaskbarHero/Build/전체 게임 빌드 & 실행 (Title→Game)")]

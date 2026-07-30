@@ -651,6 +651,216 @@
     "basePrice": 400000
   },
   {
+    "itemCode": 31411,
+    "name": "녹슨 도끼",
+    "itemType": 1,
+    "grade": 1,
+    "equipSlot": 1,
+    "classReq": 4,
+    "levelReq": 0,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 12,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 500
+  },
+  {
+    "itemCode": 31412,
+    "name": "사냥꾼의 손도끼",
+    "itemType": 1,
+    "grade": 1,
+    "equipSlot": 1,
+    "classReq": 4,
+    "levelReq": 0,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 11,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.02,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 500
+  },
+  {
+    "itemCode": 31421,
+    "name": "강철 도끼",
+    "itemType": 1,
+    "grade": 2,
+    "equipSlot": 1,
+    "classReq": 4,
+    "levelReq": 10,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 26,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 5000
+  },
+  {
+    "itemCode": 31422,
+    "name": "쌍날 도끼",
+    "itemType": 1,
+    "grade": 2,
+    "equipSlot": 1,
+    "classReq": 4,
+    "levelReq": 10,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 24,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.03,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 5000
+  },
+  {
+    "itemCode": 31431,
+    "name": "전투 도끼",
+    "itemType": 1,
+    "grade": 3,
+    "equipSlot": 1,
+    "classReq": 4,
+    "levelReq": 20,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 44,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": -0.1
+    },
+    "sellable": 1,
+    "basePrice": 50000
+  },
+  {
+    "itemCode": 31432,
+    "name": "핏빛 도끼",
+    "itemType": 1,
+    "grade": 3,
+    "equipSlot": 1,
+    "classReq": 4,
+    "levelReq": 20,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 41,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.1,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 50000
+  },
+  {
+    "itemCode": 31441,
+    "name": "학살자의 도끼",
+    "itemType": 1,
+    "grade": 4,
+    "equipSlot": 1,
+    "classReq": 4,
+    "levelReq": 30,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 70,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.05,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 150000
+  },
+  {
+    "itemCode": 31442,
+    "name": "광기의 도끼",
+    "itemType": 1,
+    "grade": 4,
+    "equipSlot": 1,
+    "classReq": 4,
+    "levelReq": 30,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 74,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.15,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 150000
+  },
+  {
+    "itemCode": 31451,
+    "name": "처형자의 도끼",
+    "itemType": 1,
+    "grade": 5,
+    "equipSlot": 1,
+    "classReq": 4,
+    "levelReq": 40,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 112,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.08,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 400000
+  },
+  {
+    "itemCode": 31452,
+    "name": "종말의 대도끼",
+    "itemType": 1,
+    "grade": 5,
+    "equipSlot": 1,
+    "classReq": 4,
+    "levelReq": 40,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 120,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.3,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 400000
+  },
+  {
     "itemCode": 32111,
     "name": "낡은 방패",
     "itemType": 1,
@@ -960,6 +1170,111 @@
       "moveSpeed": 0.0,
       "critChance": 0.0,
       "critDamage": 0.3,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 400000
+  },
+  {
+    "itemCode": 32411,
+    "name": "낡은 갈고리",
+    "itemType": 1,
+    "grade": 1,
+    "equipSlot": 2,
+    "classReq": 4,
+    "levelReq": 0,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 4,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.02,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 500
+  },
+  {
+    "itemCode": 32421,
+    "name": "강철 갈고리",
+    "itemType": 1,
+    "grade": 2,
+    "equipSlot": 2,
+    "classReq": 4,
+    "levelReq": 10,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 8,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.03,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 5000
+  },
+  {
+    "itemCode": 32431,
+    "name": "사슬 갈고리",
+    "itemType": 1,
+    "grade": 3,
+    "equipSlot": 2,
+    "classReq": 4,
+    "levelReq": 20,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 14,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.15,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 50000
+  },
+  {
+    "itemCode": 32441,
+    "name": "피의 갈고리",
+    "itemType": 1,
+    "grade": 4,
+    "equipSlot": 2,
+    "classReq": 4,
+    "levelReq": 30,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 22,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.06,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 150000
+  },
+  {
+    "itemCode": 32451,
+    "name": "심연의 사슬 갈고리",
+    "itemType": 1,
+    "grade": 5,
+    "equipSlot": 2,
+    "classReq": 4,
+    "levelReq": 40,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 32,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.25,
       "cooldown": 0.0
     },
     "sellable": 1,

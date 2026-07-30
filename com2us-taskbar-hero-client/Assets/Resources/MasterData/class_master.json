@@ -43,5 +43,20 @@
       "critDamage": 1.7,
       "cooldown": 1.5
     }
+  },
+  {
+    "classCode": 4,
+    "name": "슬레이어",
+    "description": "거대한 도끼를 휘둘러 적을 베어 넘기는 공격 특화 근접 전사다.",
+    "unlockType": 0,
+    "baseStats": {
+      "hp": 130,
+      "atk": 15,
+      "def": 9,
+      "moveSpeed": 3.4,
+      "critChance": 0.12,
+      "critDamage": 1.6,
+      "cooldown": 1.1
+    }
   }
 ]

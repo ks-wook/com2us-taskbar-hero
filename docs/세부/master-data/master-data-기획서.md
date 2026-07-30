@@ -65,7 +65,9 @@ erDiagram
     stage_master     ||--o{ stage_spawn        : "스폰(자식)"
     monster_master   ||--o{ stage_spawn        : "등장 몬스터"
     stage_master     ||--|| stage_reward       : "클리어 보상(1:1)"
-    item_master      ||--o{ box_master         : "지급 아이템 풀(등급)"
+    item_master      ||--o{ box_item_pool      : "가챠 지급 후보"
+    box_master       ||--o{ box_grade_weight   : "등급별 추첨 가중치"
+    box_master       ||--o{ box_item_pool      : "등급별 지급 후보"
     item_master      ||--o{ attendance_master  : "일차별 보상"
     equip_slot_master||--o{ item_master        : "장착 슬롯"
     grade_master     ||--o{ item_master        : "등급(1~5)"
@@ -442,7 +444,7 @@ erDiagram
 | 1010001 | 100 | 50 |  | 1010001 | 1 | 0.30 |
 | 1010003 | 500 | 250 |  | 1010003 | 2 | 0.25 |
 
-> 클리어 시 서버가 등급을 추첨(`stage_reward_drop.drop_prob`)해 그 등급의 `item_master` 아이템 하나를 지급하고, 확률 합이 1 미만이면 나머지는 미드롭이다(상자 가챠와 동일 방식). 드롭 확정은 서버 권위([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
+> 클리어 시 서버가 등급을 추첨(`stage_reward_drop.drop_prob`)해 그 등급의 `item_master` 아이템 하나를 지급하고, 확률 합이 1 미만이면 나머지는 미드롭이다(상자 가챠와 동일 방식). **후보 풀은 장비(`item_type=1`)·재료(2)로 한정**하며 재화(3)·소모품(4)은 제외한다. 드롭 확정은 서버 권위([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
 
 ### 5.11 `cube_master` — 큐브(Hero-dric Cube)
 
@@ -489,7 +491,9 @@ erDiagram
 
 ### 5.13 `box_master` — 랜덤 상자
 
-랜덤 상자 열기([인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 5.9)가 참조하는 상자 정의. 플레이어가 **골드를 소모**해 여는 가챠이며, 서버는 오픈 시 `open_cost`(골드)를 차감한 뒤 `grade_weights`로 등급을 추첨하고 그 등급의 `item_master` 아이템 중 하나를 무작위로 지급한다. 상자는 인벤토리에 적재되는 아이템이 아니다.
+랜덤 상자 열기([인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 5.9)가 참조하는 상자 정의. 플레이어가 **골드를 소모**해 여는 가챠이며, 서버는 오픈 시 `open_cost`(골드)를 차감한 뒤 `box_grade_weight`로 등급을 추첨하고 `box_item_pool`에 정의된 그 등급의 후보 중 하나를 무작위로 지급한다. 상자는 인벤토리에 적재되는 아이템이 아니다.
+
+**가챠 후보는 `box_item_pool`이 명시적으로 정의한다(확정).** 스테이지 전리품 드롭(5.10)처럼 "해당 등급의 `item_master` 전체"를 암시적으로 쓰지 않는다. 두 경로의 지급 풀을 분리해야 하기 때문이다 — 상자 가챠는 **소모품(`item_type=4`)을 포함**하고, 스테이지 전리품은 장비·재료만 지급한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -497,17 +501,22 @@ erDiagram
 | `name` | varchar | 상자 이름 |
 | `open_cost` | bigint | 1회 오픈 비용 |
 | `currency_type` | int | 오픈 비용 재화 `item_code`(FK `item_master` 재화, 기본 1:골드) |
-| `grade_weights` | json | 등급별 추첨 가중치(확률은 가중치 합 대비 비율) |
-| `item_pool` | json | (선택) 등급별 지급 아이템 화이트리스트. 생략 시 해당 등급의 전체 `item_master` 아이템에서 선택 |
 
-**담기는 데이터 예시**
+**`box_grade_weight`(등급별 추첨 가중치, 자식)** — `(box_code, grade)` 복합 PK, `weight`(int). 확률은 그 상자의 가중치 합 대비 비율이다. 등급을 추가·제거할 때 스키마를 바꾸지 않고 행만 조정한다(구 `grade_weights` JSON 컬럼을 대체, JSON 컬럼 금지 규칙).
 
-| box_code | name | open_cost | currency_type | grade_weights | item_pool |
-|---|---|---|---|---|---|
-| 60001 | 일반 상자 | 10000 | 1 | `{ "3": 70, "4": 25, "5": 5 }` | `null` |
-| 60002 | 고급 상자 | 50000 | 1 | `{ "4": 60, "5": 30, "6": 10 }` | `null` |
+**`box_item_pool`(등급별 지급 후보, 자식)** — `(box_code, grade, item_code)` 복합 PK. `item_code`는 `item_master`를 참조한다(구 `item_pool` JSON 컬럼을 대체).
 
-> 오픈 비용·다연속 오픈 정책, 등급 추첨 후 아이템 선택 방식, 지급 아이템 풀 범위 등 세부는 [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 8장 미결과 함께 확정한다.
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `box_code` | int PK | 상자 코드(FK `box_master`) |
+| `grade` | tinyint PK | **상자 안에서의 추첨 등급 슬롯**(`box_grade_weight.grade`와 대응) |
+| `item_code` | int PK | 지급 후보 아이템(FK `item_master`) |
+
+- **`grade`는 상자 내 추첨 슬롯이며 `item_master.grade`와 일치할 필요가 없다.** 소모품처럼 `grade`가 FK 충족용 값(5.3)인 아이템도 원하는 등급 슬롯에 배치할 수 있어, **아이템 자체의 등급을 바꾸지 않고** 가챠 출현 빈도만 조절한다.
+- 등급 슬롯 안에서의 아이템 선택은 **균등**이다. 아이템별 가중치가 필요해지면 이 테이블에 `weight` 컬럼을 추가한다(스키마 확장만).
+- 후보 행이 없는 등급 슬롯이 추첨되면 **미지급**으로 처리한다(스테이지 드롭의 확률 합 미만 구간과 동일 취급).
+
+> 🚧 값 미확정 — 상자 종류·오픈 비용·등급 가중치·후보 아이템 목록은 [마스터 데이터 값](master-data-값.md) §12에서 확정한다. 다연속 오픈 정책은 [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 8장과 함께 정한다.
 
 ### 5.14 `attendance_master` — 출석부 일차별 보상
 

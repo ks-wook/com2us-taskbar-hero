@@ -29,6 +29,9 @@ namespace TaskbarHero.Client.Battle
         [Header("파티 구성 (1~3인 자유 조합)")]
         [Tooltip("전투에 참여할 멤버. index 0 = 선두(대형 기준). 리스트만 바꾸면 조합이 바뀐다.")]
         public List<PartyMemberConfig> party = new List<PartyMemberConfig>();
+        [Tooltip("개발 하네스 전용. 0이 아니면 이 classCode 멤버만 기본 선택해 소환한다(한 직업의 연출을 단독으로 개발할 때). "
+                 + "OnGUI '소환 캐릭터 선택'에서 다시 켤 수 있고, serverMode에는 영향이 없다.")]
+        public int devSoloClassCode = 0;
 
         [Header("몬스터 / 스폰 위치")]
         public GameObject monsterPrefab;
@@ -142,7 +145,8 @@ namespace TaskbarHero.Client.Battle
         private int _bossCode;                                 // 이 스테이지의 보스 몬스터 코드(0=없음)
 
         // 소환 캐릭터 선택(테스트용). 현재 구현된 직업만 선택 가능.
-        private static readonly HashSet<int> ImplementedClasses = new HashSet<int> { 1, 2, 3 }; // 기사1·레인저2·마법사3
+        private static readonly HashSet<int> ImplementedClasses = new HashSet<int> { 1, 2, 3, 4 }; // 기사1·레인저2·마법사3·슬레이어4
+        private const int MaxPartySlots = 3;  // 편성 자리 1~3(slot 0 = 미편성 → 전투 미참가)
         private bool[] _selected;
 
         private readonly List<string> _log = new List<string>();
@@ -336,8 +340,10 @@ namespace TaskbarHero.Client.Battle
 
         // ---- 스폰 / 대형 ----
 
-        /// <summary>선택 상태 배열을 초기화한다. 개발 모드는 구현된 직업 전부, 서버 모드는
-        /// 계정에 실제로 있는 캐릭터(classCode)와 일치하는 멤버만 선택한다.</summary>
+        /// <summary>선택 상태 배열을 초기화한다. 개발 모드는 구현된 직업 전부(단
+        /// <see cref="devSoloClassCode"/>가 지정되면 그 직업만), 서버 모드는
+        /// <b>파티에 편성된 캐릭터</b>(slot 1~3)의 직업과 일치하는 멤버만 선택한다 —
+        /// slot 0(미편성)은 보유만 하고 전투에 나가지 않으므로 스폰하지 않는다(세이브 데이터 기획서 5.5).</summary>
         private void InitSelection()
         {
             _selected = new bool[party.Count];
@@ -351,7 +357,7 @@ namespace TaskbarHero.Client.Battle
                 {
                     foreach (var c in chars)
                     {
-                        if (c != null) accountClasses.Add(c.classCode);
+                        if (c != null && c.slot >= 1 && c.slot <= MaxPartySlots) accountClasses.Add(c.classCode);
                     }
                 }
             }
@@ -362,6 +368,10 @@ namespace TaskbarHero.Client.Battle
                 if (ok && accountClasses != null)
                 {
                     ok = party[i] != null && accountClasses.Contains(party[i].classCode); // 계정 보유 직업만
+                }
+                else if (ok && devSoloClassCode != 0)
+                {
+                    ok = party[i].classCode == devSoloClassCode; // 개발 하네스 단독 소환
                 }
                 _selected[i] = ok;
             }
