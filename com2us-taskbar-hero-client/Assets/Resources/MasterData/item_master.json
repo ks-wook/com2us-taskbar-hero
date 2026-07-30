@@ -1951,5 +1951,47 @@
     },
     "sellable": 1,
     "basePrice": 40000
+  },
+  {
+    "itemCode": 42001,
+    "name": "경험치 부스터",
+    "itemType": 4,
+    "grade": 1,
+    "equipSlot": 0,
+    "classReq": 0,
+    "levelReq": 0,
+    "stackMax": 99,
+    "baseStats": {
+      "hp": 0,
+      "atk": 0,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 0,
+    "basePrice": 0
+  },
+  {
+    "itemCode": 42002,
+    "name": "골드 부스터",
+    "itemType": 4,
+    "grade": 1,
+    "equipSlot": 0,
+    "classReq": 0,
+    "levelReq": 0,
+    "stackMax": 99,
+    "baseStats": {
+      "hp": 0,
+      "atk": 0,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.0,
+      "cooldown": 0.0
+    },
+    "sellable": 0,
+    "basePrice": 0
   }
 ]
