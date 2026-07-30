@@ -51,6 +51,19 @@ namespace TaskbarHero.Client.UI
             }
         }
 
+        /// <summary>
+        /// 렌더 결과를 받을 RawImage를 갈아끼운다(카메라·RenderTexture·캐릭터 인스턴스는 그대로 유지).
+        /// 목록을 매번 다시 그리는 화면(파티 편성 씬)에서 RawImage가 파괴돼도 렌더러는 재사용하기 위한 것이다.
+        /// </summary>
+        public void Retarget(RawImage target)
+        {
+            _target = target;
+            if (_target != null)
+            {
+                _target.texture = _rt;
+            }
+        }
+
         /// <summary>표시할 캐릭터 프리팹을 교체한다(이전 인스턴스 제거 후 새로 인스턴스화하고 격리 레이어에 배치).</summary>
         public void SetCharacter(GameObject prefab)
         {

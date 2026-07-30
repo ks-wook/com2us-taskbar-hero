@@ -165,6 +165,7 @@ namespace TaskbarHero.Client.UI
 
             // 회원가입 직후 최초 캐릭터 생성 진입은 '뒤로가기' 미노출(게임 안 진입 아님).
             Session.CreateCharacterFromGame = false;
+            Session.CreateCharacterReturnScene = "GameScene"; // 생성 후 복귀 지점(편성 씬 진입 흔적 정리)
 
             // 캐릭터가 없으면(신규 계정) 오프라인 정산 대상이 아니므로 캐릭터 생성 씬으로 전환.
             if (!hasCharacter)

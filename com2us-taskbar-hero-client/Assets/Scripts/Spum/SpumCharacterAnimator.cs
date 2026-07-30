@@ -369,6 +369,115 @@ public class SpumCharacterAnimator : MonoBehaviour
         if (sg != null) sg.sortingOrder = origOrder; // 정렬 순서 복원
     }
 
+    [Tooltip("내려찍기: 점프 높이(유닛)")]
+    public float groundSlamJumpHeight = 1.6f;
+    [Tooltip("내려찍기: 공중 체류 시간 중 상승에 쓰는 비율(0~1). 나머지가 낙하 — 낙하가 짧을수록 내리찍는 느낌이 강해진다")]
+    public float groundSlamRiseFraction = 0.72f;
+    [Tooltip("내려찍기: 정점에서의 크기 배율(오르며 커졌다 착지 시 원상복귀)")]
+    public float groundSlamPeakScale = 1.25f;
+    [Tooltip("내려찍기: 점프 중 다른 오브젝트에 가리지 않도록 올릴 정렬 순서(SortingGroup)")]
+    public int groundSlamFrontOrder = 1000;
+    [Tooltip("내려찍기: 정점에서 정지할 공격 애니 정규화 시점(0~1). 도끼를 가장 높이 치켜든 프레임. "
+             + "0_Attack_Normal은 클립을 샘플링해 도끼(R_Weapon) 최상단을 재면 nt 0.50에서 최대(1.07)이고 "
+             + "바로 뒤 nt 0.60에서 최저(0.35)로 내리친다 → 0.50에서 정지하면 재개 즉시 내리치는 동작이 이어진다")]
+    public float groundSlamRaiseNormalizedTime = 0.50f;
+
+    /// <summary>
+    /// 내려찍기용: 공격 애니메이션을 재생하며 위로 솟구쳤다가(오르며 커짐), 정점에서
+    /// **도끼를 치켜든 프레임(<see cref="groundSlamRaiseNormalizedTime"/>)으로 정지**한 뒤 그 자세로 빠르게 낙하하고,
+    /// 착지하는 순간 재생을 재개해 내리치는 구간을 이어서 보여준다.
+    /// 착지 시점의 이펙트/데미지는 <c>PlayerCombatant</c>가 같은 airTime으로 맞춰 처리한다.
+    /// </summary>
+    public void PlayGroundSlam(float airTime)
+    {
+        EnsureInitialized();
+        if (_spum == null || _spum._anim == null) return;
+        StopCoroutine(nameof(GroundSlamRoutine));
+        StartCoroutine(GroundSlamRoutine(airTime));
+    }
+
+    private IEnumerator GroundSlamRoutine(float airTime)
+    {
+        var anim = _spum._anim;
+        float air = Mathf.Max(0.08f, airTime);
+        float riseDur = Mathf.Max(0.04f, air * Mathf.Clamp(groundSlamRiseFraction, 0.2f, 0.9f));
+        float fallDur = Mathf.Max(0.03f, air - riseDur);
+
+        float baseY = transform.position.y;
+        float apexY = baseY + groundSlamJumpHeight;
+        Vector3 baseScale = transform.localScale;
+        Vector3 peakScale = baseScale * Mathf.Max(1f, groundSlamPeakScale); // 부호(좌우 반전) 유지
+
+        // 점프 동안 다른 캐릭터/오브젝트에 가리지 않도록 정렬 순서를 최상단으로
+        var sg = GetComponentInChildren<SortingGroup>();
+        int origOrder = sg != null ? sg.sortingOrder : 0;
+        if (sg != null) sg.sortingOrder = groundSlamFrontOrder;
+
+        // 상승 동안 클립이 '치켜든 프레임'을 **넘어가지 않도록** 재생 속도를 맞춘다.
+        // speed 1로 두면 상승(riseDur)이 끝나기 전에 내리치는 구간까지 지나가 버려서
+        // 공중에서 한 번 찍고 착지 후 또 한 번 찍는 이중 스윙이 된다.
+        float clipLen = (_spum.ATTACK_List != null && _spum.ATTACK_List.Count > 0
+                         && _spum.ATTACK_List[0] != null) ? _spum.ATTACK_List[0].length : 0f;
+        float raiseNt = Mathf.Clamp01(groundSlamRaiseNormalizedTime);
+        anim.speed = (clipLen > 0f && raiseNt > 0f)
+            ? Mathf.Clamp(clipLen * raiseNt / riseDur, 0.01f, 3f) // 하한을 낮게 — 상승이 길어도 넘어가지 않게
+            : 1f;
+        _spum.PlayAnimation(PlayerState.ATTACK, 0);
+
+        // 1) 상승 — ease-out으로 솟구치며 점점 커진다.
+        //    상승 중에 공격 상태(트랜지션 종료)로 진입한 시점의 상태 해시를 잡아둔다
+        //    (정점에서 프레임을 강제 이동하려면 필요하고, 여기서 잡아두면 추가 대기가 없어 타이밍이 안 밀린다).
+        int attackHash = 0;
+        float t = 0f;
+        while (t < riseDur)
+        {
+            t += Time.deltaTime;
+            float k = Mathf.Sin(Mathf.Clamp01(t / riseDur) * Mathf.PI * 0.5f);
+            var p = transform.position; p.y = Mathf.Lerp(baseY, apexY, k); transform.position = p;
+            transform.localScale = Vector3.Lerp(baseScale, peakScale, k);
+
+            if (attackHash == 0 && !anim.IsInTransition(0))
+            {
+                var ci = anim.GetCurrentAnimatorClipInfo(0);
+                if (ci != null && ci.Length > 0 && ci[0].clip != null
+                    && ci[0].clip.name.ToLower().Contains("attack"))
+                {
+                    attackHash = anim.GetCurrentAnimatorStateInfo(0).fullPathHash;
+                }
+            }
+            yield return null;
+        }
+        { var p = transform.position; p.y = apexY; transform.position = p; }
+        transform.localScale = peakScale;
+
+        // 2) 정점에서 도끼를 치켜든 프레임으로 정확히 맞춘 뒤 정지
+        //    (상승 중 트랜지션 지연으로 조금 덜 진행됐을 수 있어 프레임을 강제 지정한다)
+        if (attackHash != 0)
+        {
+            anim.Play(attackHash, 0, raiseNt);
+            anim.Update(0f);
+        }
+        anim.speed = 0f;
+
+        // 3) 낙하 — 치켜든 자세를 그대로 유지한 채 ease-in(가속)으로 짧고 빠르게 떨어지며 원래 크기로 복귀
+        t = 0f;
+        while (t < fallDur)
+        {
+            t += Time.deltaTime;
+            float u = Mathf.Clamp01(t / fallDur);
+            float k = u * u;                       // 가속 낙하
+            var p = transform.position; p.y = Mathf.Lerp(apexY, baseY, k); transform.position = p;
+            transform.localScale = Vector3.Lerp(peakScale, baseScale, k);
+            yield return null;
+        }
+        { var p = transform.position; p.y = baseY; transform.position = p; }
+        transform.localScale = baseScale;           // 원래 크기 복원
+
+        // 4) 착지 — 재생 재개. 정지해 둔 지점부터 내리치는 구간이 이어서 재생되고 IDLE로 복귀한다.
+        anim.speed = 1f;
+        if (sg != null) sg.sortingOrder = origOrder; // 정렬 순서 복원
+    }
+
     private void Play(PlayerState state, System.Collections.Generic.List<AnimationClip> clips)
     {
         if (_spum != null && clips != null && clips.Count > 0)

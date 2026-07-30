@@ -120,15 +120,25 @@ namespace TaskbarHero.Client.UI
             btnGo.AddComponent<Button>().onClick.AddListener(OnBack);
         }
 
-        /// <summary>뒤로가기: 게임 진입 플래그를 해제하고 GameScene으로 돌아간다.</summary>
+        /// <summary>뒤로가기: 게임 진입 플래그를 해제하고 진입한 화면(편성 씬 또는 GameScene)으로 돌아간다.</summary>
         private void OnBack()
         {
             Session.CreateCharacterFromGame = false;
-            Debug.Log("[CharacterSelect] 뒤로가기 → GameScene 복귀");
+            string target = ConsumeReturnScene();
+            Debug.Log($"[CharacterSelect] 뒤로가기 → {target} 복귀");
             if (SceneManager.Instance != null)
             {
-                SceneManager.Instance.LoadScene("GameScene");
+                SceneManager.Instance.LoadScene(target);
             }
+        }
+
+        /// <summary>생성 완료·뒤로가기 후 돌아갈 씬 이름을 꺼내고(기본 GameScene) 복귀 지점을 초기화한다.</summary>
+        private static string ConsumeReturnScene()
+        {
+            string target = string.IsNullOrEmpty(Session.CreateCharacterReturnScene)
+                ? "GameScene" : Session.CreateCharacterReturnScene;
+            Session.CreateCharacterReturnScene = "GameScene";
+            return target;
         }
 
         /// <summary>계정이 이미 보유한 직업의 캐릭터 위에 빨간 '선택불가' 라벨을 띄운다.</summary>
@@ -331,12 +341,13 @@ namespace TaskbarHero.Client.UI
             // load로 받은 세이브 스냅샷을 캐싱하고, 성공한 뒤에 GameScene으로 전환한다.
             Session.SetGameData(response.data);
             int charCount = response.data != null && response.data.characters != null ? response.data.characters.Count : 0;
-            Debug.Log($"[CharacterSelect] 세이브 로드 완료(캐릭터수={charCount}) → GameScene 전환");
 
             Session.CreateCharacterFromGame = false; // 진입 플래그 정리
+            string target = ConsumeReturnScene();    // 편성 씬에서 진입했다면 그 씬으로 복귀
+            Debug.Log($"[CharacterSelect] 세이브 로드 완료(캐릭터수={charCount}) → {target} 전환");
             if (SceneManager.Instance != null)
             {
-                SceneManager.Instance.LoadScene("GameScene");
+                SceneManager.Instance.LoadScene(target);
             }
         }
 

@@ -11,7 +11,7 @@ namespace TaskbarHero.Client.UI
     /// 오프라인(방치) 보상 정산 결과 팝업. Login→GameScene 전환 시 정산한 결과(<see cref="Session.PendingOfflineReward"/>)를
     /// 표시한다. 상단에 경과 시간·획득 골드/경험치를 요약하고, 하단에 파티원 3명의 초상화 프리팹 + 정산 후 레벨 + 경험치 막대를 보여준다.
     /// 계층은 에디터 빌드 시 프리팹에 정적 저장되고(코드 구성), 표시될 때마다 세션 실데이터로 갱신한다.
-    /// (파티 편성 패널 <see cref="PartyPanelController"/>와 동일한 초상화 렌더 방식을 따른다.)
+    /// (파티 편성 씬 <see cref="TeamListController"/>와 동일한 초상화 렌더 방식을 따른다.)
     /// </summary>
     public class OfflineRewardPanelController : MonoBehaviour
     {

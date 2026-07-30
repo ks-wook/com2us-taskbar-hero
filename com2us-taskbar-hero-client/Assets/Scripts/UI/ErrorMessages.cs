@@ -53,6 +53,13 @@ namespace TaskbarHero.Client.UI
                     return "액티브 스킬은 최대 2개까지 장착할 수 있습니다.";
                 case ErrorCode.InvalidCharacterId:
                     return "잘못된 캐릭터입니다.";
+                // 파티 편성 도메인(save-data 기획서 §5.5 / party/arrange)
+                case ErrorCode.CannotRemoveLastCharacter:
+                    return "파티는 최소 1명이어야 합니다.";
+                case ErrorCode.CharacterNotFound:
+                    return "보유하지 않은 캐릭터입니다.";
+                case ErrorCode.PartySlotOccupied:
+                    return "파티 자리가 올바르지 않습니다(최대 3명, 자리 중복 불가).";
                 case ErrorCode.RunePrereqNotMet:
                     return "선행 룬을 먼저 해금하세요.";
                 case ErrorCode.RuneMaxLevel:

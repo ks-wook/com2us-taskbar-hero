@@ -356,16 +356,22 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>파티 편성 패널 토글(UIManager 위임).</summary>
+        /// <summary>파티 편성 씬(TeamListScene)으로 이동한다. 편성은 팝업이 아니라 전용 씬으로 다룬다.
+        /// 열려 있던 패널은 먼저 닫는다(패널은 DontDestroyOnLoad라 씬 전환 후에도 남는다).</summary>
         private void OnPartyButton()
         {
             if (UIManager.Instance != null)
             {
-                UIManager.Instance.ToggleParty();
+                UIManager.Instance.HideAll();
+            }
+            if (SceneManager.Instance != null)
+            {
+                Debug.Log("[HUD] 편성 → TeamListScene 이동");
+                SceneManager.Instance.LoadScene("TeamListScene");
             }
             else
             {
-                Debug.LogWarning("[HUD] UIManager 인스턴스를 찾을 수 없습니다.");
+                Debug.LogWarning("[HUD] SceneManager 인스턴스를 찾을 수 없습니다.");
             }
         }
 
