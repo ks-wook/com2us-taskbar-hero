@@ -18,6 +18,9 @@ namespace TaskbarHero.ClientEditor
         private const string MailIconPath = "Assets/Art/UI/Mail/메일.png";
         private const string AttendanceIconPath = IconDir + "/출석부.png";
         private const string UiBackgroundPath = "Assets/Art/UI/ui_bg.png";
+        // 우측 상단 '적용 중인 버프' 아이콘과 그 상세 툴팁 배경(둘 다 임포트 설정은 건드리지 않고 읽어서 배선만 한다).
+        private const string ActiveBuffIconPath = IconDir + "/적용중인버프.png";
+        private const string ItemDetailBgPath = "Assets/Art/UI/item_detail_bg.png";
         // ui_bg(2048×731) 9-slice 경계: 나무 테두리 + 모서리 금장식이 온전히 남는 크기(L,B,R,T).
         private static readonly Vector4 UiBackgroundBorder = new Vector4(230f, 250f, 230f, 250f);
 
@@ -61,11 +64,13 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("uiBackgroundSprite").objectReferenceValue = LoadSpriteAt(UiBackgroundPath);
             so.FindProperty("systemBackgroundSprite").objectReferenceValue = LoadSpriteAt(SystemBackgroundPath);
             so.FindProperty("systemSlotSprite").objectReferenceValue = LoadSpriteAt(SystemSlotPath);
+            so.FindProperty("activeBuffIcon").objectReferenceValue = LoadSpriteAt(ActiveBuffIconPath);
+            so.FindProperty("buffTooltipBackground").objectReferenceValue = LoadSpriteAt(ItemDetailBgPath);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
-            Debug.Log("[GameSceneHudBuilder] 완료: GameScene HUD 아이콘 + 하단 배경 + ESC 메뉴 아트 배선.");
+            Debug.Log("[GameSceneHudBuilder] 완료: GameScene HUD 아이콘 + 하단 배경 + ESC 메뉴 아트 + 버프 아이콘 배선.");
         }
 
         /// <summary>프레임 텍스처를 9-slice로 쓸 수 있게 교정한다(Sprite/Single · Full Rect · Border).

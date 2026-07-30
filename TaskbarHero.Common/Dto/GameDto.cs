@@ -222,8 +222,23 @@ namespace TaskbarHero.Common.Dto
         public List<SkillDto> skills = new List<SkillDto>();
         public List<RuneDto> runes = new List<RuneDto>();
         public CubeDto cube = new CubeDto();
+        // 활성 획득량 버프(expires_at > now인 행만). 계정당 버프 종류 수만큼이라 크기가 고정이므로 코어 로드에 담는다.
+        public List<ActiveBuffDto> activeBuffs = new List<ActiveBuffDto>();
         public int inventoryTotal;      // 가방 아이템 행 수(페이징 진행률·용량 UI). 조회 시점 기준 근사치
         public long offlineElapsedSec;
+    }
+
+    /// <summary>
+    /// 활성 획득량 버프 1건(소모품 사용 결과). 코어 로드의 activeBuffs와 소모품 사용 응답이 공유한다.
+    /// 만료 판정은 항상 서버가 하며, 클라이언트는 expiresAt으로 잔여 시간만 표시한다.
+    /// </summary>
+    [Serializable]
+    public class ActiveBuffDto
+    {
+        public int buffType;     // BuffType (1:경험치 획득량 2:골드 획득량)
+        public float buffValue;  // 획득량 배율(1.5 = 150%)
+        public long startedAt;   // 버프 시작 Unix ts(초)
+        public long expiresAt;   // 버프 만료 Unix ts(초)
     }
 
     /// <summary>인벤토리 페이지 조회 요청 body(인증). { userId, token, data:{ cursor, limit } }</summary>
@@ -1160,5 +1175,71 @@ namespace TaskbarHero.Common.Dto
         public int errorCode;
         public string message;
         public TradeCancelResultData data = new TradeCancelResultData();
+    }
+
+    // ── 소모품(소모성 아이템) 사용 ──
+
+    /// <summary>소모품 사용 요청 데이터. { itemId } — 1회 호출당 1개 고정(수량 필드 없음).</summary>
+    [Serializable]
+    public class ConsumableUseData
+    {
+        public long itemId; // 사용할 소모품이 담긴 인벤토리 행(player_item.player_item_id)
+    }
+
+    /// <summary>소모품 사용 요청 body(인증). { userId, token, data:{ itemId } }</summary>
+    [Serializable]
+    public class ConsumableUseRequest
+    {
+        public long userId;
+        public string token;
+        public ConsumableUseData data;
+    }
+
+    /// <summary>
+    /// 소모품 사용 결과(POST /api/game/consumable/use 성공 응답 data).
+    /// buff는 이번 사용으로 부여·연장된 버프, activeBuffs는 갱신 후 계정의 활성 버프 전체다.
+    /// </summary>
+    [Serializable]
+    public class ConsumableUseResultData
+    {
+        public long itemId;            // 사용한 인벤토리 행
+        public int itemCode;           // 사용한 소모품 코드
+        public long remainingQuantity; // 1 차감 후 남은 수량(0이면 그 행이 삭제되어 가방 칸이 비었다)
+        public ActiveBuffDto buff = new ActiveBuffDto();
+        public List<ActiveBuffDto> activeBuffs = new List<ActiveBuffDto>();
+    }
+
+    /// <summary>소모품 사용 응답 { success, errorCode, message, data(ConsumableUseResultData) }.</summary>
+    [Serializable]
+    public class ConsumableUseResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public ConsumableUseResultData data = new ConsumableUseResultData();
+    }
+
+    // 활성 버프 조회 요청 body는 payload가 없어 공용 AuthRequest({ userId, token })를 그대로 쓴다.
+
+    /// <summary>
+    /// 활성 버프 조회 결과(POST /api/game/consumable/buffs 성공 응답 data).
+    /// 버프 UI 재동기화 전용 경량 응답이며, 코어 로드의 activeBuffs와 같은 내용을 같은 형식으로 담는다.
+    /// serverTime은 클라이언트가 잔여 시간(expiresAt - serverTime)을 로컬 시계에 의존하지 않고 계산하기 위한 기준점이다.
+    /// </summary>
+    [Serializable]
+    public class ActiveBuffListResultData
+    {
+        public long serverTime;  // 조회 시점 서버 Unix ts(초). 잔여 시간 계산 기준점
+        public List<ActiveBuffDto> activeBuffs = new List<ActiveBuffDto>();
+    }
+
+    /// <summary>활성 버프 조회 응답 { success, errorCode, message, data(ActiveBuffListResultData) }.</summary>
+    [Serializable]
+    public class ActiveBuffListResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public ActiveBuffListResultData data = new ActiveBuffListResultData();
     }
 }

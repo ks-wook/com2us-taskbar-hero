@@ -11,6 +11,7 @@
 | [**스테이지**](#스테이지) (던전 입장·클리어 보상) | GameStageController | Game | `POST /api/game/stage/enter` · `clear` |
 | [**방치형 오프라인 보상**](#방치형-오프라인-보상) | GameOfflineController | Game | `POST /api/game/offline/claim` |
 | [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장. 가방 조회는 세이브 데이터 섹션) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
+| [**소모품/버프**](#소모품버프) (소모품 사용 → 경험치·골드 획득량 버프 부여·연장, 적용 중인 버프 조회) | GameConsumableController | Game | `POST /api/game/consumable/use`, `POST /api/game/consumable/buffs` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
 | [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchService(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
@@ -165,8 +166,9 @@ sequenceDiagram
         S->>DB: 캐릭터·재화·장착 장비·스킬(레벨 > 0만)·룬·큐브 데이터 확인
         DB-->>S: 코어 스냅샷(가방 아이템 제외)
         S->>DB: 가방 아이템 개수 확인
+        S->>DB: 활성 획득량 버프 확인(만료분 제외) — activeBuffs
         S->>S: 방치 경과 시간 계산(현재 시각 − 마지막 활동 시각)
-        S-->>C: 성공 { 코어 스냅샷, inventoryTotal }
+        S-->>C: 성공 { 코어 스냅샷, activeBuffs, inventoryTotal }
     end
 ```
 
@@ -482,6 +484,74 @@ sequenceDiagram
         end
     end
 ```
+
+## 소모품/버프
+
+소모성 아이템 사용 → 계정 획득량 버프 부여·연장, 적용 중인 버프 조회 (GameConsumableController, `/api/game/consumable`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_item`·`player_buff`) + 인메모리 마스터 데이터(item·consumable). 현재 소모품은 **경험치 부스터·골드 부스터** 2종이다.
+
+**활성 버프를 받는 창구는 세 곳이다** — 접속 직후는 코어 로드(`POST /api/game/load`)의 `activeBuffs`([세이브 데이터/캐릭터 생성](#세이브-데이터캐릭터-생성) 섹션), 소모품 사용 직후는 사용 응답, 그 이후 버프 UI 재동기화는 전용 경량 조회(`POST /api/game/consumable/buffs`)가 담당한다.
+
+### POST /api/game/consumable/use — 소모품 사용(버프 부여·연장)
+
+1회 호출당 **1개 고정**이다. 같은 종류를 다시 쓰면 남은 시간에 **누적 연장**되며(`started_at`은 유지 — 오프라인 소급 정산의 구간 하한이 흔들리지 않도록), 누적 상한(24시간)을 넘으면 **아이템을 차감하지 않고** 거부한다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /consumable/use { userId, token, data:{ itemId } }
+    S->>S: 마스터 데이터 확인(인메모리) — 아이템 정의(item_type=4 여부)·버프 효과(종류·배율·지속시간)
+    alt 소모품이 아님
+        S-->>C: 실패 { errorCode: ItemNotConsumable(4020) }
+    else 효과 정의 없음
+        S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) }
+    end
+    Note over S,DB: 단일 트랜잭션
+    S->>DB: 대상 아이템 데이터 확인(소유·아이템 행 여부·수량)
+    alt 없음/재화 행
+        S-->>C: 실패 { errorCode: ItemNotFound(4001) }
+    else 수량 0
+        S-->>C: 실패 { errorCode: InsufficientQuantity(4006) }
+    else 보유
+        S->>DB: 같은 종류의 기존 버프 데이터 조회(연장 기준)
+        S->>S: 새 유효 구간 산출 — 활성이면 잔여에 누적 연장(started_at 유지), 만료·없으면 now부터 시작
+        alt 누적 지속시간 > 24시간
+            S-->>C: 실패 { errorCode: BuffDurationLimitExceeded(4021) } (아이템 미차감)
+        else 상한 내
+            S->>DB: 아이템 수량 −1 조건부 갱신(0이면 행 삭제 = 가방 칸 반납)
+            S->>DB: 버프 데이터 부여/연장(계정·버프 종류 단위 1건)
+            S->>DB: 갱신 후 활성 버프 전체 조회(만료분 제외)
+            S-->>C: 성공 { 사용 아이템, 남은 수량, 갱신된 버프, 활성 버프 전체 }
+        end
+    end
+```
+
+- 버프 상태는 **MySQL 정본**이다(Redis TTL 미사용). 버프 시간이 벽시계로 흐르므로 오프라인 정산이 **이미 만료된 버프의 유효 구간까지 소급 참조**해야 하는데, TTL은 그 근거를 만료 순간 지워버린다([소모품/버프 기획서](../docs/세부/consumable-buff-기획서.md) 4.1).
+- 만료 버프 행은 **즉시 삭제하지 않는다.** 활성 판정이 `expires_at > now` 필터이고, 오프라인 정산 상한(12시간) + 여유만큼은 보존해야 소급 계산이 성립한다(같은 문서 6.4).
+
+### POST /api/game/consumable/buffs — 적용 중인 버프 조회
+
+버프 UI(아이콘·잔여 시간) 재동기화용 **경량 조회**다. 요청 data가 없고, 마스터 데이터를 참조하지 않으며(배율·지속시간은 부여 시점에 확정돼 DB에 있다), 활성 버프가 없어도 **빈 목록 + 성공**이다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /consumable/buffs { userId, token }
+    S->>S: 서버 시각 확정(만료 판정 기준 = 응답의 serverTime)
+    S->>DB: 활성 버프 데이터 조회(expires_at > 서버 시각, 버프 종류 순)
+    S-->>C: 성공 { serverTime, 활성 버프 목록(종류·배율·시작/만료 시각) }
+```
+
+- **만료 판정은 서버가 한다.** 클라이언트는 `expiresAt - serverTime`으로 남은 초를 얻어 로컬에서 카운트다운만 하고, 만료를 자체 확정하지 않는다 — 다음 응답에서 그 항목이 사라지는 것으로 확인한다.
+- **주기적 폴링은 하지 않는다.** 버프 UI를 열거나 앱이 백그라운드에서 복귀했을 때처럼 재동기화가 필요한 순간에만 호출한다(버프는 소모품 사용 외에 서버 단독으로 바뀌지 않는다).
+- 신규 에러 코드가 없다 — 인증 실패 계열 외 분기가 없다.
 
 ## 큐브
 

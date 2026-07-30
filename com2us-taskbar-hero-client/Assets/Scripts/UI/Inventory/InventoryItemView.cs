@@ -30,6 +30,7 @@ namespace TaskbarHero.Client.UI
             public int equippedSlot;  // 현재 장착 슬롯(1~6). 0 = 가방(미장착)
             public bool equippable;   // 착용 가능 여부(장비 + 현재 캐릭터 클래스·레벨 허용). 장착 버튼 활성 조건
             public bool equipLocked;  // 착용 불가 장비(클래스 불일치 또는 레벨 미달) → 슬롯에 X 표시 + 흐림
+            public bool usable;       // 소모품(item_type=4) 여부. true면 툴팁 버튼이 '장착'이 아니라 '사용'이 된다
         }
 
         [SerializeField] private Display _data;

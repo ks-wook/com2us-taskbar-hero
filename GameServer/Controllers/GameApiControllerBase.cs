@@ -84,7 +84,11 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.ItemEquipped => "Item already equipped",
         ErrorCode.InvalidInventorySlot => "Invalid inventory slot",
         ErrorCode.InsufficientCurrency => "Insufficient currency",
+        ErrorCode.InsufficientQuantity => "Insufficient quantity",
         ErrorCode.InventoryCapacityMax => "Inventory capacity max",
+        // 소모품 / 버프
+        ErrorCode.ItemNotConsumable => "Item is not consumable",
+        ErrorCode.BuffDurationLimitExceeded => "Buff duration limit exceeded",
         // 성장(스킬·룬)
         ErrorCode.InvalidGrowthTarget => "Invalid growth target",
         ErrorCode.SkillMaxLevel => "Skill max level",

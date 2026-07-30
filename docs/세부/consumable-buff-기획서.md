@@ -16,7 +16,7 @@
   - [4.4 공유 DTO / enum](#44-공유-dto--enum)
 - [5. API 명세](#5-api-명세)
   - [5.1 소모품 사용 — `POST /api/game/consumable/use`](#51-소모품-사용--post-apigameconsumableuse)
-  - [5.2 활성 버프 조회 — 코어 로드에 포함](#52-활성-버프-조회--코어-로드에-포함)
+  - [5.2 활성 버프 조회 — `POST /api/game/consumable/buffs`](#52-활성-버프-조회--post-apigameconsumablebuffs)
 - [6. 처리 흐름](#6-처리-흐름)
   - [6.1 소모품 사용 (의사코드)](#61-소모품-사용-의사코드)
   - [6.2 버프 적용 — 스테이지 클리어 보상](#62-버프-적용--스테이지-클리어-보상)
@@ -54,7 +54,7 @@
 **기능 요구사항**
 - 소모품 아이템 타입(`item_type=4`)을 도입하고, 소모품별 버프 효과(종류·배율·지속시간)를 마스터 데이터로 정의한다.
 - 소모품 사용 요청을 받아 **아이템 1개 차감 + 버프 부여**를 하나의 트랜잭션으로 처리하고, 부여 결과와 계정의 활성 버프 전체를 응답한다.
-- 활성 버프는 재접속 시 **코어 로드 응답에 포함**해 클라이언트가 잔여 시간을 UI에 표시할 수 있게 한다.
+- 활성 버프는 재접속 시 **코어 로드 응답에 포함**해 클라이언트가 잔여 시간을 UI에 표시할 수 있게 하고, 이후 버프 UI 재동기화를 위한 **전용 경량 조회 API**를 함께 제공한다(5.2).
 - 스테이지 클리어 보상(골드·경험치)과 오프라인 정산 보상(골드·경험치)에 활성 버프 배율을 반영한다.
 - 만료된 버프 행은 주기 배치로 정리한다. 단, 오프라인 정산이 소급 참조하는 구간은 보존한다(6.4).
 
@@ -152,11 +152,12 @@ newExpiresAt = max(now, 기존 expires_at) + consumable_master.duration_sec
 
 소모품을 `item_master`에 통합하면 **아이템 정의 조회**와 **등급 추첨 후보 풀**의 적재 기준이 갈라진다. 현재 `GameServer/MasterData/MasterDataProvider.cs`의 `LoadItemsAsync`는 하나의 쿼리(`item_type IN (1,2)`)로 두 사전(`_itemsByCode`·`_itemsByGrade`)을 동시에 만들므로, 그대로 두거나 단순히 `4`를 더하기만 하면 어느 쪽이든 결함이 된다.
 
-| 적재 대상 | 용도 | 기준 |
-|---|---|---|
-| `_itemsByCode` | 아이템 **정의 조회**(타입·`stack_max`·`sellable` 등) | **`item_type` 1·2·4** — 소모품이 없으면 사용 API가 `item_type=4` 확인·스택 적재를 못 한다 |
-| `_itemsByGrade` | **스테이지 전리품** 드롭 후보 풀(`RollDrop`) | **`item_type` 1·2만** — 소모품은 스테이지 드롭으로 지급하지 않는다(아래 확정) |
-| 상자 가챠 후보 풀 | 랜덤 상자 지급 후보 | **`box_item_pool` 마스터에서 별도 적재** — `item_master.grade`나 위 `_itemsByGrade`를 쓰지 않는다 |
+| 적재 대상 | 용도 | 기준 | 상태 |
+|---|---|---|---|
+| `_itemsByCode` | 아이템 **정의 조회**(타입·`stack_max`·`sellable` 등) | **`item_type` 1·2·4** — 소모품이 없으면 사용 API가 `item_type=4` 확인·스택 적재를 못 한다 | 구현 완료 |
+| `_itemsByGrade` | **스테이지 전리품** 드롭 후보 풀(`RollDrop`) | **`item_type` 1·2만** — 소모품은 스테이지 드롭으로 지급하지 않는다(아래 확정) | 구현 완료 |
+| `_consumablesByCode` | 소모품 **버프 효과 조회**(`GetConsumable`) | `consumable_master` 전량 | 구현 완료 |
+| 상자 가챠 후보 풀 | 랜덤 상자 지급 후보 | **`box_item_pool` 마스터에서 별도 적재** — `item_master.grade`나 위 `_itemsByGrade`를 쓰지 않는다 | 가챠 미구현(예정) |
 
 - **소모품 확률 지급 범위(확정)**: **상자 가챠에는 포함**하고 **스테이지 전리품 드롭에는 포함하지 않는다.** 두 경로가 같은 사전을 공유하면 이 구분이 불가능하므로, 가챠 후보는 전용 마스터(`box_item_pool`)로 분리해 정의한다([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.13).
 - **소모품의 `grade`는 그대로 둔다(확정).** `grade`는 `grade_master` FK 충족용 값이라 희귀도 의미가 없다(4.3-(1)). 가챠 출현 빈도는 아이템 등급을 고치는 대신 `box_item_pool`의 **등급 슬롯 배치**로 조절한다 — 그 테이블의 `grade`는 상자 안에서의 추첨 슬롯이며 `item_master.grade`와 일치할 필요가 없다.
@@ -181,7 +182,7 @@ namespace TaskbarHero.Common
 ```csharp
 namespace TaskbarHero.Common.Dto
 {
-    // 활성 버프 1건. 코어 로드(activeBuffs)·소모품 사용 응답이 공유한다.
+    // 활성 버프 1건. 코어 로드(activeBuffs)·소모품 사용 응답·활성 버프 조회 응답이 공유한다.
     [Serializable]
     public class ActiveBuff
     {
@@ -201,6 +202,14 @@ namespace TaskbarHero.Common.Dto
         public ActiveBuff buff = new ActiveBuff();                       // 이번 사용으로 갱신된 버프
         public List<ActiveBuff> activeBuffs = new List<ActiveBuff>();    // 갱신 후 계정의 활성 버프 전체
     }
+
+    // 활성 버프 조회 결과 (POST /api/game/consumable/buffs 성공 응답 data)
+    [Serializable]
+    public class ActiveBuffListResult
+    {
+        public long serverTime;   // 조회 시점 서버 Unix ts(초). 잔여 시간 계산 기준점
+        public List<ActiveBuff> activeBuffs = new List<ActiveBuff>();
+    }
 }
 ```
 
@@ -212,7 +221,7 @@ namespace TaskbarHero.Common.Dto
 **API 목록**
 
 - [5.1 소모품 사용 — `POST /api/game/consumable/use`](#51-소모품-사용--post-apigameconsumableuse)
-- [5.2 활성 버프 조회 — 코어 로드에 포함](#52-활성-버프-조회--코어-로드에-포함)
+- [5.2 활성 버프 조회 — `POST /api/game/consumable/buffs`](#52-활성-버프-조회--post-apigameconsumablebuffs)
 
 Base URL(개발): `http://localhost:5247` (GameServer). 인증 요청 공통 형식 `{ userId, token, data }`, 응답 `{ success, errorCode, message, data }`([세이브 데이터 기획서](save-data-기획서.md) 5장과 동일 규약, `success`는 `errorCode == 0`과 동치).
 
@@ -256,19 +265,42 @@ Base URL(개발): `http://localhost:5247` (GameServer). 인증 요청 공통 형
 
 - 오류: `ItemNotFound(4001)`(인벤토리에 없거나 본인 아이템이 아님), `ItemNotConsumable(4020)`(`item_type≠4`), `InsufficientQuantity(4006)`(수량 0), `BuffDurationLimitExceeded(4021)`(누적 24시간 초과), `MasterDataNotLoaded(10001)`(`consumable_master` 미로드), `SaveNotFound(2001)`(세이브 없음).
 
-### 5.2 활성 버프 조회 — 코어 로드에 포함
+### 5.2 활성 버프 조회 — `POST /api/game/consumable/buffs`
 
-**전용 조회 엔드포인트를 두지 않는다.** 활성 버프는 계정당 최대 버프 종류 수(현재 2행)로 **크기가 고정**이므로, 고정 크기 데이터를 코어 로드가 전량 반환하는 정책([세이브 데이터 기획서](save-data-기획서.md) 2장)에 따라 `POST /api/game/load` 응답에 `activeBuffs` 항목으로 포함한다.
+클라이언트는 현재 적용 중인 버프를 **상시 UI(버프 아이콘 + 잔여 시간)** 로 보여주므로, 활성 버프를 받는 창구는 **세 곳**이다.
 
+| 창구 | 시점 | 담기는 곳 |
+| --- | --- | --- |
+| `POST /api/game/load` | 접속 직후 1회 | `activeBuffs` (코어 스냅샷) |
+| `POST /api/game/consumable/use` | 소모품 사용 직후 | `activeBuffs` (갱신 후 전체) |
+| `POST /api/game/consumable/buffs` | 그 이후 재동기화 | 응답 `data` 전체 |
+
+**전용 조회 엔드포인트를 둔다.** 활성 버프는 계정당 최대 버프 종류 수(현재 2행)로 크기가 고정이라 코어 로드에도 포함하지만([세이브 데이터 기획서](save-data-기획서.md) 2장의 고정 크기 전량 반환 정책), 코어 로드는 캐릭터·재화·장비·스킬·룬을 전량 싣고 `offlineElapsedSec`(오프라인 정산 입력값)까지 함께 내려주는 **접속 시점 전용 무거운 호출**이다. 버프 2행을 다시 확인하려고 재호출할 대상이 아니므로, 재동기화용 **경량 조회**를 별도로 둔다.
+
+**Request** — payload가 없어 공용 `AuthRequest`를 그대로 쓴다.
 ```json
-"activeBuffs": [
-  { "buffType": 1, "buffValue": 1.5, "startedAt": 1752350000, "expiresAt": 1752351800 }
-]
+{ "userId": 1, "token": "..." }
 ```
 
-- `expires_at > now`인 행만 담는다. 활성 버프가 없으면 빈 배열이다.
-- 클라이언트는 `expiresAt - 서버 시각`으로 잔여 시간을 표시하고, 만료 후에는 서버 판정을 신뢰해 다음 응답에서 배열이 비는 것으로 확인한다(클라이언트가 만료를 확정하지 않는다).
+**Response (성공, 200 OK)**
+```json
+{
+  "success": true, "errorCode": 0, "message": "Active buffs loaded",
+  "data": {
+    "serverTime": 1752351000,
+    "activeBuffs": [
+      { "buffType": 1, "buffValue": 1.5, "startedAt": 1752350000, "expiresAt": 1752351800 }
+    ]
+  }
+}
+```
+
+- `expires_at > now`인 행만 담고 `buff_type` 오름차순으로 정렬한다. 활성 버프가 없으면 **빈 배열 + 성공**이다(오류가 아니다).
+- **`serverTime`은 잔여 시간 계산의 기준점이다.** 클라이언트는 `expiresAt - serverTime`으로 남은 초를 얻고 그 값을 로컬에서 카운트다운하며, 로컬 시계 자체로 만료를 판정하지 않는다. 만료는 항상 서버가 확정하고, 클라이언트는 다음 응답에서 해당 항목이 사라지는 것으로 확인한다.
+- 마스터 데이터를 참조하지 않는다 — 배율·지속시간은 버프 부여 시점에 이미 확정돼 `player_buff`에 저장돼 있으므로, 마스터 미로드 상태(`4001`)에서도 조회는 정상 동작한다.
+- **호출 시점**: 버프 UI를 여는 순간, 앱이 백그라운드에서 복귀한 순간, 카운트다운이 0에 닿은 직후 등 재동기화가 필요한 때만 호출한다. **주기적 폴링은 하지 않는다** — 버프 상태는 소모품 사용 외에 서버 단독으로 바뀌지 않는다(버프 획득 경로가 늘어나면 이 항목을 갱신한다).
 - 재접속 흐름상 **오프라인 정산(`/api/game/offline/claim`)보다 로드가 먼저 호출**되므로([오프라인 보상 정산 기획서](offline-reward-기획서.md) 6.2), 로드 시점의 `activeBuffs`는 정산 전 상태다. 정산은 만료 버프까지 소급 참조하므로 이 순서가 결과에 영향을 주지 않는다.
+- 신규 에러 코드는 없다. 인증 실패 계열 외의 분기가 없으며, 조회 결과가 비어도 성공으로 응답한다.
 
 ## 6. 처리 흐름
 

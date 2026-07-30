@@ -118,7 +118,6 @@ public sealed class MailRepository : IMailRepository
     private const int RowTypeItem = 1;
     private const int RowTypeCurrency = 2;
     private const int GoldItemCode = 1;
-    private const int ItemTypeMaterial = 2;
 
     private const int RewardTypeGold = 1;
 
@@ -440,9 +439,10 @@ public sealed class MailRepository : IMailRepository
         var used = await LoadUsedSlotsAsync(db, tx, userId);
         foreach (var item in itemGroups)
         {
-            var (itemType, stackMax) = itemLookup(item.RewardCode);
+            // 적재 규칙은 스택 상한(stack_max)만으로 결정되므로 itemType은 쓰지 않는다(소모품·재료 모두 스택 병합 대상).
+            var (_, stackMax) = itemLookup(item.RewardCode);
             bool stored = await StoreItemAsync(
-                db, tx, userId, item.RewardCode, item.Quantity, itemType, stackMax,
+                db, tx, userId, item.RewardCode, item.Quantity, stackMax,
                 item.EnhanceLevel, capacity, used, nowUnix);
             if (!stored)
             {
@@ -514,17 +514,17 @@ public sealed class MailRepository : IMailRepository
     }
 
     /// <summary>
-    /// 첨부 아이템을 적재한다. 재료(스택)면 기존 스택의 여유부터 채운 뒤 남으면 새 행, 장비면 개당 1행씩 새 칸에 넣는다.
-    /// 새 칸이 용량을 넘어 부족하면 false(호출측 롤백).
+    /// 첨부 아이템을 적재한다. 스택형(stack_max &gt; 1인 재료·소모품)이면 기존 스택의 여유부터 채운 뒤 남으면 새 행,
+    /// 비스택(stack_max = 1인 장비)이면 개당 1행씩 새 칸에 넣는다. 새 칸이 용량을 넘어 부족하면 false(호출측 롤백).
     /// </summary>
     private static async Task<bool> StoreItemAsync(
         QueryFactory db, DbTransaction tx, long userId, int itemCode, long quantity,
-        int itemType, int stackMax, int enhanceLevel, int capacity, HashSet<int> used, long nowUnix)
+        int stackMax, int enhanceLevel, int capacity, HashSet<int> used, long nowUnix)
     {
         long remaining = quantity;
 
-        // 재료(스택 가능): 기존 스택의 여유부터 채운다(새 칸 불필요).
-        if (itemType == ItemTypeMaterial && stackMax > 1 && enhanceLevel == 0)
+        // 스택형(재료·소모품): 기존 스택의 여유부터 채운다(새 칸 불필요).
+        if (stackMax > 1 && enhanceLevel == 0)
         {
             var stacks = await db.Query("player_item").Select("player_item_id", "quantity")
                 .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", itemCode)
@@ -547,8 +547,8 @@ public sealed class MailRepository : IMailRepository
             }
         }
 
-        // 남은 수량은 새 행으로. 장비는 1개당 1행, 재료는 stackMax씩 묶는다.
-        int perRow = itemType == ItemTypeMaterial ? Math.Max(stackMax, 1) : 1;
+        // 남은 수량은 새 행으로. 스택형은 stackMax씩 묶고, 장비는 stackMax가 1이라 자연히 1개당 1행이 된다.
+        int perRow = Math.Max(stackMax, 1);
         while (remaining > 0)
         {
             int slot = FirstFreeSlot(used, capacity);

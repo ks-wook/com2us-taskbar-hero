@@ -104,3 +104,24 @@ Content-Type: application/json
 }
 
 ###
+
+### 소모품 사용(1회 1개 고정 — 버프 부여·연장. 누적 24시간 초과면 4021, 소모품 아니면 4020)
+POST {{GameServer_HostAddress}}/api/game/consumable/use
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": { "itemId": 1 }
+}
+
+### 적용 중인 버프 조회(버프 UI 재동기화용 경량 조회, data 없음 — 없으면 빈 배열 + 성공)
+POST {{GameServer_HostAddress}}/api/game/consumable/buffs
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}"
+}
+
+###

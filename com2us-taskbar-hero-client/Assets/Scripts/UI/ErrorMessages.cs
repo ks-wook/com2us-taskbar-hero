@@ -70,6 +70,13 @@ namespace TaskbarHero.Client.UI
                     return "인벤토리가 이미 최대 용량입니다.";
                 case ErrorCode.InventoryFull:
                     return "인벤토리가 가득 차 받을 수 없습니다.";
+                // 소모품/버프 도메인(consumable-buff 기획서 §7)
+                case ErrorCode.ItemNotConsumable:
+                    return "사용할 수 없는 아이템입니다.";
+                case ErrorCode.BuffDurationLimitExceeded:
+                    return "버프 지속시간이 상한(24시간)을 넘어 더 사용할 수 없습니다.";
+                case ErrorCode.InsufficientQuantity:
+                    return "아이템 수량이 부족합니다.";
                 // 메일(우편함) 도메인(mail 기획서 §7)
                 case ErrorCode.MailNotFound:
                     return "메일을 찾을 수 없습니다.";

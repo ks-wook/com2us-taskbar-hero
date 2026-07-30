@@ -7,7 +7,7 @@ namespace TaskbarHero.Client.UI
     /// <summary>
     /// 아이템 hover 시 뜨는 상세 툴팁 창. 위젯은 프리팹에 직렬화되고, 계층은 에디터 빌드 시 생성된다.
     /// 커서를 칸→툴팁으로 옮겨도 유지되도록 자체 pointer enter/exit로 닫기를 취소한다(keep-open).
-    /// 서버 미연동 상태이므로 장착/해제 버튼은 아직 로그만 남긴다.
+    /// 좌측 버튼은 장비면 '장착', 소모품(item_type=4)이면 '사용'으로 바뀌며, 각각 서버에 요청을 보낸다.
     /// </summary>
     public class InventoryTooltip : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
@@ -32,7 +32,8 @@ namespace TaskbarHero.Client.UI
         /// 스테이지 클리어 슬로우모션(0.25배, 최저 0.01배) 중에는 닫힘이 4~400배 늦어져 툴팁이 남는다.</summary>
         private float _hideAt = -1f;
 
-        private InventoryItemView.Display _current; // 현재 표시 중인 아이템(장착/해제 대상)
+        private InventoryItemView.Display _current; // 현재 표시 중인 아이템(장착/해제/사용 대상)
+        private Text _actionLabel;                  // 좌측 버튼 라벨('장착'/'사용' 전환, 지연 캐싱)
         private InventoryPanelController _controller;
         private InventoryPanelController Controller =>
             _controller != null ? _controller : (_controller = GetComponentInParent<InventoryPanelController>());
@@ -108,9 +109,15 @@ namespace TaskbarHero.Client.UI
             _reqText.text = data.requirement;
             _statsText.text = data.description;       // 아이템 설명
 
-            // 장착: 장비이고 미장착(가방)일 때 활성. 해제: 현재 장착 중일 때 활성.
+            // 소모품이면 같은 버튼을 '사용'으로 바꿔 쓴다(장착 개념이 없는 아이템이라 별도 버튼을 두지 않는다).
+            // 장비는 종전대로 — 장착: 장비이고 미장착(가방)일 때 활성. 해제: 현재 장착 중일 때 활성.
             bool isEquipped = data.equippedSlot > 0;
-            _equipButton.interactable = data.equippable && !isEquipped;
+            var label = ActionButtonLabel;
+            if (label != null)
+            {
+                label.text = data.usable ? "사용" : "장착";
+            }
+            _equipButton.interactable = data.usable || (data.equippable && !isEquipped);
             _unequipButton.interactable = isEquipped;
 
             Reposition(screenPos);
@@ -192,11 +199,32 @@ namespace TaskbarHero.Client.UI
             RequestHide();
         }
 
+        /// <summary>좌측 액션 버튼('장착'/'사용' 겸용)의 라벨. 계층이 프리팹에 구워져 있어 직렬화 참조 대신
+        /// 최초 사용 시 자식에서 찾아 캐싱한다(옛 프리팹에도 새 필드 배선 없이 동작하도록).</summary>
+        private Text ActionButtonLabel
+        {
+            get
+            {
+                if (_actionLabel == null && _equipButton != null)
+                {
+                    _actionLabel = _equipButton.GetComponentInChildren<Text>(true);
+                }
+                return _actionLabel;
+            }
+        }
+
         private void OnEquip()
         {
             if (Controller != null)
             {
-                Controller.RequestEquip(_current.itemId);
+                if (_current.usable)
+                {
+                    Controller.RequestUseConsumable(_current.itemId); // 소모품 = 사용
+                }
+                else
+                {
+                    Controller.RequestEquip(_current.itemId);
+                }
             }
             HideImmediate();
         }

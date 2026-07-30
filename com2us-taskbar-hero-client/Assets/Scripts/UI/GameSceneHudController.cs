@@ -29,6 +29,12 @@ namespace TaskbarHero.Client.UI
         [Tooltip("하단 아이콘 줄 뒷배경 프레임(Assets/Art/UI/ui_bg.png, 9-slice). 없으면 배경 없이 아이콘만 표시.")]
         [SerializeField] private Sprite uiBackgroundSprite;
 
+        [Header("적용 중인 버프 표시 (우측 상단)")]
+        [Tooltip("적용 중인 버프 아이콘(Assets/Art/Icon/적용중인버프.png). 활성 버프가 있을 때만 노출된다.")]
+        [SerializeField] private Sprite activeBuffIcon;
+        [Tooltip("버프 상세 툴팁 배경(Assets/Art/UI/item_detail_bg.png). 없으면 단색 배경으로 표시.")]
+        [SerializeField] private Sprite buffTooltipBackground;
+
         [Header("ESC 메뉴 리소스 (Assets/Art/UI/System — 에디터 빌더가 배선)")]
         [Tooltip("ESC 메뉴 패널 배경(system_bg.png, 9-slice). 없으면 단색 패널.")]
         [SerializeField] private Sprite systemBackgroundSprite;
@@ -60,6 +66,10 @@ namespace TaskbarHero.Client.UI
         // 9-slice 원본(2048×731)의 테두리(상하 250px)가 두꺼워 그대로 쓰면 바 높이(186)를 넘는다
         // → 배율로 줄여 쓴다(250/4 = 62.5씩, 상하 합 125 < 186).
         private const float UiBackPixelsPerUnitMultiplier = 4f;
+
+        // 우측 상단 버프 아이콘: 화면 모서리에서 살짝 띄운 위치·크기.
+        private const float BuffIconSize = 96f;
+        private static readonly Vector2 BuffIconPos = new Vector2(-28f, -28f);
 
         // ESC 메뉴 버튼: system_slot 원본(2048×731) 테두리 상하 128px → 배율 4로 32씩(합 64 < 100).
         private const float EscButtonWidth = 440f;
@@ -93,6 +103,8 @@ namespace TaskbarHero.Client.UI
             {
                 UIManager.Instance.ShowOfflineReward();
             }
+            // 접속 직후 1회만 활성 버프를 재동기화한다(잔여 시간 기준점 serverTime 확보 — 이후 폴링 없음).
+            BuffManager.Refresh();
             StartCoroutine(MailNotifyLoop());
             if (autoOpenAttendance)
             {
@@ -182,6 +194,22 @@ namespace TaskbarHero.Client.UI
 
             // 가방 버튼 우측 상단 레드닷: 잔여 스킬 포인트가 있으면 표시(스킬 레벨업은 가방 안에서 진입).
             RedDot.AttachTopRight((RectTransform)inventoryBtn.transform).Bind(RedDotConditions.HasUnspentSkillPoints);
+
+            BuildBuffIndicator(canvasGo.transform, font);
+        }
+
+        /// <summary>화면 우측 상단의 '적용 중인 버프' 아이콘을 만든다(활성 버프가 있을 때만 스스로 노출한다).</summary>
+        private void BuildBuffIndicator(Transform parent, Font font)
+        {
+            var go = new GameObject("BuffIndicator", typeof(RectTransform), typeof(BuffIndicator));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            go.GetComponent<BuffIndicator>()
+                .Build(font, activeBuffIcon, buffTooltipBackground, BuffIconPos, BuffIconSize);
         }
 
         /// <summary>

@@ -24,6 +24,12 @@ public sealed record ItemDef(
     int ItemCode, string Name, int ItemType, int Grade, int StackMax, int EquipSlot, int ClassReq, int LevelReq,
     int Sellable, long BasePrice);
 
+/// <summary>
+/// 소모품 버프 효과 정의(consumable_master). item_master의 소모품 행(item_type=4)과 1:1이다.
+/// BuffValue는 획득량 배율(1.5 = 150%), DurationSec은 지속시간(초, 벽시계 경과 — 오프라인 중에도 소모).
+/// </summary>
+public sealed record ConsumableDef(int ItemCode, int BuffType, float BuffValue, int DurationSec);
+
 /// <summary>스킬 정의(skill_master). 성장 검증(직업 소속·액티브/패시브·최대 레벨)에 사용한다. SkillType 1:액티브 2:패시브.</summary>
 public sealed record SkillDef(int SkillCode, int ClassCode, int SkillType, int MaxLevel);
 
@@ -173,6 +179,14 @@ file sealed class ItemMasterRow
     public long BasePrice { get; set; }
 }
 
+file sealed class ConsumableMasterRow
+{
+    public int ItemCode { get; set; }
+    public int BuffType { get; set; }
+    public decimal BuffValue { get; set; } // DECIMAL(5,3) → decimal로 받아 float로 캐스팅
+    public int DurationSec { get; set; }
+}
+
 file sealed class AttendanceMasterRow
 {
     public int Day { get; set; }
@@ -209,7 +223,9 @@ public sealed class MasterDataProvider
     /// <summary>신규 계정 기본 인벤토리 용량(점유 slot 수). 골드로 1칸씩 확장(inventory_expand_master).</summary>
     public const int BaseInventoryCapacity = 100;
 
-    private const int ItemTypeEquip = 1; // item_master.item_type 1:장비
+    private const int ItemTypeEquip = 1;      // item_master.item_type 1:장비
+    private const int ItemTypeMaterial = 2;   // 2:재료
+    private const int ItemTypeConsumable = 4; // 4:소모품(효과는 consumable_master)
 
     private readonly MasterDbFactory _masterDbFactory;
     private readonly ILogger<MasterDataProvider> _logger;
@@ -235,9 +251,17 @@ public sealed class MasterDataProvider
     private IReadOnlyDictionary<int, CubeRule> _cubeRules = new Dictionary<int, CubeRule>();
     private IReadOnlyDictionary<int, RecipeDef> _recipesByCode = new Dictionary<int, RecipeDef>();
 
-    // 드롭 풀: 등급 → 드롭 가능 아이템 코드 목록(재화 item_type=3 제외). 코드 → 아이템 정의.
-    private IReadOnlyDictionary<int, List<int>> _itemsByGrade = new Dictionary<int, List<int>>();
+    // 아이템 정의: 코드 → 정의. 인벤토리에 존재할 수 있는 전 타입(장비 1·재료 2·소모품 4)을 담는다.
+    //   소모품이 빠지면 사용 API가 item_type=4 확인·스택 적재를 못 하고, 메일 첨부 적재가 "장비·스택1"로 오인한다.
     private IReadOnlyDictionary<int, ItemDef> _itemsByCode = new Dictionary<int, ItemDef>();
+
+    // 스테이지 전리품 드롭 풀: 등급 → 드롭 후보 코드 목록. 정의 사전과 달리 **장비(1)·재료(2)만** 담는다.
+    //   소모품(4)은 스테이지 드롭으로 지급하지 않는다(소모품/버프 기획서 §4.3-(3) — 확률 지급은 상자 가챠 전용
+    //   마스터 box_item_pool로 정의한다). 재화(3)는 양쪽 모두 제외.
+    private IReadOnlyDictionary<int, List<int>> _itemsByGrade = new Dictionary<int, List<int>>();
+
+    // 소모품 버프 효과: item_code → 정의(consumable_master).
+    private IReadOnlyDictionary<int, ConsumableDef> _consumablesByCode = new Dictionary<int, ConsumableDef>();
 
     // 인벤토리 확장 비용: index i(0-based) = 기본 용량 이후 (i+1)번째 칸을 여는 골드 비용(inventory_expand_master, step 오름차순).
     // 배열 길이 = 확장 가능한 총 칸 수이며, 상한 용량 = BaseInventoryCapacity + 길이.
@@ -275,9 +299,14 @@ public sealed class MasterDataProvider
     public StageRewardDef? GetStageReward(int stageId)
         => _rewardsByStageId.TryGetValue(stageId, out var r) ? r : null;
 
-    /// <summary>item_code의 아이템 정의(타입·등급·스택·장착 슬롯·클래스/레벨 제한). 재화(type 3)·미로드 코드는 null.</summary>
+    /// <summary>item_code의 아이템 정의(타입·등급·스택·장착 슬롯·클래스/레벨 제한).
+    /// 인벤토리에 존재할 수 있는 전 타입(장비 1·재료 2·소모품 4)을 담으며, 재화(type 3)·미로드 코드는 null.</summary>
     public ItemDef? GetItem(int itemCode)
         => _itemsByCode.TryGetValue(itemCode, out var def) ? def : null;
+
+    /// <summary>소모품(item_type=4)의 버프 효과 정의(consumable_master). 소모품이 아니거나 미정의 코드는 null.</summary>
+    public ConsumableDef? GetConsumable(int itemCode)
+        => _consumablesByCode.TryGetValue(itemCode, out var def) ? def : null;
 
     /// <summary>현재 용량에서 1칸 확장 가능 여부와 그 비용을 산출한다.
     /// 확장할 칸의 step = currentCapacity - 기본 용량 + 1이며, 상한(=기본 용량 + 확장 정의 수)을 넘으면 불가(false).</summary>
@@ -403,6 +432,7 @@ public sealed class MasterDataProvider
             _rewardsByStageId = await LoadStageRewardsAsync(db);
             (_levelRequiredExp, _maxLevel, _levelSkillPoints) = await LoadLevelsAsync(db);
             (_itemsByGrade, _itemsByCode) = await LoadItemsAsync(db);
+            _consumablesByCode = await LoadConsumablesAsync(db);
             _skillsByCode = await LoadSkillsAsync(db);
             _runesByCode = await LoadRunesAsync(db);
             _runeCosts = await LoadRuneCostsAsync(db);
@@ -422,7 +452,7 @@ public sealed class MasterDataProvider
             }
 
             IsLoaded = true;
-            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · dropGrades {_itemsByGrade.Count:@Grades} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates} · newbieReward {_newbieRewards.Count:@NewbieRewards}");
+            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · item {_itemsByCode.Count:@Items} · dropGrades {_itemsByGrade.Count:@Grades} · consumable {_consumablesByCode.Count:@Consumables} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates} · newbieReward {_newbieRewards.Count:@NewbieRewards}");
         }
         catch (Exception ex)
         {
@@ -694,13 +724,22 @@ public sealed class MasterDataProvider
         return byCode;
     }
 
+    /// <summary>
+    /// item_master를 두 사전으로 적재한다. <b>적재 기준이 서로 다르므로 한 필터로 결정하지 않는다</b>
+    /// (소모품/버프 기획서 §4.3-(3)):
+    /// <para>· <b>정의 사전</b>(byCode) — 인벤토리에 존재할 수 있는 전 타입(장비 1·재료 2·<b>소모품 4</b>).
+    ///   소모품이 빠지면 사용 API가 item_type 확인·스택 적재를 못 하고, 메일 첨부가 "장비·스택1"로 오인 적재된다.</para>
+    /// <para>· <b>드롭 후보 풀</b>(byGrade) — <b>장비·재료만</b>. 소모품을 넣으면 스테이지 전리품에서 확률로 지급되는데,
+    ///   소모품의 확률 지급은 상자 가챠(box_item_pool) 전용이다. 소모품의 grade는 grade_master FK 충족용 값이라
+    ///   희귀도 의미가 없어 추첨 축으로 쓸 수 없다.</para>
+    /// 재화(3, 골드)는 양쪽 모두에서 제외한다. 장착 검증용 슬롯·클래스/레벨 제한도 정의 사전에 함께 담는다.
+    /// </summary>
     private static async Task<(Dictionary<int, List<int>>, Dictionary<int, ItemDef>)> LoadItemsAsync(QueryFactory db)
     {
-        // 드롭 대상은 장비(1)·재료(2)만. 재화(3, 골드)는 제외. 장착 검증용으로 슬롯·클래스/레벨 제한도 함께 적재.
         var rows = await db.Query("item_master")
             .Select("item_code", "name", "item_type", "grade", "stack_max", "equip_slot", "class_req", "level_req",
                     "sellable", "base_price")
-            .WhereIn("item_type", new[] { 1, 2 })
+            .WhereIn("item_type", new[] { ItemTypeEquip, ItemTypeMaterial, ItemTypeConsumable })
             .GetAsync<ItemMasterRow>();
 
         var byGrade = new Dictionary<int, List<int>>();
@@ -719,6 +758,12 @@ public sealed class MasterDataProvider
                 row.Sellable,
                 row.BasePrice);
 
+            // 드롭 후보는 장비·재료만(소모품 제외).
+            if (row.ItemType != ItemTypeEquip && row.ItemType != ItemTypeMaterial)
+            {
+                continue;
+            }
+
             if (!byGrade.TryGetValue(row.Grade, out var list))
             {
                 list = new List<int>();
@@ -729,6 +774,23 @@ public sealed class MasterDataProvider
         }
 
         return (byGrade, byCode);
+    }
+
+    /// <summary>consumable_master를 item_code → 버프 효과 정의로 적재한다(소모품 사용 API가 배율·지속시간을 여기서 읽는다).</summary>
+    private static async Task<Dictionary<int, ConsumableDef>> LoadConsumablesAsync(QueryFactory db)
+    {
+        var rows = await db.Query("consumable_master")
+            .Select("item_code", "buff_type", "buff_value", "duration_sec")
+            .GetAsync<ConsumableMasterRow>();
+
+        var byCode = new Dictionary<int, ConsumableDef>();
+        foreach (var row in rows)
+        {
+            // DECIMAL 컬럼은 POCO에서 decimal로 받아 float로 캐스팅한다(프로젝트 DB 매핑 규칙).
+            byCode[row.ItemCode] = new ConsumableDef(row.ItemCode, row.BuffType, (float)row.BuffValue, row.DurationSec);
+        }
+
+        return byCode;
     }
 
     /// <summary>attendance_master를 day(출석 일차) → 보상 정의로 적재한다(정상 운영에선 1~30 전부 정의).</summary>

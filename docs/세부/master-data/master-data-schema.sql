@@ -1058,7 +1058,7 @@ INSERT INTO mail_master (mail_template_code, category, title_format, body_format
 --   * 계정 세이브가 처음 만들어질 때(= 최초 캐릭터 생성) 서버가 이 행들을 그대로 player_mail_reward로 적재한다.
 --     문구 템플릿은 mail_master 101(신규 모험가 지원금, 무기한).
 --   * 첨부 형식은 attendance_master·player_mail_reward와 동일 — reward_type 1:골드 2:아이템 3:재료,
---     골드는 reward_code=0이고 quantity가 금액이다.
+--     골드는 reward_code=0이고 quantity가 금액이다. 소모품(item_type=4)은 reward_type=2(아이템)로 지급한다.
 --   * game_player가 계정당 1행이라 초기화 트랜잭션은 계정 생애에 한 번만 성공한다 → 중복 지급 방지 플래그 불필요.
 --   * 지급 품목을 늘리려면 seq 행만 추가한다(스키마·코드 불변). 서버 전용 마스터(클라 번들 제외).
 DROP TABLE IF EXISTS newbie_reward_master;
@@ -1071,7 +1071,9 @@ CREATE TABLE newbie_reward_master (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='신규 가입 지원금 메일 첨부(서버 전용)';
 
 INSERT INTO newbie_reward_master (seq, reward_type, reward_code, quantity) VALUES
-    (1, 1, 0, 10000000);
+    (1, 1, 0,     10000000),   -- 골드 1,000만
+    (2, 2, 42001, 10),         -- 경험치 부스터 10개(소모품, stack_max 99라 1칸에 스택으로 들어간다)
+    (3, 2, 42002, 10);         -- 골드 부스터 10개
 
 
 SET FOREIGN_KEY_CHECKS = 1;

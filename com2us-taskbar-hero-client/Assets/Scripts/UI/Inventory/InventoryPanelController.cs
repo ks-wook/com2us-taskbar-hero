@@ -61,6 +61,7 @@ namespace TaskbarHero.Client.UI
 
         private const int GoldCurrencyType = 1;   // 재화 타입 1 = 골드
         private const int GoldItemCode = 1;       // item_master 골드 코드(아이콘 item_1)
+        private const int ConsumableItemType = 4; // item_master.item_type 4 = 소모품(사용 시 획득량 버프)
 
         private const float CanvasRefWidth = 1080f;
         private const float CanvasRefHeight = 1920f;
@@ -1319,6 +1320,7 @@ namespace TaskbarHero.Client.UI
             // 착용 가능 판정: 장비이면서 (공용이거나 현재 캐릭터의 직업과 클래스 제한 일치) + (요구 레벨 이하)여야 한다.
             // 클래스 불일치 또는 레벨 미달 장비는 착용 불가(슬롯에 X 표시 + 장착 버튼 비활성).
             bool isEquip = im != null && im.itemType == 1;
+            bool isConsumable = im != null && im.itemType == ConsumableItemType; // 소모품 → 툴팁 버튼이 '사용'
             var cur = CurrentCharacter();
             int curClass = cur != null ? cur.classCode : -1;
             int curLevel = cur != null ? cur.level : -1;
@@ -1342,6 +1344,7 @@ namespace TaskbarHero.Client.UI
                 equippedSlot = equippedSlot,
                 equippable = isEquip && classOk && levelOk,
                 equipLocked = equipLocked,
+                usable = isConsumable && equippedSlot == 0, // 가방에 있는 소모품만 사용할 수 있다
             };
         }
 
@@ -1405,6 +1408,68 @@ namespace TaskbarHero.Client.UI
             };
             Debug.Log($"[Inventory] 해제 요청 char={characterId} slot={slot}");
             NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/inventory/unequip", req, _ => ReloadAndRefresh(), OnActionError);
+        }
+
+        // ── 소모품 사용 (서버 연동) ──
+
+        /// <summary>가방의 소모품 1개를 사용 요청한다(<c>POST /api/game/consumable/use</c>).
+        /// 배율·지속시간은 서버가 마스터 데이터에서 확정하므로 클라이언트는 아이템 행(itemId)만 보낸다.
+        /// 성공 시 갱신된 활성 버프를 버프 캐시에 반영하고(우상단 버프 아이콘 즉시 갱신), 가방·코어를 재로드한다.</summary>
+        public void RequestUseConsumable(long itemId)
+        {
+            if (NetworkManager.Instance == null || !Session.IsLoggedIn)
+            {
+                Debug.LogWarning("[Inventory] 소모품 사용 요청 불가(네트워크/세션 없음).");
+                return;
+            }
+            var req = new ConsumableUseRequest
+            {
+                userId = Session.UserId,
+                token = Session.Token,
+                data = new ConsumableUseData { itemId = itemId },
+            };
+            Debug.Log($"[Inventory] 소모품 사용 요청 item={itemId}");
+            NetworkManager.Instance.PostToGame<ConsumableUseResponse>("/api/game/consumable/use", req,
+                OnUseConsumableSuccess, OnUseConsumableError);
+        }
+
+        /// <summary>소모품 사용 성공: 활성 버프 캐시를 응답으로 교체하고 부여된 버프 효과·만료를 모달로 안내한 뒤,
+        /// 가방(수량 차감·행 삭제)을 반영하기 위해 재로드한다.</summary>
+        private void OnUseConsumableSuccess(ConsumableUseResponse resp)
+        {
+            var data = resp != null ? resp.data : null;
+            if (data != null)
+            {
+                BuffManager.Apply(data.activeBuffs); // 우상단 버프 아이콘 즉시 갱신
+                BuffManager.Refresh();               // 잔여 시간 기준점(serverTime) 보정
+            }
+            ReloadAndRefresh();
+
+            var buff = data != null ? data.buff : null;
+            if (buff != null && ModalManager.Instance != null)
+            {
+                string name = BuffManager.DisplayName(buff.buffType);
+                string bonus = BuffManager.BonusText(buff.buffValue);
+                string remain = BuffManager.RemainText(BuffManager.RemainingSeconds(buff));
+                ModalManager.Instance.ShowConfirm(
+                    "소모품 사용",
+                    $"{name} {bonus} 효과가 적용되었습니다.\n남은 시간: {remain} (만료 {BuffManager.ExpireTimeText(buff.expiresAt)})");
+            }
+        }
+
+        /// <summary>소모품 사용 실패: 사유(소모품 아님·수량 부족·누적 상한 초과 등)를 모달로 안내한다.
+        /// 이미 사라진 행(<see cref="ErrorCode.ItemNotFound"/>)이면 가방 캐시가 낡은 것이므로 목록을 새로 고친다.</summary>
+        private void OnUseConsumableError(NetworkError error)
+        {
+            Debug.LogWarning($"[Inventory] 소모품 사용 실패: {error}");
+            if (ModalManager.Instance != null)
+            {
+                ModalManager.Instance.ShowConfirm("소모품 사용 실패", ErrorMessages.ToKorean(error));
+            }
+            if (error != null && error.ErrorCode == ErrorCode.ItemNotFound)
+            {
+                ReloadAndRefresh();
+            }
         }
 
         /// <summary>장착/해제 후 코어 스냅샷과 가방을 함께 재로드해 세션·UI·전투 스탯을 최신화한다.

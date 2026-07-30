@@ -83,6 +83,10 @@ builder.Services.AddScoped<IGrowthService, GrowthService>();
 builder.Services.AddScoped<ICubeRepository, CubeRepository>();
 builder.Services.AddScoped<ICubeService, CubeService>();
 
+// 소모품 사용 계층(아이템 1개 차감 → 계정 획득량 버프 부여·연장). 활성 버프 조회는 코어 로드가 담당.
+builder.Services.AddScoped<IConsumableRepository, ConsumableRepository>();
+builder.Services.AddScoped<IConsumableService, ConsumableService>();
+
 // 오프라인(방치) 보상 정산 계층.
 builder.Services.AddScoped<IOfflineRepository, OfflineRepository>();
 builder.Services.AddScoped<IOfflineService, OfflineService>();

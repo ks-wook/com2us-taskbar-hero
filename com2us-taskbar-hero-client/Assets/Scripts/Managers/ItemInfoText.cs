@@ -66,6 +66,7 @@ namespace TaskbarHero.Client.Managers
                     return "방어구"; // 투구·갑옷·장갑·신발
                 case 2: return "재료";
                 case 3: return "재화";
+                case 4: return "소모품";
                 default: return "기타";
             }
         }
@@ -92,6 +93,13 @@ namespace TaskbarHero.Client.Managers
             if (im.itemType == 3) // 재화
             {
                 return "게임 내에서 사용하는 재화입니다.";
+            }
+            if (im.itemType == 4) // 소모품(획득량 버프)
+            {
+                // 배율·지속시간은 consumable_master(서버 전용 마스터)에 있어 클라이언트가 알지 못한다.
+                // 실제 값은 사용 직후 응답(ActiveBuffDto)과 버프 아이콘 툴팁에서 보여준다.
+                string q = quantity > 1 ? $" (수량 {quantity:N0})" : string.Empty;
+                return $"사용하면 일정 시간 동안 획득량이 증가합니다.{q}";
             }
             return string.Empty;
         }

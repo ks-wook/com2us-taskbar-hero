@@ -48,6 +48,10 @@ namespace TaskbarHero.Common
         CubeLevelInsufficient = 4011,
         // 4012(구 InventoryRevisionChanged): 가방 페이지 조회의 정합성 검증 장치를 제거하며 폐기(결번, 재사용 금지)
 
+        // 소모품 / 버프 (4020~4029)
+        ItemNotConsumable = 4020,
+        BuffDurationLimitExceeded = 4021,
+
         // 성장 (5000번대)
         InvalidGrowthTarget = 5001,
         SkillMaxLevel = 5002,

@@ -43,7 +43,8 @@
 | 인벤토리 내 아이템 이동요청 → 캐싱 방식으로 변경 | Game | ☐ | ☐ |
 | 로드 2단계 분리(`/load` 코어 + `/inventory/list` slot 커서 keyset 페이징) | Game | ☑ | ☑ |
 | 캐릭터 성별(남/여) 선택(`player_character.gender` · 생성 시 확정 · 외형 전용) | Game | ☑ | ☑ |
-| 뽑기 시스템 구현 | Game | ☐ | ☐ |
+| 뽑기(랜덤 상자 가챠) 시스템 구현 · `box_item_pool`로 소모품 지급 | Game | ☐ | ☐ |
 | 장비 강화 시스템 | Game | ☐ | ☐ |
-| 소모품 사용 기능(경험치·골드 부스터 · [기획서](docs/세부/consumable-buff-기획서.md) 작성 완료) | Game | ☐ | ☐ |
+| 소모품 사용·활성 버프 조회(경험치·골드 부스터 · [기획서](docs/세부/consumable-buff-기획서.md)) | Game | ☑ | ☑ |
+| 소모품 버프 배율 보상 반영(스테이지 클리어·오프라인 정산) | Game | ☐ | ☐ |
 | 업적 시스템 | Game | ☐ | ☐ |

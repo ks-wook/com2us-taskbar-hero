@@ -75,6 +75,9 @@ namespace TaskbarHero.Client.Managers
             {
                 Nickname = data.player.nickname;
             }
+            // 코어 로드에 실려 온 활성 버프를 버프 캐시에도 반영한다(응답에 serverTime이 없어 기준점은 갱신하지 않는다 —
+            // 정확한 잔여 시간은 BuffManager.Refresh가 serverTime과 함께 보정한다).
+            BuffManager.Apply(data != null ? data.activeBuffs : null);
             InvalidateBag();
         }
 
@@ -226,6 +229,7 @@ namespace TaskbarHero.Client.Managers
             Nickname = null;
             GameData = null;
             PendingOfflineReward = null;
+            BuffManager.Clear();
             InvalidateBag();
         }
     }

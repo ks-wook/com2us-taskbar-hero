@@ -33,13 +33,19 @@ public sealed class SaveService : ISaveService
     private const int NewbieRewardMailTemplateCode = 101;
 
     private readonly ISaveRepository _saveRepository;
+    private readonly IConsumableRepository _consumableRepository;
     private readonly MasterDataProvider _masterData;
     private readonly ILogger<SaveService> _logger;
 
-    /// <summary>의존성(세이브 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
-    public SaveService(ISaveRepository saveRepository, MasterDataProvider masterData, ILogger<SaveService> logger)
+    /// <summary>의존성(세이브·소모품 버프 리포지토리, 마스터 데이터, 로거)을 주입받는다.</summary>
+    public SaveService(
+        ISaveRepository saveRepository,
+        IConsumableRepository consumableRepository,
+        MasterDataProvider masterData,
+        ILogger<SaveService> logger)
     {
         _saveRepository = saveRepository;
+        _consumableRepository = consumableRepository;
         _masterData = masterData;
         _logger = logger;
     }
@@ -60,6 +66,8 @@ public sealed class SaveService : ISaveService
     ///   (초기화로 레벨 0이 된 행은 미습득이라 제외한다)</para>
     /// <para><c>runes</c> — player_rune: 계정 공용 룬 코드·레벨</para>
     /// <para><c>cube</c> — player_cube 1행: 큐브 레벨·경험치(행이 없으면 레벨 1·경험치 0)</para>
+    /// <para><c>activeBuffs</c> — player_buff 중 <c>expires_at &gt; now</c>인 행: 활성 획득량 버프의 종류·배율·시작/만료 시각.
+    ///   계정당 버프 종류 수만큼이라 크기가 고정이므로 코어에 담는다(만료 판정은 항상 서버가 한다)</para>
     /// <para><c>inventoryTotal</c> — 가방 아이템 총 행 수(페이징 진행률·용량 UI 표시용)</para>
     /// <para><c>offlineElapsedSec</c> — 현재 서버 시각 − last_active_at(오프라인 보상 계산 입력값)</para>
     /// </remarks>
@@ -82,6 +90,9 @@ public sealed class SaveService : ISaveService
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var offlineElapsed = Math.Max(0, now - player.lastActiveAt);
 
+        // 활성 버프만 담는다(만료 행은 남아 있어도 제외 — 오프라인 정산이 소급 참조할 뿐이다).
+        var activeBuffs = await _consumableRepository.GetActiveBuffsAsync(userId, now);
+
         var data = new LoadDataDto
         {
             player = player,
@@ -91,6 +102,15 @@ public sealed class SaveService : ISaveService
             skills = skills,
             runes = runes,
             cube = cube,
+            activeBuffs = activeBuffs
+                .Select(b => new ActiveBuffDto
+                {
+                    buffType = b.BuffType,
+                    buffValue = b.BuffValue,
+                    startedAt = b.StartedAt,
+                    expiresAt = b.ExpiresAt,
+                })
+                .ToList(),
             inventoryTotal = inventoryTotal,
             offlineElapsedSec = offlineElapsed,
         };
