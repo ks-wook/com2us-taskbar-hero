@@ -1,6 +1,7 @@
 using GameServer.Data;
 using GameServer.MasterData;
 using SqlKata.Execution;
+using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories;
@@ -17,18 +18,25 @@ public enum ClearStatus
     InventoryFull, // 전리품 적재 중 용량 초과
 }
 
-/// <summary>클리어 트랜잭션 결과.</summary>
+/// <summary>
+/// 클리어 트랜잭션 결과. GrantedGold·GrantedExp는 <b>활성 획득량 버프 배율을 적용한 최종 지급액</b>이며
+/// (배율 판정은 지급과 같은 트랜잭션에서 수행), GoldMultiplier·ExpMultiplier는 그때 적용된 배율(버프 없으면 1.0)이다.
+/// </summary>
 public sealed record ClearOutcome(
     ClearStatus Status,
     List<CharacterProgressDto> Characters,
     long GoldBalance,
+    long GrantedGold,
+    long GrantedExp,
+    decimal GoldMultiplier,
+    decimal ExpMultiplier,
     int Act,
     int Difficulty,
     int Stage,
     int MaxStageCleared)
 {
     public static ClearOutcome Fail(ClearStatus status)
-        => new(status, new List<CharacterProgressDto>(), 0, 0, 0, 0, 0);
+        => new(status, new List<CharacterProgressDto>(), 0, 0, 0, 1.0m, 1.0m, 0, 0, 0, 0);
 }
 
 public interface IStageRepository
@@ -39,14 +47,15 @@ public interface IStageRepository
     Task<int> SetCurrentStageAsync(long userId, int act, int difficulty, int stage, long nowUnix);
 
     /// <summary>
-    /// 클리어를 한 트랜잭션으로 적용한다: 진입 스테이지 재검증 → 골드/경험치 지급·전리품 적재 → 진행도 갱신.
-    /// 경험치→레벨 계산은 주입된 levelUp 델리게이트(현재 level·exp → 지급 후 상태)로 처리한다.
+    /// 클리어를 한 트랜잭션으로 적용한다: 진입 스테이지 재검증 → 활성 획득량 버프 배율 판정 →
+    /// 골드/경험치 지급·전리품 적재 → 진행도 갱신. baseGold·baseExp는 마스터의 기본 보상이며 배율은 이 안에서 곱한다.
+    /// 경험치→레벨 계산은 주입된 levelUp 델리게이트(현재 level·exp·배율 적용된 지급 경험치 → 지급 후 상태)로 처리한다.
     /// </summary>
     Task<ClearOutcome> ApplyClearAsync(
         long userId,
         int expectedAct, int expectedDifficulty, int expectedStage,
-        long gold, DroppedItem? dropped,
-        Func<int, long, (int newLevel, long newExp, bool leveledUp)> levelUp,
+        long baseGold, long baseExp, DroppedItem? dropped,
+        Func<int, long, long, (int newLevel, long newExp, bool leveledUp)> levelUp,
         long nowUnix);
 }
 
@@ -71,6 +80,12 @@ file sealed class ItemIdQtyRow
 {
     public long PlayerItemId { get; set; }
     public long Quantity { get; set; }
+}
+
+file sealed class BuffMultiplierRow
+{
+    public int BuffType { get; set; }
+    public decimal BuffValue { get; set; } // DECIMAL(5,3) → decimal로 받아 그대로 곱한다(부동소수 오차 없이 내림).
 }
 
 /// <summary>스테이지 진행/클리어 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
@@ -127,18 +142,20 @@ public sealed class StageRepository : IStageRepository
     /// <remarks>
     /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 보상만 들어가고 진행도가 안 오르는 부분 반영을 막는다):
     /// <para>1) game_player SELECT — 현재 진입 좌표·max_stage_cleared·inventory_capacity 확보 후 요청 좌표와 일치 검증(불일치 → NotEntered)</para>
-    /// <para>2) player_item(재화 행) upsert — 클리어 보상 골드 적립, 갱신 후 잔액 산출</para>
-    /// <para>3) player_character SELECT + 캐릭터별 UPDATE — <b>파티에 편성된(slot≠0)</b> 캐릭터에만 동일 경험치 지급 후 levelUp 델리게이트로 레벨 재계산</para>
-    /// <para>4) player_item 전리품 적재 — 스택 가능하면 기존 스택 병합, 아니면 빈 칸에 INSERT(용량 초과 → InventoryFull)</para>
-    /// <para>5) game_player 진행도 UPDATE — 프런티어 클리어면 max_stage_cleared 갱신 + 다음 스테이지로 전진, 재파밍이면 updated_at만 갱신</para>
+    /// <para>2) player_buff SELECT — 활성(<c>expires_at &gt; now</c>) 획득량 버프 배율을 읽어 골드·경험치 지급액 확정(내림).
+    ///    <b>지급과 같은 트랜잭션에서 판정</b>해 배율 판정과 지급이 갈라지지 않게 한다(소모품/버프 기획서 6.2)</para>
+    /// <para>3) player_item(재화 행) upsert — 클리어 보상 골드 적립, 갱신 후 잔액 산출</para>
+    /// <para>4) player_character SELECT + 캐릭터별 UPDATE — <b>파티에 편성된(slot≠0)</b> 캐릭터에만 동일 경험치 지급 후 levelUp 델리게이트로 레벨 재계산</para>
+    /// <para>5) player_item 전리품 적재 — 스택 가능하면 기존 스택 병합, 아니면 빈 칸에 INSERT(용량 초과 → InventoryFull)</para>
+    /// <para>6) game_player 진행도 UPDATE — 프런티어 클리어면 max_stage_cleared 갱신 + 다음 스테이지로 전진, 재파밍이면 updated_at만 갱신</para>
     /// ⚠️ 원자성은 보장하지만 game_player 행에 잠금(FOR UPDATE 등)을 걸지 않으므로, 동일 userId의 동시 요청은
     ///    1)의 검증을 함께 통과할 수 있다(중복 전리품 지급·골드/경험치 lost update·슬롯 유니크 충돌). 백로그 과제.
     /// </remarks>
     public async Task<ClearOutcome> ApplyClearAsync(
         long userId,
         int expectedAct, int expectedDifficulty, int expectedStage,
-        long gold, DroppedItem? dropped,
-        Func<int, long, (int newLevel, long newExp, bool leveledUp)> levelUp,
+        long baseGold, long baseExp, DroppedItem? dropped,
+        Func<int, long, long, (int newLevel, long newExp, bool leveledUp)> levelUp,
         long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -173,10 +190,24 @@ public sealed class StageRepository : IStageRepository
                 return ClearOutcome.Fail(ClearStatus.NotEntered);
             }
 
-            // 2) 골드 지급(재화 행 upsert).
+            // 2) 활성 획득량 버프 배율 판정. 지급과 같은 트랜잭션에서 읽어 배율 판정과 지급이 갈라지지 않게 한다.
+            //    트랜잭션 시작 시각(nowUnix) 기준 단일 판정이며, 만료 행(expires_at <= now)은 제외한다.
+            var buffRows = await db.Query("player_buff")
+                .Select("buff_type", "buff_value")
+                .Where("user_id", userId).Where("expires_at", ">", nowUnix)
+                .GetAsync<BuffMultiplierRow>(transaction);
+
+            // PK가 (user_id, buff_type)이라 종류별 1행뿐이므로 키 충돌이 없다.
+            var multipliers = buffRows.ToDictionary(r => r.BuffType, r => r.BuffValue);
+            decimal goldMultiplier = MultiplierOf(multipliers, BuffType.GoldGain);
+            decimal expMultiplier = MultiplierOf(multipliers, BuffType.ExpGain);
+            long gold = ApplyMultiplier(baseGold, goldMultiplier);
+            long exp = ApplyMultiplier(baseExp, expMultiplier);
+
+            // 3) 골드 지급(재화 행 upsert).
             long goldBalance = await UpsertGoldAsync(db, transaction, userId, gold, nowUnix);
 
-            // 3) 경험치 지급(파티 편성 캐릭터 동일) + 레벨 재계산.
+            // 4) 경험치 지급(파티 편성 캐릭터 동일) + 레벨 재계산.
             //    미편성(slot=0) 캐릭터는 전투에 나가지 않았으므로 경험치를 받지 않는다(세이브 데이터 기획서 5.5).
             var charRows = await db.Query("player_character")
                 .Select("character_id", "level", "exp")
@@ -189,7 +220,7 @@ public sealed class StageRepository : IStageRepository
             {
                 int characterId = c.CharacterId;
 
-                var (newLevel, newExp, leveledUp) = levelUp(c.Level, c.Exp);
+                var (newLevel, newExp, leveledUp) = levelUp(c.Level, c.Exp, exp);
                 await db.Query("player_character")
                     .Where("user_id", userId).Where("character_id", characterId)
                     .UpdateAsync(new { level = newLevel, exp = newExp }, transaction);
@@ -203,7 +234,7 @@ public sealed class StageRepository : IStageRepository
                 });
             }
 
-            // 4) 전리품 적재(있으면). 용량 초과 시 롤백.
+            // 5) 전리품 적재(있으면). 용량 초과 시 롤백.
             if (dropped is not null)
             {
                 var stored = await StoreDroppedItemAsync(db, transaction, userId, dropped, capacity, nowUnix);
@@ -214,7 +245,7 @@ public sealed class StageRepository : IStageRepository
                 }
             }
 
-            // 5) 진행도 갱신: 프런티어 클리어면 다음 스테이지로 전진 + max 갱신, 재파밍이면 유지.
+            // 6) 진행도 갱신: 프런티어 클리어면 다음 스테이지로 전진 + max 갱신, 재파밍이면 유지.
             int seq = StageCoords.Sequence(expectedAct, expectedDifficulty, expectedStage);
             bool isFrontier = seq == maxCleared + 1;
 
@@ -250,7 +281,10 @@ public sealed class StageRepository : IStageRepository
             }
 
             await transaction.CommitAsync();
-            return new ClearOutcome(ClearStatus.Ok, characters, goldBalance, newAct, newDiff, newStage, newMax);
+            return new ClearOutcome(
+                ClearStatus.Ok, characters, goldBalance,
+                gold, exp, goldMultiplier, expMultiplier,
+                newAct, newDiff, newStage, newMax);
         }
         catch
         {
@@ -258,6 +292,14 @@ public sealed class StageRepository : IStageRepository
             throw;
         }
     }
+
+    /// <summary>활성 버프 배율 목록에서 지정 종류의 획득량 배율을 얻는다. 해당 종류의 활성 버프가 없으면 1.0(배율 없음).</summary>
+    private static decimal MultiplierOf(IReadOnlyDictionary<int, decimal> multipliers, BuffType buffType)
+        => multipliers.TryGetValue((int)buffType, out var value) ? value : 1.0m;
+
+    /// <summary>기본 보상에 획득량 배율을 곱해 지급액을 확정한다(기획서 6.2: 정수 내림). 배율이 1.0이면 원값 그대로.</summary>
+    private static long ApplyMultiplier(long baseAmount, decimal multiplier)
+        => multiplier == 1.0m ? baseAmount : (long)decimal.Floor(baseAmount * multiplier);
 
     /// <summary>재화(골드) 행을 upsert하고 갱신 후 잔액을 반환한다.</summary>
     private static async Task<long> UpsertGoldAsync(

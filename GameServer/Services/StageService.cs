@@ -109,15 +109,14 @@ public sealed class StageService : IStageService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        // 보상 산출(서버 권위): 골드·경험치는 고정, 드롭은 등급 확률로 추첨.
-        var gold = reward.Gold;
-        var rewardExp = reward.Exp;
+        // 보상 산출(서버 권위): 골드·경험치는 마스터 고정값이 기본이고, 드롭은 등급 확률로 추첨한다.
+        // 활성 획득량 버프(경험치·골드 부스터) 배율은 지급 트랜잭션 안에서 곱한다(소모품/버프 기획서 6.2).
         var dropped = _masterData.RollDrop(reward);
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var outcome = await _stageRepository.ApplyClearAsync(
-            userId, act, difficulty, stage, gold, dropped,
-            (level, exp) => ApplyExp(level, exp, rewardExp),
+            userId, act, difficulty, stage, reward.Gold, reward.Exp, dropped,
+            ApplyExp,
             now);
 
         switch (outcome.Status)
@@ -139,7 +138,8 @@ public sealed class StageService : IStageService
         var data = new StageClearData
         {
             cleared = new ClearedStageDto { act = act, difficulty = difficulty, stage = stage },
-            rewards = new StageRewardsDto { gold = gold, exp = rewardExp, items = items },
+            // 버프 배율이 적용된 최종 지급액을 응답에 담는다(클라이언트가 표시하는 값 = 실제 반영된 값).
+            rewards = new StageRewardsDto { gold = outcome.GrantedGold, exp = outcome.GrantedExp, items = items },
             characters = outcome.Characters,
             balance = new List<CurrencyDto>
             {
@@ -154,7 +154,7 @@ public sealed class StageService : IStageService
             },
         };
 
-        _logger.ZLogInformation($"스테이지 클리어: userId {userId:@UserId}, act {act:@Act}, difficulty {difficulty:@Difficulty}, stage {stage:@Stage}, gold {gold:@Gold}, exp {rewardExp:@Exp}");
+        _logger.ZLogInformation($"스테이지 클리어: userId {userId:@UserId}, act {act:@Act}, difficulty {difficulty:@Difficulty}, stage {stage:@Stage}, gold {outcome.GrantedGold:@Gold}, exp {outcome.GrantedExp:@Exp}, goldMul {outcome.GoldMultiplier:@GoldMultiplier}, expMul {outcome.ExpMultiplier:@ExpMultiplier}");
         return new SaveResult(ErrorCode.Success, "Stage cleared", data);
     }
 
