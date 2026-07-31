@@ -30,13 +30,16 @@ namespace TaskbarHero.Client.Managers
         [Tooltip("획득 완료 표시(Assets/Art/UI/Attendance/check). 슬롯 레이어 가장 위(마지막 자식)에 그려진다. 기본 숨김.")]
         [SerializeField] private Image _claimedOverlay;
 
-        private const float ClaimedPopShrinkScale = 0.35f;
-        private const float ClaimedPopDuration = 0.35f;
+        // 획득 연출: 체크 표시가 슬롯 밖으로 크게 부풀었다가 원래 크기로 잦아든다.
+        private const float ClaimedPopExpandScale = 3f;   // 최대 크기(원래 크기 배수)
+        private const float ClaimedPopDuration = 0.45f;   // 연출 전체 길이
+        private const float ClaimedPopExpandRatio = 0.4f; // 전체 길이 중 커지는 구간의 비율(나머지는 되돌아오는 구간)
 
         private int _itemCode;
         private long _quantity;
         private bool _showDetail;
         private Coroutine _claimedPopRoutine;
+        private Canvas _claimedLift; // 획득 연출 동안만 붙는 정렬 덮어쓰기 Canvas(끝나면 제거)
 
         /// <summary>아이템 코드·수량으로 슬롯을 구성한다(수량 2 이상이면 "xN" 표기, hover 상세 활성).</summary>
         public void Setup(int itemCode, long quantity)
@@ -145,20 +148,16 @@ namespace TaskbarHero.Client.Managers
         /// <summary>획득 완료 표시(check)를 켜고 끈다(연출 없이 즉시 반영, 예: 출석부 현황 새로고침).</summary>
         public void SetClaimed(bool claimed)
         {
-            if (_claimedPopRoutine != null)
-            {
-                StopCoroutine(_claimedPopRoutine);
-                _claimedPopRoutine = null;
-            }
+            CancelClaimedPop();
             if (_claimedOverlay != null)
             {
-                _claimedOverlay.rectTransform.localScale = Vector3.one;
                 _claimedOverlay.gameObject.SetActive(claimed);
             }
         }
 
-        /// <summary>방금 획득했음을 알리는 연출: 획득 완료 표시(check)가 원래 크기에서 작아졌다가
-        /// 다시 커지면서 원래 크기로 돌아온다(예: 출석부에서 오늘자 보상을 처음 받는 순간).
+        /// <summary>방금 획득했음을 알리는 연출: 획득 완료 표시(check)가 원래 크기보다 훨씬 크게
+        /// (<see cref="ClaimedPopExpandScale"/>배) 부풀었다가 원래 크기로 돌아온다
+        /// (예: 출석부에서 오늘자 보상을 처음 받는 순간).
         /// <paramref name="onComplete"/>는 연출이 끝난 뒤 호출된다(획득 안내 모달처럼 연출 후에 이어질 처리용).
         /// 표시할 오버레이가 없으면 연출 없이 즉시 호출한다. 연출 도중 <see cref="SetClaimed"/> 등으로
         /// 상태가 덮어써지면 호출되지 않는다(그 처리가 무효가 된 것이므로).</summary>
@@ -169,44 +168,73 @@ namespace TaskbarHero.Client.Managers
                 onComplete?.Invoke();
                 return;
             }
+            CancelClaimedPop(); // 재생 중이던 연출이 있으면 크기·정렬을 원래대로 되돌리고 새로 시작
             _claimedOverlay.gameObject.SetActive(true);
-            if (_claimedPopRoutine != null)
-            {
-                StopCoroutine(_claimedPopRoutine);
-            }
             _claimedPopRoutine = StartCoroutine(ClaimedPopRoutine(onComplete));
         }
 
         private IEnumerator ClaimedPopRoutine(Action onComplete)
         {
             var rt = _claimedOverlay.rectTransform;
-            float half = ClaimedPopDuration * 0.5f;
+            LiftClaimedOverlay(); // 커지는 동안 이웃 슬롯에 가리지 않도록 위로 띄운다
+            float expandDuration = ClaimedPopDuration * ClaimedPopExpandRatio;
+            float settleDuration = ClaimedPopDuration - expandDuration;
 
             float elapsed = 0f;
-            while (elapsed < half)
+            while (elapsed < expandDuration)
             {
                 elapsed += Time.unscaledDeltaTime;
-                float k = Mathf.Clamp01(elapsed / half);
-                rt.localScale = Vector3.one * Mathf.Lerp(1f, ClaimedPopShrinkScale, k);
+                float k = Mathf.Clamp01(elapsed / expandDuration);
+                rt.localScale = Vector3.one * Mathf.Lerp(1f, ClaimedPopExpandScale, Mathf.SmoothStep(0f, 1f, k));
                 yield return null;
             }
 
             elapsed = 0f;
-            while (elapsed < half)
+            while (elapsed < settleDuration)
             {
                 elapsed += Time.unscaledDeltaTime;
-                float k = Mathf.Clamp01(elapsed / half);
-                rt.localScale = Vector3.one * Mathf.Lerp(ClaimedPopShrinkScale, 1f, k);
+                float k = Mathf.Clamp01(elapsed / settleDuration);
+                rt.localScale = Vector3.one * Mathf.Lerp(ClaimedPopExpandScale, 1f, Mathf.SmoothStep(0f, 1f, k));
                 yield return null;
             }
 
             rt.localScale = Vector3.one;
+            DropClaimedOverlay();
             _claimedPopRoutine = null;
             onComplete?.Invoke();
         }
 
-        /// <summary>Setup 호출 시 획득 완료 표시를 기본 숨김 상태로 되돌린다(호출측이 필요 시 SetClaimed로 재설정).</summary>
-        private void ResetClaimedOverlay()
+        /// <summary>연출 동안 획득 완료 표시를 같은 캔버스의 다른 UI 위로 올린다(중첩 Canvas의 정렬 덮어쓰기).
+        /// 슬롯이 그리드로 나열되는 화면(출석부 달력)에서는 슬롯 밖까지 커진 체크가 뒤에 배치된 이웃 칸에
+        /// 가려지므로, 계층/형제 순서를 건드리지 않고(레이아웃 그룹이 자리를 재배치하지 않게) 정렬만
+        /// 임시로 끌어올린다. 여기서 붙인 Canvas는 <see cref="DropClaimedOverlay"/>가 제거한다.</summary>
+        private void LiftClaimedOverlay()
+        {
+            var parentCanvas = _claimedOverlay.canvas;
+            if (parentCanvas == null || _claimedLift != null || _claimedOverlay.GetComponent<Canvas>() != null)
+            {
+                return; // 캔버스 밖이거나 이미 자체 Canvas가 있으면 건드리지 않는다
+            }
+            _claimedLift = _claimedOverlay.gameObject.AddComponent<Canvas>();
+            _claimedLift.overrideSorting = true;
+            _claimedLift.sortingLayerID = parentCanvas.sortingLayerID;
+            _claimedLift.sortingOrder = parentCanvas.sortingOrder + 1;
+        }
+
+        /// <summary><see cref="LiftClaimedOverlay"/>가 올린 정렬을 되돌린다(임시 Canvas 제거).
+        /// 연출이 끝났을 때와 중간에 취소됐을 때 모두 호출된다.</summary>
+        private void DropClaimedOverlay()
+        {
+            if (_claimedLift != null)
+            {
+                Destroy(_claimedLift);
+                _claimedLift = null;
+            }
+        }
+
+        /// <summary>재생 중인 획득 연출을 중단하고 크기·정렬을 원래 상태로 되돌린다
+        /// (연출 재시작·상태 덮어쓰기·슬롯 재구성 공통 정리).</summary>
+        private void CancelClaimedPop()
         {
             if (_claimedPopRoutine != null)
             {
@@ -216,6 +244,16 @@ namespace TaskbarHero.Client.Managers
             if (_claimedOverlay != null)
             {
                 _claimedOverlay.rectTransform.localScale = Vector3.one;
+                DropClaimedOverlay();
+            }
+        }
+
+        /// <summary>Setup 호출 시 획득 완료 표시를 기본 숨김 상태로 되돌린다(호출측이 필요 시 SetClaimed로 재설정).</summary>
+        private void ResetClaimedOverlay()
+        {
+            CancelClaimedPop();
+            if (_claimedOverlay != null)
+            {
                 _claimedOverlay.gameObject.SetActive(false);
             }
         }

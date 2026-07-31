@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
+using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 
 namespace TaskbarHero.Client.Battle
@@ -31,6 +32,12 @@ namespace TaskbarHero.Client.Battle
         private const float RewardPopDuration = 0.22f;  // 칸 하나가 다 커지는 데 걸리는 시간
         private const float RewardPopInterval = 0.11f;  // 다음 칸이 등장하기까지의 간격
 
+        // 버프 적용 표시 마크: 보상 칸(150×150) 우상단 모서리에 살짝 걸치도록 슬롯 밖으로 내민다.
+        // 오프셋은 슬롯 우상단 모서리 기준(피벗이 마크 중앙) — 값을 줄일수록 마크가 왼쪽·아래,
+        // 즉 슬롯 안쪽으로 붙어 슬롯과의 거리가 좁아진다.
+        private const float BuffMarkSize = 56f;
+        private static readonly Vector2 BuffMarkOffset = new Vector2(-4f, -4f);
+
         [Tooltip("전체화면 클릭 시 닫기 처리할 투명 차단막 버튼.")]
         [SerializeField] private Button _dimButton;
         [Tooltip("클리어 팡파레 프레임 시퀀스를 그리는 이미지.")]
@@ -49,22 +56,27 @@ namespace TaskbarHero.Client.Battle
         private bool _dismissed;
         private bool _restoreTimeScale;
         private bool _showFanfare;
+        private bool _markBuffedRewards;
         private Action _onClosed;
 
         /// <summary>클리어 응답 데이터로 오버레이를 생성·표시한다. onClosed는 닫힐 때(클릭/자동) 1회 호출된다.
-        /// 전투 종료 슬로우모션 상태에서 열리므로 닫을 때 게임 속도를 정상으로 되돌리고, 팡파레를 재생한다.</summary>
+        /// 전투 종료 슬로우모션 상태에서 열리므로 닫을 때 게임 속도를 정상으로 되돌리고, 팡파레를 재생한다.
+        /// 획득량 버프가 적용 중이면 해당 보상 칸(골드·경험치)에 버프마크를 붙인다 —
+        /// 스테이지 클리어 보상만 버프 대상이므로 이 경로에서만 표시한다.</summary>
         public static void Show(StageClearData data, Action onClosed = null)
         {
             // 전투 연출 띠(기능 패널 아래) — 인벤토리·출석부 등을 열어 둔 동안 가리지 않는다.
             SoundManager.Jingle(SoundId.JingleStageClear);
             ShowRewards(StageClearTitle, data != null ? data.rewards : null,
-                restoreTimeScale: true, showFanfare: true, UiSortingOrder.BattleResult, onClosed);
+                restoreTimeScale: true, showFanfare: true, markBuffedRewards: true,
+                UiSortingOrder.BattleResult, onClosed);
         }
 
         /// <summary>
         /// 클리어 연출 UI(보상 칸 순차 등장)를 <b>보상 획득 연출로 재활용</b>한다.
         /// 우편함 첨부 수령처럼 "무엇을 얼마나 받았는지"를 같은 방식으로 보여줄 때 쓴다.
         /// 전투 승리 연출이 아니므로 <b>뒤편 팡파레 이펙트는 재생하지 않고</b> 게임 속도에도 손대지 않는다.
+        /// 획득량 버프의 대상이 아닌 보상(우편 첨부 등)이므로 <b>버프마크도 붙이지 않는다.</b>
         /// </summary>
         /// <param name="title">상단에 표시할 문구(예: "보상 획득!").</param>
         /// <param name="rewards">표시할 보상(골드·경험치·아이템). 비어 있으면 보상 칸 없이 연출만 나온다.</param>
@@ -72,14 +84,15 @@ namespace TaskbarHero.Client.Battle
         {
             // 패널(우편함·거래소)에서 띄우므로 그 위 띠에 올린다 — 전투 연출과 달리 패널에 가려지면 안 된다.
             ShowRewards(title, rewards, restoreTimeScale: false, showFanfare: false,
-                UiSortingOrder.RewardOverPanel, onClosed);
+                markBuffedRewards: false, UiSortingOrder.RewardOverPanel, onClosed);
         }
 
         /// <summary>오버레이를 만들어 표시하는 공통 경로(클리어·보상 획득 재활용 양쪽).
         /// <paramref name="sortingOrder"/>로 어느 띠에 뜰지 정한다(클리어는 패널 아래, 보상 재활용은 패널 위).
+        /// <paramref name="markBuffedRewards"/>가 true면 활성 버프에 해당하는 보상 칸에 버프마크를 붙인다.
         /// 프리팹이 없으면 런타임 구성으로 폴백한다.</summary>
         private static void ShowRewards(string title, StageRewardsDto rewards, bool restoreTimeScale,
-            bool showFanfare, int sortingOrder, Action onClosed)
+            bool showFanfare, bool markBuffedRewards, int sortingOrder, Action onClosed)
         {
             var assets = StageClearAssets.Load();
             StageClearOverlay overlay;
@@ -102,6 +115,7 @@ namespace TaskbarHero.Client.Battle
             overlay._onClosed = onClosed;
             overlay._restoreTimeScale = restoreTimeScale;
             overlay._showFanfare = showFanfare;
+            overlay._markBuffedRewards = markBuffedRewards;
             overlay.ApplySortingOrder(sortingOrder); // 프리팹에 구워진 값을 호출 경로에 맞게 덮어쓴다
             overlay.SetTitle(title);
             overlay.Populate(rewards);
@@ -304,12 +318,14 @@ namespace TaskbarHero.Client.Battle
             // 슬롯 안쪽(우하단)에 획득량이 노출되도록 통일한다.
             if (rewards != null && rewards.exp > 0)
             {
-                CreateLabelRewardEntry(_rewardsRow, font, "EXP", new Color(0.4f, 0.8f, 1f), $"+{rewards.exp:N0}");
+                var slot = CreateLabelRewardEntry(_rewardsRow, font, "EXP", new Color(0.4f, 0.8f, 1f), $"+{rewards.exp:N0}");
+                AttachBuffMarkIfActive(slot, BuffType.ExpGain);
             }
             // 골드(item_1 아이콘 재사용). 마스터 데이터에 없는 재화라 hover 상세는 끈다.
             if (rewards != null && rewards.gold > 0)
             {
-                CreateRewardEntry(_rewardsRow, font, 1, rewards.gold, $"+{rewards.gold:N0}", false);
+                var slot = CreateRewardEntry(_rewardsRow, font, 1, rewards.gold, $"+{rewards.gold:N0}", false);
+                AttachBuffMarkIfActive(slot, BuffType.GoldGain);
             }
             // 전리품 아이템 — 공용 슬롯(ItemSlot 프리팹)이 등급 배경·아이콘·수량을 표시하고 hover 시 상세 팝업을 띄운다.
             if (rewards != null && rewards.items != null)
@@ -326,6 +342,36 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
+        /// <summary>
+        /// 해당 종류의 획득량 버프가 적용 중이면 보상 칸 우상단에 버프마크를 붙인다
+        /// (그 보상이 버프로 늘어난 양이라는 표시). 클리어 보상 경로에서만 동작하며
+        /// (<see cref="_markBuffedRewards"/>), 마크 스프라이트가 배선돼 있지 않으면 아무것도 붙이지 않는다.
+        ///
+        /// 판정 근거는 클리어 응답이 아니라 <see cref="BuffManager"/> 캐시다 — 클리어 응답(StageRewardsDto)에는
+        /// 버프 적용 여부 필드가 없으므로, 보상을 받은 시점(오버레이가 열리는 순간)에 적용 중인 버프로 판단한다.
+        /// </summary>
+        private void AttachBuffMarkIfActive(GameObject slot, BuffType buffType)
+        {
+            Sprite mark = _assets != null ? _assets.buffMarkIcon : null;
+            if (!_markBuffedRewards || slot == null || mark == null || !BuffManager.IsActive(buffType))
+            {
+                return;
+            }
+
+            // 슬롯의 마지막 자식으로 붙어 프레임·아이콘·수량 위에 그려진다.
+            var go = new GameObject("BuffMark", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(slot.transform, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = mark;
+            img.preserveAspect = true;
+            img.raycastTarget = false; // 슬롯 hover 판정을 가로채지 않는다
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f); // 슬롯 우상단
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(BuffMarkSize, BuffMarkSize);
+            rt.anchoredPosition = BuffMarkOffset; // 모서리에 살짝 걸치도록 밖으로 내민다
+        }
+
         /// <summary>아이템 코드의 등급(1~5)을 마스터 데이터에서 조회한다. 없으면 노말(1).</summary>
         private static int GradeOf(int itemCode)
         {
@@ -334,8 +380,9 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>보상 한 칸을 공용 아이템 슬롯 프리팹(ItemSlot)으로 만든다(등급 배경·아이콘·수량,
-        /// hover 시 item_detail_bg 배경의 공용 상세 팝업). 프리팹 미배선(에셋 미빌드) 시 기존 코드 구성 폴백.</summary>
-        private void CreateRewardEntry(RectTransform parent, Font font, int itemCode, long quantity, string qtyText, bool showDetail)
+        /// hover 시 item_detail_bg 배경의 공용 상세 팝업). 프리팹 미배선(에셋 미빌드) 시 기존 코드 구성 폴백.
+        /// 만들어진 칸을 반환한다(버프마크 등 부가 표시를 붙일 수 있도록).</summary>
+        private GameObject CreateRewardEntry(RectTransform parent, Font font, int itemCode, long quantity, string qtyText, bool showDetail)
         {
             var prefab = _assets != null ? _assets.itemSlotPrefab : null;
             if (prefab != null)
@@ -347,19 +394,20 @@ namespace TaskbarHero.Client.Battle
                 if (view != null)
                 {
                     view.Setup(itemCode, quantity, qtyText, showDetail);
-                    return;
+                    return slotGo;
                 }
                 Destroy(slotGo); // 프리팹에 뷰가 없으면 폴백으로
             }
-            CreateRewardEntryFallback(parent, font, GetIcon(itemCode), qtyText,
+            return CreateRewardEntryFallback(parent, font, GetIcon(itemCode), qtyText,
                 itemCode == 1 ? new Color(1f, 0.85f, 0.3f) : Color.white,
                 GradeColors.RewardSlotBackground(GradeOf(itemCode)));
         }
 
         /// <summary>아이콘이 없는 보상(경험치 등) 한 칸을 공용 아이템 슬롯 프리팹(ItemSlot)의 라벨 모드로
         /// 만든다. 골드·아이템과 동일한 슬롯에 텍스트 라벨 + 슬롯 안쪽 수치를 표시한다.
-        /// 프리팹 미배선(에셋 미빌드) 시 기존 코드 구성 폴백.</summary>
-        private void CreateLabelRewardEntry(RectTransform parent, Font font, string label, Color labelColor, string valueText)
+        /// 프리팹 미배선(에셋 미빌드) 시 기존 코드 구성 폴백.
+        /// 만들어진 칸을 반환한다(버프마크 등 부가 표시를 붙일 수 있도록).</summary>
+        private GameObject CreateLabelRewardEntry(RectTransform parent, Font font, string label, Color labelColor, string valueText)
         {
             var prefab = _assets != null ? _assets.itemSlotPrefab : null;
             if (prefab != null)
@@ -371,17 +419,17 @@ namespace TaskbarHero.Client.Battle
                 if (view != null)
                 {
                     view.SetupLabel(label, labelColor, valueText);
-                    return;
+                    return slotGo;
                 }
                 Destroy(slotGo);
             }
-            CreateLabelRewardEntryFallback(parent, font, label, labelColor, valueText);
+            return CreateLabelRewardEntryFallback(parent, font, label, labelColor, valueText);
         }
 
         /// <summary>[폴백] 아이콘+수량 보상 항목 한 칸을 코드로 만든다(아이콘 없으면 색 사각형).
         /// slotColor는 등급별 슬롯 배경. 수량은 슬롯 안쪽 우하단에 표시해 실제 ItemSlot 프리팹과
-        /// 동일한 배치가 되도록 한다. 폴백에서는 hover 상세를 제공하지 않는다.</summary>
-        private void CreateRewardEntryFallback(RectTransform parent, Font font, Sprite icon, string qtyText, Color tint, Color slotColor)
+        /// 동일한 배치가 되도록 한다. 폴백에서는 hover 상세를 제공하지 않는다. 만들어진 칸을 반환한다.</summary>
+        private GameObject CreateRewardEntryFallback(RectTransform parent, Font font, Sprite icon, string qtyText, Color tint, Color slotColor)
         {
             var entry = new GameObject("Reward", typeof(RectTransform), typeof(Image));
             entry.transform.SetParent(parent, false);
@@ -426,11 +474,13 @@ namespace TaskbarHero.Client.Battle
             }
 
             CreateQuantityLabel(entry.transform, font, qtyText);
+            return entry;
         }
 
         /// <summary>[폴백] 아이콘이 없는 보상(경험치 등) 한 칸을 코드로 만든다. 텍스트 라벨을 슬롯 중앙에,
-        /// 수치는 슬롯 안쪽 우하단에 표시해 <see cref="CreateRewardEntryFallback"/>과 배치를 통일한다.</summary>
-        private void CreateLabelRewardEntryFallback(RectTransform parent, Font font, string label, Color labelColor, string valueText)
+        /// 수치는 슬롯 안쪽 우하단에 표시해 <see cref="CreateRewardEntryFallback"/>과 배치를 통일한다.
+        /// 만들어진 칸을 반환한다.</summary>
+        private GameObject CreateLabelRewardEntryFallback(RectTransform parent, Font font, string label, Color labelColor, string valueText)
         {
             var entry = new GameObject("Badge", typeof(RectTransform), typeof(Image));
             entry.transform.SetParent(parent, false);
@@ -466,6 +516,7 @@ namespace TaskbarHero.Client.Battle
             lrt.offsetMax = Vector2.zero;
 
             CreateQuantityLabel(entry.transform, font, valueText);
+            return entry;
         }
 
         /// <summary>슬롯 안쪽 우하단에 수량/획득량 텍스트를 배치한다(ItemSlot 프리팹의 Qty 배치와 동일 비율).</summary>

@@ -84,6 +84,22 @@ namespace TaskbarHero.Client.Managers
             return removed > 0;
         }
 
+        /// <summary>지정한 종류의 버프가 지금 적용 중인지(아직 만료되지 않았는지). 보상 칸에 '버프로 늘어난 보상'
+        /// 표시를 붙일지 판단할 때 쓴다. 카운트다운이 끝났지만 아직 <see cref="PruneExpired"/>가 돌지 않은
+        /// 항목은 만료로 본다(1초 주기 정리와 실제 만료 시각 사이의 오차를 여기서 흡수).</summary>
+        public static bool IsActive(BuffType buffType)
+        {
+            long now = ServerNow;
+            foreach (var b in Buffs)
+            {
+                if (b != null && b.buffType == (int)buffType && b.expiresAt > now)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /// <summary>버프 1건의 남은 시간(초). 이미 만료됐으면 0.</summary>
         public static long RemainingSeconds(ActiveBuffDto buff)
         {

@@ -30,6 +30,9 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("공용 아이템 슬롯 프리팹(Assets/Prefabs/UI/ItemSlot.prefab). 보상 아이템 칸에 사용하며, 없으면 코드 구성 폴백.")]
         public GameObject itemSlotPrefab;
 
+        [Tooltip("버프 적용 표시 마크(Assets/Art/Icon/Etc/버프마크.png). 활성 버프로 늘어난 보상 칸 모서리에 작게 붙는다. 없으면 마크를 붙이지 않는다.")]
+        public Sprite buffMarkIcon;
+
         [Tooltip("스테이지 클리어 연출 오버레이 프리팹(Assets/Prefabs/UI/StageClearOverlay.prefab). 없으면 런타임 코드 구성 폴백.")]
         public GameObject overlayPrefab;
 

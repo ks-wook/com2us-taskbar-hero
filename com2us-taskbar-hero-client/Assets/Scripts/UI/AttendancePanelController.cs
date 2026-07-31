@@ -14,7 +14,7 @@ namespace TaskbarHero.Client.UI
     /// <b>일차는 날짜(day-of-month)가 아니라 이번달 누적 출석 순번</b>이다 — 월중 첫 접속이어도 1일차부터
     /// 순서대로 받으며, 앞에서부터 채워진다. 수령 가능 여부는 서버가 판정한 <c>canClaim</c>을 따른다
     /// (30일차를 모두 받으면 1일차부터 순환하므로 사다리 소진으로 인한 실패는 없다).
-    /// 오늘 처음 받는 순간에만 그 칸의 체크 표시가 작아졌다가 원래 크기로 돌아오는 연출을 재생한다
+    /// 오늘 처음 받는 순간에만 그 칸의 체크 표시가 크게 부풀었다가 원래 크기로 돌아오는 연출을 재생한다
     /// (<see cref="ItemSlotView.PlayClaimedPopAnimation"/>). 이미 수령한 과거 일자는 연출 없이 체크만 표시한다.
     /// 외형은 <c>Assets/Art/UI/Attendance</c>의 전용 아트를 쓴다 — 게시판 배경 <c>attendance_board</c>(상단 리본이
     /// 제목 역할), 사다리 칸 슬롯 프레임 <c>attendance_item_slot</c>, 수령 표시 <c>check</c>.
@@ -487,7 +487,7 @@ namespace TaskbarHero.Client.UI
                 UpdateClaimButton();
                 MailNotifier.Refresh(); // 보상이 메일로 발급됐으므로 미수령 메일 레드닷을 즉시 갱신
 
-                // 오늘 칸에 획득 연출(축소→확대)을 재생하고, 끝난 뒤에 안내 모달을 띄운다.
+                // 오늘 칸에 획득 연출(크게 확대→원래 크기)을 재생하고, 끝난 뒤에 안내 모달을 띄운다.
                 var cell = data != null ? FindCell(data.day) : null;
                 if (cell != null && cell.slotView != null)
                 {
