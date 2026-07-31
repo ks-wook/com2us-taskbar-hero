@@ -91,7 +91,9 @@ public sealed class StageService : IStageService
     /// 스테이지 클리어를 처리한다. 마스터 로드·스테이지·보상 정의를 확인하고, 서버 권위로 보상을
     /// 산출한다(골드·경험치는 고정, 드롭은 등급 확률로 추첨). 이어서 리포지토리 트랜잭션으로
     /// 진입 스테이지 재검증 → 골드·경험치 지급 → 전리품 적재 → 진행도 갱신을 원자적으로 수행하고,
-    /// 결과 상태를 에러 코드로 매핑해(미진입·용량초과 등) 클리어 응답을 반환한다.
+    /// 결과 상태를 에러 코드로 매핑해(미진입 등) 클리어 응답을 반환한다.
+    /// 인벤토리가 가득 차 전리품을 적재할 수 없으면 실패로 처리하지 않고 전리품만 폐기해
+    /// 골드·경험치만 지급한다(응답 rewards.items 비움).
     /// </summary>
     public async Task<SaveResult> ClearAsync(long userId, int act, int difficulty, int stage)
     {
@@ -129,14 +131,19 @@ public sealed class StageService : IStageService
                 return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
             case ClearStatus.NotEntered:
                 return new SaveResult(ErrorCode.StageNotEntered, string.Empty, null);
-            case ClearStatus.InventoryFull:
-                return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
         }
 
+        // 전리품은 실제로 적재된 경우에만 보상 목록에 담는다. 인벤토리가 가득 차 폐기됐으면
+        // 클리어를 거부하지 않고(기획서 6.3) 골드·경험치만 지급하므로 items는 비운다.
         var items = new List<RewardItemDto>();
-        if (dropped is not null)
+        if (dropped is not null && outcome.LootStored)
         {
             items.Add(new RewardItemDto { itemCode = dropped.ItemCode, quantity = dropped.Quantity });
+        }
+
+        if (dropped is not null && !outcome.LootStored)
+        {
+            _logger.ZLogDebug($"전리품 폐기(인벤토리 가득): userId {userId:@UserId}, itemCode {dropped.ItemCode:@ItemCode}, quantity {dropped.Quantity:@Quantity}");
         }
 
         var data = new StageClearData

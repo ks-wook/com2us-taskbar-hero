@@ -15,7 +15,6 @@ public enum ClearStatus
     Ok,
     NoPlayer,      // game_player 없음(세이브 미생성)
     NotEntered,    // 현재 진입 스테이지와 요청 불일치
-    InventoryFull, // 전리품 적재 중 용량 초과
 }
 
 /// <summary>
@@ -38,6 +37,12 @@ public sealed record ClearOutcome(
     /// <summary>가방 변경분(5.0). 전리품 적재로 생긴·병합된 행이 담긴다(드롭이 없으면 비어 있다).</summary>
     public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
 
+    /// <summary>
+    /// 추첨된 전리품을 실제로 적재했는지 여부. 드롭이 없었거나 인벤토리 용량이 부족해 폐기한 경우 false다
+    /// (용량 부족은 클리어를 거부하지 않고 골드·경험치만 지급한다 — stage-battle 기획서 6.3).
+    /// </summary>
+    public bool LootStored { get; init; }
+
     public static ClearOutcome Fail(ClearStatus status)
         => new(status, new List<CharacterProgressDto>(), 0, 0, 0, 1.0m, 1.0m, 0, 0, 0, 0);
 }
@@ -53,6 +58,7 @@ public interface IStageRepository
     /// 클리어를 한 트랜잭션으로 적용한다: 진입 스테이지 재검증 → 활성 획득량 버프 배율 판정 →
     /// 골드/경험치 지급·전리품 적재 → 진행도 갱신. baseGold·baseExp는 마스터의 기본 보상이며 배율은 이 안에서 곱한다.
     /// 경험치→레벨 계산은 주입된 levelUp 델리게이트(현재 level·exp·배율 적용된 지급 경험치 → 지급 후 상태)로 처리한다.
+    /// 인벤토리 용량이 부족하면 전리품만 폐기하고(<see cref="ClearOutcome.LootStored"/>=false) 클리어는 성공시킨다.
     /// </summary>
     Task<ClearOutcome> ApplyClearAsync(
         long userId,
@@ -148,7 +154,7 @@ public sealed class StageRepository : IStageRepository
 
     /// <summary>
     /// 클리어 판정·보상 지급·진행도 전진을 단일 커넥션의 단일 트랜잭션으로 적용한다.
-    /// 검증 실패(NoPlayer·NotEntered·InventoryFull)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// 검증 실패(NoPlayer·NotEntered)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
     /// </summary>
     /// <remarks>
     /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 보상만 들어가고 진행도가 안 오르는 부분 반영을 막는다):
@@ -157,7 +163,8 @@ public sealed class StageRepository : IStageRepository
     ///    <b>지급과 같은 트랜잭션에서 판정</b>해 배율 판정과 지급이 갈라지지 않게 한다(소모품/버프 기획서 6.2)</para>
     /// <para>3) player_item(재화 행) upsert — 클리어 보상 골드 적립, 갱신 후 잔액 산출</para>
     /// <para>4) player_character SELECT + 캐릭터별 UPDATE — <b>파티에 편성된(slot≠0)</b> 캐릭터에만 동일 경험치 지급 후 levelUp 델리게이트로 레벨 재계산</para>
-    /// <para>5) player_item 전리품 적재 — 스택 가능하면 기존 스택 병합, 아니면 빈 칸에 INSERT(용량 초과 → InventoryFull)</para>
+    /// <para>5) player_item 전리품 적재 — 스택 가능하면 기존 스택 병합, 아니면 빈 칸에 INSERT
+    ///    (용량 초과면 롤백하지 않고 전리품만 폐기 → LootStored=false, 골드·경험치·진행도는 그대로 반영)</para>
     /// <para>6) game_player 진행도 UPDATE — 프런티어 클리어면 max_stage_cleared 갱신 + 다음 스테이지로 전진, 재파밍이면 updated_at만 갱신</para>
     /// ⚠️ 원자성은 보장하지만 game_player 행에 잠금(FOR UPDATE 등)을 걸지 않으므로, 동일 userId의 동시 요청은
     ///    1)의 검증을 함께 통과할 수 있다(중복 전리품 지급·골드/경험치 lost update·슬롯 유니크 충돌). 백로그 과제.
@@ -245,16 +252,14 @@ public sealed class StageRepository : IStageRepository
                 });
             }
 
-            // 5) 전리품 적재(있으면). 용량 초과 시 롤백. 적재 결과는 가방 변경분(5.0)에 담긴다.
+            // 5) 전리품 적재(있으면). 적재 결과는 가방 변경분(5.0)에 담긴다.
+            //    용량이 부족하면 클리어를 거부하지 않고 전리품만 폐기한다(골드·경험치는 그대로 지급, 기획서 6.3).
+            //    적재 실패는 빈 칸 판정 단계에서 결정되므로 이 시점까지 player_item에 쓰기가 없다(부분 반영 없음).
             var delta = new InventoryDeltaDto();
+            bool lootStored = false;
             if (dropped is not null)
             {
-                var stored = await StoreDroppedItemAsync(db, transaction, userId, dropped, capacity, nowUnix, delta);
-                if (!stored)
-                {
-                    await transaction.RollbackAsync();
-                    return ClearOutcome.Fail(ClearStatus.InventoryFull);
-                }
+                lootStored = await StoreDroppedItemAsync(db, transaction, userId, dropped, capacity, nowUnix, delta);
             }
 
             // 6) 진행도 갱신: 프런티어 클리어면 다음 스테이지로 전진 + max 갱신, 재파밍이면 유지.
@@ -299,6 +304,7 @@ public sealed class StageRepository : IStageRepository
                 newAct, newDiff, newStage, newMax)
             {
                 Delta = delta,
+                LootStored = lootStored,
             };
         }
         catch
