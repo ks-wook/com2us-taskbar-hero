@@ -11,6 +11,7 @@
 - [3. 요구사항](#3-요구사항)
 - [4. 데이터 모델](#4-데이터-모델)
 - [5. API 명세](#5-api-명세)
+  - [5.0 공통 규약 — 인벤토리 변경분(`inventoryDelta`)](#50-공통-규약--인벤토리-변경분inventorydelta)
   - [5.1 장착 — `POST /api/game/inventory/equip`](#51-장착--post-apigameinventoryequip)
   - [5.2 장착 해제 — `POST /api/game/inventory/unequip`](#52-장착-해제--post-apigameinventoryunequip)
   - [5.3 강화 — `POST /api/game/inventory/enhance`](#53-강화--post-apigameinventoryenhance)
@@ -54,6 +55,7 @@
   - **합성(combine)**: 같은 등급의 아이템 여러 개를 소모해 **한 등급 높은** 아이템을 만든다(`cube_master.combine_grade_up`·`combine_count`). **슬롯·클래스는 서로 달라도 된다.**
   - **분해(dismantle)**: 아이템을 분해해 **골드로 전환**한다(`cube_master.gold_per_scrap`).
   - **제작(craft)**: 재료를 소모해 지정 아이템을 만든다(레시피 기반).
+  - **성장(`cube_level`)**: 합성·분해·제작으로 얻은 `cube_exp`가 `cube_master.required_exp(cube_level)` 이상이면 레벨업하고 초과분은 이월한다(**최대 5레벨**). 레벨은 분해 골드 계수(`gold_per_scrap`)와 제작 요구 레벨(`req_cube_level`) 게이팅에 작용한다(합성 소모 개수는 현재 전 레벨 3 고정).
 
 ## 3. 요구사항
 
@@ -67,10 +69,11 @@
 - **서버 권위**: 수량·등급·강화 단계·개봉 결과는 서버가 마스터 데이터로 계산·검증한다. 클라이언트가 보낸 결과값은 신뢰하지 않는다.
 - **원자성**: "재화 차감 + 아이템 증감(+장비/큐브 상태 변경)"은 하나의 `user_id` 단위 트랜잭션으로 처리한다. 중도 실패 시 전체 롤백하여 재화만 빠지거나 아이템만 생기는 상태를 막는다.
 - **동시성/멱등성**: 단일 세션 정책([계정/로그인 기획서](account-login-기획서.md))으로 경합은 제한적이나, 대상 행(`player_item_id`/`user_id`)에 잠금을 걸어 같은 아이템에 대한 중복 강화·중복 소모를 막는다. 개별 액션은 서버가 대상 상태를 확인 후 반영하므로 동일 요청 재전송 시 이미 소모/장착된 상태면 해당 에러 코드로 거부된다.
+- **쓰기는 즉시 반영, 읽기는 캐시**: 모든 액션은 그 요청의 트랜잭션에서 MySQL에 즉시 커밋하며, 배치 변경(`move`)을 포함해 **지연 쓰기(write-behind)를 두지 않는다**(판단 근거는 5.5). 반면 가방 조회는 Redis write-through 캐시로 받는다(6.5) — 정본은 항상 MySQL이고 캐시는 파생 데이터다.
 
 ## 4. 데이터 모델
 
-본 시스템은 [세이브 데이터 기획서](save-data-기획서.md) 3장의 기존 테이블을 사용하며, **새 영속 테이블을 요구하지 않는다.** 다만 인벤토리 용량 확장(5.4)을 위해 `game_player`에 컬럼 1개(`inventory_capacity`)를 추가한다. 아래는 본 도메인 관점에서 각 테이블의 역할과 이 문서에서 확정/제안하는 세부 규칙이다.
+본 시스템은 [세이브 데이터 기획서](save-data-기획서.md) 3장의 기존 테이블을 사용하며, **전용 영속 테이블을 두지 않는다.** 인벤토리 용량 확장(5.4)에 쓰는 `game_player.inventory_capacity`까지 포함해 저장 구조는 세이브 데이터 기획서 ERD에 반영되어 있다. 아래는 본 도메인 관점에서 각 테이블의 역할과 세부 규칙이다.
 
 | 테이블 | 역할 | 참조 마스터 |
 |---|---|---|
@@ -95,15 +98,17 @@
 
 **공유 enum / DTO (TaskbarHero.Common)**
 - `item_type`(1:장비 2:재료 3:재화 4:소모품), `reward_type`(1:골드 2:아이템 3:재료), `equip_slot` 등 분류 코드는 [마스터 데이터 기획서](master-data/master-data-기획서.md) 5장 공통 규칙에 따라 `TaskbarHero.Common`에 enum으로 고정한다(값 변경 금지).
-- 액션 결과 DTO(장착 결과·강화 결과·큐브 결과 등, 5장 응답 `data` 구조)는 `TaskbarHero.Common`에 공유 DTO로 두는 것을 **제안**한다. 구체 필드는 5장 응답 스키마를 따르며, 클라이언트 UI 갱신에 사용한다.
+- 액션 결과 DTO(장착 결과·강화 결과·큐브 결과 등, 5장 응답 `data` 구조)는 `TaskbarHero.Common`에 공유 DTO로 둔다. 구체 필드는 5장 응답 스키마를 따르며, 클라이언트 UI 갱신에 사용한다.
 
-**확정 필드 — 세이브 데이터 기획서 ERD 반영 필요:**
-- **인벤토리 용량(`game_player.inventory_capacity`, int)**: 플레이어별 인벤토리 최대 슬롯 수. 기본값에서 시작해 **골드 소모로 확장**한다(5.4). 확장분이 플레이어마다 달라지므로 상수가 아닌 플레이어 단위 컬럼으로 저장한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`로 반영 완료.
+**인벤토리 용량 (`game_player.inventory_capacity`, int)**
+- 플레이어별 인벤토리 최대 칸 수. **기본 100**에서 시작해 골드 소모로 1칸씩 확장한다(5.4). 확장분이 플레이어마다 달라지므로 상수가 아닌 플레이어 단위 컬럼으로 저장한다.
+- 용량 집계 기준은 **점유 칸 수**(= `slot`이 NULL이 아닌 `player_item` 행 수)다. 스택 행은 `quantity`와 무관하게 1칸을 차지하고, 재화 행과 장착 중인 장비는 `slot`이 NULL이라 집계에서 빠진다.
 
 ## 5. API 명세
 
 **API 목록**
 
+- [5.0 공통 규약 — 인벤토리 변경분(`inventoryDelta`)](#50-공통-규약--인벤토리-변경분inventorydelta)
 - [5.1 장착 — `POST /api/game/inventory/equip`](#51-장착--post-apigameinventoryequip)
 - [5.2 장착 해제 — `POST /api/game/inventory/unequip`](#52-장착-해제--post-apigameinventoryunequip)
 - [5.3 강화 — `POST /api/game/inventory/enhance`](#53-강화--post-apigameinventoryenhance)
@@ -120,6 +125,29 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 > 이 액션 엔드포인트들은 **RNG·비용을 수반하는 서버 권위 연산**이며, 각 액션이 자기 변경분을 그 요청 트랜잭션에서 직접 저장한다(별도의 일괄 저장 API는 없음, [세이브 데이터 기획서](save-data-기획서.md) 4장). 예를 들어 큐브 합성 결과는 클라이언트가 보고하는 것이 아니라 서버가 산출해 반영한다.
 
+### 5.0 공통 규약 — 인벤토리 변경분(`inventoryDelta`)
+
+**가방을 바꾸는 모든 액션은 그 변경분을 응답에 담는다. 클라이언트는 응답만으로 가방 캐시를 갱신하며, 액션 뒤에 `/api/game/load`나 `/api/game/inventory/list`를 다시 부르지 않는다(확정).**
+
+서버는 트랜잭션 안에서 이미 어떤 행이 생기고 사라지고 바뀌었는지 알고 있으므로, 이 블록을 채우는 데 추가 조회 비용이 들지 않는다. 반대로 클라이언트가 전량을 재조회하면 액션 1회마다 **코어 스냅샷 + 가방 전 페이지**를 다시 읽게 되어, 액션 자체보다 훨씬 비싼 읽기가 따라붙는다.
+
+```json
+"inventoryDelta": {
+  "upserted": [ { "itemId": 6100, "slot": 23, "itemCode": 30120, "quantity": 1, "enhanceLevel": 0 } ],
+  "removed":  [ 4801, 4802, 4803 ]
+}
+```
+
+| 필드 | 의미 |
+|---|---|
+| `upserted` | 생기거나 바뀐 가방 행의 **최종 상태 전체**. 항목 구조는 가방 페이지 조회의 `InventoryItemDto`와 동일(`itemId`·`slot`·`itemCode`·`quantity`·`enhanceLevel`)하므로 공유 DTO를 그대로 재사용한다 |
+| `removed` | 사라진 행의 `itemId` 목록(전량 소모·분해·합성 입력·거래 등록 등) |
+
+- **적용 순서는 `removed` → `upserted`** 다. 클라이언트는 `itemId`를 키로 지우고 덮어쓰기만 하면 되며(upsert), 같은 응답을 두 번 적용해도 결과가 같다(멱등).
+- **추가/수정을 구분하지 않는다.** 새 행인지 기존 행의 수량·칸 변경인지는 클라이언트가 알 필요가 없다.
+- **재화는 이 블록에 넣지 않는다.** 기존 `balance`(변경 후 잔액) 필드를 그대로 쓴다.
+- **장착 상태 변경은 이 블록에 넣지 않는다.** 각 액션의 `equipped`/`unequipped` 필드가 담당한다(5.1·5.2).
+- 가방이 바뀌지 않는 액션은 이 블록을 생략한다.
 ### 5.1 장착 — `POST /api/game/inventory/equip`
 
 지정 캐릭터에게 아이템을 장착한다. 장착 슬롯은 아이템의 `item_master.equip_slot`에서 파생하며, 서버는 `player_item_equipped`에 대상 아이템의 장착 행(`equipped_character_id`/`equipped_slot`)을 INSERT한다. 그 캐릭터의 같은 슬롯에 이미 장착된 장비가 있으면 그 장착 행을 DELETE해 스왑한다. 장비의 **클래스 제한**(`item_master.class_req`, `0`은 전 클래스 공용)이 **대상 캐릭터의 직업**(`player_character.class_code`, 기사/레인저/마법사/슬레이어)과 일치해야 하고, 그 캐릭터 `level`이 **요구 레벨**(`item_master.level_req`, **5레벨 단위**, `0`은 제한 없음) 이상이어야 하며, 어느 하나라도 위반하면 `ItemNotEquippable(4003)`로 거부한다.
@@ -151,7 +179,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - `equipped.slot`·`unequipped.slot`: **장착 슬롯**(`equip_slot_master`)이다. 가방 칸이 아니다.
 - `unequipped`: 스왑으로 미장착 상태로 되돌아온 기존 장비(없으면 `null`).
 - `unequippedBagSlot`: 그 기존 장비가 되돌아간 **가방 칸**(스왑이 없으면 `-1`). 장착한 아이템이 비운 칸을 그대로 물려받는다.
-- 클라이언트는 장착한 아이템(`equipped.itemId`)을 가방 목록에서 제거하고, `unequipped`가 있으면 `unequippedBagSlot` 칸에 그린다.
+- 클라이언트는 장착한 아이템(`equipped.itemId`)을 가방 목록에서 제거하고, `unequipped`가 있으면 `unequippedBagSlot` 칸에 그린다. 밀려난 장비의 아이템 코드·강화 단계는 클라이언트가 이미 장착 정보로 갖고 있으므로 **이 응답만으로 가방과 장비 슬롯을 모두 갱신할 수 있다 — 재조회하지 않는다**(5.0).
 - 오류: `ItemNotFound(4001)`(인벤토리에 없음), `ItemNotEquippable(4003)`(장비가 아니거나 슬롯·클래스·레벨 부적합), `ItemEquipped(4007)`(다른 캐릭터가 이미 장착 중), `InvalidCharacterId(2006)`(잘못된 `characterId`), `InventoryFull(4002)`(스왑 장비를 되돌릴 칸이 없는 예외 상황 — 칸을 반납하지 못한 경우에만 발생).
 
 ### 5.2 장착 해제 — `POST /api/game/inventory/unequip`
@@ -172,7 +200,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 { "success": true, "errorCode": 0, "message": "Unequipped", "data": { "characterId": 1, "slot": 1, "itemId": 5001, "bagSlot": 7 } }
 ```
 
-- `slot`: 비운 **장착 슬롯**. `bagSlot`: 장비가 되돌아간 **가방 칸**(0-based). 클라이언트는 이 칸에 아이템을 그린다.
+- `slot`: 비운 **장착 슬롯**. `bagSlot`: 장비가 되돌아간 **가방 칸**(0-based). 클라이언트는 이 칸에 아이템을 그린다(아이템 코드·강화 단계는 장착 정보로 이미 알고 있다). **재조회하지 않는다**(5.0).
 - 해당 캐릭터의 슬롯이 비어 있으면 `ItemNotFound(4001)`, 잘못된 `characterId`는 `InvalidCharacterId(2006)`, 가방에 빈 칸이 없으면 `InventoryFull(4002)`.
 
 ### 5.3 강화 — `POST /api/game/inventory/enhance`
@@ -210,12 +238,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ![인벤토리 용량 확장 화면 — 골드로 최대 슬롯 수를 늘리는 UI](../images/inventory-item-cube-인벤토리_확장.png)
 
-**Request** — 추가 데이터 없이 인증 정보만 보낸다(1칸 확장 고정).
+**Request** — 추가 데이터 없이 인증 정보만 보낸다(1칸 확장 고정, 수량 지정 필드 없음).
 ```json
 { "userId": 1, "token": "..." }
 ```
-
-> 초기 스펙에 있던 `count`(다단계 확장) 필드는 "**1회 1칸 고정**" 결정으로 제거했다.
 
 **Response (성공, 200 OK)**
 ```json
@@ -232,7 +258,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 ```
 
 - 트랜잭션: 비용 골드 차감 → `inventory_capacity += 1`. 부분 실패 시 전체 롤백.
-- `inventoryCapacity`는 확장 후 최종 용량, `cost`는 이번에 차감된 골드다.
+- `inventoryCapacity`는 확장 후 최종 용량, `cost`는 이번에 차감된 골드다. 가방 행은 바뀌지 않으므로 `inventoryDelta`가 없다 — 클라이언트는 용량과 잔액만 갱신하고 **재조회하지 않는다**(5.0).
 - 오류: `InsufficientCurrency(4005)`(골드 부족), `InventoryCapacityMax(4008)`(이미 상한에 도달해 더 이상 확장 불가).
 
 ### 5.5 인벤토리 배치 변경(이동/교환) — `POST /api/game/inventory/move`
@@ -263,6 +289,14 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - 트랜잭션: 두 행의 `slot` 갱신을 하나의 트랜잭션으로 처리해 `(user_id, slot)` 유니크 위반이 생기지 않게 한다.
 - 오류: `ItemNotFound(4001)`(대상 아이템이 인벤토리에 없음), `InvalidInventorySlot(4009)`(`toSlot`이 용량 범위 밖이거나 잘못된 값).
 
+**드래그 1회 = 요청 1회로 즉시 반영한다(확정).** 쓰기 요청을 줄이려는 두 대안 — 서버 Redis 배치 캐시(지연 쓰기)와 클라이언트 일괄 커밋(창고를 닫을 때 변경분 전송) — 은 검토 후 **모두 채택하지 않는다.**
+
+- **병목이 아니다.** 드래그는 사람 손 속도라 계정당 초당 1~2건이고, `(user_id, slot)` 유니크 인덱스를 타는 `UPDATE` 1~3개짜리 트랜잭션이다. 측정된 병목 없이 계층을 얹을 이유가 없다.
+- **지연 반영은 `slot`의 writer를 둘로 만든다.** 전리품 적재·메일 첨부 수령·큐브·거래소·장착 해제가 모두 "가장 작은 빈 칸"을 계산하므로, 미반영 배치가 있으면 낡은 점유 상태 위에서 칸을 잡는다. 이를 막으려면 선행 flush·계정 락·방어 필터가 줄줄이 필요해져 복잡도가 이득을 넘는다.
+- **방치형 특성상 정리 중에도 전리품이 계속 들어온다.** 자동 전투를 돌린 채 가방을 정리하는 것이 기본 시나리오라, 클라이언트가 배치를 모아 두면 창고를 열어 둔 내내 서버 배치와 어긋난다. 전리품이 들어올 때마다 클라이언트가 자기 보류분과의 충돌을 재조정해야 하고, 창고를 닫는 순간 여러 아이템이 튀어 **정리한 배치가 흐트러져 보인다.** 즉시 반영은 불일치 구간이 왕복 1회뿐이라 이 문제가 없다.
+
+> 이는 **쓰기 경로**에 대한 결정이다. 가방 **조회**는 별도로 Redis write-through 캐시를 둔다(6.5) — 정본이 MySQL로 남으므로 위 문제들이 발생하지 않는다.
+
 ### 5.6 큐브 합성 — `POST /api/game/cube/combine`
 
 같은 등급의 아이템 여러 개를 소모해 한 등급 높은 아이템을 만든다(슬롯·클래스는 서로 달라도 된다).
@@ -283,12 +317,17 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "data": {
     "consumed": [4801, 4802, 4803],
     "result": { "itemId": 5300, "itemCode": 30120, "grade": 4 },
-    "cube": { "cubeLevel": 4, "cubeExp": 1350 }
+    "cube": { "cubeLevel": 4, "cubeExp": 1350 },
+    "inventoryDelta": {
+      "upserted": [ { "itemId": 5300, "slot": 12, "itemCode": 30120, "quantity": 1, "enhanceLevel": 0 } ],
+      "removed": [4801, 4802, 4803]
+    }
   }
 }
 ```
 
 - **입력/결과 규칙(확정·구현)**: 입력은 **모두 장비(item_type=1)이며 같은 등급**이어야 하고 **슬롯·클래스 제한(`class_req`)은 서로 달라도 된다**, 개수는 현재 큐브 레벨의 `combine_count`(현재 5레벨 모두 3)와 일치해야 한다. 결과는 **(입력 등급+1) 장비 하나를 서버가 무작위로 선정(슬롯·클래스 무관)**해 지급한다(입력 3개 삭제로 빈 칸이 생겨 항상 적재). 등급 5 입력은 상위 등급 후보가 없어 `CubeRecipeNotMet(4010)`. 큐브 경험치 `50 × 입력 등급`을 획득해 누적한다(레벨업 시 이월). 응답 `cube`는 갱신 후 큐브 상태.
+- `result`는 결과 아이템의 식별·표시 정보이고, **그 아이템이 실제로 놓인 가방 칸은 `inventoryDelta.upserted`가 알려준다**(5.0). 클라이언트는 이 응답만으로 입력 3개를 지우고 결과 1개를 그린다 — 재조회하지 않는다.
 - 오류: `ItemNotFound(4001)`(입력 일부 미보유/재화 행), `ItemEquipped(4007)`(입력 중 장착 중), `CubeRecipeNotMet(4010)`(등급 불일치·개수 불일치·최대 등급).
 
 ### 5.7 큐브 분해 — `POST /api/game/cube/dismantle`
@@ -310,7 +349,13 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "message": "Dismantled",
   "data": {
     "gold": 300,
-    "cubeExp": 60
+    "cubeExp": 60,
+    "cube": { "cubeLevel": 4, "cubeExp": 1410 },
+    "balance": [ { "currencyType": 1, "amount": 9880721 } ],
+    "inventoryDelta": {
+      "upserted": [ { "itemId": 4700, "slot": 3, "itemCode": 41001, "quantity": 2, "enhanceLevel": 0 } ],
+      "removed": [4712]
+    }
   }
 }
 ```
@@ -319,9 +364,12 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 |---|---|
 | `gold` | 이번 분해로 **획득한 골드**(서버 산출 합계) |
 | `cubeExp` | 이번 분해로 **획득한 큐브 경험치**(증가분) |
+| `cube` | 갱신 후 큐브 상태(레벨·누적 경험치) |
+| `balance` | 적립 후 재화 잔액 |
+| `inventoryDelta` | 수량이 줄어든 행(`upserted`)과 전량 분해로 사라진 행(`removed`) — 5.0 |
 
 - **산출 공식(확정·구현)**: 아이템당 골드 = `gold_per_scrap(현재 큐브 레벨) × 아이템 등급 × 개수`, 큐브 경험치 = `20 × 아이템 등급 × 개수`. 여러 아이템은 합산한다. `items[].count`는 장비(스택 1)는 1, 재료 스택은 보유 수량 이하. 장착 중 아이템은 `ItemEquipped(4007)`로 거부한다.
-- 소모된 아이템·재화 잔액·큐브 누적 상태는 응답에 담지 않는다. 클라이언트는 획득분만 표시하고, 최신 스냅샷이 필요하면 `POST /api/game/load`(장비·재화·큐브)와 `POST /api/game/inventory/list`(가방)로 재조회한다.
+- **클라이언트는 이 응답만으로 가방·재화·큐브 표시를 모두 갱신한다 — 재조회하지 않는다**(5.0).
 - 오류: `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)`.
 
 ### 5.8 큐브 제작 — `POST /api/game/cube/craft`
@@ -348,11 +396,17 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "data": {
     "consumed": [ { "itemCode": 41001, "quantity": 5 } ],
     "gained": { "items": [ { "itemCode": 30500, "quantity": 1 } ] },
-    "cube": { "cubeLevel": 5, "cubeExp": 20 }
+    "cube": { "cubeLevel": 5, "cubeExp": 20 },
+    "balance": [ { "currencyType": 1, "amount": 9870421 } ],
+    "inventoryDelta": {
+      "upserted": [ { "itemId": 6100, "slot": 23, "itemCode": 30500, "quantity": 1, "enhanceLevel": 0 } ],
+      "removed": [5501]
+    }
   }
 }
 ```
 
+- `consumed`·`gained`는 사람이 읽는 표시용(아이템 **코드**·수량)이고, 가방 반영은 `inventoryDelta`가 담당한다(행 식별자 `itemId`와 배치 `slot`을 포함). **클라이언트는 이 응답만으로 갱신하고 재조회하지 않는다**(5.0).
 - **규칙(확정·구현)**: `recipeCode`로 `cube_recipe`(결과 아이템·수량·요구 큐브 레벨·비용 골드)와 자식 `cube_recipe_ingredient`(소모 재료·수량)를 조회한다. 현재 큐브 레벨 ≥ `req_cube_level`, 골드 ≥ `cost_gold`, 재료 보유 ≥ 요구량을 모두 만족하면 골드·재료를 차감하고 결과 아이템을 지급한다(빈 칸 부족 시 `InventoryFull`). 큐브 경험치 `20`(고정)을 획득한다. 응답 `cube`는 갱신 후 큐브 상태.
 - 오류: `CubeRecipeNotMet(4010)`(없는 레시피·재료 부족), `CubeLevelInsufficient(4011)`(큐브 레벨 미달), `InsufficientCurrency(4005)`(비용 골드 부족), `InventoryFull(4002)`(결과 적재 용량 부족).
 
@@ -381,12 +435,17 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
     "rewards": [ { "grade": 4, "itemCode": 30105, "quantity": 1 } ],
     "gained": { "items": [ { "itemCode": 30105, "quantity": 1 } ] },
     "cost": { "currencyType": 1, "amount": 10000 },
-    "balance": [ { "currencyType": 1, "amount": 9890421 } ]
+    "balance": [ { "currencyType": 1, "amount": 9890421 } ],
+    "inventoryDelta": {
+      "upserted": [ { "itemId": 6200, "slot": 31, "itemCode": 30105, "quantity": 1, "enhanceLevel": 0 } ],
+      "removed": []
+    }
   }
 }
 ```
 
 - `rewards`: 추첨된 등급·아이템 **목록**(현재 단발이라 1개, 다연속 도입 시 `count`개). `gained`: 실제 인벤토리에 적재된 결과(동일 아이템은 스택 병합). `cost`: 이번에 차감된 골드 합계, `balance`: 차감 후 잔액.
+- 가방 반영은 `inventoryDelta`가 담당한다(스택 병합이면 기존 행이 `upserted`로 갱신된다). **재조회하지 않는다**(5.0).
 - 오류: `InsufficientCurrency(4005)`(골드 부족), `InvalidSaveData(2002)`(존재하지 않는 `boxCode`), 지급 결과가 인벤토리 용량을 초과하면 `InventoryFull(4002)`, 마스터 미로드 시 `MasterDataNotLoaded(10001)`.
 
 > 인증 오류(401), 마스터에 없는 코드 요청 등은 기존 미들웨어·`InvalidSaveData(2002)`/마스터 도메인 코드를 따른다.
@@ -407,7 +466,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 COMMIT → 변경된 상태를 응답 data로 반환
 ```
 
-- 4·5단계 결과는 전부 서버가 확정한 값이며, 클라이언트는 응답으로만 인벤토리를 갱신한다.
+- 4·5단계 결과는 전부 서버가 확정한 값이며, 클라이언트는 응답으로만 인벤토리를 갱신한다. 5단계에서 바뀐 가방 행은 **커밋 전에 이미 확정되어 있으므로 그대로 `inventoryDelta`로 내려보낸다**(5.0) — 응답을 만들려고 다시 조회하지 않는다.
 - 인벤토리를 바꿨다고 해서 별도의 변경 카운터·버전 값을 갱신하지 않는다. 가방 페이지 조회는 페이지 간 정합성을 검증하지 않으며, 클라이언트가 `itemId` 기준 병합으로 흡수한다([세이브 데이터 기획서](save-data-기획서.md) 2장·5.2).
 
 ### 6.2 장착 스왑 순서
@@ -485,6 +544,29 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 - **오픈 트리거가 골드 소모**이므로 서버가 비용 검증·차감으로 오픈을 통제한다(별도 오픈 기회 관리 불필요). 골드 차감과 아이템 지급은 하나의 트랜잭션이며, 인벤토리 용량 초과 등 실패 시 **골드 차감까지 전체 롤백**한다.
 - `count`는 계약에 미리 두었을 뿐 현재 로직은 `1`만 처리한다. 다연속(10연차) 도입 시 `count`>1 처리와 관련 정책을 확정한다(8장).
 
+### 6.5 가방 조회 캐시 (write-through)
+
+**대상**: `POST /api/game/inventory/list`(가방 페이지 조회, [세이브 데이터 기획서](save-data-기획서.md) 5.2).
+
+**배경**: 클라이언트는 **창고를 열 때마다** 서버에서 가방을 다시 받는다 — 자동 전투로 전리품이 계속 적재되므로 로컬 캐시를 신뢰하지 않고 서버 상태를 확인한다. 조회 한 번은 `(user_id, slot)` 인덱스 범위 스캔이라 가볍지만, 동시 접속이 늘면 이 읽기가 DB 커넥션을 점유한다. 계정별 가방 스냅샷을 Redis에 두어 이 읽기를 흡수한다.
+
+> **정합 원칙 — "캐시는 MySQL과 같거나, 없다."** 정본은 항상 MySQL이고 캐시는 파생 데이터다. 부분 갱신 상태를 남기지 않으며, 갱신에 실패하면 키를 삭제해 다음 조회가 MySQL에서 재적재하게 한다([거래소 기획서](trade-기획서.md) 7.3·7.5와 같은 원칙).
+
+| 키 | 구조 | 내용 | TTL |
+|---|---|---|---|
+| `inv:bag:{userId}` | String(직렬화) | 그 계정의 가방 **전량** 스냅샷(`slot` 오름차순 `InventoryItemDto` 목록) | 세션 길이 수준(오염 안전망) |
+
+- **전량만 담는다(부분 적재 금지).** 페이지 단위로 채우면 잘린 목록을 완전한 것처럼 응답하게 된다. 페이징(`cursor`·`limit`)과 `total`은 서버가 이 스냅샷에서 잘라 만든다. 용량 상한이 120칸이라 계정당 수 KB다.
+- **적재는 lazy**다. 캐시 미스면 MySQL에서 전량을 읽어 응답하고 그 결과로 캐시를 채운다.
+- **갱신은 write-through**다. 가방을 바꾸는 액션은 **트랜잭션 커밋 후** 캐시에 반영하며, 이때 5.0의 `inventoryDelta`를 그대로 적용하므로 **추가 DB 조회가 없다** — 델타를 만드는 김에 캐시도 갱신한다.
+  - **write-invalidate(변경 시 삭제)는 쓰지 않는다.** 자동 전투 전리품이 계속 들어와 캐시가 거의 항상 무효가 되어 적중률이 0에 수렴한다.
+- **삭제(무효화)**: 커밋 후 캐시 적용이 실패했거나, 델타를 만들지 않는 경로가 가방을 바꿨으면 키를 **삭제**한다. 반쯤 갱신된 스냅샷을 남기지 않는다.
+- **Redis 장애**: 예외를 밖으로 던지지 않는다. 조회는 MySQL 직접 경로로 폴백하고(느려질 뿐 동작한다), 갱신 실패는 Warning 로그 후 키 삭제로 흡수한다.
+
+**갱신 주체** — 가방 행(`player_item`의 `row_type=1`)을 바꾸는 모든 경로다: 장착·해제(5.1·5.2), 배치 이동(5.5), 큐브 합성/분해/제작(5.6~5.8), 상자 개봉(5.9), 소모품 사용, 스테이지 전리품 적재, 메일 첨부 수령, 거래소 등록/구매/취소. 새 기능이 `player_item`을 바꾸면 이 목록에 추가한다. 용량 확장(5.4)은 가방 행을 바꾸지 않으므로 스냅샷에 영향이 없다.
+
+**하지 않는 것** — 쓰기를 Redis에 지연 반영하지 않는다(write-behind 미도입, 판단 근거는 5.5). 자산의 정합성·원자성·내구성은 계속 MySQL 트랜잭션이 보장한다.
+
 ## 7. 에러 코드
 
 `TaskbarHero.Common`의 `ErrorCode`에 추가 제안. 도메인 4.4(인벤토리/아이템/큐브)는 **4000번대**를 사용한다([통합 정의](../공통/error-code-정의.md) 블록 규약, 도메인 4.N → N000). 추가 시 통합 문서도 함께 갱신한다.
@@ -504,24 +586,19 @@ COMMIT → { boxCode, rewards, gained, cost, balance }
 | CubeLevelInsufficient | 4011 | 큐브 레벨이 해당 연산 요구치 미만 |
 
 - `4001~4009`는 인벤토리/아이템, `4010~4019`는 큐브, `4020~4029`는 **소모품/버프**([소모품/버프 기획서](consumable-buff-기획서.md) 7장)에 할당한다.
-- `4012`(구 `InventoryRevisionChanged`)는 가방 페이지 조회의 정합성 검증 장치를 제거하며 **폐기**했다. 결번으로 두고 재사용하지 않는다.
+- `4012`는 **결번**이다. 재사용하지 않는다(가방 페이지 조회는 정합성 검증 장치를 두지 않는다).
 - **가방 페이지 조회**([세이브 데이터 기획서](save-data-기획서.md#52-인벤토리-페이지-조회--post-apigameinventorylist) 5.2)는 전용 에러 코드를 쓰지 않고 세이브 없음(`SaveNotFound(2001)`)만 반환한다.
 - `InsufficientCurrency(4005)`는 재화 부족을 처음 다루는 도메인으로서 본 블록에 정의한다. 재화 부족이 필요한 다른 도메인(예: 성장의 룬 업그레이드)은 이 코드를 **재정의하지 않고 그대로 재사용**한다(코드 값은 계약이므로 이동 금지).
 - **랜덤 상자 열기(5.9)**는 신규 에러 코드를 추가하지 않고 `InsufficientCurrency(4005)`(골드 부족)·`InvalidSaveData(2002)`(잘못된 `boxCode`)·`InventoryFull(4002)`·`MasterDataNotLoaded(10001)`를 재사용한다.
 
 ## 8. 미결 사항 / TODO
 
-- **인벤토리 용량 정책 (확정·구현)**: 플레이어 단위 컬럼(`game_player.inventory_capacity`)에 저장하고 **골드 소모로 확장**한다(API 5.4). 용량은 **점유 slot(=`player_item` 행) 수** 기준이며, 스택은 수량과 무관하게 1 slot을 차지한다. → [세이브 데이터 기획서](save-data-기획서.md) `game_player.inventory_capacity`에 반영 완료. 세부 확정: **기본 용량 100**, 확장은 **1회당 1칸 고정**, 여는 칸별 비용·상한은 `inventory_expand_master`(step·gold_cost)로 정의(현재 20칸·칸당 10,000골드 정액 → 상한 120, 학습용 임시값). 비용 곡선은 값만 조정하면 누진 전환 가능.
-- **강화 성공 확률**: 현행은 비용 지불 시 확정 상승으로 가정. 실패/하락/파괴 확률 도입 시 `enhance_master`에 확률 필드 추가 및 본 문서 5.3 갱신.
-- **큐브 합성/분해/제작 상세 규칙 (확정·구현)**: 합성 소모 개수(`combine_count`)·등급 상승 규칙·분해 골드 계수와 제작 레시피(`cube_recipe`/`cube_recipe_ingredient`)는 **확정**([마스터 데이터 값](master-data/master-data-값.md) §8). 미결이던 세부도 아래로 **확정·구현**했다:
-  - **합성 결과 아이템 선정**: **(입력 등급+1) 장비 중 서버 무작위 1개**(슬롯·클래스 무관, 확률 개입 없음, 균등). 입력은 같은 등급이면 되고 **슬롯·클래스는 서로 달라도 된다**. 등급 5는 상위 없음 → `CubeRecipeNotMet`.
-  - **큐브 경험치 획득량**: 합성 `50 × 입력 등급`, 분해 `20 × 등급 × 개수`, 제작 `20`(고정). 학습용 임시값(스키마 불변, 값만 조정).
-  - **`cube_level` 효과·성장**: `cube_exp` 누적이 `cube_master.required_exp(cube_level)` 이상이면 레벨업(초과분 이월, 최대 5). 레벨은 분해 골드 계수(`gold_per_scrap`)와 제작 요구 레벨(`req_cube_level`) 게이팅에 작용한다(합성 개수는 현재 전 레벨 3 고정).
-- **장비 클래스 제한 (확정)**: 장비는 착용 가능한 **클래스 제한**을 가진다. 현재 클래스는 **기사·레인저·마법사·슬레이어 4종으로 확정**([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.1 `class_master`)이며, **추후 확인 후 클래스를 더 추가할 예정**이다. 각 장비가 어느 클래스용인지는 `item_master.class_req`로 정의한다(`0`이면 전 클래스 공용, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.3에 반영 완료). 장착(5.1) 시 서버가 `class_req`(≠0)을 **대상 캐릭터 클래스**(`player_character.class_code`)와 대조해 불일치면 `ItemNotEquippable(4003)`로 거부한다.
-- **다연속 오픈(10연차) — 예정**: 요청 `count`와 응답 `rewards` 배열은 **다연속 확장을 위해 계약에 미리 반영**했다(5.9). 현재 서버 로직은 `count`=1(단발)만 처리하며, 추후 10연차 등 다연속 오픈 로직을 구현할 때 `count`>1 처리(비용 `오픈 비용 × count`)와 묶음 할인·등급 보장(천장) 여부를 함께 확정한다.
-- **상자 오픈 비용·등급 확률·지급 후보 (`box_master` 계열)**: 구조는 **확정**됐다 — `box_master`(오픈 비용·재화) + 자식 `box_grade_weight`(등급별 가중치) + 자식 `box_item_pool`(등급 슬롯별 **지급 후보 화이트리스트**, 등급 내 선택은 균등, **소모품 포함**)([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.13). 남은 것은 **값**이다 — 상자 종류·오픈 비용·등급 가중치·후보 아이템 목록(소모품을 어느 등급 슬롯에 몇 개 넣을지 포함)·지급 수량 규칙은 [마스터 데이터 값](master-data/master-data-값.md) §12에서 확정한다.
-- **오픈 상자 종류의 노출 방식**: 어떤 상자(`box_code`)를 어디서(상점/특정 UI) 열 수 있는지, 상자별 해금 조건이 있는지.
-- **장비 레벨 제한 (확정)**: 장비는 착용 요구 레벨을 가지며, **레벨 단위는 5레벨(5의 배수)** 로 확정한다(예: 15, 40). `item_master.level_req`로 정의하고(`0`이면 제한 없음, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.3에 반영 완료), 장착(5.1) 시 **대상 캐릭터의 `level`**이 `level_req` 미만이면 `ItemNotEquippable(4003)`로 거부한다. 요구 레벨별 스탯 곡선 등 밸런스 수치는 아이템/직업 기획서에서 확정.
+- **장비 강화 도입 여부**: 5.3은 `enhance_master`(단계별 비용·배율) 값 미확정으로 **보류** 중이다([마스터 데이터 값](master-data/master-data-값.md) §7 미작성). 도입 시 실패/하락/파괴 확률을 둘지 함께 정하고(현행 기준안은 비용 지불 시 확정 상승) 확률 필드를 `enhance_master`에 추가한다.
+- **다연속 오픈(10연차)**: 요청 `count`와 응답 `rewards` 배열은 다연속 확장을 위해 계약에 미리 반영했으나(5.9), 현재 서버는 `count`=1만 처리한다. 구현 시 `count`>1 처리(비용 `오픈 비용 × count`)와 묶음 할인·등급 보장(천장) 여부를 함께 확정한다.
+- **상자 마스터 값 (`box_master` 계열)**: 구조는 확정됐다([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.13). 남은 것은 값 — 상자 종류·오픈 비용·등급 가중치·후보 아이템 목록(소모품을 어느 등급 슬롯에 몇 개 넣을지 포함)·지급 수량 규칙은 [마스터 데이터 값](master-data/master-data-값.md) §12에서 확정한다.
+- **상자 종류의 노출 방식**: 어떤 상자(`box_code`)를 어디서(상점/특정 UI) 열 수 있는지, 상자별 해금 조건이 있는지.
+- **직업 추가**: 현재 클래스는 기사·레인저·마법사·슬레이어 4종이다([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.1 `class_master`). 추후 확인 후 추가할 예정이며, 추가 시 각 장비의 `item_master.class_req` 배정을 함께 갱신한다.
+- **밸런스 수치**: 요구 레벨(`level_req`)별 장비 스탯 곡선, 큐브 경험치 획득량(합성 `50 × 등급` 등)·확장 비용(칸당 10,000골드 정액)은 **학습용 임시값**이다. 스키마 변경 없이 값만 조정한다.
 
 ## 9. 참고
 

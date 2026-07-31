@@ -466,7 +466,7 @@ erDiagram
 
 **`cube_recipe_ingredient`(제작 소모 재료, 자식)** — `(recipe_code, material_code)` 복합 PK, `quantity`. `material_code`는 `item_master`의 **재료 아이템(item_type=2)** 을 가리킨다.
 
-> 제작(craft)은 [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 5.8 기준 **보류(우선순위 낮음)** 이나 레시피 스키마·데이터는 미리 정의해 둔다. 큐브 합성/분해/제작 상세 규칙은 인벤토리/큐브 기획서에서 확정한다.
+> 제작(craft)의 상세 규칙은 [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 5.8에서 확정하며 **구현 완료**다. 본 절은 그 규칙이 참조하는 레시피 스키마·데이터를 정의한다.
 
 ### 5.12 `level_master` — 캐릭터 레벨
 

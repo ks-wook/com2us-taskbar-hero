@@ -180,14 +180,19 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
     "mailId": 7001,
     "gained": {
       "currencies": [ { "currencyType": 1, "amount": 5000 } ],
-      "items": []
+      "items": [ { "itemCode": 30105, "quantity": 1 } ]
     },
-    "balance": [ { "currencyType": 1, "amount": 9880421 } ]
+    "balance": [ { "currencyType": 1, "amount": 9880421 } ],
+    "inventoryDelta": {
+      "upserted": [ { "itemId": 6300, "slot": 41, "itemCode": 30105, "quantity": 1, "enhanceLevel": 0 } ],
+      "removed": []
+    }
   }
 }
 ```
 
 - `gained`는 서버가 지급한 첨부(재화·아이템)다. 메일은 `claimed=1`로 갱신된다.
+- `gained.items`는 표시용(아이템 **코드**·수량)이고, 가방 반영은 `inventoryDelta`가 담당한다(행 식별자 `itemId`·배치 `slot` 포함, 스택 병합이면 기존 행이 `upserted`로 갱신된다). **클라이언트는 이 응답만으로 가방·재화를 갱신하고 재조회하지 않는다**([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.0 공통 규약).
 - 오류: `MailNotFound(8001)`(메일 없음/타인 메일), `MailAlreadyClaimed(8002)`(이미 수령), `MailExpired(8003)`(만료), 첨부 아이템이 인벤토리 용량을 초과하면 `InventoryFull(4002)`.
 
 ### 5.3 일괄 수령 — `POST /api/game/mail/claim-all`
@@ -211,12 +216,17 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
       "currencies": [ { "currencyType": 1, "amount": 15000 } ],
       "items": [ { "itemCode": 41001, "quantity": 5 } ]
     },
-    "balance": [ { "currencyType": 1, "amount": 9895421 } ]
+    "balance": [ { "currencyType": 1, "amount": 9895421 } ],
+    "inventoryDelta": {
+      "upserted": [ { "itemId": 6301, "slot": 41, "itemCode": 41001, "quantity": 5, "enhanceLevel": 0 } ],
+      "removed": []
+    }
   }
 }
 ```
 
 - `gained`는 수령한 모든 메일 첨부의 합계다. 첨부 아이템 적재가 인벤토리 용량을 넘으면 **전체 롤백**하고 `InventoryFull(4002)`를 반환한다(부분 수령 없음, 확정). 수령 대상이 없으면 빈 `claimedMailIds`로 성공(200)한다.
+- `inventoryDelta`는 수령 전체를 합산한 **최종 가방 상태의 변경분**이다(메일별로 나누지 않는다). 단건 수령과 동일하게 클라이언트는 이 응답만으로 갱신하고 **재조회하지 않는다**([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.0).
 
 > 인증 오류(401) 등은 기존 미들웨어를 따른다. 읽음 처리는 목록 조회 시 서버가 수행하며(5.1), 삭제 전용 엔드포인트는 없다 — 메일은 발급 후 7일 보관 뒤 배치가 삭제한다(6.5).
 

@@ -214,19 +214,19 @@ CREATE TABLE player_cube (
 
 
 -- 소모품 사용으로 부여된 계정 획득량 버프. 버프 종류당 1행(경험치·골드 동시 활성 가능).
---   버프 시간은 벽시계로 흐른다(오프라인 중에도 소모). 그래서 만료 시각을 값으로 영속 저장한다 —
---   오프라인 정산은 이미 만료된 버프의 유효 구간(정산 구간과의 교집합)까지 소급 계산하므로
---   Redis TTL처럼 만료와 함께 근거가 사라지면 안 된다(소모품·버프 기획서 4.1·6.3).
---   활성 판정은 expires_at > now. 만료 행은 조회에서 걸러지므로 즉시 삭제하지 않고,
---   정리 배치가 오프라인 상한(12시간) + 여유를 지나서만 삭제한다(같은 문서 6.4).
+--   버프 시간은 벽시계로 흐른다(오프라인 중에도 소모). MySQL을 정본으로 두는 이유는 버프가
+--   아이템을 차감한 결과여서 유실 시 복구가 불가능하고, 배율 판정이 보상 지급 트랜잭션에
+--   포함되어야 하기 때문이다(소모품·버프 기획서 4.1). Redis TTL 단독 저장은 쓰지 않는다.
+--   배율은 스테이지 클리어 보상에만 적용하고 오프라인 정산에는 적용하지 않는다(같은 문서 6.3).
+--   활성 판정은 expires_at > now. 만료 행은 조회에서 걸러지므로 정리 배치가 여유를 두고 삭제한다(6.4).
 --   PK (user_id, buff_type)의 행 잠금이 같은 종류의 중복 사용 요청을 직렬화한다(분산 락 불필요).
 DROP TABLE IF EXISTS player_buff;
 CREATE TABLE player_buff (
     user_id    BIGINT       NOT NULL COMMENT '계정 user_id',
     buff_type  INT          NOT NULL COMMENT '버프 종류(1=경험치 획득량 2=골드 획득량, consumable_master.buff_type)',
     buff_value DECIMAL(5,3) NOT NULL COMMENT '획득량 배율(1.500=150%)',
-    started_at BIGINT       NOT NULL COMMENT '버프 시작 Unix ts(초). 소급 구간 하한',
-    expires_at BIGINT       NOT NULL COMMENT '버프 만료 Unix ts(초). 소급 구간 상한',
+    started_at BIGINT       NOT NULL COMMENT '버프 시작 Unix ts(초). UI 진행률 표시·사후 검증 근거',
+    expires_at BIGINT       NOT NULL COMMENT '버프 만료 Unix ts(초). 활성 판정·배율 적용 기준',
     PRIMARY KEY (user_id, buff_type),
     KEY idx_buff_expires (expires_at),
     CONSTRAINT fk_buff_player FOREIGN KEY (user_id)

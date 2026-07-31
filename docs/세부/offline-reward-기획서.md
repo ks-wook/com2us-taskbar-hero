@@ -56,7 +56,6 @@
 |---|---|---|
 | 입력(기준 시각) | `game_player.last_active_at` | 오프라인 시작점 |
 | 입력(파밍 기준) | `game_player.max_stage_cleared` / `stage`·`act`·`difficulty` | 산출율 결정 |
-| 입력(획득량 버프) | `player_buff`(`buff_type`·`buff_value`·`started_at`·`expires_at`) | 정산 구간과의 **교집합 시간에만** 배율 적용. **만료 행도 읽는다**([소모품/버프 기획서](consumable-buff-기획서.md) 6.3) |
 | 산출 근거(정적) | `stage_reward`(reward_gold/reward_exp), `monster_master` | 시간당 골드·경험치 산출량 |
 | 출력(지급) | `player_item`(재화 행 골드 증가, 계정), **파티에 편성된 캐릭터(`slot`≠0) 각각의 `player_character.exp`/`level`**(편성 캐릭터에 **동일 경험치** 지급, 미편성은 제외) | 정산 반영 |
 | 기준 시각 리셋 | `game_player.last_active_at = now` | 중복 정산 방지 |
@@ -164,16 +163,9 @@ stage         = 파밍 기준 스테이지(진행도 기반)
 goldPerSec    = stageGoldRate(stage)                 # 마스터 데이터에서 파생
 expPerSec     = stageExpRate(stage)
 
-# 획득량 버프(소모품 부스터) 소급 반영 — 정산 구간과 버프 구간의 교집합에만 배율 적용
-windowStart   = now - effective                       # cap 적용 후의 실제 정산 구간 시작(last_active_at 아님)
-weightedSec(type):
-    b = player_buff[user_id, type]                    # 만료 행도 조회한다(expires_at 필터 없음)
-    if b == null: return effective
-    bs = max(0, min(now, b.expires_at) - max(windowStart, b.started_at))   # 버프가 유효했던 초
-    return (effective - bs) + bs * b.buff_value
-
-gold          = floor(weightedSec(2:골드)   * goldPerSec * OFFLINE_EFFICIENCY)
-exp           = floor(weightedSec(1:경험치) * expPerSec  * OFFLINE_EFFICIENCY)
+# 소모품 부스터(획득량 버프)는 적용하지 않는다 — player_buff를 읽지 않는다
+gold          = floor(effective * goldPerSec * OFFLINE_EFFICIENCY)
+exp           = floor(effective * expPerSec  * OFFLINE_EFFICIENCY)
 # 아이템은 지급하지 않음 (골드·경험치만)
 
 # 트랜잭션 (user_id 단위)
@@ -187,9 +179,7 @@ return { elapsed, effective, gold, exp, characters[], ... }
 ```
 
 - `OFFLINE_CAP_SEC=43200`(12시간), `MIN_REWARD_SEC=600`(10분), `OFFLINE_EFFICIENCY=0.5`(50%)는 **확정**. `stageGoldRate/stageExpRate`(스테이지별 산출율)만 8장 미결이다.
-- **획득량 버프 소급 반영(확정)**: 버프 시간은 **벽시계로 흐르므로**(오프라인 중에도 소모) 재접속 시 이미 만료된 버프가 기본 경로다. 따라서 `player_buff`를 **활성 필터 없이** 읽어 정산 구간과의 **교집합 시간(`bs`)에만** 배율을 적용한다. 이 계산이 가능하도록 `player_buff`는 만료 후에도 상한 시간 + 여유만큼 보존된다([소모품/버프 기획서](consumable-buff-기획서.md) 4.1·6.3·6.4).
-- **`windowStart`는 `last_active_at`이 아니라 cap 적용 후 시각**이다. 12시간 상한에 걸린 경우 버려진 초과 구간의 버프까지 세면 지급이 과다해진다.
-- 예: `effective=43200`, 골드 버프가 정산 구간 초반 1800초 동안 유효(`buff_value=1.5`) → `weightedSec = (43200-1800) + 1800×1.5 = 44100`(골드 +2.08%).
+- **획득량 버프 미적용(확정)**: 소모품 부스터(경험치·골드)의 배율은 **스테이지 클리어 보상에만** 적용하고 오프라인 정산에는 적용하지 않는다. 정산은 이미 효율 50%·12시간 상한으로 조정된 소급 지급이며, 여기에 배율을 얹으면 "버프를 켜고 로그아웃"이 최적 플레이가 되어 부스터가 능동 플레이 대신 방치를 보상하게 된다([소모품/버프 기획서](consumable-buff-기획서.md) 6.3). 따라서 정산은 `player_buff`를 **읽지 않는다.**
 
 ### 6.2 재접속 시 순서 (권장)
 
@@ -293,5 +283,5 @@ namespace TaskbarHero.Common.Dto
 - [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) — 도메인 4.3(방치형 보상 정산)
 - [세이브 데이터 기획서](save-data-기획서.md) — `last_active_at` 기준 시각, 로드 응답 `offlineElapsedSec`
 - [마스터 데이터 기획서](master-data/master-data-기획서.md) — 스테이지·스테이지 보상·몬스터(산출 근거)
-- [소모품 아이템 / 계정 버프 기획서](consumable-buff-기획서.md) — 획득량 버프 소급 반영(구간 교집합)·`player_buff` 보존 하한
+- [소모품 아이템 / 계정 버프 기획서](consumable-buff-기획서.md) — 획득량 버프는 스테이지 클리어에만 적용(오프라인 정산 미적용)
 - [ErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약

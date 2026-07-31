@@ -117,6 +117,25 @@ namespace TaskbarHero.Common.Dto
         public ArrangePartyResultData data = new ArrangePartyResultData();
     }
 
+    /// <summary>접속 시각 갱신(heartbeat, update-last-active 응답 data). 서버가 현재 시각으로 갱신한
+    /// 기준 시각을 회신한다 — 이 값이 곧 접속이 끊겼을 때의 오프라인 정산 시작점이 된다.
+    /// 요청 body는 payload가 없어 공용 <see cref="AuthRequest"/>({ userId, token })를 그대로 쓴다.</summary>
+    [Serializable]
+    public class UpdateLastActiveResultData
+    {
+        public long lastActiveAt; // 서버가 갱신한 기준 시각(Unix ts, 초)
+    }
+
+    /// <summary>접속 시각 갱신 응답 { success, errorCode, message, data(UpdateLastActiveResultData) }.</summary>
+    [Serializable]
+    public class UpdateLastActiveResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public UpdateLastActiveResultData data = new UpdateLastActiveResultData();
+    }
+
     // ── load 스냅샷 DTO ──
 
     [Serializable]

@@ -51,7 +51,7 @@
 | `POST /api/game/party/arrange` | 파티 편성 저장(저장 후 파티 **전체 스냅샷**) | `{ members:[{ characterId, slot }] }`(1~3개) | `characters[]`(보유 전체, 자리 순) | `CannotRemoveLastCharacter(2008)`, `CharacterNotFound(2009)`, `PartySlotOccupied(2010)`, `InvalidCharacterId(2006)` |
 | `POST /api/game/update-last-active` | 접속 시각 갱신(heartbeat, 오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
 
-- **로드는 2단계**다. 크기가 고정된 데이터(플레이어·캐릭터·재화·장착 장비·스킬·룬·큐브)는 `load`가 한 번에 내려주고, 무한히 커질 수 있는 **가방 아이템만** `inventory/list`가 페이징한다. 접속 직후에는 `load`만 호출하고 가방은 창고 UI를 열 때 조회한다.
+- **로드는 2단계**다. 크기가 고정된 데이터(플레이어·캐릭터·재화·장착 장비·스킬·룬·큐브)는 `load`가 한 번에 내려주고, 무한히 커질 수 있는 **가방 아이템만** `inventory/list`가 페이징한다. 접속 직후에는 `load`만 호출하고, 가방은 **창고 UI를 열 때마다** 조회한다(자동 전투 전리품이 계속 적재되므로 로컬 캐시를 신뢰하지 않는다). 이 조회는 서버에서 **Redis write-through 캐시**로 받는다([인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 6.5) — 정본은 MySQL이며 응답 규약은 캐시 사용 여부와 무관하게 동일하다.
 - **페이지 간 정합성은 서버가 검증하지 않는다.** 클라이언트가 페이지를 이어붙일 때 `itemId`를 키로 중복 제거하고 나중 페이지를 우선한다([세이브 데이터 기획서](../세부/save-data-기획서.md) 5.2).
 - 캐릭터는 **한 번에 1개씩** 생성(`create-character`), 계정당 최대 3개·**직업 중복 불가**. `nickname`은 최초 생성 시에만 사용. 캐릭터·성장 상태 조회는 별도 API 없이 `load` 스냅샷 사용.
 - **성별(`gender`)**: `1`(남)·`2`(여) 중 하나를 생성 시 함께 보내며, 그 외 값은 `InvalidGender(2007)`. 외형만 가르는 값이라 직업 중복 제약·스탯·비용에는 영향이 없고, 요청에 필드가 없으면 `1`(남)로 저장된다. **생성 이후 변경 API는 없다.** `load`의 `characters[]`에도 `gender`가 포함된다.
@@ -79,14 +79,17 @@
 | `POST /api/game/inventory/enhance` ⚠️보류 | 장비 강화 단계 +1(재화 소모) | `{ itemId }` | `enhanceLevel`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
 | `POST /api/game/inventory/expand` | 인벤토리 용량 확장(골드 소모) | `{ count }` | `inventoryCapacity`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InventoryCapacityMax(4008)` |
 | `POST /api/game/inventory/move` | 인벤토리 배치 이동/교환(드래그 저장) | `{ itemId, toSlot }` | `moved`, `swapped` | `ItemNotFound(4001)`, `InvalidInventorySlot(4009)` |
-| `POST /api/game/cube/combine` | 큐브 합성(동급 아이템 3개→상위 등급 1개, 슬롯·클래스 무관) | `{ itemIds[] }` | `consumed`, `result`, `cube` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `CubeRecipeNotMet(4010)` |
-| `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{itemId,count}] }` | `gold`, `cubeExp` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
-| `POST /api/game/cube/craft` | 큐브 제작(레시피로 아이템 생성) | `{ recipeCode }` | `consumed`, `gained`, `cube` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)` |
-| `POST /api/game/box/open` | 랜덤 상자 열기(골드 가챠, 등급 확률 추첨→랜덤 아이템 지급). 현재 단발(`count`=1)만 처리, 다연속 예정 | `{ boxCode, count? }` | `rewards`, `gained`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InvalidSaveData(2002)`, `InventoryFull(4002)`, `MasterDataNotLoaded(10001)` |
-| `POST /api/game/consumable/use` | 소모품 1개 사용 → 계정 획득량 버프 부여·연장(경험치·골드 부스터) | `{ itemId }` | `itemCode`, `remainingQuantity`, `buff`, `activeBuffs` | `ItemNotFound(4001)`, `ItemNotConsumable(4020)`, `InsufficientQuantity(4006)`, `BuffDurationLimitExceeded(4021)`, `MasterDataNotLoaded(10001)` |
+| `POST /api/game/cube/combine` | 큐브 합성(동급 아이템 3개→상위 등급 1개, 슬롯·클래스 무관) | `{ itemIds[] }` | `consumed`, `result`, `cube`, `inventoryDelta` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `CubeRecipeNotMet(4010)` |
+| `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{itemId,count}] }` | `gold`, `cubeExp`, `cube`, `balance`, `inventoryDelta` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
+| `POST /api/game/cube/craft` | 큐브 제작(레시피로 아이템 생성) | `{ recipeCode }` | `consumed`, `gained`, `cube`, `balance`, `inventoryDelta` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)` |
+| `POST /api/game/box/open` | 랜덤 상자 열기(골드 가챠, 등급 확률 추첨→랜덤 아이템 지급). 현재 단발(`count`=1)만 처리, 다연속 예정 | `{ boxCode, count? }` | `rewards`, `gained`, `cost`, `balance`, `inventoryDelta` | `InsufficientCurrency(4005)`, `InvalidSaveData(2002)`, `InventoryFull(4002)`, `MasterDataNotLoaded(10001)` |
+| `POST /api/game/consumable/use` | 소모품 1개 사용 → 계정 획득량 버프 부여·연장(경험치·골드 부스터) | `{ itemId }` | `itemCode`, `remainingQuantity`, `buff`, `activeBuffs`, `inventoryDelta` | `ItemNotFound(4001)`, `ItemNotConsumable(4020)`, `InsufficientQuantity(4006)`, `BuffDurationLimitExceeded(4021)`, `MasterDataNotLoaded(10001)` |
+| `POST /api/game/consumable/buffs` | 적용 중인 획득량 버프 조회(버프 UI 재동기화용 경량 조회) | 없음 | `serverTime`, `activeBuffs` | 인증 실패 계열만 |
 
+- **가방을 바꾸는 액션은 변경분을 `inventoryDelta`(`upserted[]`·`removed[]`)로 응답에 담는다.** 클라이언트는 응답만으로 가방 캐시를 갱신하며 **액션 뒤에 `/api/game/load`·`/api/game/inventory/list`를 재조회하지 않는다**(공통 규약: [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 5.0). 장착·해제는 기존 `equipped`/`unequipped`/`bagSlot` 필드로 충분해 이 블록을 두지 않고, 메일 수령(`mail/claim`·`mail/claim-all`)도 같은 규약을 따른다.
 - 장비는 **캐릭터별**(장착 시 `characterId` 필수), 인벤토리·골드·큐브는 계정 공유. 큐브 합성·분해·제작(`cube/*`)은 **구현 완료**. `inventory/enhance`(장비 강화)는 `enhance_master` 값 미확정으로 **보류**.
-- `consumable/use`는 **1회 1개 고정**(수량 필드 없음)이며 버프도 **계정 단위**다. 활성 버프 조회 전용 엔드포인트는 없다 — 크기가 고정이라 코어 로드(`/api/game/load`)의 `activeBuffs`가 담당한다([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 5.2).
+- `consumable/use`는 **1회 1개 고정**(수량 필드 없음)이며 버프도 **계정 단위**다. 활성 버프를 받는 창구는 세 곳 — 접속 직후는 코어 로드(`/api/game/load`)의 `activeBuffs`, 사용 직후는 `consumable/use` 응답, 이후 재동기화는 `consumable/buffs`([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 5.2).
+- 버프 배율은 **스테이지 클리어 보상(`stage/clear`)에만** 곱해진다. 오프라인 정산(`offline/claim`)·메일·출석·큐브 분해·거래 대금에는 적용하지 않는다(같은 문서 6.3·6.5).
 
 ### 3.4 성장 (직업 / 스킬 / 룬)
 
@@ -135,8 +138,8 @@
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
 | `POST /api/game/mail/list` | 우편함 목록 조회 | `{}` | `mails[]`(첨부·읽음·수령·만료 포함) | — |
-| `POST /api/game/mail/claim` | 단건 메일 첨부 수령 | `{ mailId }` | `gained`, `balance` | `MailNotFound(8001)`, `MailAlreadyClaimed(8002)`, `MailExpired(8003)`, `InventoryFull(4002)` |
-| `POST /api/game/mail/claim-all` | 수령 가능한 메일 일괄 수령 | `{}` | `claimedMailIds[]`, `gained`, `balance` | `InventoryFull(4002)` |
+| `POST /api/game/mail/claim` | 단건 메일 첨부 수령 | `{ mailId }` | `gained`, `balance`, `inventoryDelta` | `MailNotFound(8001)`, `MailAlreadyClaimed(8002)`, `MailExpired(8003)`, `InventoryFull(4002)` |
+| `POST /api/game/mail/claim-all` | 수령 가능한 메일 일괄 수령 | `{}` | `claimedMailIds[]`, `gained`, `balance`, `inventoryDelta` | `InventoryFull(4002)` |
 
 - 첨부(재화·아이템)는 서버가 지급하며 중복 수령 불가(수령 플래그+행 잠금). 만료 메일은 수령 거부. 발급은 거래소(4.7)·출석부(4.9)·운영이 담당.
 
