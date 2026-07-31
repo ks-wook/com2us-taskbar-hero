@@ -193,9 +193,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 **Response (성공, 200 OK)**
 ```json
-{ "success": true, "errorCode": 0, "message": "Registered", "data": { "listingId": 88001, "itemCode": 30012, "enhanceLevel": 3, "quantity": 1, "price": 50000 } }
+{ "success": true, "errorCode": 0, "message": "Registered", "data": { "listingId": 88001, "itemCode": 30012, "enhanceLevel": 3, "quantity": 1, "price": 50000, "inventoryDelta": { "upserted": [], "removed": [5001] } } }
 ```
 
+- 등록한 아이템 행은 에스크로로 옮겨져 가방에서 사라지므로, 그 변경분이 `inventoryDelta.removed`에 담긴다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.0 공통 규약). 클라이언트는 이 값으로 가방을 갱신하고 **재조회하지 않는다.**
 - 오류: `ItemNotFound(4001)`(인벤토리에 없음), `ItemEquipped(4007)`(장착 중), `TradeNotSellable(7002)`(`sellable=0`), `TradePriceOutOfRange(7006)`(기준가 ±20% 범위 밖), `TradeListingLimitExceeded(7007)`(동시 등록 10개 초과), `InvalidSaveData(2002)`(형식 오류 등).
 
 ### 5.3 구매 — `POST /api/game/trade/buy`
@@ -238,9 +239,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 **Response (성공, 200 OK)**
 ```json
-{ "success": true, "errorCode": 0, "message": "Cancelled", "data": { "listingId": 88001, "restored": { "itemCode": 30012, "enhanceLevel": 3, "quantity": 1 } } }
+{ "success": true, "errorCode": 0, "message": "Cancelled", "data": { "listingId": 88001, "restored": { "itemCode": 30012, "enhanceLevel": 3, "quantity": 1 }, "inventoryDelta": { "upserted": [ { "itemId": 5107, "slot": 14, "itemCode": 30012, "quantity": 1, "enhanceLevel": 3 } ], "removed": [] } } }
 ```
 
+- `restored`는 표시용(아이템 코드·강화·수량)이고, 실제 가방 반영은 `inventoryDelta.upserted`가 담당한다(복귀 행의 `itemId`·`slot` 포함, [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.0 공통 규약). **재조회하지 않는다.**
 - 오류: `TradeListingNotFound(7001)`, `TradeNotOwner(7003)`(본인 등록 아님), `TradeAlreadyClosed(7005)`(이미 판매/취소), `InventoryFull(4002)`(복귀 시 인벤토리 초과).
 
 > 인증 오류(401) 등은 기존 미들웨어를 따른다. 등록 만료(3일) 시 자동 취소·메일 반송은 6.2 참고. "내 판매 목록"은 별도 엔드포인트 없이 목록 조회의 `mine=true`로 처리한다(5.1).

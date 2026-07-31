@@ -22,16 +22,21 @@ public sealed class CubeService : ICubeService
     private const int CombineExpPerGrade = 50;   // 합성: 입력 등급 × 이 값 = 획득 큐브 경험치
     private const int DismantleExpPerGrade = 20;  // 분해: 아이템당 등급 × 이 값 × 개수
     private const int CraftExp = 20;              // 제작: 1회 고정 획득 경험치
+    private const int GoldCurrencyType = 1;       // 응답 balance의 재화 종류(골드)
 
     private readonly ICubeRepository _cubeRepository;
     private readonly MasterDataProvider _masterData;
+    private readonly InventoryBagCache _bagCache;
     private readonly ILogger<CubeService> _logger;
 
-    /// <summary>의존성(큐브 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
-    public CubeService(ICubeRepository cubeRepository, MasterDataProvider masterData, ILogger<CubeService> logger)
+    /// <summary>의존성(큐브 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
+    public CubeService(
+        ICubeRepository cubeRepository, MasterDataProvider masterData,
+        InventoryBagCache bagCache, ILogger<CubeService> logger)
     {
         _cubeRepository = cubeRepository;
         _masterData = masterData;
+        _bagCache = bagCache;
         _logger = logger;
     }
 
@@ -76,8 +81,10 @@ public sealed class CubeService : ICubeService
                 grade = outcome.ResultGrade,
             },
             cube = new CubeDto { cubeLevel = outcome.CubeLevel, cubeExp = outcome.CubeExp },
+            inventoryDelta = outcome.Delta,
         };
 
+        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogInformation($"큐브 합성: userId {userId:@UserId}, consumed {ids.Count:@Count}, resultItemCode {outcome.ResultItemCode:@ResultCode}, grade {outcome.ResultGrade:@Grade}");
         return new SaveResult(ErrorCode.Success, "Combined", data);
     }
@@ -114,8 +121,19 @@ public sealed class CubeService : ICubeService
                 return new SaveResult(ErrorCode.InsufficientQuantity, string.Empty, null);
         }
 
-        var data = new CubeDismantleResultData { gold = outcome.Gold, cubeExp = outcome.CubeExp };
+        var data = new CubeDismantleResultData
+        {
+            gold = outcome.Gold,
+            cubeExp = outcome.CubeExp,
+            cube = new CubeDto { cubeLevel = outcome.NewCubeLevel, cubeExp = outcome.NewCubeExp },
+            balance = new List<CurrencyDto>
+            {
+                new CurrencyDto { currencyType = GoldCurrencyType, amount = outcome.GoldBalance },
+            },
+            inventoryDelta = outcome.Delta,
+        };
 
+        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogInformation($"큐브 분해: userId {userId:@UserId}, items {pairs.Count:@Count}, gold {outcome.Gold:@Gold}, cubeExp {outcome.CubeExp:@CubeExp}");
         return new SaveResult(ErrorCode.Success, "Dismantled", data);
     }
@@ -172,8 +190,14 @@ public sealed class CubeService : ICubeService
                 },
             },
             cube = new CubeDto { cubeLevel = outcome.CubeLevel, cubeExp = outcome.CubeExp },
+            balance = new List<CurrencyDto>
+            {
+                new CurrencyDto { currencyType = GoldCurrencyType, amount = outcome.GoldBalance },
+            },
+            inventoryDelta = outcome.Delta,
         };
 
+        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogInformation($"큐브 제작: userId {userId:@UserId}, recipeCode {recipeCode:@RecipeCode}, resultItemCode {recipe.ResultItemCode:@ResultCode} x{recipe.ResultQuantity:@Quantity}");
         return new SaveResult(ErrorCode.Success, "Crafted", data);
     }

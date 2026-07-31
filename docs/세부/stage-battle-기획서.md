@@ -218,6 +218,7 @@ COMMIT → { cleared, rewards, characters, balance, progress }
 | StageNotEntered | 6003 | 진입하지 않았거나 현재 진입 스테이지와 불일치 |
 
 - 전리품이 인벤토리 용량을 초과하면 신규 코드를 만들지 않고 `InventoryFull(4002)`([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 7장)를 재사용한다.
+- 클리어 응답에는 적재된 전리품의 가방 변경분(`inventoryDelta`)이 함께 실린다([인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) 5.0 공통 규약). 클라이언트는 이 값으로 가방을 갱신하고 **재조회하지 않는다.**
 
 ## 8. 미결 사항 / TODO
 

@@ -1,6 +1,7 @@
 using GameServer.Data;
 using MySqlConnector;
 using SqlKata.Execution;
+using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories;
 
@@ -38,6 +39,9 @@ public sealed record ConsumableUseOutcome(
     PlayerBuffRow? Buff,
     IReadOnlyList<PlayerBuffRow> ActiveBuffs)
 {
+    /// <summary>가방 변경분(5.0). 수량이 남으면 그 행이 upserted, 0이면 removed에 담긴다.</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
     public static ConsumableUseOutcome Fail(ConsumableUseStatus status)
         => new(status, 0, 0, null, Array.Empty<PlayerBuffRow>());
 }
@@ -66,6 +70,7 @@ file sealed class PlayerItemRow
     public int ItemCode { get; set; }
     public int RowType { get; set; }
     public long Quantity { get; set; }
+    public int? Slot { get; set; } // 가방 변경분(5.0) 조립용 배치 칸
 }
 
 file sealed class BuffRow
@@ -130,7 +135,7 @@ public sealed class ConsumableRepository : IConsumableRepository
 
             // 1) 대상 아이템 행 조회(소유·타입·수량).
             var item = await db.Query("player_item")
-                .Select("player_item_id", "item_code", "row_type", "quantity")
+                .Select("player_item_id", "item_code", "row_type", "quantity", "slot")
                 .Where("user_id", userId).Where("player_item_id", itemId)
                 .FirstOrDefaultAsync<PlayerItemRow>(transaction);
 
@@ -187,6 +192,24 @@ public sealed class ConsumableRepository : IConsumableRepository
                 return ConsumableUseOutcome.Fail(ConsumableUseStatus.ItemNotFound);
             }
 
+            // 가방 변경분(5.0): 수량이 남으면 그 행의 최종 상태, 0이면 행이 사라진다.
+            var delta = new InventoryDeltaDto();
+            if (remaining <= 0)
+            {
+                delta.removed.Add(itemId);
+            }
+            else
+            {
+                delta.upserted.Add(new InventoryItemDto
+                {
+                    itemId = itemId,
+                    slot = item.Slot ?? 0,
+                    itemCode = item.ItemCode,
+                    quantity = remaining,
+                    enhanceLevel = 0,
+                });
+            }
+
             // 6) 버프 부여(신규) 또는 연장(기존 행 갱신).
             if (prevBuff is null)
             {
@@ -222,7 +245,7 @@ public sealed class ConsumableRepository : IConsumableRepository
 
             var buff = new PlayerBuffRow(decision.BuffType, decision.BuffValue, startedAt, expiresAt);
             var active = activeRows.Select(r => r.ToBuff()!).ToList();
-            return new ConsumableUseOutcome(ConsumableUseStatus.Ok, item.ItemCode, remaining, buff, active);
+            return new ConsumableUseOutcome(ConsumableUseStatus.Ok, item.ItemCode, remaining, buff, active) { Delta = delta };
         }
         catch
         {

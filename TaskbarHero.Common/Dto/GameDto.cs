@@ -188,6 +188,23 @@ namespace TaskbarHero.Common.Dto
     }
 
     /// <summary>
+    /// 가방 변경분(inventory-item-cube 기획서 §5.0 공통 규약). 가방을 바꾸는 액션 응답에 함께 실린다.
+    /// 서버는 트랜잭션 안에서 이미 확정한 값을 담으므로 이 블록을 만들려고 다시 조회하지 않는다.
+    /// <para>클라이언트는 <c>removed</c> → <c>upserted</c> 순으로 <c>itemId</c>를 키 삼아 적용하며(멱등),
+    /// 액션 뒤에 <c>/api/game/load</c>·<c>/api/game/inventory/list</c>를 재조회하지 않는다.</para>
+    /// <para>재화는 각 응답의 <c>balance</c>가, 장착 상태는 <c>equipped</c>/<c>unequipped</c>가 담당한다.</para>
+    /// </summary>
+    [Serializable]
+    public class InventoryDeltaDto
+    {
+        /// <summary>생기거나 바뀐 가방 행의 최종 상태 전체(신규·수량 변경·칸 이동을 구분하지 않는다).</summary>
+        public List<InventoryItemDto> upserted = new List<InventoryItemDto>();
+
+        /// <summary>사라진 행의 itemId(전량 소모·분해·합성 입력·거래 등록 등).</summary>
+        public List<long> removed = new List<long>();
+    }
+
+    /// <summary>
     /// 장착 중인 장비 1개(계정 전체 최대 3캐릭터 × 6슬롯 = 18개). 크기가 고정이고 캐릭터 스탯 계산의
     /// 입력이라 코어 로드(/api/game/load) 응답에 포함한다.
     /// </summary>
@@ -426,6 +443,7 @@ namespace TaskbarHero.Common.Dto
         public List<CharacterProgressDto> characters = new List<CharacterProgressDto>();
         public List<CurrencyDto> balance = new List<CurrencyDto>();
         public StageProgressDto progress = new StageProgressDto();
+        public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
     }
 
     // ── 인벤토리/아이템 액션 (inventory-item-cube 기획서 §5.1·5.2·5.5) ──
@@ -538,6 +556,27 @@ namespace TaskbarHero.Common.Dto
         public int errorCode;
         public string message;
         public ExpandResultData data = new ExpandResultData();
+    }
+
+    /// <summary>장착 응답 { success, errorCode, message, data(EquipResultData) }.
+    /// 클라이언트가 재조회 없이 가방·장착 목록을 갱신하려면 data가 필요하다(§5.0 규약).</summary>
+    [Serializable]
+    public class EquipResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public EquipResultData data = new EquipResultData();
+    }
+
+    /// <summary>장착 해제 응답 { success, errorCode, message, data(UnequipResultData) }.</summary>
+    [Serializable]
+    public class UnequipResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public UnequipResultData data = new UnequipResultData();
     }
 
     /// <summary>스테이지 클리어 응답 { success, errorCode, message, data(StageClearData) }.</summary>
@@ -663,6 +702,17 @@ namespace TaskbarHero.Common.Dto
         public List<CurrencyDto> balance = new List<CurrencyDto>();
     }
 
+    /// <summary>룬 업그레이드 응답 { success, errorCode, message, data(RuneUpgradeResultData) }.
+    /// 클라이언트가 재조회 없이 룬 레벨·골드 잔액을 갱신하려면 data가 필요하다.</summary>
+    [Serializable]
+    public class RuneUpgradeResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public RuneUpgradeResultData data = new RuneUpgradeResultData();
+    }
+
     // ── 큐브(합성/분해/제작) 액션 (inventory-item-cube 기획서 §5.6·5.7·5.8) ──
 
     /// <summary>큐브 합성 요청 데이터. { itemIds } — 같은 등급·슬롯·클래스 장비 combine_count개.</summary>
@@ -745,6 +795,7 @@ namespace TaskbarHero.Common.Dto
         public List<long> consumed = new List<long>();
         public CombineResultDto result = new CombineResultDto();
         public CubeDto cube = new CubeDto();
+        public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
     }
 
     /// <summary>큐브 분해 결과(5.7). gold = 이번 분해로 획득한 골드, cubeExp = 이번 분해로 획득한 큐브 경험치(증가분).</summary>
@@ -753,6 +804,9 @@ namespace TaskbarHero.Common.Dto
     {
         public long gold;
         public long cubeExp;
+        public CubeDto cube = new CubeDto();
+        public List<CurrencyDto> balance = new List<CurrencyDto>();
+        public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
     }
 
     /// <summary>큐브 제작 획득물(5.8).</summary>
@@ -769,6 +823,8 @@ namespace TaskbarHero.Common.Dto
         public List<ItemQuantityDto> consumed = new List<ItemQuantityDto>();
         public CubeCraftGainedDto gained = new CubeCraftGainedDto();
         public CubeDto cube = new CubeDto();
+        public List<CurrencyDto> balance = new List<CurrencyDto>();
+        public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
     }
 
     /// <summary>큐브 합성 응답 { success, errorCode, message, data(CubeCombineResultData) }.</summary>
@@ -910,6 +966,7 @@ namespace TaskbarHero.Common.Dto
         public long mailId;
         public MailGainedDto gained = new MailGainedDto();
         public List<CurrencyDto> balance = new List<CurrencyDto>();
+        public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
     }
 
     /// <summary>메일 일괄 수령 결과(5.3 응답 data). claimedMailIds = 수령된 메일, gained = 첨부 합계, balance = 지급 후 재화 잔액.</summary>
@@ -919,6 +976,7 @@ namespace TaskbarHero.Common.Dto
         public List<long> claimedMailIds = new List<long>();
         public MailGainedDto gained = new MailGainedDto();
         public List<CurrencyDto> balance = new List<CurrencyDto>();
+        public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
     }
 
     /// <summary>우편함 조회 응답 { success, errorCode, message, data(MailListResultData) }.</summary>
@@ -1092,6 +1150,7 @@ namespace TaskbarHero.Common.Dto
         public int enhanceLevel;
         public int quantity;
         public long price;
+        public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
     }
 
     /// <summary>등록 지정 요청 데이터(5.3 구매·5.4 취소 공용). { listingId }</summary>
@@ -1154,6 +1213,7 @@ namespace TaskbarHero.Common.Dto
     {
         public long listingId;
         public TradeItemDto restored = new TradeItemDto();
+        public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
     }
 
     /// <summary>거래소 목록 조회 응답 { success, errorCode, message, data(TradeListResultData) }.</summary>
@@ -1226,6 +1286,7 @@ namespace TaskbarHero.Common.Dto
         public long remainingQuantity; // 1 차감 후 남은 수량(0이면 그 행이 삭제되어 가방 칸이 비었다)
         public ActiveBuffDto buff = new ActiveBuffDto();
         public List<ActiveBuffDto> activeBuffs = new List<ActiveBuffDto>();
+        public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
     }
 
     /// <summary>소모품 사용 응답 { success, errorCode, message, data(ConsumableUseResultData) }.</summary>

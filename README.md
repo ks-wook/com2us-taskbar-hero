@@ -47,3 +47,4 @@
 | 소모품 사용·활성 버프 조회(경험치·골드 부스터 · [기획서](docs/세부/consumable-buff-기획서.md)) | Game | ☑ | ☑ |
 | 소모품 버프 배율 보상 반영(스테이지 클리어 · 오프라인 정산은 미적용 확정) · 클리어 보상 칸 버프마크 표시 | Game | ☑ | ☑ |
 | 업적 시스템 | Game | ☐ | ☐ |
+| 인벤토리 액션 응답 델타(`inventoryDelta`) + 가방 조회 write-through 캐시 ([규약](docs/세부/inventory-item-cube-기획서.md#50-공통-규약--인벤토리-변경분inventorydelta)) | Game | ☑ | ☑ |

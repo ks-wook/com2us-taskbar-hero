@@ -11,6 +11,8 @@
 | [**스테이지**](#스테이지) (던전 입장·클리어 보상) | GameStageController | Game | `POST /api/game/stage/enter` · `clear` |
 | [**방치형 오프라인 보상**](#방치형-오프라인-보상) | GameOfflineController | Game | `POST /api/game/offline/claim` |
 | [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장. 가방 조회는 세이브 데이터 섹션) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
+
+> **가방 변경분 공통 규약(`inventoryDelta`)** — 가방을 바꾸는 액션(`cube/*`·`box/open`·`consumable/use`·`mail/claim`·`mail/claim-all`·`stage/clear`·`trade/register`·`trade/cancel`)은 변경분을 응답에 담고, 커밋 후 같은 값으로 Redis 가방 캐시를 갱신한다(write-through). 클라이언트는 응답만으로 가방을 갱신하며 **액션 뒤에 `/load`·`/inventory/list`를 재조회하지 않는다**([인벤토리/아이템/큐브 기획서](../docs/세부/inventory-item-cube-기획서.md) 5.0·6.5). 아래 다이어그램에서는 이 갱신을 `S->>R: 가방 캐시 갱신`으로 줄여 표기한다.
 | [**소모품/버프**](#소모품버프) (소모품 사용 → 경험치·골드 획득량 버프 부여·연장, 적용 중인 버프 조회) | GameConsumableController | Game | `POST /api/game/consumable/use`, `POST /api/game/consumable/buffs` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
@@ -174,27 +176,33 @@ sequenceDiagram
 
 ### POST /api/game/inventory/list — 가방 아이템 페이지 조회
 
-창고/인벤토리 UI를 열 때 호출한다. `slot` 커서 keyset 페이징이며(OFFSET 미사용, `(user_id, slot)` 유니크 인덱스가 범위 스캔을 커버), 페이지 사이의 인벤토리 변경은 서버가 검증하지 않고 클라이언트가 `itemId` 기준 병합으로 흡수한다.
+창고/인벤토리 UI를 **열 때마다** 호출한다(자동 전투 전리품이 계속 적재되므로 클라 로컬 캐시를 신뢰하지 않는다). 이 조회는 Redis 가방 캐시(`inv:bag:{userId}`, write-through)에서 받고, 미스·장애 시 MySQL에서 전량을 읽어 캐시를 채운다(인벤토리/아이템/큐브 기획서 6.5). 페이징(`slot` 커서)과 `total`은 그 완전 집합에서 잘라 만든다.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /inventory/list { userId, token, data:{ cursor, limit } }
     S->>S: 페이지 크기 클램프(1~500, 미지정 200)
-    Note over S,DB: 단일 트랜잭션(스냅샷) — 목록과 총계를 한 시점으로 묶는다
-    S->>DB: 계정 세이브 존재 확인
-    alt 계정 세이브 없음
-        S-->>C: 실패 { errorCode: SaveNotFound(2001) }
-    else 존재
-        S->>DB: 가방 아이템 조회(slot > cursor, slot 오름차순, limit+1건)
-        S->>DB: 가방 아이템 총 개수 확인
-        S->>S: limit+1번째 행 유무로 hasMore 판정 후 잘라내기
-        S-->>C: 성공 { items, nextCursor, hasMore, total }
+    S->>R: 가방 스냅샷 조회(inv:bag:{userId})
+    alt 캐시 적중
+        R-->>S: 가방 전량(slot 오름차순)
+    else 캐시 미스 · Redis 장애
+        Note over S,DB: 단일 트랜잭션(스냅샷)
+        S->>DB: 계정 세이브 존재 확인
+        alt 계정 세이브 없음
+            S-->>C: 실패 { errorCode: SaveNotFound(2001) }
+        else 존재
+            S->>DB: 가방 아이템 전량 조회(slot 오름차순)
+            S->>R: 스냅샷 적재(전량만, TTL 30분)
+        end
     end
+    S->>S: slot > cursor 구간을 limit만큼 잘라 hasMore·total 산출
+    S-->>C: 성공 { items, nextCursor, hasMore, total }
 ```
 
 ### POST /api/game/create-character — 캐릭터 생성

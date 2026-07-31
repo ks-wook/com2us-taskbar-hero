@@ -86,7 +86,7 @@
 | `POST /api/game/consumable/use` | 소모품 1개 사용 → 계정 획득량 버프 부여·연장(경험치·골드 부스터) | `{ itemId }` | `itemCode`, `remainingQuantity`, `buff`, `activeBuffs`, `inventoryDelta` | `ItemNotFound(4001)`, `ItemNotConsumable(4020)`, `InsufficientQuantity(4006)`, `BuffDurationLimitExceeded(4021)`, `MasterDataNotLoaded(10001)` |
 | `POST /api/game/consumable/buffs` | 적용 중인 획득량 버프 조회(버프 UI 재동기화용 경량 조회) | 없음 | `serverTime`, `activeBuffs` | 인증 실패 계열만 |
 
-- **가방을 바꾸는 액션은 변경분을 `inventoryDelta`(`upserted[]`·`removed[]`)로 응답에 담는다.** 클라이언트는 응답만으로 가방 캐시를 갱신하며 **액션 뒤에 `/api/game/load`·`/api/game/inventory/list`를 재조회하지 않는다**(공통 규약: [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 5.0). 장착·해제는 기존 `equipped`/`unequipped`/`bagSlot` 필드로 충분해 이 블록을 두지 않고, 메일 수령(`mail/claim`·`mail/claim-all`)도 같은 규약을 따른다.
+- **가방을 바꾸는 액션은 변경분을 `inventoryDelta`(`upserted[]`·`removed[]`)로 응답에 담는다.** 클라이언트는 응답만으로 가방 캐시를 갱신하며 **액션 뒤에 `/api/game/load`·`/api/game/inventory/list`를 재조회하지 않는다**(공통 규약: [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 5.0). 장착·해제·용량 확장은 기존 `equipped`/`unequipped`/`bagSlot`/`inventoryCapacity` 필드로 충분해 이 블록을 두지 않는다. 이 도메인 밖에서도 가방을 바꾸는 **`stage/clear`(전리품)·`mail/claim`·`mail/claim-all`(첨부)·`trade/register`·`trade/cancel`(에스크로 이동)** 이 같은 규약을 따르며, `trade/buy`는 구매 아이템이 우편함으로 가므로 이 블록이 없다.
 - 장비는 **캐릭터별**(장착 시 `characterId` 필수), 인벤토리·골드·큐브는 계정 공유. 큐브 합성·분해·제작(`cube/*`)은 **구현 완료**. `inventory/enhance`(장비 강화)는 `enhance_master` 값 미확정으로 **보류**.
 - `consumable/use`는 **1회 1개 고정**(수량 필드 없음)이며 버프도 **계정 단위**다. 활성 버프를 받는 창구는 세 곳 — 접속 직후는 코어 로드(`/api/game/load`)의 `activeBuffs`, 사용 직후는 `consumable/use` 응답, 이후 재동기화는 `consumable/buffs`([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 5.2).
 - 버프 배율은 **스테이지 클리어 보상(`stage/clear`)에만** 곱해진다. 오프라인 정산(`offline/claim`)·메일·출석·큐브 분해·거래 대금에는 적용하지 않는다(같은 문서 6.3·6.5).
@@ -111,7 +111,7 @@
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
 | `POST /api/game/stage/enter` | 스테이지 진입(진행 가능 검증) | `{ act, difficulty, stage }` | `stageId`, `monsters[]`, `boss`, `enteredAt` | `StageNotFound(6001)`, `StageLocked(6002)` |
-| `POST /api/game/stage/clear` | 스테이지 클리어 → 보상 지급·진행도 갱신 | `{ act, difficulty, stage }` | `rewards`, `characters[]`(각 `isLevelUp`), `balance`, `progress` | `StageNotEntered(6003)`, `InventoryFull(4002)` |
+| `POST /api/game/stage/clear` | 스테이지 클리어 → 보상 지급·진행도 갱신 | `{ act, difficulty, stage }` | `rewards`, `characters[]`(각 `isLevelUp`), `balance`, `progress`, `inventoryDelta` | `StageNotEntered(6003)`, `InventoryFull(4002)` |
 
 - 진입 응답은 스테이지의 **몬스터 구성(`monsters`)·보스(`boss`)** 를 포함. 클리어 보상(골드·경험치·전리품)은 서버가 마스터로 산출, 경험치는 3캐릭터 동일 지급(캐릭터별 **`isLevelUp`**), 골드는 계정. 이미 클리어한 스테이지는 재파밍 가능(보상은 프런티어와 **동일**). 전리품이 인벤토리 용량을 초과하면 지급하지 않고 클리어를 `InventoryFull(4002)`로 거부(전체 롤백).
 
@@ -122,9 +122,9 @@
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
 | `POST /api/game/trade/list` | 거래소 목록 조회(판매중, 아이템 코드 검색). `mine=false`(기본) 본인 등록 제외 / `mine=true` 본인 등록만 | `{ itemCode?, mine?, page?, pageSize? }` | `listings[]`, `page`, `hasMore` | — |
-| `POST /api/game/trade/register` | 판매 등록(에스크로) | `{ itemId, price }` | `listingId`, `itemCode`, `price` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `TradeNotSellable(7002)`, `TradePriceOutOfRange(7006)`, `TradeListingLimitExceeded(7007)`, `InvalidSaveData(2002)` |
+| `POST /api/game/trade/register` | 판매 등록(에스크로) | `{ itemId, price }` | `listingId`, `itemCode`, `price`, `inventoryDelta` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `TradeNotSellable(7002)`, `TradePriceOutOfRange(7006)`, `TradeListingLimitExceeded(7007)`, `InvalidSaveData(2002)` |
 | `POST /api/game/trade/buy` | 구매(골드 차감 → 아이템·대금 모두 메일 발급) | `{ listingId }` | `gained`, `cost`, `balance`, `mailId` | `TradeListingNotFound(7001)`, `TradeAlreadyClosed(7005)`, `TradeSelfPurchase(7004)`, `InsufficientCurrency(4005)`, `TradeBusy(7008)` |
-| `POST /api/game/trade/cancel` | 판매 취소(아이템 복귀) | `{ listingId }` | `restored` | `TradeListingNotFound(7001)`, `TradeNotOwner(7003)`, `TradeAlreadyClosed(7005)`, `InventoryFull(4002)`, `TradeBusy(7008)` |
+| `POST /api/game/trade/cancel` | 판매 취소(아이템 복귀) | `{ listingId }` | `restored`, `inventoryDelta` | `TradeListingNotFound(7001)`, `TradeNotOwner(7003)`, `TradeAlreadyClosed(7005)`, `InventoryFull(4002)`, `TradeBusy(7008)` |
 
 - 목록 조회는 **본인 등록을 쿼리 단계에서 제외**한다(자기 등록은 구매 불가). 판매 취소에 필요한 `listingId`는 `mine=true` 조회로 얻는다.
 - 등록은 아이템을 인벤토리에서 거래소 보관(에스크로)으로 이동. 구매 시 **구매 아이템(구매자)·판매 대금(판매자) 모두 메일(3.7, `category=2` 거래)로 지급**되며 수령 시 계정에 반영된다. 구매 단계에서는 인벤토리 용량을 검사하지 않는다.

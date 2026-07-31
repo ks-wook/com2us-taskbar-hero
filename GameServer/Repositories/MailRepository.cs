@@ -1,6 +1,7 @@
 using System.Data.Common;
 using GameServer.Data;
 using SqlKata.Execution;
+using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories;
 
@@ -41,6 +42,9 @@ public enum MailClaimStatus
 public sealed record MailClaimOutcome(
     MailClaimStatus Status, long Gold, IReadOnlyList<MailAttachment> Items, long GoldBalance)
 {
+    /// <summary>가방 변경분(5.0). 첨부 아이템 적재로 생긴·병합된 행이 담긴다.</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
     public static MailClaimOutcome Fail(MailClaimStatus status)
         => new(status, 0, Array.Empty<MailAttachment>(), 0);
 }
@@ -50,6 +54,9 @@ public sealed record MailClaimAllOutcome(
     MailClaimStatus Status, IReadOnlyList<long> ClaimedMailIds, long Gold,
     IReadOnlyList<MailAttachment> Items, long GoldBalance)
 {
+    /// <summary>가방 변경분(5.0). 수령 전체를 합산한 최종 상태다(메일별로 나누지 않는다).</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
     public static MailClaimAllOutcome Fail(MailClaimStatus status)
         => new(status, Array.Empty<long>(), 0, Array.Empty<MailAttachment>(), 0);
 }
@@ -110,6 +117,14 @@ file sealed class ItemIdQtyRow
 {
     public long PlayerItemId { get; set; }
     public long Quantity { get; set; }
+}
+
+/// <summary>가방 변경분(5.0) 조립에 배치 칸이 필요한 스택 병합 조회용.</summary>
+file sealed class ItemIdQtySlotRow
+{
+    public long PlayerItemId { get; set; }
+    public long Quantity { get; set; }
+    public int? Slot { get; set; }
 }
 
 /// <summary>메일(우편함) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
@@ -237,7 +252,7 @@ public sealed class MailRepository : IMailRepository
             }
 
             await transaction.CommitAsync();
-            return new MailClaimOutcome(MailClaimStatus.Ok, grant.gold, grant.items, grant.goldBalance);
+            return new MailClaimOutcome(MailClaimStatus.Ok, grant.gold, grant.items, grant.goldBalance) { Delta = grant.delta };
         }
         catch
         {
@@ -302,7 +317,7 @@ public sealed class MailRepository : IMailRepository
             }
 
             await transaction.CommitAsync();
-            return new MailClaimAllOutcome(MailClaimStatus.Ok, claimedIds, grant.gold, grant.items, grant.goldBalance);
+            return new MailClaimAllOutcome(MailClaimStatus.Ok, claimedIds, grant.gold, grant.items, grant.goldBalance) { Delta = grant.delta };
         }
         catch
         {
@@ -421,7 +436,7 @@ public sealed class MailRepository : IMailRepository
     /// 첨부 목록을 지급한다: 골드(reward_type=1)는 합산해 재화 행에 적립하고, 아이템/재료(2·3)는 스택 병합·빈 칸 규칙으로
     /// 적재한다. 적재 실패(용량 부족) 시 stored=false를 반환한다(호출측 롤백). items는 코드별 합산된 지급 내역.
     /// </summary>
-    private static async Task<(bool stored, long gold, IReadOnlyList<MailAttachment> items, long goldBalance)>
+    private static async Task<(bool stored, long gold, IReadOnlyList<MailAttachment> items, long goldBalance, InventoryDeltaDto delta)>
         GrantAttachmentsAsync(
             QueryFactory db, DbTransaction tx, long userId,
             IReadOnlyList<MailAttachment> rewards, Func<int, (int itemType, int stackMax)> itemLookup, long nowUnix)
@@ -437,21 +452,22 @@ public sealed class MailRepository : IMailRepository
 
         int capacity = await LoadCapacityAsync(db, tx, userId);
         var used = await LoadUsedSlotsAsync(db, tx, userId);
+        var delta = new InventoryDeltaDto();
         foreach (var item in itemGroups)
         {
             // 적재 규칙은 스택 상한(stack_max)만으로 결정되므로 itemType은 쓰지 않는다(소모품·재료 모두 스택 병합 대상).
             var (_, stackMax) = itemLookup(item.RewardCode);
             bool stored = await StoreItemAsync(
                 db, tx, userId, item.RewardCode, item.Quantity, stackMax,
-                item.EnhanceLevel, capacity, used, nowUnix);
+                item.EnhanceLevel, capacity, used, nowUnix, delta);
             if (!stored)
             {
-                return (false, 0, Array.Empty<MailAttachment>(), 0);
+                return (false, 0, Array.Empty<MailAttachment>(), 0, new InventoryDeltaDto());
             }
         }
 
         long balance = await CreditGoldAsync(db, tx, userId, gold, nowUnix);
-        return (true, gold, itemGroups, balance);
+        return (true, gold, itemGroups, balance, delta);
     }
 
     /// <summary>인벤토리 용량(game_player.inventory_capacity). 계정 세이브가 없으면 0.</summary>
@@ -519,18 +535,18 @@ public sealed class MailRepository : IMailRepository
     /// </summary>
     private static async Task<bool> StoreItemAsync(
         QueryFactory db, DbTransaction tx, long userId, int itemCode, long quantity,
-        int stackMax, int enhanceLevel, int capacity, HashSet<int> used, long nowUnix)
+        int stackMax, int enhanceLevel, int capacity, HashSet<int> used, long nowUnix, InventoryDeltaDto delta)
     {
         long remaining = quantity;
 
         // 스택형(재료·소모품): 기존 스택의 여유부터 채운다(새 칸 불필요).
         if (stackMax > 1 && enhanceLevel == 0)
         {
-            var stacks = await db.Query("player_item").Select("player_item_id", "quantity")
+            var stacks = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
                 .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", itemCode)
                 .Where("enhance_level", 0)
                 .Where("quantity", "<", stackMax)
-                .GetAsync<ItemIdQtyRow>(tx);
+                .GetAsync<ItemIdQtySlotRow>(tx);
 
             foreach (var stack in stacks)
             {
@@ -541,8 +557,17 @@ public sealed class MailRepository : IMailRepository
 
                 long room = stackMax - stack.Quantity;
                 long add = Math.Min(room, remaining);
+                long merged = stack.Quantity + add;
                 await db.Query("player_item").Where("player_item_id", stack.PlayerItemId)
-                    .UpdateAsync(new { quantity = stack.Quantity + add }, tx);
+                    .UpdateAsync(new { quantity = merged }, tx);
+                delta.upserted.Add(new InventoryItemDto
+                {
+                    itemId = stack.PlayerItemId,
+                    slot = stack.Slot ?? 0,
+                    itemCode = itemCode,
+                    quantity = merged,
+                    enhanceLevel = enhanceLevel,
+                });
                 remaining -= add;
             }
         }
@@ -558,7 +583,7 @@ public sealed class MailRepository : IMailRepository
             }
 
             long put = Math.Min(perRow, remaining);
-            await db.Query("player_item").InsertAsync(new
+            long newItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
             {
                 user_id = userId,
                 row_type = RowTypeItem,
@@ -568,6 +593,14 @@ public sealed class MailRepository : IMailRepository
                 enhance_level = enhanceLevel,
                 acquired_at = nowUnix,
             }, tx);
+            delta.upserted.Add(new InventoryItemDto
+            {
+                itemId = newItemId,
+                slot = slot,
+                itemCode = itemCode,
+                quantity = put,
+                enhanceLevel = enhanceLevel,
+            });
             used.Add(slot);
             remaining -= put;
         }

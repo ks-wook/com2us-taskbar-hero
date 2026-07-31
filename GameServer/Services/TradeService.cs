@@ -52,16 +52,18 @@ public sealed class TradeService : ITradeService
     private readonly ITradeRepository _tradeRepository;
     private readonly TradeCache _cache;
     private readonly MasterDataProvider _masterData;
+    private readonly InventoryBagCache _bagCache;
     private readonly ILogger<TradeService> _logger;
 
-    /// <summary>의존성(거래 리포지토리·Redis 캐시·마스터 데이터·로거)을 주입받는다.</summary>
+    /// <summary>의존성(거래 리포지토리·Redis 목록 캐시·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
     public TradeService(
         ITradeRepository tradeRepository, TradeCache cache, MasterDataProvider masterData,
-        ILogger<TradeService> logger)
+        InventoryBagCache bagCache, ILogger<TradeService> logger)
     {
         _tradeRepository = tradeRepository;
         _cache = cache;
         _masterData = masterData;
+        _bagCache = bagCache;
         _logger = logger;
     }
 
@@ -151,6 +153,7 @@ public sealed class TradeService : ITradeService
 
             _logger.ZLogInformation($"거래소 등록: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}, price {listing.Price:@Price}");
 
+            await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
             return new SaveResult(ErrorCode.Success, "Registered", new TradeRegisterResultData
             {
                 listingId = listing.ListingId,
@@ -158,6 +161,7 @@ public sealed class TradeService : ITradeService
                 enhanceLevel = listing.EnhanceLevel,
                 quantity = listing.Quantity,
                 price = listing.Price,
+                inventoryDelta = outcome.Delta,
             });
         }
         finally
@@ -293,6 +297,7 @@ public sealed class TradeService : ITradeService
 
             _logger.ZLogInformation($"거래소 취소: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}");
 
+            await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
             return new SaveResult(ErrorCode.Success, "Cancelled", new TradeCancelResultData
             {
                 listingId = listing.ListingId,
@@ -302,6 +307,7 @@ public sealed class TradeService : ITradeService
                     enhanceLevel = listing.EnhanceLevel,
                     quantity = listing.Quantity,
                 },
+                inventoryDelta = outcome.Delta,
             });
         }
         finally

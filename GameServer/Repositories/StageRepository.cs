@@ -35,6 +35,9 @@ public sealed record ClearOutcome(
     int Stage,
     int MaxStageCleared)
 {
+    /// <summary>가방 변경분(5.0). 전리품 적재로 생긴·병합된 행이 담긴다(드롭이 없으면 비어 있다).</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
     public static ClearOutcome Fail(ClearStatus status)
         => new(status, new List<CharacterProgressDto>(), 0, 0, 0, 1.0m, 1.0m, 0, 0, 0, 0);
 }
@@ -80,6 +83,14 @@ file sealed class ItemIdQtyRow
 {
     public long PlayerItemId { get; set; }
     public long Quantity { get; set; }
+}
+
+/// <summary>가방 변경분(5.0) 조립에 배치 칸이 필요한 스택 병합 조회용.</summary>
+file sealed class ItemIdQtySlotRow
+{
+    public long PlayerItemId { get; set; }
+    public long Quantity { get; set; }
+    public int? Slot { get; set; }
 }
 
 file sealed class BuffMultiplierRow
@@ -234,10 +245,11 @@ public sealed class StageRepository : IStageRepository
                 });
             }
 
-            // 5) 전리품 적재(있으면). 용량 초과 시 롤백.
+            // 5) 전리품 적재(있으면). 용량 초과 시 롤백. 적재 결과는 가방 변경분(5.0)에 담긴다.
+            var delta = new InventoryDeltaDto();
             if (dropped is not null)
             {
-                var stored = await StoreDroppedItemAsync(db, transaction, userId, dropped, capacity, nowUnix);
+                var stored = await StoreDroppedItemAsync(db, transaction, userId, dropped, capacity, nowUnix, delta);
                 if (!stored)
                 {
                     await transaction.RollbackAsync();
@@ -284,7 +296,10 @@ public sealed class StageRepository : IStageRepository
             return new ClearOutcome(
                 ClearStatus.Ok, characters, goldBalance,
                 gold, exp, goldMultiplier, expMultiplier,
-                newAct, newDiff, newStage, newMax);
+                newAct, newDiff, newStage, newMax)
+            {
+                Delta = delta,
+            };
         }
         catch
         {
@@ -336,16 +351,17 @@ public sealed class StageRepository : IStageRepository
     /// <summary>전리품 1개를 인벤토리에 적재한다. 재료는 기존 스택에 합치고, 새 칸이 필요하면 용량을 확인한다.
     /// 용량 초과로 적재 실패하면 false.</summary>
     private static async Task<bool> StoreDroppedItemAsync(
-        QueryFactory db, System.Data.Common.DbTransaction transaction, long userId, DroppedItem dropped, int capacity, long nowUnix)
+        QueryFactory db, System.Data.Common.DbTransaction transaction, long userId, DroppedItem dropped, int capacity, long nowUnix,
+        InventoryDeltaDto delta)
     {
         // 재료(스택 가능): 여유 있는 기존 스택에 합친다(새 칸 불필요).
         if (dropped.StackMax > 1)
         {
             var stackRow = await db.Query("player_item")
-                .Select("player_item_id", "quantity")
+                .Select("player_item_id", "quantity", "slot")
                 .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", dropped.ItemCode)
                 .Where("quantity", "<", dropped.StackMax)
-                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
+                .FirstOrDefaultAsync<ItemIdQtySlotRow>(transaction);
 
             if (stackRow is not null)
             {
@@ -354,6 +370,14 @@ public sealed class StageRepository : IStageRepository
                 await db.Query("player_item")
                     .Where("player_item_id", stackRowId)
                     .UpdateAsync(new { quantity = merged }, transaction);
+                delta.upserted.Add(new InventoryItemDto
+                {
+                    itemId = stackRowId,
+                    slot = stackRow.Slot ?? 0,
+                    itemCode = dropped.ItemCode,
+                    quantity = merged,
+                    enhanceLevel = 0,
+                });
                 return true;
             }
         }
@@ -377,7 +401,7 @@ public sealed class StageRepository : IStageRepository
             freeSlot++;
         }
 
-        await db.Query("player_item").InsertAsync(new
+        long newItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
         {
             user_id = userId,
             row_type = RowTypeItem,
@@ -387,6 +411,14 @@ public sealed class StageRepository : IStageRepository
             enhance_level = 0,
             acquired_at = nowUnix,
         }, transaction);
+        delta.upserted.Add(new InventoryItemDto
+        {
+            itemId = newItemId,
+            slot = freeSlot,
+            itemCode = dropped.ItemCode,
+            quantity = dropped.Quantity,
+            enhanceLevel = 0,
+        });
         return true;
     }
 }

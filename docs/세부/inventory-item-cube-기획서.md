@@ -148,6 +148,19 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - **재화는 이 블록에 넣지 않는다.** 기존 `balance`(변경 후 잔액) 필드를 그대로 쓴다.
 - **장착 상태 변경은 이 블록에 넣지 않는다.** 각 액션의 `equipped`/`unequipped` 필드가 담당한다(5.1·5.2).
 - 가방이 바뀌지 않는 액션은 이 블록을 생략한다.
+
+**이 블록을 담는 엔드포인트**
+
+| 도메인 | 엔드포인트 | 가방 변경 내용 |
+|---|---|---|
+| 큐브 | `cube/combine` · `cube/dismantle` · `cube/craft` | 입력 소모·결과 생성·재료 차감 |
+| 상자 | `box/open` | 지급 아이템 적재(스택 병합 포함) |
+| 소모품 | `consumable/use` | 수량 1 차감(0이면 행 삭제) |
+| 메일 | `mail/claim` · `mail/claim-all` | 첨부 아이템 적재 |
+| **스테이지** | `stage/clear` | **전리품 적재**(스택 병합·새 칸) |
+| **거래소** | `trade/register` · `trade/cancel` | **등록 = 에스크로로 제거 / 취소 = 가방 복귀** |
+
+`trade/buy`는 구매 아이템이 우편함으로 가고 구매자 가방은 그대로이므로 이 블록을 두지 않는다(골드 변동은 `balance`). 장착·해제(5.1·5.2)와 용량 확장(5.4)도 기존 필드로 충분해 생략한다.
 ### 5.1 장착 — `POST /api/game/inventory/equip`
 
 지정 캐릭터에게 아이템을 장착한다. 장착 슬롯은 아이템의 `item_master.equip_slot`에서 파생하며, 서버는 `player_item_equipped`에 대상 아이템의 장착 행(`equipped_character_id`/`equipped_slot`)을 INSERT한다. 그 캐릭터의 같은 슬롯에 이미 장착된 장비가 있으면 그 장착 행을 DELETE해 스왑한다. 장비의 **클래스 제한**(`item_master.class_req`, `0`은 전 클래스 공용)이 **대상 캐릭터의 직업**(`player_character.class_code`, 기사/레인저/마법사/슬레이어)과 일치해야 하고, 그 캐릭터 `level`이 **요구 레벨**(`item_master.level_req`, **5레벨 단위**, `0`은 제한 없음) 이상이어야 하며, 어느 하나라도 위반하면 `ItemNotEquippable(4003)`로 거부한다.

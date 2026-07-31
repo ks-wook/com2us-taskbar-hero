@@ -22,6 +22,9 @@ public enum EquipStatus
 /// </summary>
 public sealed record EquipOutcome(EquipStatus Status, int Slot, long? UnequippedItemId, int? UnequippedBagSlot)
 {
+    /// <summary>가방 변경분(5.0). 장착 아이템은 칸을 반납하므로 removed, 스왑된 장비는 그 칸으로 들어오므로 upserted.</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
     public static EquipOutcome Fail(EquipStatus status) => new(status, 0, null, null);
 }
 
@@ -37,6 +40,9 @@ public enum UnequipStatus
 /// <summary>장착 해제 트랜잭션 결과. BagSlot=장비가 되돌아간 가방 칸.</summary>
 public sealed record UnequipOutcome(UnequipStatus Status, long ItemId, int BagSlot)
 {
+    /// <summary>가방 변경분(5.0). 해제한 장비가 BagSlot 칸으로 돌아오므로 upserted 1건.</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
     public static UnequipOutcome Fail(UnequipStatus status) => new(status, 0, 0);
 }
 
@@ -51,6 +57,9 @@ public enum MoveStatus
 /// <summary>배치 이동 트랜잭션 결과. Swapped*는 목표 칸에 있던 아이템(비어 있었으면 null).</summary>
 public sealed record MoveOutcome(MoveStatus Status, long MovedItemId, int MovedSlot, long? SwappedItemId, int? SwappedSlot)
 {
+    /// <summary>가방 변경분(5.0). 이동한 아이템과 교환으로 밀려난 아이템의 최종 배치가 upserted에 담긴다.</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
     public static MoveOutcome Fail(MoveStatus status) => new(status, 0, 0, null, null);
 }
 
@@ -69,25 +78,27 @@ public sealed record ExpandOutcome(ExpandStatus Status, int InventoryCapacity, l
     public static ExpandOutcome Fail(ExpandStatus status) => new(status, 0, 0, 0);
 }
 
-/// <summary>인벤토리 페이지 조회 결과 상태.</summary>
+/// <summary>인벤토리 조회 결과 상태.</summary>
 public enum InventoryPageStatus
 {
     Ok,
     NoPlayer, // game_player 없음(세이브 미생성)
 }
 
-/// <summary>인벤토리 페이지 조회 결과. Items는 slot 오름차순 가방 아이템.</summary>
-public sealed record InventoryPageOutcome(
-    InventoryPageStatus Status, IReadOnlyList<InventoryItemDto> Items, bool HasMore, int Total)
+/// <summary>가방 전량 조회 결과. Items는 slot 오름차순 가방 아이템 전체다.</summary>
+public sealed record InventoryBagOutcome(InventoryPageStatus Status, IReadOnlyList<InventoryItemDto> Items)
 {
-    public static InventoryPageOutcome Fail(InventoryPageStatus status) =>
-        new(status, Array.Empty<InventoryItemDto>(), false, 0);
+    public static InventoryBagOutcome Fail(InventoryPageStatus status) =>
+        new(status, Array.Empty<InventoryItemDto>());
 }
 
 public interface IInventoryRepository
 {
-    /// <summary>가방 아이템 한 페이지를 slot 커서 keyset 페이징으로 조회한다.</summary>
-    Task<InventoryPageOutcome> GetPageAsync(long userId, int cursor, int limit);
+    /// <summary>
+    /// 그 계정의 가방 아이템 <b>전량</b>을 slot 오름차순으로 조회한다. 페이지 응답 조립(커서·limit·total)과
+    /// 가방 캐시 적재(§6.5)가 모두 완전 집합을 요구하므로 부분 조회 API를 두지 않는다.
+    /// </summary>
+    Task<InventoryBagOutcome> GetAllAsync(long userId);
 
     /// <summary>
     /// 장착을 한 트랜잭션으로 적용한다: 캐릭터·아이템 존재/미장착 확인 → validate(마스터 검증)로 장착 가능 여부·대상 슬롯 판정
@@ -128,6 +139,9 @@ file sealed class ItemRowTypeSlotRow
 {
     public int RowType { get; set; }
     public int? Slot { get; set; }
+    public int ItemCode { get; set; }
+    public long Quantity { get; set; }
+    public int EnhanceLevel { get; set; }
 }
 
 file sealed class ItemIdQtyRow
@@ -158,23 +172,20 @@ public sealed class InventoryRepository : IInventoryRepository
     public InventoryRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
     /// <summary>
-    /// 가방 아이템 한 페이지를 조회한다. slot 커서 기준으로 limit+1건을 읽어 다음 페이지 존재 여부(HasMore)를
-    /// 판정한 뒤 limit건만 돌려준다.
+    /// 그 계정의 가방 아이템 전량을 slot 오름차순으로 조회한다. 계정 세이브가 없으면 NoPlayer.
     /// </summary>
     /// <remarks>
-    /// 한 트랜잭션(REPEATABLE READ 스냅샷)으로 묶는 읽기 — 목록과 총계가 서로 다른 시점을 보면 진행률이
-    /// 어긋난 응답이 나간다:
+    /// 한 트랜잭션(REPEATABLE READ 스냅샷)으로 묶는 읽기:
     /// <para>1) game_player SELECT — 계정 세이브 존재 확인(행 없으면 NoPlayer)</para>
-    /// <para>2) player_item SELECT — row_type=1이고 slot &gt; cursor인 행을 slot 오름차순 limit+1건.
-    ///     (user_id, slot) 유니크 인덱스가 이 범위 스캔을 커버한다(OFFSET 미사용)</para>
-    /// <para>3) player_item COUNT — 가방 아이템 총 행 수(진행률 표시용)</para>
+    /// <para>2) player_item SELECT — row_type=1이고 slot이 NULL이 아닌 행 전체를 slot 오름차순.
+    ///     (user_id, slot) 유니크 인덱스가 이 스캔을 커버한다. 재화 행과 장착 중인 장비는 slot이 NULL이라
+    ///     자동으로 빠진다</para>
     /// </remarks>
     /// <remarks>
-    /// 페이지 사이에 인벤토리가 바뀌어도 서버는 감지하지 않는다. 단일 세션 정책상 페이징 도중 가방을 바꿀 수
-    /// 있는 주체는 같은 클라이언트뿐이고(방치 전투 전리품 등), 그 클라이언트는 자기가 바꿨다는 것을 이미 안다.
-    /// 최악의 경우도 표시 오차이며 창고를 다시 열면 해소된다(세이브 데이터 기획서 5.2).
+    /// 용량 상한이 있어(기본 100·상한 120) 행 수가 제한적이므로 전량을 한 번에 읽는다. 응답의 페이지 분할과
+    /// 총계 산출, 가방 캐시 적재(§6.5)는 이 완전 집합을 재료로 서비스 계층이 수행한다.
     /// </remarks>
-    public async Task<InventoryPageOutcome> GetPageAsync(long userId, int cursor, int limit)
+    public async Task<InventoryBagOutcome> GetAllAsync(long userId)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -192,28 +203,15 @@ public sealed class InventoryRepository : IInventoryRepository
             if (playerId is null)
             {
                 await transaction.RollbackAsync();
-                return InventoryPageOutcome.Fail(InventoryPageStatus.NoPlayer);
+                return InventoryBagOutcome.Fail(InventoryPageStatus.NoPlayer);
             }
 
-            // 2) keyset 페이징. 다음 페이지 존재 여부를 알려고 limit+1건을 읽는다.
-            //    재화 행과 장착 중인 장비는 slot이 NULL이라 slot > cursor 비교에서 자동으로 빠진다.
-            var rows = (await db.Query("player_item")
+            // 2) 가방 전량(slot 오름차순).
+            var rows = await db.Query("player_item")
                 .Select("player_item_id", "slot", "item_code", "quantity", "enhance_level")
-                .Where("user_id", userId).Where("row_type", RowTypeItem).Where("slot", ">", cursor)
-                .OrderBy("slot")
-                .Limit(limit + 1)
-                .GetAsync<BagItemRow>(transaction)).ToList();
-
-            bool hasMore = rows.Count > limit;
-            if (hasMore)
-            {
-                rows.RemoveAt(rows.Count - 1);
-            }
-
-            // 3) 총 개수(진행률 표시용). 같은 스냅샷이라 2)의 결과와 시점이 일치한다.
-            int total = await db.Query("player_item")
                 .Where("user_id", userId).Where("row_type", RowTypeItem).WhereNotNull("slot")
-                .CountAsync<int>(transaction: transaction);
+                .OrderBy("slot")
+                .GetAsync<BagItemRow>(transaction);
 
             await transaction.CommitAsync();
 
@@ -226,7 +224,7 @@ public sealed class InventoryRepository : IInventoryRepository
                 enhanceLevel = r.EnhanceLevel,
             }).ToList();
 
-            return new InventoryPageOutcome(InventoryPageStatus.Ok, items, hasMore, total);
+            return new InventoryBagOutcome(InventoryPageStatus.Ok, items);
         }
         catch
         {
@@ -360,8 +358,16 @@ public sealed class InventoryRepository : IInventoryRepository
                 equipped_slot = slot,
             }, transaction);
 
+            // 9) 가방 변경분(5.0): 장착 아이템은 칸을 반납해 removed, 스왑된 장비는 그 칸으로 들어와 upserted.
+            var delta = new InventoryDeltaDto();
+            delta.removed.Add(itemId);
+            if (prevItemId is not null && prevBagSlot is not null)
+            {
+                delta.upserted.Add(await LoadBagItemAsync(db, transaction, prevItemId.Value, prevBagSlot.Value));
+            }
+
             await transaction.CommitAsync();
-            return new EquipOutcome(EquipStatus.Ok, slot, prevItemId, prevBagSlot);
+            return new EquipOutcome(EquipStatus.Ok, slot, prevItemId, prevBagSlot) { Delta = delta };
         }
         catch
         {
@@ -429,8 +435,12 @@ public sealed class InventoryRepository : IInventoryRepository
 
             await db.Query("player_item_equipped").Where("player_item_id", itemId.Value).DeleteAsync(transaction);
 
+            // 가방 변경분(5.0): 해제한 장비가 bagSlot 칸으로 돌아온다.
+            var delta = new InventoryDeltaDto();
+            delta.upserted.Add(await LoadBagItemAsync(db, transaction, itemId.Value, bagSlot.Value));
+
             await transaction.CommitAsync();
-            return new UnequipOutcome(UnequipStatus.Ok, itemId.Value, bagSlot.Value);
+            return new UnequipOutcome(UnequipStatus.Ok, itemId.Value, bagSlot.Value) { Delta = delta };
         }
         catch
         {
@@ -480,9 +490,9 @@ public sealed class InventoryRepository : IInventoryRepository
                 return MoveOutcome.Fail(MoveStatus.InvalidSlot);
             }
 
-            // 2) 이동 대상 아이템(계정 소유) 확인.
+            // 2) 이동 대상 아이템(계정 소유) 확인. item_code·quantity·enhance_level은 가방 변경분(5.0) 조립용.
             var itemRow = await db.Query("player_item")
-                .Select("row_type", "slot")
+                .Select("row_type", "slot", "item_code", "quantity", "enhance_level")
                 .Where("player_item_id", itemId).Where("user_id", userId)
                 .FirstOrDefaultAsync<ItemRowTypeSlotRow>(transaction);
             if (itemRow is null)
@@ -501,33 +511,53 @@ public sealed class InventoryRepository : IInventoryRepository
             int fromSlot = itemRow.Slot.Value;
             if (fromSlot == toSlot)
             {
-                // 같은 칸으로의 이동은 변경 없음.
+                // 같은 칸으로의 이동은 변경 없음(가방 변경분도 비어 있다).
                 await transaction.CommitAsync();
                 return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null);
             }
 
-            // 3) 목표 칸 점유자 조회.
-            var occupantId = await db.Query("player_item")
-                .Select("player_item_id")
+            // 3) 목표 칸 점유자 조회(변경분 조립을 위해 표시 정보까지 함께 읽는다).
+            var occupant = await db.Query("player_item")
+                .Select("player_item_id", "slot", "item_code", "quantity", "enhance_level")
                 .Where("user_id", userId).Where("slot", toSlot)
-                .FirstOrDefaultAsync<long?>(transaction);
+                .FirstOrDefaultAsync<BagItemRow>(transaction);
 
-            if (occupantId is not null)
+            // 가방 변경분(5.0): 이동한 아이템의 최종 배치는 언제나 toSlot.
+            var delta = new InventoryDeltaDto();
+            delta.upserted.Add(new InventoryItemDto
+            {
+                itemId = itemId,
+                slot = toSlot,
+                itemCode = itemRow.ItemCode,
+                quantity = itemRow.Quantity,
+                enhanceLevel = itemRow.EnhanceLevel,
+            });
+
+            if (occupant is not null)
             {
                 // 교환: (user_id, slot) 유니크 위반을 피하려 이동 대상 slot을 잠시 비운 뒤 재배치한다.
                 await db.Query("player_item").Where("player_item_id", itemId).UpdateAsync(new { slot = (int?)null }, transaction);
-                await db.Query("player_item").Where("player_item_id", occupantId).UpdateAsync(new { slot = fromSlot }, transaction);
+                await db.Query("player_item").Where("player_item_id", occupant.PlayerItemId).UpdateAsync(new { slot = fromSlot }, transaction);
                 await db.Query("player_item").Where("player_item_id", itemId).UpdateAsync(new { slot = toSlot }, transaction);
 
+                delta.upserted.Add(new InventoryItemDto
+                {
+                    itemId = occupant.PlayerItemId,
+                    slot = fromSlot,
+                    itemCode = occupant.ItemCode,
+                    quantity = occupant.Quantity,
+                    enhanceLevel = occupant.EnhanceLevel,
+                });
+
                 await transaction.CommitAsync();
-                return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, occupantId, fromSlot);
+                return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, occupant.PlayerItemId, fromSlot) { Delta = delta };
             }
 
             // 빈 칸으로 이동.
             await db.Query("player_item").Where("player_item_id", itemId).UpdateAsync(new { slot = toSlot }, transaction);
 
             await transaction.CommitAsync();
-            return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null);
+            return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null) { Delta = delta };
         }
         catch
         {
@@ -612,6 +642,29 @@ public sealed class InventoryRepository : IInventoryRepository
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    /// <summary>
+    /// 가방 변경분(5.0)에 담을 행 1건을 조립한다. 아이템의 표시 정보(item_code·quantity·enhance_level)를
+    /// 호출측 트랜잭션 안에서 읽고, 배치 칸은 그 트랜잭션이 확정한 값(<paramref name="slot"/>)을 쓴다
+    /// (아직 커밋 전이라 DB의 slot 컬럼과 다를 수 있으므로 조회하지 않고 인자로 받는다).
+    /// </summary>
+    private static async Task<InventoryItemDto> LoadBagItemAsync(
+        QueryFactory db, DbTransaction transaction, long itemId, int slot)
+    {
+        var row = await db.Query("player_item")
+            .Select("player_item_id", "slot", "item_code", "quantity", "enhance_level")
+            .Where("player_item_id", itemId)
+            .FirstOrDefaultAsync<BagItemRow>(transaction);
+
+        return new InventoryItemDto
+        {
+            itemId = itemId,
+            slot = slot,
+            itemCode = row?.ItemCode ?? 0,
+            quantity = row?.Quantity ?? 1,
+            enhanceLevel = row?.EnhanceLevel ?? 0,
+        };
     }
 
     /// <summary>

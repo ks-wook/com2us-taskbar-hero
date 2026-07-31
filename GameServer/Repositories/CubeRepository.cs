@@ -2,6 +2,7 @@ using System.Data.Common;
 using GameServer.Data;
 using GameServer.MasterData;
 using SqlKata.Execution;
+using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories;
 
@@ -29,6 +30,9 @@ public sealed record CombineDecision(CombineStatus Status, int ResultItemCode, i
 public sealed record CombineOutcome(
     CombineStatus Status, long ResultItemId, int ResultItemCode, int ResultGrade, int CubeLevel, long CubeExp)
 {
+    /// <summary>가방 변경분(5.0). 커밋 전에 확정된 값이라 응답 조립·캐시 갱신에 추가 조회가 필요 없다.</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
     public static CombineOutcome Fail(CombineStatus status) => new(status, 0, 0, 0, 0, 0);
 }
 
@@ -50,6 +54,18 @@ public sealed record DismantleReward(long TotalGold, long TotalCubeExp);
 /// <summary>분해 트랜잭션 결과. Gold·CubeExp는 이번 분해로 획득한 증가분.</summary>
 public sealed record DismantleOutcome(DismantleStatus Status, long Gold, long CubeExp)
 {
+    /// <summary>가방 변경분(5.0). 커밋 전에 확정된 값이라 응답 조립·캐시 갱신에 추가 조회가 필요 없다.</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
+    /// <summary>갱신 후 큐브 레벨(응답 cube).</summary>
+    public int NewCubeLevel { get; init; }
+
+    /// <summary>갱신 후 큐브 누적 경험치(응답 cube). 위 <see cref="CubeExp"/>는 이번 증가분이다.</summary>
+    public long NewCubeExp { get; init; }
+
+    /// <summary>적립 후 골드 잔액(응답 balance).</summary>
+    public long GoldBalance { get; init; }
+
     public static DismantleOutcome Fail(DismantleStatus status) => new(status, 0, 0);
 }
 
@@ -66,6 +82,12 @@ public enum CraftStatus
 /// <summary>제작 트랜잭션 결과. CubeLevel·CubeExp는 갱신 후 큐브 상태.</summary>
 public sealed record CraftOutcome(CraftStatus Status, int CubeLevel, long CubeExp)
 {
+    /// <summary>가방 변경분(5.0). 커밋 전에 확정된 값이라 응답 조립·캐시 갱신에 추가 조회가 필요 없다.</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
+    /// <summary>비용 차감 후 골드 잔액(응답 balance).</summary>
+    public long GoldBalance { get; init; }
+
     public static CraftOutcome Fail(CraftStatus status) => new(status, 0, 0);
 }
 
@@ -121,6 +143,14 @@ file sealed class ItemIdQtyRow
 {
     public long PlayerItemId { get; set; }
     public long Quantity { get; set; }
+}
+
+/// <summary>가방 변경분(5.0) 조립에 배치 칸이 필요한 조회용(재료 차감·스택 병합).</summary>
+file sealed class ItemIdQtySlotRow
+{
+    public long PlayerItemId { get; set; }
+    public long Quantity { get; set; }
+    public int? Slot { get; set; }
 }
 
 /// <summary>큐브(합성·분해·제작) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
@@ -227,8 +257,23 @@ public sealed class CubeRepository : ICubeRepository
             var (newLevel, newExp) = advanceCube(cubeLevel, cubeExp, decision.CubeExpGain);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
 
+            // 7) 가방 변경분(5.0): 입력 전량이 사라지고 결과 아이템 1개가 slot 칸에 생긴다.
+            var delta = new InventoryDeltaDto();
+            delta.removed.AddRange(itemIds);
+            delta.upserted.Add(new InventoryItemDto
+            {
+                itemId = resultItemId,
+                slot = slot,
+                itemCode = decision.ResultItemCode,
+                quantity = 1,
+                enhanceLevel = 0,
+            });
+
             await transaction.CommitAsync();
-            return new CombineOutcome(CombineStatus.Ok, resultItemId, decision.ResultItemCode, decision.ResultGrade, newLevel, newExp);
+            return new CombineOutcome(CombineStatus.Ok, resultItemId, decision.ResultItemCode, decision.ResultGrade, newLevel, newExp)
+            {
+                Delta = delta,
+            };
         }
         catch
         {
@@ -308,30 +353,47 @@ public sealed class CubeRepository : ICubeRepository
             // 2) 보상 산출(마스터 등급 기반, 서비스).
             var reward = computeReward(cubeLevel, inputs);
 
-            // 3) 아이템 차감/삭제.
+            // 3) 아이템 차감/삭제. 같은 루프에서 가방 변경분(5.0)을 모은다.
+            var delta = new InventoryDeltaDto();
             foreach (var (itemId, count) in items)
             {
                 var row = byId[itemId];
                 if (count >= row.Quantity)
                 {
                     await db.Query("player_item").Where("player_item_id", itemId).DeleteAsync(transaction);
+                    delta.removed.Add(itemId);
                 }
                 else
                 {
+                    long remaining = row.Quantity - count;
                     await db.Query("player_item").Where("player_item_id", itemId)
-                        .UpdateAsync(new { quantity = row.Quantity - count }, transaction);
+                        .UpdateAsync(new { quantity = remaining }, transaction);
+                    delta.upserted.Add(new InventoryItemDto
+                    {
+                        itemId = itemId,
+                        slot = row.Slot ?? 0,
+                        itemCode = row.ItemCode,
+                        quantity = remaining,
+                        enhanceLevel = 0,
+                    });
                 }
             }
 
-            // 4) 골드 적립.
-            await CreditGoldAsync(db, transaction, userId, reward.TotalGold, nowUnix);
+            // 4) 골드 적립(적립 후 잔액을 응답에 담는다).
+            long goldBalance = await CreditGoldAsync(db, transaction, userId, reward.TotalGold, nowUnix);
 
             // 5) 큐브 경험치 반영.
             var (newLevel, newExp) = advanceCube(cubeLevel, cubeExp, reward.TotalCubeExp);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
 
             await transaction.CommitAsync();
-            return new DismantleOutcome(DismantleStatus.Ok, reward.TotalGold, reward.TotalCubeExp);
+            return new DismantleOutcome(DismantleStatus.Ok, reward.TotalGold, reward.TotalCubeExp)
+            {
+                Delta = delta,
+                NewCubeLevel = newLevel,
+                NewCubeExp = newExp,
+                GoldBalance = goldBalance,
+            };
         }
         catch
         {
@@ -406,24 +468,27 @@ public sealed class CubeRepository : ICubeRepository
             }
 
             // 4) 골드 차감.
+            long goldBalance = gold;
             if (recipe.CostGold > 0 && goldRow is not null)
             {
+                goldBalance = gold - recipe.CostGold;
                 await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
-                    .UpdateAsync(new { quantity = gold - recipe.CostGold }, transaction);
+                    .UpdateAsync(new { quantity = goldBalance }, transaction);
             }
 
-            // 5) 재료 차감.
+            // 5) 재료 차감. 차감 결과는 가방 변경분(5.0)에 누적된다.
+            var delta = new InventoryDeltaDto();
             foreach (var ing in recipe.Ingredients)
             {
-                await ConsumeMaterialAsync(db, transaction, userId, ing.MaterialCode, ing.Quantity);
+                await ConsumeMaterialAsync(db, transaction, userId, ing.MaterialCode, ing.Quantity, delta);
             }
 
-            // 6) 결과 아이템 지급.
+            // 6) 결과 아이템 지급(생성·병합 결과도 같은 변경분에 누적).
             int capacity = await LoadCapacityAsync(db, transaction, userId);
             var used = await LoadUsedSlotsAsync(db, transaction, userId);
             bool stored = await StoreResultAsync(
                 db, transaction, userId, recipe.ResultItemCode, recipe.ResultQuantity,
-                resultItemType, resultStackMax, capacity, used, nowUnix);
+                resultItemType, resultStackMax, capacity, used, nowUnix, delta);
             if (!stored)
             {
                 await transaction.RollbackAsync();
@@ -435,7 +500,7 @@ public sealed class CubeRepository : ICubeRepository
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
 
             await transaction.CommitAsync();
-            return new CraftOutcome(CraftStatus.Ok, newLevel, newExp);
+            return new CraftOutcome(CraftStatus.Ok, newLevel, newExp) { Delta = delta, GoldBalance = goldBalance };
         }
         catch
         {
@@ -496,16 +561,16 @@ public sealed class CubeRepository : ICubeRepository
     }
 
     /// <summary>골드(재화 행)를 upsert로 적립한다.</summary>
-    private static async Task CreditGoldAsync(QueryFactory db, DbTransaction tx, long userId, long amount, long nowUnix)
+    private static async Task<long> CreditGoldAsync(QueryFactory db, DbTransaction tx, long userId, long amount, long nowUnix)
     {
-        if (amount <= 0)
-        {
-            return;
-        }
-
         var goldRow = await db.Query("player_item").Select("player_item_id", "quantity")
             .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
             .FirstOrDefaultAsync<ItemIdQtyRow>(tx);
+
+        if (amount <= 0)
+        {
+            return goldRow?.Quantity ?? 0; // 적립할 것이 없어도 응답에 담을 현재 잔액은 돌려준다.
+        }
 
         if (goldRow is null)
         {
@@ -519,21 +584,26 @@ public sealed class CubeRepository : ICubeRepository
                 enhance_level = 0,
                 acquired_at = nowUnix,
             }, tx);
+            return amount;
         }
-        else
-        {
-            await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
-                .UpdateAsync(new { quantity = goldRow.Quantity + amount }, tx);
-        }
+
+        long newBalance = goldRow.Quantity + amount;
+        await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
+            .UpdateAsync(new { quantity = newBalance }, tx);
+        return newBalance;
     }
 
-    /// <summary>재료(material_code)를 필요 수량만큼 여러 행에 걸쳐 차감한다(부족분은 호출 전에 검증됨).</summary>
-    private static async Task ConsumeMaterialAsync(QueryFactory db, DbTransaction tx, long userId, int materialCode, long need)
+    /// <summary>
+    /// 재료(material_code)를 필요 수량만큼 여러 행에 걸쳐 차감한다(부족분은 호출 전에 검증됨).
+    /// 사라진 행과 수량이 줄어든 행을 <paramref name="delta"/>에 기록해 응답·캐시 갱신에 쓴다(5.0).
+    /// </summary>
+    private static async Task ConsumeMaterialAsync(
+        QueryFactory db, DbTransaction tx, long userId, int materialCode, long need, InventoryDeltaDto delta)
     {
-        var rows = await db.Query("player_item").Select("player_item_id", "quantity")
+        var rows = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
             .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", materialCode)
             .OrderBy("player_item_id")
-            .GetAsync<ItemIdQtyRow>(tx);
+            .GetAsync<ItemIdQtySlotRow>(tx);
 
         foreach (var row in rows)
         {
@@ -546,11 +616,21 @@ public sealed class CubeRepository : ICubeRepository
             if (take >= row.Quantity)
             {
                 await db.Query("player_item").Where("player_item_id", row.PlayerItemId).DeleteAsync(tx);
+                delta.removed.Add(row.PlayerItemId);
             }
             else
             {
+                long remaining = row.Quantity - take;
                 await db.Query("player_item").Where("player_item_id", row.PlayerItemId)
-                    .UpdateAsync(new { quantity = row.Quantity - take }, tx);
+                    .UpdateAsync(new { quantity = remaining }, tx);
+                delta.upserted.Add(new InventoryItemDto
+                {
+                    itemId = row.PlayerItemId,
+                    slot = row.Slot ?? 0,
+                    itemCode = materialCode,
+                    quantity = remaining,
+                    enhanceLevel = 0,
+                });
             }
 
             need -= take;
@@ -560,20 +640,21 @@ public sealed class CubeRepository : ICubeRepository
     /// <summary>
     /// 제작 결과 아이템을 적재한다. 재료(스택)면 기존 스택에 채운 뒤 남으면 새 행, 장비면 개당 1행씩 새 칸에 넣는다.
     /// 새 칸이 용량을 넘어 부족하면 false(호출측 롤백).
+    /// 병합된 스택과 새로 만든 행을 <paramref name="delta"/>에 기록해 응답·캐시 갱신에 쓴다(5.0).
     /// </summary>
     private static async Task<bool> StoreResultAsync(
         QueryFactory db, DbTransaction tx, long userId, int itemCode, int quantity,
-        int itemType, int stackMax, int capacity, HashSet<int> used, long nowUnix)
+        int itemType, int stackMax, int capacity, HashSet<int> used, long nowUnix, InventoryDeltaDto delta)
     {
         long remaining = quantity;
 
         // 재료(스택 가능): 기존 스택의 여유부터 채운다(새 칸 불필요).
         if (itemType == ItemTypeMaterial && stackMax > 1)
         {
-            var stacks = await db.Query("player_item").Select("player_item_id", "quantity")
+            var stacks = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
                 .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", itemCode)
                 .Where("quantity", "<", stackMax)
-                .GetAsync<ItemIdQtyRow>(tx);
+                .GetAsync<ItemIdQtySlotRow>(tx);
 
             foreach (var stack in stacks)
             {
@@ -584,8 +665,17 @@ public sealed class CubeRepository : ICubeRepository
 
                 long room = stackMax - stack.Quantity;
                 long add = Math.Min(room, remaining);
+                long merged = stack.Quantity + add;
                 await db.Query("player_item").Where("player_item_id", stack.PlayerItemId)
-                    .UpdateAsync(new { quantity = stack.Quantity + add }, tx);
+                    .UpdateAsync(new { quantity = merged }, tx);
+                delta.upserted.Add(new InventoryItemDto
+                {
+                    itemId = stack.PlayerItemId,
+                    slot = stack.Slot ?? 0,
+                    itemCode = itemCode,
+                    quantity = merged,
+                    enhanceLevel = 0,
+                });
                 remaining -= add;
             }
         }
@@ -601,7 +691,7 @@ public sealed class CubeRepository : ICubeRepository
             }
 
             long put = Math.Min(perRow, remaining);
-            await db.Query("player_item").InsertAsync(new
+            long newItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
             {
                 user_id = userId,
                 row_type = RowTypeItem,
@@ -611,6 +701,14 @@ public sealed class CubeRepository : ICubeRepository
                 enhance_level = 0,
                 acquired_at = nowUnix,
             }, tx);
+            delta.upserted.Add(new InventoryItemDto
+            {
+                itemId = newItemId,
+                slot = slot,
+                itemCode = itemCode,
+                quantity = put,
+                enhanceLevel = 0,
+            });
             used.Add(slot);
             remaining -= put;
         }

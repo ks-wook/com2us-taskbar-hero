@@ -34,42 +34,61 @@ public sealed class InventoryService : IInventoryService
 
     private readonly IInventoryRepository _inventoryRepository;
     private readonly MasterDataProvider _masterData;
+    private readonly InventoryBagCache _bagCache;
     private readonly ILogger<InventoryService> _logger;
 
-    /// <summary>의존성(인벤토리 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
-    public InventoryService(IInventoryRepository inventoryRepository, MasterDataProvider masterData, ILogger<InventoryService> logger)
+    /// <summary>의존성(인벤토리 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
+    public InventoryService(
+        IInventoryRepository inventoryRepository, MasterDataProvider masterData,
+        InventoryBagCache bagCache, ILogger<InventoryService> logger)
     {
         _inventoryRepository = inventoryRepository;
         _masterData = masterData;
+        _bagCache = bagCache;
         _logger = logger;
     }
 
     /// <summary>
     /// 가방 아이템 한 페이지를 조회한다(코어 로드에서 빠진 가변 크기 데이터의 지연 로딩).
-    /// 페이지 크기를 1~<see cref="MaxPageLimit"/>으로 클램프하고(0 이하이면 기본값), 리포지토리가 slot 커서
-    /// keyset 페이징으로 읽은 결과를 응답 DTO로 변환한다. 페이지 사이의 인벤토리 변경은 감지하지 않으며,
-    /// 클라이언트가 itemId 기준으로 병합해 흡수한다(세이브 데이터 기획서 5.2).
+    /// 가방 캐시(기획서 6.5)에서 전량 스냅샷을 읽고, 미스면 MySQL에서 전량을 읽어 캐시를 채운다.
+    /// 그 완전 집합에 slot 커서와 페이지 크기를 적용해 응답을 만든다 — 페이지 크기는 1~<see cref="MaxPageLimit"/>로
+    /// 클램프한다(0 이하이면 기본값). 페이지 사이의 인벤토리 변경은 감지하지 않으며, 클라이언트가
+    /// itemId 기준으로 병합해 흡수한다(세이브 데이터 기획서 5.2).
     /// </summary>
     public async Task<SaveResult> GetPageAsync(long userId, int cursor, int limit)
     {
         // 클라 버전 차이로 로드가 아예 실패하지 않도록 거부하지 않고 클램프한다(기획서 5.2).
         int effectiveLimit = limit <= 0 ? DefaultPageLimit : Math.Min(limit, MaxPageLimit);
 
-        var outcome = await _inventoryRepository.GetPageAsync(userId, cursor, effectiveLimit);
-
-        if (outcome.Status == InventoryPageStatus.NoPlayer)
+        var bag = await _bagCache.TryGetAsync(userId);
+        if (bag is null)
         {
-            return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+            // 캐시 미스·Redis 장애 → MySQL 폴백. 완전 집합을 읽었으므로 그대로 캐시에 적재한다(6.5).
+            var outcome = await _inventoryRepository.GetAllAsync(userId);
+            if (outcome.Status == InventoryPageStatus.NoPlayer)
+            {
+                return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+            }
+
+            bag = outcome.Items;
+            await _bagCache.FillAsync(userId, bag);
         }
 
-        var items = outcome.Items.ToList();
+        // 완전 집합에서 요청 구간만 잘라낸다. 한 건 더 떠서 다음 페이지 존재 여부를 판정한다.
+        var page = bag.Where(i => i.slot > cursor).Take(effectiveLimit + 1).ToList();
+        bool hasMore = page.Count > effectiveLimit;
+        if (hasMore)
+        {
+            page.RemoveAt(page.Count - 1);
+        }
+
         var data = new InventoryPageDto
         {
-            items = items,
+            items = page,
             // 다음 페이지 커서는 이 페이지 마지막 항목의 slot. 빈 페이지면 요청 커서를 그대로 돌려준다.
-            nextCursor = items.Count > 0 ? items[^1].slot : cursor,
-            hasMore = outcome.HasMore,
-            total = outcome.Total,
+            nextCursor = page.Count > 0 ? page[^1].slot : cursor,
+            hasMore = hasMore,
+            total = bag.Count,
         };
 
         return new SaveResult(ErrorCode.Success, "Inventory page", data);
@@ -114,6 +133,7 @@ public sealed class InventoryService : IInventoryService
             unequippedBagSlot = outcome.UnequippedBagSlot ?? -1,
         };
 
+        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogDebug($"장착 성공: userId {userId:@UserId}, characterId {characterId:@CharacterId}, itemId {itemId:@ItemId}, slot {outcome.Slot:@Slot}");
         return new SaveResult(ErrorCode.Success, "Equipped", data);
     }
@@ -144,6 +164,7 @@ public sealed class InventoryService : IInventoryService
             itemId = outcome.ItemId,
             bagSlot = outcome.BagSlot,
         };
+        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogDebug($"장착 해제 성공: userId {userId:@UserId}, characterId {characterId:@CharacterId}, slot {slot:@Slot}, itemId {outcome.ItemId:@ItemId}, bagSlot {outcome.BagSlot:@BagSlot}");
         return new SaveResult(ErrorCode.Success, "Unequipped", data);
     }
@@ -169,6 +190,7 @@ public sealed class InventoryService : IInventoryService
                 : new SlotItemDto { slot = outcome.SwappedSlot!.Value, itemId = outcome.SwappedItemId.Value },
         };
 
+        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogDebug($"배치 이동 성공: userId {userId:@UserId}, itemId {itemId:@ItemId}, toSlot {toSlot:@ToSlot}");
         return new SaveResult(ErrorCode.Success, "Moved", data);
     }

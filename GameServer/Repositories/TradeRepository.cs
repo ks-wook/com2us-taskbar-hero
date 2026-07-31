@@ -1,6 +1,7 @@
 using System.Data.Common;
 using GameServer.Data;
 using SqlKata.Execution;
+using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories;
 
@@ -37,6 +38,9 @@ public enum TradeCloseStatus
 /// <summary>판매 등록 결과. 성공 시 등록된 스냅샷을 함께 돌려준다.</summary>
 public sealed record TradeRegisterOutcome(TradeRegisterStatus Status, TradeListingSnapshot? Listing)
 {
+    /// <summary>가방 변경분(5.0). 커밋 전에 확정된 값이라 응답 조립·캐시 갱신에 추가 조회가 필요 없다.</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
     public static TradeRegisterOutcome Fail(TradeRegisterStatus status) => new(status, null);
 }
 
@@ -50,6 +54,9 @@ public sealed record TradeBuyOutcome(
 /// <summary>판매 취소 결과. 성공 시 인벤토리로 복귀한 아이템 스냅샷을 돌려준다.</summary>
 public sealed record TradeCancelOutcome(TradeCloseStatus Status, TradeListingSnapshot? Listing)
 {
+    /// <summary>가방 변경분(5.0). 커밋 전에 확정된 값이라 응답 조립·캐시 갱신에 추가 조회가 필요 없다.</summary>
+    public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
+
     public static TradeCancelOutcome Fail(TradeCloseStatus status) => new(status, null);
 }
 
@@ -262,11 +269,18 @@ public sealed class TradeRepository : ITradeRepository
                 closed_at = 0,
             }, transaction);
 
+            // 가방 변경분(5.0): 등록한 아이템 행은 에스크로로 옮겨져 인벤토리에서 사라진다.
+            var delta = new InventoryDeltaDto();
+            delta.removed.Add(itemId);
+
             await transaction.CommitAsync();
             return new TradeRegisterOutcome(
                 TradeRegisterStatus.Ok,
                 new TradeListingSnapshot(
-                    listingId, userId, item.ItemCode, item.EnhanceLevel, quantity, price, nowUnix, expiresAt));
+                    listingId, userId, item.ItemCode, item.EnhanceLevel, quantity, price, nowUnix, expiresAt))
+            {
+                Delta = delta,
+            };
         }
         catch
         {
@@ -422,7 +436,8 @@ public sealed class TradeRepository : ITradeRepository
             var snapshot = new TradeListingSnapshot(
                 row.ListingId, row.SellerUserId, row.ItemCode, row.EnhanceLevel,
                 row.Quantity, row.Price, row.CreatedAt, row.ExpiresAt);
-            var stored = await StoreTradeItemAsync(db, transaction, userId, snapshot, itemLookup, nowUnix);
+            var delta = new InventoryDeltaDto();
+            var stored = await StoreTradeItemAsync(db, transaction, userId, snapshot, itemLookup, nowUnix, delta);
             if (!stored)
             {
                 await transaction.RollbackAsync();
@@ -430,7 +445,7 @@ public sealed class TradeRepository : ITradeRepository
             }
 
             await transaction.CommitAsync();
-            return new TradeCancelOutcome(TradeCloseStatus.Ok, snapshot);
+            return new TradeCancelOutcome(TradeCloseStatus.Ok, snapshot) { Delta = delta };
         }
         catch
         {
@@ -541,7 +556,7 @@ public sealed class TradeRepository : ITradeRepository
     /// </summary>
     private static async Task<bool> StoreTradeItemAsync(
         QueryFactory db, DbTransaction tx, long userId, TradeListingSnapshot listing,
-        Func<int, TradeItemInfo?> itemLookup, long nowUnix)
+        Func<int, TradeItemInfo?> itemLookup, long nowUnix, InventoryDeltaDto delta)
     {
         var info = itemLookup(listing.ItemCode);
         var itemType = info?.ItemType ?? 1;
@@ -557,10 +572,10 @@ public sealed class TradeRepository : ITradeRepository
         // 재료(스택 가능): 기존 스택의 여유부터 채운다(새 칸 불필요). 강화 단계가 없는 종류다.
         if (itemType == ItemTypeMaterial && stackMax > 1)
         {
-            var stacks = await db.Query("player_item").Select("player_item_id", "quantity")
+            var stacks = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
                 .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", listing.ItemCode)
                 .Where("quantity", "<", stackMax)
-                .GetAsync<ItemIdQtyRow>(tx);
+                .GetAsync<ItemIdQtySlotRow>(tx);
 
             foreach (var stack in stacks)
             {
@@ -571,8 +586,17 @@ public sealed class TradeRepository : ITradeRepository
 
                 var room = stackMax - stack.Quantity;
                 var add = Math.Min(room, remaining);
+                var merged = stack.Quantity + add;
                 await db.Query("player_item").Where("player_item_id", stack.PlayerItemId)
-                    .UpdateAsync(new { quantity = stack.Quantity + add }, tx);
+                    .UpdateAsync(new { quantity = merged }, tx);
+                delta.upserted.Add(new InventoryItemDto
+                {
+                    itemId = stack.PlayerItemId,
+                    slot = stack.Slot ?? 0,
+                    itemCode = listing.ItemCode,
+                    quantity = merged,
+                    enhanceLevel = listing.EnhanceLevel,
+                });
                 remaining -= add;
             }
         }
@@ -587,7 +611,7 @@ public sealed class TradeRepository : ITradeRepository
             }
 
             var put = Math.Min(perRow, remaining);
-            await db.Query("player_item").InsertAsync(new
+            var newItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
             {
                 user_id = userId,
                 row_type = RowTypeItem,
@@ -597,6 +621,14 @@ public sealed class TradeRepository : ITradeRepository
                 enhance_level = listing.EnhanceLevel,
                 acquired_at = nowUnix,
             }, tx);
+            delta.upserted.Add(new InventoryItemDto
+            {
+                itemId = newItemId,
+                slot = slot,
+                itemCode = listing.ItemCode,
+                quantity = put,
+                enhanceLevel = listing.EnhanceLevel,
+            });
             used.Add(slot);
             remaining -= put;
         }
@@ -659,4 +691,12 @@ file sealed class ItemIdQtyRow
 {
     public long PlayerItemId { get; set; }
     public long Quantity { get; set; }
+}
+
+/// <summary>가방 변경분(5.0) 조립에 배치 칸이 필요한 스택 병합 조회용.</summary>
+file sealed class ItemIdQtySlotRow
+{
+    public long PlayerItemId { get; set; }
+    public long Quantity { get; set; }
+    public int? Slot { get; set; }
 }
