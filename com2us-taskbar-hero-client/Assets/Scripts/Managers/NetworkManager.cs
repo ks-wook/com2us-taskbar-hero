@@ -12,6 +12,9 @@ namespace TaskbarHero.Client.Managers
     /// UnityWebRequest 기반으로 JSON GET/POST를 수행하고, 서버 공통 응답 봉투
     /// ({ success, errorCode, message, ... })를 해석해 성공/실패 콜백으로 전달한다.
     /// 에러 코드는 서버-클라이언트 공통 계약인 <see cref="ErrorCode"/>(TaskbarHero.Common)를 사용한다.
+    /// <b>전송 계층 오류</b>(연결 실패·타임아웃·봉투 없는 HTTP 오류·응답 해석 실패)는 호출측 처리와 별개로
+    /// 여기서 공용 모달로 안내한다(<see cref="ReportTransportError"/>) — 화면 반응 없이 로그에만 남는
+    /// 상황을 없애기 위함이다. 서버가 봉투로 응답한 논리 오류(errorCode)는 각 화면이 안내한다.
     /// </summary>
     public class NetworkManager : MonoBehaviour
     {
@@ -24,6 +27,15 @@ namespace TaskbarHero.Client.Managers
         [Header("요청 설정")]
         [Tooltip("요청 타임아웃(초). 0이면 무제한.")]
         [SerializeField] private int timeoutSeconds = 10;
+
+        [Tooltip("전송 계층 오류(연결 실패·타임아웃·HTTP 오류·응답 해석 실패)를 공용 모달로도 안내한다. " +
+                 "끄면 로그에만 남는다.")]
+        [SerializeField] private bool showNetworkErrorModal = true;
+
+        // 서버가 죽어 여러 요청이 한꺼번에 실패할 때 같은 안내가 반복해 열리지 않도록 하는 간격(초).
+        private const float NetworkErrorModalCooldown = 3f;
+        private const string NetworkErrorModalTitle = "네트워크 오류";
+        private float _lastNetworkErrorModalTime = -999f;
 
         // 최초 직렬화 기본값(포트·스킴). 접속 호스트를 바꿔도 각 서버의 포트는 이 기본값을 유지한다.
         private string _defaultAccountBaseUrl;
@@ -202,14 +214,16 @@ namespace TaskbarHero.Client.Managers
                 // 2) 전송/프로토콜 오류: 연결 실패·타임아웃·봉투 없는 HTTP 오류 등
                 if (request.result != UnityWebRequest.Result.Success)
                 {
-                    onError?.Invoke(new NetworkError
+                    var transportError = new NetworkError
                     {
                         IsTransportError = true,
                         HttpStatus = request.responseCode,
                         ErrorCode = hasEnvelope ? (ErrorCode)env.errorCode : ErrorCode.InvalidRequest,
                         Message = string.IsNullOrEmpty(request.error) ? "네트워크 오류" : request.error,
                         RawBody = responseText,
-                    });
+                    };
+                    ReportTransportError(DescribeTransportKind(request.result, request.error), method, url, transportError);
+                    onError?.Invoke(transportError);
                     yield break;
                 }
 
@@ -229,20 +243,103 @@ namespace TaskbarHero.Client.Managers
                     }
                     catch (Exception e)
                     {
-                        onError?.Invoke(new NetworkError
+                        var parseError = new NetworkError
                         {
                             IsTransportError = false,
                             HttpStatus = request.responseCode,
                             ErrorCode = ErrorCode.InvalidRequest,
                             Message = "응답 JSON 파싱 실패: " + e.Message,
                             RawBody = responseText,
-                        });
+                        };
+                        ReportTransportError("응답 해석 실패", method, url, parseError);
+                        onError?.Invoke(parseError);
                         yield break;
                     }
                 }
 
                 onSuccess?.Invoke(response);
             }
+        }
+
+        /// <summary>
+        /// 전송 계층 오류(연결 실패·타임아웃·봉투 없는 HTTP 오류·응답 해석 실패)를 경고 로그로 남기고,
+        /// <b>공용 모달로도 안내</b>한다 — 서버가 내려갔거나 주소가 틀렸을 때 화면에는 아무 반응이 없고
+        /// 로그에만 흔적이 남는 상황을 없애기 위함이다(어떤 요청이 왜 실패했는지 사용자에게 그대로 노출).
+        /// 서버가 봉투로 응답한 <b>논리 오류(errorCode)는 여기서 다루지 않는다</b> — 그쪽은 각 화면이
+        /// 사용자 문구(<c>ErrorMessages</c>)로 이미 안내하므로 중복 안내가 된다.
+        /// 호출측이 자체 모달을 띄우는 화면(로그인 등)은 이 안내 직후 같은 모달을 덮어써 더 구체적인
+        /// 문구를 보여주게 된다(공용 모달 인스턴스가 하나이므로 창이 쌓이지 않는다).
+        /// </summary>
+        private void ReportTransportError(string kind, string method, string url, NetworkError error)
+        {
+            Debug.LogWarning($"[NET] {kind}: {method} {url} → {error}");
+
+            if (!showNetworkErrorModal || ModalManager.Instance == null)
+            {
+                return;
+            }
+            // 서버 다운 등으로 여러 요청이 동시에 실패할 때 같은 안내가 반복 개폐되지 않도록 간격을 둔다.
+            if (Time.unscaledTime - _lastNetworkErrorModalTime < NetworkErrorModalCooldown)
+            {
+                return;
+            }
+            _lastNetworkErrorModalTime = Time.unscaledTime;
+            ModalManager.Instance.ShowConfirm(NetworkErrorModalTitle, BuildNetworkErrorMessage(kind, method, url, error));
+        }
+
+        /// <summary>모달에 표시할 오류 내역을 만든다(오류 종류·요청 대상·HTTP 상태·원인 메시지).
+        /// 공용 모달의 본문 영역은 <b>네 줄까지만</b> 보이므로(그 아래는 버튼에 가린다) 줄 수를 그 안에 맞추고,
+        /// 원인 문구는 길면 잘라 한 줄을 넘기지 않게 한다.</summary>
+        private static string BuildNetworkErrorMessage(string kind, string method, string url, NetworkError error)
+        {
+            var sb = new StringBuilder();
+            sb.Append(kind).Append('\n');
+            sb.Append("요청: ").Append(method).Append(' ').Append(ExtractAuthority(url)).Append(ExtractPath(url));
+            if (error.HttpStatus > 0)
+            {
+                sb.Append('\n').Append("HTTP 상태: ").Append(error.HttpStatus);
+            }
+            if (!string.IsNullOrEmpty(error.Message))
+            {
+                sb.Append('\n').Append("원인: ").Append(Shorten(error.Message, 46));
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>모달 한 줄을 넘기지 않도록 긴 문구를 잘라낸다(파싱 예외 메시지 등).</summary>
+        private static string Shorten(string text, int max)
+            => string.IsNullOrEmpty(text) || text.Length <= max ? text : text.Substring(0, max) + "…";
+
+        /// <summary>전송 계층 실패의 종류를 사람이 읽을 수 있는 문구로 분류한다(연결/타임아웃/HTTP/데이터).</summary>
+        private static string DescribeTransportKind(UnityWebRequest.Result result, string error)
+        {
+            switch (result)
+            {
+                case UnityWebRequest.Result.ConnectionError:
+                    return !string.IsNullOrEmpty(error) && error.IndexOf("timeout", StringComparison.OrdinalIgnoreCase) >= 0
+                        ? "요청 시간이 초과되었습니다."
+                        : "서버에 연결할 수 없습니다.";
+                case UnityWebRequest.Result.ProtocolError:
+                    return "서버가 오류 응답을 반환했습니다.";
+                case UnityWebRequest.Result.DataProcessingError:
+                    return "응답 데이터를 처리하지 못했습니다.";
+                default:
+                    return "네트워크 요청에 실패했습니다.";
+            }
+        }
+
+        /// <summary>URL에서 경로만 추출한다(파싱 실패 시 원본 반환).</summary>
+        private static string ExtractPath(string url)
+        {
+            try { return new Uri(url).AbsolutePath; }
+            catch { return url; }
+        }
+
+        /// <summary>URL에서 호스트:포트를 추출한다(파싱 실패 시 원본 반환).</summary>
+        private static string ExtractAuthority(string url)
+        {
+            try { var uri = new Uri(url); return uri.Host + ":" + uri.Port; }
+            catch { return url; }
         }
 
         private static bool HasEnvelope(string text)
