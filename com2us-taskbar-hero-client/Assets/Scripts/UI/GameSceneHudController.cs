@@ -13,6 +13,11 @@ namespace TaskbarHero.Client.UI
     /// ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
     /// 버튼 줄은 던전 배경 띠보다 아래(화면 최하단)에 놓여 배경 아트에 묻히지 않는다 —
     /// 배경 띠를 위로 띄우는 쪽은 <c>DungeonBattleBuilder</c>가 GameScene을 구울 때 처리한다.
+    /// <para>
+    /// 화면 구성 외에 <b>GameScene에 머무는 동안 도는 주기 작업</b>도 이 컴포넌트가 소유한다 —
+    /// 미수령 메일 레드닷 조회(<see cref="MailNotifyLoop"/>)와 접속 시각 갱신
+    /// (<see cref="HeartbeatLoop"/>, 오프라인 정산 기준 시각). 씬을 벗어나면 함께 사라져 자동으로 멈춘다.
+    /// </para>
     /// </summary>
     public class GameSceneHudController : MonoBehaviour
     {
@@ -44,6 +49,11 @@ namespace TaskbarHero.Client.UI
         [Header("알림(레드닷)")]
         [Tooltip("미수령 보상 메일 확인을 위한 우편함 재조회 주기(초). 0 이하면 진입 시 1회만 조회한다.")]
         [SerializeField] private float mailPollIntervalSeconds = 60f;
+
+        [Header("접속 시각 갱신(heartbeat)")]
+        [Tooltip("접속 시각 갱신(/api/game/update-last-active) 주기(초). 기획서 규약은 5분(300초)이며, " +
+                 "이 값이 곧 오프라인 정산 시작점의 정밀도가 된다. 0 이하면 보내지 않는다.")]
+        [SerializeField] private float heartbeatIntervalSeconds = 300f;
 
         [Header("접속 시 자동 표시")]
         [Tooltip("접속 시 오늘자 출석 보상이 아직 남아 있으면 출석부 패널을 자동으로 연다.")]
@@ -96,7 +106,8 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>GameScene 진입 시 대기 중인 오프라인 보상 정산 결과가 있으면 팝업으로 표시하고,
-        /// 메일 레드닷 판정을 위한 우편함 조회 루프와 출석부 자동 표시 판정을 시작한다.</summary>
+        /// 메일 레드닷 판정을 위한 우편함 조회 루프·접속 시각 갱신(heartbeat) 루프와
+        /// 출석부 자동 표시 판정을 시작한다.</summary>
         private void Start()
         {
             if (Session.PendingOfflineReward != null && UIManager.Instance != null)
@@ -106,6 +117,7 @@ namespace TaskbarHero.Client.UI
             // 접속 직후 1회만 활성 버프를 재동기화한다(잔여 시간 기준점 serverTime 확보 — 이후 폴링 없음).
             BuffManager.Refresh();
             StartCoroutine(MailNotifyLoop());
+            StartCoroutine(HeartbeatLoop());
             if (autoOpenAttendance)
             {
                 StartCoroutine(AutoOpenAttendanceRoutine());
@@ -161,6 +173,50 @@ namespace TaskbarHero.Client.UI
                 yield return wait;
                 MailNotifier.Refresh();
             }
+        }
+
+        /// <summary>
+        /// 접속 중임을 서버에 알리는 heartbeat 루프(<c>POST /api/game/update-last-active</c>).
+        /// 서버는 이 요청마다 <c>game_player.last_active_at</c>을 현재 시각으로 갱신하며, 접속이 끊기면
+        /// <b>마지막 heartbeat 시각이 곧 오프라인 정산의 시작점</b>이 된다([오프라인 보상 기획서] 5분 주기 규약).
+        /// <para>
+        /// 첫 요청은 <b>간격만큼 기다린 뒤</b> 보낸다 — GameScene 진입 직전에 오프라인 정산
+        /// (<c>offline/claim</c>)이 기준 시각을 이미 현재로 리셋했으므로 진입 즉시 보낼 이유가 없고,
+        /// 무엇보다 정산보다 heartbeat가 먼저 나가면 경과가 소실돼 보상이 0이 된다(같은 기획서 6.2·6.3).
+        /// </para>
+        /// 전투 슬로우모션 등 timeScale 변화에 영향받지 않도록 실시간 대기를 쓰고, 실패는 경고 로그만 남긴 뒤
+        /// 다음 주기에 다시 시도한다(보조 갱신이라 사용자에게 오류를 노출하지 않는다).
+        /// GameScene을 벗어나면(타이틀 복귀 등) 이 오브젝트와 함께 코루틴도 사라져 자동으로 멈춘다.
+        /// </summary>
+        private IEnumerator HeartbeatLoop()
+        {
+            if (heartbeatIntervalSeconds <= 0f)
+            {
+                yield break; // 0 이하면 heartbeat 비활성(개발 중 확인용)
+            }
+            var wait = new WaitForSecondsRealtime(heartbeatIntervalSeconds);
+            while (true)
+            {
+                yield return wait;
+                SendHeartbeat();
+            }
+        }
+
+        /// <summary>heartbeat 요청 1건을 보낸다(비로그인·네트워크 매니저 부재면 건너뛴다).</summary>
+        private static void SendHeartbeat()
+        {
+            if (NetworkManager.Instance == null || !Session.IsLoggedIn)
+            {
+                return;
+            }
+            var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
+            NetworkManager.Instance.PostToGame<UpdateLastActiveResponse>("/api/game/update-last-active", req,
+                resp =>
+                {
+                    long at = resp != null && resp.data != null ? resp.data.lastActiveAt : 0;
+                    Debug.Log($"[HUD] heartbeat 갱신 완료 lastActiveAt={at}");
+                },
+                error => Debug.LogWarning($"[HUD] heartbeat 실패(다음 주기에 재시도): {error}"));
         }
 
         /// <summary>HUD 캔버스와 토글 버튼(스테이지·가방)을 생성·배선한다.</summary>
