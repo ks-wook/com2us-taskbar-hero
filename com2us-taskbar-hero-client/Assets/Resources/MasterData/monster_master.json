@@ -2,73 +2,73 @@
   {
     "monsterCode": 9001,
     "name": "빙의된 병사",
-    "hp": 75,
-    "attack": 8
+    "hp": 38,
+    "attack": 3
   },
   {
     "monsterCode": 9002,
     "name": "빙의된 암살자",
-    "hp": 125,
-    "attack": 14
+    "hp": 63,
+    "attack": 5
   },
   {
     "monsterCode": 9099,
     "name": "암흑 마법사 (Act1 보스)",
-    "hp": 1000,
-    "attack": 20
+    "hp": 500,
+    "attack": 7
   },
   {
     "monsterCode": 9101,
     "name": "스켈레톤 병사",
-    "hp": 200,
-    "attack": 30
+    "hp": 100,
+    "attack": 10
   },
   {
     "monsterCode": 9102,
     "name": "스켈레톤 기사",
-    "hp": 300,
-    "attack": 50
+    "hp": 150,
+    "attack": 16
   },
   {
     "monsterCode": 9199,
     "name": "스켈레톤 군주 (Act2 보스)",
-    "hp": 2000,
-    "attack": 65
+    "hp": 1000,
+    "attack": 22
   },
   {
     "monsterCode": 9201,
     "name": "데몬",
-    "hp": 300,
-    "attack": 120
+    "hp": 150,
+    "attack": 28
   },
   {
     "monsterCode": 9299,
     "name": "마왕 (Act3 보스)",
-    "hp": 4000,
-    "attack": 160
+    "hp": 2000,
+    "attack": 39
   },
   {
     "monsterCode": 9301,
     "name": "타락한 성기사",
-    "hp": 600,
-    "attack": 250
+    "hp": 300,
+    "attack": 36
   },
   {
     "monsterCode": 9399,
     "name": "몰락한 대천사 (Act4 보스)",
-    "hp": 10000,
-    "attack": 330
+    "hp": 5000,
+    "attack": 50
   },
   {
     "monsterCode": 9401,
     "name": "공허의 추적자",
-    "hp": 1250,
-    "attack": 450
+    "hp": 625,
+    "attack": 52
   },
   {
     "monsterCode": 9499,
     "name": "공허의 지배자 (Act5 보스)",
-    "hp": 20000,
-    "attack": 600
+    "hp": 10000,
+    "attack": 75
   }
 ]
