@@ -93,5 +93,20 @@ namespace TaskbarHero.Client.Managers
             _db?.Clear();
             _db = null;
         }
+
+        /// <summary>
+        /// 플레이 시작마다 캐시를 버려 <b>항상 최신 JSON을 다시 읽게</b> 한다.
+        /// <para><b>필요한 이유</b>: 이 프로젝트는 Enter Play Mode Options의 <c>DisableDomainReload</c>가 켜져 있어
+        /// 플레이를 껐다 켜도 정적 필드가 초기화되지 않는다. 그래서 <c>Assets/Resources/MasterData/*.json</c>을
+        /// 최신화해도 <see cref="_db"/>가 옛 파싱 결과를 계속 들고 있어, 에디터를 재시작하기 전까지 인게임 수치가
+        /// 바뀌지 않는다(2026-07-31 몬스터 HP 조정이 반영되지 않은 원인).</para>
+        /// <para><see cref="RuntimeInitializeLoadType.SubsystemRegistration"/>은 도메인 리로드 여부와 무관하게
+        /// 씬 로드 전에 매번 호출되므로, 이 훅이 그 구멍을 막는다. 빌드에서는 어차피 캐시가 비어 있어 무해하다.</para>
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetCacheOnPlay()
+        {
+            Unload();
+        }
     }
 }
