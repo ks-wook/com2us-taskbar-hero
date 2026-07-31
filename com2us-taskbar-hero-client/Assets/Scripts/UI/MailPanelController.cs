@@ -513,8 +513,9 @@ namespace TaskbarHero.Client.UI
             NetworkManager.Instance.PostToGame<MailClaimResponse>("/api/game/mail/claim", req, resp =>
             {
                 Debug.Log($"[Mail] 수령 완료 mailId={mailId}");
-                ShowGainedRewards(resp != null && resp.data != null ? resp.data.gained : null);
-                ReloadSessionAndList();
+                var data = resp != null ? resp.data : null;
+                ShowGainedRewards(data != null ? data.gained : null);
+                ApplyClaimResult(data != null ? data.inventoryDelta : null, data != null ? data.balance : null);
             }, OnClaimError);
         }
 
@@ -538,7 +539,7 @@ namespace TaskbarHero.Client.UI
                 }
                 Debug.Log($"[Mail] 일괄 수령 완료 {data.claimedMailIds.Count}건");
                 ShowGainedRewards(data.gained);
-                ReloadSessionAndList();
+                ApplyClaimResult(data.inventoryDelta, data.balance);
             }, OnClaimError);
         }
 
@@ -588,20 +589,16 @@ namespace TaskbarHero.Client.UI
             return rewards;
         }
 
-        /// <summary>수령 후 세이브 스냅샷을 재로드해 세션(골드·인벤토리)을 최신화하고 목록을 다시 그린다.</summary>
-        private void ReloadSessionAndList()
+        /// <summary>수령 응답으로 세션(가방·골드)을 맞추고 우편함 목록을 다시 그린다.
+        /// 첨부 적재는 <c>inventoryDelta</c>, 재화는 <c>balance</c>가 담고 오므로 세이브를 재조회하지 않는다(§5.0 규약).
+        /// 목록 재조회는 수령 표시·레드닷 갱신을 위한 것이라 그대로 유지한다(가방 조회가 아니다).</summary>
+        private void ApplyClaimResult(InventoryDeltaDto delta, List<CurrencyDto> balance)
         {
-            var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
-            NetworkManager.Instance.PostToGame<LoadResponse>("/api/game/load", req, resp =>
-            {
-                if (resp != null && resp.data != null)
-                {
-                    Session.SetGameData(resp.data);
-                    Session.RaiseInventoryChanged(); // 골드·아이템 표시(HUD·패널) 갱신 트리거
-                }
-                _busy = false;
-                RequestList();
-            }, OnListError);
+            Session.ApplyInventoryDelta(delta);
+            Session.ApplyBalance(balance);
+            Session.RaiseInventoryChanged(); // 골드·아이템 표시(HUD·패널) 갱신 트리거
+            _busy = false;
+            RequestList();
         }
 
         /// <summary>목록 조회/재로드 실패: 메시지만 표시한다(재조회하지 않음 — 실패 시 재조회하면 무한 루프).</summary>

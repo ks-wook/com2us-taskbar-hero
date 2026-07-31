@@ -754,27 +754,25 @@ namespace TaskbarHero.Client.UI
                 data = new RuneUpgradeData { runeCode = _selectedRune },
             };
             Debug.Log($"[Rune] 업그레이드 요청 rune={_selectedRune}");
-            NetworkManager.Instance.PostToGame<ApiResponse>(
+            NetworkManager.Instance.PostToGame<RuneUpgradeResponse>(
                 "/api/game/growth/rune/upgrade", req,
-                _ => ReloadAndRefresh("룬 강화 완료"),
+                resp => ApplyUpgradeResult(resp != null ? resp.data : null, "룬 강화 완료"),
                 OnActionError);
         }
 
-        /// <summary>업그레이드 후 세이브 스냅샷을 재로드해 세션·UI·전투를 최신화한다.</summary>
-        private void ReloadAndRefresh(string message)
+        /// <summary>업그레이드 응답(룬 레벨·골드 잔액)으로 세션을 맞추고 UI·전투를 갱신한다.
+        /// 룬 강화는 가방을 바꾸지 않으므로 반영할 것이 이 둘뿐이며, 세이브를 재조회하지 않는다.</summary>
+        private void ApplyUpgradeResult(RuneUpgradeResultData data, string message)
         {
-            var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
-            NetworkManager.Instance.PostToGame<LoadResponse>("/api/game/load", req, resp =>
+            if (data != null)
             {
-                if (resp != null && resp.data != null)
-                {
-                    Session.SetGameData(resp.data);
-                }
-                _busy = false;
-                RefreshFromSession();
-                SetMessage(message);
-                Session.RaiseInventoryChanged(); // 룬(계정 버프) 변경 → 전투 스탯 재계산 트리거
-            }, OnActionError);
+                Session.ApplyRuneLevel(data.runeCode, data.level);
+                Session.ApplyBalance(data.balance);
+            }
+            _busy = false;
+            RefreshFromSession();
+            SetMessage(message);
+            Session.RaiseInventoryChanged(); // 룬(계정 버프) 변경 → 전투 스탯 재계산 트리거
         }
 
         private void OnActionError(NetworkError error)

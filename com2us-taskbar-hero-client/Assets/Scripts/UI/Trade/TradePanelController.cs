@@ -541,7 +541,10 @@ namespace TaskbarHero.Client.UI.Trade
 
             if (tab == TradeTab.Sell)
             {
+                // 판매 후보는 가방 아이템이라 탭을 열 때 서버에서 다시 받는다(창고와 같은 기준).
+                // 도착 전에는 현재 캐시로 먼저 그려 빈 화면을 보이지 않게 한다.
                 RebuildSellRows();
+                InventoryLoader.ReloadBag(RebuildSellRowsIfOpen, OnListError);
             }
             else
             {
@@ -796,7 +799,9 @@ namespace TaskbarHero.Client.UI.Trade
                 var data = resp != null ? resp.data : null;
                 Debug.Log($"[Trade] 구매 완료 listing={listingId} mailId={(data != null ? data.mailId : 0)}");
                 ShowPurchasedModal(data);
-                ReloadSessionAndList();
+                // 산 아이템은 우편함으로 가므로 가방은 그대로다 — 차감된 골드(balance)만 반영한다.
+                Session.ApplyBalance(data != null ? data.balance : null);
+                RefreshAfterTrade();
             }, OnActionError);
         }
 
@@ -816,11 +821,13 @@ namespace TaskbarHero.Client.UI.Trade
             };
             NetworkManager.Instance.PostToGame<TradeCancelResponse>("/api/game/trade/cancel", req, resp =>
             {
-                var restored = resp != null && resp.data != null ? resp.data.restored : null;
+                var data = resp != null ? resp.data : null;
+                var restored = data != null ? data.restored : null;
                 Debug.Log($"[Trade] 판매 취소 완료 listing={listingId}");
                 string name = restored != null ? ItemName(restored.itemCode) : "아이템";
                 ModalManager.Instance?.ShowConfirm("판매 취소", $"{name}이(가) 인벤토리로 돌아왔습니다.");
-                ReloadSessionAndList();
+                Session.ApplyInventoryDelta(data != null ? data.inventoryDelta : null); // 가방으로 복귀
+                RefreshAfterTrade();
             }, OnActionError);
         }
 
@@ -851,14 +858,11 @@ namespace TaskbarHero.Client.UI.Trade
 
         // ── 판매 등록 ──
 
-        /// <summary>가방에서 판매 가능한 아이템(sellable=1 · 기준가 있음)을 나열한다.
-        /// 가방 캐시가 없으면 페이징 조회 후 다시 그린다(코어 로드에는 가방 아이템이 없다).</summary>
+        /// <summary>가방 캐시에서 판매 가능한 아이템(sellable=1 · 기준가 있음)을 나열한다.
+        /// 서버 조회는 하지 않는다 — 판매 탭을 열 때 <see cref="SelectTab"/>이 한 번 받아 두고,
+        /// 등록·취소 뒤에는 응답의 변경분이 이미 캐시에 반영돼 있다(§5.0 규약).</summary>
         private void RebuildSellRows()
         {
-            if (!Session.BagLoaded)
-            {
-                InventoryLoader.EnsureBag(RebuildSellRowsIfOpen, OnListError);
-            }
             foreach (var row in _sellRows)
             {
                 if (row != null) Destroy(row);
@@ -1033,28 +1037,27 @@ namespace TaskbarHero.Client.UI.Trade
                 ModalManager.Instance?.ShowConfirm("판매 등록",
                     $"{ItemName(_selectedItemCode)}을(를) {GoldFormat.Highlight(price)}에 등록했습니다.\n" +
                     "3일 안에 팔리지 않으면 우편함으로 반송됩니다.");
-                ReloadSessionAndList();
+                Session.ApplyInventoryDelta(data != null ? data.inventoryDelta : null); // 가방에서 빠져 에스크로로
+                RefreshAfterTrade();
             }, OnActionError);
         }
 
         // ── 공통 후처리 ──
 
-        /// <summary>거래 후 코어 스냅샷과 가방을 함께 재로드해 세션(골드·인벤토리)을 최신화하고 화면을 다시 그린다.
-        /// 등록/구매/취소는 가방 아이템이 빠지거나 돌아오므로 가방까지 다시 받아야 판매 후보가 맞는다.</summary>
-        private void ReloadSessionAndList()
+        /// <summary>거래 응답을 반영한 뒤 화면을 다시 그린다(재조회 없음). 가방 변화는 호출측이 응답의
+        /// <c>inventoryDelta</c>(등록·취소)로, 골드는 <c>balance</c>(구매)로 이미 세션에 반영해 둔다.
+        /// 거래소 목록 재조회는 다른 사람의 매물 상태를 받는 것이라 그대로 유지한다(가방 조회가 아니다).</summary>
+        private void RefreshAfterTrade()
         {
-            InventoryLoader.ReloadAll(() =>
+            Session.RaiseInventoryChanged(); // 골드·아이템 표시(HUD·패널) 갱신 트리거
+            _busy = false;
+            RefreshGold(); // 구매·등록·취소로 골드가 바뀌었을 수 있다
+            MailNotifier.Refresh(); // 판매 대금·반송 메일이 도착할 수 있으므로 알림 갱신
+            RequestList();
+            if (_sellTabRoot != null && _sellTabRoot.activeSelf)
             {
-                Session.RaiseInventoryChanged(); // 골드·아이템 표시(HUD·패널) 갱신 트리거
-                _busy = false;
-                RefreshGold(); // 구매·등록·취소로 골드가 바뀌었을 수 있다
-                MailNotifier.Refresh(); // 판매 대금·반송 메일이 도착할 수 있으므로 알림 갱신
-                RequestList();
-                if (_sellTabRoot != null && _sellTabRoot.activeSelf)
-                {
-                    RebuildSellRows();
-                }
-            }, OnListError);
+                RebuildSellRows();
+            }
         }
 
         /// <summary>목록 조회/재로드 실패: 메시지만 표시한다(재조회하면 무한 루프가 되므로 하지 않는다).</summary>

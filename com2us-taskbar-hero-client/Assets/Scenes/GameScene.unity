@@ -524,6 +524,7 @@ MonoBehaviour:
   systemBackgroundSprite: {fileID: 21300000, guid: bc0d2e30484693b4d8076bb0020cb4f3, type: 3}
   systemSlotSprite: {fileID: 21300000, guid: 0dd82755c31b84e4099a16001ad10f6b, type: 3}
   mailPollIntervalSeconds: 60
+  heartbeatIntervalSeconds: 300
   autoOpenAttendance: 1
 --- !u!4 &499822581
 Transform:
@@ -1261,8 +1262,8 @@ MonoBehaviour:
   background: {fileID: 113508826}
   backgrounds:
   - {fileID: -4366932508998779180, guid: 1c3b6715696e07148bc92cf84a4eb1cd, type: 3}
-  - {fileID: 6651587236486831564, guid: 2490deed97dfe544a908de00ec4d6f22, type: 3}
-  - {fileID: 9125231439734002556, guid: c121ca45fed73474088d3c07eb63b6e5, type: 3}
+  - {fileID: -4696692152400628652, guid: 2490deed97dfe544a908de00ec4d6f22, type: 3}
+  - {fileID: 7069784266262184480, guid: c121ca45fed73474088d3c07eb63b6e5, type: 3}
   - {fileID: -4696692152400628652, guid: 493c8ae577de4b84eb02adb64754221c, type: 3}
   - {fileID: 7069784266262184480, guid: eec4537c28b3afc40bffa135812dfa2a, type: 3}
   stageEnterBannerPrefab: {fileID: 5636239778160969774, guid: 24f156cbb8ceab04c9ed158452d74d63, type: 3}

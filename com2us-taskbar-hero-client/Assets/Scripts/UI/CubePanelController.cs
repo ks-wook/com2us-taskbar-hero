@@ -17,7 +17,8 @@ namespace TaskbarHero.Client.UI
     /// - <b>제작</b>: 레시피(cube_recipe)의 재료·골드를 소모해 지정 아이템을 만든다.
     /// 정적 계층(제목·골드·닫기·탭·큐브 레벨바·내용 영역·실행 버튼)은 에디터 빌드 시 생성되고, 표시될 때마다
     /// 세션(<see cref="Session.GameData"/>)의 인벤토리·큐브 상태와 마스터 데이터(cube_master·cube_recipe·item_master)로
-    /// 내용을 채운다. 실제 소모·지급은 서버가 최종 확정하며, 성공 후 <c>/api/game/load</c>로 재로드해 UI를 갱신한다.
+    /// 내용을 채운다. 실제 소모·지급은 서버가 최종 확정하며, 성공 응답에 담겨 오는 변경분(<c>inventoryDelta</c>)·
+    /// 큐브 상태·재화 잔액을 세션 캐시에 반영해 UI를 갱신한다(액션 뒤 재조회 없음).
     /// </summary>
     public class CubePanelController : MonoBehaviour
     {
@@ -80,8 +81,9 @@ namespace TaskbarHero.Client.UI
             WireRuntime();
         }
 
-        /// <summary>패널 표시 시 세션 데이터로 갱신한다. 합성·분해 후보는 가방 아이템이라, 가방 캐시가 없으면
-        /// (코어 로드에는 없다) 페이징으로 조회한 뒤 목록을 다시 그린다.</summary>
+        /// <summary>패널 표시 시 세션 데이터로 갱신한다. 합성·분해 후보는 가방 아이템이라(코어 로드에는 없다)
+        /// <b>패널을 열 때마다</b> 서버에서 다시 받아 목록을 그린다 — 창고와 같은 데이터를 보여주므로 같은 기준이며,
+        /// 자동 전투로 전리품이 계속 쌓이는 동안 낡은 캐시를 후보로 내놓지 않기 위함이다.</summary>
         private void OnEnable()
         {
             if (!AlreadyBuilt)
@@ -90,7 +92,7 @@ namespace TaskbarHero.Client.UI
             }
             SetMessage(string.Empty);
             RefreshFromSession();
-            InventoryLoader.EnsureBag(RefreshIfOpen, OnBagLoadError);
+            InventoryLoader.ReloadBag(RefreshIfOpen, OnBagLoadError);
         }
 
         /// <summary>가방 조회 완료 후 목록을 다시 그린다(그 사이 패널이 닫혔으면 아무것도 하지 않는다).</summary>
@@ -601,10 +603,16 @@ namespace TaskbarHero.Client.UI
                 "/api/game/cube/combine", req,
                 resp =>
                 {
-                    string name = ItemName(resp != null && resp.data != null ? resp.data.result.itemCode : 0);
-                    int grade = resp != null && resp.data != null ? resp.data.result.grade : 0;
+                    var data = resp != null ? resp.data : null;
+                    string name = ItemName(data != null ? data.result.itemCode : 0);
+                    int grade = data != null ? data.result.grade : 0;
                     ShowResult("합성 완료", $"{name} (등급 {grade}) 획득!");
-                    ReloadAndRefresh();
+                    if (data != null)
+                    {
+                        Session.ApplyInventoryDelta(data.inventoryDelta); // 입력 소모 + 결과 생성
+                        Session.ApplyCube(data.cube);
+                    }
+                    RefreshAfterAction();
                 },
                 OnActionError);
         }
@@ -641,9 +649,16 @@ namespace TaskbarHero.Client.UI
                 "/api/game/cube/dismantle", req,
                 resp =>
                 {
-                    long gold = resp != null && resp.data != null ? resp.data.gold : 0;
+                    var data = resp != null ? resp.data : null;
+                    long gold = data != null ? data.gold : 0;
                     ShowResult("연금술 완료", $"골드 {GoldFormat.Highlight(gold)} 획득!");
-                    ReloadAndRefresh();
+                    if (data != null)
+                    {
+                        Session.ApplyInventoryDelta(data.inventoryDelta); // 분해한 아이템 제거·수량 차감
+                        Session.ApplyCube(data.cube);
+                        Session.ApplyBalance(data.balance);
+                    }
+                    RefreshAfterAction();
                 },
                 OnActionError);
         }
@@ -668,31 +683,41 @@ namespace TaskbarHero.Client.UI
                 "/api/game/cube/craft", req,
                 resp =>
                 {
+                    var data = resp != null ? resp.data : null;
                     string gained = "제작 완료!";
-                    if (resp != null && resp.data != null && resp.data.gained != null
-                        && resp.data.gained.items != null && resp.data.gained.items.Count > 0)
+                    if (data != null && data.gained != null
+                        && data.gained.items != null && data.gained.items.Count > 0)
                     {
-                        var g = resp.data.gained.items[0];
+                        var g = data.gained.items[0];
                         gained = $"{ItemName(g.itemCode)} x{g.quantity} 제작!";
                     }
                     ShowResult("제작 완료", gained);
-                    ReloadAndRefresh();
+                    if (data != null)
+                    {
+                        Session.ApplyInventoryDelta(data.inventoryDelta); // 재료 차감 + 제작물 적재
+                        Session.ApplyCube(data.cube);
+                        Session.ApplyBalance(data.balance);
+                    }
+                    RefreshAfterAction();
                 },
                 OnActionError);
         }
 
-        /// <summary>액션 성공 후 코어 스냅샷과 가방을 함께 재로드해 세션·UI·전투를 최신화한다(선택 초기화).
-        /// 합성/분해/제작은 가방 아이템을 소모·지급하므로 가방까지 다시 받아야 목록이 맞는다.</summary>
-        private void ReloadAndRefresh()
+        /// <summary>액션 응답(변경분·큐브·잔액)을 반영한 뒤 화면을 다시 그린다(선택 초기화, 재조회 없음).
+        /// 합성/분해/제작이 가방을 어떻게 바꿨는지는 서버가 <c>inventoryDelta</c>로 알려준다(§5.0 규약).</summary>
+        private void RefreshAfterAction()
         {
-            InventoryLoader.ReloadAll(() =>
-            {
-                _busy = false;
-                _selCombine.Clear();
-                _selDismantle.Clear();
-                RefreshFromSession();
-                Session.RaiseInventoryChanged(); // 인벤토리 변경 → 전투 스탯 재계산 트리거
-            }, OnActionError);
+            _busy = false;
+            _selCombine.Clear();
+            _selDismantle.Clear();
+            RefreshFromSession();
+            Session.RaiseInventoryChanged(); // 인벤토리 변경 → 전투 스탯 재계산 트리거
+        }
+
+        /// <summary>가방 캐시가 서버와 어긋났을 때만 가방을 다시 받아 후보 목록을 맞춘다(코어는 받지 않는다).</summary>
+        private void ReloadBagAndRefresh()
+        {
+            InventoryLoader.ReloadBag(RefreshAfterAction, OnBagLoadError);
         }
 
         /// <summary>큐브 액션 실패. 재료가 이미 사라진 경우(<see cref="ErrorCode.ItemNotFound"/>)는 페이징 이후
@@ -704,7 +729,7 @@ namespace TaskbarHero.Client.UI
             SetMessage(ErrorMessages.ToKorean(error));
             if (error != null && error.ErrorCode == ErrorCode.ItemNotFound)
             {
-                ReloadAndRefresh();
+                ReloadBagAndRefresh();
             }
         }
 

@@ -112,7 +112,8 @@ namespace TaskbarHero.Client.UI
 
         /// <summary>패널이 표시될 때마다 세션 실데이터(골드·보유 아이템·장착)로 갱신한다.
         /// (UIManager가 인스턴스를 캐싱·재사용하므로 활성화 시점마다 최신 데이터를 반영해야 한다.)
-        /// 가방 아이템은 코어 로드에 없으므로, 캐시가 없으면 창고를 여는 이 시점에 페이징 조회한다(세이브 기획서 5.2).</summary>
+        /// 가방 아이템은 코어 로드에 없으므로 <b>창고를 열 때마다 서버에서 다시 받는다</b>(세이브 기획서 5.2) —
+        /// 자동 전투로 전리품이 계속 쌓이므로 로컬 캐시를 신뢰하지 않는다(서버는 이 조회를 캐시로 받는다).</summary>
         private void OnEnable()
         {
             if (!AlreadyBuilt && _tooltip == null)
@@ -129,7 +130,7 @@ namespace TaskbarHero.Client.UI
                 _tooltip.HideImmediate();
             }
             RefreshFromSession(); // 코어 데이터(골드·장착·능력치)는 즉시 표시
-            InventoryLoader.EnsureBag(RefreshGridIfOpen, OnBagLoadError); // 가방은 도착한 뒤 격자에 채운다
+            InventoryLoader.ReloadBag(RefreshGridIfOpen, OnBagLoadError); // 가방은 도착한 뒤 격자에 채운다
         }
 
         /// <summary>가방 조회가 끝났을 때 격자를 다시 그린다(조회 도중 패널이 닫혔으면 아무것도 하지 않는다).</summary>
@@ -445,7 +446,8 @@ namespace TaskbarHero.Client.UI
             NetworkManager.Instance.PostToGame<ExpandResponse>("/api/game/inventory/expand", req, OnExpandSuccess, OnExpandError);
         }
 
-        /// <summary>확장 성공: 소모 골드·잔액·확장 후 용량을 공용 모달로 안내하고, 세이브를 재로드해 UI를 갱신한다.</summary>
+        /// <summary>확장 성공: 응답의 용량·잔액만 캐시에 반영해 UI를 갱신하고(재조회 없음 — 가방 아이템은 그대로다),
+        /// 소모 골드·잔액·확장 후 용량을 공용 모달로 안내한다.</summary>
         private void OnExpandSuccess(ExpandResponse resp)
         {
             long cost = 0, balance = 0;
@@ -455,8 +457,10 @@ namespace TaskbarHero.Client.UI
                 if (resp.data.cost != null) cost = resp.data.cost.amount;
                 if (resp.data.balance != null && resp.data.balance.Count > 0) balance = resp.data.balance[0].amount;
                 capacity = resp.data.inventoryCapacity;
+                Session.ApplyInventoryCapacity(capacity);
+                Session.ApplyBalance(resp.data.balance);
             }
-            ReloadAndRefresh(); // 용량/골드/격자 최신화
+            RefreshAfterInventoryChange(); // 용량/골드/격자 최신화
 
             if (ModalManager.Instance != null)
             {
@@ -1387,10 +1391,15 @@ namespace TaskbarHero.Client.UI
                 data = new EquipData { characterId = characterId, itemId = itemId },
             };
             Debug.Log($"[Inventory] 장착 요청 char={characterId} item={itemId}");
-            NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/inventory/equip", req, _ => ReloadAndRefresh(), OnActionError);
+            NetworkManager.Instance.PostToGame<EquipResponse>("/api/game/inventory/equip", req, resp =>
+            {
+                // 응답만으로 캐시를 맞춘다(재조회 없음) — 장착품은 가방에서 빠지고, 스왑된 장비는 서버가 알려준 칸으로.
+                Session.ApplyEquipResult(resp != null ? resp.data : null);
+                RefreshAfterInventoryChange();
+            }, OnActionError);
         }
 
-        /// <summary>현재 선택 캐릭터의 지정 슬롯 장비를 해제 요청한다(성공 시 재로드·갱신).</summary>
+        /// <summary>현재 선택 캐릭터의 지정 슬롯 장비를 해제 요청한다(성공 시 응답으로 캐시 갱신).</summary>
         public void RequestUnequip(int slot)
         {
             var chars = Characters;
@@ -1407,7 +1416,12 @@ namespace TaskbarHero.Client.UI
                 data = new UnequipData { characterId = characterId, slot = slot },
             };
             Debug.Log($"[Inventory] 해제 요청 char={characterId} slot={slot}");
-            NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/inventory/unequip", req, _ => ReloadAndRefresh(), OnActionError);
+            NetworkManager.Instance.PostToGame<UnequipResponse>("/api/game/inventory/unequip", req, resp =>
+            {
+                // 해제한 장비는 서버가 알려준 가방 칸(bagSlot)으로 되돌린다(재조회 없음).
+                Session.ApplyUnequipResult(resp != null ? resp.data : null);
+                RefreshAfterInventoryChange();
+            }, OnActionError);
         }
 
         // ── 소모품 사용 (서버 연동) ──
@@ -1433,8 +1447,8 @@ namespace TaskbarHero.Client.UI
                 OnUseConsumableSuccess, OnUseConsumableError);
         }
 
-        /// <summary>소모품 사용 성공: 활성 버프 캐시를 응답으로 교체하고 부여된 버프 효과·만료를 모달로 안내한 뒤,
-        /// 가방(수량 차감·행 삭제)을 반영하기 위해 재로드한다.</summary>
+        /// <summary>소모품 사용 성공: 활성 버프 캐시를 응답으로 교체하고 부여된 버프 효과·만료를 모달로 안내한다.
+        /// 가방(수량 차감·행 삭제)은 응답의 변경분(inventoryDelta)으로 반영한다 — 재조회하지 않는다.</summary>
         private void OnUseConsumableSuccess(ConsumableUseResponse resp)
         {
             var data = resp != null ? resp.data : null;
@@ -1442,8 +1456,9 @@ namespace TaskbarHero.Client.UI
             {
                 BuffManager.Apply(data.activeBuffs); // 우상단 버프 아이콘 즉시 갱신
                 BuffManager.Refresh();               // 잔여 시간 기준점(serverTime) 보정
+                Session.ApplyInventoryDelta(data.inventoryDelta);
             }
-            ReloadAndRefresh();
+            RefreshAfterInventoryChange();
 
             var buff = data != null ? data.buff : null;
             if (buff != null && ModalManager.Instance != null)
@@ -1468,20 +1483,27 @@ namespace TaskbarHero.Client.UI
             }
             if (error != null && error.ErrorCode == ErrorCode.ItemNotFound)
             {
-                ReloadAndRefresh();
+                ReloadBagAndRefresh();
             }
         }
 
-        /// <summary>장착/해제 후 코어 스냅샷과 가방을 함께 재로드해 세션·UI·전투 스탯을 최신화한다.
-        /// (장착/해제는 아이템이 가방↔장비로 오가므로 코어만 받으면 가방 표시가 낡는다.)</summary>
-        private void ReloadAndRefresh()
+        /// <summary>액션 응답을 캐시에 반영한 뒤 화면·전투 스탯을 갱신한다(네트워크 재조회 없음).
+        /// 서버가 변경분을 응답에 담아 주므로(§5.0 규약) 액션마다 코어·가방을 다시 받을 필요가 없다.</summary>
+        private void RefreshAfterInventoryChange()
         {
-            InventoryLoader.ReloadAll(() =>
+            RequestHideTooltip();
+            RefreshFromSession();            // 인벤토리 UI 갱신
+            Session.RaiseInventoryChanged(); // 전투 스탯 재계산 트리거
+        }
+
+        /// <summary>가방 캐시가 서버와 어긋났을 때(<see cref="ErrorCode.ItemNotFound"/>·이동 저장 실패)만
+        /// 가방을 다시 받아 화면을 맞춘다. 코어 스냅샷은 이 경우에도 다시 받지 않는다.</summary>
+        private void ReloadBagAndRefresh()
+        {
+            InventoryLoader.ReloadBag(() =>
             {
-                RequestHideTooltip();
-                RefreshFromSession();          // 인벤토리 UI 갱신
-                Session.RaiseInventoryChanged(); // 전투 스탯 재계산 트리거
-            }, OnActionError);
+                RefreshAfterInventoryChange();
+            }, OnBagLoadError);
         }
 
         /// <summary>장착/해제 실패. 대상이 이미 사라진 아이템(<see cref="ErrorCode.ItemNotFound"/>)이면
@@ -1491,7 +1513,7 @@ namespace TaskbarHero.Client.UI
             Debug.LogWarning($"[Inventory] 장착/해제 실패: {error}");
             if (error != null && error.ErrorCode == ErrorCode.ItemNotFound)
             {
-                ReloadAndRefresh();
+                ReloadBagAndRefresh();
             }
         }
 
@@ -1546,37 +1568,19 @@ namespace TaskbarHero.Client.UI
 
             NetworkManager.Instance.PostToGame<ApiResponse>("/api/game/inventory/move", req, _ =>
             {
-                ApplyMovedSlotToCache(itemId, toSlot);
+                Session.ApplyBagSlot(itemId, toSlot);
                 if (occupant != null && fromSlot >= 0)
                 {
-                    ApplyMovedSlotToCache(occupant.Data.itemId, fromSlot); // 스왑된 아이템도 함께
+                    Session.ApplyBagSlot(occupant.Data.itemId, fromSlot); // 스왑된 아이템도 함께
                 }
             }, OnMoveError);
         }
 
-        /// <summary>캐시된 가방에서 해당 아이템의 칸 번호를 갱신한다(서버가 확정한 값과 동일하게).</summary>
-        private static void ApplyMovedSlotToCache(long itemId, int slot)
-        {
-            var bag = Session.Bag;
-            if (bag == null)
-            {
-                return;
-            }
-            foreach (var item in bag)
-            {
-                if (item != null && item.itemId == itemId)
-                {
-                    item.slot = slot;
-                    return;
-                }
-            }
-        }
-
-        /// <summary>배치 이동 실패: 낙관적으로 바꿔 둔 화면이 서버와 어긋나므로 세이브를 재로드해 되돌린다.</summary>
+        /// <summary>배치 이동 실패: 낙관적으로 바꿔 둔 화면이 서버와 어긋나므로 가방을 다시 받아 되돌린다.</summary>
         private void OnMoveError(NetworkError error)
         {
             Debug.LogWarning($"[Inventory] 배치 이동 실패: {error}");
-            ReloadAndRefresh();
+            ReloadBagAndRefresh();
         }
 
         /// <summary>패널을 닫는다(UIManager 우선, 없으면 자체 비활성).</summary>

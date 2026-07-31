@@ -11,14 +11,19 @@
 | [**스테이지**](#스테이지) (던전 입장·클리어 보상) | GameStageController | Game | `POST /api/game/stage/enter` · `clear` |
 | [**방치형 오프라인 보상**](#방치형-오프라인-보상) | GameOfflineController | Game | `POST /api/game/offline/claim` |
 | [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장. 가방 조회는 세이브 데이터 섹션) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
-
-> **가방 변경분 공통 규약(`inventoryDelta`)** — 가방을 바꾸는 액션(`cube/*`·`box/open`·`consumable/use`·`mail/claim`·`mail/claim-all`·`stage/clear`·`trade/register`·`trade/cancel`)은 변경분을 응답에 담고, 커밋 후 같은 값으로 Redis 가방 캐시를 갱신한다(write-through). 클라이언트는 응답만으로 가방을 갱신하며 **액션 뒤에 `/load`·`/inventory/list`를 재조회하지 않는다**([인벤토리/아이템/큐브 기획서](../docs/세부/inventory-item-cube-기획서.md) 5.0·6.5). 아래 다이어그램에서는 이 갱신을 `S->>R: 가방 캐시 갱신`으로 줄여 표기한다.
 | [**소모품/버프**](#소모품버프) (소모품 사용 → 경험치·골드 획득량 버프 부여·연장, 적용 중인 버프 조회) | GameConsumableController | Game | `POST /api/game/consumable/use`, `POST /api/game/consumable/buffs` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
 | [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchService(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
 | [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchService(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
 | [**출석부 보상**](#출석부-보상) (이번달 진행도 조회 / 오늘자 보상 획득→메일 발급, 일차 = 누적 출석 순번 1~30) | GameAttendanceController | Game | `POST /api/game/attendance/status` · `claim` |
+
+> **가방 변경분 공통 규약(`inventoryDelta`)** — 가방을 바꾸는 액션(`cube/*`·`box/open`·`consumable/use`·`mail/claim`·`mail/claim-all`·`stage/clear`·`trade/register`·`trade/cancel`)은 변경분을 응답에 담고, 커밋 후 같은 값으로 Redis 가방 캐시를 갱신한다(write-through). 클라이언트는 응답만으로 가방을 갱신하며 **액션 뒤에 `/load`·`/inventory/list`를 재조회하지 않는다**([인벤토리/아이템/큐브 기획서](../docs/세부/inventory-item-cube-기획서.md) 5.0·6.5).
+>
+> - 아래 다이어그램에서 서버 쪽 갱신은 `S->>R: 가방 캐시 갱신(변경분)`, 클라이언트 쪽 반영은 `C->>C: 응답으로 캐시 반영(재조회 없음)`으로 줄여 표기한다.
+> - 클라이언트는 `removed` → `upserted` 순으로 `itemId`를 키 삼아 적용하며(멱등), **서버가 응답한 `slot`이 최종 위치**다(스택 병합·빈 칸 배정은 서버 권위). 재화는 각 응답의 `balance`, 큐브 상태는 `cube`가 담당한다.
+> - **`inventory/equip`·`unequip`·`move`는 응답에 `inventoryDelta`를 담지 않는다.** 바뀐 내용이 `equipped`/`unequipped`/`unequippedBagSlot`/`bagSlot`/`moved`/`swapped`로 이미 특정되므로 클라이언트는 그 필드로 캐시를 옮긴다. 서버는 이 세 액션에서도 내부 변경분으로 Redis 가방 캐시를 같이 갱신한다.
+> - 재조회가 남아 있는 경우는 두 가지뿐이다 — **가방을 보여주는 화면을 열 때**(창고·큐브·거래 판매 탭 → `inventory/list`)와 **캐시가 서버와 어긋났을 때**(`ItemNotFound(4001)`·배치 이동 저장 실패 → `inventory/list` 1회).
 
 ## 공통 아키텍처
 
@@ -151,6 +156,8 @@ sequenceDiagram
 ### POST /api/game/load — 코어 세이브 로드
 
 크기가 고정된 데이터만 한 번에 내려준다. 무한히 커질 수 있는 가방 아이템은 여기 없고 `/api/game/inventory/list`로 지연 로딩한다(세이브 데이터 기획서 2장). 장착 장비는 최대 18행으로 고정이고 캐릭터 스탯 계산의 입력이라 코어에 포함해, 가방 로딩 없이도 전투를 시작할 수 있다.
+
+**호출 시점은 접속 계열뿐이다** — 로그인 직후와 캐릭터 생성 직후. 인벤토리·큐브·거래·메일·룬 등 액션 뒤에는 호출하지 않는다. 바뀐 값(가방 변경분·재화 잔액·큐브 상태·룬 레벨)이 각 액션 응답에 들어 있어 클라이언트가 그것만 캐시에 반영하기 때문이다(위 「가방 변경분 공통 규약」).
 
 ```mermaid
 sequenceDiagram
@@ -330,6 +337,7 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /stage/clear { userId, token, data:{ act, difficulty, stage } }
@@ -349,10 +357,14 @@ sequenceDiagram
         alt 미진입 / 용량 초과
             S-->>C: 실패 { errorCode: StageNotEntered(6003) / InventoryFull(4002) }
         else 성공
-            S-->>C: 성공 { 보상·캐릭터·잔액·진행도 }
+            S->>R: 가방 캐시 갱신(변경분)
+            S-->>C: 성공 { 보상·캐릭터·잔액·진행도·inventoryDelta }
+            C->>C: 응답으로 캐시 반영(재조회 없음) — 전리품 적재·골드 잔액
         end
     end
 ```
+
+- 전투 중 계속 발생하는 호출이라 **전리품이 쌓여도 가방을 다시 받지 않는다.** 클라이언트가 응답의 `inventoryDelta`·`balance`를 세션 캐시에 반영해 두므로, 창고를 열기 전에 이미 최신 상태다.
 
 ## 방치형 오프라인 보상
 
@@ -406,6 +418,7 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /equip { userId, token, data:{ characterId, itemId } }
@@ -419,9 +432,13 @@ sequenceDiagram
         S->>DB: 장착 아이템의 가방 칸 반납(slot → NULL)
         S->>DB: (스왑이면) 밀려난 장비를 반납된 칸에 배치
         S->>DB: 장착 데이터 적재(대상 캐릭터·슬롯)
+        S->>R: 가방 캐시 갱신(변경분)
         S-->>C: 성공 { 장착된 아이템, 밀려난 아이템, 밀려난 장비의 가방 칸 }
+        C->>C: 응답으로 캐시 반영(재조회 없음) — 장착품을 가방에서 제거, 밀려난 장비는 알려준 칸으로
     end
 ```
+
+- 응답에 `inventoryDelta`는 없다. 바뀐 행이 `equipped`·`unequipped`·`unequippedBagSlot`으로 이미 특정되고, 옮겨지는 장비의 `itemCode`·`enhanceLevel`은 클라이언트의 가방·장착 캐시에 이미 있어 그대로 승계하면 되기 때문이다.
 
 ### POST /api/game/inventory/unequip — 장착 해제
 
@@ -432,6 +449,7 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /unequip { userId, token, data:{ characterId, slot } }
@@ -446,7 +464,9 @@ sequenceDiagram
         else 빈 칸 있음
             S->>DB: 아이템을 그 칸에 배치(가방 복귀)
             S->>DB: 장착 데이터 삭제
+            S->>R: 가방 캐시 갱신(변경분)
             S-->>C: 성공 { 해제된 캐릭터·장착 슬롯·아이템, 복귀한 가방 칸 }
+            C->>C: 응답으로 캐시 반영(재조회 없음) — 장착 목록에서 빼 알려준 칸의 가방 행으로
         end
     end
 ```
@@ -458,16 +478,21 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
+    C->>C: 드래그 결과를 화면에 먼저 반영(낙관적)
     C->>S: POST /move { userId, token, data:{ itemId, toSlot } }
     S->>DB: 대상 아이템·목표 칸 데이터 확인(소유·용량 범위)
     alt 대상 없음 / 잘못된 칸
         S-->>C: 실패 { errorCode: ItemNotFound(4001) / InvalidInventorySlot(4009) }
+        C->>S: POST /inventory/list — 어긋난 화면을 서버 상태로 되돌림
     else 유효
         Note over S,DB: 단일 트랜잭션(계정-칸 유니크 제약 보존)
         S->>DB: 두 아이템의 칸 데이터 갱신(목표 비었으면 이동, 차 있으면 교환)
+        S->>R: 가방 캐시 갱신(변경분)
         S-->>C: 성공 { 이동한 아이템, 교환된 아이템 }
+        C->>C: 캐시의 칸 번호를 서버 확정값으로 맞춤(재조회 없음)
     end
 ```
 
@@ -493,9 +518,12 @@ sequenceDiagram
         else 충분
             S->>DB: 인벤토리 용량 데이터 갱신(+1칸)
             S-->>C: 성공 { 확장 후 용량, 소모 골드, 잔액 }
+            C->>C: 응답으로 캐시 반영(재조회 없음) — 용량·골드 잔액만(가방 아이템은 그대로)
         end
     end
 ```
+
+- 가방 행이 바뀌지 않는 유일한 인벤토리 액션이라 가방 캐시도 건드리지 않는다.
 
 ## 소모품/버프
 
@@ -512,6 +540,7 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /consumable/use { userId, token, data:{ itemId } }
@@ -536,7 +565,9 @@ sequenceDiagram
             S->>DB: 아이템 수량 −1 조건부 갱신(0이면 행 삭제 = 가방 칸 반납)
             S->>DB: 버프 데이터 부여/연장(계정·버프 종류 단위 1건)
             S->>DB: 갱신 후 활성 버프 전체 조회(만료분 제외)
-            S-->>C: 성공 { 사용 아이템, 남은 수량, 갱신된 버프, 활성 버프 전체 }
+            S->>R: 가방 캐시 갱신(변경분)
+            S-->>C: 성공 { 사용 아이템, 남은 수량, 갱신된 버프, 활성 버프 전체, inventoryDelta }
+            C->>C: 응답으로 캐시 반영(재조회 없음) — 수량 −1(0이면 행 삭제) + 버프 캐시 교체
         end
     end
 ```
@@ -577,6 +608,7 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /cube/combine { userId, token, data:{ itemIds[] } }
@@ -589,7 +621,9 @@ sequenceDiagram
     else 성공
         S->>DB: 입력 아이템 데이터 삭제 + 결과 아이템 데이터 적재(빈 칸)
         S->>DB: 큐브 경험치·레벨 데이터 갱신(50 × 입력등급 누적)
-        S-->>C: 성공 { 소모한 아이템, 결과 아이템, 큐브 상태 }
+        S->>R: 가방 캐시 갱신(변경분)
+        S-->>C: 성공 { 소모한 아이템, 결과 아이템, 큐브 상태, inventoryDelta }
+        C->>C: 응답으로 캐시 반영(재조회 없음) — 입력 3개 제거·결과 1개 적재 + 큐브 상태 교체
     end
 ```
 
@@ -600,6 +634,7 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /cube/dismantle { userId, token, data:{ items[]{ itemId, count } } }
@@ -611,9 +646,13 @@ sequenceDiagram
         S-->>C: 실패 { errorCode: ItemNotFound(4001) / InsufficientQuantity(4006) / ItemEquipped(4007) }
     else 성공
         S->>DB: 아이템 수량 데이터 차감 + 골드 재화 데이터 적립 + 큐브 경험치·레벨 데이터 갱신
-        S-->>C: 성공 { 획득 골드, 획득 큐브 경험치 }
+        S->>R: 가방 캐시 갱신(변경분)
+        S-->>C: 성공 { 획득 골드, 획득 큐브 경험치, 큐브 상태, 잔액, inventoryDelta }
+        C->>C: 응답으로 캐시 반영(재조회 없음) — 분해분 차감/삭제 + 큐브 상태·골드 잔액
     end
 ```
+
+- `cube` (갱신 후 큐브 상태)와 `balance` (골드 잔액)는 재조회를 없애기 위해 응답에 함께 싣는다.
 
 ### POST /api/game/cube/craft — 제작(레시피)
 
@@ -622,6 +661,7 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /cube/craft { userId, token, data:{ recipeCode } }
@@ -635,10 +675,14 @@ sequenceDiagram
             S-->>C: 실패 { errorCode: CubeLevelInsufficient(4011) / InsufficientCurrency(4005) / CubeRecipeNotMet(4010) / InventoryFull(4002) }
         else 충족
             S->>DB: 골드·재료 데이터 차감 + 결과 아이템 데이터 적재 + 큐브 경험치 데이터 갱신(+20)
-            S-->>C: 성공 { 소모한 골드·재료, 획득 아이템, 큐브 상태 }
+            S->>R: 가방 캐시 갱신(변경분)
+            S-->>C: 성공 { 소모한 골드·재료, 획득 아이템, 큐브 상태, 잔액, inventoryDelta }
+            C->>C: 응답으로 캐시 반영(재조회 없음) — 재료 차감·제작물 적재 + 큐브 상태·골드 잔액
         end
     end
 ```
+
+- 분해와 마찬가지로 `balance`를 함께 실어 제작 비용 차감 후 잔액을 재조회 없이 표시한다.
 
 ## 성장(스킬·룬)
 
@@ -730,8 +774,11 @@ sequenceDiagram
     else 유효
         S->>DB: 골드 데이터 차감 + 룬 레벨 데이터 갱신(+1, 첫 해금이면 신규 적재)
         S-->>C: 성공 { 올린 레벨, 소모 골드, 잔액 }
+        C->>C: 응답으로 캐시 반영(재조회 없음) — 룬 레벨·골드 잔액
     end
 ```
+
+- 가방을 바꾸지 않는 액션이라 반영 대상이 룬 레벨과 잔액뿐이다. 이 둘이 응답에 있으므로 코어 스냅샷(`/load`)을 다시 받지 않는다.
 
 ## 거래소/교역선
 
@@ -809,8 +856,9 @@ sequenceDiagram
     else 정상
         S->>DB: 인벤토리 아이템 데이터 제거(에스크로 이동, 스택형은 행 전체 수량)
         S->>DB: 등록 데이터 적재(trade_listing status=1, expires_at = now + 3일)
-        S->>R: 커밋 후 캐시 추가(색인 2종 + 스냅샷)
-        S-->>C: 성공 { listingId, itemCode, enhanceLevel, quantity, price }
+        S->>R: 커밋 후 캐시 추가(색인 2종 + 스냅샷) · 가방 캐시 갱신(변경분)
+        S-->>C: 성공 { listingId, itemCode, enhanceLevel, quantity, price, inventoryDelta }
+        C->>C: 응답으로 캐시 반영(재조회 없음) — 등록한 아이템을 가방에서 제거
     end
 ```
 
@@ -851,6 +899,7 @@ sequenceDiagram
             S->>DB: 판매 대금 메일 데이터 적재(판매자, 템플릿 201, 판매가의 80%)
             S->>R: 커밋 후 캐시에서 등록 제거
             S-->>C: 성공 { listingId, gained, cost, balance, mailId }
+            C->>C: 응답으로 캐시 반영(재조회 없음) — 골드 잔액만(산 아이템은 우편함이라 가방 변화 없음)
         end
         S->>R: 락 해제(값이 자기 토큰일 때만)
     end
@@ -891,8 +940,9 @@ sequenceDiagram
             alt 빈 칸 부족
                 S-->>C: 실패 { errorCode: InventoryFull(4002) }
             end
-            S->>R: 커밋 후 캐시에서 등록 제거
-            S-->>C: 성공 { listingId, restored }
+            S->>R: 커밋 후 캐시에서 등록 제거 · 가방 캐시 갱신(변경분)
+            S-->>C: 성공 { listingId, restored, inventoryDelta }
+            C->>C: 응답으로 캐시 반영(재조회 없음) — 복원된 아이템을 서버가 준 칸에 배치
         end
         S->>R: 락 해제
     end
@@ -969,6 +1019,7 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /mail/claim { userId, token, data:{ mailId } }
@@ -991,7 +1042,9 @@ sequenceDiagram
             alt 용량 초과(롤백 — 미수령 유지)
                 S-->>C: 실패 { errorCode: InventoryFull(4002) }
             else 지급 완료
-                S-->>C: 성공 { mailId, gained, balance }
+                S->>R: 가방 캐시 갱신(변경분)
+                S-->>C: 성공 { mailId, gained, balance, inventoryDelta }
+                C->>C: 응답으로 캐시 반영(재조회 없음) — 첨부 적재·골드 잔액
             end
         end
     end
@@ -1004,6 +1057,7 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
+    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /mail/claim-all { userId, token }
@@ -1018,9 +1072,13 @@ sequenceDiagram
     alt 용량 초과(전체 롤백 — 부분 수령 없음)
         S-->>C: 실패 { errorCode: InventoryFull(4002) }
     else 지급 완료(대상 없으면 빈 목록)
-        S-->>C: 성공 { claimedMailIds[], gained(합계), balance }
+        S->>R: 가방 캐시 갱신(변경분)
+        S-->>C: 성공 { claimedMailIds[], gained(합계), balance, inventoryDelta }
+        C->>C: 응답으로 캐시 반영(재조회 없음) — 첨부 적재·골드 잔액
     end
 ```
+
+- 수령 뒤 클라이언트가 다시 부르는 것은 **우편함 목록(`mail/list`)뿐**이다 — 수령 표시·레드닷을 갱신하기 위한 것이며 가방 조회가 아니다.
 
 ## 출석부 보상
 

@@ -149,6 +149,272 @@ namespace TaskbarHero.Client.Managers
             BagLoaded = false;
         }
 
+        // ── 액션 응답 반영(재조회 없이 캐시를 서버 확정값으로 맞춘다) ──
+        //
+        // 가방을 바꾸는 액션은 응답에 변경분(inventoryDelta)을, 재화·용량·큐브·룬은 각자의 필드를 담고 온다
+        // (서버 inventory-item-cube 기획서 §5.0). 아래 헬퍼로 그 값만 반영하면 되므로 액션 뒤에
+        // /api/game/load·/api/game/inventory/list 를 다시 부르지 않는다.
+
+        /// <summary>
+        /// 가방 변경분을 캐시에 적용한다 — <c>removed</c>(itemId 제거) → <c>upserted</c>(itemId 키 덮어쓰기) 순서이며,
+        /// 마지막에 slot 오름차순으로 정렬해 서버 조회 결과와 같은 순서를 유지한다. 같은 응답을 두 번 적용해도
+        /// 결과가 같다(멱등).
+        /// <para><b>서버가 응답한 slot이 최종 위치다</b> — 스택 병합·빈 칸 배정은 서버 권위이므로 클라이언트가
+        /// 예상한 칸과 달라도 응답 값을 그대로 따른다.</para>
+        /// <para>가방을 한 번도 받지 않은 상태(<see cref="BagLoaded"/>가 false)면 적용하지 않는다 — 캐시가 없어
+        /// 델타만 적용하면 일부 아이템만 든 반쪽 가방이 되고, 어차피 가방을 쓰는 화면이 열릴 때 새로 조회한다.</para>
+        /// </summary>
+        public static void ApplyInventoryDelta(InventoryDeltaDto delta)
+        {
+            if (delta == null || !BagLoaded)
+            {
+                return;
+            }
+
+            if (delta.removed != null)
+            {
+                foreach (var itemId in delta.removed)
+                {
+                    RemoveBagItem(itemId);
+                }
+            }
+            if (delta.upserted != null)
+            {
+                foreach (var item in delta.upserted)
+                {
+                    UpsertBagItem(item);
+                }
+            }
+            SortBag();
+        }
+
+        /// <summary>가방에서 해당 itemId 행을 제거한다(없으면 무시).</summary>
+        private static void RemoveBagItem(long itemId)
+        {
+            for (int i = 0; i < Bag.Count; i++)
+            {
+                if (Bag[i] != null && Bag[i].itemId == itemId)
+                {
+                    Bag.RemoveAt(i);
+                    return;
+                }
+            }
+        }
+
+        /// <summary>가방 행을 itemId 키로 덮어쓰거나(있으면) 새로 넣는다(없으면). 신규·수정을 구분하지 않는다.</summary>
+        private static void UpsertBagItem(InventoryItemDto item)
+        {
+            if (item == null)
+            {
+                return;
+            }
+            for (int i = 0; i < Bag.Count; i++)
+            {
+                if (Bag[i] != null && Bag[i].itemId == item.itemId)
+                {
+                    Bag[i] = item;
+                    return;
+                }
+            }
+            Bag.Add(item);
+        }
+
+        /// <summary>가방을 slot 오름차순으로 정렬한다(서버 조회 순서와 동일하게 유지).</summary>
+        private static void SortBag() => Bag.Sort((a, b) => a.slot.CompareTo(b.slot));
+
+        /// <summary>캐시된 가방에서 해당 아이템의 칸 번호를 서버가 확정한 값으로 갱신한다(배치 이동 저장 후).</summary>
+        public static void ApplyBagSlot(long itemId, int slot)
+        {
+            foreach (var item in Bag)
+            {
+                if (item != null && item.itemId == itemId)
+                {
+                    item.slot = slot;
+                    SortBag();
+                    return;
+                }
+            }
+        }
+
+        /// <summary>응답의 재화 잔액(balance)을 캐시에 반영한다. 서버가 확정한 <b>잔액</b>이므로 가산이 아니라 대입이며,
+        /// 캐시에 없던 재화 종류는 새로 추가한다.</summary>
+        public static void ApplyBalance(List<CurrencyDto> balance)
+        {
+            if (balance == null || GameData == null)
+            {
+                return;
+            }
+            if (GameData.currencies == null)
+            {
+                GameData.currencies = new List<CurrencyDto>();
+            }
+            foreach (var after in balance)
+            {
+                if (after == null)
+                {
+                    continue;
+                }
+                bool found = false;
+                foreach (var cur in GameData.currencies)
+                {
+                    if (cur != null && cur.currencyType == after.currencyType)
+                    {
+                        cur.amount = after.amount;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    GameData.currencies.Add(after);
+                }
+            }
+        }
+
+        /// <summary>인벤토리 용량을 응답 값으로 갱신한다(용량 확장 후).</summary>
+        public static void ApplyInventoryCapacity(int inventoryCapacity)
+        {
+            if (GameData != null && GameData.player != null && inventoryCapacity > 0)
+            {
+                GameData.player.inventoryCapacity = inventoryCapacity;
+            }
+        }
+
+        /// <summary>큐브 상태(레벨·경험치)를 응답 값으로 교체한다(합성·분해·제작 후).</summary>
+        public static void ApplyCube(CubeDto cube)
+        {
+            if (GameData != null && cube != null)
+            {
+                GameData.cube = cube;
+            }
+        }
+
+        /// <summary>룬 1개의 레벨을 응답 값으로 갱신한다(캐시에 없던 룬이면 추가). 룬 강화 후.</summary>
+        public static void ApplyRuneLevel(int runeCode, int level)
+        {
+            if (GameData == null)
+            {
+                return;
+            }
+            if (GameData.runes == null)
+            {
+                GameData.runes = new List<RuneDto>();
+            }
+            foreach (var rune in GameData.runes)
+            {
+                if (rune != null && rune.runeCode == runeCode)
+                {
+                    rune.level = level;
+                    return;
+                }
+            }
+            GameData.runes.Add(new RuneDto { runeCode = runeCode, level = level });
+        }
+
+        /// <summary>
+        /// 장착 응답을 캐시에 반영한다 — 장착한 아이템은 <b>가방에서 빠져</b> 장착 목록으로 옮기고,
+        /// 스왑으로 밀려난 기존 장비는 서버가 알려준 <c>unequippedBagSlot</c> 칸으로 되돌린다.
+        /// 아이템 코드·강화 수치는 응답에 없지만 각각 가방 행과 장착 목록에 이미 있으므로 그대로 옮겨 쓴다.
+        /// </summary>
+        public static void ApplyEquipResult(EquipResultData data)
+        {
+            if (data == null || data.equipped == null || GameData == null)
+            {
+                return;
+            }
+            if (GameData.equipped == null)
+            {
+                GameData.equipped = new List<EquippedItemDto>();
+            }
+
+            // 1) 스왑으로 밀려난 기존 장비: 장착 목록에서 빼 가방(unequippedBagSlot)으로 되돌린다.
+            if (data.unequipped != null && data.unequipped.itemId != 0)
+            {
+                var old = TakeEquipped(data.unequipped.itemId);
+                if (old != null && BagLoaded)
+                {
+                    UpsertBagItem(new InventoryItemDto
+                    {
+                        itemId = old.itemId,
+                        slot = data.unequippedBagSlot,
+                        itemCode = old.itemCode,
+                        quantity = 1,
+                        enhanceLevel = old.enhanceLevel,
+                    });
+                }
+            }
+
+            // 2) 장착한 아이템: 가방 행을 근거로 장착 목록에 추가하고 가방에서 제거한다.
+            var bagRow = FindBagItem(data.equipped.itemId);
+            GameData.equipped.Add(new EquippedItemDto
+            {
+                itemId = data.equipped.itemId,
+                itemCode = bagRow != null ? bagRow.itemCode : 0,
+                enhanceLevel = bagRow != null ? bagRow.enhanceLevel : 0,
+                equippedCharacterId = data.characterId,
+                equippedSlot = data.equipped.slot,
+            });
+            RemoveBagItem(data.equipped.itemId);
+            SortBag();
+        }
+
+        /// <summary>장착 해제 응답을 캐시에 반영한다 — 해제한 장비를 장착 목록에서 빼 서버가 알려준
+        /// <c>bagSlot</c> 칸의 가방 행으로 되돌린다.</summary>
+        public static void ApplyUnequipResult(UnequipResultData data)
+        {
+            if (data == null || data.itemId == 0)
+            {
+                return;
+            }
+            var removed = TakeEquipped(data.itemId);
+            if (removed == null || !BagLoaded)
+            {
+                return;
+            }
+            UpsertBagItem(new InventoryItemDto
+            {
+                itemId = removed.itemId,
+                slot = data.bagSlot,
+                itemCode = removed.itemCode,
+                quantity = 1,
+                enhanceLevel = removed.enhanceLevel,
+            });
+            SortBag();
+        }
+
+        /// <summary>장착 목록에서 해당 itemId를 빼내 반환한다(없으면 null).</summary>
+        private static EquippedItemDto TakeEquipped(long itemId)
+        {
+            var equipped = Equipped;
+            if (equipped == null)
+            {
+                return null;
+            }
+            for (int i = 0; i < equipped.Count; i++)
+            {
+                if (equipped[i] != null && equipped[i].itemId == itemId)
+                {
+                    var found = equipped[i];
+                    equipped.RemoveAt(i);
+                    return found;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>가방에서 해당 itemId 행을 찾는다(없으면 null).</summary>
+        private static InventoryItemDto FindBagItem(long itemId)
+        {
+            foreach (var item in Bag)
+            {
+                if (item != null && item.itemId == itemId)
+                {
+                    return item;
+                }
+            }
+            return null;
+        }
+
         /// <summary>
         /// 오프라인 보상 정산 결과를 캐싱된 세이브에 반영하고, GameScene 진입 팝업이 표시할 수 있게 대기시킨다.
         /// 서버가 이미 지급을 확정한 값이므로(경험치·레벨·골드), 클라이언트 캐시(파티/HUD/인벤토리 표시)를 동일 상태로 맞춘다:

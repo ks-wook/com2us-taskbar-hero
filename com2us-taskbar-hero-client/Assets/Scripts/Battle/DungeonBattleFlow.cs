@@ -338,8 +338,13 @@ namespace TaskbarHero.Client.Battle
             // 레벨업한 캐릭터 수집(오버레이가 닫혀 전장이 보일 때 글로우 재생) + 세션 캐릭터 레벨/경험치 동기화.
             CollectLevelUps(d);
 
-            // 전리품이 가방에 들어갔으므로 가방 캐시를 무효화한다(가방은 지연 로딩이라 창고를 열 때 다시 받는다).
-            Session.InvalidateBag();
+            // 전리품 적재·골드 증가는 응답이 그대로 알려주므로 캐시에 반영해 둔다(§5.0 규약) —
+            // 가방을 이미 받아 둔 상태면 창고를 열기 전에 최신이 되고, 아직 안 받았으면 열 때 조회된다.
+            if (d != null)
+            {
+                Session.ApplyInventoryDelta(d.inventoryDelta);
+                Session.ApplyBalance(d.balance);
+            }
 
             // 클리어 연출 이펙트 + 보상 노출(클릭 또는 5초 후 닫힘 → timeScale 복원 → 다음 스테이지 자동 입장).
             StageClearOverlay.Show(d, () => OnClearOverlayClosed(next));

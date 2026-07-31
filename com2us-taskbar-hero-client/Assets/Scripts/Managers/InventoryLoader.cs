@@ -25,19 +25,9 @@ namespace TaskbarHero.Client.Managers
         /// <summary>페이지 크기(서버가 1~500으로 클램프, 기본 200).</summary>
         private const int PageLimit = 200;
 
-        /// <summary>가방 캐시가 유효하면 즉시 완료 콜백을 호출하고, 아니면 전체 페이지를 조회한 뒤 호출한다.
-        /// 가방을 보여주는 화면(창고·큐브·거래 판매 등록)을 열 때 사용한다.</summary>
-        public static void EnsureBag(Action onDone, Action<NetworkError> onError = null)
-        {
-            if (Session.BagLoaded)
-            {
-                onDone?.Invoke();
-                return;
-            }
-            ReloadBag(onDone, onError);
-        }
-
-        /// <summary>가방을 첫 페이지부터 다시 조회해 캐시를 교체한다(캐시가 유효해도 무조건 재조회).</summary>
+        /// <summary>가방을 첫 페이지부터 다시 조회해 캐시를 교체한다(캐시가 유효해도 무조건 재조회).
+        /// 가방을 보여주는 화면(창고·큐브·거래 판매 등록)을 <b>열 때</b>와, 가방 캐시가 서버와 어긋났을 때
+        /// (<c>ItemNotFound</c>·배치 이동 저장 실패) 호출한다.</summary>
         public static void ReloadBag(Action onDone, Action<NetworkError> onError = null)
         {
             if (!CanRequest())
@@ -54,28 +44,9 @@ namespace TaskbarHero.Client.Managers
             FetchPage(new Dictionary<long, InventoryItemDto>(), new List<long>(), -1, onDone, onError);
         }
 
-        /// <summary>
-        /// 코어 로드(<c>/api/game/load</c>) → 가방 페이징까지 이어서 다시 받는다.
-        /// 인벤토리를 바꾼 액션(장착·해제·이동·큐브·거래·메일 수령 등) 뒤에 세션 전체를 최신화할 때 쓴다.
-        /// </summary>
-        public static void ReloadAll(Action onDone, Action<NetworkError> onError = null)
-        {
-            if (!CanRequest())
-            {
-                onDone?.Invoke();
-                return;
-            }
-
-            var request = new AuthRequest { userId = Session.UserId, token = Session.Token };
-            NetworkManager.Instance.PostToGame<LoadResponse>("/api/game/load", request, response =>
-            {
-                if (response != null && response.data != null)
-                {
-                    Session.SetGameData(response.data); // 가방 캐시는 여기서 무효화된다
-                }
-                ReloadBag(onDone, onError);
-            }, onError);
-        }
+        // 인벤토리를 바꾼 액션 뒤에 코어+가방을 통째로 다시 받던 ReloadAll은 제거했다 —
+        // 서버가 변경분(inventoryDelta)·잔액·큐브 상태를 응답에 담아 주므로(§5.0 규약) 재조회가 필요 없고,
+        // 남겨 두면 액션마다 다시 호출되는 회귀가 생기기 쉽다. 캐시 재동기화가 필요하면 ReloadBag만 쓴다.
 
         /// <summary>
         /// 가방 한 페이지를 조회해 누적 결과에 병합하고, 다음 페이지가 있으면 재귀적으로 이어 받는다.
