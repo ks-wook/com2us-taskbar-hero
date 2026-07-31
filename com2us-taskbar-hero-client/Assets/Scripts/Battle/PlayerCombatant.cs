@@ -79,6 +79,13 @@ namespace TaskbarHero.Client.Battle
         private long _baseAtk;        // 장비 제외 기본 공격(클래스+레벨)
         private long _def;            // 최종 방어력(클래스+레벨+장비 × 패시브 × 룬). 피격 데미지 경감에 사용
         private long _baseDef;        // 장비 제외 기본 방어력(클래스+레벨)
+        /// <summary>클래스 마스터에 치명피해가 없을 때 쓰는 기본 배율(150%).</summary>
+        private const float DefaultCritDamage = 1.5f;
+
+        private float _critChance;    // 최종 치명확률(0~1). 매 타격마다 굴려 치명타 여부를 정한다
+        private float _critDamage;    // 최종 치명피해 배율(1.5 = 150%). 치명타일 때 데미지에 곱한다
+        private float _baseCritChance; // 장비 제외 기본 치명확률(클래스+레벨)
+        private float _baseCritDamage; // 장비 제외 기본 치명피해(클래스+레벨)
         private long _baseMaxHp;      // 장비 제외 기본 체력
         private int _characterId;     // 연결된 계정 캐릭터 id(serverMode, 0=없음)
         private long _maxHp = 1;
@@ -102,6 +109,10 @@ namespace TaskbarHero.Client.Battle
         public long Attack => _atk;
         /// <summary>현재 방어력(클래스+레벨+장비 × 패시브 × 룬). 피격 데미지 경감에 사용.</summary>
         public long Defense => _def;
+        /// <summary>현재 치명확률(0~1, 클래스+레벨+장비 × 패시브 × 룬).</summary>
+        public float CritChance => _critChance;
+        /// <summary>현재 치명피해 배율(1.5 = 150%).</summary>
+        public float CritDamage => _critDamage;
         /// <summary>연결된 계정 캐릭터 id(serverMode).</summary>
         public int CharacterId => _characterId;
 
@@ -180,12 +191,16 @@ namespace TaskbarHero.Client.Battle
         {
             var db = MasterDataManager.Db;
             long atk, hp, def;
+            float critChance, critDamage;
             if (db != null && db.Classes.TryGetValue(_classCode, out ClassMaster cls))
             {
                 _name = cls.name;
                 atk = cls.baseStats.atk;
                 hp = System.Math.Max(1L, cls.baseStats.hp);
                 def = cls.baseStats.def;
+                critChance = cls.baseStats.critChance;
+                // 마스터에 치명피해가 없으면(0) 치명타가 무의미해지므로 기본 배율 1.5를 쓴다.
+                critDamage = cls.baseStats.critDamage > 0f ? cls.baseStats.critDamage : DefaultCritDamage;
                 _cooldown = cls.baseStats.cooldown > 0f ? cls.baseStats.cooldown : 1.2f;
                 _moveSpeed = cls.baseStats.moveSpeed > 0f ? cls.baseStats.moveSpeed : 3f;
             }
@@ -193,6 +208,7 @@ namespace TaskbarHero.Client.Battle
             {
                 _name = "Ally(?" + _classCode + ")";
                 atk = 10; hp = 100; def = 0; _cooldown = 1.2f; _moveSpeed = 3f;
+                critChance = 0f; critDamage = DefaultCritDamage;
             }
 
             // 서버 구동 모드: 계정 캐릭터의 레벨 보너스를 기본 스탯에 반영하고 characterId를 기록(장비 합산용).
@@ -208,12 +224,16 @@ namespace TaskbarHero.Client.Battle
                         atk += lm.statBonus.atk;
                         hp += lm.statBonus.hp;
                         def += lm.statBonus.def;
+                        critChance += lm.statBonus.critChance;
+                        critDamage += lm.statBonus.critDamage;
                     }
                 }
             }
 
             _baseAtk = atk;
             _baseDef = def;
+            _baseCritChance = critChance;
+            _baseCritDamage = critDamage;
             _baseMaxHp = System.Math.Max(1L, hp);
             _baseMoveSpeed = _moveSpeed; // 패시브 적용 전 기준 이동속도
             _baseCooldown = _cooldown;   // 룬 적용 전 기준 쿨다운
@@ -222,13 +242,18 @@ namespace TaskbarHero.Client.Battle
             gameObject.name = "Player_" + _name;
         }
 
-        /// <summary>기본 스탯(_baseAtk/_baseMaxHp/_baseMoveSpeed)에 장착 장비 합산 + 학습한 패시브 스킬 배율을
-        /// 적용해 _atk/_maxHp/_moveSpeed를 확정한다. 패시브는 장착과 무관하게 습득(레벨 ≥ 1) 시 상시 적용된다.</summary>
+        /// <summary>기본 스탯(_baseAtk/_baseMaxHp/_baseMoveSpeed/_baseCrit*)에 장착 장비 합산 + 학습한 패시브 스킬
+        /// 배율을 적용해 _atk/_maxHp/_moveSpeed/_critChance/_critDamage를 확정한다.
+        /// 패시브는 장착과 무관하게 습득(레벨 ≥ 1) 시 상시 적용된다.
+        /// 계산식은 인벤토리 능력치 패널(<c>InventoryPanelController.RefreshStatPanel</c>)과 동일하게 맞춘다 —
+        /// 패널에 보이는 수치가 곧 전투에 쓰이는 수치여야 한다.</summary>
         private void ApplyEquipStats()
         {
             long atk = _baseAtk;
             long hp = _baseMaxHp;
             long def = _baseDef;
+            float critChance = _baseCritChance;
+            float critDamage = _baseCritDamage;
             var db = MasterDataManager.Db;
             // 장착 장비는 코어 로드(equipped)에만 있다 — 가방 아이템(페이징 조회)과 겹치지 않으므로
             // 가방을 아직 받지 않은 상태(접속 직후)에도 전투 스탯을 온전히 계산할 수 있다.
@@ -243,15 +268,22 @@ namespace TaskbarHero.Client.Battle
                         atk += im.baseStats.atk;
                         hp += im.baseStats.hp;
                         def += im.baseStats.def;
+                        critChance += im.baseStats.critChance;
+                        critDamage += im.baseStats.critDamage;
                     }
                 }
             }
 
-            // 패시브 스킬 배율 + 룬(계정 공용) 배율(statType: 1 공격력 · 2 방어력 · 3 체력 · 6 이동속도 · 7 쿨다운)을 곱한다.
+            // 패시브 스킬 배율 + 룬(계정 공용) 배율(statType: 1 공격력 · 2 방어력 · 3 체력 · 4 치명확률 ·
+            // 5 치명피해 · 6 이동속도 · 7 쿨다운)을 곱한다.
             // 반올림으로 확정한다(버림 시 작은 % 상승분이 사라지는 문제 방지 — 인벤토리 능력치 패널과 동일 규칙).
             _atk = System.Math.Max(1L, (long)System.Math.Round(atk * (double)PassiveMult(1) * RuneMult(1)));
             _def = System.Math.Max(0L, (long)System.Math.Round(def * (double)PassiveMult(2) * RuneMult(2)));
             _maxHp = System.Math.Max(1L, (long)System.Math.Round(hp * (double)PassiveMult(3) * RuneMult(3)));
+            // 치명확률은 0~1로 클램프(100%를 넘겨도 항상 치명일 뿐이고, 음수는 판정을 깨뜨린다).
+            _critChance = Mathf.Clamp01(critChance * PassiveMult(4) * RuneMult(4));
+            // 치명피해는 1 미만이면 치명타가 오히려 손해가 되므로 하한을 1로 둔다.
+            _critDamage = Mathf.Max(1f, critDamage * PassiveMult(5) * RuneMult(5));
             _moveSpeed = _baseMoveSpeed * PassiveMult(6) * RuneMult(6);
             _cooldown = Mathf.Max(0.1f, _baseCooldown * RuneMult(7)); // 룬 재사용 단축(감소 방향)
         }
@@ -722,16 +754,16 @@ namespace TaskbarHero.Client.Battle
         /// 단일 대상 데미지를 컨트롤러에 넘기면서 흡혈을 함께 처리한다.
         /// 모든 데미지 경로가 이 창구를 지나므로 기본공격·스킬·투사체·돌진 어디서든 흡혈이 동작한다.
         /// </summary>
-        private void DealDamage(float delay, long dmg, string label)
+        private void DealDamage(float delay, long dmg, bool crit, string label)
         {
-            _ctrl.DealDamageAfter(delay, dmg, label);
+            _ctrl.DealDamageAfter(delay, dmg, crit, label);
             ScheduleLifesteal(delay, dmg);
         }
 
         /// <summary>광역 데미지 + 흡혈. 회복량은 대상 1기분 피해 기준이다(적중 수만큼 배로 늘리지 않는다).</summary>
-        private void DealAreaDamage(float delay, long dmg, string label, Vector3 center, float radius)
+        private void DealAreaDamage(float delay, long dmg, bool crit, string label, Vector3 center, float radius)
         {
-            _ctrl.DealAreaDamageAfter(delay, dmg, label, center, radius);
+            _ctrl.DealAreaDamageAfter(delay, dmg, crit, label, center, radius);
             ScheduleLifesteal(delay, dmg);
         }
 
@@ -787,7 +819,7 @@ namespace TaskbarHero.Client.Battle
             }
             else // 공격 스킬
             {
-                long dmg = Damage(sk.coef);
+                long dmg = Damage(sk.coef, out bool crit);
                 float motion = EffectDuration(sk.effect);
                 // 데미지 타격 시점 — 기본은 이펙트 종료 시점(비율 1)이고, 이펙트가 빠르게 터지는 스킬은
                 // 멤버 설정의 hitTimeRatio로 앞당긴다(모션·쿨타임은 motion 그대로 유지).
@@ -801,7 +833,7 @@ namespace TaskbarHero.Client.Battle
                     _moving = false;
                     SendMessage("PlayArrowRain", motion, SendMessageOptions.DontRequireReceiver);
                     SpawnEffectAt(sk.effect, ArrowRainTargetPos(), sk.scale);
-                    DealDamage(hitDelay, dmg, label);
+                    DealDamage(hitDelay, dmg, crit, label);
                     _busyTimer = motion + 0.4f; // 점프+홀드+착지 동안 대기
                 }
                 else if (_slamSkillCode != 0 && sk.code == _slamSkillCode)
@@ -809,7 +841,7 @@ namespace TaskbarHero.Client.Battle
                     // 내려찍기: 공격 애니를 재생한 채 솟구쳐 올랐다 빠르게 낙하 →
                     // **착지한 뒤에** 지면 이펙트와 데미지가 나간다(공중에서 터지지 않게).
                     SendMessage("PlayGroundSlam", _slamAirTime, SendMessageOptions.DontRequireReceiver);
-                    StartCoroutine(SlamImpactAfter(_slamAirTime, sk, dmg, label));
+                    StartCoroutine(SlamImpactAfter(_slamAirTime, sk, dmg, crit, label));
                     _busyTimer = _slamAirTime + motion; // 상승·낙하·이펙트 동안 이동/다음 행동 금지
                 }
                 else if (_allSkillsAoe && sk.effect != null)
@@ -822,7 +854,7 @@ namespace TaskbarHero.Client.Battle
                         PlayAttackAnim();
                     Vector3 center = SelfEffectPos(sk.offset);
                     var fx = SpawnEffectAt(sk.effect, center, sk.scale);
-                    DealAreaDamage(hitDelay, dmg, label, center, EffectRadius(fx));
+                    DealAreaDamage(hitDelay, dmg, crit, label, center, EffectRadius(fx));
                     _busyTimer = motion;
                 }
                 else if (_ranged && sk.effect != null && _ctrl.MonsterTransform != null)
@@ -835,7 +867,7 @@ namespace TaskbarHero.Client.Battle
                     var proj = fx.GetComponent<ProjectileEffect>();
                     if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
                     proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
-                                () => DealDamage(0f, dmg, label));
+                                () => DealDamage(0f, dmg, crit, label));
                     _busyTimer = motion;
                 }
                 else
@@ -850,12 +882,12 @@ namespace TaskbarHero.Client.Battle
                     if (_aoeSkillCodes.Contains(sk.code))
                     {
                         // 광역(강타·강한일격 등): 이펙트 범위 내 모든 적에게 데미지.
-                        DealAreaDamage(hitDelay, dmg, label,
+                        DealAreaDamage(hitDelay, dmg, crit, label,
                             EffectCenter(fx, SelfEffectPos(sk.offset)), EffectRadius(fx));
                     }
                     else
                     {
-                        DealDamage(hitDelay, dmg, label);
+                        DealDamage(hitDelay, dmg, crit, label);
                     }
                     _busyTimer = motion;
                 }
@@ -865,7 +897,7 @@ namespace TaskbarHero.Client.Battle
         private void BasicAttack()
         {
             PlayAttackAnim();
-            long dmg = Damage(1f);
+            long dmg = Damage(1f, out bool crit);
 
             if (_basicAttackProjectile != null && _ctrl.MonsterTransform != null)
             {
@@ -880,7 +912,7 @@ namespace TaskbarHero.Client.Battle
                 if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
                 string label = $"[{_name}] → 몬스터";
                 proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
-                            () => DealDamage(0f, dmg, label));
+                            () => DealDamage(0f, dmg, crit, label));
                 _busyTimer = _ctrl.BasicHitDelay;
             }
             else if (_ranged && _arrowPrefab != null)
@@ -891,9 +923,9 @@ namespace TaskbarHero.Client.Battle
                 var arrow = arrowGo.GetComponent<ArrowProjectile>();
                 string label = $"[{_name}] 화살 → 몬스터";
                 if (arrow != null)
-                    arrow.Launch(monster, _arrowSpeed, _ctrl.EffectYOffset, () => DealDamage(0f, dmg, label));
+                    arrow.Launch(monster, _arrowSpeed, _ctrl.EffectYOffset, () => DealDamage(0f, dmg, crit, label));
                 else
-                    DealDamage(_ctrl.BasicHitDelay, dmg, label);
+                    DealDamage(_ctrl.BasicHitDelay, dmg, crit, label);
                 _busyTimer = _ctrl.BasicHitDelay;
             }
             else // 근접
@@ -905,11 +937,11 @@ namespace TaskbarHero.Client.Battle
                     Vector3 center = target != null
                         ? target.position
                         : transform.position + Vector3.right * Mathf.Max(1f, _attackRange * 0.5f) + Vector3.up * _ctrl.EffectYOffset;
-                    DealAreaDamage(_ctrl.BasicHitDelay, dmg, $"[{_name}] 광역 → 적", center, _attackRange);
+                    DealAreaDamage(_ctrl.BasicHitDelay, dmg, crit, $"[{_name}] 광역 → 적", center, _attackRange);
                 }
                 else
                 {
-                    DealDamage(_ctrl.BasicHitDelay, dmg, $"[{_name}] → 몬스터");
+                    DealDamage(_ctrl.BasicHitDelay, dmg, crit, $"[{_name}] → 몬스터");
                 }
                 _busyTimer = _ctrl.BasicHitDelay;
             }
@@ -973,8 +1005,8 @@ namespace TaskbarHero.Client.Battle
 
                 // 도달(또는 발동 시점부터 사거리 안). 데미지는 자세가 끝나는 순간에 들어간다.
                 _chargeImpacted = true;
-                long dmg = Damage(_chargeSkill.coef);
-                DealDamage(Mathf.Max(0f, _chargeMotion - _chargeElapsed), dmg,
+                long dmg = Damage(_chargeSkill.coef, out bool crit);
+                DealDamage(Mathf.Max(0f, _chargeMotion - _chargeElapsed), dmg, crit,
                     $"[{_name}] 돌진 {_chargeSkill.name} ×{_chargeSkill.coef:0.##}");
             }
 
@@ -994,16 +1026,29 @@ namespace TaskbarHero.Client.Battle
 
         // ---- 공용 계산 ----
 
-        private long Damage(float coef)
+        /// <summary>
+        /// 한 번의 타격 데미지를 계산하고 치명타 여부를 함께 돌려준다.
+        /// 기획서(master-data-기획서 §7.4)의 공식 <c>공격력 × 스킬 계수</c>에 버프 배율을 곱한 값이며,
+        /// <see cref="_critChance"/>로 굴린 판정이 성공하면 <see cref="_critDamage"/>를 추가로 곱한다
+        /// (치명 판정은 <b>타격 단위</b> — 광역 스킬은 그 타격에 맞은 모든 적이 같은 판정 결과를 공유한다).
+        /// <see cref="BattleDevController.DevDamageMultiplier"/>는 개발 하네스에서만 1이 아니다(실게임은 1).
+        /// </summary>
+        private long Damage(float coef, out bool crit)
         {
-            return System.Math.Max(1L, (long)(_atk * Mathf.Max(1f, _ctrl.DevDamageMultiplier) * coef * _atkBuffMult));
+            crit = _critChance > 0f && UnityEngine.Random.value < _critChance;
+            double dmg = _atk * _ctrl.DevDamageMultiplier * coef * _atkBuffMult;
+            if (crit)
+            {
+                dmg *= _critDamage;
+            }
+            return System.Math.Max(1L, (long)dmg);
         }
 
         /// <summary>
         /// 내려찍기 착지 순간에 지면 이펙트를 띄우고 데미지를 적용한다(공중 체류 <paramref name="airTime"/> 뒤).
         /// 착지 후에 스폰하므로 이펙트가 도약 전 발밑이 아니라 실제로 내리찍은 지점에 생긴다.
         /// </summary>
-        private System.Collections.IEnumerator SlamImpactAfter(float airTime, Skill sk, long dmg, string label)
+        private System.Collections.IEnumerator SlamImpactAfter(float airTime, Skill sk, long dmg, bool crit, string label)
         {
             yield return new WaitForSeconds(Mathf.Max(0.05f, airTime));
 
@@ -1012,12 +1057,12 @@ namespace TaskbarHero.Client.Battle
             // 내리찍은 순간이 곧 타격. 광역 지정이면 먼지 이펙트 범위 안의 적 전부를 때린다.
             if (_aoeSkillCodes.Contains(sk.code))
             {
-                DealAreaDamage(0f, dmg, label,
+                DealAreaDamage(0f, dmg, crit, label,
                     EffectCenter(fx, SelfEffectPos(sk.offset)), EffectRadius(fx));
             }
             else
             {
-                DealDamage(0f, dmg, label);
+                DealDamage(0f, dmg, crit, label);
             }
         }
 

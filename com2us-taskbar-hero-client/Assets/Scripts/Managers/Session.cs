@@ -27,7 +27,9 @@ namespace TaskbarHero.Client.Managers
         /// <summary>캐릭터별 장착 장비(코어 로드의 equipped). 스탯 계산·장비 슬롯 표시의 입력이다.</summary>
         public static List<EquippedItemDto> Equipped => GameData != null ? GameData.equipped : null;
 
-        /// <summary>가방(비장착) 아이템 캐시. /api/game/inventory/list 전체 페이지를 이어 붙인 결과다.
+        /// <summary>가방(비장착) 아이템 캐시. /api/game/inventory/list 페이지를 이어 붙인 결과다.
+        /// 창고 격자는 스크롤이 닿은 구간까지만 받으므로(<see cref="BagPager"/>) 지연 로딩 중에는 <b>부분 집합</b>일 수 있고,
+        /// 전량이 필요한 화면은 <see cref="InventoryLoader.ReloadBag"/>로 끝까지 받는다.
         /// 장착 장비·재화는 코어 로드로 내려오므로 여기 포함되지 않는다.</summary>
         public static List<InventoryItemDto> Bag { get; private set; } = new List<InventoryItemDto>();
 
@@ -89,6 +91,24 @@ namespace TaskbarHero.Client.Managers
         public static void SetBag(List<InventoryItemDto> items)
         {
             Bag = ExcludeEquipped(items);
+            BagLoaded = true;
+        }
+
+        /// <summary>
+        /// 가방 <b>한 페이지</b>를 캐시에 이어 붙인다(스크롤 지연 로딩 — <see cref="BagPager"/>가 페이지마다 호출).
+        /// 병합은 itemId 키이며 <b>나중 페이지가 이긴다</b>(세이브 기획서 5.2) — 페이지 사이에 아이템이 옮겨 가
+        /// 같은 itemId가 두 페이지에 걸쳐도 최종 위치 하나만 남는다. 병합 후 slot 오름차순으로 정렬해
+        /// 서버 조회 순서를 유지하고, 캐시를 쓸 수 있는 상태로 표시한다(<see cref="BagLoaded"/>).
+        /// <para>지연 로딩 중 캐시는 <b>받은 구간까지만</b> 채워진 부분 집합이다. 가방 전량이 필요한 화면
+        /// (큐브·거래 판매 등록)은 열 때 <see cref="InventoryLoader.ReloadBag"/>로 전량을 다시 받으므로 영향받지 않는다.</para>
+        /// </summary>
+        public static void MergeBagPage(List<InventoryItemDto> items)
+        {
+            foreach (var item in ExcludeEquipped(items))
+            {
+                UpsertBagItem(item);
+            }
+            SortBag();
             BagLoaded = true;
         }
 

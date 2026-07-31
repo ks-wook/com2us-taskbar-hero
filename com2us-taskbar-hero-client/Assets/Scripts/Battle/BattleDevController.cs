@@ -64,7 +64,7 @@ namespace TaskbarHero.Client.Battle
         public float effectYOffset = 0.6f;
 
         [Header("개발용 편의")]
-        [Tooltip("데미지 배수(개발용). 마스터 데이터 값 자체는 불변")]
+        [Tooltip("데미지 배수. BattleDevScene 하네스에서 전투를 빨리 돌려보기 위한 값이며, 실게임(serverMode)에서는 무시된다")]
         public float devDamageMultiplier = 20f;
 
         [Header("이동 / 교전 / 카메라")]
@@ -147,6 +147,11 @@ namespace TaskbarHero.Client.Battle
         // 소환 캐릭터 선택(테스트용). 현재 구현된 직업만 선택 가능.
         private static readonly HashSet<int> ImplementedClasses = new HashSet<int> { 1, 2, 3, 4 }; // 기사1·레인저2·마법사3·슬레이어4
         private const int MaxPartySlots = 3;  // 편성 자리 1~3(slot 0 = 미편성 → 전투 미참가)
+
+        /// <summary>방어력 경감 곡선의 반감점(<see cref="MitigatedDamage"/>). 방어력이 이 값이면 피해가 절반이 된다.
+        /// 씬별로 어긋나면 같은 캐릭터가 화면마다 다르게 맞으므로 인스펙터 노출 없이 상수로 고정한다
+        /// (개발용 노브인 <see cref="devDamageMultiplier"/>가 씬에 구워져 실게임까지 따라온 전례가 있다).</summary>
+        private const long DefenseMitigationK = 100L;
         private bool[] _selected;
 
         private readonly List<string> _log = new List<string>();
@@ -907,21 +912,29 @@ namespace TaskbarHero.Client.Battle
         public bool MonsterAlive => FrontMonster != null;
         public bool IsFighting => _phase == Phase.Fighting && MonsterAlive;
         public float PathY => _pathY;
-        public float DevDamageMultiplier => devDamageMultiplier;
+        /// <summary>
+        /// 실제 전투에 적용할 데미지 배수. <b>실게임(<see cref="serverMode"/>)에서는 항상 1</b>이고,
+        /// 개발 하네스(BattleDevScene)에서만 <see cref="devDamageMultiplier"/>를 쓴다.
+        /// <para>GameScene 전투는 BattleDevScene을 복제해 만들기 때문에 하네스용 20배가 실게임 씬까지 따라와,
+        /// 아군 데미지가 마스터 데이터의 20배로 나가고 있었다. 기획서(master-data-기획서 §7.4)의 데미지 공식은
+        /// <c>공격력 × 스킬 계수</c>(치명 시 × 치명피해)이며 개발 배수는 없다 — 실게임은 그 공식을 그대로 따른다.</para>
+        /// </summary>
+        public float DevDamageMultiplier => serverMode ? 1f : Mathf.Max(1f, devDamageMultiplier);
         public float BasicHitDelay => basicAttackHitDelay;
         public float EffectYOffset => effectYOffset;
         public int DevSkillLevel => devSkillLevel;
         public float SkillCooldownFallback => skillCooldown;
         public bool IsPaused => _paused;
 
-        /// <summary>공격 모션/이펙트가 끝난 뒤 최전방 몬스터에 데미지를 적용한다(호출 시점의 대상을 캡처, 생존 시에만 적용).</summary>
-        public void DealDamageAfter(float delay, long dmg, string label)
+        /// <summary>공격 모션/이펙트가 끝난 뒤 최전방 몬스터에 데미지를 적용한다(호출 시점의 대상을 캡처, 생존 시에만 적용).
+        /// <paramref name="crit"/>는 시전 측이 굴린 치명타 판정 결과로, 숫자 연출·로그에만 쓴다(데미지에는 이미 반영돼 있다).</summary>
+        public void DealDamageAfter(float delay, long dmg, bool crit, string label)
         {
             var target = FrontMonster;
-            StartCoroutine(DoDamageAfter(delay, dmg, label, target));
+            StartCoroutine(DoDamageAfter(delay, dmg, crit, label, target));
         }
 
-        private IEnumerator DoDamageAfter(float delay, long dmg, string label, MonsterUnit target)
+        private IEnumerator DoDamageAfter(float delay, long dmg, bool crit, string label, MonsterUnit target)
         {
             if (delay > 0f)
             {
@@ -932,18 +945,18 @@ namespace TaskbarHero.Client.Battle
                 yield break;
             }
             target.TakeDamage(dmg);
-            // 피격 데미지를 붉은 숫자로 표시(오브젝트 풀 재사용).
-            DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f));
-            Log($"{label} → -{dmg} (HP {Mathf.Max(0, (int)target.Hp)}/{target.MaxHp})");
+            // 피격 데미지를 붉은 숫자로 표시(치명타는 노란색). 오브젝트 풀 재사용.
+            DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f), crit);
+            Log($"{label} → -{dmg}{(crit ? " (치명타)" : string.Empty)} (HP {Mathf.Max(0, (int)target.Hp)}/{target.MaxHp})");
         }
 
         /// <summary>지연 후 지정 중심 반경 내 모든 살아있는 적에게 데미지를 적용한다(광역 스킬).</summary>
-        public void DealAreaDamageAfter(float delay, long dmg, string label, Vector3 center, float radius)
+        public void DealAreaDamageAfter(float delay, long dmg, bool crit, string label, Vector3 center, float radius)
         {
-            StartCoroutine(DoAreaDamageAfter(delay, dmg, label, center, radius));
+            StartCoroutine(DoAreaDamageAfter(delay, dmg, crit, label, center, radius));
         }
 
-        private IEnumerator DoAreaDamageAfter(float delay, long dmg, string label, Vector3 center, float radius)
+        private IEnumerator DoAreaDamageAfter(float delay, long dmg, bool crit, string label, Vector3 center, float radius)
         {
             if (delay > 0f)
             {
@@ -973,11 +986,11 @@ namespace TaskbarHero.Client.Battle
                 if (((Vector2)mu.transform.position - (Vector2)center).sqrMagnitude <= r2)
                 {
                     mu.TakeDamage(dmg);
-                    DamageNumberPool.GetOrCreate().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f));
+                    DamageNumberPool.GetOrCreate().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f), crit);
                     hit++;
                 }
             }
-            Log($"{label} (광역 r{radius:0.#}) → {hit}체 -{dmg}");
+            Log($"{label} (광역 r{radius:0.#}) → {hit}체 -{dmg}{(crit ? " (치명타)" : string.Empty)}");
         }
 
         /// <summary>MonsterUnit이 죽는 순간 주입된 콜백으로 호출된다 — 누적 킬/로그 갱신.</summary>
@@ -991,7 +1004,7 @@ namespace TaskbarHero.Client.Battle
             Log($"{(m != null ? m.MonsterName : _monsterName)} 처치! (누적 {_killCount})");
         }
 
-        /// <summary>몬스터가 공격 주기마다 호출한다. 최전방 생존 아군에게 몬스터 공격력×배수만큼 데미지를 준다.
+        /// <summary>몬스터가 공격 주기마다 호출한다. 최전방 생존 아군에게 몬스터 공격력×배수를 방어력으로 경감해 준다.
         /// 대상이 있으면 true(공격 애니 재생), 없으면 false.</summary>
         public bool OnMonsterAttack(MonsterUnit m)
         {
@@ -999,13 +1012,32 @@ namespace TaskbarHero.Client.Battle
             var target = FrontAlly();
             if (target == null) return false;
 
-            // 몬스터 공격력 × 배수에서 아군 방어력만큼 경감(최소 1). 방어력 룬/장비/패시브가 실제 전투에 반영된다.
             long raw = (long)(m.Atk * Mathf.Max(1f, enemyDamageMultiplier));
-            long dmg = System.Math.Max(1L, raw - target.Defense);
+            long dmg = MitigatedDamage(raw, target.Defense);
             target.TakeDamage(dmg);
             // 아군 피격 데미지를 붉은 숫자로 표시(오브젝트 풀 재사용).
             DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f));
             return true;
+        }
+
+        /// <summary>
+        /// 방어력으로 피해를 경감한다 — <c>raw × K / (K + def)</c>(K = <see cref="DefenseMitigationK"/>).
+        /// <para><b>감산식(<c>raw − def</c>)을 쓰지 않는 이유</b>: 방어력은 레벨당 선형으로 계속 오르는데
+        /// 저레벨 구간 몬스터의 공격력은 고정이라, 방어력이 공격력을 넘는 순간 피해가 최소값 1로 바닥친다
+        /// (1지역이 영구히 1뎀이 되어 사실상 무적). 반대로 고레벨 구간에서는 방어력이 무의미해져 즉사한다.
+        /// 비율식은 수확체감으로 0에 수렴하지 않으므로 두 극단이 모두 사라진다 —
+        /// 방어력 K면 절반, 3K면 1/4로 경감된다.</para>
+        /// </summary>
+        public static long MitigatedDamage(long raw, long defense)
+        {
+            if (raw <= 0)
+            {
+                return 0;
+            }
+            long def = System.Math.Max(0L, defense);
+            // 정수 나눗셈 전에 double로 계산해 작은 피해가 0으로 잘리지 않게 한다(하한은 1).
+            double mitigated = raw * (DefenseMitigationK / (double)(DefenseMitigationK + def));
+            return System.Math.Max(1L, (long)System.Math.Round(mitigated));
         }
 
         /// <summary>파티에서 가장 앞선(x 최대) 생존 아군. 없으면 null(전멸).</summary>

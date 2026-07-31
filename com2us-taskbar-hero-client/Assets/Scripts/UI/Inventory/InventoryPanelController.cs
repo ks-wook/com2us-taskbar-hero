@@ -33,6 +33,10 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private int initialItemSlots = 14;
         [Tooltip("한 번에 보이는 줄 수(스크롤). 2줄 = 10칸.")]
         [SerializeField] private int visibleRows = 2;
+        [Tooltip("스크롤 지연 로딩의 페이지 크기(칸 수). 창고를 열면 이만큼만 먼저 받고, 스크롤이 아직 받지 않은 칸에 닿으면 한 페이지씩 더 받는다.")]
+        [SerializeField] private int bagPageLimit = InventoryLoader.ScrollPageLimit;
+        [Tooltip("미리 받아 둘 여유 줄 수. 뷰포트 아래로 이만큼 더 채워 두어 스크롤이 빈 칸에 닿기 전에 도착하게 한다.")]
+        [SerializeField] private int prefetchRows = 2;
 
         [Header("구성 참조 (에디터 빌더가 배선 — 직접 수정 불필요)")]
         [SerializeField] private List<InventoryItemSlot> _gridSlots = new List<InventoryItemSlot>();
@@ -71,6 +75,10 @@ namespace TaskbarHero.Client.UI
         private int _selectedCharacter;       // 현재 보고 있는 파티 캐릭터(0-based)
         private int _partyCount = 1;          // 실제 파티 캐릭터 수(세션 기준)
         private ItemIconDatabase _iconDb;     // 아이템 아이콘 조회
+
+        private BagPager _bagPager;           // 가방 스크롤 지연 로딩 커서(창고를 열 때마다 새로 만든다)
+        private ScrollRect _gridScroll;       // 가방 격자 스크롤(런타임에 _gridContent의 부모에서 해석)
+        private Text _bagLoadingText;         // 페이지를 받는 동안 격자 하단에 뜨는 안내(런타임 생성)
 
         private CharacterPortrait _portrait;  // 초상화 렌더러(전용 카메라+RT, 런타임 생성)
         private GameObject _portraitStage;    // 초상화 렌더러가 얹히는 화면 밖 격리 오브젝트
@@ -113,7 +121,9 @@ namespace TaskbarHero.Client.UI
         /// <summary>패널이 표시될 때마다 세션 실데이터(골드·보유 아이템·장착)로 갱신한다.
         /// (UIManager가 인스턴스를 캐싱·재사용하므로 활성화 시점마다 최신 데이터를 반영해야 한다.)
         /// 가방 아이템은 코어 로드에 없으므로 <b>창고를 열 때마다 서버에서 다시 받는다</b>(세이브 기획서 5.2) —
-        /// 자동 전투로 전리품이 계속 쌓이므로 로컬 캐시를 신뢰하지 않는다(서버는 이 조회를 캐시로 받는다).</summary>
+        /// 자동 전투로 전리품이 계속 쌓이므로 로컬 캐시를 신뢰하지 않는다(서버는 이 조회를 캐시로 받는다).
+        /// 가방 전량을 한 번에 받지는 않고, <b>보이는 만큼만</b> slot 커서 페이징으로 받는다
+        /// (<see cref="BeginPagedBagLoad"/> — 이후는 스크롤이 빈 칸에 닿을 때마다 한 페이지씩).</summary>
         private void OnEnable()
         {
             if (!AlreadyBuilt && _tooltip == null)
@@ -129,23 +139,137 @@ namespace TaskbarHero.Client.UI
             {
                 _tooltip.HideImmediate();
             }
-            RefreshFromSession(); // 코어 데이터(골드·장착·능력치)는 즉시 표시
-            InventoryLoader.ReloadBag(RefreshGridIfOpen, OnBagLoadError); // 가방은 도착한 뒤 격자에 채운다
+            _bagPager = InventoryLoader.BeginPaged(bagPageLimit); // 캐시를 비우고 커서를 처음으로(열 때마다 새로 받는다)
+            RefreshFromSession();  // 코어 데이터(골드·장착·능력치) 즉시 표시 + 빈 격자
+            ResetGridScroll();     // 첫 페이지부터 보도록 맨 위로
+            LoadNextBagPage();     // 첫 페이지 요청(나머지는 스크롤이 요구할 때)
         }
 
-        /// <summary>가방 조회가 끝났을 때 격자를 다시 그린다(조회 도중 패널이 닫혔으면 아무것도 하지 않는다).</summary>
-        private void RefreshGridIfOpen()
+        // ── 가방 스크롤 지연 로딩(slot 커서 페이징) ──
+        //
+        // 격자는 인벤토리 <b>용량</b>만큼 항상 그려지므로(빈 칸 포함) 스크롤 범위는 받은 아이템 수와 무관하다.
+        // 그래서 "지금 보이는 마지막 칸 번호"가 "마지막으로 받은 칸 번호"를 넘어서면 다음 페이지를 받으면 된다.
+
+        /// <summary>다음 가방 페이지를 요청한다(요청 중·마지막 페이지는 <see cref="BagPager"/>가 걸러낸다).</summary>
+        private void LoadNextBagPage()
         {
-            if (this != null && gameObject.activeInHierarchy)
+            if (_bagPager == null || !_bagPager.HasMore || _bagPager.IsLoading)
             {
-                RefreshGrid();
+                return;
+            }
+            SetBagLoadingVisible(true);
+            _bagPager.LoadNext(OnBagPageLoaded, OnBagPageError);
+        }
+
+        /// <summary>가방 페이지 도착: 격자를 다시 그리고, 뷰포트가 아직 못 받은 칸을 보고 있으면 이어서 더 받는다.
+        /// (조회 도중 패널이 닫혔으면 아무것도 하지 않는다.)</summary>
+        private void OnBagPageLoaded()
+        {
+            if (this == null || !gameObject.activeInHierarchy)
+            {
+                return;
+            }
+            SetBagLoadingVisible(false);
+            RefreshGrid();
+            TryLoadMoreForViewport(); // 한 페이지로 화면을 못 채웠으면(또는 아래로 건너뛰었으면) 계속 이어 받는다
+        }
+
+        /// <summary>가방 페이지 조회 실패: 받은 데까지만 두고 로그만 남긴다(코어 데이터 표시는 유지).</summary>
+        private void OnBagPageError(NetworkError error)
+        {
+            SetBagLoadingVisible(false);
+            Debug.LogWarning($"[Inventory] 가방 페이지 조회 실패: {error}");
+        }
+
+        /// <summary>격자 스크롤 이벤트: 아직 받지 않은 칸이 보이기 시작하면 다음 페이지를 당겨 온다.</summary>
+        private void OnGridScrolled(Vector2 _)
+        {
+            TryLoadMoreForViewport();
+        }
+
+        /// <summary>뷰포트(+미리받기 여유 줄)가 아직 받지 않은 칸에 닿았으면 다음 페이지를 요청한다.</summary>
+        private void TryLoadMoreForViewport()
+        {
+            if (_bagPager == null || !_bagPager.HasMore || _bagPager.IsLoading)
+            {
+                return;
+            }
+            if (LastNeededSlot() > _bagPager.LoadedSlot)
+            {
+                LoadNextBagPage();
             }
         }
 
-        /// <summary>가방 조회 실패: 격자는 비워 둔 채 로그만 남긴다(코어 데이터 표시는 유지).</summary>
-        private void OnBagLoadError(NetworkError error)
+        /// <summary>지금 채워져 있어야 하는 마지막 칸 번호 = 뷰포트 맨 아래 줄 + 미리받기 여유 줄의 마지막 칸.</summary>
+        private int LastNeededSlot()
         {
-            Debug.LogWarning($"[Inventory] 가방 조회 실패: {error}");
+            if (_gridScroll == null || _gridContent == null)
+            {
+                return -1;
+            }
+            var viewport = _gridScroll.viewport != null ? _gridScroll.viewport : (RectTransform)_gridScroll.transform;
+            // 콘텐츠는 상단 고정 pivot이라 위로 스크롤한 만큼 anchoredPosition.y가 양수로 커진다.
+            float scrolled = Mathf.Max(0f, _gridContent.anchoredPosition.y);
+            float bottom = scrolled + viewport.rect.height;
+            int lastVisibleRow = Mathf.FloorToInt(bottom / (GridCell + GridSpacing));
+            int rows = lastVisibleRow + 1 + Mathf.Max(0, prefetchRows);
+            return rows * Mathf.Max(1, columns) - 1;
+        }
+
+        /// <summary>격자 스크롤을 맨 위로 되돌린다(창고를 다시 열 때 첫 페이지부터 보이도록).</summary>
+        private void ResetGridScroll()
+        {
+            if (_gridContent != null)
+            {
+                _gridContent.anchoredPosition = new Vector2(_gridContent.anchoredPosition.x, 0f);
+            }
+            if (_gridScroll != null)
+            {
+                _gridScroll.verticalNormalizedPosition = 1f;
+            }
+        }
+
+        /// <summary>페이지를 받는 동안 격자 하단의 "불러오는 중" 안내를 토글한다.</summary>
+        private void SetBagLoadingVisible(bool visible)
+        {
+            if (_bagLoadingText != null)
+            {
+                _bagLoadingText.gameObject.SetActive(visible);
+            }
+        }
+
+        /// <summary>격자 스크롤 참조를 해석하고 스크롤 이벤트를 연결한다(리스너는 프리팹에 직렬화되지 않아 매 실행 재연결).</summary>
+        private void WireGridScroll()
+        {
+            _gridScroll = _gridContent != null ? _gridContent.GetComponentInParent<ScrollRect>() : null;
+            if (_gridScroll == null)
+            {
+                Debug.LogWarning("[Inventory] 가방 스크롤(ScrollRect)을 찾지 못해 지연 로딩이 동작하지 않는다.");
+                return;
+            }
+            _gridScroll.onValueChanged.RemoveListener(OnGridScrolled);
+            _gridScroll.onValueChanged.AddListener(OnGridScrolled);
+            EnsureBagLoadingText();
+        }
+
+        /// <summary>페이지 로딩 안내 라벨을 격자 뷰 하단에 1회 만든다(런타임 전용 — 프리팹에 굽지 않는다).</summary>
+        private void EnsureBagLoadingText()
+        {
+            if (_bagLoadingText != null || _gridScroll == null)
+            {
+                return;
+            }
+            var t = NewText("BagLoadingText", _gridScroll.transform, "아이템 불러오는 중...", 22, TextAnchor.MiddleCenter);
+            t.fontStyle = FontStyle.Bold;
+            t.color = new Color(1f, 0.92f, 0.6f, 0.95f);
+            var rt = t.rectTransform;
+            rt.anchorMin = new Vector2(0f, 0f);
+            rt.anchorMax = new Vector2(1f, 0f);
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.sizeDelta = new Vector2(0f, 30f);
+            rt.anchoredPosition = new Vector2(0f, 2f);
+            t.gameObject.SetActive(false);
+            _bagLoadingText = t;
         }
 
         /// <summary>패널이 숨겨지면 초상화 렌더러(카메라)를 꺼 불필요한 렌더를 막고, 툴팁을 닫는다.
@@ -162,6 +286,7 @@ namespace TaskbarHero.Client.UI
             {
                 _tooltip.HideImmediate();
             }
+            SetBagLoadingVisible(false); // 조회 중 닫혔으면 안내가 남지 않게(다음에 열 때 그대로 떠 있는 것 방지)
         }
 
         /// <summary>패널 파괴 시 화면 밖 초상화 스테이지(카메라·RT·캐릭터 인스턴스)를 함께 정리한다.</summary>
@@ -285,6 +410,7 @@ namespace TaskbarHero.Client.UI
             {
                 _expandButton.onClick.AddListener(OnExpandInventory);
             }
+            WireGridScroll();      // 가방 스크롤 지연 로딩 트리거
             EnsurePortraitStage(); // 초상화 렌더러(전용 카메라+RT) 생성
         }
 
@@ -334,8 +460,10 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>세션 가방 캐시(비장착 아이템)를 가방 격자에 채운다. 용량만큼 슬롯을 확보한다.
-        /// 가방은 코어 로드에 없고 페이징으로 받는 데이터라, 캐시가 비어 있으면 격자만 비운 채 그린다
-        /// (조회는 <see cref="OnEnable"/>·<see cref="ReloadAndRefresh"/>가 담당).</summary>
+        /// 가방은 코어 로드에 없고 페이징으로 받는 데이터라, 아직 받지 않은 칸은 <b>빈 칸으로 그린다</b>
+        /// (조회는 <see cref="LoadNextBagPage"/>·<see cref="ReloadBagAndRefresh"/>가 담당).
+        /// 격자를 용량 전체만큼 그리는 덕에 스크롤 범위가 받은 개수와 무관해져, 스크롤 위치로 다음 페이지 시점을
+        /// 판정할 수 있다(<see cref="LastNeededSlot"/>).</summary>
         private void RefreshGrid()
         {
             // 기존 표시 아이템 제거(재오픈 대비).
@@ -1497,13 +1625,25 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>가방 캐시가 서버와 어긋났을 때(<see cref="ErrorCode.ItemNotFound"/>·이동 저장 실패)만
-        /// 가방을 다시 받아 화면을 맞춘다. 코어 스냅샷은 이 경우에도 다시 받지 않는다.</summary>
+        /// 가방을 다시 받아 화면을 맞춘다. 코어 스냅샷은 이 경우에도 다시 받지 않는다.
+        /// 이 경로는 <b>전량</b>을 다시 받아 캐시를 통째로 교체하므로(어긋난 원인이 어느 페이지인지 모른다),
+        /// 낡은 커서로 이어 받지 않도록 스크롤 페이저를 완료 처리한다.</summary>
         private void ReloadBagAndRefresh()
         {
             InventoryLoader.ReloadBag(() =>
             {
+                if (_bagPager != null)
+                {
+                    _bagPager.MarkComplete();
+                }
                 RefreshAfterInventoryChange();
             }, OnBagLoadError);
+        }
+
+        /// <summary>가방 전량 재조회 실패: 화면은 현재 캐시 그대로 두고 로그만 남긴다.</summary>
+        private void OnBagLoadError(NetworkError error)
+        {
+            Debug.LogWarning($"[Inventory] 가방 재조회 실패: {error}");
         }
 
         /// <summary>장착/해제 실패. 대상이 이미 사라진 아이템(<see cref="ErrorCode.ItemNotFound"/>)이면

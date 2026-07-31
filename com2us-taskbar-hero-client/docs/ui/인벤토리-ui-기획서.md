@@ -53,7 +53,7 @@
 
 **비기능 요구사항**
 - (N1) **서버 권위**: 장착 성립·스왑·수량은 서버 응답으로만 확정한다. 클라이언트는 낙관적 갱신을 하지 않거나, 하더라도 실패 응답 시 즉시 롤백한다(기본: 응답 후 갱신).
-- (N2) **로컬 상태 일관성**: 서버 액션 성공 시 로컬 캐시(`Session.GameData` 코어 + `Session.Bag` 가방)도 같은 상태로 맞춘다 — 배치 이동처럼 결과가 확정적인 변경은 캐시를 직접 패치하고, 아이템 구성이 바뀌는 변경(장착·해제·큐브·거래)은 `InventoryLoader.ReloadAll()`로 다시 받는다. 패널을 닫았다 다시 열어도 동일 상태가 보여야 한다.
+- (N2) **로컬 상태 일관성**: 서버 액션 성공 시 로컬 캐시(`Session.GameData` 코어 + `Session.Bag` 가방)도 같은 상태로 맞춘다 — 배치 이동처럼 결과가 확정적인 변경은 캐시를 직접 패치하고, 아이템 구성이 바뀌는 변경(장착·해제·소모품·큐브·거래)은 **응답에 실려 오는 변경분**(`inventoryDelta`·`ApplyEquipResult`·`ApplyUnequipResult`)으로 캐시를 맞춘다 — 액션마다 재조회하지 않는다. 캐시가 서버와 어긋난 게 드러났을 때(`ItemNotFound`·이동 저장 실패)만 `InventoryLoader.ReloadBag()`으로 전량을 다시 받는다. 패널을 닫았다 다시 열어도 동일 상태가 보여야 한다.
 - (N3) **네트워크 검증 범위**: 실서버 연동 검증은 [클라 규칙](../../CLAUDE.md)에 따라 명시 요청 시에만 수행한다. 그 외에는 컴파일·씬 배선·패널 On/Off·데이터 바인딩(로컬 스냅샷 기준)까지만 확인한다.
 - (N4) 기존 UI 관례 준수: 레거시 `UnityEngine.UI`(`Button`/`Text`/`Image`), `[SerializeField] private` 인스펙터 배선, `Awake` 리스너 등록.
 
@@ -113,9 +113,11 @@
 
 로드는 **2단계**다([세이브 데이터 기획서](../../../docs/세부/save-data-기획서.md) 5.1·5.2). 고정 크기 데이터(장착 장비 포함)는 코어 로드(`POST /api/game/load`) 스냅샷에서 오고, **가방 아이템만** 창고를 열 때 `POST /api/game/inventory/list`로 페이징 조회해 세션에 캐싱한다.
 
+가방은 **한 번에 전량을 받지 않고 스크롤에 맞춰 지연 로딩**한다(아래 5.1).
+
 | 표시 항목 | 소스 |
 |---|---|
-| 가방 아이템 목록·slot·수량·강화 | `Session.Bag` (`List<InventoryItemDto>`, `InventoryLoader`가 페이징으로 채움) |
+| 가방 아이템 목록·slot·수량·강화 | `Session.Bag` (`List<InventoryItemDto>`, `BagPager`가 스크롤에 맞춰 페이지 단위로 채움) |
 | 캐릭터별 장착 장비(장비 6슬롯) | `Session.Equipped` (`List<EquippedItemDto>`, 코어 로드의 `equipped`) |
 | 인벤토리 칸 수 | `Session.GameData.player.inventoryCapacity` |
 | 캐릭터 목록(장비 영역 대상) | `Session.GameData.characters` (`List<CharacterDto>`) |
@@ -126,9 +128,20 @@
 - 조인 키: `itemCode` ↔ `ItemMaster.itemCode`(가방·장착 양쪽 동일).
 - 장비 영역 매핑: `Session.Equipped` 중 `equippedCharacterId == 선택 캐릭터 && equippedSlot == s`인 항목을 슬롯 `s`(1~6)에 배치. 없으면 빈 슬롯.
 - 인벤토리 격자 매핑: `Session.Bag`의 각 항목을 `slot`(0-based) 칸에 배치. **장착 중인 아이템은 인벤 칸을 점유하지 않아 가방 목록에 없고**(장비 슬롯에서만 보인다), 재화도 코어 로드의 `currencies`로 분리돼 격자에 오지 않는다.
-- 가방 캐시 수명: 인벤토리를 바꾸는 액션(장착·해제·이동·큐브·거래·전리품 등) 뒤에는 `Session.InvalidateBag()`으로 무효화되고, 가방을 쓰는 화면이 열릴 때 `InventoryLoader.EnsureBag()`이 다시 페이징 조회한다.
-- **페이지 병합은 클라이언트 책임(계약)**: 서버는 페이지 사이의 인벤토리 변경을 감지하지 않는다(변경 카운터·버전 토큰 없음). `InventoryLoader`가 페이지를 이어붙일 때 **`itemId`를 키로 중복을 제거하고 나중 페이지를 우선**하며, 최종 목록을 `slot` 오름차순으로 정리한다. 이동으로 같은 아이템이 두 페이지에 걸쳐도 최종 위치 하나만 남는다.
-- **남는 오차와 해소**: 이미 지나간 칸으로 이동한 아이템은 이번 조회에서 빠지고, 읽은 뒤 소모된 아이템은 유령으로 남는다. 창고를 다시 열면 해소되며, 유령 아이템을 조작하면 서버가 `ItemNotFound(4001)`로 거부한다 → **각 패널의 실패 핸들러가 그 코드를 받으면 가방을 새로 고친다**(인벤토리/큐브는 `ReloadAndRefresh`, 거래는 `ReloadBag`).
+- 가방 캐시 수명: 창고는 **열 때마다** 캐시를 비우고 첫 페이지부터 다시 받는다(자동 전투로 전리품이 계속 쌓이므로 로컬 캐시를 신뢰하지 않는다). 가방을 바꾸는 액션 뒤에는 응답의 변경분(`inventoryDelta`)·`ApplyEquipResult`·`ApplyUnequipResult`로 캐시를 직접 맞추므로 재조회하지 않는다.
+- **페이지 병합은 클라이언트 책임(계약)**: 서버는 페이지 사이의 인벤토리 변경을 감지하지 않는다(변경 카운터·버전 토큰 없음). 페이지를 이어붙일 때 **`itemId`를 키로 중복을 제거하고 나중 페이지를 우선**하며(`Session.MergeBagPage`), 최종 목록을 `slot` 오름차순으로 정리한다. 이동으로 같은 아이템이 두 페이지에 걸쳐도 최종 위치 하나만 남는다.
+- **남는 오차와 해소**: 이미 지나간 칸으로 이동한 아이템은 이번 조회에서 빠지고, 읽은 뒤 소모된 아이템은 유령으로 남는다. 창고를 다시 열면 해소되며, 유령 아이템을 조작하면 서버가 `ItemNotFound(4001)`로 거부한다 → **각 패널의 실패 핸들러가 그 코드를 받으면 가방을 새로 고친다**(인벤토리/큐브는 `ReloadBagAndRefresh`, 거래는 `ReloadBag`).
+
+### 5.1 가방 스크롤 지연 로딩 (slot 커서 페이징)
+
+서버 `POST /api/game/inventory/list`는 `slot` 커서 keyset 페이징을 지원한다(요청 `{ cursor, limit }`, 응답 `{ items, nextCursor, hasMore, total }`). 클라이언트는 이를 **무한 스크롤**로 소비한다 — 창고를 열면 한 페이지만 받고, 스크롤이 아직 받지 않은 칸에 닿을 때 다음 페이지를 이어 받는다.
+
+- **커서 상태**: `BagPager`(`Assets/Scripts/Managers/InventoryLoader.cs`). `InventoryLoader.BeginPaged(pageLimit)`이 캐시를 비우고 커서를 `-1`로 만들며, `LoadNext(onPage, onError)`가 한 페이지를 받아 `Session.MergeBagPage`로 캐시를 넓힌다. 중복 요청(`IsLoading`)과 마지막 페이지(`HasMore`)는 `BagPager`가 걸러내므로 호출 측은 스크롤 이벤트마다 불러도 된다.
+- **다음 페이지 판정**: 격자는 **용량(`inventoryCapacity`) 전체만큼** 항상 그려지므로(빈 칸 포함) 스크롤 범위가 받은 개수와 무관하다. 따라서 `뷰포트 맨 아래 줄 + 미리받기 여유 줄(prefetchRows, 기본 2)`의 마지막 칸 번호가 `BagPager.LoadedSlot`(마지막으로 받은 칸)을 넘으면 다음 페이지를 요청한다. 한 페이지로 화면을 못 채웠거나 스크롤바를 아래로 건너뛰면 필요한 만큼 연속으로 이어 받는다.
+- **페이지 크기**: `InventoryPanelController.bagPageLimit`(기본 `InventoryLoader.ScrollPageLimit` = 20칸 = 4줄). 서버는 1~500으로 클램프한다.
+- **트리거 배선**: `ScrollRect.onValueChanged`는 비영구 리스너라 프리팹에 직렬화되지 않으므로 `WireRuntime()`에서 매 실행 다시 연결한다(`WireGridScroll`).
+- **로딩 표시**: 페이지 대기 중 격자 하단에 "아이템 불러오는 중..." 라벨(런타임 생성, 프리팹에 굽지 않음)을 띄운다.
+- **전량이 필요한 화면은 예외**: 큐브 재료 목록·거래 판매 등록은 가방 **전체**를 알아야 하므로 지연 로딩을 쓰지 않고 `InventoryLoader.ReloadBag`으로 끝까지 받는다. 인벤토리 패널도 캐시가 서버와 어긋났을 때(`ItemNotFound`·이동 저장 실패)는 이 전량 재조회를 쓰고, 낡은 커서로 이어 받지 않도록 `BagPager.MarkComplete()`로 페이저를 닫는다.
 - **전리품 직후**: 스테이지 클리어로 아이템을 받으면(`DungeonBattleFlow.OnClear`) 그 자리에서 `Session.InvalidateBag()`을 호출해, 다음에 창고를 열 때 첫 페이지부터 다시 받게 한다.
 - 마스터데이터는 `MasterDataManager.EnsureLoaded()`로 최초 1회 로드 후 사용. **아이콘 스프라이트 매핑**(`itemCode` → 아이템 아이콘)은 아직 규약이 없어 10장 미결(현재 `item_master`에 아이콘 키 없음).
 
@@ -181,8 +194,8 @@ HUD 인벤토리 버튼 클릭 → UIManager.ToggleInventory()
      → Rebuild(): MasterDataManager.EnsureLoaded()
                   → 캐릭터 네비게이션(◀ N/M ▶) 구성(기본=첫 캐릭터)
                   → 장비 6슬롯 채우기(코어 로드의 equipped — 즉시 표시)
-                  → InventoryLoader.EnsureBag() → 가방 페이지 도착 후 격자 채우기
-                    (캐시가 유효하면 요청 없이 즉시 그린다)
+                  → InventoryLoader.BeginPaged() → 첫 페이지만 요청 → 도착 후 격자 채우기
+                  → 이후 스크롤이 아직 안 받은 칸에 닿으면 BagPager.LoadNext()로 이어 받기(5.1)
   Current == Inventory → Hide(Inventory)
 ```
 
@@ -207,14 +220,15 @@ ItemSlot에 커서 진입(PointerEnter) → 컨트롤러.ShowTooltip(itemDto, �
 ```
 [장착] → data { characterId(선택 캐릭터), itemId(=player_item_id) }
         → NetworkManager.PostToGame(/api/game/inventory/equip, ...)
-   성공: InventoryLoader.ReloadAll() — 코어 로드(equipped 최신) + 가방 재페이징
-         (아이템이 가방↔장비로 이동하므로 두 소스를 함께 다시 받아야 맞는다)
+   성공: Session.ApplyEquipResult(응답) — 재조회 없이 캐시를 서버 확정값으로 맞춘다
+         (장착품은 가방에서 빠져 장착 목록으로, 스왑된 기존 장비는 응답의 unequippedBagSlot 칸으로)
          → 장비 영역·격자·상세 재갱신 + Session.RaiseInventoryChanged()(전투 스탯 재계산)
    실패: ErrorMessages.ToKorean(error) 표시(4001 없음 / 4003 장착불가 / 4007 타 캐릭터 장착중 / 2006 캐릭터ID)
 
 [해제] → data { characterId, slot(장착 슬롯 1~6) }
         → /api/game/inventory/unequip
-   성공: 장착과 동일하게 InventoryLoader.ReloadAll() 후 재갱신
+   성공: 장착과 동일하게 Session.ApplyUnequipResult(응답)로 캐시를 맞춘 뒤 재갱신
+         (해제한 장비는 응답의 bagSlot 칸으로 되돌아간다)
 ```
 
 ### 8.4 예외 / 엣지

@@ -55,11 +55,12 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
-        /// <summary>지정 월드 위치에 데미지 숫자를 띄운다(풀에서 재사용, 부족하면 새로 생성).</summary>
-        public void Spawn(long damage, Vector3 worldPos)
+        /// <summary>지정 월드 위치에 데미지 숫자를 띄운다(풀에서 재사용, 부족하면 새로 생성).
+        /// <paramref name="crit"/>이면 치명타 연출(노란색·큰 팝·<c>!</c>)로 표시한다.</summary>
+        public void Spawn(long damage, Vector3 worldPos, bool crit = false)
         {
             var dn = _free.Count > 0 ? _free.Dequeue() : CreateNumber();
-            dn.Play(damage, worldPos);
+            dn.Play(damage, worldPos, crit);
         }
 
         /// <summary>애니가 끝난 숫자를 풀로 되돌린다.</summary>
