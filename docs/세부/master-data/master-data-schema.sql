@@ -8,9 +8,10 @@
 --   1) equip_slot_master  1b) grade_master  2) class_master  3) level_master  4) skill_master  4b) skill_coefficient  5) rune_master  5b) rune_cost
 --   6) item_master  6b) consumable_master  8) cube_master  8b) cube_recipe  8c) cube_recipe_ingredient
 --   9) monster_master  10) stage_reward  10b) stage_reward_drop  11) stage_master  11b) stage_spawn
+--   12) gacha_master  12b) gacha_grade_weight  12c) gacha_item_pool  12d) gacha_pity_rule
 --   13) attendance_master  14) grade_master  · inventory_expand_master(인벤토리 확장 비용)  · character_create_cost(캐릭터 추가 생성 비용)  · mail_master(메일 템플릿)
 --   · newbie_reward_master(신규 가입 지원금 메일 첨부)
---   (7 enhance/12 box는 값 미확정이라 제외)
+--   (7 enhance만 값 미확정이라 제외)
 --   * grade_master(값 문서 §14)는 item_master.grade가 FK로 참조하므로 물리적으로 item_master보다 앞(1b)에 생성한다.
 --
 -- 성격 안내(중요)
@@ -27,7 +28,7 @@
 --     반복 구조는 무조건 별도(자식) 테이블로 분리한다(예: stage_master 스폰 → stage_spawn).
 --     클라 번들 JSON은 이 컬럼/자식 행들을 baseStats·spawns 등 객체/배열로 묶어 직렬화한다(기획서 5.1·7장).
 --     cube의 제작 레시피도 자식 테이블(cube_recipe/cube_recipe_ingredient)로 분리했고,
---     앞으로 추가할 box도 같은 방식이다 — box_master + 자식 box_grade_weight(등급 가중치)·box_item_pool(지급 후보).
+--     gacha도 같은 방식이다 — gacha_master + 자식 gacha_grade_weight(등급 가중치)·gacha_item_pool(지급 후보)·gacha_pity_rule(천장 규칙).
 --   * skill_type: 1=액티브, 2=패시브.  unlock_type: 0=기본 선택(생성 시 선택 가능).
 --   * class_code는 class_master를, skill_master.class_code가 이를 참조한다(같은 DB이므로 FK를 건다).
 -- =====================================================================
@@ -1263,6 +1264,210 @@ INSERT INTO stage_reward_drop (stage_id, grade, drop_prob) VALUES
 
 
 -- =====================================================================
+-- 12. gacha_master — 가챠(뽑기) 배너 (값 문서 §12)
+--    출처: master-data-값.md §12, 기획서 5.13, 가챠 시스템 기획서(../gacha-기획서.md)
+--    한 행 = 하나의 가챠 배너. 노출 스위치·기간으로 "지금 돌릴 수 있는 배너"를 정의하고,
+--    서버가 서버 시각으로 판정해 POST /api/game/gacha/banners로 내려준다.
+--      노출 조건: is_active = 1 AND (open_at = 0 OR now >= open_at) AND (close_at = 0 OR now < close_at)
+--    pickup_item_code: 픽업 배너의 **천장 확정 아이템**. 0이면 픽업 없음(하드 천장이 등급만 보장하고
+--      그 등급 슬롯에서 균등 추첨). 0이 아니면 하드 천장 발동 시 **그 아이템을 확정 지급**한다.
+--      0 센티널이 섞이므로 FK를 걸지 않고 애플리케이션에서 검증한다(attendance_master.reward_code와 동일 방식).
+--
+--    ▶ 배너 2종 확정:
+--        60001 상시 뽑기   — 기간 없음(close_at=0). 전설 슬롯에 전설 장비 20종 → 90회차에 그중 랜덤.
+--        60002 픽업 뽑기   — **한정(기간 필수)**. 전설 슬롯에 '성검 엑스칼리버'(31151) **하나만**.
+--      ⚠️ 픽업 = 한정이다. 픽업 배너는 반드시 close_at != 0(기간 종료 시각)을 갖는다.
+--         close_at=0(무기한)은 상시 배너만 쓴다.
+--      ⚠️ 픽업 배너의 **최고 등급 슬롯에는 픽업 아이템만 둔다**(12c). 그래서 그 배너에서 나오는 전설은
+--         90회차 천장이든 그 전의 일반 추첨이든 **항상 픽업 아이템**이다 — 다른 전설 장비는 등장하지 않는다.
+--         pickup_item_code는 이 사실을 선언·검증하는 값이며 추첨 로직이 따로 분기하지 않는다.
+-- =====================================================================
+DROP TABLE IF EXISTS gacha_master;
+CREATE TABLE gacha_master (
+    gacha_code             INT         NOT NULL COMMENT '가챠(배너) 코드',
+    name                   VARCHAR(50) NOT NULL COMMENT '배너 이름(UI 표시)',
+    banner_image           VARCHAR(100) NOT NULL DEFAULT '' COMMENT '배너 이미지 리소스 키(클라가 자기 리소스에서 찾는 이름)',
+    is_active              TINYINT     NOT NULL DEFAULT 1 COMMENT '노출 스위치(0:비노출 1:노출). 기간과 무관하게 즉시 내리는 운영 스위치',
+    open_at                BIGINT      NOT NULL DEFAULT 0 COMMENT '노출 시작 Unix ts. 0=시작 제한 없음',
+    close_at               BIGINT      NOT NULL DEFAULT 0 COMMENT '노출 종료 Unix ts(미포함, now < close_at). 0=종료 없음(상시 배너)',
+    sort_order             INT         NOT NULL DEFAULT 0 COMMENT '배너 목록 표시 순서(오름차순, 작을수록 앞)',
+    cost_currency_code     INT         NOT NULL DEFAULT 1 COMMENT '비용 재화(item_master.item_code, item_type=3. 골드=1)',
+    cost_single            BIGINT      NOT NULL COMMENT '1연 1회 비용',
+    cost_multi             BIGINT      NOT NULL COMMENT '10연 1회 비용(묶음 할인 반영. cost_single×multi_count와 독립)',
+    multi_count            INT         NOT NULL DEFAULT 10 COMMENT '10연 1회에 뽑는 횟수(현재 10 고정)',
+    multi_guaranteed_grade TINYINT     NOT NULL DEFAULT 0 COMMENT '10연 묶음 보장 최소 등급(0=보장 없음)',
+    pickup_item_code       INT         NOT NULL DEFAULT 0 COMMENT '픽업 대상 아이템 선언(item_master.item_code). 0=상시 배너. !=0이면 그 배너 최고 등급 슬롯의 유일한 후보이며 close_at!=0 필수. 0 센티널 때문에 FK 없음',
+    PRIMARY KEY (gacha_code),
+    KEY idx_gacha_open (is_active, open_at, close_at) COMMENT '노출 배너 판정(인메모리 로드용이라 성능 목적은 아님)',
+    CONSTRAINT fk_gacha_currency FOREIGN KEY (cost_currency_code)
+        REFERENCES item_master (item_code) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='가챠 배너 정의(노출 조건·1연/10연 비용·10연 보장)';
+
+-- 배너 2종. 상시는 기간 없음(close_at=0), 픽업은 **한정이라 기간 필수**(close_at != 0).
+--   10연 보장은 3등급(희귀) 이상(multi_guaranteed_grade=3).
+INSERT INTO gacha_master (gacha_code, name, banner_image, is_active, open_at, close_at, sort_order,
+                          cost_currency_code, cost_single, cost_multi, multi_count, multi_guaranteed_grade,
+                          pickup_item_code) VALUES
+    -- 픽업(한정): 2026-08-03 00:00 KST ~ 2026-08-17 00:00 KST (14일). 종료는 미포함(now < close_at).
+    (60002, '성검 엑스칼리버 픽업', 'gacha_banner_pickup_31151', 1, 1785682800, 1786892400, 1, 1, 60000, 540000, 10, 3, 31151),
+    -- 상시: 기간 없음
+    (60001, '상시 뽑기',            'gacha_banner_normal',        1,          0,          0, 2, 1, 50000, 450000, 10, 3,     0);
+-- sort_order: 한정(픽업)을 앞(1), 상시를 뒤(2)에 노출한다.
+-- 비용은 학습용 임시값이다(1연 50,000/60,000, 10연은 1연 10회 대비 10% 할인).
+-- ⚠️ 픽업 기간이 지나면 이 배너는 목록에서 사라진다(정상 동작). 다음 픽업을 열 때는 새 gacha_code로
+--    행을 추가하고 이 행은 이력으로 남긴다(과거 뽑기 기록의 gacha_code FK가 살아 있어야 한다).
+--    상시 배너(60001)가 항상 열려 있으므로 "열린 배너 0개" 상황은 생기지 않는다.
+
+
+-- =====================================================================
+-- 12b. gacha_grade_weight — 가챠 등급별 추첨 가중치 (gacha_master 자식, 값 문서 §12)
+--    확률 = 그 등급 weight / 그 배너의 weight 합. 정규화하지 않으므로 소프트 천장이 가중치를 더하면
+--    나머지 등급 확률이 자동으로 비례 감소한다(가챠 기획서 6.2).
+--    합을 10,000으로 맞추면 weight를 만분율(1 = 0.01%)로 읽을 수 있어 확률 공시·검산이 쉽다(§12.2).
+--    등급을 늘리고 줄일 때 스키마가 아니라 행만 바꾼다(구 grade_weights JSON 컬럼 대체).
+--    ▶ 두 배너 모두 같은 분포(합 10,000 = 만분율): 노말 50% / 고급 30% / 희귀 15% / 영웅 4% / 전설 1%.
+-- =====================================================================
+DROP TABLE IF EXISTS gacha_grade_weight;
+CREATE TABLE gacha_grade_weight (
+    gacha_code INT     NOT NULL COMMENT '가챠 배너(gacha_master.gacha_code)',
+    grade      TINYINT NOT NULL COMMENT '추첨 등급 슬롯(grade_master, 1~5)',
+    weight     INT     NOT NULL COMMENT '추첨 가중치(확률 = weight / 배너 weight 합)',
+    PRIMARY KEY (gacha_code, grade),
+    KEY idx_ggw_grade (grade),
+    CONSTRAINT fk_ggw_gacha FOREIGN KEY (gacha_code)
+        REFERENCES gacha_master (gacha_code) ON DELETE CASCADE,
+    CONSTRAINT fk_ggw_grade FOREIGN KEY (grade)
+        REFERENCES grade_master (grade) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='가챠 등급별 추첨 가중치(자식)';
+
+-- 합 10,000이라 weight를 만분율로 읽는다(100 = 1.00%).
+INSERT INTO gacha_grade_weight (gacha_code, grade, weight) VALUES
+    (60001, 1, 5000), (60001, 2, 3000), (60001, 3, 1500), (60001, 4, 400), (60001, 5, 100),
+    (60002, 1, 5000), (60002, 2, 3000), (60002, 3, 1500), (60002, 4, 400), (60002, 5, 100);
+
+
+-- =====================================================================
+-- 12c. gacha_item_pool — 가챠 등급 슬롯별 지급 후보 (gacha_master 자식, 값 문서 §12)
+--    후보를 **명시적으로** 정의한다. 스테이지 드롭(10b)처럼 "해당 등급의 item_master 전체"를
+--    암시적으로 쓰지 않는다 — 가챠는 소모품(item_type=4)을 포함하고 스테이지 전리품은 장비·재료만 준다.
+--    grade는 **배너 안에서의 추첨 슬롯**이며 item_master.grade와 일치할 필요가 없다
+--      (소모품의 grade는 grade_master FK 충족용 값이라 희귀도 의미가 없으므로, 아이템 등급을
+--       바꾸지 않고 이 테이블의 슬롯 배치로 출현 빈도를 조절한다).
+--    슬롯 안에서의 아이템 선택은 균등이다(아이템별 가중치가 필요해지면 weight 컬럼 추가).
+--    ⚠️ 가중치가 있는 모든 등급(12b)에 후보가 1개 이상 있어야 한다 — 가챠는 비용을 먼저 받으므로
+--       후보 없는 슬롯이 추첨되면 미지급이 아니라 GachaPoolEmpty(12002) 전체 롤백이다.
+--    ▶ 슬롯 배치 규칙: 1·2 슬롯 = 재료·소모품, 3·4 슬롯 = 해당 등급 장비 전종.
+--      슬롯 1의 강화석(41001, item_master.grade=2)처럼 슬롯 번호와 아이템 등급은 일치하지 않는다 —
+--      슬롯은 '가챠 안에서의 추첨 칸'이기 때문이다.
+--    ▶ 5(전설) 슬롯만 배너별로 다르다:
+--        60001 상시 → 전설 장비 20종 전부
+--        60002 픽업 → **픽업 아이템(31151) 하나만** — 이 배너에서 나오는 전설은 항상 성검 엑스칼리버이며
+--                     다른 전설 장비는 등장하지 않는다. 90회차 천장도 이 1종 슬롯에서 뽑으므로 확정이다.
+-- =====================================================================
+DROP TABLE IF EXISTS gacha_item_pool;
+CREATE TABLE gacha_item_pool (
+    gacha_code INT     NOT NULL COMMENT '가챠 배너(gacha_master.gacha_code)',
+    grade      TINYINT NOT NULL COMMENT '배너 안에서의 추첨 등급 슬롯(gacha_grade_weight.grade와 대응)',
+    item_code  INT     NOT NULL COMMENT '지급 후보 아이템(item_master.item_code. 소모품 포함)',
+    quantity   INT     NOT NULL DEFAULT 1 COMMENT '1회 지급 수량. 장비는 stack_max=1이라 항상 1',
+    PRIMARY KEY (gacha_code, grade, item_code),
+    KEY idx_gip_item (item_code),
+    CONSTRAINT fk_gip_gacha FOREIGN KEY (gacha_code)
+        REFERENCES gacha_master (gacha_code) ON DELETE CASCADE,
+    CONSTRAINT fk_gip_grade FOREIGN KEY (grade)
+        REFERENCES grade_master (grade) ON DELETE RESTRICT,
+    CONSTRAINT fk_gip_item FOREIGN KEY (item_code)
+        REFERENCES item_master (item_code) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='가챠 등급 슬롯별 지급 후보 화이트리스트(자식)';
+
+INSERT INTO gacha_item_pool (gacha_code, grade, item_code, quantity) VALUES
+    -- 60001(상시 뽑기) 등급 슬롯 1 — 재료
+    (60001, 1, 41001, 5), (60001, 1, 41002, 2),
+    -- 60001(상시 뽑기) 등급 슬롯 2 — 상위 재료 + 소모품 부스터
+    (60001, 2, 41002, 5), (60001, 2, 41010, 2), (60001, 2, 42001, 1), (60001, 2, 42002, 1),
+    -- 60001(상시 뽑기) 등급 슬롯 3 — 3등급(희귀) 장비 20종
+    (60001, 3, 31131, 1), (60001, 3, 31132, 1), (60001, 3, 31231, 1), (60001, 3, 31232, 1),
+    (60001, 3, 31331, 1), (60001, 3, 31332, 1), (60001, 3, 31431, 1), (60001, 3, 31432, 1),
+    (60001, 3, 32131, 1), (60001, 3, 32231, 1), (60001, 3, 32331, 1), (60001, 3, 32431, 1),
+    (60001, 3, 33031, 1), (60001, 3, 33032, 1), (60001, 3, 34031, 1), (60001, 3, 34032, 1),
+    (60001, 3, 35031, 1), (60001, 3, 35032, 1), (60001, 3, 36031, 1), (60001, 3, 36032, 1),
+    -- 60001(상시 뽑기) 등급 슬롯 4 — 4등급(영웅) 장비 16종
+    (60001, 4, 31141, 1), (60001, 4, 31142, 1), (60001, 4, 31241, 1), (60001, 4, 31242, 1),
+    (60001, 4, 31341, 1), (60001, 4, 31342, 1), (60001, 4, 31441, 1), (60001, 4, 31442, 1),
+    (60001, 4, 32141, 1), (60001, 4, 32241, 1), (60001, 4, 32341, 1), (60001, 4, 32441, 1),
+    (60001, 4, 33041, 1), (60001, 4, 34041, 1), (60001, 4, 35041, 1), (60001, 4, 36041, 1),
+    -- 60001(상시 뽑기) 등급 슬롯 5 — 5등급(전설) 장비 20종
+    (60001, 5, 31151, 1), (60001, 5, 31152, 1), (60001, 5, 31251, 1), (60001, 5, 31252, 1),
+    (60001, 5, 31351, 1), (60001, 5, 31352, 1), (60001, 5, 31451, 1), (60001, 5, 31452, 1),
+    (60001, 5, 32151, 1), (60001, 5, 32251, 1), (60001, 5, 32351, 1), (60001, 5, 32451, 1),
+    (60001, 5, 33051, 1), (60001, 5, 33052, 1), (60001, 5, 34051, 1), (60001, 5, 34052, 1),
+    (60001, 5, 35051, 1), (60001, 5, 35052, 1), (60001, 5, 36051, 1), (60001, 5, 36052, 1),
+    -- 60002(성검 엑스칼리버 픽업) 등급 슬롯 1 — 재료
+    (60002, 1, 41001, 5), (60002, 1, 41002, 2),
+    -- 60002(성검 엑스칼리버 픽업) 등급 슬롯 2 — 상위 재료 + 소모품 부스터
+    (60002, 2, 41002, 5), (60002, 2, 41010, 2), (60002, 2, 42001, 1), (60002, 2, 42002, 1),
+    -- 60002(성검 엑스칼리버 픽업) 등급 슬롯 3 — 3등급(희귀) 장비 20종
+    (60002, 3, 31131, 1), (60002, 3, 31132, 1), (60002, 3, 31231, 1), (60002, 3, 31232, 1),
+    (60002, 3, 31331, 1), (60002, 3, 31332, 1), (60002, 3, 31431, 1), (60002, 3, 31432, 1),
+    (60002, 3, 32131, 1), (60002, 3, 32231, 1), (60002, 3, 32331, 1), (60002, 3, 32431, 1),
+    (60002, 3, 33031, 1), (60002, 3, 33032, 1), (60002, 3, 34031, 1), (60002, 3, 34032, 1),
+    (60002, 3, 35031, 1), (60002, 3, 35032, 1), (60002, 3, 36031, 1), (60002, 3, 36032, 1),
+    -- 60002(성검 엑스칼리버 픽업) 등급 슬롯 4 — 4등급(영웅) 장비 16종
+    (60002, 4, 31141, 1), (60002, 4, 31142, 1), (60002, 4, 31241, 1), (60002, 4, 31242, 1),
+    (60002, 4, 31341, 1), (60002, 4, 31342, 1), (60002, 4, 31441, 1), (60002, 4, 31442, 1),
+    (60002, 4, 32141, 1), (60002, 4, 32241, 1), (60002, 4, 32341, 1), (60002, 4, 32441, 1),
+    (60002, 4, 33041, 1), (60002, 4, 34041, 1), (60002, 4, 35041, 1), (60002, 4, 36041, 1),
+    -- 60002(성검 엑스칼리버 픽업) 등급 슬롯 5 — **픽업 아이템 1종만** — 이 배너의 전설은 항상 성검 엑스칼리버
+    (60002, 5, 31151, 1);
+
+
+-- =====================================================================
+-- 12d. gacha_pity_rule — 가챠 천장 규칙 (gacha_master 자식, 값 문서 §12.1 — 수치 확정)
+--    pity_type이 PK에 포함되어 **같은 등급에 소프트·하드를 동시에** 건다.
+--    threshold는 "누적 미획득 횟수"가 아니라 **이번 뽑기의 회차 번호**(player_gacha_counter.pity_count + 1)와
+--      비교한다. 그래야 "90회째에 확정"이 threshold=90으로 그대로 읽힌다(누적값과 직접 비교하면 91회째에 터진다).
+--
+--    ▶ 확정값 (두 배너 공통, 최고 등급 5(전설)에 2단계):
+--        (grade=5, pity_type=1 소프트) threshold=70  weight_up=100  weight_up_max=0
+--        (grade=5, pity_type=2 하드)   threshold=90  weight_up=0    weight_up_max=0
+--      → 1~69회차 1.00% / 70~89회차 상승(1.98% → 17.50%) / 90회차 100% 확정.
+--        5등급을 받으면 즉시 카운터가 0으로 리셋되어 다음 주기가 시작된다.
+--      → weight_up=100은 5등급 기본 가중치(12b)와 같은 값이다(발동 후 k회차째 가중치 = 100 × (1+k)).
+--        weight_up_max는 0 — 소프트 구간이 90회차 하드에서 끊기므로 상한이 필요 없다.
+--
+--    ▶ 90회차 확정은 "5등급 슬롯에서 균등 추첨"이며, 배너에 따라 결과가 갈리는 것은
+--      슬롯의 후보 구성 차이(12c) 때문이다 — 추첨 로직에 픽업 분기가 없다:
+--        60001 상시 → 전설 장비 20종 중 균등 → 랜덤 전설
+--        60002 픽업 → 후보가 31151 하나뿐 → '성검 엑스칼리버' 확정
+--
+--    검증 조건: 하드 threshold(90) > gacha_master.multi_count(10)  — 작으면 한 10연에서 하드가 두 번 터진다.
+--              소프트 threshold(70) < 하드 threshold(90)          — 크면 상승 구간 없이 하드만 동작한다.
+--              pickup_item_code != 0이면 (a) 그 배너의 하드 천장 등급 슬롯(여기선 5) 후보가 **정확히 그 아이템 하나**여야 하고
+--                                        (b) close_at != 0이어야 한다(픽업 = 한정 배너).
+-- =====================================================================
+DROP TABLE IF EXISTS gacha_pity_rule;
+CREATE TABLE gacha_pity_rule (
+    gacha_code    INT     NOT NULL COMMENT '가챠 배너(gacha_master.gacha_code)',
+    grade         TINYINT NOT NULL COMMENT '천장 대상 등급(grade_master)',
+    pity_type     TINYINT NOT NULL COMMENT '1=소프트(가중치 가산) 2=하드(확정 지급)',
+    threshold     INT     NOT NULL COMMENT '발동 회차(= player_gacha_counter.pity_count + 1과 비교). 기준값 소프트 70 / 하드 90',
+    weight_up     INT     NOT NULL DEFAULT 0 COMMENT '소프트 전용 — 발동 후 1회당 가산할 가중치(= 그 등급 기본 가중치). 하드는 0',
+    weight_up_max INT     NOT NULL DEFAULT 0 COMMENT '소프트 전용 — 누적 가산 상한(0=무제한). 하드가 끊어 주므로 기준값 0',
+    PRIMARY KEY (gacha_code, grade, pity_type),
+    CONSTRAINT fk_gpr_gacha FOREIGN KEY (gacha_code)
+        REFERENCES gacha_master (gacha_code) ON DELETE CASCADE,
+    CONSTRAINT fk_gpr_grade FOREIGN KEY (grade)
+        REFERENCES grade_master (grade) ON DELETE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='가챠 천장 규칙(등급별 소프트·하드 각 1행)';
+
+INSERT INTO gacha_pity_rule (gacha_code, grade, pity_type, threshold, weight_up, weight_up_max) VALUES
+    (60001, 5, 1, 70, 100, 0),   -- 상시 소프트: 70회차부터 회차마다 5등급 가중치를 100씩 가산
+    (60001, 5, 2, 90, 0,   0),   -- 상시 하드:   90회차에 5등급(전설) 확정 — 슬롯 내 균등 추첨
+    (60002, 5, 1, 70, 100, 0),   -- 픽업 소프트: 상시와 동일 곡선
+    (60002, 5, 2, 90, 0,   0);   -- 픽업 하드:   90회차에 5등급 슬롯 추첨 → 후보가 31151 하나뿐이라 확정
+
+
+-- =====================================================================
 -- 13. attendance_master — 출석부 일차별(누적 출석 순번) 보상 (값 문서 §13)
 --    출처: master-data-값.md §13, 기획서 5.14
 --    reward_type: 1=골드 2=아이템 3=재료 (item_master.item_type와 별개의 enum).
@@ -1404,5 +1609,5 @@ INSERT INTO newbie_reward_master (seq, reward_type, reward_code, quantity) VALUE
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- =====================================================================
--- 끝. (7 enhance/12 box는 값 확정 후 추가한다. inventory_expand_master는 인벤토리 확장 기능으로 추가됨.)
+-- 끝. (7 enhance는 값 확정 후 추가한다. inventory_expand_master는 인벤토리 확장 기능으로 추가됨.)
 -- =====================================================================

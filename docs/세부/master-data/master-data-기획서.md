@@ -65,14 +65,15 @@ erDiagram
     stage_master     ||--o{ stage_spawn        : "스폰(자식)"
     monster_master   ||--o{ stage_spawn        : "등장 몬스터"
     stage_master     ||--|| stage_reward       : "클리어 보상(1:1)"
-    item_master      ||--o{ box_item_pool      : "가챠 지급 후보"
-    box_master       ||--o{ box_grade_weight   : "등급별 추첨 가중치"
-    box_master       ||--o{ box_item_pool      : "등급별 지급 후보"
+    item_master      ||--o{ gacha_item_pool    : "가챠 지급 후보"
+    gacha_master     ||--o{ gacha_grade_weight : "등급별 추첨 가중치"
+    gacha_master     ||--o{ gacha_item_pool    : "등급별 지급 후보"
+    gacha_master     ||--o{ gacha_pity_rule    : "등급별 천장 규칙"
     item_master      ||--o{ attendance_master  : "일차별 보상"
     equip_slot_master||--o{ item_master        : "장착 슬롯"
     grade_master     ||--o{ item_master        : "등급(1~5)"
     item_master      ||--o{ enhance_master     : "소모 재화(골드)"
-    item_master      ||--o{ box_master         : "오픈 비용(골드)"
+    item_master      ||--o{ gacha_master       : "뽑기 비용(골드)"
     cube_recipe      ||--o{ cube_recipe_ingredient : "소모 재료(자식)"
     item_master      ||--o{ cube_recipe        : "제작 결과 아이템"
     item_master      ||--o{ cube_recipe_ingredient : "소모 재료(재료 아이템)"
@@ -94,7 +95,7 @@ erDiagram
     cube_master { int cube_level PK }
     cube_recipe { int recipe_code PK }
     cube_recipe_ingredient { int recipe_code PK }
-    box_master { int box_code PK }
+    gacha_master { int gacha_code PK }
     attendance_master { int day PK }
 ```
 
@@ -115,7 +116,7 @@ erDiagram
 | `stage_spawn` | 스테이지별 등장 일반 몬스터(스폰, `stage_master` 자식) | 스테이지 × 몬스터 |
 | `stage_reward` | 스테이지 클리어 보상(골드·경험치·등급별 아이템 확률) | 스테이지 수만큼 |
 | `cube_master` | 큐브 레벨별 규칙·레시피 | 레벨 수만큼 |
-| `box_master` | 랜덤 상자별 등급 확률·지급 아이템 풀 | 상자 종류 수만큼 |
+| `gacha_master` | 가챠 배너별 노출 조건·1연/10연 비용·등급 확률·지급 아이템 풀·천장 규칙 | 배너 종류 수만큼 |
 | `attendance_master` | 출석부 일차별(누적 출석 순번) 보상 정의 | 30 |
 
 ## 5. 테이블별 상세 (필드 + 담기는 데이터)
@@ -176,7 +177,7 @@ erDiagram
 
 ### 5.2b `grade_master` — 등급(희귀도)
 
-아이템·장비의 **등급(희귀도)** 정의. `item_master.grade`가 FK로 참조하며, `stage_reward`/`box_master`의 등급별 확률도 이 등급 체계를 따른다. **5등급 확정**(구 6등급 체계를 통일).
+아이템·장비의 **등급(희귀도)** 정의. `item_master.grade`가 FK로 참조하며, `stage_reward`/`gacha_master`의 등급별 확률도 이 등급 체계를 따른다. **5등급 확정**(구 6등급 체계를 통일).
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
@@ -257,7 +258,7 @@ erDiagram
 
 골드 등 소비 재화는 별도 테이블을 두지 않고 **`item_master`에 `item_type=3`(재화)로 정의**한다(5.3). 골드는 `item_code=1`로 고정한다. 보유 잔액은 세이브 `player_item` 재화 행(`row_type=2`)의 `quantity`(bigint)에 저장한다([세이브 데이터 기획서](../save-data-기획서.md) 3장).
 
-- `enhance_master`·`box_master` 등의 `currency_type` 필드는 **소모 재화의 `item_code`**를 가리킨다(골드=1).
+- `enhance_master`의 `currency_type`·`gacha_master`의 `cost_currency_code` 등 비용 재화 필드는 **소모 재화의 `item_code`**를 가리킨다(골드=1).
 - 재화 보유 상한, 골드 외 추가 재화 도입 여부는 향후 재화 정책에서 확정([[save-data-기획서]] 미결 참고).
 
 ### 5.6 `skill_master` — 스킬
@@ -444,7 +445,7 @@ erDiagram
 | 1010001 | 100 | 50 |  | 1010001 | 1 | 0.30 |
 | 1010003 | 500 | 250 |  | 1010003 | 2 | 0.25 |
 
-> 클리어 시 서버가 등급을 추첨(`stage_reward_drop.drop_prob`)해 그 등급의 `item_master` 아이템 하나를 지급하고, 확률 합이 1 미만이면 나머지는 미드롭이다(상자 가챠와 동일 방식). **후보 풀은 장비(`item_type=1`)·재료(2)로 한정**하며 재화(3)·소모품(4)은 제외한다. 드롭 확정은 서버 권위([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
+> 클리어 시 서버가 등급을 추첨(`stage_reward_drop.drop_prob`)해 그 등급의 `item_master` 아이템 하나를 지급하고, 확률 합이 1 미만이면 나머지는 미드롭이다(가챠의 등급 추첨과 같은 가중치 방식). **후보 풀은 장비(`item_type=1`)·재료(2)로 한정**하며 재화(3)·소모품(4)은 제외한다. 드롭 확정은 서버 권위([스테이지/전투 결과 기획서](../stage-battle-기획서.md)).
 
 ### 5.11 `cube_master` — 큐브(Hero-dric Cube)
 
@@ -489,34 +490,65 @@ erDiagram
 
 > `skill_points`는 해당 레벨에서 쓸 수 있는 총 포인트다. **실제 사용 가능 포인트 = `skill_points` − 그 캐릭터가 이미 투자한 스킬 레벨 합**(스킬 1레벨당 1포인트). 스킬 포인트 잔량은 저장하지 않고 이 값으로 파생한다([성장 시스템 기획서](../growth-기획서.md) 4장).
 
-### 5.13 `box_master` — 랜덤 상자
+### 5.13 `gacha_master` — 가챠(뽑기)
 
-랜덤 상자 열기([인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 5.9)가 참조하는 상자 정의. 플레이어가 **골드를 소모**해 여는 가챠이며, 서버는 오픈 시 `open_cost`(골드)를 차감한 뒤 `box_grade_weight`로 등급을 추첨하고 `box_item_pool`에 정의된 그 등급의 후보 중 하나를 무작위로 지급한다. 상자는 인벤토리에 적재되는 아이템이 아니다.
+가챠 뽑기([가챠 시스템 기획서](../gacha-기획서.md) 5장)가 참조하는 정의. **한 행이 곧 하나의 가챠 배너**이며, 노출 스위치·기간으로 "지금 돌릴 수 있는 배너"를 정의한다. 플레이어가 **골드를 소모**해 1연·10연을 뽑으면 서버는 비용을 차감한 뒤 `gacha_grade_weight`로 등급을 추첨하고 `gacha_item_pool`에 정의된 그 등급의 후보 중 하나를 무작위로 지급한다. 가챠 자체는 인벤토리에 적재되는 아이템이 아니다.
 
-**가챠 후보는 `box_item_pool`이 명시적으로 정의한다(확정).** 스테이지 전리품 드롭(5.10)처럼 "해당 등급의 `item_master` 전체"를 암시적으로 쓰지 않는다. 두 경로의 지급 풀을 분리해야 하기 때문이다 — 상자 가챠는 **소모품(`item_type=4`)을 포함**하고, 스테이지 전리품은 장비·재료만 지급한다.
 
-| 필드 | 타입 | 설명 |
-|---|---|---|
-| `box_code` | int PK | 상자 코드 |
-| `name` | varchar | 상자 이름 |
-| `open_cost` | bigint | 1회 오픈 비용 |
-| `currency_type` | int | 오픈 비용 재화 `item_code`(FK `item_master` 재화, 기본 1:골드) |
-
-**`box_grade_weight`(등급별 추첨 가중치, 자식)** — `(box_code, grade)` 복합 PK, `weight`(int). 확률은 그 상자의 가중치 합 대비 비율이다. 등급을 추가·제거할 때 스키마를 바꾸지 않고 행만 조정한다(구 `grade_weights` JSON 컬럼을 대체, JSON 컬럼 금지 규칙).
-
-**`box_item_pool`(등급별 지급 후보, 자식)** — `(box_code, grade, item_code)` 복합 PK. `item_code`는 `item_master`를 참조한다(구 `item_pool` JSON 컬럼을 대체).
+**가챠 후보는 `gacha_item_pool`이 명시적으로 정의한다(확정).** 스테이지 전리품 드롭(5.10)처럼 "해당 등급의 `item_master` 전체"를 암시적으로 쓰지 않는다. 두 경로의 지급 풀을 분리해야 하기 때문이다 — 가챠는 **소모품(`item_type=4`)을 포함**하고, 스테이지 전리품은 장비·재료만 지급한다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `box_code` | int PK | 상자 코드(FK `box_master`) |
-| `grade` | tinyint PK | **상자 안에서의 추첨 등급 슬롯**(`box_grade_weight.grade`와 대응) |
+| `gacha_code` | int PK | 가챠(배너) 코드 |
+| `name` | varchar | 배너 이름 |
+| `banner_image` | varchar | 배너 이미지 리소스 키(클라 표시용) |
+| `is_active` | tinyint | 노출 스위치(0:비노출 1:노출) |
+| `open_at` | bigint | 노출 시작 Unix ts(0=시작 제한 없음) |
+| `close_at` | bigint | 노출 종료 Unix ts(0=종료 없음, 상시 배너) |
+| `sort_order` | int | 배너 목록 표시 순서(오름차순) |
+| `cost_currency_code` | int | 비용 재화 `item_code`(FK `item_master` 재화, 기본 1:골드) |
+| `cost_single` | bigint | **1연** 1회 비용 |
+| `cost_multi` | bigint | **10연** 1회 비용(묶음 할인을 반영한 독립 값) |
+| `multi_count` | int | 10연 1회에 뽑는 횟수(현재 10 고정) |
+| `multi_guaranteed_grade` | tinyint | 10연 묶음에서 보장하는 최소 등급(0=보장 없음) |
+| `pickup_item_code` | int | **픽업 대상 아이템 선언**(`item_master.item_code`). 0=상시 배너. ≠0이면 그 배너 **최고 등급 슬롯의 유일한 후보**이며 **한정이라 `close_at`≠0 필수**. 0 센티널 때문에 FK 없음 |
+
+- **배너 노출 조건**: `is_active = 1 AND (open_at = 0 OR now >= open_at) AND (close_at = 0 OR now < close_at)`. 판정은 **서버 시각** 기준이며, 조회 API(`gacha/banners`)와 뽑기 API가 같은 조건을 쓴다([가챠 기획서](../gacha-기획서.md) 4.1·6.1). `is_active`는 기간과 무관하게 배너를 즉시 내리는 운영 스위치다.
+- **`pickup_item_code`는 배너의 성격을 선언한다** — `0`이면 **상시 배너**, `≠0`이면 **픽업(한정) 배너**다. 픽업 배너는 **최고 등급 슬롯(`gacha_item_pool`)에 그 아이템 하나만** 두므로 그 배너에서 나오는 전설은 90회차 천장이든 일반 추첨이든 **항상 픽업 아이템**이다. 추첨 로직은 픽업을 분기하지 않고 언제나 슬롯 내 균등 추첨이며, 이 컬럼은 선언·검증·UI 표시용이다.
+- **적재 시점 검증**: `pickup_item_code ≠ 0`이면 (1) 그 배너 최고 등급 슬롯 후보가 **정확히 그 아이템 하나**, (2) `close_at ≠ 0`(픽업 = 한정).
+- **확정 배너 2종**: `60001` 상시 뽑기(기간 없음, 5등급 슬롯 = 전설 장비 20종), `60002` 성검 엑스칼리버 픽업(한정 14일, 5등급 슬롯 = `31151` 1종).
+- 기간이 끝난 픽업 배너 행은 **지우지 않는다** — 과거 뽑기 기록(`player_gacha_pull.gacha_code`)이 참조하므로 이력으로 남기고 다음 픽업은 새 `gacha_code`로 추가한다.
+
+**`gacha_grade_weight`(등급별 추첨 가중치, 자식)** — `(gacha_code, grade)` 복합 PK, `weight`(int). 확률은 그 가챠의 가중치 합 대비 비율이다. 등급을 추가·제거할 때 스키마를 바꾸지 않고 행만 조정한다(구 `grade_weights` JSON 컬럼을 대체, JSON 컬럼 금지 규칙).
+
+**`gacha_item_pool`(등급별 지급 후보, 자식)** — `(gacha_code, grade, item_code)` 복합 PK. `item_code`는 `item_master`를 참조한다(구 `item_pool` JSON 컬럼을 대체).
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `gacha_code` | int PK | 가챠 코드(FK `gacha_master`) |
+| `grade` | tinyint PK | **가챠 안에서의 추첨 등급 슬롯**(`gacha_grade_weight.grade`와 대응) |
 | `item_code` | int PK | 지급 후보 아이템(FK `item_master`) |
+| `quantity` | int | 1회 지급 수량(기본 1). 장비는 `stack_max=1`이라 항상 1 |
 
-- **`grade`는 상자 내 추첨 슬롯이며 `item_master.grade`와 일치할 필요가 없다.** 소모품처럼 `grade`가 FK 충족용 값(5.3)인 아이템도 원하는 등급 슬롯에 배치할 수 있어, **아이템 자체의 등급을 바꾸지 않고** 가챠 출현 빈도만 조절한다.
+**`gacha_pity_rule`(등급별 천장 규칙, 자식)** — `(gacha_code, grade, pity_type)` 복합 PK. 행이 없으면 그 등급에 천장이 없다. **`pity_type`이 PK에 포함되어 같은 등급에 소프트·하드를 동시에 걸 수 있다**(확정 규칙이 "70회차 확률 상승 + 90회차 확정"의 2단계다).
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `gacha_code` | int PK | 가챠 코드(FK `gacha_master`) |
+| `grade` | tinyint PK | 천장 대상 등급 |
+| `pity_type` | tinyint PK | 1:소프트(가중치 가산) 2:하드(확정 지급) |
+| `threshold` | int | **이번 뽑기가 마지막 획득 이후 `threshold`회차**가 되면 발동(회차 = `pity_count + 1`) |
+| `weight_up` | int | 소프트 전용 — 발동 후 1회당 가산할 가중치 |
+| `weight_up_max` | int | 소프트 전용 — 누적 가산 상한(0=무제한) |
+
+**천장 기준값(확정)**: 최고 등급(5)에 소프트 `threshold=70`, 하드 `threshold=90`. 1~69회차 기본 확률 → 70~89회차 상승 → **90회차 100% 확정**이다([가챠 기획서](../gacha-기획서.md) 6.3).
+
+- **`grade`는 가챠 내 추첨 슬롯이며 `item_master.grade`와 일치할 필요가 없다.** 소모품처럼 `grade`가 FK 충족용 값(5.3)인 아이템도 원하는 등급 슬롯에 배치할 수 있어, **아이템 자체의 등급을 바꾸지 않고** 가챠 출현 빈도만 조절한다.
 - 등급 슬롯 안에서의 아이템 선택은 **균등**이다. 아이템별 가중치가 필요해지면 이 테이블에 `weight` 컬럼을 추가한다(스키마 확장만).
-- 후보 행이 없는 등급 슬롯이 추첨되면 **미지급**으로 처리한다(스테이지 드롭의 확률 합 미만 구간과 동일 취급).
+- **후보 행이 없는 등급 슬롯은 마스터 결함이다.** 스테이지 드롭과 달리 가챠는 이미 비용을 받았으므로 미지급으로 넘어가지 않고 `GachaPoolEmpty(12002)`로 전체 롤백한다. 적재 시점에 "가중치가 있는 모든 등급에 후보 1개 이상"을 검증한다([가챠 기획서](../gacha-기획서.md) 6.1).
+- **소프트 천장은 확률(%)이 아니라 가중치 가산**이다. 등급 선택이 가중치 방식이라 가산만으로 나머지 등급 확률이 자동 비례 감소하며, 총합 재정규화 단계가 필요 없다.
 
-> 🚧 값 미확정 — 상자 종류·오픈 비용·등급 가중치·후보 아이템 목록은 [마스터 데이터 값](master-data-값.md) §12에서 확정한다. 다연속 오픈 정책은 [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 8장과 함께 정한다.
+> 🚧 값 미확정 — 배너 종류·노출 기간·1연/10연 비용·등급 가중치·후보 아이템 목록·보장 등급·천장 기준은 [마스터 데이터 값](master-data-값.md) §12에서 확정한다.
 
 ### 5.14 `attendance_master` — 출석부 일차별 보상
 
@@ -556,13 +588,13 @@ erDiagram
 | 42002 | 골드 부스터 | 2 (골드 획득량) | 1.500 | 1800 (30분) |
 
 - 소모품 효과를 `item_master` 컬럼으로 넣지 않고 별도 테이블로 분리한 이유는 장비 스탯 컬럼과 성격이 달라 대다수 아이템 행에 의미 없는 컬럼이 깔리기 때문이다(`enhance_master`·`cube_master`와 동일한 분리 방식).
-- 버프는 **계정 단위**이며 배율은 스테이지 클리어 보상·오프라인 정산의 골드·경험치에만 적용한다. 메일·출석·분해·상자·거래 대금에는 적용하지 않는다(같은 문서 6.5).
+- 버프는 **계정 단위**이며 배율은 스테이지 클리어 보상·오프라인 정산의 골드·경험치에만 적용한다. 메일·출석·분해·가챠·거래 대금에는 적용하지 않는다(같은 문서 6.5).
 
 ### 공통 규칙
 
 - **키 규칙**: `stage_master`는 `(act, difficulty, stage)`를 인코딩한 `stage_id`를 PK로 쓰고, `stage_reward`는 같은 `stage_id`를 PK/FK로 써 스테이지와 1:1 대응한다.
 - **enum 공유**: `item_type`(1:장비 2:재료 3:재화 4:소모품)·`buff_type`(1:경험치 획득량 2:골드 획득량)·`unlock_type`·`reward_type`·룬 `stat_type`(1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도 7:재사용 대기시간) 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상, 신규 값 추가는 허용). 재화는 별도 `currency_type` enum 없이 `item_master`(item_type=3)의 `item_code`로 식별한다(골드=1).
-- **JSON 컬럼 금지(설계 규칙)**: DB 테이블에는 JSON 문자열 컬럼을 두지 않는다. 고정 스키마 값은 개별 컬럼(예: 스탯 `hp`~`cooldown`)으로, 배열·중첩 등 반복 구조는 **별도 자식 테이블**(예: `stage_master` 스폰 → `stage_spawn`, `skill_master`의 레벨별 계수 → `skill_coefficient`, 향후 `box`의 등급 가중치·아이템 풀, `cube`의 레시피도 자식 테이블)로 분리한다. 단 **클라 번들 JSON·POCO는 예외**로, 전송 편의상 이 컬럼/자식 행들을 중첩 객체·배열로 직렬화한다(DB↔번들, 5.1·7장).
+- **JSON 컬럼 금지(설계 규칙)**: DB 테이블에는 JSON 문자열 컬럼을 두지 않는다. 고정 스키마 값은 개별 컬럼(예: 스탯 `hp`~`cooldown`)으로, 배열·중첩 등 반복 구조는 **별도 자식 테이블**(예: `stage_master` 스폰 → `stage_spawn`, `skill_master`의 레벨별 계수 → `skill_coefficient`, `gacha_master`의 등급 가중치·아이템 풀·천장 규칙, `cube`의 레시피도 자식 테이블)로 분리한다. 단 **클라 번들 JSON·POCO는 예외**로, 전송 편의상 이 컬럼/자식 행들을 중첩 객체·배열로 직렬화한다(DB↔번들, 5.1·7장).
 
 ## 6. 클라이언트가 보유하는 데이터 범위
 
@@ -582,11 +614,11 @@ erDiagram
 | `stage_reward` | 클리어 골드·경험치·등급별 드롭 확률(표시·예측용, 확정은 서버) | 🟡 표시용 |
 | `cube_master` | 큐브 합성/분해/제작 규칙 표시 | 🟡 표시용 |
 | `equip_slot_master` | 슬롯 이름 표시 | 🟡 표시용 |
-| `box_master` | 상자 등급 확률 안내 표시 | 🟡 표시용 |
+| `gacha_master` | 배너 이름·이미지·비용·등급 확률 공시 표시(어느 배너가 열려 있는지는 서버가 판정) | 🟡 표시용 |
 | `attendance_master` | 출석 달력 보상 표시 | 🟡 표시용 |
 
 - 🔴 **전투 필수**: 자동 전투 연출·전투력/데미지 계산에 직접 쓰인다.
-- 🟡 **표시용**: UI 안내·미리보기용. 실제 결과(드롭·상자·큐브 RNG)는 서버가 확정한다.
+- 🟡 **표시용**: UI 안내·미리보기용. 실제 결과(드롭·가챠·큐브 RNG)는 서버가 확정한다.
 - **동적 데이터(플레이어 세이브)는 여기 포함되지 않는다**: 캐릭터 레벨·장착 장비·재화 등은 `POST /api/game/load` 코어 스냅샷으로, 가방 아이템은 `POST /api/game/inventory/list` 페이지 조회로 받는다([세이브 데이터 기획서](../save-data-기획서.md) 5장). 전투 계산에 필요한 장착 장비는 코어 스냅샷에 들어 있으므로 가방 로드를 기다리지 않는다. 클라 전투 계산은 "마스터 데이터(정적) + 세이브(동적)"를 결합한다.
 
 ## 7. 클라이언트(Unity) 연동
@@ -942,7 +974,8 @@ public class CombatCalculator
 
 - [서버 시스템 전체 개요](../../서버-시스템-전체-개요.md) — 도메인 4.10, 서버 권위 원칙
 - [세이브 데이터 기획서](../save-data-기획서.md) — 마스터를 코드로 참조하는 주체(동적 데이터)
-- [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) — 아이템·강화·큐브·상자
+- [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) — 아이템·강화·큐브
+- [가챠(뽑기) 시스템 기획서](../gacha-기획서.md) — `gacha_master` 계열 소비처(1연/10연·천장·기록)
 - [소모품 아이템 / 계정 버프 기획서](../consumable-buff-기획서.md) — `item_type=4` 소모품·`consumable_master` 버프 효과
 - [성장 시스템 기획서](../growth-기획서.md) — 스킬·룬 성장
 - [스테이지/전투 결과 기획서](../stage-battle-기획서.md) — 전투 결과 서버 검증(클라 계산은 예측)

@@ -18,15 +18,21 @@
   - [player_skill](#player_skill)
   - [player_rune](#player_rune)
   - [player_cube](#player_cube)
+  - [player_buff](#player_buff)
   - [player_mail](#player_mail)
   - [player_mail_reward](#player_mail_reward)
   - [player_attendance](#player_attendance)
   - [trade_listing](#trade_listing)
+  - [player_gacha_counter](#player_gacha_counter)
+  - [player_gacha_pull](#player_gacha_pull)
+  - [player_gacha_pull_item](#player_gacha_pull_item)
 - [4. 마스터 데이터 (정적 · 읽기 전용)](#4-마스터-데이터-정적--읽기-전용)
+  - [grade_master](#grade_master)
   - [class_master](#class_master)
   - [level_master](#level_master)
   - [equip_slot_master](#equip_slot_master)
   - [item_master](#item_master)
+  - [consumable_master](#consumable_master)
   - [enhance_master](#enhance_master)
   - [skill_master](#skill_master)
   - [rune_master](#rune_master)
@@ -35,10 +41,15 @@
   - [stage_reward](#stage_reward)
   - [stage_reward_drop](#stage_reward_drop)
   - [cube_master](#cube_master)
-  - [box_master](#box_master)
-  - [box_grade_weight](#box_grade_weight)
-  - [box_item_pool](#box_item_pool)
+  - [gacha_master](#gacha_master)
+  - [gacha_grade_weight](#gacha_grade_weight)
+  - [gacha_item_pool](#gacha_item_pool)
+  - [gacha_pity_rule](#gacha_pity_rule)
   - [attendance_master](#attendance_master)
+  - [inventory_expand_master](#inventory_expand_master)
+  - [character_create_cost](#character_create_cost)
+  - [mail_master](#mail_master)
+  - [newbie_reward_master](#newbie_reward_master)
 - [5. 출처 문서](#5-출처-문서)
 
 
@@ -49,12 +60,13 @@
 | MySQL (Account DB) | `AccountServer` | 계정·인증 토큰 영속 저장 |
 | Redis | `AccountServer` 발급 / `GameServer` 검증 | 인증 토큰 캐시(`auth:token:{userId}`) — **필수 의존**(없으면 인증 불가) |
 | Redis | `GameServer` | 거래소 — 목록 캐시(`trade:index:{itemCode}`·`trade:listing:{listingId}`)와 **판매 등록용 판매자 락**(`trade:lock:seller:{userId}`). **상시 사용**하되 모두 파생 데이터이며, 장애 시 MySQL 폴백·락 없이 축소 운전([거래소 기획서](../세부/trade-기획서.md) 7.3·7.4). 구매·취소·만료는 Redis를 쓰지 않고 `trade_listing` 행의 조건부 갱신(행 잠금)으로 직렬화한다 |
+| Redis | `GameServer` | 가방 조회 캐시(`inv:bag:{userId}`) — 계정 가방 전량 스냅샷. **write-through**로 갱신하며 정본은 MySQL이다. 가방을 바꾸는 모든 경로(**가챠 뽑기**·큐브·소모품·스테이지 전리품·메일 첨부·거래소 등록/취소·장착/해제/배치)가 커밋 후 변경분을 반영하고, 실패 시 키를 삭제해 다음 조회가 MySQL에서 재적재한다([인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 6.5) |
 | MySQL (Game DB) | `GameServer` | 플레이어 진행 세이브 데이터 |
 | 인메모리 캐시(원천 CSV/JSON) | `GameServer` | 마스터(정적 기획) 데이터. 관계형 영속 테이블이 아닌 읽기 전용 정의 |
 
 - **서버 간 공유 키**: 모든 게임 DB 테이블의 `user_id`는 `AccountServer`의 `users.user_id`와 **동일 식별자**다.
 - **시간 값**: 계정·세이브 공통으로 **Unix timestamp(BIGINT, 초)**.
-- **캐릭터 구조**: **파티 자리 3개**(3인 파티)에, 직업 중복이 불가하므로 **보유 캐릭터는 직업 수(현재 4)까지**. 편성되지 않은 캐릭터는 `player_character.slot=0`으로 남아 성장·장비를 그대로 보존한다. 직업·레벨·경험치·스킬·장비는 **캐릭터별**, 인벤토리·골드·큐브·룬은 **계정 공유**.
+- **캐릭터 구조**: **파티 자리 3개**(3인 파티)에, 직업 중복이 불가하므로 **보유 캐릭터는 직업 수(현재 4)까지**. 편성되지 않은 캐릭터는 `player_character.slot=0`으로 남아 성장·장비를 그대로 보존한다. 직업·레벨·경험치·스킬·장비는 **캐릭터별**, 인벤토리·골드·큐브·룬·**가챠 천장 진행도**는 **계정 공유**.
 
 ## 2. AccountServer — 계정/인증 MySQL
 
@@ -108,6 +120,9 @@ erDiagram
     game_player      ||--o{ player_mail      : receives
     game_player      ||--|| player_attendance : progresses
     game_player      ||--o{ trade_listing    : sells
+    game_player      ||--o{ player_gacha_counter : "천장 진행도"
+    game_player      ||--o{ player_gacha_pull : pulls
+    player_gacha_pull ||--o{ player_gacha_pull_item : "뽑기 결과"
     player_item      ||--o| player_item_equipped : "equipped as"
     player_character ||--o{ player_item_equipped : equips
     player_character ||--o{ player_skill     : has
@@ -225,6 +240,34 @@ erDiagram
         bigint  expires_at "만료(= created_at + 3일)"
         bigint  closed_at "미완료 0"
     }
+
+    player_gacha_counter {
+        bigint  user_id PK,FK
+        int     gacha_code PK "gacha_master.gacha_code"
+        int     grade PK "천장 대상 등급(gacha_pity_rule.grade)"
+        int     pity_count "그 등급을 마지막으로 받은 뒤 누적 뽑기 횟수"
+        bigint  updated_at
+    }
+
+    player_gacha_pull {
+        bigint  pull_id PK "AUTO_INCREMENT, 기록 페이징 커서"
+        bigint  user_id FK
+        int     gacha_code "gacha_master.gacha_code"
+        int     pull_type "1:1연 2:10연"
+        int     cost_currency_code "소모 재화 item_code(골드=1)"
+        bigint  cost_amount "이번 요청에서 차감한 금액"
+        bigint  pulled_at
+    }
+
+    player_gacha_pull_item {
+        bigint  pull_id PK,FK
+        int     seq PK "요청 내 회차(1부터)"
+        int     item_code "지급 아이템(item_master)"
+        int     grade "추첨된 등급 슬롯"
+        int     quantity "지급 수량"
+        int     pity_applied "0/1 하드 천장 확정"
+        int     guaranteed "0/1 10연 보장 대체"
+    }
 ```
 
 **PK / 유니크**
@@ -243,6 +286,9 @@ erDiagram
 | `player_mail_reward` | `(mail_id, seq)` | 메일 첨부 |
 | `player_attendance` | `user_id` | 계정 출석 진행도(누적 카운터, 계정당 1행) |
 | `trade_listing` | `listing_id` PK, `(status, item_code, price)`·`(status, price)` 조회·정렬 인덱스, `(seller_user_id, status)` 한도·내 판매 조회, `(status, expires_at)` 만료 배치 | 거래소 등록(전역, 에스크로) |
+| `player_gacha_counter` | `(user_id, gacha_code, grade)` PK | 계정 공유(가챠별·등급별 천장 진행도) |
+| `player_gacha_pull` | `pull_id` PK, `(user_id, pull_id)` 인덱스(전체 기록 최신순 커서 페이징), `(user_id, gacha_code, pull_id)` 인덱스(가챠별 필터) | 계정 뽑기 원장(부모) |
+| `player_gacha_pull_item` | `(pull_id, seq)` PK | 뽑기 결과(자식, 1연 1행·10연 10행) |
 
 **테이블별 역할·저장 데이터**
 
@@ -310,12 +356,28 @@ erDiagram
 - **역할**: 거래소(교역선) **판매 등록**(전역). 등록 시 아이템을 인벤토리에서 분리하는 **에스크로** 방식이며, 판매 대금은 메일로 지급된다.
 - **저장 데이터**: `listing_id`(PK), `seller_user_id`, 매물 스냅샷(`item_code`·`enhance_level`·`quantity`), `price`(구매가 골드), `status`(1:판매중 2:판매완료 3:취소/만료), `buyer_user_id`(미판매 0), 생성/만료(`created_at`+3일)/종료 시각.
 
+### player_gacha_counter
+
+- **역할**: 가챠 **천장(pity) 진행도**(계정 공유). 천장 규칙(`gacha_pity_rule`)이 있는 등급마다 1행이며, 그 등급을 못 받은 누적 횟수를 센다. 행은 해당 가챠를 처음 뽑을 때 lazy 생성한다.
+- **저장 데이터**: `(user_id, gacha_code, grade)` 키, `pity_count`(누적 미획득 횟수 — 그 등급 **이상**을 뽑으면 0으로 리셋), `updated_at`. 소프트·하드 규칙이 둘 다 걸려 있어도 카운터는 **등급당 1행**이며, 각 규칙이 `pity_count + 1`(이번 회차 번호)을 자기 `threshold`와 비교한다([가챠 기획서](../세부/gacha-기획서.md) 6.3).
+
+### player_gacha_pull
+
+- **역할**: 뽑기 **1회 요청**의 원장(부모). 1연이든 10연이든 요청 1건 = 1행이며, 비용은 요청 단위로 한 번 차감되므로 여기에 둔다. `pull_id`(AUTO_INCREMENT)가 기록 조회의 **커서이자 최신순 정렬키**다 — 같은 초에 여러 건이 들어와도 순서가 흔들리지 않아 커서 페이징이 항목을 건너뛰거나 중복시키지 않는다.
+- **저장 데이터**: `pull_id`(PK), `user_id`, `gacha_code`, `pull_type`(1:1연 2:10연), `cost_currency_code`·`cost_amount`(실제 차감액), `pulled_at`. **자동 삭제하지 않는다**(재화가 오간 원장이라 감사 근거).
+
+### player_gacha_pull_item
+
+- **역할**: 그 요청의 **회차별 결과**(`player_gacha_pull`의 자식, 1:N). 반복 구조를 JSON이 아니라 자식 테이블로 분리하는 공통 규칙을 따른다(`player_mail`/`player_mail_reward`와 같은 형태).
+- **저장 데이터**: `(pull_id, seq)` 키, `item_code`·`grade`(추첨된 등급 슬롯)·`quantity`, `pity_applied`(하드 천장으로 등급이 확정된 회차), `guaranteed`(10연 보장으로 대체된 회차). 뒤 두 플래그가 사후 확률 검증의 근거다.
+
 ## 4. 마스터 데이터 (정적 · 읽기 전용)
 
 > 출처: [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 5장. 관계형 영속 테이블이 아니라 원천(CSV/JSON)에서 로드하는 인메모리 정의이며, 세이브 테이블이 코드로 참조한다.
 
 | 마스터 테이블 | PK | 참조하는 세이브 컬럼 |
 |---|---|---|
+| `grade_master` | `grade` | (등급 1~5 정의 · `item_master.grade`·`stage_reward_drop.grade`·`gacha_grade_weight`/`gacha_item_pool`/`gacha_pity_rule`의 `grade`가 FK로 참조) |
 | `class_master` | `class_code` | `player_character.class_code` |
 | `level_master` | `level` | `player_character.level` |
 | `equip_slot_master` | `slot` | `player_item_equipped.equipped_slot` / `item_master.equip_slot` |
@@ -329,12 +391,22 @@ erDiagram
 | `stage_reward` | `stage_id` | `stage_master.stage_id`와 1:1(스테이지 클리어 보상 스칼라) |
 | `stage_reward_drop` | `stage_id`+`grade` | `stage_reward.stage_id`의 자식(등급별 드롭 확률, 1:N) |
 | `cube_master` | `cube_level` | `player_cube.cube_level` |
-| `box_master` | `box_code` | (골드 가챠 상자 열기 API 입력 · 골드 차감·지급 모두 `player_item`, 상자 자체는 저장 안 함) |
-| `box_grade_weight` | `box_code`+`grade` | `box_master.box_code`의 자식(등급별 추첨 가중치, 1:N) |
-| `box_item_pool` | `box_code`+`grade`+`item_code` | `box_master`의 자식(등급별 지급 후보 화이트리스트) · `item_code`는 `item_master` 참조 |
+| `gacha_master` | `gacha_code` | `player_gacha_pull.gacha_code` · `player_gacha_counter.gacha_code` (배너 정의 — 노출 조건은 서버 시각 판정, 골드 차감·지급 모두 `player_item`) |
+| `gacha_grade_weight` | `gacha_code`+`grade` | `gacha_master.gacha_code`의 자식(등급별 추첨 가중치, 1:N) |
+| `gacha_item_pool` | `gacha_code`+`grade`+`item_code` | `gacha_master`의 자식(등급별 지급 후보 화이트리스트) · `item_code`는 `item_master` 참조 |
+| `gacha_pity_rule` | `gacha_code`+`grade`+`pity_type` | `gacha_master`의 자식(등급별 천장 규칙, 소프트·하드 각 1행) · `player_gacha_counter`가 이 기준으로 카운트 |
 | `attendance_master` | `day` | (출석부 **일차별**(누적 출석 순번 1~30) 보상 정의 · 지급은 메일 발급, `player_attendance`는 진행도 보관) |
+| `inventory_expand_master` | `step` | `game_player.inventory_capacity` 확장 비용(칸당 골드) |
+| `character_create_cost` | `character_id` | 캐릭터 추가 생성 골드(생성 순번별) · `player_character` 생성 시 차감 |
+| `mail_master` | `mail_template_code` | `player_mail.category`/`title`/`body`/`expires_at`의 원천(발급 시 렌더링해 스냅샷 저장) · **서버 전용** |
+| `newbie_reward_master` | `seq` | 계정 초기화 시 발급하는 환영 메일의 `player_mail_reward` 첨부 목록 · **서버 전용** |
 
 **테이블별 역할·정의 데이터** (모두 정적·읽기 전용 정의이며 유저가 변경하지 않는다. 실제 값은 [마스터 데이터 값](../세부/master-data/master-data-값.md))
+
+### grade_master
+
+- **역할**: 아이템·장비의 **등급(희귀도)** 정의. `item_master.grade`가 FK로 참조하며, 등급을 추첨 축으로 쓰는 `stage_reward_drop`·`gacha_grade_weight`·`gacha_item_pool`·`gacha_pity_rule`의 `grade`도 이 체계를 따른다. 참조 대상이므로 물리적으로 `item_master`보다 앞에 생성한다.
+- **정의 데이터**: `grade`(PK, 1~5), `name`. **5등급 확정** — 노말·고급·희귀·영웅·전설.
 
 ### class_master
 
@@ -401,25 +473,50 @@ erDiagram
 - **역할**: 큐브 레벨별 합성/분해 규칙 정의. `player_cube.cube_level`이 참조.
 - **정의 데이터**: 레벨별 요구 경험치, 합성 등급 상승 허용·소모 개수, 분해 골드 계수. 제작 레시피는 자식 테이블 `cube_recipe`(헤더)·`cube_recipe_ingredient`(소모 재료)로 분리.
 
-### box_master
+### gacha_master
 
-- **역할**: 골드 가챠 랜덤 상자 정의. 상자 열기 API의 입력이며 상자 자체는 저장하지 않는다(골드 차감·아이템 지급 모두 `player_item`).
-- **정의 데이터**: `box_code`·`name`·`open_cost`·`currency_type`. 등급별 추첨 가중치는 자식 `box_grade_weight`, 지급 후보는 자식 `box_item_pool`로 분리한다(JSON 컬럼 금지 규칙). (값 미확정, 작성 예정)
+- **역할**: 가챠(뽑기) 정의. **한 행이 하나의 배너**이며 노출 스위치·기간으로 "지금 돌릴 수 있는 배너"를 정의한다(서버 시각 판정). 1연·10연 API의 입력이며 가챠 자체는 저장하지 않는다(골드 차감·아이템 지급 모두 `player_item`, 이력은 `player_gacha_pull`).
+- **정의 데이터**: `gacha_code`·`name`·`banner_image`·**노출 조건**(`is_active`·`open_at`·`close_at`·`sort_order`)·`cost_currency_code`·`cost_single`(1연 비용)·`cost_multi`(10연 묶음 비용)·`multi_count`(현재 10)·`multi_guaranteed_grade`(10연 보장 최소 등급, 0=없음)·`pickup_item_code`(픽업 대상 선언, 0=상시 배너). 등급 가중치·지급 후보·천장 규칙은 각각 자식 테이블로 분리한다(JSON 컬럼 금지 규칙). 확정 배너 2종 — `60001` 상시(기간 없음, 5등급 슬롯 = 전설 장비 20종)·`60002` 성검 엑스칼리버 픽업(**한정 14일**, 5등급 슬롯 = `31151` 1종이라 그 배너의 전설은 항상 픽업 아이템). **픽업 = 한정이므로 `pickup_item_code`≠0인 배너는 `close_at`≠0 필수**이며, 기간이 끝난 행은 과거 뽑기 기록이 참조하므로 지우지 않는다.
 
-### box_grade_weight
+### gacha_grade_weight
 
-- **역할**: 상자별 **등급 추첨 가중치**(`box_master`의 자식, 1:N). 확률은 그 상자의 가중치 합 대비 비율이다.
-- **정의 데이터**: `(box_code, grade)` → `weight`. 등급을 추가·제거할 때 스키마 변경 없이 행만 조정한다.
+- **역할**: 가챠별 **등급 추첨 가중치**(`gacha_master`의 자식, 1:N). 확률은 그 가챠의 가중치 합 대비 비율이다.
+- **정의 데이터**: `(gacha_code, grade)` → `weight`. 등급을 추가·제거할 때 스키마 변경 없이 행만 조정한다.
 
-### box_item_pool
+### gacha_item_pool
 
-- **역할**: 상자별·등급별 **지급 후보 화이트리스트**(`box_master`의 자식). 가챠 후보를 **명시적으로 정의**하며, 스테이지 전리품 드롭이 쓰는 "해당 등급의 `item_master` 전체" 방식과 분리된다 — 상자 가챠는 **소모품(`item_type=4`)을 포함**하고 스테이지 전리품은 장비·재료만 지급한다([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 4.3-(3)).
-- **정의 데이터**: `(box_code, grade, item_code)`. `grade`는 **상자 안에서의 추첨 등급 슬롯**이며 `item_master.grade`와 일치할 필요가 없다 — 소모품처럼 `grade`가 FK 충족용 값인 아이템도 아이템 등급을 바꾸지 않고 원하는 슬롯에 배치해 출현 빈도를 조절한다. 등급 슬롯 내 선택은 균등이며, 후보 행이 없는 슬롯이 추첨되면 미지급이다.
+- **역할**: 가챠별·등급별 **지급 후보 화이트리스트**(`gacha_master`의 자식). 가챠 후보를 **명시적으로 정의**하며, 스테이지 전리품 드롭이 쓰는 "해당 등급의 `item_master` 전체" 방식과 분리된다 — 가챠는 **소모품(`item_type=4`)을 포함**하고 스테이지 전리품은 장비·재료만 지급한다([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 4.3-(3)).
+- **정의 데이터**: `(gacha_code, grade, item_code)` → `quantity`(1회 지급 수량). `grade`는 **가챠 안에서의 추첨 등급 슬롯**이며 `item_master.grade`와 일치할 필요가 없다 — 소모품처럼 `grade`가 FK 충족용 값인 아이템도 아이템 등급을 바꾸지 않고 원하는 슬롯에 배치해 출현 빈도를 조절한다. 등급 슬롯 내 선택은 균등이므로, **픽업 배너는 최고 등급 슬롯에 후보를 1종만 둬서** 그 배너의 전설을 확정한다(추첨 로직에 픽업 분기가 없다). **후보 행이 없는 슬롯은 마스터 결함**이며(비용을 이미 받았으므로 미지급으로 넘어가지 않는다) `GachaPoolEmpty(12002)`로 전체 롤백한다.
+
+### gacha_pity_rule
+
+- **역할**: 가챠별·등급별 **천장(pity) 규칙**(`gacha_master`의 자식). 행이 없으면 그 등급에 천장이 없다. 진행도는 세이브 테이블 `player_gacha_counter`가 계정별로 보관한다.
+- **정의 데이터**: `(gacha_code, grade, pity_type)` → `threshold`(발동 회차 = `player_gacha_counter.pity_count + 1`과 비교), `weight_up`·`weight_up_max`(소프트 전용 가중치 가산량·상한). `pity_type`이 PK라 **같은 등급에 소프트·하드를 동시에** 건다 — 확정 기준값은 5등급 소프트 70회차·하드 90회차(90회차 100% 확정). **소프트 천장을 확률(%)이 아니라 가중치 가산으로 정의**해, 나머지 등급 확률이 자동 비례 감소하고 총합 재정규화 단계가 필요 없다.
 
 ### attendance_master
 
 - **역할**: 출석부 **일차별(1~30)** 보상 정의. `day`는 날짜가 아니라 **누적 출석 순번**이며, 출석 시 `누적 출석일수 % 30 + 1`(30일 순환)로 조회해 보상을 확정하고 메일로 발급한다(진행도는 `player_attendance`).
 - **정의 데이터**: `day`(출석 일차 1~30), `reward_type`(1:골드 2:아이템 3:재료), `reward_code`(골드면 0), `quantity`.
+
+### inventory_expand_master
+
+- **역할**: 인벤토리 용량 확장 1칸당 골드 비용 정의. 확장 API가 이 값으로 비용을 산출해 `game_player.inventory_capacity`를 1 올린다(클라이언트 입력 불신, [인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 5.4).
+- **정의 데이터**: `step`(PK, 기본 용량 이후 여는 칸의 순번 1-based), `gold_cost`. **행 개수 = 확장 가능한 총 칸 수**이므로 상한 용량 = 기본 용량(100) + 행 개수(현재 20 → 상한 120)다.
+
+### character_create_cost
+
+- **역할**: 캐릭터 추가 생성 골드 비용(생성 순번별). `POST /api/game/create-character`가 서버 권위로 차감한다.
+- **정의 데이터**: `character_id`(PK, **생성 순번** 2~), `gold_cost`. 순번 1(최초 생성 = 계정 초기화)은 무료라 행이 없다. ⚠️ `player_character.slot`(파티 자리)이 아니라 생성 순번이 키다 — 슬롯은 편성 변경으로 바뀌므로 비용 키로 쓸 수 없다.
+
+### mail_master
+
+- **역할**: 메일 발급 **문구 템플릿**. 발급 시 서버가 자리표시자에 파라미터를 채워 렌더링한 결과를 `player_mail.title`/`body`에 **스냅샷으로 저장**하므로, 템플릿 수정은 이미 발급된 메일에 소급되지 않는다([메일 기획서](../세부/mail-기획서.md) 4장·6.4). **서버 전용**(클라이언트 번들 제외).
+- **정의 데이터**: `mail_template_code`(PK, `category`×100+순번), `category`(1:운영 2:거래 3:출석 4:시스템), `title_format`·`body_format`(`{0}` 자리표시자), `valid_days`(만료 일수 → `player_mail.expires_at`, `0`=무기한). `category`·만료 일수는 템플릿이 확정하며 발급자가 임의 지정하지 않는다.
+
+### newbie_reward_master
+
+- **역할**: **신규 가입 지원금** 첨부 목록. 계정 세이브가 처음 만들어질 때(최초 캐릭터 생성) 서버가 이 행들을 그대로 `player_mail_reward`로 적재해 환영 메일(`mail_master` 101)로 발급한다. `game_player`가 계정당 1행이라 초기화 트랜잭션이 생애 한 번만 성공하므로 중복 지급 방지 플래그가 불필요하다. **서버 전용**.
+- **정의 데이터**: `seq`(PK, 첨부 순번), `reward_type`(1:골드 2:아이템 3:재료 — 메일 첨부·출석 보상과 동일 enum), `reward_code`(골드면 0), `quantity`. 지급 품목을 늘리려면 행만 추가한다(스키마·코드 불변).
 
 - 마스터 데이터는 **클라이언트 빌드에 번들**되고 서버도 같은 원천을 기동 시 자체 로드한다(런타임 다운로드·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 6·8장).
 
@@ -434,4 +531,5 @@ erDiagram
 - [소모품 아이템 / 계정 버프 기획서](../세부/consumable-buff-기획서.md) — `player_buff`·`consumable_master`, 저장 위치(MySQL 정본) 근거
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 캐릭터·스킬·룬 세부 규칙
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) — 경험치·골드 지급(세이브 테이블 사용)
+- [가챠(뽑기) 시스템 기획서](../세부/gacha-기획서.md) — `player_gacha_counter`·`player_gacha_pull`·`player_gacha_pull_item`, `gacha_master` 계열 소비 규칙
 - [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) — 마스터 테이블 정의

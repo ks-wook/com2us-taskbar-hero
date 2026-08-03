@@ -305,4 +305,55 @@ CREATE TABLE trade_listing (
         REFERENCES game_player (user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='거래소 등록(전역, 에스크로)';
 
+
+-- 가챠 천장(pity) 진행도. 천장 규칙(gacha_pity_rule)이 있는 (가챠, 등급)마다 1행이며 lazy 생성한다.
+--   pity_count: 그 등급을 마지막으로 받은 뒤 누적 뽑기 횟수. 그 등급 '이상'을 뽑으면 0으로 리셋.
+DROP TABLE IF EXISTS player_gacha_counter;
+CREATE TABLE player_gacha_counter (
+    user_id    BIGINT  NOT NULL          COMMENT '계정 user_id',
+    gacha_code INT     NOT NULL          COMMENT '가챠 코드(gacha_master)',
+    grade      TINYINT NOT NULL          COMMENT '천장 대상 등급(gacha_pity_rule.grade)',
+    pity_count INT     NOT NULL DEFAULT 0 COMMENT '그 등급 미획득 누적 횟수. 해당 등급 이상 획득 시 0으로 리셋',
+    updated_at BIGINT  NOT NULL          COMMENT '갱신 시각(Unix ts)',
+    PRIMARY KEY (user_id, gacha_code, grade),
+    CONSTRAINT fk_gachacounter_player FOREIGN KEY (user_id)
+        REFERENCES game_player (user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='가챠 천장 진행도(계정 공유, 가챠별·등급별)';
+
+
+-- 뽑기 1회 요청의 원장(부모). 1연이든 10연이든 요청 1건 = 1행. 비용도 요청 단위로 한 번 차감되므로 여기에 둔다.
+--   pull_id(AUTO_INCREMENT)가 기록 조회의 커서이자 최신순 정렬키다(created_at 정렬은 동초 충돌로 커서가 흔들린다).
+--   재화가 오간 원장이라 자동 삭제하지 않는다.
+DROP TABLE IF EXISTS player_gacha_pull;
+CREATE TABLE player_gacha_pull (
+    pull_id            BIGINT  NOT NULL AUTO_INCREMENT COMMENT '뽑기 요청 고유 ID(기록 페이징 커서)',
+    user_id            BIGINT  NOT NULL          COMMENT '계정 user_id',
+    gacha_code         INT     NOT NULL          COMMENT '가챠 코드(gacha_master)',
+    pull_type          TINYINT NOT NULL          COMMENT '1:1연 2:10연',
+    cost_currency_code INT     NOT NULL DEFAULT 1 COMMENT '소모 재화 item_code(골드=1)',
+    cost_amount        BIGINT  NOT NULL          COMMENT '이번 요청에서 실제 차감한 금액',
+    pulled_at          BIGINT  NOT NULL          COMMENT '뽑은 시각(Unix ts)',
+    PRIMARY KEY (pull_id),
+    KEY idx_gachapull_user  (user_id, pull_id)             COMMENT '전체 기록 최신순 커서 페이징(pull_id < cursor)',
+    KEY idx_gachapull_gacha (user_id, gacha_code, pull_id) COMMENT '가챠 종류 필터 커서 페이징',
+    CONSTRAINT fk_gachapull_player FOREIGN KEY (user_id)
+        REFERENCES game_player (user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='가챠 뽑기 원장(요청 단위, 영구 보존)';
+
+
+-- 뽑기 요청의 회차별 결과(player_gacha_pull의 자식). 1연 1행, 10연 10행.
+DROP TABLE IF EXISTS player_gacha_pull_item;
+CREATE TABLE player_gacha_pull_item (
+    pull_id      BIGINT  NOT NULL          COMMENT '소속 요청(player_gacha_pull.pull_id)',
+    seq          INT     NOT NULL          COMMENT '요청 내 회차(1부터. 1연은 1, 10연은 1~10)',
+    item_code    INT     NOT NULL          COMMENT '지급 아이템(item_master)',
+    grade        TINYINT NOT NULL          COMMENT '추첨된 등급 슬롯(gacha_grade_weight.grade)',
+    quantity     INT     NOT NULL DEFAULT 1 COMMENT '지급 수량(gacha_item_pool.quantity)',
+    pity_applied TINYINT NOT NULL DEFAULT 0 COMMENT '0/1 하드 천장으로 등급이 확정된 회차',
+    guaranteed   TINYINT NOT NULL DEFAULT 0 COMMENT '0/1 10연 보장으로 등급이 대체된 회차',
+    PRIMARY KEY (pull_id, seq),
+    CONSTRAINT fk_gachapullitem_pull FOREIGN KEY (pull_id)
+        REFERENCES player_gacha_pull (pull_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='가챠 뽑기 결과(회차별, 1:N)';
+
 SET FOREIGN_KEY_CHECKS = 1;

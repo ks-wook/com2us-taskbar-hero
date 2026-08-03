@@ -15,6 +15,7 @@
   - [3.6 거래소 / 교역선](#36-거래소--교역선)
   - [3.7 메일(보상)](#37-메일보상)
   - [3.8 출석부 보상](#38-출석부-보상)
+  - [3.9 가챠(뽑기)](#39-가챠뽑기)
 - [4. 에러 코드](#4-에러-코드)
 - [5. 출처 문서](#5-출처-문서)
 
@@ -82,11 +83,10 @@
 | `POST /api/game/cube/combine` | 큐브 합성(동급 아이템 3개→상위 등급 1개, 슬롯·클래스 무관) | `{ itemIds[] }` | `consumed`, `result`, `cube`, `inventoryDelta` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `CubeRecipeNotMet(4010)` |
 | `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{itemId,count}] }` | `gold`, `cubeExp`, `cube`, `balance`, `inventoryDelta` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
 | `POST /api/game/cube/craft` | 큐브 제작(레시피로 아이템 생성) | `{ recipeCode }` | `consumed`, `gained`, `cube`, `balance`, `inventoryDelta` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)` |
-| `POST /api/game/box/open` | 랜덤 상자 열기(골드 가챠, 등급 확률 추첨→랜덤 아이템 지급). 현재 단발(`count`=1)만 처리, 다연속 예정 | `{ boxCode, count? }` | `rewards`, `gained`, `cost`, `balance`, `inventoryDelta` | `InsufficientCurrency(4005)`, `InvalidSaveData(2002)`, `InventoryFull(4002)`, `MasterDataNotLoaded(10001)` |
 | `POST /api/game/consumable/use` | 소모품 1개 사용 → 계정 획득량 버프 부여·연장(경험치·골드 부스터) | `{ itemId }` | `itemCode`, `remainingQuantity`, `buff`, `activeBuffs`, `inventoryDelta` | `ItemNotFound(4001)`, `ItemNotConsumable(4020)`, `InsufficientQuantity(4006)`, `BuffDurationLimitExceeded(4021)`, `MasterDataNotLoaded(10001)` |
 | `POST /api/game/consumable/buffs` | 적용 중인 획득량 버프 조회(버프 UI 재동기화용 경량 조회) | 없음 | `serverTime`, `activeBuffs` | 인증 실패 계열만 |
 
-- **가방을 바꾸는 액션은 변경분을 `inventoryDelta`(`upserted[]`·`removed[]`)로 응답에 담는다.** 클라이언트는 응답만으로 가방 캐시를 갱신하며 **액션 뒤에 `/api/game/load`·`/api/game/inventory/list`를 재조회하지 않는다**(공통 규약: [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 5.0). 장착·해제·용량 확장은 기존 `equipped`/`unequipped`/`bagSlot`/`inventoryCapacity` 필드로 충분해 이 블록을 두지 않는다. 이 도메인 밖에서도 가방을 바꾸는 **`stage/clear`(전리품)·`mail/claim`·`mail/claim-all`(첨부)·`trade/register`·`trade/cancel`(에스크로 이동)** 이 같은 규약을 따르며, `trade/buy`는 구매 아이템이 우편함으로 가므로 이 블록이 없다.
+- **가방을 바꾸는 액션은 변경분을 `inventoryDelta`(`upserted[]`·`removed[]`)로 응답에 담는다.** 클라이언트는 응답만으로 가방 캐시를 갱신하며 **액션 뒤에 `/api/game/load`·`/api/game/inventory/list`를 재조회하지 않는다**(공통 규약: [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 5.0). 장착·해제·용량 확장은 기존 `equipped`/`unequipped`/`bagSlot`/`inventoryCapacity` 필드로 충분해 이 블록을 두지 않는다. 이 도메인 밖에서도 가방을 바꾸는 **`gacha/pull`(뽑기 지급)·`stage/clear`(전리품)·`mail/claim`·`mail/claim-all`(첨부)·`trade/register`·`trade/cancel`(에스크로 이동)** 이 같은 규약을 따르며, `trade/buy`는 구매 아이템이 우편함으로 가므로 이 블록이 없다.
 - 장비는 **캐릭터별**(장착 시 `characterId` 필수), 인벤토리·골드·큐브는 계정 공유. 큐브 합성·분해·제작(`cube/*`)은 **구현 완료**. `inventory/enhance`(장비 강화)는 `enhance_master` 값 미확정으로 **보류**.
 - `consumable/use`는 **1회 1개 고정**(수량 필드 없음)이며 버프도 **계정 단위**다. 활성 버프를 받는 창구는 세 곳 — 접속 직후는 코어 로드(`/api/game/load`)의 `activeBuffs`, 사용 직후는 `consumable/use` 응답, 이후 재동기화는 `consumable/buffs`([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 5.2).
 - 버프 배율은 **스테이지 클리어 보상(`stage/clear`)에만** 곱해진다. 오프라인 정산(`offline/claim`)·메일·출석·큐브 분해·거래 대금에는 적용하지 않는다(같은 문서 6.3·6.5).
@@ -155,11 +155,30 @@
 - 보상 **일차(`day`)는 날짜가 아니라 이번달 누적 출석 순번**(`이번달 출석 수 + 1`, 1~30)이다. 월중에 처음 접속해도 1일차 보상부터 순서대로 받으며, 달이 바뀌면 1일차로 리셋된다.
 - 날짜 경계는 서버 KST 자정, 하루 1회(`(user_id, attend_date)` 유니크). 획득 보상은 즉시 지급이 아니라 **메일(3.6)로 발급**되어 우편함 수령 시 계정 반영.
 
+### 3.9 가챠(뽑기)
+
+> 출처: [가챠(뽑기) 시스템 기획서](../세부/gacha-기획서.md) 5장
+
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/game/gacha/banners` | **가챠 배너 조회** — 지금 돌릴 수 있는 배너 목록(서버 시각으로 노출 판정) + 배너별 천장 진행도 | 없음 | `serverTime`, `banners[]`(`gachaCode`·`sortOrder`·`openAt`·`closeAt`·`counters[]`) | `MasterDataNotLoaded(10001)` |
+| `POST /api/game/gacha/pull` | **가챠 뽑기(1연·10연 공통)** — `pullType` 1:1연(`cost_single`, 1회) / 2:10연(`cost_multi`, `multi_count`회 + 보장 등급 대체). 등급 가중치 추첨 → 등급 슬롯 내 균등 선택 | `{ gachaCode, pullType }` | `gachaCode`, `pullId`, `pullType`, `pulledAt`, `results[]`, `cost`, `balance`, `counters[]`, `inventoryDelta` | `GachaNotFound(12001)`, `GachaNotAvailable(12003)`, `InvalidRequest(1006)`, `GachaPoolEmpty(12002)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)`, `MasterDataNotLoaded(10001)` |
+| `POST /api/game/gacha/history` | 뽑기 기록 조회(`pull_id` 커서 keyset 페이징, 최신순). 페이징 단위는 **뽑기 요청**(10연 1건 = 1행) | `{ gachaCode?, cursor?, limit? }` | `pulls[]`(각 `items[]` 포함), `nextCursor`, `hasMore` | 인증 실패 계열만 |
+
+- **1연·10연은 한 엔드포인트에서 `pullType`으로 가른다.** 요청·응답 스키마와 처리 흐름이 같아 엔드포인트를 둘로 두면 같은 계약이 두 벌 생긴다. 다른 것은 비용·횟수·보장 적용뿐이며 셋 다 마스터 값이라 서버가 `pullType`에서 파생한다.
+- **뽑을 횟수(`count`)는 요청 필드가 아니다.** 횟수는 확률·결과와 함께 서버 소유 값이며 `gacha_master.multi_count`에서 읽는다 — 클라이언트가 `10`을 박아 두면 마스터를 바꾸는 순간 깨지고, "몇 번 뽑는가"의 출처가 요청과 마스터 두 곳이 된다. 정의되지 않은 `pullType`은 `InvalidRequest(1006)`로 거부한다.
+- **배너 목록은 서버가, 확률표는 클라 번들이 담당한다.** 마스터가 클라이언트 번들이라 이름·비용·등급 확률·후보 목록은 클라가 직접 그리고, 서버는 **번들만으로 알 수 없는 것**(지금 열려 있는 배너인가 · 내 천장이 얼마인가)만 내려준다. 확률표 조회(`gacha/detail` 류) API는 두지 않는다.
+- **배너 노출 판정은 서버 시각 기준**이다(`gacha_master`의 `is_active`·`open_at`·`close_at`). **뽑기 요청도 노출을 다시 검증**하며, 목록을 받아 둔 사이 배너가 닫혔으면 비용 차감 전에 `GachaNotAvailable(12003)`으로 거부한다 — 클라이언트는 이 코드를 받으면 배너 목록을 재조회한다.
+- 등급·아이템·천장·보장 판정은 전부 서버가 확정한다(요청에 결과·확률·횟수를 넣을 필드가 없다). 비용 차감 → 추첨 → 지급 → 카운터 갱신 → 기록 적재가 **하나의 트랜잭션**이며, 가방 용량 초과(`InventoryFull`) 시 골드 차감까지 전체 롤백된다.
+- 기록 조회는 오프셋이 아니라 **커서 페이징**이다(append-only 로그라 `OFFSET`이 깊어질수록 비싸고, 조회 중 새 뽑기가 들어오면 기준이 밀린다). `limit`은 서버가 1~50으로 clamp하며 전체 건수(`total`)는 내려주지 않는다.
+
 > **마스터(기획) 데이터 다운로드 API는 두지 않는다.** 본 프로젝트는 학습 목적이므로 마스터 데이터는 **클라이언트에 번들로 포함**되고, 서버도 같은 원천을 기동 시 자체 로드한다(런타임 배포·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md)).
 
 ## 4. 에러 코드
 
 전체 코드 목록·블록 규약(도메인 4.N → N000)은 [ErrorCode 통합 정의](error-code-정의.md) 참고. 공통 성공은 `0`, 인증 실패는 HTTP 401.
+
+- **가챠(뽑기)만 규약의 예외다**: 도메인 4.11이지만 `11000`번대를 공통/시스템이 선점해 **12000번대**를 쓴다(`GachaNotFound(12001)`·`GachaPoolEmpty(12002)`·`GachaNotAvailable(12003)`).
 
 ## 5. 출처 문서
 
@@ -173,4 +192,5 @@
 - [메일 기획서](../세부/mail-기획서.md)
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md)
 - [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md)
+- [가챠(뽑기) 시스템 기획서](../세부/gacha-기획서.md)
 - [ErrorCode 통합 정의](error-code-정의.md)
