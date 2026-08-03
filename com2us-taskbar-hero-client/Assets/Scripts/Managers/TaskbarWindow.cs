@@ -82,13 +82,16 @@ namespace TaskbarHero.Client.Managers
         }
 
         // 확장 모드: 게임 UI 설계 비율(1080×1920 = 9:16). 창 크기 기준 계수 —
-        // 타이틀(16:9)·확장(정사각형) 창의 공통 크기 기준이라 이 값만 줄이면 두 모드가
-        // 각자의 비율을 유지한 채 함께 작아진다(0.90 → 0.68로 축소, 2026-07-27).
+        // 타이틀(16:9)·확장(정사각형) 창의 공통 크기 기준이라 이 값만 조절하면 두 모드가
+        // 각자의 비율을 유지한 채 함께 커지거나 작아진다(2026-08-03: 0.68 → 1.36으로 2배 확대 후
+        // 화면이 너무 커서 그 2/3인 0.907로 축소 = 1.36 × 2/3).
+        // 창 비율은 이 값이 아니라 아래 Aspect 상수들이 결정하므로 크기만 바뀐다.
         private const float PortraitAspect = 1080f / 1920f;
-        private const float ExpandedHeightFrac = 0.68f;
+        private const float ExpandedHeightFrac = 0.907f;
 
         // 전투(투명) 씬 확장 창: 세로로 긴 9:16 대신 가로가 넓은 16:9 — 줌아웃된 가로 전장에 맞춤.
-        private const float BattleHeightFrac = 0.45f;
+        // 위 확장 계수와 같은 배수로 함께 조절한다(2026-08-03: 0.45 → 0.90 → 그 2/3인 0.60).
+        private const float BattleHeightFrac = 0.60f;
         private const float BattleAspect = 16f / 9f;
 
         // 타이틀·캐릭터 생성 씬 창: 화면비가 깨지지 않도록 16:9 고정(높이는 확장 창과 동일 기준).
@@ -621,7 +624,12 @@ namespace TaskbarHero.Client.Managers
             {
                 // 개발용 투명 전투 씬(BattleDevScene 등): 낮고 넓은 16:9 창 — 세로 투명 여백을 줄이고 가로 전장을 확보.
                 h = Mathf.RoundToInt(waH * BattleHeightFrac);
-                w = Mathf.Min(waW, Mathf.RoundToInt(h * BattleAspect));
+                w = Mathf.RoundToInt(h * BattleAspect);
+                if (w > waW)
+                {
+                    w = waW;
+                    h = Mathf.RoundToInt(w / BattleAspect); // 좁은 작업영역에서도 16:9 유지
+                }
             }
             else
             {
@@ -630,6 +638,7 @@ namespace TaskbarHero.Client.Managers
                 // GameScene은 패널 유무와 무관하게 항상 이 창을 써서 평상시 UI가 ESC 메뉴가 열렸을 때와 동일하게 구성된다.
                 w = Mathf.Min(waW, Mathf.RoundToInt(waH * ExpandedHeightFrac * PortraitAspect));
                 h = Mathf.Min(waH, w);
+                w = h; // 작업영역에 걸려 잘렸을 때도 1:1(정사각형)을 유지한다
             }
 
             // 기본은 작업표시줄 바로 위 중앙 하단(작업영역 가로 중앙 · 하단 밀착).
