@@ -24,6 +24,17 @@ namespace TaskbarHero.Client.Managers
     /// 창 크기와 동기화한다(불일치 시 UI가 잘려 보임). 에디터/타 플랫폼에서는 아무 것도 하지 않는다.
     /// <see cref="RuntimeInitializeOnLoadMethod"/>로 씬 배선 없이 부팅 시 1회 생성된다.
     ///
+    /// <para><b>창 위치 정책</b>:
+    /// <list type="number">
+    /// <item><b>부팅(검은 로딩 화면)</b>은 항상 <b>작업영역 중앙 하단</b>에 띄운다. 저장된 사용자 위치가 있어도
+    /// 로딩 중에는 쓰지 않는다 — 어디서 실행해도 로딩 창이 같은 자리에 뜨게 하기 위함.</item>
+    /// <item><b>TitleScene이 실제로 그려진 뒤</b>(= 로딩 완료) 사용자가 마지막으로 드래그해 둔 위치가 있으면
+    /// 그 자리로 옮긴다. 없으면(첫 실행) 중앙 하단에 그대로 머문다.</item>
+    /// <item>드래그로 옮긴 위치는 <see cref="PlayerPrefs"/>에 저장해 <b>다음 실행에도 기억</b>한다.</item>
+    /// </list>
+    /// 기본 위치(사용자가 옮긴 적 없을 때)는 모든 모드에서 중앙 하단이다 — 로딩 창과 같은 자리라
+    /// 타이틀 진입·씬 전환에서 창이 튀지 않는다.</para>
+    ///
     /// 추가로 원작처럼 <b>창 배경을 픽셀 단위 투명(per-pixel alpha)</b>으로 만든다:
     /// DWM(<c>DwmExtendFrameIntoClientArea</c>)으로 창 전체를 알파 합성 대상으로 확장하고,
     /// 전투 씬(GameScene·BattleDevScene)에서는 카메라를 Solid RGBA(0,0,0,0)로 클리어해
@@ -88,8 +99,13 @@ namespace TaskbarHero.Client.Managers
         private bool _inWideScene;       // 16:9 고정 창을 쓰는 씬(WideAspectScenes)인지
         private bool _transparentScene;  // 현재 씬이 투명 배경 대상(TransparentScenes)인지
 
-        /// <summary>부팅 시 창 제어기를 1회 생성한다(씬 배선 불필요).</summary>
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        /// <summary>
+        /// 부팅 시 창 제어기를 1회 생성한다(씬 배선 불필요).
+        /// <para><b>왜 <see cref="RuntimeInitializeLoadType.BeforeSplashScreen"/>인가</b> — 첫 씬(TitleScene)이
+        /// 로드·렌더되기 전의 <b>검은 로딩 화면 구간</b>에도 창이 이미 원하는 자리(중앙 하단)에 있어야 한다.
+        /// AfterSceneLoad로 늦게 만들면 그 구간 동안 창이 OS/이전 실행이 정한 자리에 떠 있게 된다.</para>
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
         private static void Bootstrap()
         {
             if (Instance != null)
@@ -110,13 +126,23 @@ namespace TaskbarHero.Client.Managers
             Instance = this;
             DontDestroyOnLoad(gameObject);
             USceneManager.activeSceneChanged += OnSceneChanged;
-            _inGameScene = USceneManager.GetActiveScene().name == "GameScene";
-            _inWideScene = IsWideAspectScene(USceneManager.GetActiveScene().name);
-            _transparentScene = IsTransparentScene(USceneManager.GetActiveScene().name);
+
+            // BeforeSplashScreen 시점에는 첫 씬이 아직 로드되지 않아 씬 이름이 빈 문자열일 수 있다.
+            // 이 부팅 구간은 곧 열릴 TitleScene과 같은 16:9 창으로 취급해, 타이틀 진입 때 창 크기가 튀지 않게 한다.
+            string active = USceneManager.GetActiveScene().name;
+            bool booting = string.IsNullOrEmpty(active);
+            _inGameScene = active == "GameScene";
+            _inWideScene = booting || IsWideAspectScene(active);
+            _transparentScene = !booting && IsTransparentScene(active);
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
             // Awake는 모든 씬 오브젝트의 Start(ScrollingBackground.Build 포함)보다 먼저 실행되므로
             // 여기서 플래그를 세워야 첫 씬부터 배경 타일 생성이 생략된다.
             TransparentOverlayActive = true;
+
+            // 검은 로딩 화면부터 중앙 하단에 놓기 위해 창 초기화·배치를 여기서(가능한 가장 이른 시점) 끝낸다.
+            // 창 핸들이 아직 없으면 Start에서 다시 시도한다.
+            LoadUserPosition();
+            InitWindow();
 #endif
         }
 
@@ -222,22 +248,94 @@ namespace TaskbarHero.Client.Managers
         private int _pressX, _pressY; // 눌렀을 때 커서 좌표(물리 px)
         private bool _dragging;       // 드래그로 창 이동 중
         private int _dragOffX, _dragOffY; // 커서 ↔ 창 좌상단 오프셋
-        private bool _userMoved;      // 드래그로 위치를 옮긴 적 있음 → Apply가 도킹 대신 이 위치 유지
+        private bool _userMoved;      // 드래그로 옮긴 위치가 있음(이번 실행 또는 저장된 값) → Apply가 기본 위치 대신 이 위치 유지
         private int _userLeft, _userBottom; // 사용자 위치(좌측 x·하단선 y — 모드 전환 시 하단선 유지)
+
+        // 검은 로딩 화면 구간인지. true면 저장된 사용자 위치를 무시하고 항상 중앙 하단에 배치한다.
+        private bool _bootPlacement = true;
+
+        // 사용자 위치 저장 키(실행 간 유지). 좌측 x·하단선 y를 물리 픽셀로 보관한다.
+        private const string PrefKeyLeft = "TaskbarWindow.UserLeft";
+        private const string PrefKeyBottom = "TaskbarWindow.UserBottom";
+
+        // 창 핸들 확보 재시도를 포기하는 시각(초, 부팅 기준). 이 시간이 지나면 창 제어 없이 동작한다.
+        private const float WindowResolveTimeoutSec = 5f;
 
         private void Start()
         {
+            // Awake(BeforeSplashScreen)에서 창 핸들을 못 얻었을 수 있어 한 번 더 시도한다
+            // (그래도 없으면 Update가 잠시 재시도한다).
+            InitWindow();
+            if (_hwnd == IntPtr.Zero)
+            {
+                Debug.LogWarning("[TaskbarWindow] 게임 창 핸들을 아직 찾지 못했습니다 — 잠시 재시도합니다.");
+            }
+            ApplyTransparentSceneCamera();
+            StartCoroutine(RestorePositionAfterLoading());
+        }
+
+        /// <summary>
+        /// 창을 테두리 없는 항상-위 투명 창으로 초기화하고 현재 모드에 맞게 배치한다(핸들이 있으면 1회만 수행).
+        /// <para>순서가 중요하다 — <b>WS_EX_LAYERED를 세우기 전에 <see cref="InitTransparency"/>가
+        /// <c>SetLayeredWindowAttributes</c>를 호출</b>해야 한다. 레이어드 창은 알파 속성이 설정되기 전까지
+        /// 아무것도 그려지지 않아, 순서를 바꾸면 로딩 중 창이 통째로 사라진다.</para>
+        /// </summary>
+        private void InitWindow()
+        {
+            if (_hwnd != IntPtr.Zero)
+            {
+                return;
+            }
             _hwnd = ResolveWindow();
             if (_hwnd == IntPtr.Zero)
             {
-                Debug.LogWarning("[TaskbarWindow] 게임 창 핸들을 찾지 못해 창 제어를 건너뜁니다.");
                 return;
             }
             // 테두리 제거(팝업 스타일). 이후 위치/크기는 Apply가 담당.
             SetWindowLongPtr(_hwnd, GWL_STYLE, new IntPtr((long)(WS_POPUP | WS_VISIBLE)));
             InitTransparency();
             Apply();
-            ApplyTransparentSceneCamera();
+        }
+
+        /// <summary>
+        /// 로딩이 끝나 <b>TitleScene이 실제로 한 프레임 그려진 뒤</b> 저장된 사용자 위치로 창을 옮긴다.
+        /// 그때까지는 <see cref="_bootPlacement"/>가 켜져 있어 <see cref="Apply"/>가 중앙 하단만 사용한다
+        /// (= 검은 로딩 화면은 항상 중앙 하단). 저장된 위치가 없으면 중앙 하단에 그대로 머문다.
+        /// </summary>
+        private IEnumerator RestorePositionAfterLoading()
+        {
+            while (USceneManager.GetActiveScene().name != "TitleScene")
+            {
+                yield return null; // 첫 씬이 아직 활성화되지 않은 부팅 구간
+            }
+            yield return new WaitForEndOfFrame(); // 타이틀이 한 번 그려짐 = 검은 로딩 화면 종료
+
+            _bootPlacement = false;
+            if (_userMoved)
+            {
+                Apply();
+                Debug.Log($"[TaskbarWindow] 저장된 위치로 복원: left={_userLeft} bottom={_userBottom}");
+            }
+        }
+
+        /// <summary>이전 실행에서 드래그로 옮겨 둔 창 위치를 불러온다(없으면 기본 위치=중앙 하단을 쓴다).</summary>
+        private void LoadUserPosition()
+        {
+            if (!PlayerPrefs.HasKey(PrefKeyLeft) || !PlayerPrefs.HasKey(PrefKeyBottom))
+            {
+                return;
+            }
+            _userLeft = PlayerPrefs.GetInt(PrefKeyLeft);
+            _userBottom = PlayerPrefs.GetInt(PrefKeyBottom);
+            _userMoved = true;
+        }
+
+        /// <summary>드래그로 옮긴 창 위치를 저장해 다음 실행에서도 같은 자리에 뜨게 한다.</summary>
+        private void SaveUserPosition()
+        {
+            PlayerPrefs.SetInt(PrefKeyLeft, _userLeft);
+            PlayerPrefs.SetInt(PrefKeyBottom, _userBottom);
+            PlayerPrefs.Save(); // 프로세스가 강제 종료돼도 남도록 즉시 기록
         }
 
         /// <summary>
@@ -278,6 +376,12 @@ namespace TaskbarHero.Client.Managers
         {
             if (_hwnd == IntPtr.Zero)
             {
+                // 창 생성이 관리 코드보다 늦는 경우 대비 — 부팅 직후 잠시만 재시도한다
+                // (성공하면 InitWindow가 곧바로 중앙 하단에 배치한다).
+                if (Time.unscaledTime < WindowResolveTimeoutSec)
+                {
+                    InitWindow();
+                }
                 return;
             }
             UpdateDrag();
@@ -366,7 +470,8 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
-        /// <summary>드래그를 끝내고 최종 위치(좌측 x·하단선 y)를 기억한다 — 이후 모드 전환에도 이 위치를 유지.</summary>
+        /// <summary>드래그를 끝내고 최종 위치(좌측 x·하단선 y)를 기억·저장한다 —
+        /// 이후 모드 전환에도 이 위치를 유지하며, 다음 실행에서도 같은 자리에 뜬다.</summary>
         private void EndDrag()
         {
             _dragging = false;
@@ -375,7 +480,8 @@ namespace TaskbarHero.Client.Managers
             _userMoved = true;
             _userLeft = r.left;
             _userBottom = r.bottom;
-            Debug.Log($"[TaskbarWindow] 드래그 이동 완료: left={_userLeft} bottom={_userBottom}");
+            SaveUserPosition();
+            Debug.Log($"[TaskbarWindow] 드래그 이동 완료·저장: left={_userLeft} bottom={_userBottom}");
         }
 
         private static readonly System.Collections.Generic.List<UnityEngine.EventSystems.RaycastResult> s_uiHits =
@@ -526,17 +632,19 @@ namespace TaskbarHero.Client.Managers
                 h = Mathf.Min(waH, w);
             }
 
-            // 기본은 작업표시줄 바로 위 우측 도킹(원작의 taskbar 밀착 느낌).
-            // 사용자가 드래그로 옮겼다면 그 위치(좌측 x·하단선 y)를 작업영역 안으로 클램프해 유지한다.
+            // 기본은 작업표시줄 바로 위 중앙 하단(작업영역 가로 중앙 · 하단 밀착).
+            // 사용자가 드래그로 옮긴 위치가 있으면 그 위치(좌측 x·하단선 y)를 작업영역 안으로 클램프해 유지한다.
+            // 단 검은 로딩 화면 구간(_bootPlacement)에서는 저장된 위치를 쓰지 않는다 —
+            // 어디서 실행해도 로딩 창은 중앙 하단에 뜨고, 로딩이 끝난 뒤 저장된 자리로 옮겨진다.
             int x, y;
-            if (_userMoved)
+            if (_userMoved && !_bootPlacement)
             {
                 x = Mathf.Clamp(_userLeft, wa.left, Mathf.Max(wa.left, wa.right - w));
                 y = Mathf.Clamp(_userBottom - h, wa.top, Mathf.Max(wa.top, wa.bottom - h));
             }
             else
             {
-                x = wa.right - w;
+                x = wa.left + Mathf.Max(0, (waW - w) / 2);
                 y = wa.bottom - h;
             }
 
