@@ -171,9 +171,11 @@ public sealed class TradeService : ITradeService
     }
 
     /// <summary>
-    /// 등록을 구매한다(5.3). Redis 락으로 같은 등록에 몰린 요청을 1차 차단하고, 트랜잭션 안에서 조건부 갱신으로
-    /// 선점한 뒤 골드 차감·<b>구매 아이템 메일 발급(구매자)</b>·판매 대금 메일 발급(판매자)을 원자 적용한다.
+    /// 등록을 구매한다(5.3). 트랜잭션 안에서 <b>조건부 갱신</b>(status=1일 때만 전이)으로 등록을 선점한 뒤
+    /// 골드 차감·<b>구매 아이템 메일 발급(구매자)</b>·판매 대금 메일 발급(판매자)을 원자 적용한다.
     /// 커밋 후 캐시에서 등록을 제거한다.
+    /// <para>동시 구매 직렬화는 <b>MySQL 행 잠금만</b>으로 처리한다 — 같은 등록에 두 요청이 도달하면 UPDATE가
+    /// 줄을 세우고, 뒤에 온 쪽은 조건이 어긋나 0행을 받아 TradeAlreadyClosed가 된다(§7.4). 별도 Redis 락은 없다.</para>
     /// <para>아이템은 인벤토리에 즉시 넣지 않고 <b>우편함으로 지급</b>한다 — 구매 시점에 인벤토리 용량을 보지 않으므로
     /// 가방이 가득해도 거래가 성립하고, 적재는 플레이어가 메일을 수령할 때 이뤄진다.</para>
     /// </summary>
@@ -197,71 +199,60 @@ public sealed class TradeService : ITradeService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        var handle = await _cache.AcquireLockAsync(listingId);
-        if (!handle.Acquired && !handle.Degraded)
+        var now = NowUnix();
+        var outcome = await _tradeRepository.ApplyBuyAsync(
+            userId, listingId,
+            listing => MailComposer.Compose(
+                purchaseTemplate, ItemLabel(listing.ItemCode), now,
+                new[]
+                {
+                    new MailAttachment(
+                        RewardTypeFor(listing.ItemCode), listing.ItemCode,
+                        listing.Quantity, listing.EnhanceLevel),
+                }),
+            listing => MailComposer.Compose(
+                settlementTemplate, ItemLabel(listing.ItemCode), now,
+                new[] { new MailAttachment(RewardTypeGold, 0, SettlementAmount(listing.Price)) }),
+            now);
+
+        switch (outcome.Status)
         {
-            return new SaveResult(ErrorCode.TradeBusy, string.Empty, null);
+            case TradeCloseStatus.ListingNotFound:
+                return new SaveResult(ErrorCode.TradeListingNotFound, string.Empty, null);
+            case TradeCloseStatus.AlreadyClosed:
+                return new SaveResult(ErrorCode.TradeAlreadyClosed, string.Empty, null);
+            case TradeCloseStatus.SelfPurchase:
+                return new SaveResult(ErrorCode.TradeSelfPurchase, string.Empty, null);
+            case TradeCloseStatus.InsufficientGold:
+                return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
         }
 
-        try
+        var bought = outcome.Listing!;
+        await _cache.RemoveAsync(bought);
+
+        _logger.ZLogInformation($"거래소 구매: buyerUserId {userId:@BuyerUserId}, listingId {bought.ListingId:@ListingId}, price {bought.Price:@Price}, 정산액 {SettlementAmount(bought.Price):@Settlement}, 아이템 메일 {outcome.ItemMailId:@MailId}");
+
+        var data = new TradeBuyResultData
         {
-            var now = NowUnix();
-            var outcome = await _tradeRepository.ApplyBuyAsync(
-                userId, listingId,
-                listing => MailComposer.Compose(
-                    purchaseTemplate, ItemLabel(listing.ItemCode), now,
-                    new[]
-                    {
-                        new MailAttachment(
-                            RewardTypeFor(listing.ItemCode), listing.ItemCode,
-                            listing.Quantity, listing.EnhanceLevel),
-                    }),
-                listing => MailComposer.Compose(
-                    settlementTemplate, ItemLabel(listing.ItemCode), now,
-                    new[] { new MailAttachment(RewardTypeGold, 0, SettlementAmount(listing.Price)) }),
-                now);
-
-            switch (outcome.Status)
-            {
-                case TradeCloseStatus.ListingNotFound:
-                    return new SaveResult(ErrorCode.TradeListingNotFound, string.Empty, null);
-                case TradeCloseStatus.AlreadyClosed:
-                    return new SaveResult(ErrorCode.TradeAlreadyClosed, string.Empty, null);
-                case TradeCloseStatus.SelfPurchase:
-                    return new SaveResult(ErrorCode.TradeSelfPurchase, string.Empty, null);
-                case TradeCloseStatus.InsufficientGold:
-                    return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
-            }
-
-            var listing = outcome.Listing!;
-            await _cache.RemoveAsync(listing);
-
-            _logger.ZLogInformation($"거래소 구매: buyerUserId {userId:@BuyerUserId}, listingId {listing.ListingId:@ListingId}, price {listing.Price:@Price}, 정산액 {SettlementAmount(listing.Price):@Settlement}, 아이템 메일 {outcome.ItemMailId:@MailId}");
-
-            var data = new TradeBuyResultData
-            {
-                listingId = listing.ListingId,
-                cost = new CurrencyDto { currencyType = GoldItemCode, amount = listing.Price },
-                mailId = outcome.ItemMailId,
-            };
-            data.gained.items.Add(new TradeItemDto
-            {
-                itemCode = listing.ItemCode,
-                enhanceLevel = listing.EnhanceLevel,
-                quantity = listing.Quantity,
-            });
-            data.balance.Add(new CurrencyDto { currencyType = GoldItemCode, amount = outcome.GoldBalance });
-            return new SaveResult(ErrorCode.Success, "Purchased", data);
-        }
-        finally
+            listingId = bought.ListingId,
+            cost = new CurrencyDto { currencyType = GoldItemCode, amount = bought.Price },
+            mailId = outcome.ItemMailId,
+        };
+        data.gained.items.Add(new TradeItemDto
         {
-            await _cache.ReleaseLockAsync(listingId, handle);
-        }
+            itemCode = bought.ItemCode,
+            enhanceLevel = bought.EnhanceLevel,
+            quantity = bought.Quantity,
+        });
+        data.balance.Add(new CurrencyDto { currencyType = GoldItemCode, amount = outcome.GoldBalance });
+        return new SaveResult(ErrorCode.Success, "Purchased", data);
     }
 
     /// <summary>
-    /// 판매 중인 본인 등록을 취소한다(5.4). 구매와 같은 락을 써서 같은 등록을 닫는 경로를 직렬화하고,
-    /// 조건부 갱신 선점 후 아이템을 인벤토리로 복원한다. 커밋 후 캐시에서 등록을 제거한다.
+    /// 판매 중인 본인 등록을 취소한다(5.4). 조건부 갱신으로 등록을 선점한 뒤 아이템을 인벤토리로 복원한다.
+    /// 커밋 후 캐시에서 등록을 제거한다.
+    /// <para>구매·만료 배치와 같은 등록을 동시에 닫으려 해도 <b>MySQL 행 잠금</b>이 직렬화하므로 별도 락은 쓰지
+    /// 않는다 — 먼저 닫은 쪽만 성공하고 뒤에 온 쪽은 TradeAlreadyClosed가 된다(§7.4).</para>
     /// </summary>
     public async Task<SaveResult> CancelAsync(long userId, long listingId)
     {
@@ -270,50 +261,37 @@ public sealed class TradeService : ITradeService
             return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
         }
 
-        var handle = await _cache.AcquireLockAsync(listingId);
-        if (!handle.Acquired && !handle.Degraded)
+        var outcome = await _tradeRepository.ApplyCancelAsync(userId, listingId, LookupItem, NowUnix());
+
+        switch (outcome.Status)
         {
-            return new SaveResult(ErrorCode.TradeBusy, string.Empty, null);
+            case TradeCloseStatus.ListingNotFound:
+                return new SaveResult(ErrorCode.TradeListingNotFound, string.Empty, null);
+            case TradeCloseStatus.NotOwner:
+                return new SaveResult(ErrorCode.TradeNotOwner, string.Empty, null);
+            case TradeCloseStatus.AlreadyClosed:
+                return new SaveResult(ErrorCode.TradeAlreadyClosed, string.Empty, null);
+            case TradeCloseStatus.InventoryFull:
+                return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
         }
 
-        try
-        {
-            var outcome = await _tradeRepository.ApplyCancelAsync(userId, listingId, LookupItem, NowUnix());
+        var listing = outcome.Listing!;
+        await _cache.RemoveAsync(listing);
 
-            switch (outcome.Status)
+        _logger.ZLogInformation($"거래소 취소: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}");
+
+        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
+        return new SaveResult(ErrorCode.Success, "Cancelled", new TradeCancelResultData
+        {
+            listingId = listing.ListingId,
+            restored = new TradeItemDto
             {
-                case TradeCloseStatus.ListingNotFound:
-                    return new SaveResult(ErrorCode.TradeListingNotFound, string.Empty, null);
-                case TradeCloseStatus.NotOwner:
-                    return new SaveResult(ErrorCode.TradeNotOwner, string.Empty, null);
-                case TradeCloseStatus.AlreadyClosed:
-                    return new SaveResult(ErrorCode.TradeAlreadyClosed, string.Empty, null);
-                case TradeCloseStatus.InventoryFull:
-                    return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
-            }
-
-            var listing = outcome.Listing!;
-            await _cache.RemoveAsync(listing);
-
-            _logger.ZLogInformation($"거래소 취소: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}");
-
-            await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
-            return new SaveResult(ErrorCode.Success, "Cancelled", new TradeCancelResultData
-            {
-                listingId = listing.ListingId,
-                restored = new TradeItemDto
-                {
-                    itemCode = listing.ItemCode,
-                    enhanceLevel = listing.EnhanceLevel,
-                    quantity = listing.Quantity,
-                },
-                inventoryDelta = outcome.Delta,
-            });
-        }
-        finally
-        {
-            await _cache.ReleaseLockAsync(listingId, handle);
-        }
+                itemCode = listing.ItemCode,
+                enhanceLevel = listing.EnhanceLevel,
+                quantity = listing.Quantity,
+            },
+            inventoryDelta = outcome.Delta,
+        });
     }
 
     /// <summary>판매 대금(수수료 20% 차감 후 판매자 수령액). 소수점은 버린다.</summary>

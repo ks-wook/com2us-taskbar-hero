@@ -6,9 +6,9 @@ using ZLogger;
 
 namespace GameServer.Services;
 
-/// <summary>구매 락 보유 토큰. Dispose 대신 <see cref="TradeCache.ReleaseLockAsync"/>로 명시 해제한다.</summary>
+/// <summary>판매자 락 보유 토큰. Dispose 대신 <see cref="TradeCache.ReleaseSellerLockAsync"/>로 명시 해제한다.</summary>
 /// <param name="Acquired">락을 실제로 잡았는지. false면 경합 패배(TradeBusy).</param>
-/// <param name="Degraded">Redis 장애로 락 없이 진행 중인지(축소 운전 — 정합성은 조건부 갱신이 보증).</param>
+/// <param name="Degraded">Redis 장애로 락 없이 진행 중인지(축소 운전 — 한도 초과 가능성을 감수한다).</param>
 /// <param name="Token">락 소유자 식별값. 해제 시 이 값이 일치할 때만 지운다(남의 락 해제 방지).</param>
 public sealed record TradeLockHandle(bool Acquired, bool Degraded, string Token);
 
@@ -16,12 +16,14 @@ public sealed record TradeLockHandle(bool Acquired, bool Degraded, string Token)
 /// 거래소 Redis 계층(trade 기획서 §7.3·§7.4). 두 가지를 담당한다.
 /// <para><b>목록 캐시</b> — <c>trade:index:{itemCode}</c>(Sorted Set, score=가격) + <c>trade:listing:{listingId}</c>(스냅샷 JSON).
 /// 전역 공유 읽기인 목록 조회를 MySQL 없이 응답한다. 캐시는 <b>파생 데이터</b>이며 정합성 정본은 항상 MySQL이다.</para>
-/// <para><b>구매 락</b> — <c>trade:lock:listing:{listingId}</c>(SET NX + TTL). 같은 등록에 몰린 요청을 DB 도달 전에 줄인다.</para>
-/// 모든 Redis 호출은 실패해도 예외를 밖으로 던지지 않는다. 장애 시 목록은 MySQL 폴백, 구매는 락 없이 진행한다(§7.5 축소 운전).
+/// <para><b>판매자 락</b> — <c>trade:lock:seller:{userId}</c>(SET NX + TTL). 판매 등록의 동시 등록 한도 검사를
+/// 계정 단위로 직렬화한다. 구매·취소·만료는 <b>락을 쓰지 않는다</b> — 같은 등록 행을 닫는 경합은 MySQL 조건부
+/// 갱신의 행 잠금이 직렬화한다(§7.4).</para>
+/// 모든 Redis 호출은 실패해도 예외를 밖으로 던지지 않는다. 장애 시 목록은 MySQL 폴백, 등록은 락 없이 진행한다(§7.5 축소 운전).
 /// </summary>
 public sealed class TradeCache
 {
-    /// <summary>구매 락 TTL(trade 기획서 §7.4). 락 보유 프로세스가 죽어도 이 시간 뒤 자동 해제된다.</summary>
+    /// <summary>판매자 락 TTL(trade 기획서 §7.4). 락 보유 프로세스가 죽어도 이 시간 뒤 자동 해제된다.</summary>
     private static readonly TimeSpan LockTtl = TimeSpan.FromSeconds(3);
 
     /// <summary>
@@ -33,7 +35,7 @@ public sealed class TradeCache
     /// </summary>
     private static readonly TimeSpan IndexTtl = TimeSpan.FromHours(24);
 
-    /// <summary>락 재시도 간격·횟수(§7.4). 짧은 경합은 흡수하고, 계속 실패하면 TradeBusy로 돌려보낸다.</summary>
+    /// <summary>판매자 락 재시도 간격·횟수(§7.4). 짧은 경합은 흡수하고, 계속 실패하면 TradeBusy로 돌려보낸다.</summary>
     private static readonly TimeSpan LockRetryDelay = TimeSpan.FromMilliseconds(50);
     private const int LockRetryCount = 2;
 
@@ -180,26 +182,20 @@ public sealed class TradeCache
         }
     }
 
-    // ── 구매 락 ──
+    // ── 판매자 락(판매 등록 전용) ──
 
     /// <summary>
-    /// 등록 단위 락을 SET NX + TTL로 시도한다(§7.4). 경합이면 짧게 재시도하고, 그래도 실패하면
-    /// Acquired=false(호출측이 TradeBusy로 응답). Redis 장애면 Degraded=true로 <b>락 없이 진행</b>한다.
-    /// </summary>
-    public Task<TradeLockHandle> AcquireLockAsync(long listingId) => AcquireAsync(Lock(listingId));
-
-    /// <summary>
-    /// 판매자 단위 락을 시도한다(판매 등록 전용). 등록은 아직 listingId가 없어 등록 단위 락을 쓸 수 없고,
-    /// 경합 대상이 <b>그 계정의 동시 등록 수</b>라서 판매자 키로 잡는다 — 같은 계정의 동시 등록을 직렬화해
-    /// "한도 검사와 삽입 사이에 다른 요청이 끼어들어 한도를 넘기는" 경합을 막는다.
+    /// 판매자 단위 락을 SET NX + TTL로 시도한다(판매 등록 전용, §7.4). 경합이면 짧게 재시도하고, 그래도
+    /// 실패하면 Acquired=false(호출측이 TradeBusy로 응답). Redis 장애면 Degraded=true로 <b>락 없이 진행</b>한다.
+    /// <para>등록의 경합 대상은 특정 등록 행이 아니라 <b>그 계정의 동시 등록 수</b>다. 한도 검사(COUNT)와 삽입
+    /// 사이에 같은 계정의 다른 요청이 끼어들면 한도를 넘길 수 있고(9건에서 둘이 통과 → 11건), 이 경합은 잠글
+    /// 대상 행이 없어 조건부 갱신으로 막을 수 없다. 그래서 등록만 락을 쓴다.</para>
     /// <para><b>보증이 아니라 완화다.</b> Redis 장애 시에는 락 없이 진행하므로(축소 운전) 경합이 다시 가능해진다.
     /// 초과 결과가 무해(한도 10건이 11건이 되는 정도)하고 그 대가로 가용성을 지키는 선택이다(§7.4).</para>
     /// </summary>
-    public Task<TradeLockHandle> AcquireSellerLockAsync(long userId) => AcquireAsync(SellerLock(userId));
-
-    /// <summary>락 키 하나에 대해 SET NX + TTL 획득을 재시도하며 시도한다(등록 단위·판매자 단위 공용).</summary>
-    private async Task<TradeLockHandle> AcquireAsync(RedisString<string> key)
+    public async Task<TradeLockHandle> AcquireSellerLockAsync(long userId)
     {
+        var key = SellerLock(userId);
         var token = Guid.NewGuid().ToString("N");
         try
         {
@@ -220,30 +216,23 @@ public sealed class TradeCache
         }
         catch (Exception ex)
         {
-            _logger.ZLogWarning(ex, $"거래소 락 사용 불가(key {key.Key.ToString():@LockKey}) — 락 없이 진행합니다(축소 운전).");
+            _logger.ZLogWarning(ex, $"거래소 판매자 락 사용 불가(key {key.Key.ToString():@LockKey}) — 락 없이 진행합니다(축소 운전).");
             return new TradeLockHandle(false, true, token);
         }
     }
 
     /// <summary>
-    /// 락을 해제한다. <b>값이 자기 토큰일 때만</b> 지운다 — TTL이 먼저 만료돼 다른 요청이 같은 키를 잡았을 수 있어,
-    /// 값 비교 없이 지우면 남의 락을 해제하게 된다(§7.4).
+    /// 판매자 락을 해제한다. <b>값이 자기 토큰일 때만</b> 지운다 — TTL이 먼저 만료돼 다른 요청이 같은 키를 잡았을
+    /// 수 있어, 값 비교 없이 지우면 남의 락을 해제하게 된다(§7.4).
     /// </summary>
-    public Task ReleaseLockAsync(long listingId, TradeLockHandle handle)
-        => ReleaseAsync(Lock(listingId), handle);
-
-    /// <summary>판매자 단위 락(판매 등록)을 해제한다. 규약은 등록 단위 락과 동일하다.</summary>
-    public Task ReleaseSellerLockAsync(long userId, TradeLockHandle handle)
-        => ReleaseAsync(SellerLock(userId), handle);
-
-    /// <summary>락 키 하나를 자기 토큰일 때만 지운다(등록 단위·판매자 단위 공용).</summary>
-    private async Task ReleaseAsync(RedisString<string> key, TradeLockHandle handle)
+    public async Task ReleaseSellerLockAsync(long userId, TradeLockHandle handle)
     {
         if (!handle.Acquired)
         {
             return;
         }
 
+        var key = SellerLock(userId);
         try
         {
             var current = await key.GetAsync();
@@ -254,7 +243,7 @@ public sealed class TradeCache
         }
         catch (Exception ex)
         {
-            _logger.ZLogWarning(ex, $"거래소 락 해제 실패(key {key.Key.ToString():@LockKey}) — TTL로 자연 만료됩니다.");
+            _logger.ZLogWarning(ex, $"거래소 판매자 락 해제 실패(key {key.Key.ToString():@LockKey}) — TTL로 자연 만료됩니다.");
         }
     }
 
@@ -267,10 +256,7 @@ public sealed class TradeCache
     private RedisString<TradeListingCacheEntry> Snapshot(long listingId)
         => new(_redis, $"trade:listing:{listingId}", null);
 
-    /// <summary>구매·취소·만료가 공유하는 등록 단위 락.</summary>
-    private RedisString<string> Lock(long listingId) => new(_redis, $"trade:lock:listing:{listingId}", null);
-
-    /// <summary>판매 등록이 쓰는 판매자 단위 락(동시 등록 한도 검사를 직렬화).</summary>
+    /// <summary>판매 등록이 쓰는 판매자 단위 락(동시 등록 한도 검사를 직렬화). 거래소의 유일한 락이다.</summary>
     private RedisString<string> SellerLock(long userId) => new(_redis, $"trade:lock:seller:{userId}", null);
 
     /// <summary>

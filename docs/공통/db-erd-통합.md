@@ -48,7 +48,7 @@
 |---|---|---|
 | MySQL (Account DB) | `AccountServer` | 계정·인증 토큰 영속 저장 |
 | Redis | `AccountServer` 발급 / `GameServer` 검증 | 인증 토큰 캐시(`auth:token:{userId}`) — **필수 의존**(없으면 인증 불가) |
-| Redis | `GameServer` | 거래소 — 목록 캐시(`trade:index:{itemCode}`·`trade:listing:{listingId}`)와 구매 락(`trade:lock:listing:{listingId}`). **상시 사용**하되 모두 파생 데이터이며, 장애 시 MySQL 폴백·락 없이 축소 운전([거래소 기획서](../세부/trade-기획서.md) 7.3·7.4) |
+| Redis | `GameServer` | 거래소 — 목록 캐시(`trade:index:{itemCode}`·`trade:listing:{listingId}`)와 **판매 등록용 판매자 락**(`trade:lock:seller:{userId}`). **상시 사용**하되 모두 파생 데이터이며, 장애 시 MySQL 폴백·락 없이 축소 운전([거래소 기획서](../세부/trade-기획서.md) 7.3·7.4). 구매·취소·만료는 Redis를 쓰지 않고 `trade_listing` 행의 조건부 갱신(행 잠금)으로 직렬화한다 |
 | MySQL (Game DB) | `GameServer` | 플레이어 진행 세이브 데이터 |
 | 인메모리 캐시(원천 CSV/JSON) | `GameServer` | 마스터(정적 기획) 데이터. 관계형 영속 테이블이 아닌 읽기 전용 정의 |
 

@@ -10,7 +10,8 @@ namespace GameServer.Batch;
 /// 거래소 만료 배치(trade 기획서 7.6). 판매 기간(3일)이 지난 등록(`status=1 AND expires_at &lt; now`)을 자동 취소하고,
 /// 에스크로 아이템을 판매자에게 <b>메일로 반송</b>한다(템플릿 202). 판매자가 오프라인이거나 인벤토리가 가득해도
 /// 안전하게 되돌리기 위해 수동 취소와 달리 메일을 쓴다. 골드 이동은 없다.
-/// 등록 1건 = 락 1개 + 트랜잭션 1개로 처리하며, 구매·취소와 같은 락 키를 써서 같은 등록을 닫는 경로를 직렬화한다.
+/// 등록 1건 = 트랜잭션 1개로 처리하며, 구매·취소와의 충돌은 <b>조건부 갱신</b>(status=1 AND expires_at &lt; now일 때만
+/// 전이)이 직렬화한다 — 그 사이 구매·취소로 닫힌 등록은 0행이 반영되어 스킵된다(별도 락 없음, §7.4).
 /// 설정: appsettings "TradeExpireBatch" 섹션(IntervalSeconds 기본 60 · BatchSize 기본 200).
 /// </summary>
 public sealed class TradeExpireBatchService : PeriodicBatchService
@@ -54,7 +55,7 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
     protected override string BatchKey => "trade-expire";
 
     /// <summary>
-    /// 1주기 작업(trade 기획서 7.6.2): 만료 대상을 상한까지 조회해 건별로 락 → 조건부 갱신 선점 → 반송 메일 발급 →
+    /// 1주기 작업(trade 기획서 7.6.2): 만료 대상을 상한까지 조회해 건별로 조건부 갱신 선점 → 반송 메일 발급 →
     /// 캐시 제거를 수행한다. 건별 예외는 해당 건만 실패로 세고 다음 건을 계속 처리한다(주기 전체를 중단하지 않는다).
     /// 대상 0건이면 로그를 남기지 않는다(소음 방지).
     /// </summary>
@@ -92,13 +93,6 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
                 break; // 종료 요청 — 처리 중인 건까지만 마무리하고 루프 종료
             }
 
-            var handle = await _cache.AcquireLockAsync(listingId);
-            if (!handle.Acquired && !handle.Degraded)
-            {
-                skipped++; // 구매·취소가 처리 중 — 다음 주기가 자연 재시도
-                continue;
-            }
-
             try
             {
                 var expired = await tradeRepository.ApplyExpireAsync(
@@ -115,7 +109,7 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
 
                 if (expired is null)
                 {
-                    skipped++; // 그 사이 구매·취소로 이미 닫힘
+                    skipped++; // 조건부 갱신 0행 — 그 사이 구매·취소로 이미 닫힘
                     continue;
                 }
 
@@ -126,10 +120,6 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
             {
                 failed++;
                 _logger.ZLogError(ex, $"거래소 만료 처리 실패(listingId {listingId:@ListingId}) — 다음 주기에 재시도합니다.");
-            }
-            finally
-            {
-                await _cache.ReleaseLockAsync(listingId, handle);
             }
         }
 

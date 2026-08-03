@@ -787,12 +787,12 @@ sequenceDiagram
 
 ## 거래소/교역선
 
-판매 등록·목록 조회·구매·취소 (GameTradeController, `/api/game/trade`, GameServer)와 만료 배치(TradeExpireBatchService). 저장소: MySQL `taskbar_hero_game`(`trade_listing`·`player_item`·`player_mail`) + **Redis**(목록 캐시 `trade:index:{itemCode}`·`trade:listing:{listingId}`, 구매 락 `trade:lock:listing:{listingId}`) + 인메모리 마스터(item — `sellable`·`base_price`, mail 템플릿 201·202).
+판매 등록·목록 조회·구매·취소 (GameTradeController, `/api/game/trade`, GameServer)와 만료 배치(TradeExpireBatchService). 저장소: MySQL `taskbar_hero_game`(`trade_listing`·`player_item`·`player_mail`) + **Redis**(목록 캐시 `trade:index:{itemCode}`·`trade:listing:{listingId}`, 판매 등록용 판매자 락 `trade:lock:seller:{userId}`) + 인메모리 마스터(item — `sellable`·`base_price`, mail 템플릿 201·202).
 
 핵심 규약(trade 기획서 §4·§7):
 
 - **에스크로** — 등록 즉시 아이템을 `player_item`에서 빼 `trade_listing` 스냅샷으로 옮긴다. 등록 중 아이템의 장착·분해·재등록은 대상이 없어 `ItemNotFound(4001)`.
-- **정합성 2중화** — Redis 락은 몰린 요청을 DB 앞단에서 줄이는 **혼잡 제어**, MySQL 조건부 갱신(`status=1`일 때만 전이)은 **정합성 보증**이다. 락 TTL 만료·Redis 장애·배치 충돌에서도 조건부 갱신이 한 번만 팔리게 한다.
+- **직렬화는 MySQL 하나로** — 같은 등록을 닫는 경로(구매·취소·만료 배치)는 **조건부 갱신**(`status=1`일 때만 전이)의 행 잠금으로 직렬화된다. 뒤에 온 요청은 0행을 받아 `TradeAlreadyClosed(7005)`가 되므로 이중 판매가 불가하며, **이 경로들에는 Redis 락을 두지 않는다**. Redis 락은 판매 등록의 한도 검사(계정 단위)에만 쓴다 — 잠글 등록 행이 없어 조건부 갱신으로 막을 수 없는 유일한 경합이다.
 - **캐시는 파생 데이터** — 목록은 Redis로 응답하되 정합성 정본은 MySQL이다. 미적재·장애면 MySQL 폴백 후 lazy 적재하고, 캐시 갱신은 **항상 커밋 이후**에 한다.
 - **거래 결과물은 전부 메일로** — 구매 아이템(구매자, 템플릿 203) · 판매 대금(판매자, 수수료 20% 차감, 템플릿 201) · 만료 반송 아이템(판매자, 템플릿 202)이 모두 우편함을 거친다. 지급 경로를 하나로 통일해 구매 시 인벤토리 용량을 보지 않아도 되고, 수령 이력이 메일 원장에 남는다. 첨부는 강화 단계를 보존한다. 수동 취소만 예외로 판매자 인벤토리에 직접 복원한다(요청자가 온라인).
 
@@ -878,39 +878,34 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>S: POST /trade/buy { userId, token, data:{ listingId } }
-    S->>R: 구매 락 획득(trade:lock:listing:{listingId}, SET NX + TTL 3초, 50ms 간격 2회 재시도)
-    alt 락 경합(재시도 후에도 실패)
-        S-->>C: 실패 { errorCode: TradeBusy(7008) }
-    else 락 획득 또는 Redis 장애(축소 운전 — 락 없이 진행)
-        Note over S,DB: 단일 트랜잭션
-        S->>DB: 등록 조회(trade_listing)
-        alt 등록 없음
-            S-->>C: 실패 { errorCode: TradeListingNotFound(7001) }
-        else 판매중 아님
-            S-->>C: 실패 { errorCode: TradeAlreadyClosed(7005) }
-        else 자기 등록
-            S-->>C: 실패 { errorCode: TradeSelfPurchase(7004) }
-        end
-        S->>DB: 구매자 골드 확인(player_item 재화 행)
-        alt 골드 부족
-            S-->>C: 실패 { errorCode: InsufficientCurrency(4005) }
-        end
-        S->>DB: 선점(조건부 갱신) — status 1에서 2로, buyer_user_id·closed_at 기록
-        alt 반영 0행(동시 구매자가 먼저 선점)
-            S-->>C: 실패 { errorCode: TradeAlreadyClosed(7005) }
-        else 선점 성공
-            S->>DB: 구매자 골드 차감
-            S->>DB: 구매 아이템 메일 데이터 적재(구매자, 템플릿 203, 무기한, 강화 단계 보존)
-            S->>DB: 판매 대금 메일 데이터 적재(판매자, 템플릿 201, 판매가의 80%)
-            S->>R: 커밋 후 캐시에서 등록 제거
-            S-->>C: 성공 { listingId, gained, cost, balance, mailId }
-            C->>C: 응답으로 캐시 반영(재조회 없음) — 골드 잔액만(산 아이템은 우편함이라 가방 변화 없음)
-        end
-        S->>R: 락 해제(값이 자기 토큰일 때만)
+    Note over S,DB: 단일 트랜잭션 — 직렬화는 선점 UPDATE의 행 잠금(Redis 락 없음)
+    S->>DB: 등록 조회(trade_listing)
+    alt 등록 없음
+        S-->>C: 실패 { errorCode: TradeListingNotFound(7001) }
+    else 판매중 아님
+        S-->>C: 실패 { errorCode: TradeAlreadyClosed(7005) }
+    else 자기 등록
+        S-->>C: 실패 { errorCode: TradeSelfPurchase(7004) }
+    end
+    S->>DB: 구매자 골드 확인(player_item 재화 행)
+    alt 골드 부족
+        S-->>C: 실패 { errorCode: InsufficientCurrency(4005) }
+    end
+    S->>DB: 선점(조건부 갱신) — status 1에서 2로, buyer_user_id·closed_at 기록
+    alt 반영 0행(동시 구매자가 행 잠금에서 먼저 선점)
+        S-->>C: 실패 { errorCode: TradeAlreadyClosed(7005) }
+    else 선점 성공
+        S->>DB: 구매자 골드 차감
+        S->>DB: 구매 아이템 메일 데이터 적재(구매자, 템플릿 203, 무기한, 강화 단계 보존)
+        S->>DB: 판매 대금 메일 데이터 적재(판매자, 템플릿 201, 판매가의 80%)
+        S->>R: 커밋 후 캐시에서 등록 제거
+        S-->>C: 성공 { listingId, gained, cost, balance, mailId }
+        C->>C: 응답으로 캐시 반영(재조회 없음) — 골드 잔액만(산 아이템은 우편함이라 가방 변화 없음)
     end
 ```
 
 - **선점을 재화 이동보다 앞에 둔다** — 경합에서 진 요청이 골드·아이템을 건드리지 않고 즉시 빠진다.
+- **구매 경로에 Redis 락은 없다** — 경합 대상이 등록 행 하나라 선점 UPDATE의 행 잠금이 곧 직렬화 지점이다. 동시 구매자 중 한 명만 성공하고 나머지는 `TradeAlreadyClosed(7005)`를 받는다. Redis는 목록 캐시 제거(커밋 후)에만 쓰이므로 장애 시에도 구매는 정상 성립한다.
 - **구매 아이템도 우편함으로 지급한다.** 인벤토리에 직접 넣지 않으므로 구매 단계에서 용량을 검사하지 않으며(가방이 가득해도 거래 성립), 적재와 `InventoryFull(4002)` 판정은 메일 수령 시점으로 미뤄진다.
 - **거래에서 발급되는 메일은 모두 만료가 없다**(`expires_at=0` — 구매 아이템 203 · 판매 대금 201 · 만료 반송 202). 거래로 확정된 재산을 수령 기한으로 잃지 않도록 하며, 보관 GC도 미수령 무기한 메일은 지우지 않는다.
 - 메일 첨부는 **강화 단계를 보존**한다(`player_mail_reward.enhance_level`) — 등록 당시 강화가 구매자에게 그대로 전달된다.
@@ -927,33 +922,28 @@ sequenceDiagram
     participant DB as MySQL(game)
 
     C->>S: POST /trade/cancel { userId, token, data:{ listingId } }
-    S->>R: 구매 락 획득(구매와 같은 키 — 같은 등록을 닫는 경로를 직렬화)
-    alt 락 경합
-        S-->>C: 실패 { errorCode: TradeBusy(7008) }
-    else 락 획득
-        Note over S,DB: 단일 트랜잭션
-        S->>DB: 등록 조회(trade_listing)
-        alt 등록 없음
-            S-->>C: 실패 { errorCode: TradeListingNotFound(7001) }
-        else 본인 등록 아님
-            S-->>C: 실패 { errorCode: TradeNotOwner(7003) }
-        else 판매중 아님
-            S-->>C: 실패 { errorCode: TradeAlreadyClosed(7005) }
-        else 정상
-            S->>DB: 선점(조건부 갱신) — status 1에서 3(취소)으로
-            S->>DB: 판매자 인벤토리에 아이템 데이터 복원(강화 단계 보존)
-            alt 빈 칸 부족
-                S-->>C: 실패 { errorCode: InventoryFull(4002) }
-            end
-            S->>R: 커밋 후 캐시에서 등록 제거 · 가방 캐시 갱신(변경분)
-            S-->>C: 성공 { listingId, restored, inventoryDelta }
-            C->>C: 응답으로 캐시 반영(재조회 없음) — 복원된 아이템을 서버가 준 칸에 배치
+    Note over S,DB: 단일 트랜잭션 — 구매·만료와의 충돌은 선점 UPDATE의 행 잠금이 직렬화(Redis 락 없음)
+    S->>DB: 등록 조회(trade_listing)
+    alt 등록 없음
+        S-->>C: 실패 { errorCode: TradeListingNotFound(7001) }
+    else 본인 등록 아님
+        S-->>C: 실패 { errorCode: TradeNotOwner(7003) }
+    else 판매중 아님
+        S-->>C: 실패 { errorCode: TradeAlreadyClosed(7005) }
+    else 정상
+        S->>DB: 선점(조건부 갱신) — status 1에서 3(취소)으로
+        S->>DB: 판매자 인벤토리에 아이템 데이터 복원(강화 단계 보존)
+        alt 빈 칸 부족
+            S-->>C: 실패 { errorCode: InventoryFull(4002) }
         end
-        S->>R: 락 해제
+        S->>R: 커밋 후 캐시에서 등록 제거 · 가방 캐시 갱신(변경분)
+        S-->>C: 성공 { listingId, restored, inventoryDelta }
+        C->>C: 응답으로 캐시 반영(재조회 없음) — 복원된 아이템을 서버가 준 칸에 배치
     end
 ```
 
 - 수동 취소는 요청자가 온라인이므로 **인벤토리로 직접 복원**한다(만료 반송은 메일 — 아래 참고).
+- 구매·만료 배치가 같은 등록을 동시에 닫으려 해도 먼저 선점한 쪽만 성공하고, 뒤에 온 쪽은 조건부 갱신 0행으로 `TradeAlreadyClosed(7005)`가 된다.
 
 ### 거래소 만료 배치 — TradeExpireBatchService (엔드포인트 없음)
 
@@ -973,19 +963,13 @@ sequenceDiagram
         S->>DB: 만료 대상 조회(trade_listing, status=1 이면서 expires_at 경과, 최대 200건)
         DB-->>S: listingId 목록
         loop 등록 1건씩
-            S->>R: 구매 락 획득(trade:lock:listing:{listingId} — 구매·취소와 직렬화)
-            alt 경합으로 실패
-                S->>S: 스킵(다음 주기가 자연 재시도)
-            else 획득 또는 Redis 장애
-                Note over S,DB: 단일 트랜잭션
-                S->>DB: 선점(조건부 갱신) — status 1에서 4(만료)로, 만료 조건 재확인
-                alt 반영 0행(그 사이 구매·취소로 닫힘)
-                    S->>S: 스킵
-                else 선점 성공
-                    S->>DB: 반송 스냅샷 조회 후 반송 메일 데이터 적재(판매자, 템플릿 202, 만료 없음)
-                    S->>R: 커밋 후 캐시에서 등록 제거
-                end
-                S->>R: 락 해제
+            Note over S,DB: 단일 트랜잭션 — 구매·취소와의 충돌은 선점 UPDATE의 행 잠금이 직렬화(등록 단위 락 없음)
+            S->>DB: 선점(조건부 갱신) — status 1에서 4(만료)로, 만료 조건 재확인
+            alt 반영 0행(그 사이 구매·취소로 닫힘)
+                S->>S: 스킵
+            else 선점 성공
+                S->>DB: 반송 스냅샷 조회 후 반송 메일 데이터 적재(판매자, 템플릿 202, 만료 없음)
+                S->>R: 커밋 후 캐시에서 등록 제거
             end
         end
         S->>S: 요약 로그 1줄(처리 n건 / 스킵 s건 / 실패 f건)

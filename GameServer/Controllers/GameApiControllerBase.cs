@@ -111,7 +111,7 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.TradeAlreadyClosed => "Trade listing already closed",
         ErrorCode.TradePriceOutOfRange => "Price out of allowed range",
         ErrorCode.TradeListingLimitExceeded => "Trade listing limit exceeded",
-        ErrorCode.TradeBusy => "Trade listing is busy, retry shortly",
+        ErrorCode.TradeBusy => "Another trade registration is in progress, retry shortly",
         // 출석부
         ErrorCode.AttendanceAlreadyClaimed => "Attendance already claimed",
         ErrorCode.MasterDataNotLoaded => "Master data not loaded",
