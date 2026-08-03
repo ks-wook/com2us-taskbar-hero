@@ -6,7 +6,7 @@ using UnityEngine;
 namespace TaskbarHero.ClientEditor
 {
     /// <summary>
-    /// 상단 메뉴에서 작업 씬을 바로 여는 도구. 메뉴: <b>TaskbarHero/씬/…</b> (단축키 Alt+1~5)
+    /// 상단 메뉴에서 작업 씬을 바로 여는 도구. 메뉴: <b>TaskbarHero/씬/…</b> (단축키 Alt+1~6)
     /// <para>
     /// 저장하지 않은 변경이 있으면 Unity 표준 저장 프롬프트를 먼저 띄우고(취소하면 전환하지 않음),
     /// 현재 열려 있는 씬에는 체크 표시를 단다. 플레이 중에는 에디터 씬을 열 수 없으므로 항목이 비활성화된다.
@@ -24,12 +24,14 @@ namespace TaskbarHero.ClientEditor
         private const string GameItem = MenuRoot + "GameScene";
         private const string TeamListItem = MenuRoot + "TeamListScene (파티 편성)";
         private const string BattleDevItem = MenuRoot + "BattleDevScene (전투 개발용)";
+        private const string AnimDevItem = MenuRoot + "AnimDevScene (애니메이션 개발용)";
 
         private const string TitlePath = SceneFolder + "TitleScene.unity";
         private const string CreateCharacterPath = SceneFolder + "CreateCharacterScene.unity";
         private const string GamePath = SceneFolder + "GameScene.unity";
         private const string TeamListPath = SceneFolder + "TeamListScene.unity";
         private const string BattleDevPath = SceneFolder + "BattleDevScene.unity";
+        private const string AnimDevPath = SceneFolder + "AnimDevScene.unity";
 
         // ── TitleScene ──
 
@@ -70,6 +72,14 @@ namespace TaskbarHero.ClientEditor
 
         [MenuItem(BattleDevItem + " &5", true)]
         private static bool OpenBattleDevValidate() => Validate(BattleDevItem, BattleDevPath);
+
+        // ── AnimDevScene (캐릭터 프리팹 애니메이션 확인용 하네스 — 빌드에 포함되지 않음) ──
+
+        [MenuItem(AnimDevItem + " &6", false, 21)]
+        private static void OpenAnimDev() => Open(AnimDevPath);
+
+        [MenuItem(AnimDevItem + " &6", true)]
+        private static bool OpenAnimDevValidate() => Validate(AnimDevItem, AnimDevPath);
 
         /// <summary>저장 프롬프트를 거친 뒤 해당 씬을 단독(Single)으로 연다. 사용자가 저장을 취소하면 아무것도 하지 않는다.</summary>
         private static void Open(string scenePath)
