@@ -155,3 +155,4 @@ com2us-taskbar-hero-client/Assets/Thirdparty
 # --- Python 도구(tools/) 캐시 ---
 __pycache__/
 *.py[cod]
+docs/공통/trade-테스트-데이터.sql
