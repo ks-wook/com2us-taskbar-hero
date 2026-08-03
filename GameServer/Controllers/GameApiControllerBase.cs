@@ -54,6 +54,9 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.TradeBusy => StatusCodes.Status409Conflict,
         // 출석: 오늘자 중복 수령(동시 요청 경합 포함)은 409.
         ErrorCode.AttendanceAlreadyClaimed => StatusCodes.Status409Conflict,
+        // 가챠: 없는 배너 코드는 404, 후보 풀 부재는 마스터 결함이라 500.
+        ErrorCode.GachaNotFound => StatusCodes.Status404NotFound,
+        ErrorCode.GachaPoolEmpty => StatusCodes.Status500InternalServerError,
         // 인증 실패 계열(미들웨어가 대부분 선처리하나 방어적으로 매핑).
         ErrorCode.InvalidToken => StatusCodes.Status401Unauthorized,
         ErrorCode.ExpiredToken => StatusCodes.Status401Unauthorized,
@@ -114,6 +117,10 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.TradeBusy => "Another trade registration is in progress, retry shortly",
         // 출석부
         ErrorCode.AttendanceAlreadyClaimed => "Attendance already claimed",
+        // 가챠(뽑기)
+        ErrorCode.GachaNotFound => "Gacha not found",
+        ErrorCode.GachaPoolEmpty => "Gacha item pool is empty",
+        ErrorCode.GachaNotAvailable => "Gacha banner is not available",
         ErrorCode.MasterDataNotLoaded => "Master data not loaded",
         ErrorCode.InvalidToken => "Invalid token",
         ErrorCode.ExpiredToken => "Expired token",

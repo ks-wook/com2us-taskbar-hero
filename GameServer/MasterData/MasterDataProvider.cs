@@ -58,6 +58,55 @@ public sealed record MailTemplateDef(int TemplateCode, int Category, string Titl
 /// RewardType 1:골드 2:아이템 3:재료(메일 첨부·출석 보상과 동일 enum), 골드는 RewardCode 0.</summary>
 public sealed record NewbieRewardDef(int Seq, int RewardType, int RewardCode, long Quantity);
 
+/// <summary>가챠 등급 슬롯의 지급 후보 1건(gacha_item_pool). Quantity는 1회 지급 수량.</summary>
+public sealed record GachaPoolEntry(int ItemCode, int Quantity);
+
+/// <summary>
+/// 가챠 천장 규칙 1건(gacha_pity_rule). PityType 1:소프트(가중치 가산) 2:하드(확정 지급).
+/// Threshold는 <b>이번 뽑기의 회차 번호</b>(player_gacha_counter.pity_count + 1)와 비교한다 —
+/// 누적 미획득 횟수와 직접 비교하면 한 회차 늦게 발동한다(가챠 기획서 §4.1·6.3).
+/// </summary>
+public sealed record GachaPityRule(int Grade, int PityType, int Threshold, int WeightUp, int WeightUpMax);
+
+/// <summary>
+/// 가챠(뽑기) 배너 정의(gacha_master + 자식 3종). 한 행이 하나의 배너다.
+/// <para><b>노출 조건</b>: IsActive=1 AND (OpenAt=0 or now&gt;=OpenAt) AND (CloseAt=0 or now&lt;CloseAt).
+/// 판정은 서버 시각 기준이며 배너 조회·뽑기가 같은 조건을 쓴다(기획서 §6.1).</para>
+/// <para><b>PickupItemCode</b>는 픽업 대상 <i>선언</i>이며 추첨식에 들어가지 않는다. 픽업 배너는 최고 등급 슬롯의
+/// 후보를 그 아이템 1종으로 두므로, 균등 추첨이 그대로 확정을 만든다(기획서 §4.1). 0이면 상시 배너.</para>
+/// </summary>
+public sealed record GachaBannerDef(
+    int GachaCode, string Name, int IsActive, long OpenAt, long CloseAt, int SortOrder,
+    int CostCurrencyCode, long CostSingle, long CostMulti, int MultiCount, int MultiGuaranteedGrade,
+    int PickupItemCode,
+    IReadOnlyDictionary<int, int> GradeWeights,
+    IReadOnlyDictionary<int, List<GachaPoolEntry>> PoolByGrade,
+    IReadOnlyList<GachaPityRule> PityRules)
+{
+    /// <summary>지정 시각에 이 배너가 열려 있는지(노출 조건, 기획서 §6.1).</summary>
+    public bool IsOpenAt(long nowUnix)
+        => IsActive == 1
+           && (OpenAt == 0 || nowUnix >= OpenAt)
+           && (CloseAt == 0 || nowUnix < CloseAt);
+
+    /// <summary>천장 규칙이 걸린 등급 목록(소프트·하드가 같은 등급에 있으면 한 번만). 오름차순.</summary>
+    public IReadOnlyList<int> PityGrades => PityRules.Select(r => r.Grade).Distinct().OrderBy(g => g).ToList();
+
+    /// <summary>등급의 하드 천장 발동 회차. 하드 규칙이 없으면 0(클라이언트 게이지 표시용).</summary>
+    public int HardThreshold(int grade)
+        => PityRules.FirstOrDefault(r => r.Grade == grade && r.PityType == GachaPityTypes.Hard)?.Threshold ?? 0;
+}
+
+/// <summary>gacha_pity_rule.pity_type 값(마스터 enum). 서버 내부 판정용이라 공유 계약에는 두지 않는다.</summary>
+public static class GachaPityTypes
+{
+    public const int Soft = 1;
+    public const int Hard = 2;
+}
+
+/// <summary>가챠 1회 추첨 결과(서버 RNG 확정). PityApplied는 하드 천장으로 등급이 확정된 회차임을 뜻한다.</summary>
+public sealed record GachaRoll(int Grade, int ItemCode, int Quantity, bool PityApplied, bool Guaranteed);
+
 // ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑.
 //    DECIMAL 컬럼은 decimal로 받아 float/double로 캐스팅한다. ──
 file sealed class ClassMasterRow
@@ -212,6 +261,47 @@ file sealed class MailMasterRow
     public int ValidDays { get; set; }
 }
 
+file sealed class GachaMasterRow
+{
+    public int GachaCode { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public int IsActive { get; set; }
+    public long OpenAt { get; set; }
+    public long CloseAt { get; set; }
+    public int SortOrder { get; set; }
+    public int CostCurrencyCode { get; set; }
+    public long CostSingle { get; set; }
+    public long CostMulti { get; set; }
+    public int MultiCount { get; set; }
+    public int MultiGuaranteedGrade { get; set; }
+    public int PickupItemCode { get; set; }
+}
+
+file sealed class GachaGradeWeightRow
+{
+    public int GachaCode { get; set; }
+    public int Grade { get; set; }
+    public int Weight { get; set; }
+}
+
+file sealed class GachaItemPoolRow
+{
+    public int GachaCode { get; set; }
+    public int Grade { get; set; }
+    public int ItemCode { get; set; }
+    public int Quantity { get; set; }
+}
+
+file sealed class GachaPityRuleRow
+{
+    public int GachaCode { get; set; }
+    public int Grade { get; set; }
+    public int PityType { get; set; }
+    public int Threshold { get; set; }
+    public int WeightUp { get; set; }
+    public int WeightUpMax { get; set; }
+}
+
 /// <summary>
 /// 마스터(정적) 데이터 인메모리 캐시. 서버 기동 시 마스터 DB에서 코드→정의 딕셔너리로 적재한다.
 /// class_master(직업)에 더해 스테이지 진행/전투(스테이지 진입·클리어)에 필요한 마스터를 적재한다:
@@ -257,7 +347,7 @@ public sealed class MasterDataProvider
 
     // 스테이지 전리품 드롭 풀: 등급 → 드롭 후보 코드 목록. 정의 사전과 달리 **장비(1)·재료(2)만** 담는다.
     //   소모품(4)은 스테이지 드롭으로 지급하지 않는다(소모품/버프 기획서 §4.3-(3) — 확률 지급은 상자 가챠 전용
-    //   마스터 box_item_pool로 정의한다). 재화(3)는 양쪽 모두 제외.
+    //   마스터 gacha_item_pool로 정의한다). 재화(3)는 양쪽 모두 제외.
     private IReadOnlyDictionary<int, List<int>> _itemsByGrade = new Dictionary<int, List<int>>();
 
     // 소모품 버프 효과: item_code → 정의(consumable_master).
@@ -275,6 +365,9 @@ public sealed class MasterDataProvider
 
     // 신규 가입 지원금 첨부(newbie_reward_master, seq 오름차순). 계정 초기화 시 환영 메일에 담는다.
     private IReadOnlyList<NewbieRewardDef> _newbieRewards = new List<NewbieRewardDef>();
+
+    // 가챠 배너: gacha_code → 정의(gacha_master + 자식 가중치·후보·천장). 적재 시 유효성 검증을 통과한 배너만 담는다.
+    private IReadOnlyDictionary<int, GachaBannerDef> _gachaByCode = new Dictionary<int, GachaBannerDef>();
 
     public MasterDataProvider(MasterDbFactory masterDbFactory, ILogger<MasterDataProvider> logger)
     {
@@ -395,6 +488,108 @@ public sealed class MasterDataProvider
         return candidates[Random.Shared.Next(candidates.Count)];
     }
 
+    /// <summary>gacha_code의 배너 정의. 없으면 null(→ GachaNotFound).</summary>
+    public GachaBannerDef? GetGacha(int gachaCode)
+        => _gachaByCode.TryGetValue(gachaCode, out var def) ? def : null;
+
+    /// <summary>
+    /// 지정 시각에 열려 있는 배너 목록을 노출 순서(sort_order → gacha_code)로 반환한다(기획서 §6.1).
+    /// 마스터는 인메모리라 DB 조회가 없고, 배너 수가 적어 매 요청 선형 훑기로 충분하다.
+    /// </summary>
+    public IReadOnlyList<GachaBannerDef> OpenGachaBanners(long nowUnix)
+        => _gachaByCode.Values
+            .Where(b => b.IsOpenAt(nowUnix))
+            .OrderBy(b => b.SortOrder).ThenBy(b => b.GachaCode)
+            .ToList();
+
+    /// <summary>
+    /// 가챠 1회 추첨(기획서 §6.2). 2단계다 — ①하드 천장 확인 → ②소프트 천장 가중치 가산 → ③등급 추첨 → ④슬롯 내 균등 추첨.
+    /// <para><paramref name="pityCounts"/>는 등급 → 누적 미획득 횟수이며, 판정은 <b>이번 회차 번호</b>(count+1)로 한다.</para>
+    /// <para>픽업 분기는 없다 — 픽업 배너는 최고 등급 슬롯 후보가 1종이라 ④의 균등 추첨이 그대로 확정을 만든다.</para>
+    /// 추첨된 등급 슬롯에 후보가 없으면 null(→ 호출측이 GachaPoolEmpty(12002)로 전체 롤백).
+    /// </summary>
+    public GachaRoll? RollGacha(GachaBannerDef banner, IReadOnlyDictionary<int, int> pityCounts)
+    {
+        int PullNo(int grade) => (pityCounts.TryGetValue(grade, out var c) ? c : 0) + 1;
+
+        // 1) 하드 천장 — 도달했으면 추첨 없이 등급 확정(동시 도달 시 가장 높은 등급).
+        var hard = banner.PityRules
+            .Where(r => r.PityType == GachaPityTypes.Hard && PullNo(r.Grade) >= r.Threshold)
+            .OrderByDescending(r => r.Grade)
+            .FirstOrDefault();
+        if (hard is not null)
+        {
+            return PickFromSlot(banner, hard.Grade, pityApplied: true, guaranteed: false);
+        }
+
+        // 2) 소프트 천장 — 발동 이후 회차 수만큼 그 등급 가중치를 가산한다.
+        //    가중치 합을 정규화하지 않으므로 나머지 등급 확률은 자동으로 비례 감소한다(기획서 §4.1).
+        var weights = new Dictionary<int, long>();
+        foreach (var (grade, weight) in banner.GradeWeights)
+        {
+            weights[grade] = weight;
+        }
+
+        foreach (var rule in banner.PityRules.Where(r => r.PityType == GachaPityTypes.Soft))
+        {
+            int k = PullNo(rule.Grade) - rule.Threshold + 1;
+            if (k <= 0 || !weights.ContainsKey(rule.Grade))
+            {
+                continue;
+            }
+
+            long up = (long)k * rule.WeightUp;
+            if (rule.WeightUpMax > 0)
+            {
+                up = Math.Min(up, rule.WeightUpMax);
+            }
+
+            weights[rule.Grade] += up;
+        }
+
+        // 3) 등급 추첨(누적 가중치). 순회 순서를 등급 오름차순으로 고정해 결과가 재현·검증 가능하게 한다.
+        long total = weights.Values.Sum();
+        if (total <= 0)
+        {
+            return null;
+        }
+
+        long roll = Random.Shared.NextInt64(0, total);
+        long acc = 0;
+        foreach (var (grade, weight) in weights.OrderBy(w => w.Key))
+        {
+            acc += weight;
+            if (roll < acc)
+            {
+                return PickFromSlot(banner, grade, pityApplied: false, guaranteed: false);
+            }
+        }
+
+        return null; // 가중치 합 계산과 어긋난 경우(도달 불가) — 마스터 결함으로 취급한다.
+    }
+
+    /// <summary>
+    /// 10연 보장 대체용 추첨(기획서 §6.4). 보장 등급 슬롯에서 균등 추첨하며 결과에 Guaranteed 플래그를 세운다.
+    /// 후보가 없으면 null(→ GachaPoolEmpty).
+    /// </summary>
+    public GachaRoll? RollGuaranteed(GachaBannerDef banner, int grade)
+        => PickFromSlot(banner, grade, pityApplied: false, guaranteed: true);
+
+    /// <summary>
+    /// 등급 슬롯의 지급 후보 중 하나를 <b>균등</b>하게 고른다(기획서 §6.2-④).
+    /// 픽업 배너의 최고 등급 슬롯은 후보가 1종이라 이 균등 추첨이 곧 확정이다. 후보가 없으면 null.
+    /// </summary>
+    private static GachaRoll? PickFromSlot(GachaBannerDef banner, int grade, bool pityApplied, bool guaranteed)
+    {
+        if (!banner.PoolByGrade.TryGetValue(grade, out var pool) || pool.Count == 0)
+        {
+            return null;
+        }
+
+        var pick = pool[Random.Shared.Next(pool.Count)];
+        return new GachaRoll(grade, pick.ItemCode, pick.Quantity, pityApplied, guaranteed);
+    }
+
     /// <summary>등급별 확률로 전리품 1개를 추첨한다. 미드롭이면 null. (서버 권위 RNG)</summary>
     public DroppedItem? RollDrop(StageRewardDef reward)
     {
@@ -442,6 +637,7 @@ public sealed class MasterDataProvider
             _attendanceByDay = await LoadAttendanceAsync(db);
             _mailTemplates = await LoadMailTemplatesAsync(db);
             _newbieRewards = await LoadNewbieRewardsAsync(db);
+            _gachaByCode = await LoadGachaAsync(db);
 
             // 인벤토리 확장은 부가 기능이라 별도 try로 감싼다(테이블 부재 시 다른 마스터 적재까지 실패하지 않도록).
             _expandCosts = await LoadExpandCostsAsync(db);
@@ -452,7 +648,7 @@ public sealed class MasterDataProvider
             }
 
             IsLoaded = true;
-            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · item {_itemsByCode.Count:@Items} · dropGrades {_itemsByGrade.Count:@Grades} · consumable {_consumablesByCode.Count:@Consumables} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates} · newbieReward {_newbieRewards.Count:@NewbieRewards}");
+            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · item {_itemsByCode.Count:@Items} · dropGrades {_itemsByGrade.Count:@Grades} · consumable {_consumablesByCode.Count:@Consumables} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates} · newbieReward {_newbieRewards.Count:@NewbieRewards} · gacha {_gachaByCode.Count:@Gachas}");
         }
         catch (Exception ex)
         {
@@ -689,6 +885,172 @@ public sealed class MasterDataProvider
     }
 
     /// <summary>cube_recipe + cube_recipe_ingredient(자식)를 recipe_code → 레시피(결과·요구 큐브 레벨·비용·소모 재료)로 적재한다.</summary>
+    /// <summary>
+    /// gacha_master + 자식 3종(gacha_grade_weight·gacha_item_pool·gacha_pity_rule)을 배너 코드 → 정의로 적재한다.
+    /// <para><b>유효성 검증을 통과한 배너만 담는다</b>(기획서 §4.1). 위반한 배너는 Error 로그를 남기고 제외하며,
+    /// 서버 전체를 내리지는 않는다 — 배너 하나의 값 오류로 게임 전체가 멈추는 편이 더 나쁘고, 제외된 배너는
+    /// 목록에 나오지 않아 뽑을 수 없으므로 잘못된 확률로 재화를 받는 일이 없다.</para>
+    /// 검증 항목: ①가중치가 있는 모든 등급에 후보 1개 이상 ②하드 threshold &gt; multi_count
+    /// ③소프트 threshold &lt; 하드 threshold ④픽업(pickup_item_code≠0)이면 close_at≠0이고 그 배너 최고 등급 슬롯
+    /// 후보가 정확히 그 아이템 하나.
+    /// </summary>
+    private async Task<Dictionary<int, GachaBannerDef>> LoadGachaAsync(QueryFactory db)
+    {
+        var bannerRows = await db.Query("gacha_master")
+            .Select("gacha_code", "name", "is_active", "open_at", "close_at", "sort_order",
+                    "cost_currency_code", "cost_single", "cost_multi", "multi_count",
+                    "multi_guaranteed_grade", "pickup_item_code")
+            .GetAsync<GachaMasterRow>();
+
+        var weightRows = await db.Query("gacha_grade_weight")
+            .Select("gacha_code", "grade", "weight").OrderBy("gacha_code", "grade")
+            .GetAsync<GachaGradeWeightRow>();
+
+        var poolRows = await db.Query("gacha_item_pool")
+            .Select("gacha_code", "grade", "item_code", "quantity").OrderBy("gacha_code", "grade", "item_code")
+            .GetAsync<GachaItemPoolRow>();
+
+        var pityRows = await db.Query("gacha_pity_rule")
+            .Select("gacha_code", "grade", "pity_type", "threshold", "weight_up", "weight_up_max")
+            .OrderBy("gacha_code", "grade", "pity_type")
+            .GetAsync<GachaPityRuleRow>();
+
+        var weightsByGacha = new Dictionary<int, Dictionary<int, int>>();
+        foreach (var row in weightRows)
+        {
+            if (row.Weight <= 0)
+            {
+                continue; // 가중치 0인 등급은 추첨 대상이 아니므로 후보 검증에서도 제외된다.
+            }
+
+            if (!weightsByGacha.TryGetValue(row.GachaCode, out var map))
+            {
+                map = new Dictionary<int, int>();
+                weightsByGacha[row.GachaCode] = map;
+            }
+
+            map[row.Grade] = row.Weight;
+        }
+
+        var poolByGacha = new Dictionary<int, Dictionary<int, List<GachaPoolEntry>>>();
+        foreach (var row in poolRows)
+        {
+            if (!poolByGacha.TryGetValue(row.GachaCode, out var byGrade))
+            {
+                byGrade = new Dictionary<int, List<GachaPoolEntry>>();
+                poolByGacha[row.GachaCode] = byGrade;
+            }
+
+            if (!byGrade.TryGetValue(row.Grade, out var list))
+            {
+                list = new List<GachaPoolEntry>();
+                byGrade[row.Grade] = list;
+            }
+
+            list.Add(new GachaPoolEntry(row.ItemCode, Math.Max(row.Quantity, 1)));
+        }
+
+        var pityByGacha = new Dictionary<int, List<GachaPityRule>>();
+        foreach (var row in pityRows)
+        {
+            if (!pityByGacha.TryGetValue(row.GachaCode, out var list))
+            {
+                list = new List<GachaPityRule>();
+                pityByGacha[row.GachaCode] = list;
+            }
+
+            list.Add(new GachaPityRule(row.Grade, row.PityType, row.Threshold, row.WeightUp, row.WeightUpMax));
+        }
+
+        var byCode = new Dictionary<int, GachaBannerDef>();
+        foreach (var row in bannerRows)
+        {
+            weightsByGacha.TryGetValue(row.GachaCode, out var weights);
+            poolByGacha.TryGetValue(row.GachaCode, out var pool);
+            pityByGacha.TryGetValue(row.GachaCode, out var pity);
+
+            var banner = new GachaBannerDef(
+                row.GachaCode, row.Name, row.IsActive, row.OpenAt, row.CloseAt, row.SortOrder,
+                row.CostCurrencyCode, row.CostSingle, row.CostMulti, Math.Max(row.MultiCount, 1),
+                row.MultiGuaranteedGrade, row.PickupItemCode,
+                weights ?? new Dictionary<int, int>(),
+                pool ?? new Dictionary<int, List<GachaPoolEntry>>(),
+                pity ?? new List<GachaPityRule>());
+
+            var reason = ValidateGacha(banner);
+            if (reason is not null)
+            {
+                _logger.ZLogError($"가챠 배너 마스터 검증 실패로 제외: {row.GachaCode:@GachaCode} — {reason:@Reason}");
+                continue;
+            }
+
+            byCode[row.GachaCode] = banner;
+        }
+
+        return byCode;
+    }
+
+    /// <summary>가챠 배너 정의의 유효성을 검증한다. 통과하면 null, 위반하면 사람이 읽는 사유 문구를 반환한다.</summary>
+    private static string? ValidateGacha(GachaBannerDef b)
+    {
+        if (b.GradeWeights.Count == 0)
+        {
+            return "등급 가중치(gacha_grade_weight)가 없음";
+        }
+
+        // ① 가중치가 있는 모든 등급에 후보가 1개 이상 있어야 한다(비용을 먼저 받으므로 미지급으로 넘길 수 없다).
+        foreach (var grade in b.GradeWeights.Keys)
+        {
+            if (!b.PoolByGrade.TryGetValue(grade, out var pool) || pool.Count == 0)
+            {
+                return $"등급 {grade} 슬롯에 지급 후보(gacha_item_pool)가 없음";
+            }
+        }
+
+        // 10연 보장 등급도 대체 추첨 대상이므로 후보가 있어야 한다.
+        if (b.MultiGuaranteedGrade > 0
+            && (!b.PoolByGrade.TryGetValue(b.MultiGuaranteedGrade, out var gp) || gp.Count == 0))
+        {
+            return $"10연 보장 등급 {b.MultiGuaranteedGrade} 슬롯에 지급 후보가 없음";
+        }
+
+        foreach (var grade in b.PityGrades)
+        {
+            int hard = b.HardThreshold(grade);
+
+            // ② 하드 천장은 10연 1회보다 커야 한다(작으면 한 번의 10연에서 하드가 두 번 터진다).
+            if (hard > 0 && hard <= b.MultiCount)
+            {
+                return $"등급 {grade} 하드 천장 threshold({hard}) <= multi_count({b.MultiCount})";
+            }
+
+            // ③ 소프트는 하드보다 앞서야 한다(뒤면 상승 구간 없이 하드만 동작한다).
+            var soft = b.PityRules.FirstOrDefault(r => r.Grade == grade && r.PityType == GachaPityTypes.Soft);
+            if (soft is not null && hard > 0 && soft.Threshold >= hard)
+            {
+                return $"등급 {grade} 소프트 threshold({soft.Threshold}) >= 하드 threshold({hard})";
+            }
+        }
+
+        // ④ 픽업 = 한정이며, 픽업 배너의 최고 등급 슬롯 후보는 그 아이템 하나여야 한다.
+        if (b.PickupItemCode != 0)
+        {
+            if (b.CloseAt == 0)
+            {
+                return "픽업 배너인데 close_at=0(기간 없음) — 픽업은 한정 배너다";
+            }
+
+            int topGrade = b.GradeWeights.Keys.Max();
+            if (!b.PoolByGrade.TryGetValue(topGrade, out var top)
+                || top.Count != 1 || top[0].ItemCode != b.PickupItemCode)
+            {
+                return $"픽업 배너의 최고 등급 {topGrade} 슬롯 후보가 pickup_item_code({b.PickupItemCode}) 1종이 아님";
+            }
+        }
+
+        return null;
+    }
+
     private static async Task<Dictionary<int, RecipeDef>> LoadRecipesAsync(QueryFactory db)
     {
         var recipeRows = await db.Query("cube_recipe")
@@ -730,7 +1092,7 @@ public sealed class MasterDataProvider
     /// <para>· <b>정의 사전</b>(byCode) — 인벤토리에 존재할 수 있는 전 타입(장비 1·재료 2·<b>소모품 4</b>).
     ///   소모품이 빠지면 사용 API가 item_type 확인·스택 적재를 못 하고, 메일 첨부가 "장비·스택1"로 오인 적재된다.</para>
     /// <para>· <b>드롭 후보 풀</b>(byGrade) — <b>장비·재료만</b>. 소모품을 넣으면 스테이지 전리품에서 확률로 지급되는데,
-    ///   소모품의 확률 지급은 상자 가챠(box_item_pool) 전용이다. 소모품의 grade는 grade_master FK 충족용 값이라
+    ///   소모품의 확률 지급은 가챠(gacha_item_pool) 전용이다. 소모품의 grade는 grade_master FK 충족용 값이라
     ///   희귀도 의미가 없어 추첨 축으로 쓸 수 없다.</para>
     /// 재화(3, 골드)는 양쪽 모두에서 제외한다. 장착 검증용 슬롯·클래스/레벨 제한도 정의 사전에 함께 담는다.
     /// </summary>

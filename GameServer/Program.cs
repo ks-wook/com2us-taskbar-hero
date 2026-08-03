@@ -102,6 +102,10 @@ builder.Services.AddScoped<IMailService, MailService>();
 builder.Services.AddScoped<IAttendanceRepository, AttendanceRepository>();
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 
+// 가챠(뽑기) 계층(배너 조회·1연·10연·기록 조회). 추첨·천장·보장은 서버 권위(가챠 기획서 §5·6).
+builder.Services.AddScoped<IGachaRepository, GachaRepository>();
+builder.Services.AddScoped<IGachaService, GachaService>();
+
 // 거래소(교역선) 계층(목록·등록·구매·취소). TradeCache는 Redis 목록 캐시 + 구매 락(싱글턴).
 builder.Services.AddSingleton<TradeCache>();
 builder.Services.AddScoped<ITradeRepository, TradeRepository>();

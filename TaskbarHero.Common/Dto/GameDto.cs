@@ -1322,4 +1322,190 @@ namespace TaskbarHero.Common.Dto
         public string message;
         public ActiveBuffListResultData data = new ActiveBuffListResultData();
     }
+
+    // ── 가챠(뽑기) (가챠 기획서 §5.1~5.4) ──
+
+    /// <summary>
+    /// 천장(pity) 진행도 한 항목. 천장 규칙이 있는 등급만 내려간다.
+    /// pityCount = 그 등급을 마지막으로 받은 뒤 누적 뽑기 횟수, pityThreshold = 하드 천장 발동 회차(없으면 0).
+    /// 클라이언트는 "pityCount / pityThreshold" 게이지로 표시한다.
+    /// </summary>
+    [Serializable]
+    public class GachaPityCounterDto
+    {
+        public int grade;
+        public int pityCount;
+        public int pityThreshold;
+    }
+
+    /// <summary>
+    /// 배너 목록 한 항목(5.1). 이름·이미지·비용·등급 확률은 클라이언트 번들 마스터에 있으므로 담지 않고,
+    /// 번들만으로 알 수 없는 것(지금 열려 있는가 · 내 천장이 얼마인가)만 내려준다.
+    /// closeAt = 0이면 상시 배너라 카운트다운을 표시하지 않는다.
+    /// </summary>
+    [Serializable]
+    public class GachaBannerDto
+    {
+        public int gachaCode;
+        public int sortOrder;
+        public long openAt;
+        public long closeAt;
+        public List<GachaPityCounterDto> counters = new List<GachaPityCounterDto>();
+    }
+
+    /// <summary>
+    /// 배너 조회 결과(5.1 성공 응답 data). serverTime은 클라이언트가 남은 기간을 로컬 시계가 아니라
+    /// 이 값 기준으로 계산하기 위한 기준점이다. 열려 있는 배너가 없으면 banners는 빈 목록(에러 아님).
+    /// </summary>
+    [Serializable]
+    public class GachaBannerListResultData
+    {
+        public long serverTime;
+        public List<GachaBannerDto> banners = new List<GachaBannerDto>();
+    }
+
+    /// <summary>배너 조회 응답 { success, errorCode, message, data(GachaBannerListResultData) }.</summary>
+    [Serializable]
+    public class GachaBannerListResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public GachaBannerListResultData data = new GachaBannerListResultData();
+    }
+
+    /// <summary>
+    /// 가챠 뽑기 요청 데이터. { gachaCode, pullType }
+    /// <para><b>pullType은 "어떤 상품을 사는가"이지 "몇 번 뽑는가"가 아니다.</b> 뽑는 횟수는 서버가
+    /// gacha_master.multi_count에서 읽으므로 요청에 횟수 필드가 없다 — 확률·결과와 함께 서버 소유 값이다.
+    /// 1(Single)·2(Multi) 외 값은 InvalidRequest(1006)로 거부한다.</para>
+    /// </summary>
+    [Serializable]
+    public class GachaPullData
+    {
+        public int gachaCode;
+        public int pullType;   // GachaPullType (1:1연 2:10연)
+    }
+
+    /// <summary>가챠 뽑기 요청 body(인증). 1연·10연이 한 엔드포인트를 쓰고 pullType이 상품을 가른다.</summary>
+    [Serializable]
+    public class GachaPullRequest
+    {
+        public long userId;
+        public string token;
+        public GachaPullData data;
+    }
+
+    /// <summary>
+    /// 뽑기 결과 한 회차. seq는 1부터(1연은 1, 10연은 1~10), grade는 추첨된 등급 슬롯.
+    /// isPity = 하드 천장으로 등급이 확정된 회차, isGuaranteed = 10연 보장으로 등급이 대체된 회차.
+    /// </summary>
+    [Serializable]
+    public class GachaResultItemDto
+    {
+        public int seq;
+        public int grade;
+        public int itemCode;
+        public long quantity;
+        public bool isPity;
+        public bool isGuaranteed;
+    }
+
+    /// <summary>
+    /// 가챠 뽑기 결과(5.2·5.3 성공 응답 data). 1연과 10연이 <b>같은 타입</b>이며 results 길이와 pullType만 다르다.
+    /// pullId는 이번 뽑기의 기록 식별자이자 기록 조회(5.4)의 커서와 같은 값이다.
+    /// </summary>
+    [Serializable]
+    public class GachaPullResultData
+    {
+        public int gachaCode;
+        public long pullId;
+        public int pullType;      // GachaPullType (1:1연 2:10연)
+        public long pulledAt;
+        public List<GachaResultItemDto> results = new List<GachaResultItemDto>();
+        public CurrencyDto cost = new CurrencyDto();
+        public List<CurrencyDto> balance = new List<CurrencyDto>();
+        public List<GachaPityCounterDto> counters = new List<GachaPityCounterDto>();
+        public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
+    }
+
+    /// <summary>가챠 뽑기 응답 { success, errorCode, message, data(GachaPullResultData) }.</summary>
+    [Serializable]
+    public class GachaPullResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public GachaPullResultData data = new GachaPullResultData();
+    }
+
+    /// <summary>
+    /// 뽑기 기록 조회 요청 데이터(5.4). gachaCode 0이면 전체, cursor 0이면 최신부터.
+    /// limit은 서버가 1~50으로 clamp하며 범위 밖 값은 에러가 아니라 보정 대상이다.
+    /// </summary>
+    [Serializable]
+    public class GachaHistoryData
+    {
+        public int gachaCode;
+        public long cursor;
+        public int limit;
+    }
+
+    /// <summary>뽑기 기록 조회 요청 body(인증).</summary>
+    [Serializable]
+    public class GachaHistoryRequest
+    {
+        public long userId;
+        public string token;
+        public GachaHistoryData data;
+    }
+
+    /// <summary>기록 항목 안의 회차별 결과(5.4). 뽑기 응답의 results와 같은 필드 구성이다.</summary>
+    [Serializable]
+    public class GachaHistoryItemDto
+    {
+        public int seq;
+        public int itemCode;
+        public int grade;
+        public long quantity;
+        public bool isPity;
+        public bool isGuaranteed;
+    }
+
+    /// <summary>
+    /// 기록 한 건 = 뽑기 요청 1건(1연=1건, 10연=1건). items가 그 요청의 회차별 결과다.
+    /// cost는 요청 단위로 한 번 차감된 금액이다(회차마다 나누지 않는다).
+    /// </summary>
+    [Serializable]
+    public class GachaHistoryEntryDto
+    {
+        public long pullId;
+        public int gachaCode;
+        public int pullType;
+        public CurrencyDto cost = new CurrencyDto();
+        public long pulledAt;
+        public List<GachaHistoryItemDto> items = new List<GachaHistoryItemDto>();
+    }
+
+    /// <summary>
+    /// 뽑기 기록 조회 결과(5.4 성공 응답 data). pulls는 pullId 내림차순(최신 먼저)이고 각 items는 seq 오름차순이다.
+    /// nextCursor는 이 페이지 마지막 건의 pullId(hasMore=false면 0). 전체 건수(total)는 내려주지 않는다.
+    /// </summary>
+    [Serializable]
+    public class GachaHistoryResultData
+    {
+        public List<GachaHistoryEntryDto> pulls = new List<GachaHistoryEntryDto>();
+        public long nextCursor;
+        public bool hasMore;
+    }
+
+    /// <summary>뽑기 기록 조회 응답 { success, errorCode, message, data(GachaHistoryResultData) }.</summary>
+    [Serializable]
+    public class GachaHistoryResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public GachaHistoryResultData data = new GachaHistoryResultData();
+    }
 }

@@ -95,5 +95,10 @@ namespace TaskbarHero.Common
         // 공통 / 시스템 (11000번대)
         // 특정 도메인에 속하지 않는 서버 내부 오류. 전역 예외 처리기가 미처리 예외를 이 코드로 일반화해 응답한다.
         ServerError = 11001,
+
+        // 가챠(뽑기) (12000번대 — 도메인 4.11이나 11000번대를 공통/시스템이 선점해 12000번대 할당)
+        GachaNotFound = 12001,
+        GachaPoolEmpty = 12002,
+        GachaNotAvailable = 12003,
     }
 }

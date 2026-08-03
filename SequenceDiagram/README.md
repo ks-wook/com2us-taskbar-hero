@@ -13,12 +13,13 @@
 | [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장. 가방 조회는 세이브 데이터 섹션) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
 | [**소모품/버프**](#소모품버프) (소모품 사용 → 경험치·골드 획득량 버프 부여·연장, 적용 중인 버프 조회) | GameConsumableController | Game | `POST /api/game/consumable/use`, `POST /api/game/consumable/buffs` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
+| [**가챠**](#가챠뽑기) (배너 조회 / 뽑기 1연·10연 / 뽑기 기록 조회) | GameGachaController | Game | `POST /api/game/gacha/banners` · `pull` · `history` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
 | [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchService(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
 | [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchService(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
 | [**출석부 보상**](#출석부-보상) (이번달 진행도 조회 / 오늘자 보상 획득→메일 발급, 일차 = 누적 출석 순번 1~30) | GameAttendanceController | Game | `POST /api/game/attendance/status` · `claim` |
 
-> **가방 변경분 공통 규약(`inventoryDelta`)** — 가방을 바꾸는 액션(`cube/*`·`box/open`·`consumable/use`·`mail/claim`·`mail/claim-all`·`stage/clear`·`trade/register`·`trade/cancel`)은 변경분을 응답에 담고, 커밋 후 같은 값으로 Redis 가방 캐시를 갱신한다(write-through). 클라이언트는 응답만으로 가방을 갱신하며 **액션 뒤에 `/load`·`/inventory/list`를 재조회하지 않는다**([인벤토리/아이템/큐브 기획서](../docs/세부/inventory-item-cube-기획서.md) 5.0·6.5).
+> **가방 변경분 공통 규약(`inventoryDelta`)** — 가방을 바꾸는 액션(`cube/*`·`gacha/pull`·`consumable/use`·`mail/claim`·`mail/claim-all`·`stage/clear`·`trade/register`·`trade/cancel`)은 변경분을 응답에 담고, 커밋 후 같은 값으로 Redis 가방 캐시를 갱신한다(write-through). 클라이언트는 응답만으로 가방을 갱신하며 **액션 뒤에 `/load`·`/inventory/list`를 재조회하지 않는다**([인벤토리/아이템/큐브 기획서](../docs/세부/inventory-item-cube-기획서.md) 5.0·6.5).
 >
 > - 아래 다이어그램에서 서버 쪽 갱신은 `S->>R: 가방 캐시 갱신(변경분)`, 클라이언트 쪽 반영은 `C->>C: 응답으로 캐시 반영(재조회 없음)`으로 줄여 표기한다.
 > - 클라이언트는 `removed` → `upserted` 순으로 `itemId`를 키 삼아 적용하며(멱등), **서버가 응답한 `slot`이 최종 위치**다(스택 병합·빈 칸 배정은 서버 권위). 재화는 각 응답의 `balance`, 큐브 상태는 `cube`가 담당한다.
@@ -979,6 +980,123 @@ sequenceDiagram
 - **골드 이동은 없다.** 만료 반송은 에스크로 아이템을 메일 첨부로 되돌릴 뿐이다.
 - 메일 첨부가 **강화 단계를 보존**하므로 반송 장비는 등록 당시 강화 단계 그대로 돌아온다(`player_mail_reward.enhance_level`).
 - 건별 예외는 그 건만 실패로 세고 다음 건을 계속 처리한다(주기 전체를 중단하지 않는다).
+
+## 가챠(뽑기)
+
+배너 조회·뽑기(1연·10연)·뽑기 기록 조회 (GameGachaController, `/api/game/gacha`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_gacha_counter`·`player_gacha_pull`·`player_gacha_pull_item`·`player_item`·`game_player`) + 인메모리 마스터 데이터(gacha_master + 자식 등급 가중치·지급 후보·천장 규칙). 배너 노출 판정·등급/아이템 추첨·천장·10연 보장은 전부 서버가 확정한다(서버 권위). 뽑기는 **비용 차감 → 추첨 → 지급 → 카운터 갱신 → 원장 적재**를 단일 트랜잭션으로 처리해, 골드만 빠지거나 원장에 없는 지급이 생기지 않게 한다.
+
+- **배너 = `gacha_master` 한 행.** 상시 배너는 기간이 없고(`close_at=0`), **픽업 배너는 한정이라 기간이 필수**다. 픽업 배너는 최고 등급 슬롯 후보를 픽업 아이템 1종으로 두므로 **그 배너에서 나오는 전설은 항상 픽업 아이템**이다(추첨 로직에 픽업 분기가 없다).
+- **천장**은 소프트(70회차부터 가중치 가산)와 하드(90회차 확정)를 같은 등급에 함께 건다. 판정 기준은 누적 미획득 횟수가 아니라 **이번 뽑기의 회차 번호**(`pity_count + 1`)다.
+
+### POST /api/game/gacha/banners — 지금 돌릴 수 있는 배너 목록
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /gacha/banners { userId, token }
+    alt 마스터 데이터 미로드
+        S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) }
+    else 정상
+        S->>S: 마스터 데이터 확인(인메모리) — 노출 조건 판정(is_active · open_at · close_at, 서버 시각 기준)
+        loop 열린 배너마다
+            S->>DB: 그 배너의 천장 진행도 데이터 확인(등급별 누적 미획득 횟수)
+        end
+        S-->>C: 성공 { serverTime, banners[]:{ gachaCode, sortOrder, openAt, closeAt, counters[] } }
+        C->>C: 번들 마스터(이름·이미지·비용·등급 확률)와 합쳐 배너 화면 구성
+    end
+```
+
+- **이름·비용·확률표는 응답에 없다.** 클라이언트 번들 마스터에 있는 정적 값이므로, 서버는 번들만으로 알 수 없는 것(지금 열려 있는가 · 내 천장이 얼마인가)만 내려준다. 그래서 확률표 조회 API를 따로 두지 않는다.
+- `serverTime`은 클라이언트가 남은 기간을 **로컬 시계가 아니라 이 값 기준**으로 계산하게 한다.
+- 열려 있는 배너가 없으면 **빈 목록으로 성공**한다(에러 아님). 번들에 없는 `gachaCode`가 오면 클라이언트가 조용히 건너뛴다.
+
+### POST /api/game/gacha/pull — 뽑기(1연·10연, pullType으로 구분)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    C->>S: POST /gacha/pull { userId, token, data:{ gachaCode, pullType } }
+    S->>S: pullType 검증(1:1연 2:10연 외 값은 거부) — 뽑을 횟수는 요청이 아니라 마스터(multi_count)에서 읽는다
+    S->>S: 마스터 데이터 확인(인메모리) — 배너 존재 + 노출 조건 재판정(목록 조회 시점의 허가를 신뢰하지 않는다)
+    alt 마스터 데이터 미로드
+        S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) }
+    else 정의되지 않은 pullType
+        S-->>C: 실패 { errorCode: InvalidRequest(1006) }
+    else 마스터에 없는 배너
+        S-->>C: 실패 { errorCode: GachaNotFound(12001) }
+    else 지금 열려 있지 않음(기간 밖·비노출)
+        S-->>C: 실패 { errorCode: GachaNotAvailable(12003) }
+    else 노출 중
+        Note over S,DB: 단일 트랜잭션
+        S->>DB: 비용 재화 데이터 확인(player_item 재화 행)
+        alt 잔액 부족
+            S-->>C: 실패 { errorCode: InsufficientCurrency(4005) }
+        else 충분
+            S->>DB: 비용 차감(추첨보다 앞에 둬 실패 경로에서 결과를 계산하지 않는다)
+            S->>DB: 천장 진행도 데이터 확인(등급별)
+            loop 회차 1..N (pullType 1 → N=1 / pullType 2 → N=multi_count, 마스터 값)
+                S->>S: 하드 천장 확인 → 소프트 가중치 가산 → 등급 추첨 → 등급 슬롯 내 균등 추첨(서버 RNG)
+                S->>S: 천장 카운터 평가(해당 등급 이상이면 0으로 리셋, 아니면 +1)
+            end
+            opt 10연이고 보장 등급 이상이 하나도 없음
+                S->>S: 마지막 회차를 보장 등급으로 대체(원래 결과는 버리고 카운터 재평가)
+            end
+            alt 추첨된 등급 슬롯에 후보 없음(마스터 결함)
+                S->>S: Error 로그(gachaCode·grade)
+                S-->>C: 실패 { errorCode: GachaPoolEmpty(12002) } · 전체 롤백(골드도 돌아온다)
+            else 지급 가능
+                S->>DB: 결과 아이템 적재(코드별 합산 → 스택 병합 → 빈 칸 배정)
+                alt 빈 칸 부족
+                    S-->>C: 실패 { errorCode: InventoryFull(4002) } · 전체 롤백
+                else 적재 성공
+                    S->>DB: 천장 카운터 갱신(회차마다가 아니라 최종값 한 번 UPSERT)
+                    S->>DB: 원장 적재 — 뽑기 요청 1행 + 회차별 결과 N행
+                    S->>R: 가방 캐시 갱신(변경분)
+                    S-->>C: 성공 { gachaCode, pullId, pullType, pulledAt, results[], cost, balance, counters[], inventoryDelta }
+                    C->>C: 응답으로 캐시 반영(재조회 없음) — 가방·재화·천장 게이지 갱신
+                end
+            end
+        end
+    end
+```
+
+- **1연과 10연은 요청·응답 스키마가 같다** — `pullType`과 `results` 길이만 다르다. 그래서 엔드포인트를 하나로 둔다. 10연은 1연 10회가 아니라 **가격(`cost_multi`)과 보장(`multi_guaranteed_grade`)이 다른 별개 상품**이며, 그 차이는 전부 마스터 값이라 서버가 `pullType`에서 파생한다.
+- **요청에 뽑을 횟수(`count`)가 없다.** 횟수는 확률·결과와 함께 서버 소유 값(`gacha_master.multi_count`)이다 — 클라이언트가 횟수를 말하면 마스터 변경 시 깨지고 출처가 두 곳이 된다.
+- **원장 적재가 같은 트랜잭션에 있다.** 커밋 후에 따로 쓰면 그 사이 서버가 죽었을 때 "지급됐는데 기록에 없는 뽑기"가 생겨 감사 근거가 무너진다.
+- 카운터는 회차마다 메모리에서 평가하고 **최종값만 UPSERT**한다. 중간값이 행으로 남지 않으므로, "몇 번째 회차에서 천장이 터졌나"는 원장의 `pity_applied` 플래그로 되짚는다.
+- **애플리케이션 락(Redis)을 두지 않는다.** 경합 대상이 그 계정의 재화 행·카운터 행뿐이라 상태 변경 전부를 단일 트랜잭션에 담고 MySQL 행 잠금에 맡긴다.
+
+### POST /api/game/gacha/history — 뽑기 기록 조회(최신순 커서 페이징)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /gacha/history { userId, token, data:{ gachaCode?, cursor?, limit? } }
+    S->>S: limit 보정(0 이하면 기본 20 · 상한 50) · cursor 0이면 최신부터(음수는 0) · gachaCode 0 이하면 전체(잘못된 값은 에러가 아니라 보정)
+    S->>DB: 뽑기 요청 데이터 확인(pull_id < cursor, 최신순, limit+1건)
+    S->>S: limit+1번째 행의 존재로 hasMore 판정 후 응답에서 잘라냄
+    S->>DB: 그 요청들의 회차별 결과 데이터 확인(pull_id 집합으로 한 번에 — 요청당 쿼리 2회 고정)
+    S-->>C: 성공 { pulls[]:{ pullId, gachaCode, pullType, cost, pulledAt, items[] }, nextCursor, hasMore }
+```
+
+- **페이징 단위는 뽑기 요청**(1연=1건, 10연=1건)이다. 회차 결과를 그대로 나열하고 페이징하면 페이지 경계가 10연 묶음 중간을 자른다.
+- **오프셋이 아니라 커서**다. 기록은 append-only로 늘어나므로 `OFFSET`은 뒤 페이지일수록 비싸고, 조회 중 새 뽑기가 들어오면 기준이 밀려 같은 건이 두 페이지에 겹친다. 정렬·커서 키를 `pull_id`(AUTO_INCREMENT)로 두면 같은 초에 여러 건이 들어와도 순서가 흔들리지 않는다.
+- **전체 건수(`total`)를 내려주지 않는다.** 무한 스크롤에 필요 없고, 매 페이지마다 계정 기록 전량을 `COUNT`하는 비용이 조회보다 크다.
+- 기록은 원장을 그대로 읽으므로 **기간이 끝난 배너의 과거 기록도 계속 조회된다**(마스터를 참조하지 않는다).
+- 기록 조회는 캐시하지 않는다(계정별 개인 데이터 + 뽑을 때마다 무효화 → 적중률이 낮다).
 
 ## 메일
 

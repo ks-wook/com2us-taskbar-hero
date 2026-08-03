@@ -6,7 +6,7 @@
 
 - 흐름: `schema.sql` 재적용(DROP+CREATE+INSERT) → MySQL master DB 조회 → 기획서 §7 규약(**테이블별 camelCase JSON 배열**)으로 직렬화 → `com2us-taskbar-hero-client/Assets/Resources/MasterData/*.json` 출력.
 - 자식 테이블은 부모 JSON에 배열로 중첩한다: `skill_coefficient`→`skill_master.coefs[]`, `stage_spawn`→`stage_master.spawns[]`, `cube_recipe_ingredient`→`cube_recipe.ingredients[]`. 스탯 컬럼(`hp`~`cooldown`)은 `baseStats`/`statBonus` 객체로 묶는다.
-- 출력 파일(13종): `equip_slot_master · grade_master · class_master · level_master · skill_master · rune_master · item_master · monster_master · stage_master · stage_reward · cube_master · cube_recipe · attendance_master`. (값 미확정인 `enhance_master`·`box_master`는 제외)
+- 출력 파일(13종): `equip_slot_master · grade_master · class_master · level_master · skill_master · rune_master · item_master · monster_master · stage_master · stage_reward · cube_master · cube_recipe · attendance_master`. (값 미확정인 `enhance_master`는 제외. `gacha_master` 계열은 값이 확정됐으나 **익스포터가 아직 지원하지 않는다** — 클라 번들이 필요해지면 추출 대상에 추가한다.)
 
 ### 정본
 - 값: `docs/세부/master-data/master-data-값.md`
