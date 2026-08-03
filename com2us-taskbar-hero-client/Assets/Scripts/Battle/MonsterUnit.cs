@@ -40,6 +40,10 @@ namespace TaskbarHero.Client.Battle
         /// 왕관 하단을 머리에서 띄우는 여백(월드 단위). HP바 배치(<c>BattleDevController</c>)와 공유한다.</summary>
         public const float BossHpBarBand = 0.5f;
 
+        // HP바를 붙일 '머리 위' 기준점(몬스터 transform 기준 월드 오프셋). 스폰 직후 1회만 측정한다.
+        private Vector2 _headAnchorOffset;
+        private bool _hasHeadAnchor;
+
         public bool Alive => _alive;
         public bool IsBoss => _isBoss;
         /// <summary>현재 전진(이동) 애니메이션이 재생 중인지. 걷기 먼지 이펙트 노출 판정에 사용.</summary>
@@ -70,6 +74,7 @@ namespace TaskbarHero.Client.Battle
             _alive = true;
             _isBoss = isBoss;
             _targetX = transform.position.x;
+            _hasHeadAnchor = false; // 풀에서 재사용될 수 있으므로 머리 기준점을 다시 측정한다
             gameObject.name = (isBoss ? "Boss_" : "Monster_") + _name;
 
             if (isBoss)
@@ -82,6 +87,56 @@ namespace TaskbarHero.Client.Battle
             }
 
             SendMessage("PlayIdle", SendMessageOptions.DontRequireReceiver);
+            StartCoroutine(MeasureHeadAnchor());
+        }
+
+        /// <summary>
+        /// HP바를 붙일 '머리 위' 기준점을 돌려준다(몬스터 <c>transform</c> 기준 월드 오프셋 — x는 몸통 중앙,
+        /// y는 몸통 상단). 아직 측정되지 않았으면 false.
+        /// </summary>
+        public bool TryGetHeadAnchor(out Vector2 offset)
+        {
+            offset = _headAnchorOffset;
+            return _hasHeadAnchor;
+        }
+
+        /// <summary>
+        /// 머리 위 기준점을 <b>스폰 직후 idle 자세에서 한 번만</b> 측정해 캐시한다.
+        /// <para>매 프레임 스프라이트 경계를 재면 걷기·공격·피격 애니메이션이 파트를 움직일 때마다 상단·중앙이
+        /// 요동쳐 HP바가 심하게 떨린다. 반면 몬스터의 <c>transform</c>은 이동(x)만 갱신되므로,
+        /// 여기서 잰 오프셋을 그 위치에 더하면 <b>흔들림 없이 따라다니기만</b> 한다.</para>
+        /// <para>왕관(<c>BossCrown</c>)은 머리 위에 따로 띄우는 장식이라 몸통 경계에서 제외한다.
+        /// 같은 프레임에 붙을 수 있어(AttachCrown도 2프레임 대기) 이름으로 걸러 낸다.</para>
+        /// </summary>
+        private IEnumerator MeasureHeadAnchor()
+        {
+            // SPUM이 스프라이트 파트를 붙이고 idle 첫 프레임이 적용될 시간을 준다(1~2프레임).
+            yield return null;
+            yield return null;
+            if (this == null || !_alive)
+            {
+                yield break;
+            }
+
+            var rends = GetComponentsInChildren<SpriteRenderer>(true);
+            Bounds body = default;
+            bool has = false;
+            foreach (var r in rends)
+            {
+                if (r == null || r.gameObject.name == "BossCrown")
+                {
+                    continue;
+                }
+                if (!has) { body = r.bounds; has = true; } else { body.Encapsulate(r.bounds); }
+            }
+            if (!has)
+            {
+                yield break; // 렌더러가 아직 없으면 다음 스폰에서 다시 측정된다(그때까지 폴백 사용)
+            }
+
+            Vector3 pos = transform.position;
+            _headAnchorOffset = new Vector2(body.center.x - pos.x, body.max.y - pos.y);
+            _hasHeadAnchor = true;
         }
 
         /// <summary>보스 머리 위에 왕관 아이콘을 붙인다. SPUM 파트가 구성될 때까지 잠깐 기다린 뒤

@@ -84,8 +84,9 @@ namespace TaskbarHero.Client.Battle
             tm.characterSize = characterSize;
             tm.anchor = TextAnchor.MiddleCenter;
             tm.alignment = TextAlignment.Center;
-            tm.fontStyle = FontStyle.Bold;
-            tm.color = Color.red;
+            // 볼드를 쓰지 않는다 — 합성 볼드는 글리프를 밀어 겹쳐 그려 획이 뭉개지고 너무 두꺼워 보인다.
+            tm.fontStyle = FontStyle.Normal;
+            tm.color = Color.white; // 실제 색은 DamageNumber가 매 프레임 지정(일반 흰색 / 치명타 노란색)
 
             var mr = go.GetComponent<MeshRenderer>();
             mr.material = _font.material;         // 빌트인 폰트 머티리얼

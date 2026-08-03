@@ -104,6 +104,11 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("보스의 이동속도 배율(일반 몹 대비). 1보다 작으면 더 느리게 전진한다.")]
         public float bossMoveSpeedFactor = 0.6f;
 
+        [Header("몬스터 체력바")]
+        [Tooltip("몬스터 머리 위 HP바의 프레임 아트(Assets/Art/Icon/Combat/체력바.png). " +
+                 "없으면 단색 반투명 배경으로 대체한다. 던전 배선 빌더가 BattleDevScene 값을 그대로 복사한다.")]
+        [SerializeField] private Sprite enemyHpBarFrame;
+
         // ---- 런타임 상태 ----
         private Camera _cam;
         private ObjectManager _om;
@@ -1196,8 +1201,12 @@ namespace TaskbarHero.Client.Battle
         // IMGUI는 항상 모든 UI 위에 그려지므로, HP바를 낮은 sortingOrder의 Canvas로 그려
         // HUD(10)·패널(100) 등 UI가 항상 HP바 위에 오도록 한다.
         private const int EnemyHpBarSortingOrder = 1; // HUD(10)/패널(100)보다 아래
-        private const float HpBarWidth = 90f;
-        private const float HpBarHeight = 10f;
+        // 프레임 아트(체력바.png, 768×144)를 정수배(8배)로 축소해 그린다 — 비정수 축소보다 픽셀이 깔끔하다.
+        private const float HpBarWidth = 96f;
+        private const float HpBarHeight = 18f;
+        // 프레임 테두리(원본 12~20px ≈ 화면 2~3px) 안쪽에 채움을 둔다.
+        private const float HpBarFillInset = 3f;
+        private const float HpBarFillWidth = HpBarWidth - HpBarFillInset * 2f;
 
         private Canvas _hpCanvas;
         private readonly List<RectTransform> _hpBarRoots = new List<RectTransform>();
@@ -1224,22 +1233,19 @@ namespace TaskbarHero.Client.Battle
                 {
                     continue;
                 }
-                // 몸통(왕관 제외) 경계로 머리 상단을 구해 HP바를 머리 위에 배치한다.
-                Transform crownT = m.transform.Find("BossCrown");
-                float bodyTop = m.transform.position.y + 1.2f; // 폴백(경계 없음)
-                float centerX = m.transform.position.x;
-                var rends = m.GetComponentsInChildren<SpriteRenderer>();
-                if (rends != null && rends.Length > 0)
+                // 머리 위 기준점은 몬스터가 스폰 직후 1회 측정해 캐시한 오프셋을 쓴다.
+                // 매 프레임 스프라이트 경계를 재면 애니메이션(걷기·공격·피격)이 파트를 움직일 때마다
+                // 상단·중앙이 요동쳐 HP바가 떨리므로, 애니메이션과 무관한 transform 위치 + 고정 오프셋으로 따라간다.
+                Vector3 pos = m.transform.position;
+                float bodyTop, centerX;
+                if (m.TryGetHeadAnchor(out Vector2 anchor))
                 {
-                    Bounds body = default;
-                    bool has = false;
-                    foreach (var r in rends)
-                    {
-                        if (r == null) continue;
-                        if (crownT != null && r.transform == crownT) continue; // 왕관은 몸통 경계에서 제외
-                        if (!has) { body = r.bounds; has = true; } else body.Encapsulate(r.bounds);
-                    }
-                    if (has) { bodyTop = body.max.y; centerX = body.center.x; }
+                    centerX = pos.x + anchor.x;
+                    bodyTop = pos.y + anchor.y;
+                }
+                else
+                {
+                    MeasureBodyTop(m, out centerX, out bodyTop); // 측정 완료 전(스폰 후 1~2프레임) 폴백
                 }
                 // 일반: 머리 위. 보스: 머리와 왕관 사이(band 중앙).
                 float barY = m.IsBoss
@@ -1252,9 +1258,11 @@ namespace TaskbarHero.Client.Battle
                 }
                 var bar = GetHpBar(used);
                 bar.gameObject.SetActive(true);
-                bar.anchoredPosition = new Vector2(sp.x, sp.y); // ConstantPixelSize 캔버스(좌하단 기준 픽셀)
+                // 픽셀 격자에 맞춰(정수 좌표) 배치한다 — 소수 좌표면 프레임 아트가 프레임마다 미세하게 번진다.
+                bar.anchoredPosition = new Vector2(Mathf.Round(sp.x), Mathf.Round(sp.y)); // ConstantPixelSize 캔버스(좌하단 기준 픽셀)
                 float ratio = Mathf.Clamp01((float)m.Hp / m.MaxHp);
-                _hpBarFills[used].rectTransform.sizeDelta = new Vector2(HpBarWidth * ratio, -2f); // 너비로 체력 표현
+                _hpBarFills[used].rectTransform.sizeDelta =
+                    new Vector2(HpBarFillWidth * ratio, -HpBarFillInset * 2f); // 너비로 체력 표현
                 used++;
             }
 
@@ -1263,6 +1271,34 @@ namespace TaskbarHero.Client.Battle
             {
                 if (_hpBarRoots[i] != null) _hpBarRoots[i].gameObject.SetActive(false);
             }
+        }
+
+        /// <summary>
+        /// 몬스터 몸통(왕관 제외) 스프라이트 경계로 몸통 중앙 x·상단 y를 즉석 측정한다.
+        /// <b>스폰 직후 <see cref="MonsterUnit.TryGetHeadAnchor"/>가 아직 준비되지 않은 몇 프레임용 폴백</b>이며,
+        /// 평상시에는 쓰지 않는다(매 프레임 측정은 애니메이션 때문에 값이 흔들린다).
+        /// </summary>
+        private static void MeasureBodyTop(MonsterUnit m, out float centerX, out float bodyTop)
+        {
+            Vector3 pos = m.transform.position;
+            centerX = pos.x;
+            bodyTop = pos.y + 1.2f; // 렌더러가 아직 없을 때의 최종 폴백
+
+            Transform crownT = m.transform.Find("BossCrown");
+            var rends = m.GetComponentsInChildren<SpriteRenderer>();
+            if (rends == null || rends.Length == 0)
+            {
+                return;
+            }
+            Bounds body = default;
+            bool has = false;
+            foreach (var r in rends)
+            {
+                if (r == null) continue;
+                if (crownT != null && r.transform == crownT) continue; // 왕관은 몸통 경계에서 제외
+                if (!has) { body = r.bounds; has = true; } else body.Encapsulate(r.bounds);
+            }
+            if (has) { bodyTop = body.max.y; centerX = body.center.x; }
         }
 
         /// <summary>적 HP바 전용 Canvas(낮은 sortingOrder, 픽셀 좌표계)를 최초 1회 생성한다.</summary>
@@ -1292,22 +1328,30 @@ namespace TaskbarHero.Client.Battle
                 var bgRt = (RectTransform)bgGo.transform;
                 bgRt.anchorMin = bgRt.anchorMax = new Vector2(0f, 0f); // 좌하단 기준
                 bgRt.pivot = new Vector2(0.5f, 0.5f);
-                bgRt.sizeDelta = new Vector2(HpBarWidth + 2f, HpBarHeight + 2f);
+                bgRt.sizeDelta = new Vector2(HpBarWidth, HpBarHeight);
                 var bgImg = bgGo.GetComponent<Image>();
-                bgImg.color = new Color(0f, 0f, 0f, 0.6f);
+                if (enemyHpBarFrame != null)
+                {
+                    bgImg.sprite = enemyHpBarFrame; // 체력바 프레임 아트(원본 비율 그대로 8배 축소)
+                    bgImg.color = Color.white;
+                }
+                else
+                {
+                    bgImg.color = new Color(0f, 0f, 0f, 0.6f); // 프레임 아트 미배선 시 폴백(단색 배경)
+                }
                 bgImg.raycastTarget = false;
 
-                // 채움: 좌측 정렬 솔리드 사각형(너비로 체력 비율 표현). 세로는 부모에 맞춰 1px 인셋.
+                // 채움: 좌측 정렬 솔리드 사각형(너비로 체력 비율 표현). 프레임 테두리를 피해 안쪽으로 넣는다.
                 var fillGo = new GameObject("Fill", typeof(RectTransform), typeof(Image));
                 fillGo.transform.SetParent(bgGo.transform, false);
                 var fillRt = (RectTransform)fillGo.transform;
                 fillRt.anchorMin = new Vector2(0f, 0f);
                 fillRt.anchorMax = new Vector2(0f, 1f);
                 fillRt.pivot = new Vector2(0f, 0.5f);
-                fillRt.anchoredPosition = new Vector2(1f, 0f);
-                fillRt.sizeDelta = new Vector2(HpBarWidth, -2f);
+                fillRt.anchoredPosition = new Vector2(HpBarFillInset, 0f);
+                fillRt.sizeDelta = new Vector2(HpBarFillWidth, -HpBarFillInset * 2f);
                 var fillImg = fillGo.GetComponent<Image>();
-                fillImg.color = Color.red;
+                fillImg.color = new Color(0.85f, 0.16f, 0.16f, 1f); // 어두운 프레임 위에서 잘 보이는 붉은색
                 fillImg.raycastTarget = false;
 
                 _hpBarRoots.Add(bgRt);

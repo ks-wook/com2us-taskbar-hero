@@ -1550,6 +1550,7 @@ MonoBehaviour:
   walkDustWorldWidth: 1.2
   bossIcon: {fileID: -6753380774007211227, guid: 54aeed7af3e5d434db29f1091619b085, type: 3}
   bossMoveSpeedFactor: 0.6
+  enemyHpBarFrame: {fileID: 3003013052192031213, guid: 92b7c1ec371896349b22006e2ae7a29c, type: 3}
 --- !u!4 &1774583028
 Transform:
   m_ObjectHideFlags: 0

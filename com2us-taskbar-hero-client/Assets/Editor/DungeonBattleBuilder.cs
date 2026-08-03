@@ -149,8 +149,12 @@ namespace TaskbarHero.ClientEditor
             // 보스 왕관 아이콘 배선(보스 몬스터 머리 위 표시용).
             var bossIcon = LoadSprite("Assets/Art/Icon/stage_king.png");
             battleSo.FindProperty("bossIcon").objectReferenceValue = bossIcon;
+            // 몬스터 머리 위 HP바 프레임 아트 배선(미배선 시 단색 배경으로 폴백된다).
+            var hpBarFrame = LoadSprite("Assets/Art/Icon/Combat/체력바.png");
+            battleSo.FindProperty("enemyHpBarFrame").objectReferenceValue = hpBarFrame;
             battleSo.ApplyModifiedPropertiesWithoutUndo();
-            Debug.Log($"[DungeonBattleBuilder] 보스 왕관 아이콘 {(bossIcon != null ? "배선" : "없음")}.");
+            Debug.Log($"[DungeonBattleBuilder] 보스 왕관 아이콘 {(bossIcon != null ? "배선" : "없음")}, "
+                      + $"몬스터 체력바 프레임 {(hpBarFrame != null ? "배선" : "없음")}.");
 
             var flow = go.AddComponent<DungeonBattleFlow>();
             var fso = new SerializedObject(flow);
