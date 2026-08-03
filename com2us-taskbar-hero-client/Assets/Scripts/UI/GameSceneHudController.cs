@@ -9,10 +9,18 @@ using TaskbarHero.Common.Dto;
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// GameScene 상시 HUD. 우하단에 기능 버튼(거래소·출석부·메일·편성·스테이지·가방)을 한 줄로 상시 노출하고,
-    /// ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
+    /// GameScene 상시 HUD. <b>화면 하단 가로 중앙</b>에 기능 버튼(거래소·출석부·메일·편성·스테이지·가방·환경설정)을
+    /// 한 줄로 노출하고, ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
     /// 버튼 줄은 던전 배경 띠보다 아래(화면 최하단)에 놓여 배경 아트에 묻히지 않는다 —
     /// 배경 띠를 위로 띄우는 쪽은 <c>DungeonBattleBuilder</c>가 GameScene을 구울 때 처리한다.
+    /// <para>
+    /// 하단 바는 <b>토글 버튼으로 열고 닫는다</b>(기본 펼침). 열면 접히는 영역이 오른쪽에서 왼쪽으로 펼쳐지고
+    /// 이어서 아이콘이 왼쪽부터 오른쪽으로 작아진 상태에서 원래 크기까지 커지며, 닫을 때는 이를 역재생한다
+    /// (아이콘이 오른쪽부터 왼쪽으로 작아진 뒤 바가 말려 접힘 — <see cref="AnimateMenuBar"/>).
+    /// 토글 버튼은 하단 바에 붙지 않고 <b>우측 상단 버프 아이콘 바로 아래</b>에 있어 접혀도 남는다
+    /// (아이콘은 <c>Assets/Art/Icon/메뉴.png</c>, 배경 프레임 없음). 누르면 아이콘이 잠깐 커졌다 원래 크기로
+    /// 돌아오는 클릭 피드백(<see cref="ButtonPunchScale"/>)이 바 연출과 함께 재생된다.
+    /// </para>
     /// <para>
     /// 화면 구성 외에 <b>GameScene에 머무는 동안 도는 주기 작업</b>도 이 컴포넌트가 소유한다 —
     /// 미수령 메일 레드닷 조회(<see cref="MailNotifyLoop"/>)와 접속 시각 갱신
@@ -33,6 +41,11 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite settingsIcon;   // 환경설정
         [Tooltip("하단 아이콘 줄 뒷배경 프레임(Assets/Art/UI/ui_bg.png, 9-slice). 없으면 배경 없이 아이콘만 표시.")]
         [SerializeField] private Sprite uiBackgroundSprite;
+        [Tooltip("하단 메뉴바 토글 버튼 아이콘(Assets/Art/Icon/메뉴.png). " +
+                 "Sprite가 아니라 Texture2D인 이유 — 이 파일은 Multiple로 임포트돼 햄버거 3줄이 서브 스프라이트로 " +
+                 "쪼개져 있어(메뉴_0/1/2) 스프라이트 하나를 쓰면 줄 한 개만 나온다. 임포트 설정은 바꾸지 않고(공용 아트 규칙) " +
+                 "런타임에 텍스처 전체로 스프라이트를 만들어 쓴다. 없으면 화살표 텍스트로 대체한다.")]
+        [SerializeField] private Texture2D menuToggleIconTexture;
 
         [Header("적용 중인 버프 표시 (우측 상단)")]
         [Tooltip("적용 중인 버프 아이콘(Assets/Art/Icon/적용중인버프.png). 활성 버프가 있을 때만 노출된다.")]
@@ -59,13 +72,12 @@ namespace TaskbarHero.Client.UI
         [Tooltip("접속 시 오늘자 출석 보상이 아직 남아 있으면 출석부 패널을 자동으로 연다.")]
         [SerializeField] private bool autoOpenAttendance = true;
 
-        // 우하단 버튼 줄: 오른쪽 끝부터 왼쪽으로 한 칸씩. GameScene 창은 정사각형이라 캔버스 가로가
-        // 약 1440 단위 — 버튼 6개(맨 왼쪽 칸이 -1100까지)가 넉넉히 들어간다.
+        // 하단 버튼 줄: 접히는 영역 안에서 오른쪽 끝부터 왼쪽으로 한 칸씩. GameScene 창은 정사각형이라
+        // 캔버스 가로가 약 1440 단위 — 버튼 7개 + 토글 버튼(합 1380)이 들어간다.
         private const int MenuSlotCount = 7;
         private const float MenuSlotStep = 180f;
         private const float MenuButtonWidth = 160f;
         private const float MenuButtonHeight = 150f;
-        private const float MenuRowRightX = -40f; // 맨 오른쪽 칸의 오른쪽 끝
         private const float MenuRowY = 28f;       // 화면 하단에서 띄우는 높이(던전 배경 띠 아래)
 
         // 하단 UI 뒷배경(ui_bg) 크기 계산용.
@@ -77,9 +89,40 @@ namespace TaskbarHero.Client.UI
         // → 배율로 줄여 쓴다(250/4 = 62.5씩, 상하 합 125 < 186).
         private const float UiBackPixelsPerUnitMultiplier = 4f;
 
-        // 우측 상단 버프 아이콘: 화면 모서리에서 살짝 띄운 위치·크기.
+        // 토글 버튼(접혀도 남아 있는 손잡이). 하단 바에 붙이지 않고 <b>우측 상단 버프 아이콘 바로 아래</b>에 둔다
+        // (우상단 앵커 기준). 버프 아이콘이 y -28에서 아래로 BuffIconSize(96)만큼 차지하므로 그 아래로 12 띄운다.
+        // 아이콘만 노출한다(뒷배경 프레임 없음) — 버튼 크기가 곧 아이콘 크기다.
+        private const float MenuToggleSize = 128f;
+        private const float MenuToggleGapFromBuff = 12f;
+        // BuffIconPos(static readonly)를 참조하지 않고 좌표 상수로 계산한다 —
+        // 정적 필드는 선언 순서대로 초기화되므로 뒤에 선언된 필드를 읽으면 0이 된다.
+        private static readonly Vector2 MenuTogglePos =
+            new Vector2(BuffIconX, BuffIconY - BuffIconSize - MenuToggleGapFromBuff);
+
+        // 열기/닫기 연출. 열 때는 ① 바가 오른쪽 끝에서 왼쪽으로 펼쳐지고 ② 아이콘이 왼쪽부터 오른쪽으로
+        // 작은 크기에서 원래 크기까지 순차적으로 커진다. 닫을 때는 이 순서를 역재생한다 —
+        // ① 아이콘이 오른쪽부터 왼쪽으로 차례로 작아지고 ② 바가 오른쪽으로 말려 접힌다.
+        private const float MenuOpenSeconds = 0.20f;
+        private const float MenuCloseSeconds = 0.16f;
+        private const float MenuIconPopSeconds = 0.16f;      // 아이콘 하나가 커지는 데 걸리는 시간
+        private const float MenuIconPopStagger = 0.03f;      // 왼쪽→오른쪽 아이콘 간 시차
+        private const float MenuIconPopStartScale = 0.35f;   // 팝 시작 크기(작아진 상태)
+        private const float MenuIconPopOvershoot = 0.6f;     // 원래 크기를 살짝 지나치는 정도(0이면 오버슈트 없음)
+
+        // 바 기하. 바 = 접히는 영역(배경 프레임 + 아이콘 줄)이며, 이 폭 그대로 화면 하단 중앙에 놓인다.
+        private const float MenuAreaWidth = (MenuSlotCount - 1) * MenuSlotStep + MenuButtonWidth + UiBackSidePadding * 2f;
+        private const float MenuBarBottom = MenuRowY - UiBackPadding;
+        // 바 위쪽 끝: 아이콘 줄 위 여백과 던전 배경과의 간격 중 더 낮은 쪽을 택해 던전 띠를 침범하지 않게 한다.
+        private static readonly float MenuBarTop = Mathf.Min(MenuRowY + MenuButtonHeight + UiBackPadding,
+                                                            DungeonBandBottomY - UiBackGapFromDungeon);
+        private static readonly float MenuBarHeight = MenuBarTop - MenuBarBottom;
+
+        // 우측 상단 버프 아이콘: 화면 모서리에서 살짝 띄운 위치·크기(우상단 앵커 기준).
+        // 좌표를 상수로 둬 메뉴 토글 버튼 위치(MenuTogglePos)가 이 아래에 붙도록 계산할 수 있게 한다.
         private const float BuffIconSize = 96f;
-        private static readonly Vector2 BuffIconPos = new Vector2(-28f, -28f);
+        private const float BuffIconX = -28f;
+        private const float BuffIconY = -28f;
+        private static readonly Vector2 BuffIconPos = new Vector2(BuffIconX, BuffIconY);
 
         // ESC 메뉴 버튼: system_slot 원본(2048×731) 테두리 상하 128px → 배율 4로 32씩(합 64 < 100).
         private const float EscButtonWidth = 440f;
@@ -87,6 +130,15 @@ namespace TaskbarHero.Client.UI
         private const float SystemSlotPixelsPerUnitMultiplier = 4f;
 
         private GameObject _escMenuRoot; // ESC로 토글하는 메뉴(타이틀 복귀)
+
+        // 하단 메뉴바 토글 상태·연출 대상.
+        private RectTransform _menuArea;         // 접히는 영역(폭을 0↔MenuAreaWidth로 애니메이션)
+        private RectTransform[] _menuButtons;    // 인덱스 = 칸 번호(0 = 맨 오른쪽)
+        private Text _menuToggleLabel;           // 토글 버튼의 화살표 폴백(아이콘이 없을 때만 생성)
+        private Sprite _menuToggleSprite;        // 메뉴 아이콘 텍스처로 런타임에 만든 스프라이트(OnDestroy에서 정리)
+        private ButtonPunchScale _menuTogglePunch; // 클릭 시 아이콘이 커졌다 작아지는 연출(아이콘/화살표에 부착)
+        private Coroutine _menuAnim;             // 진행 중인 열기/닫기 연출
+        private bool _menuOpen = true;           // 기본은 펼친 상태
 
         private void Awake()
         {
@@ -233,17 +285,23 @@ namespace TaskbarHero.Client.UI
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // 아이콘보다 먼저 만들어 뒤에 깔리게 한다(같은 캔버스에서는 자식 순서 = 그리기 순서).
-            BuildMenuBackground(canvasGo.transform);
+            // 하단 바: 화면 하단 '가로 중앙'에 놓는다(예전에는 우하단 정렬이었다).
+            // 구조 — MenuBar(중앙 정렬, 피벗 오른쪽) ├ MenuArea(접히는 영역: 배경+아이콘, 마스크로 클리핑)
+            //                                        └ MenuToggleButton(오른쪽 끝 고정, 접혀도 남는 손잡이)
+            var bar = CreateBottomCenterBar(canvasGo.transform);
+            _menuArea = CreateMenuArea(bar);
+            BuildMenuBackground(_menuArea);      // 아이콘보다 먼저 만들어 뒤에 깔리게 한다(자식 순서 = 그리기 순서)
+            CreateMenuToggleButton(canvasGo.transform, font); // 바가 아니라 캔버스 직속(게임 화면 안쪽 우측에 배치)
 
-            // 우하단 한 줄로 상시 노출: 오른쪽부터 [환경설정] [가방] [스테이지] [편성] [메일] [출석부] [거래소].
-            CreateMenuButton(canvasGo.transform, font, "SettingsButton", "환경설정", settingsIcon, 0, OnSettingsButton);
-            var inventoryBtn = CreateMenuButton(canvasGo.transform, font, "InventoryButton", "가방", inventoryIcon, 1, OnInventoryButton);
-            CreateMenuButton(canvasGo.transform, font, "StageButton", "스테이지", stageIcon, 2, OnStageButton);
-            CreateMenuButton(canvasGo.transform, font, "PartyButton", "편성", partyIcon, 3, OnPartyButton);
-            var mailBtn = CreateMenuButton(canvasGo.transform, font, "MailButton", "메일", mailIcon, 4, OnMailButton);
-            CreateMenuButton(canvasGo.transform, font, "AttendanceButton", "출석부", attendanceIcon, 5, OnAttendanceButton);
-            CreateMenuButton(canvasGo.transform, font, "TradeButton", "거래소", tradeIcon, 6, OnTradeButton);
+            // 접히는 영역 안에 한 줄로: 오른쪽부터 [환경설정] [가방] [스테이지] [편성] [메일] [출석부] [거래소].
+            _menuButtons = new RectTransform[MenuSlotCount];
+            CreateMenuButton(font, "SettingsButton", "환경설정", settingsIcon, 0, OnSettingsButton);
+            var inventoryBtn = CreateMenuButton(font, "InventoryButton", "가방", inventoryIcon, 1, OnInventoryButton);
+            CreateMenuButton(font, "StageButton", "스테이지", stageIcon, 2, OnStageButton);
+            CreateMenuButton(font, "PartyButton", "편성", partyIcon, 3, OnPartyButton);
+            var mailBtn = CreateMenuButton(font, "MailButton", "메일", mailIcon, 4, OnMailButton);
+            CreateMenuButton(font, "AttendanceButton", "출석부", attendanceIcon, 5, OnAttendanceButton);
+            CreateMenuButton(font, "TradeButton", "거래소", tradeIcon, 6, OnTradeButton);
 
             // 메일 버튼 우측 상단 레드닷: 아직 수령하지 않은 보상 첨부가 남은 메일이 있으면 표시(만료 전 수령 유도).
             RedDot.AttachTopRight((RectTransform)mailBtn.transform).Bind(RedDotConditions.HasUnclaimedMailReward);
@@ -269,27 +327,53 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>
-        /// 아이콘 줄 뒤에 깔리는 배경 프레임(ui_bg)을 만든다. 아이콘 줄 전체를 감싸도록 크기를 잡되,
-        /// 위쪽은 던전 배경 띠(아래 끝 <see cref="DungeonBandBottomY"/>)와 <see cref="UiBackGapFromDungeon"/>만큼
-        /// 띄워 배경끼리 붙어 보이지 않게 한다. 스프라이트가 없으면 배경을 만들지 않는다(아이콘만 표시).
+        /// 하단 바를 화면 <b>하단 가로 중앙</b>에 만든다.
+        /// 피벗을 오른쪽(1,0)에 두고 폭의 절반만큼 오른쪽으로 밀어, 바가 중앙을 기준으로 좌우 대칭이 되게 한다
+        /// (동시에 '오른쪽 끝'이 펼침/접힘의 기준점이 된다).
         /// </summary>
-        private void BuildMenuBackground(Transform parent)
+        private static RectTransform CreateBottomCenterBar(Transform parent)
+        {
+            var go = new GameObject("MenuBar", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0f); // 하단 중앙
+            rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = new Vector2(MenuAreaWidth * 0.5f, MenuBarBottom);
+            rt.sizeDelta = new Vector2(MenuAreaWidth, MenuBarHeight);
+            return rt;
+        }
+
+        /// <summary>
+        /// 접히는 영역(배경 프레임 + 아이콘 줄)을 만든다. 오른쪽 끝을 기준으로 폭이 0 ↔ <see cref="MenuAreaWidth"/>로
+        /// 변하며 <b>오른쪽에서 왼쪽으로 펼쳐진다</b>. <see cref="RectMask2D"/>로 클리핑해 아직 펼쳐지지 않은
+        /// 아이콘이 밖으로 새지 않게 한다(클리핑된 영역은 클릭도 받지 않는다).
+        /// </summary>
+        private static RectTransform CreateMenuArea(RectTransform bar)
+        {
+            var go = new GameObject("MenuArea", typeof(RectTransform), typeof(RectMask2D));
+            go.transform.SetParent(bar, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f); // 바의 오른쪽 아래 기준
+            rt.pivot = new Vector2(1f, 0f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(MenuAreaWidth, MenuBarHeight);
+            return rt;
+        }
+
+        /// <summary>
+        /// 아이콘 줄 뒤에 깔리는 배경 프레임(ui_bg)을 만든다. 접히는 영역을 꽉 채우도록 늘려 두어
+        /// <b>영역이 접힐 때 프레임도 함께 말려</b>(9-slice라 테두리는 유지된 채) 보인다.
+        /// 스프라이트가 없으면 배경을 만들지 않는다(아이콘만 표시).
+        /// </summary>
+        private void BuildMenuBackground(RectTransform area)
         {
             if (uiBackgroundSprite == null)
             {
                 return;
             }
 
-            float rowLeftX = MenuRowRightX - (MenuSlotCount - 1) * MenuSlotStep - MenuButtonWidth; // -1100
-            float left = rowLeftX - UiBackSidePadding;
-            float right = MenuRowRightX + UiBackSidePadding;
-            float bottom = MenuRowY - UiBackPadding;
-            // 아이콘 줄 위 여백과 던전 배경과의 간격 중 더 낮은 쪽을 택해 배경이 던전 띠를 침범하지 않게 한다.
-            float top = Mathf.Min(MenuRowY + MenuButtonHeight + UiBackPadding,
-                                  DungeonBandBottomY - UiBackGapFromDungeon);
-
             var go = new GameObject("MenuBackground", typeof(RectTransform), typeof(Image));
-            go.transform.SetParent(parent, false);
+            go.transform.SetParent(area, false);
             var img = go.GetComponent<Image>();
             img.sprite = uiBackgroundSprite;
             img.type = Image.Type.Sliced;
@@ -298,18 +382,137 @@ namespace TaskbarHero.Client.UI
             img.raycastTarget = false; // 배경은 클릭을 먹지 않는다(창 드래그·아이콘 클릭 방해 금지)
 
             var rt = (RectTransform)go.transform;
-            rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f); // 우하단
-            rt.pivot = new Vector2(1f, 0f);
-            rt.anchoredPosition = new Vector2(right, bottom);
-            rt.sizeDelta = new Vector2(right - left, top - bottom);
+            rt.anchorMin = Vector2.zero; // 영역 전체를 채운다(폭 애니메이션에 따라 함께 줄었다 늘어난다)
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
         }
 
-        /// <summary>기능 버튼 하나를 우하단 줄의 <paramref name="slot"/>번째 칸(0 = 맨 오른쪽)에 만든다.</summary>
-        private GameObject CreateMenuButton(Transform parent, Font font, string name, string label, Sprite icon,
+        /// <summary>
+        /// 메뉴바 토글 버튼을 만든다(접혀도 남아 있어 다시 펼치는 손잡이).
+        /// 하단 바에 붙이지 않고 <b>우측 상단 버프 아이콘 바로 아래</b>(<see cref="MenuTogglePos"/>)에 두며,
+        /// <b>뒷배경 프레임 없이 아이콘만</b> 노출한다(버튼 크기 = 아이콘 크기).
+        /// 아이콘은 <c>Assets/Art/Icon/메뉴.png</c>(메뉴 버튼 아이콘)이며, 배선되지 않았으면
+        /// 화살표 텍스트로 대체한다 — 펼쳐져 있으면 '&gt;', 접혀 있으면 '&lt;'.
+        /// </summary>
+        private void CreateMenuToggleButton(Transform parent, Font font)
+        {
+            var go = new GameObject("MenuToggleButton", typeof(RectTransform), typeof(Image), typeof(Button));
+            go.transform.SetParent(parent, false);
+
+            // 뒷배경 프레임 없이 아이콘만 보이게 한다. 이 Image는 클릭 판정용이라
+            // 완전 투명(A=0)으로 두되 raycastTarget은 유지한다(투명해도 클릭은 정상 동작).
+            var img = go.GetComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0f);
+
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f); // 화면 우상단 기준(버프 아이콘과 같은 앵커)
+            rt.pivot = new Vector2(1f, 1f);
+            rt.anchoredPosition = MenuTogglePos;
+            rt.sizeDelta = new Vector2(MenuToggleSize, MenuToggleSize);
+
+            if (menuToggleIconTexture != null)
+            {
+                CreateMenuToggleIcon(go.transform);
+            }
+            else
+            {
+                CreateMenuToggleArrow(go.transform, font);
+            }
+
+            // 클릭 피드백(커졌다 작아지는 punch)은 버튼 루트가 아니라 <b>아이콘 자식</b>에 붙인다 —
+            // 버튼 루트의 피벗이 우상단(1,1)이라 그걸 키우면 아이콘이 좌하단으로 쏠려 커진다.
+            // 아이콘 자식은 피벗이 중앙이라 제자리에서 커졌다 돌아온다.
+            go.GetComponent<Button>().onClick.AddListener(() =>
+            {
+                if (_menuTogglePunch != null)
+                {
+                    _menuTogglePunch.Play(); // 바 연출과 동시에 시작(끝날 때까지 기다리지 않는다)
+                }
+                ToggleMenuBar();
+            });
+        }
+
+        /// <summary>
+        /// 토글 버튼 안에 메뉴 아이콘을 붙인다.
+        /// <para>텍스처 <b>전체 영역</b>으로 스프라이트를 만든다 — 이 파일(메뉴.png)은 Multiple로 임포트돼
+        /// 햄버거 3줄이 각각 서브 스프라이트로 쪼개져 있어, 스프라이트 에셋을 그대로 쓰면 줄 한 개만 나온다.
+        /// 임포트 설정을 Single로 바꾸는 것은 공용 아트 규칙상 금지(서브 스프라이트 참조가 끊긴다)이므로
+        /// 런타임에 합쳐 쓴다. 만든 스프라이트는 <see cref="OnDestroy"/>에서 정리한다.</para>
+        /// </summary>
+        private void CreateMenuToggleIcon(Transform parent)
+        {
+            _menuToggleSprite = Sprite.Create(menuToggleIconTexture,
+                new Rect(0f, 0f, menuToggleIconTexture.width, menuToggleIconTexture.height),
+                new Vector2(0.5f, 0.5f), 100f);
+
+            var iconGo = new GameObject("Icon", typeof(RectTransform), typeof(Image));
+            iconGo.transform.SetParent(parent, false);
+            var iconImg = iconGo.GetComponent<Image>();
+            iconImg.sprite = _menuToggleSprite;
+            iconImg.preserveAspect = true;
+            iconImg.raycastTarget = false; // 클릭은 부모 버튼이 받는다
+            var irt = iconImg.rectTransform;
+            irt.anchorMin = Vector2.zero; // 버튼 전체를 채운다(배경 프레임이 없으므로 여백을 두지 않는다)
+            irt.anchorMax = Vector2.one;
+            irt.offsetMin = Vector2.zero;
+            irt.offsetMax = Vector2.zero;
+
+            _menuTogglePunch = iconGo.AddComponent<ButtonPunchScale>();
+        }
+
+        /// <summary>아이콘이 배선되지 않았을 때 쓰는 화살표 폴백(다음에 일어날 동작 방향을 가리킨다).</summary>
+        private void CreateMenuToggleArrow(Transform parent, Font font)
+        {
+            var labelGo = new GameObject("Arrow", typeof(RectTransform), typeof(Text));
+            labelGo.transform.SetParent(parent, false);
+            _menuToggleLabel = labelGo.GetComponent<Text>();
+            _menuToggleLabel.font = font;
+            _menuToggleLabel.fontSize = 40;
+            _menuToggleLabel.fontStyle = FontStyle.Bold;
+            _menuToggleLabel.alignment = TextAnchor.MiddleCenter;
+            _menuToggleLabel.color = Color.white;
+            _menuToggleLabel.raycastTarget = false;
+            _menuToggleLabel.text = MenuToggleArrow(_menuOpen);
+            var lrt = (RectTransform)labelGo.transform;
+            lrt.anchorMin = Vector2.zero;
+            lrt.anchorMax = Vector2.one;
+            lrt.offsetMin = Vector2.zero;
+            lrt.offsetMax = Vector2.zero;
+
+            _menuTogglePunch = labelGo.AddComponent<ButtonPunchScale>();
+        }
+
+        /// <summary>런타임에 만든 토글 아이콘 스프라이트를 정리한다(에셋이 아니라 런타임 생성물이라 직접 파괴한다).</summary>
+        private void OnDestroy()
+        {
+            if (_menuToggleSprite != null)
+            {
+                Destroy(_menuToggleSprite);
+                _menuToggleSprite = null;
+            }
+        }
+
+        /// <summary>토글 버튼에 표시할 화살표(다음에 일어날 동작 방향)를 돌려준다.</summary>
+        private static string MenuToggleArrow(bool open) => open ? ">" : "<";
+
+        /// <summary>기능 버튼 하나를 접히는 영역 안 <paramref name="slot"/>번째 칸(0 = 맨 오른쪽)에 만든다.</summary>
+        private GameObject CreateMenuButton(Font font, string name, string label, Sprite icon,
             int slot, UnityEngine.Events.UnityAction onClick)
         {
-            var pos = new Vector2(MenuRowRightX - slot * MenuSlotStep, MenuRowY);
-            return CreateButton(parent, font, name, label, icon, pos, onClick);
+            // 영역의 오른쪽 끝에서 안쪽 여백만큼 들어온 지점이 첫 칸(0)의 오른쪽 끝이다.
+            var pos = new Vector2(-UiBackSidePadding - slot * MenuSlotStep, UiBackPadding);
+            var go = CreateButton(_menuArea, font, name, label, icon, pos, onClick);
+
+            // 팝 연출이 아이콘 '제자리'에서 커지도록 피벗을 칸 중앙으로 옮긴다.
+            // CreateButton의 피벗(1,0 = 우측 하단)을 그대로 두면 축소가 우측 하단으로 쏠려 아이콘이 바닥에 몰려 보인다.
+            // 피벗 이동에 맞춰 위치를 칸 중심으로 바꾸므로 실제 사각형(rect)은 그대로다.
+            var rt = (RectTransform)go.transform;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = new Vector2(pos.x - MenuButtonWidth * 0.5f, pos.y + MenuButtonHeight * 0.5f);
+
+            _menuButtons[slot] = rt;
+            return go;
         }
 
         /// <summary>우하단 앵커 HUD 버튼 하나를 생성·배선하고 생성한 버튼 오브젝트를 반환한다.
@@ -373,6 +576,162 @@ namespace TaskbarHero.Client.UI
 
             btnGo.AddComponent<Button>().onClick.AddListener(onClick);
             return btnGo;
+        }
+
+        /// <summary>
+        /// 하단 메뉴바를 토글한다(펼침 ↔ 접힘). 연출 중에 다시 누르면 진행 중인 코루틴을 멈추고
+        /// <b>현재 폭에서</b> 반대 방향으로 이어 달려, 연타해도 상태와 화면이 어긋나지 않는다.
+        /// </summary>
+        private void ToggleMenuBar()
+        {
+            _menuOpen = !_menuOpen;
+            if (_menuToggleLabel != null)
+            {
+                _menuToggleLabel.text = MenuToggleArrow(_menuOpen);
+            }
+            if (_menuAnim != null)
+            {
+                StopCoroutine(_menuAnim);
+            }
+            _menuAnim = StartCoroutine(AnimateMenuBar(_menuOpen));
+        }
+
+        /// <summary>
+        /// 메뉴바 열기/닫기 연출. <b>닫기는 열기의 역재생</b>이다.
+        /// <para><b>열 때</b> — ① 접히는 영역의 폭을 0 → <see cref="MenuAreaWidth"/>로 키운다. 피벗이 오른쪽이라
+        /// <b>오른쪽에서 왼쪽으로 펼쳐진다.</b> ② 이어서 아이콘을 <b>왼쪽부터 오른쪽으로</b> 시차를 두고
+        /// 작아진 상태에서 원래 크기까지 키운다.</para>
+        /// <para><b>닫을 때</b> — ① 아이콘을 <b>오른쪽부터 왼쪽으로</b>(= 열 때의 반대 순서) 차례로 작게 줄인 뒤
+        /// ② 폭을 0으로 되돌려 오른쪽으로 말아 넣고 영역을 비활성화한다.</para>
+        /// <para>남은 거리에 비례해 시간을 잡으므로 연출 중간에 방향이 바뀌어도 속도가 일정하다.
+        /// 시간은 <see cref="Time.unscaledDeltaTime"/> 기준이라 일시정지(timeScale 0)에서도 동작한다.</para>
+        /// </summary>
+        private IEnumerator AnimateMenuBar(bool open)
+        {
+            if (open)
+            {
+                _menuArea.gameObject.SetActive(true);
+                SetMenuIconScale(MenuIconPopStartScale); // 펼침이 끝난 뒤 커지도록 작은 크기에서 시작
+                yield return RollMenuArea(true);
+                yield return ScaleMenuIcons(true);
+            }
+            else
+            {
+                yield return ScaleMenuIcons(false);
+                yield return RollMenuArea(false);
+                _menuArea.gameObject.SetActive(false); // 접힌 뒤에는 꺼 둔다(잔여 클릭·갱신 비용 제거)
+                SetMenuIconScale(1f);                  // 다음에 열 때를 위해 원래 크기로 되돌려 둔다
+            }
+            _menuAnim = null;
+        }
+
+        /// <summary>접히는 영역의 폭을 목표까지 애니메이션한다(열기 = 왼쪽으로 펼침, 닫기 = 오른쪽으로 말아 넣기).</summary>
+        private IEnumerator RollMenuArea(bool open)
+        {
+            float from = _menuArea.sizeDelta.x;
+            float to = open ? MenuAreaWidth : 0f;
+            float duration = (open ? MenuOpenSeconds : MenuCloseSeconds) * (Mathf.Abs(to - from) / MenuAreaWidth);
+
+            for (float t = 0f; t < duration; t += Time.unscaledDeltaTime)
+            {
+                SetMenuAreaWidth(Mathf.Lerp(from, to, EaseOutCubic(t / duration)));
+                yield return null;
+            }
+            SetMenuAreaWidth(to);
+        }
+
+        /// <summary>
+        /// 아이콘 크기를 <see cref="MenuIconPopStagger"/>초씩 시차를 두고 차례로 바꾼다.
+        /// <para><paramref name="grow"/>면 <b>왼쪽부터 오른쪽으로</b> 원래 크기까지 커지고(살짝 오버슈트 후 안착),
+        /// 아니면 <b>오른쪽부터 왼쪽으로</b> 작은 크기까지 줄어든다 — 순서가 반대라 닫기가 열기의 역재생이 된다.
+        /// 칸 번호는 오른쪽부터 0이므로 커질 때만 역순(<c>n-1-slot</c>)을 쓴다.</para>
+        /// <para>시작 크기를 현재 값에서 읽으므로, 연출 중간에 토글을 눌러 방향이 바뀌어도 크기가 튀지 않는다.</para>
+        /// </summary>
+        private IEnumerator ScaleMenuIcons(bool grow)
+        {
+            int n = _menuButtons.Length;
+            var from = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                from[i] = _menuButtons[i] != null ? _menuButtons[i].localScale.x : 1f;
+            }
+
+            float target = grow ? 1f : MenuIconPopStartScale;
+            float total = (n - 1) * MenuIconPopStagger + MenuIconPopSeconds;
+
+            for (float t = 0f; t < total; t += Time.unscaledDeltaTime)
+            {
+                for (int slot = 0; slot < n; slot++)
+                {
+                    var rt = _menuButtons[slot];
+                    if (rt == null)
+                    {
+                        continue;
+                    }
+                    int order = grow ? n - 1 - slot : slot; // 커질 때는 왼쪽부터, 줄어들 때는 오른쪽부터
+                    float k = Mathf.Clamp01((t - order * MenuIconPopStagger) / MenuIconPopSeconds);
+                    float eased = grow ? EaseOutBack(k) : EaseInCubic(k);
+                    float scale = Mathf.LerpUnclamped(from[slot], target, eased);
+                    rt.localScale = new Vector3(scale, scale, 1f);
+                }
+                yield return null;
+            }
+            SetMenuIconScale(target); // 끝나면 정확히 목표 크기로 고정
+        }
+
+        /// <summary>접히는 영역의 폭을 설정한다(피벗이 오른쪽이라 폭이 줄면 오른쪽으로 말려 들어간다).</summary>
+        private void SetMenuAreaWidth(float width)
+        {
+            _menuArea.sizeDelta = new Vector2(Mathf.Max(0f, width), MenuBarHeight);
+        }
+
+        /// <summary>메뉴 아이콘 전체의 크기 배율을 한 번에 지정한다(1 = 원래 크기).</summary>
+        private void SetMenuIconScale(float scale)
+        {
+            if (_menuButtons == null)
+            {
+                return;
+            }
+            foreach (var rt in _menuButtons)
+            {
+                if (rt != null)
+                {
+                    rt.localScale = new Vector3(scale, scale, 1f);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 커질 때 쓰는 곡선(ease-out-back). 0에서 0, 1에서 <b>정확히 1</b>이고 그 사이에서 1을 살짝 넘겼다가
+        /// (<see cref="MenuIconPopOvershoot"/>) 되돌아와 안착한다 — 아이콘이 원래 크기를 살짝 지나쳐 커지는 탄력.
+        /// </summary>
+        private static float EaseOutBack(float k)
+        {
+            if (k <= 0f)
+            {
+                return 0f;
+            }
+            if (k >= 1f)
+            {
+                return 1f;
+            }
+            float c = 1.70158f * MenuIconPopOvershoot;
+            float p = k - 1f;
+            return 1f + (c + 1f) * p * p * p + c * p * p;
+        }
+
+        /// <summary>줄어들 때 쓰는 곡선(ease-in-cubic — 천천히 시작해 빠르게 줄어든다. 커질 때의 감속과 거울 관계).</summary>
+        private static float EaseInCubic(float k)
+        {
+            k = Mathf.Clamp01(k);
+            return k * k * k;
+        }
+
+        /// <summary>펼침/접힘 폭 변화에 쓰는 감속 곡선(끝에서 부드럽게 멎는다).</summary>
+        private static float EaseOutCubic(float k)
+        {
+            float p = 1f - Mathf.Clamp01(k);
+            return 1f - p * p * p;
         }
 
         /// <summary>출석부 패널 토글(UIManager 위임).</summary>

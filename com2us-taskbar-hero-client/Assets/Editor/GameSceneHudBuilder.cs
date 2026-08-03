@@ -6,7 +6,7 @@ using TaskbarHero.Client.UI;
 namespace TaskbarHero.ClientEditor
 {
     /// <summary>
-    /// GameScene 우하단 HUD 버튼(햄버거·출석부·메일·편성·스테이지·가방)의 아이콘을 배선하는 에디터 도구.
+    /// GameScene 하단 중앙 HUD 버튼(거래소·출석부·메일·편성·스테이지·가방·환경설정)의 아이콘을 배선하는 에디터 도구.
     /// 아이콘은 Assets/Art/Icon(출석부·편성·스테이지·인벤토리)과 Assets/Art/UI(햄버거메뉴)·Assets/Art/UI/Mail(메일)을 사용하며,
     /// Multiple로 임포트된 아이콘은 Single로 교정한다.
     /// HUD는 런타임에 코드로 구성되므로(GameSceneHudController) 씬의 HUD 오브젝트에 스프라이트 참조만 배선한다.
@@ -21,6 +21,10 @@ namespace TaskbarHero.ClientEditor
         // 우측 상단 '적용 중인 버프' 아이콘과 그 상세 툴팁 배경(둘 다 임포트 설정은 건드리지 않고 읽어서 배선만 한다).
         private const string ActiveBuffIconPath = IconDir + "/적용중인버프.png";
         private const string ItemDetailBgPath = "Assets/Art/UI/item_detail_bg.png";
+        // 하단 메뉴바 토글 버튼 아이콘. **Sprite가 아니라 Texture2D로 배선한다** — 이 파일은 Multiple로 임포트돼
+        // 햄버거 3줄이 서브 스프라이트로 쪼개져 있어(메뉴_0/1/2) 스프라이트를 쓰면 줄 한 개만 나온다.
+        // 임포트 설정은 바꾸지 않고(공용 아트 규칙) HUD가 런타임에 텍스처 전체로 스프라이트를 만들어 쓴다.
+        private const string MenuToggleIconPath = IconDir + "/메뉴.png";
         // ui_bg(2048×731) 9-slice 경계: 나무 테두리 + 모서리 금장식이 온전히 남는 크기(L,B,R,T).
         private static readonly Vector4 UiBackgroundBorder = new Vector4(230f, 250f, 230f, 250f);
 
@@ -66,6 +70,7 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("systemSlotSprite").objectReferenceValue = LoadSpriteAt(SystemSlotPath);
             so.FindProperty("activeBuffIcon").objectReferenceValue = LoadSpriteAt(ActiveBuffIconPath);
             so.FindProperty("buffTooltipBackground").objectReferenceValue = LoadSpriteAt(ItemDetailBgPath);
+            so.FindProperty("menuToggleIconTexture").objectReferenceValue = LoadTextureAt(MenuToggleIconPath);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.MarkSceneDirty(scene);
@@ -128,6 +133,17 @@ namespace TaskbarHero.ClientEditor
         private static Sprite LoadSprite(string fileName)
         {
             return LoadSpriteAt($"{IconDir}/{fileName}.png");
+        }
+
+        /// <summary>지정 경로의 텍스처를 그대로 로드한다(스프라이트 분할 상태와 무관하게 전체 이미지가 필요할 때).</summary>
+        private static Texture2D LoadTextureAt(string path)
+        {
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (tex == null)
+            {
+                Debug.LogWarning($"[GameSceneHudBuilder] 텍스처를 찾지 못했습니다: {path}");
+            }
+            return tex;
         }
 
         /// <summary>지정 경로에서 스프라이트를 로드한다(Single/Multiple 모두 대응).</summary>
