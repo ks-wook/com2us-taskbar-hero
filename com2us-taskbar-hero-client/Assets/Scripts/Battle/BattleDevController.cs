@@ -1209,6 +1209,7 @@ namespace TaskbarHero.Client.Battle
         private const float HpBarFillWidth = HpBarWidth - HpBarFillInset * 2f;
 
         private Canvas _hpCanvas;
+        private RectTransform _hpArea; // 전투 화면 밴드로 잘라 내는 컨테이너(밖으로 나간 HP바를 가린다)
         private readonly List<RectTransform> _hpBarRoots = new List<RectTransform>();
         private readonly List<Image> _hpBarFills = new List<Image>();
 
@@ -1259,7 +1260,9 @@ namespace TaskbarHero.Client.Battle
                 var bar = GetHpBar(used);
                 bar.gameObject.SetActive(true);
                 // 픽셀 격자에 맞춰(정수 좌표) 배치한다 — 소수 좌표면 프레임 아트가 프레임마다 미세하게 번진다.
-                bar.anchoredPosition = new Vector2(Mathf.Round(sp.x), Mathf.Round(sp.y)); // ConstantPixelSize 캔버스(좌하단 기준 픽셀)
+                // 좌표는 캔버스가 아니라 밴드 컨테이너(_hpArea)의 좌하단 기준이므로 그 원점만큼 빼 준다.
+                Vector2 origin = HpAreaOrigin();
+                bar.anchoredPosition = new Vector2(Mathf.Round(sp.x - origin.x), Mathf.Round(sp.y - origin.y));
                 float ratio = Mathf.Clamp01((float)m.Hp / m.MaxHp);
                 _hpBarFills[used].rectTransform.sizeDelta =
                     new Vector2(HpBarFillWidth * ratio, -HpBarFillInset * 2f); // 너비로 체력 표현
@@ -1301,7 +1304,17 @@ namespace TaskbarHero.Client.Battle
             if (has) { bodyTop = body.max.y; centerX = body.center.x; }
         }
 
-        /// <summary>적 HP바 전용 Canvas(낮은 sortingOrder, 픽셀 좌표계)를 최초 1회 생성한다.</summary>
+        /// <summary>
+        /// 적 HP바 전용 Canvas(낮은 sortingOrder, 픽셀 좌표계)를 최초 1회 생성한다.
+        /// <para>바는 캔버스 직속이 아니라 <b>전투 화면 밴드로 잘라 내는 컨테이너</b>
+        /// (<see cref="GameAreaRect"/> + <see cref="RectMask2D"/>) 밑에 만든다. 카메라는
+        /// 가운데 밴드만 그리는데(<see cref="GameViewLayout"/>) 캔버스는 창 전체를 덮으므로,
+        /// 그냥 두면 <b>아직 화면에 들어오지 않은 몬스터의 HP바가 좌우 여백에 먼저 떠 있었다</b>.
+        /// 마스크로 잘라 내면 몬스터 스프라이트가 카메라 가장자리에서 드러나는 것과 같은 속도로
+        /// HP바도 밴드 안으로 들어오면서 보인다.</para>
+        /// <para>레이아웃이 적용되지 않는 씬(BattleDevScene)에서는 <see cref="GameAreaRect"/>가
+        /// 캔버스 전체 스트레치로 되돌리므로 종전과 동일하게 동작한다.</para>
+        /// </summary>
         private void EnsureHpCanvas()
         {
             if (_hpCanvas != null)
@@ -1316,6 +1329,26 @@ namespace TaskbarHero.Client.Battle
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize; // WorldToScreenPoint 픽셀과 1:1
             scaler.scaleFactor = 1f;
+
+            var areaGo = new GameObject("GameArea", typeof(RectTransform), typeof(RectMask2D));
+            areaGo.transform.SetParent(go.transform, false);
+            _hpArea = (RectTransform)areaGo.transform;
+            GameAreaRect.Attach(_hpArea);
+        }
+
+        /// <summary>
+        /// 밴드 컨테이너(<see cref="_hpArea"/>) 좌하단의 스크린 픽셀 좌표.
+        /// HP바는 이 컨테이너의 자식이라 <c>WorldToScreenPoint</c>(화면 기준)에서 이 원점을 빼야 자리가 맞는다.
+        /// 캔버스가 ConstantPixelSize·배율 1이라 캔버스 좌표 = 스크린 픽셀이다.
+        /// </summary>
+        private Vector2 HpAreaOrigin()
+        {
+            if (_hpArea == null)
+            {
+                return Vector2.zero;
+            }
+            Vector3 corner = _hpArea.TransformPoint(new Vector3(_hpArea.rect.xMin, _hpArea.rect.yMin, 0f));
+            return new Vector2(corner.x, corner.y);
         }
 
         /// <summary>인덱스에 해당하는 HP바(배경+채움)를 풀에서 얻거나 새로 만든다.</summary>
@@ -1324,7 +1357,7 @@ namespace TaskbarHero.Client.Battle
             while (_hpBarRoots.Count <= index)
             {
                 var bgGo = new GameObject("EnemyHpBar", typeof(RectTransform), typeof(Image));
-                bgGo.transform.SetParent(_hpCanvas.transform, false);
+                bgGo.transform.SetParent(_hpArea, false); // 밴드 밖은 마스크가 잘라 낸다
                 var bgRt = (RectTransform)bgGo.transform;
                 bgRt.anchorMin = bgRt.anchorMax = new Vector2(0f, 0f); // 좌하단 기준
                 bgRt.pivot = new Vector2(0.5f, 0.5f);
