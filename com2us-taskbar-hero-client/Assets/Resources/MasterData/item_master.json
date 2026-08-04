@@ -567,6 +567,27 @@
     "basePrice": 50000
   },
   {
+    "itemCode": 31333,
+    "name": "서리 지팡이",
+    "itemType": 1,
+    "grade": 3,
+    "equipSlot": 1,
+    "classReq": 3,
+    "levelReq": 20,
+    "stackMax": 1,
+    "baseStats": {
+      "hp": 0,
+      "atk": 40,
+      "def": 0,
+      "moveSpeed": 0.0,
+      "critChance": 0.0,
+      "critDamage": 0.08,
+      "cooldown": 0.0
+    },
+    "sellable": 1,
+    "basePrice": 50000
+  },
+  {
     "itemCode": 31341,
     "name": "대마법사의 지팡이",
     "itemType": 1,
