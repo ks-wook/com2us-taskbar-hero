@@ -1328,7 +1328,8 @@ namespace TaskbarHero.Common.Dto
     /// <summary>
     /// 천장(pity) 진행도 한 항목. 천장 규칙이 있는 등급만 내려간다.
     /// pityCount = 그 등급을 마지막으로 받은 뒤 누적 뽑기 횟수, pityThreshold = 하드 천장 발동 회차(없으면 0).
-    /// 클라이언트는 "pityCount / pityThreshold" 게이지로 표시한다.
+    /// 클라이언트는 "pityCount / pityThreshold" 게이지로 표시하고, remainingToPity로 "천장까지 N회"를 표시한다.
+    /// remainingToPity = pityThreshold - pityCount(0 미만이면 0). 하드 천장 규칙이 없는 등급(pityThreshold=0)도 0이다.
     /// </summary>
     [Serializable]
     public class GachaPityCounterDto
@@ -1336,6 +1337,7 @@ namespace TaskbarHero.Common.Dto
         public int grade;
         public int pityCount;
         public int pityThreshold;
+        public int remainingToPity;
     }
 
     /// <summary>

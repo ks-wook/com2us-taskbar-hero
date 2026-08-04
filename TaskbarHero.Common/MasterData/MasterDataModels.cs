@@ -242,4 +242,61 @@ namespace TaskbarHero.Common.MasterData
         public int rewardCode;     // 아이템/재화 코드(item_master.item_code, 없으면 0)
         public long quantity;      // 지급 수량
     }
+
+    /// <summary>가챠 등급별 추첨 가중치(gacha_grade_weight). 확률 = weight / 그 배너의 weight 합.</summary>
+    [Serializable]
+    public struct GachaGradeWeight
+    {
+        public int grade;          // 배너 안에서의 추첨 등급 슬롯(1~5)
+        public int weight;         // 가중치(정규화하지 않는다)
+    }
+
+    /// <summary>가챠 등급 슬롯의 지급 후보 한 건(gacha_item_pool). 슬롯 안에서는 균등 추첨.</summary>
+    [Serializable]
+    public struct GachaItemPoolEntry
+    {
+        public int grade;          // 추첨 등급 슬롯(item_master.grade 와 일치할 필요가 없다)
+        public int itemCode;       // 지급 아이템(item_master.item_code)
+        public int quantity;       // 1회 지급 수량
+    }
+
+    /// <summary>
+    /// 가챠 천장 규칙 한 건(gacha_pity_rule). 같은 등급에 소프트·하드가 각각 한 행으로 온다.
+    /// threshold 는 "이번 뽑기의 회차 번호"(pity_count + 1)와 비교하는 값이다.
+    /// </summary>
+    [Serializable]
+    public struct GachaPityRule
+    {
+        public int grade;          // 천장 대상 등급
+        public int pityType;       // 1:소프트(가중치 가산) 2:하드(확정 지급)
+        public int threshold;      // 발동 회차(기준값 소프트 70 / 하드 90)
+        public int weightUp;       // 소프트 전용 — 발동 이후 1회당 가산 가중치
+        public int weightUpMax;    // 소프트 전용 — 가산 상한(0 = 무제한)
+    }
+
+    /// <summary>
+    /// 가챠(뽑기) 배너 정의(gacha_master + 자식 3종을 배열로 중첩). 배너 이름·이미지·비용·등급 확률·
+    /// 후보 목록은 정적 값이라 이 번들에서 읽고, "지금 열려 있는가 · 내 천장이 얼마인가"만 서버가
+    /// 내려준다(가챠 기획서 §5 서두). 노출 판정(isActive·기간)은 서버 권위이므로 클라이언트는 표시에만 쓴다.
+    /// </summary>
+    [Serializable]
+    public class GachaMaster
+    {
+        public int gachaCode;              // 가챠(배너) 코드
+        public string name;                // 배너 이름(UI 표시)
+        public string bannerImage;         // 배너 이미지 리소스 키
+        public int isActive;               // 노출 스위치(0/1) — 최종 판정은 서버
+        public long openAt;                // 노출 시작 Unix ts(0 = 시작 제한 없음)
+        public long closeAt;               // 노출 종료 Unix ts(0 = 종료 없음 = 상시 배너)
+        public int sortOrder;              // 목록 표시 순서(오름차순)
+        public int costCurrencyCode;       // 비용 재화 item_code(골드 = 1)
+        public long costSingle;            // 1연 1회 비용
+        public long costMulti;             // 10연 1회 비용(묶음 할인 반영 — costSingle × multiCount 와 무관)
+        public int multiCount;             // 10연 1회에 뽑는 횟수(현재 10)
+        public int multiGuaranteedGrade;   // 10연 보장 최소 등급(0 = 보장 없음)
+        public int pickupItemCode;         // 픽업 아이템(0 = 상시 배너)
+        public GachaGradeWeight[] gradeWeights;
+        public GachaItemPoolEntry[] itemPool;
+        public GachaPityRule[] pityRules;
+    }
 }
