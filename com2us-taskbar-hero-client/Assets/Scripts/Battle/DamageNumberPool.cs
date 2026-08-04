@@ -56,11 +56,12 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>지정 월드 위치에 데미지 숫자를 띄운다(풀에서 재사용, 부족하면 새로 생성).
-        /// <paramref name="crit"/>이면 치명타 연출(노란색·큰 팝·<c>!</c>)로 표시한다.</summary>
-        public void Spawn(long damage, Vector3 worldPos, bool crit = false)
+        /// <paramref name="crit"/>이면 치명타 연출(노란색·큰 팝·<c>!</c>)로 표시한다.
+        /// <paramref name="sizeMul"/>은 피해 비중에 따른 크기 배수, <paramref name="delay"/>는 광역 시차다.</summary>
+        public void Spawn(long damage, Vector3 worldPos, bool crit = false, float sizeMul = 1f, float delay = 0f)
         {
             var dn = _free.Count > 0 ? _free.Dequeue() : CreateNumber();
-            dn.Play(damage, worldPos, crit);
+            dn.Play(damage, worldPos, crit, sizeMul, delay);
         }
 
         /// <summary>애니가 끝난 숫자를 풀로 되돌린다.</summary>

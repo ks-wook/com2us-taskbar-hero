@@ -257,15 +257,13 @@
         "grade": 5,
         "pityType": 1,
         "threshold": 70,
-        "weightUp": 100,
-        "weightUpMax": 0
+        "probStep": 0.049
       },
       {
         "grade": 5,
         "pityType": 2,
         "threshold": 90,
-        "weightUp": 0,
-        "weightUpMax": 0
+        "probStep": 0.0
       }
     ]
   },
@@ -622,15 +620,13 @@
         "grade": 5,
         "pityType": 1,
         "threshold": 70,
-        "weightUp": 100,
-        "weightUpMax": 0
+        "probStep": 0.049
       },
       {
         "grade": 5,
         "pityType": 2,
         "threshold": 90,
-        "weightUp": 0,
-        "weightUpMax": 0
+        "probStep": 0.0
       }
     ]
   }

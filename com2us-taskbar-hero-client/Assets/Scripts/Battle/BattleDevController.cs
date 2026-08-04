@@ -109,6 +109,60 @@ namespace TaskbarHero.Client.Battle
                  "없으면 단색 반투명 배경으로 대체한다. 던전 배선 빌더가 BattleDevScene 값을 그대로 복사한다.")]
         [SerializeField] private Sprite enemyHpBarFrame;
 
+        // ---- 히트스톱(큰 타격 순간 시간 정지) ----
+        // 평타에는 걸지 않는다 — 상시 걸면 전투가 계속 끊겨 보이고, 강한 한 방이라는 대비가 사라진다.
+        private const float HitStopScale = 0.05f;      // 정지 중 시간 배율(완전 0은 애니가 굳어 부자연스럽다)
+        private const float HitStopSeconds = 0.06f;    // 치명타·스킬 타격
+        private const float BossHitStopSeconds = 0.09f;// 보스 피격은 더 길게(무게감)
+        private const float HitStopCooldown = 0.3f;    // 이 간격 안에는 다시 걸지 않는다(연타로 전투가 늘어지지 않게)
+        // 웨이브 종료 슬로우: 히트스톱보다 얕고 길게 — 멈춤이 아니라 "마무리" 박자다.
+        private const float WaveClearSlowScale = 0.3f;
+        private const float WaveClearSlowSeconds = 0.15f;
+        private bool _hitStopping;
+        private float _slowScale = 1f;                 // 지금 내가 걸어 둔 시간 배율(원복 판정용)
+        private float _hitStopReadyAt;                 // 다음 히트스톱 허용 시각(unscaled)
+
+        // 보스 페이즈 전환 비네트(화면 가장자리 붉은 플래시)
+        private static readonly Color BossPhaseVignetteColor = new Color(0.85f, 0.05f, 0.05f, 0.55f);
+        private const float BossPhaseVignetteSeconds = 0.55f;
+        private Canvas _fxCanvas;
+        private Image _vignette;
+        private Coroutine _vignetteAnim;
+        // 버프 지속 동안 켜 두는 비네트는 두지 않는다 — 광전사의 힘이 재사용 대기시간이 짧아 화면이 거의
+        // 상시 붉어져 시야를 방해했다(2026-08-04 제거). 비네트는 보스 페이즈 전환처럼 <b>순간</b> 연출에만 쓴다.
+        private Image _screenFlash;    // 순간 전체 플래시(라이트닝 볼트)
+        private Coroutine _flashAnim;
+
+        // ---- 미세 카메라 스웨이 ----
+        // 구도가 늘 고정인 것이 지루함의 숨은 원인이다. 아주 작은 상시 흔들림만으로 화면이 "살아 있게" 보인다.
+        // 위치만 흔들고 <b>줌은 건드리지 않는다</b> — 줌 고정 정책(_baseOrtho 강제)과 충돌하지 않는다.
+        private const float SwayAmplitudeX = 0.05f;
+        private const float SwayAmplitudeY = 0.03f;
+        private const float SwaySpeedX = 0.37f;   // 초당 사이클(느리게 — 흔들림이 아니라 '숨'처럼)
+        private const float SwaySpeedY = 0.23f;
+
+        // ---- 지속 데칼(강타·내려찍기 자리) ----
+        private const float DecalSeconds = 4f;         // 남아 있는 시간
+        private const float DecalFadeSeconds = 1.2f;   // 마지막 이만큼은 서서히 사라진다
+        private static readonly Color DecalColor = new Color(0.12f, 0.09f, 0.07f, 0.5f); // 그을린 눌림 자국
+        private const int DecalSortingOrder = -50;     // 캐릭터·이펙트보다 뒤(바닥)
+        private readonly List<SpriteRenderer> _decals = new List<SpriteRenderer>();
+
+        // 킬 콤보 표시는 넣지 않는다 — 방치형은 처치가 끊이지 않아 카운터가 사실상 상시 표시가 되고,
+        // "연속"이라는 정보가 아무 의미를 갖지 못한다(2026-08-04 확인 후 제거).
+
+        // ---- 카메라 셰이크 ----
+        // 진폭 3단: 평타 없음 / 스킬 약 / 보스·광역 다수 강. 상주 소형 창이라 진폭을 작게 잡는다
+        // (ortho 5 = 화면 높이 10유닛이므로 0.14는 화면 높이의 1.4%다).
+        private const float ShakeLight = 0.08f;
+        private const float ShakeHeavy = 0.18f;
+        private const float ShakeSeconds = 0.18f;
+        private const float ShakeFrequency = 24f;      // 초당 흔들림 진동 수
+        private const float ShakeVerticalRatio = 0.7f; // 세로 진폭 비율(횡스크롤이라 가로가 주 방향)
+        private float _shakeAmp;
+        private float _shakeTimer;
+        private float _camBaseY;                       // 셰이크 없을 때의 카메라 y(원복 기준)
+
         // ---- 런타임 상태 ----
         private Camera _cam;
         private ObjectManager _om;
@@ -188,6 +242,7 @@ namespace TaskbarHero.Client.Battle
         {
             _cam = Camera.main;
             if (_cam != null && _cam.orthographic) _baseOrtho = _cam.orthographicSize;
+            if (_cam != null) _camBaseY = _cam.transform.position.y; // 셰이크 원복 기준(씬이 잡아 둔 프레이밍 y)
             MasterDataManager.EnsureLoaded();
             ResolveMonsterCode();
             LoadMonsterStats();
@@ -215,6 +270,354 @@ namespace TaskbarHero.Client.Battle
         private void OnDestroy()
         {
             Session.InventoryChanged -= RefreshPartyStats;
+            CancelTimeEffects();
+        }
+
+        /// <summary>
+        /// 진행 중인 히트스톱·카메라 셰이크를 즉시 끝내고 시간 배율을 원복한다.
+        /// <para>히트스톱은 코루틴이 끝나면서 배율을 되돌리므로, <b>코루틴이 죽는 시점</b>
+        /// (씬 전환·<see cref="OnDestroy"/>·<c>StopAllCoroutines</c>로 재시작)마다 반드시 불러야
+        /// 0.05배가 그대로 남지 않는다.</para>
+        /// </summary>
+        private void CancelTimeEffects()
+        {
+            if (_hitStopping)
+            {
+                if (Mathf.Approximately(Time.timeScale, _slowScale))
+                {
+                    Time.timeScale = 1f; // 다른 연출(클리어 슬로우모션)이 잡은 배율은 건드리지 않는다
+                }
+                _hitStopping = false;
+            }
+            _shakeTimer = 0f;
+            _shakeAmp = 0f;
+        }
+
+        /// <summary>
+        /// 큰 타격(치명타·스킬·보스 피격) 순간에 시간을 아주 짧게 <see cref="HitStopScale"/>로 떨어뜨린다.
+        /// 임팩트가 "멈춰서 보이는" 효과가 넉백보다 체감이 크다.
+        /// </summary>
+        private void RequestHitStop(float seconds)
+        {
+            RequestTimeScale(HitStopScale, seconds, respectCooldown: true);
+        }
+
+        /// <summary>
+        /// 웨이브의 마지막 한 마리를 잡은 순간처럼 <b>얕고 조금 긴</b> 슬로우를 건다(히트스톱보다 덜 멈춘다).
+        /// 웨이브당 한 번뿐이라 쿨다운은 보지 않는다(직전 타격의 히트스톱 쿨다운에 삼켜지면 안 된다).
+        /// </summary>
+        private void RequestSlowMotion(float scale, float seconds)
+        {
+            RequestTimeScale(scale, seconds, respectCooldown: false);
+        }
+
+        /// <summary>
+        /// 시간 배율 연출의 공통 창구.
+        /// <para>다음 경우에는 걸지 않는다 — ① 이미 이 컨트롤러가 시간을 잡고 있을 때 ② 쿨다운
+        /// (<see cref="HitStopCooldown"/>, 히트스톱만) ③ 일시정지 중 ④ <b>다른 연출이 이미 시간 배율을
+        /// 잡고 있을 때</b>(클리어·패배 슬로우모션 — 여기에 끼어들면 그 배율을 덮어써 연출이 깨진다).</para>
+        /// </summary>
+        private void RequestTimeScale(float scale, float seconds, bool respectCooldown)
+        {
+            if (_hitStopping || _paused) return;
+            if (respectCooldown && Time.unscaledTime < _hitStopReadyAt) return;
+            if (!Mathf.Approximately(Time.timeScale, 1f)) return;
+            StartCoroutine(HitStopRoutine(Mathf.Clamp(scale, 0.01f, 0.95f), seconds));
+        }
+
+        /// <summary>
+        /// 큰 타격에 카메라를 짧게 흔든다. 진폭은 3단이며 <b>평타에는 걸지 않는다</b>(히트스톱과 같은 지점에서 호출).
+        /// <para>이미 흔들리는 중이면 <b>더 센 쪽</b>으로 갈아탄다(합산하면 화면이 튀어 오른다).</para>
+        /// </summary>
+        private void RequestShake(float amplitude)
+        {
+            if (_paused || amplitude <= 0f) return;
+            _shakeAmp = Mathf.Max(_shakeAmp, amplitude);
+            _shakeTimer = ShakeSeconds;
+        }
+
+        /// <summary>
+        /// 이번 프레임에 카메라에 더할 셰이크 오프셋을 계산하고 타이머를 진행한다.
+        /// <para><b>unscaled 시간</b>을 쓴다 — 히트스톱으로 시간이 멈춘 0.06초 동안에도 화면이 흔들려야
+        /// "멈춘 채 얻어맞는" 임팩트가 살아난다(스케일 시간이면 정지 중 셰이크도 함께 멈춘다).</para>
+        /// <para><b>감쇠 사인</b>을 쓴다. 프레임마다 난수를 뽑으면 지글거리고, 펄린 노이즈는 값이 0.5 근처에
+        /// 몰려 있어 <b>지정 진폭의 20%밖에 나오지 않았다</b>(실측 0.06 지정 → 최대 0.013유닛 ≈ 1px로
+        /// 사실상 안 보였다). 사인은 짧은 0.18초 버스트에서 주기성이 눈에 띄지 않고 진폭을 정확히 쓴다.
+        /// x·y는 서로 다른 주파수·위상을 써서 같은 대각선만 왕복하지 않게 한다.</para>
+        /// </summary>
+        private Vector2 ConsumeShakeOffset()
+        {
+            if (_shakeTimer <= 0f)
+            {
+                return Vector2.zero;
+            }
+            _shakeTimer -= Time.unscaledDeltaTime;
+            if (_shakeTimer <= 0f)
+            {
+                _shakeAmp = 0f;
+                return Vector2.zero;
+            }
+            float decay = Mathf.Clamp01(_shakeTimer / ShakeSeconds); // 끝으로 갈수록 잦아든다
+            float phase = Time.unscaledTime * ShakeFrequency;
+            float amp = _shakeAmp * decay;
+            return new Vector2(
+                Mathf.Sin(phase) * amp,
+                Mathf.Sin(phase * 1.63f + 1.1f) * amp * ShakeVerticalRatio);
+        }
+
+        /// <summary>
+        /// 상시 미세 스웨이 오프셋 — 서로 다른 아주 느린 사인 두 개로 카메라가 조용히 떠 있게 만든다.
+        /// <para>진폭이 0.05·0.03유닛(화면 높이의 0.3~0.5%)이라 흔들린다고 느끼지 못하면서도 고정 구도의
+        /// 정적인 느낌이 사라진다. <b>줌은 건드리지 않으므로</b> 줌 고정 정책(<see cref="_baseOrtho"/> 강제)과
+        /// 충돌하지 않는다 — 예외를 둘 필요가 없었다.</para>
+        /// <para>일시정지 중에는 멈춘다(정지 화면이 미묘하게 흐르면 정지처럼 보이지 않는다).</para>
+        /// </summary>
+        private Vector2 SwayOffset()
+        {
+            if (_paused)
+            {
+                return Vector2.zero;
+            }
+            float t = Time.unscaledTime;
+            return new Vector2(
+                Mathf.Sin(t * SwaySpeedX * Mathf.PI * 2f) * SwayAmplitudeX,
+                Mathf.Sin(t * SwaySpeedY * Mathf.PI * 2f + 1.7f) * SwayAmplitudeY);
+        }
+
+        /// <summary>히트스톱·슬로우 본체 — 시간 배율을 떨어뜨리고 <b>실시간</b>으로 기다린 뒤 원복한다.</summary>
+        private IEnumerator HitStopRoutine(float scale, float seconds)
+        {
+            _hitStopping = true;
+            _slowScale = scale;
+            Time.timeScale = scale;
+            yield return new WaitForSecondsRealtime(Mathf.Max(0.01f, seconds));
+            // 정지 중에 클리어·패배 슬로우모션이 시작됐다면 그 배율을 존중한다(우리 값일 때만 원복).
+            if (Mathf.Approximately(Time.timeScale, scale))
+            {
+                Time.timeScale = 1f;
+            }
+            _slowScale = 1f;
+            _hitStopping = false;
+            _hitStopReadyAt = Time.unscaledTime + HitStopCooldown;
+        }
+
+        /// <summary>
+        /// 화면 가장자리를 물들이는 <b>비네트 플래시</b>(보스 페이즈 전환용). 빠르게 켜졌다 서서히 사라진다.
+        /// <para>가운데는 투명한 절차적 비네트 스프라이트를 쓰므로 캐릭터·숫자를 가리지 않는다
+        /// (<see cref="BattleFxTextures.Vignette"/>). 전투 화면 밴드(<see cref="GameAreaRect"/>) 안에만
+        /// 그려 좌우 UI 패널 영역까지 붉어지지 않게 한다.</para>
+        /// </summary>
+        private void FlashVignette(Color color, float seconds)
+        {
+            EnsureFxCanvas();
+            if (_vignette == null) return;
+            if (_vignetteAnim != null)
+            {
+                StopCoroutine(_vignetteAnim);
+            }
+            _vignetteAnim = StartCoroutine(VignetteRoutine(color, seconds));
+        }
+
+        private IEnumerator VignetteRoutine(Color color, float seconds)
+        {
+            float dur = Mathf.Max(0.05f, seconds);
+            float t = 0f;
+            var go = _vignette.gameObject;
+            go.SetActive(true);
+            while (t < dur)
+            {
+                t += Time.unscaledDeltaTime; // 페이즈 전환 셰이크·히트스톱과 결을 맞춘다
+                float k = Mathf.Clamp01(t / dur);
+                // 0.15까지 빠르게 차오르고 그 뒤 천천히 빠진다.
+                float a = k < 0.15f ? k / 0.15f : 1f - (k - 0.15f) / 0.85f;
+                var c = color;
+                c.a = color.a * a;
+                _vignette.color = c;
+                yield return null;
+            }
+            go.SetActive(false);
+            _vignetteAnim = null;
+        }
+
+        /// <summary>
+        /// 화면 전체를 아주 짧게 물들인다(라이트닝 볼트의 백색 섬광). 스프라이트 없이 단색 <c>Image</c>를 쓴다.
+        /// <para>상주 소형 창이므로 <b>알파를 낮게(0.35) 그리고 아주 짧게</b> 쓴다 — 전체 백색 플래시를
+        /// 불투명하게 넣으면 장시간 켜 두는 사용 패턴에서 눈이 피곤하다(제약 §5).</para>
+        /// </summary>
+        public void FlashScreen(Color color, float seconds)
+        {
+            EnsureFxCanvas();
+            if (_screenFlash == null) return;
+            if (_flashAnim != null)
+            {
+                StopCoroutine(_flashAnim);
+            }
+            _flashAnim = StartCoroutine(ScreenFlashRoutine(color, seconds));
+        }
+
+        /// <summary>지연 뒤 화면 플래시(스킬 타격 시점에 맞춘다).</summary>
+        public void FlashScreenAfter(float delay, Color color, float seconds)
+        {
+            StartCoroutine(FlashAfterRoutine(delay, color, seconds));
+        }
+
+        private IEnumerator FlashAfterRoutine(float delay, Color color, float seconds)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+            FlashScreen(color, seconds);
+        }
+
+        private IEnumerator ScreenFlashRoutine(Color color, float seconds)
+        {
+            float dur = Mathf.Max(0.03f, seconds);
+            var go = _screenFlash.gameObject;
+            go.SetActive(true);
+            float t = 0f;
+            while (t < dur)
+            {
+                t += Time.unscaledDeltaTime;
+                var c = color;
+                c.a = color.a * (1f - Mathf.Clamp01(t / dur)); // 즉시 최대 → 빠르게 감소
+                _screenFlash.color = c;
+                yield return null;
+            }
+            go.SetActive(false);
+            _flashAnim = null;
+        }
+
+        /// <summary>
+        /// 지정 위치 바닥에 <b>지속 데칼</b>을 남긴다(강타·내려찍기 자리). 전투가 지나간 흔적이 보이게 한다.
+        /// <para>스프라이트는 절차적 부드러운 타원을 어둡게 깔아 <b>그을린 눌림 자국</b>으로 쓴다 —
+        /// 프로젝트에 갈라진 바닥 아트가 없어서다(아트가 생기면 스프라이트만 갈아 끼우면 된다).</para>
+        /// <para>데칼은 <b>풀로 재사용</b>한다(스킬마다 생성/파괴하지 않는다).</para>
+        /// </summary>
+        public void SpawnGroundDecal(Vector3 worldPos, float width)
+        {
+            var sr = GetFreeDecal();
+            sr.transform.position = new Vector3(worldPos.x, _pathY, 0f); // 항상 길(지면) 높이에
+            float w = Mathf.Max(0.4f, width);
+            sr.transform.localScale = new Vector3(w, w * 0.32f, 1f);     // 납작하게 눌러 바닥에 붙은 느낌
+            sr.color = DecalColor;
+            sr.gameObject.SetActive(true);
+            StartCoroutine(DecalFadeRoutine(sr));
+        }
+
+        /// <summary>지연 뒤 데칼을 남긴다(타격 시점에 맞춘다).</summary>
+        public void SpawnGroundDecalAfter(float delay, Vector3 worldPos, float width)
+        {
+            StartCoroutine(DecalAfterRoutine(delay, worldPos, width));
+        }
+
+        private IEnumerator DecalAfterRoutine(float delay, Vector3 worldPos, float width)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+            SpawnGroundDecal(worldPos, width);
+        }
+
+        private IEnumerator DecalFadeRoutine(SpriteRenderer sr)
+        {
+            float t = 0f;
+            while (t < DecalSeconds && sr != null)
+            {
+                t += Time.deltaTime;
+                float left = DecalSeconds - t;
+                if (left < DecalFadeSeconds)
+                {
+                    var c = DecalColor;
+                    c.a = DecalColor.a * Mathf.Clamp01(left / DecalFadeSeconds);
+                    sr.color = c;
+                }
+                yield return null;
+            }
+            if (sr != null) sr.gameObject.SetActive(false); // 풀로 반환
+        }
+
+        /// <summary>비활성 데칼을 꺼내거나 새로 만든다(풀).</summary>
+        private SpriteRenderer GetFreeDecal()
+        {
+            for (int i = 0; i < _decals.Count; i++)
+            {
+                if (_decals[i] != null && !_decals[i].gameObject.activeSelf)
+                {
+                    return _decals[i];
+                }
+            }
+            var go = new GameObject("GroundDecal");
+            go.transform.SetParent(transform, false);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = BattleFxTextures.SoftEllipse();
+            sr.sortingOrder = DecalSortingOrder;
+            go.SetActive(false);
+            _decals.Add(sr);
+            return sr;
+        }
+
+        /// <summary>
+        /// 지정 중심 반경 안의 살아있는 적을 <b>빙결</b>시킨다(프로스트 노바). 데미지는 건드리지 않는다.
+        /// </summary>
+        public void FreezeEnemiesNear(float delay, Vector3 center, float radius, float seconds)
+        {
+            StartCoroutine(FreezeRoutine(delay, center, radius, seconds));
+        }
+
+        private IEnumerator FreezeRoutine(float delay, Vector3 center, float radius, float seconds)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+            if (_om == null) yield break;
+            float r2 = radius * radius;
+            foreach (var go in _om.Active(CatEnemy))
+            {
+                var mu = go.GetComponent<MonsterUnit>();
+                if (mu == null || !mu.Alive) continue;
+                if (((Vector2)mu.transform.position - (Vector2)center).sqrMagnitude <= r2)
+                {
+                    mu.ApplyFreeze(seconds);
+                }
+            }
+        }
+
+        /// <summary>비네트 등 전면 연출용 Canvas를 최초 1회 만든다(HP바 캔버스보다 위, HUD·패널보다 아래).</summary>
+        private void EnsureFxCanvas()
+        {
+            if (_fxCanvas != null)
+            {
+                return;
+            }
+            var go = new GameObject("BattleFxCanvas", typeof(Canvas), typeof(CanvasScaler));
+            go.transform.SetParent(transform, false);
+            _fxCanvas = go.GetComponent<Canvas>();
+            _fxCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            _fxCanvas.sortingOrder = EnemyHpBarSortingOrder + 1; // HP바 위, HUD(10)·패널(100) 아래
+            var scaler = go.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+            scaler.scaleFactor = 1f;
+
+            // 순간 비네트(보스 페이즈) → 전체 플래시 순서로 겹친다(뒤에 만든 것이 위에 온다).
+            _vignette = NewFxOverlay(go.transform, "Vignette", BattleFxTextures.Vignette());
+            _screenFlash = NewFxOverlay(go.transform, "ScreenFlash", null); // 단색(스프라이트 없음)
+        }
+
+        /// <summary>전면 연출용 전체 화면 오버레이 Image를 만든다(전투 밴드에만 붙고 클릭은 통과).</summary>
+        private static Image NewFxOverlay(Transform parent, string name, Sprite sprite)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            GameAreaRect.Attach((RectTransform)go.transform); // 전투 화면 밴드만 덮는다
+            var img = go.GetComponent<Image>();
+            img.sprite = sprite;
+            img.raycastTarget = false;
+            img.color = new Color(1f, 1f, 1f, 0f);
+            go.SetActive(false);
+            return img;
         }
 
         /// <summary>장비/스킬(장착·레벨) 변경 등으로 모든 파티 멤버의 전투 스탯과 사용 스킬 세트를 재계산한다.</summary>
@@ -303,6 +706,13 @@ namespace TaskbarHero.Client.Battle
             float halfW = _cam.orthographicSize * Mathf.Max(0.01f, _cam.aspect);
             Vector3 c = _cam.transform.position;
             c.x = Mathf.Min(front + camOffsetX, rear - camRearMargin + halfW);
+
+            // 셰이크·스웨이는 팔로우 결과 위에 오프셋으로 얹는다 — 팔로우가 매 프레임 x를 다시 계산하고
+            // y는 기준값(_camBaseY)에서 다시 잡으므로 흔들림이 누적되어 카메라가 떠내려가지 않는다.
+            Vector2 shake = ConsumeShakeOffset();
+            Vector2 sway = SwayOffset();
+            c.x += shake.x + sway.x;
+            c.y = _camBaseY + shake.y + sway.y;
             _cam.transform.position = c;
         }
 
@@ -663,7 +1073,7 @@ namespace TaskbarHero.Client.Battle
             bool isBoss = _bossCode != 0 && code == _bossCode;
             float speed = isBoss ? enemyMoveSpeed * Mathf.Max(0.05f, bossMoveSpeedFactor) : enemyMoveSpeed;
             mu.Init(mname, hp, atk, speed, () => _paused, OnMonsterKilled, isBoss, isBoss ? bossIcon : null,
-                    OnMonsterAttack, enemyAttackInterval);
+                    OnMonsterAttack, enemyAttackInterval, OnBossPhase);
             AttachWalkDust(go, () => mu != null && mu.IsMoving); // 걷기 먼지(전진 애니 재생 중에만 노출)
             if (isBoss)
             {
@@ -725,7 +1135,7 @@ namespace TaskbarHero.Client.Battle
             if (mu == null) mu = go.AddComponent<MonsterUnit>();
             mu.Init(_monsterName, _monsterMaxHp, _monsterAtk, enemyMoveSpeed,
                     () => _paused, OnMonsterKilled, false, null,
-                    OnMonsterAttack, enemyAttackInterval);
+                    OnMonsterAttack, enemyAttackInterval, OnBossPhase);
             AttachWalkDust(go, () => mu != null && mu.IsMoving); // 걷기 먼지(전진 애니 재생 중에만 노출)
         }
 
@@ -868,7 +1278,9 @@ namespace TaskbarHero.Client.Battle
             if (_om != null) _om.Clear(CatAlly);
             _members.Clear();
 
-            // 진행 중 지연 데미지 코루틴 취소 + 몬스터 전부 정리
+            // 진행 중 지연 데미지 코루틴 취소 + 몬스터 전부 정리.
+            // 히트스톱 코루틴도 함께 죽으므로 시간 배율을 먼저 원복한다(안 하면 0.05배로 멈춘 채 재시작된다).
+            CancelTimeEffects();
             StopAllCoroutines();
             if (_om != null) _om.Clear(CatEnemy);
             _spawnTimer = enemySpawnInterval;
@@ -932,14 +1344,18 @@ namespace TaskbarHero.Client.Battle
         public bool IsPaused => _paused;
 
         /// <summary>공격 모션/이펙트가 끝난 뒤 최전방 몬스터에 데미지를 적용한다(호출 시점의 대상을 캡처, 생존 시에만 적용).
-        /// <paramref name="crit"/>는 시전 측이 굴린 치명타 판정 결과로, 숫자 연출·로그에만 쓴다(데미지에는 이미 반영돼 있다).</summary>
-        public void DealDamageAfter(float delay, long dmg, bool crit, string label)
+        /// <paramref name="crit"/>는 시전 측이 굴린 치명타 판정 결과로, 숫자 연출·로그에만 쓴다(데미지에는 이미 반영돼 있다).
+        /// <paramref name="bigHit"/>는 <b>스킬 타격</b>이라는 표시로, 히트스톱·셰이크를 걸지 판단하는 데만 쓴다(평타는 false).
+        /// <paramref name="knockback"/>은 대상이 밀려날 거리로, <b>0이면 밀지 않는다</b>(기본공격이 이 경우다).</summary>
+        public void DealDamageAfter(float delay, long dmg, bool crit, string label, bool bigHit = false,
+                                    float knockback = 0f)
         {
             var target = FrontMonster;
-            StartCoroutine(DoDamageAfter(delay, dmg, crit, label, target));
+            StartCoroutine(DoDamageAfter(delay, dmg, crit, label, target, bigHit, knockback));
         }
 
-        private IEnumerator DoDamageAfter(float delay, long dmg, bool crit, string label, MonsterUnit target)
+        private IEnumerator DoDamageAfter(float delay, long dmg, bool crit, string label, MonsterUnit target,
+                                          bool bigHit, float knockback)
         {
             if (delay > 0f)
             {
@@ -951,19 +1367,41 @@ namespace TaskbarHero.Client.Battle
             }
             // 피격음은 대상 계열에 따라 살점/금속으로 갈린다(사운드 정의서 §5.1·§8).
             SoundManager.Sfx(BattleSounds.MonsterHitFor(target.MonsterName));
-            target.TakeDamage(dmg);
-            // 피격 데미지를 붉은 숫자로 표시(치명타는 노란색). 오브젝트 풀 재사용.
-            DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f), crit);
+            bool isBoss = target.IsBoss;
+            bool killed = target.TakeDamage(dmg);
+            // 맞는 반응(피격 모션·붉은 틴트·넉백). 죽은 대상은 사망 모션·사망음이 피드백을 맡는다.
+            if (!killed)
+            {
+                target.PlayHitReaction(heavy: true, knockback: knockback);
+            }
+            // 히트스톱은 큰 타격(치명타·스킬·보스 피격)에 건다.
+            if (crit || bigHit || isBoss)
+            {
+                RequestHitStop(isBoss ? BossHitStopSeconds : HitStopSeconds);
+            }
+            // 카메라 셰이크는 <b>스킬 타격만</b>이다. 치명타·보스 피격까지 넣었더니 기본공격에도 치명타가
+            // 자주 떠서(그리고 보스전에서는 평타마다) 화면이 거의 상시 흔들렸다(2026-08-04 축소).
+            if (bigHit)
+            {
+                RequestShake(isBoss ? ShakeHeavy : ShakeLight);
+            }
+            // 피격 데미지를 숫자로 표시(치명타는 노란색). 크기는 대상 최대 체력 대비 피해 비중으로 정한다.
+            DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f),
+                crit, DamageSizeMul(dmg, target.MaxHp));
             Log($"{label} → -{dmg}{(crit ? " (치명타)" : string.Empty)} (HP {Mathf.Max(0, (int)target.Hp)}/{target.MaxHp})");
         }
 
-        /// <summary>지연 후 지정 중심 반경 내 모든 살아있는 적에게 데미지를 적용한다(광역 스킬).</summary>
-        public void DealAreaDamageAfter(float delay, long dmg, bool crit, string label, Vector3 center, float radius)
+        /// <summary>지연 후 지정 중심 반경 내 모든 살아있는 적에게 데미지를 적용한다(광역 스킬).
+        /// <paramref name="bigHit"/>는 스킬 타격 표시(히트스톱 판단용) — 광역 <b>평타</b>도 있으므로 여기서도 구분한다.
+        /// <paramref name="knockback"/>은 대표 대상이 밀려날 거리(0이면 밀지 않는다).</summary>
+        public void DealAreaDamageAfter(float delay, long dmg, bool crit, string label, Vector3 center, float radius,
+                                        bool bigHit = false, float knockback = 0f)
         {
-            StartCoroutine(DoAreaDamageAfter(delay, dmg, crit, label, center, radius));
+            StartCoroutine(DoAreaDamageAfter(delay, dmg, crit, label, center, radius, bigHit, knockback));
         }
 
-        private IEnumerator DoAreaDamageAfter(float delay, long dmg, bool crit, string label, Vector3 center, float radius)
+        private IEnumerator DoAreaDamageAfter(float delay, long dmg, bool crit, string label, Vector3 center, float radius,
+                                              bool bigHit, float knockback)
         {
             if (delay > 0f)
             {
@@ -986,27 +1424,98 @@ namespace TaskbarHero.Client.Battle
             }
 
             int hit = 0;
+            bool hitBoss = false;
             float r2 = radius * radius;
             foreach (var mu in targets)
             {
                 if (mu == null || !mu.Alive) continue;
                 if (((Vector2)mu.transform.position - (Vector2)center).sqrMagnitude <= r2)
                 {
+                    hitBoss |= mu.IsBoss;
                     // 광역은 대상 수만큼 루프를 돌지만 피격음은 **첫 대상 한 번만** 울린다 —
                     // 대상마다 재생하면 소리가 찢어진다(사운드 정의서 §9.3).
                     if (hit == 0)
                     {
                         SoundManager.Sfx(BattleSounds.MonsterHitFor(mu.MonsterName));
                     }
-                    mu.TakeDamage(dmg);
-                    DamageNumberPool.GetOrCreate().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f), crit);
+                    bool killed = mu.TakeDamage(dmg);
+                    // 피격음과 같은 기준으로 나눈다 — 대표(첫) 대상만 모션·넉백까지, 나머지는 틴트만.
+                    // 전원에게 모션·넉백을 주면 광역 한 방에 화면이 찢어진다(사운드 정의서 §9.3과 같은 이유).
+                    if (!killed)
+                    {
+                        mu.PlayHitReaction(heavy: hit == 0, knockback: hit == 0 ? knockback : 0f);
+                    }
+                    // 광역은 대상마다 숫자가 동시에 떠 한 덩어리로 보이므로 대상 순서대로 시차를 준다.
+                    DamageNumberPool.GetOrCreate().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f),
+                        crit, DamageSizeMul(dmg, mu.MaxHp), hit * AreaNumberStagger);
                     hit++;
                 }
+            }
+            // 히트스톱·셰이크는 광역 한 방에 <b>한 번만</b> 건다(대상마다 걸면 시간·화면이 계단처럼 끊긴다).
+            if (hit > 0 && (crit || bigHit || hitBoss))
+            {
+                RequestHitStop(hitBoss ? BossHitStopSeconds : HitStopSeconds);
+            }
+            // 셰이크는 스킬 타격만(광역 <b>평타</b>도 있으므로 여기서도 bigHit로 가른다).
+            // 보스이거나 여러 대상을 한 번에 쓸었으면 강하게 준다.
+            if (hit > 0 && bigHit)
+            {
+                RequestShake(hitBoss || hit >= 3 ? ShakeHeavy : ShakeLight);
             }
             Log($"{label} (광역 r{radius:0.#}) → {hit}체 -{dmg}{(crit ? " (치명타)" : string.Empty)}");
         }
 
-        /// <summary>MonsterUnit이 죽는 순간 주입된 콜백으로 호출된다 — 누적 킬/로그 갱신.</summary>
+        // 광역에서 대상별로 숫자를 띄우는 간격(초) — 한 점에 겹쳐 한 덩어리로 보이는 것을 막는다.
+        private const float AreaNumberStagger = 0.05f;
+
+        /// <summary>
+        /// 데미지 숫자 크기 배수. <b>절대 데미지 값이 아니라 대상 최대 체력 대비 비중</b>으로 정한다 —
+        /// 절대값은 성장에 따라 계속 커져(3자리 → 6자리) 어느 값이 "큰 타격"인지 기준이 사라진다.
+        /// 체력의 절반을 날린 한 방은 어느 구간에서든 큰 타격이다.
+        /// </summary>
+        private static float DamageSizeMul(long dmg, long maxHp)
+        {
+            float weight = maxHp > 0 ? Mathf.Clamp01((float)dmg / maxHp) : 0.5f;
+            return Mathf.Lerp(0.9f, 1.35f, weight);
+        }
+
+        /// <summary>
+        /// 지정 x의 <b>앞쪽(오른쪽) <paramref name="range"/> 안</b>에 있는 살아있는 적들을 데미지 없이 밀어낸다.
+        /// 기사 방패 돌진처럼 <b>밀치는 것 자체가 스킬 효과</b>인 경우에 쓴다 — 데미지는 여전히 단일 대상에만
+        /// 들어가고(전투 수치는 그대로), 방패에 부딪힌 적들이 함께 날아가는 것만 연출로 표현한다.
+        /// </summary>
+        public void ShoveEnemiesAhead(float delay, float fromX, float range, float distance)
+        {
+            StartCoroutine(DoShoveEnemiesAhead(delay, fromX, range, distance));
+        }
+
+        private IEnumerator DoShoveEnemiesAhead(float delay, float fromX, float range, float distance)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay); // 타격(충돌) 시점에 맞춘다
+            }
+            if (_om == null || distance <= 0f)
+            {
+                yield break;
+            }
+            int pushed = 0;
+            foreach (var go in _om.Active(CatEnemy))
+            {
+                var mu = go.GetComponent<MonsterUnit>();
+                if (mu == null || !mu.Alive) continue;
+                float dx = mu.transform.position.x - fromX;
+                if (dx < 0f || dx > range) continue; // 앞쪽 일정 범위만(지나친 적·뒤쪽 적은 제외)
+                mu.ApplyPush(distance);
+                pushed++;
+            }
+            if (pushed > 0)
+            {
+                RequestShake(ShakeHeavy); // 방패로 밀어붙이는 충격
+            }
+        }
+
+        /// <summary>MonsterUnit이 죽는 순간 주입된 콜백으로 호출된다 — 누적 킬/로그 갱신 + 웨이브 종료 슬로우.</summary>
         public void OnMonsterKilled(MonsterUnit m)
         {
             _killCount++;
@@ -1015,6 +1524,25 @@ namespace TaskbarHero.Client.Battle
                 _serverKilled++; // 스테이지 진행도(처치/전체) 분자
             }
             Log($"{(m != null ? m.MonsterName : _monsterName)} 처치! (누적 {_killCount})");
+
+            // 웨이브의 <b>마지막 한 마리</b>를 잡는 순간만 짧게 슬로우 + 셰이크 — 한 웨이브를 정리했다는
+            // 마무리 박자를 준다(매 처치에 걸면 방치형 처치 빈도상 전투가 계속 끊긴다).
+            if (AliveEnemyCount() == 0)
+            {
+                RequestSlowMotion(WaveClearSlowScale, WaveClearSlowSeconds);
+                RequestShake(ShakeHeavy);
+            }
+        }
+
+        /// <summary>
+        /// 보스가 체력 70%·30%를 지날 때 <see cref="MonsterUnit"/>이 호출한다 — 붉은 비네트 플래시 + 강한 셰이크.
+        /// 포효·공격 주기 단축은 몬스터 쪽에서 처리하고, 여기서는 <b>화면 연출</b>만 담당한다.
+        /// </summary>
+        public void OnBossPhase(MonsterUnit boss, int phase)
+        {
+            FlashVignette(BossPhaseVignetteColor, BossPhaseVignetteSeconds);
+            RequestShake(ShakeHeavy);
+            Log($"{(boss != null ? boss.MonsterName : "보스")} 페이즈 {phase} 진입 — 공격이 빨라진다!");
         }
 
         /// <summary>몬스터가 공격 주기마다 호출한다. 최전방 생존 아군에게 몬스터 공격력×배수를 방어력으로 경감해 준다.
@@ -1216,10 +1744,16 @@ namespace TaskbarHero.Client.Battle
         private const float HpBarFillInset = 3f;
         private const float HpBarFillWidth = HpBarWidth - HpBarFillInset * 2f;
 
+        // HP바 juice: 방금 깎인 구간을 보여주는 고스트 바 + 피격 시 바 흔들림.
+        private const float HpBarShakePx = 3f;         // 흔들림 진폭(픽셀) — 바가 작으므로 크게 흔들면 읽기 어렵다
+        private const float HpBarShakeFrequency = 26f; // 초당 진동 수
+        private static readonly Color HpGhostColor = new Color(1f, 0.93f, 0.88f, 0.9f); // 방금 잃은 양(흰색)
+
         private Canvas _hpCanvas;
         private RectTransform _hpArea; // 전투 화면 밴드로 잘라 내는 컨테이너(밖으로 나간 HP바를 가린다)
         private readonly List<RectTransform> _hpBarRoots = new List<RectTransform>();
         private readonly List<Image> _hpBarFills = new List<Image>();
+        private readonly List<Image> _hpBarGhosts = new List<Image>();
 
         [Tooltip("일반 몬스터 HP바를 머리(스프라이트 상단)에서 얼마나 위에 둘지(월드 단위).")]
         private const float HpBarAboveMargin = 0.2f;
@@ -1270,10 +1804,16 @@ namespace TaskbarHero.Client.Battle
                 // 픽셀 격자에 맞춰(정수 좌표) 배치한다 — 소수 좌표면 프레임 아트가 프레임마다 미세하게 번진다.
                 // 좌표는 캔버스가 아니라 밴드 컨테이너(_hpArea)의 좌하단 기준이므로 그 원점만큼 빼 준다.
                 Vector2 origin = HpAreaOrigin();
-                bar.anchoredPosition = new Vector2(Mathf.Round(sp.x - origin.x), Mathf.Round(sp.y - origin.y));
+                Vector2 jitter = HpBarJitter(m.HpBarShake01); // 피격 직후 바를 미세하게 흔든다
+                bar.anchoredPosition = new Vector2(Mathf.Round(sp.x - origin.x + jitter.x),
+                                                   Mathf.Round(sp.y - origin.y + jitter.y));
                 float ratio = Mathf.Clamp01((float)m.Hp / m.MaxHp);
                 _hpBarFills[used].rectTransform.sizeDelta =
                     new Vector2(HpBarFillWidth * ratio, -HpBarFillInset * 2f); // 너비로 체력 표현
+                // 고스트 바는 붉은 채움 뒤에서 조금 늦게 따라 내려와, 방금 깎인 구간을 흰색으로 남긴다.
+                float ghost = Mathf.Max(ratio, m.HpGhostRatio);
+                _hpBarGhosts[used].rectTransform.sizeDelta =
+                    new Vector2(HpBarFillWidth * ghost, -HpBarFillInset * 2f);
                 used++;
             }
 
@@ -1359,7 +1899,23 @@ namespace TaskbarHero.Client.Battle
             return new Vector2(corner.x, corner.y);
         }
 
-        /// <summary>인덱스에 해당하는 HP바(배경+채움)를 풀에서 얻거나 새로 만든다.</summary>
+        /// <summary>
+        /// 피격 직후 HP바를 흔들 픽셀 오프셋. 강도(<paramref name="shake01"/>)는 몬스터가 감쇠시켜 넘겨준다.
+        /// 서로 다른 주파수의 사인을 써서 x·y가 같은 방향으로만 왕복하지 않게 한다(원운동처럼 보이지 않도록).
+        /// 시간은 <b>unscaled</b> — 히트스톱으로 시간이 멈춘 동안에도 바가 흔들려야 카메라 셰이크와 결이 맞는다.
+        /// </summary>
+        private static Vector2 HpBarJitter(float shake01)
+        {
+            if (shake01 <= 0f)
+            {
+                return Vector2.zero;
+            }
+            float phase = Time.unscaledTime * HpBarShakeFrequency;
+            float amp = HpBarShakePx * shake01;
+            return new Vector2(Mathf.Sin(phase) * amp, Mathf.Sin(phase * 1.7f) * amp * 0.6f);
+        }
+
+        /// <summary>인덱스에 해당하는 HP바(배경+고스트+채움)를 풀에서 얻거나 새로 만든다.</summary>
         private RectTransform GetHpBar(int index)
         {
             while (_hpBarRoots.Count <= index)
@@ -1382,23 +1938,35 @@ namespace TaskbarHero.Client.Battle
                 }
                 bgImg.raycastTarget = false;
 
+                // 고스트(방금 깎인 양): 붉은 채움보다 <b>먼저</b> 만들어 그 아래에 깔린다(자식 순서 = 그리기 순서).
+                // 붉은 채움이 덮지 못하고 남는 오른쪽 구간이 곧 "직전 체력 → 현재 체력" 차이다.
+                var ghostImg = NewHpBarFill(bgGo.transform, "Ghost", HpGhostColor);
+
                 // 채움: 좌측 정렬 솔리드 사각형(너비로 체력 비율 표현). 프레임 테두리를 피해 안쪽으로 넣는다.
-                var fillGo = new GameObject("Fill", typeof(RectTransform), typeof(Image));
-                fillGo.transform.SetParent(bgGo.transform, false);
-                var fillRt = (RectTransform)fillGo.transform;
-                fillRt.anchorMin = new Vector2(0f, 0f);
-                fillRt.anchorMax = new Vector2(0f, 1f);
-                fillRt.pivot = new Vector2(0f, 0.5f);
-                fillRt.anchoredPosition = new Vector2(HpBarFillInset, 0f);
-                fillRt.sizeDelta = new Vector2(HpBarFillWidth, -HpBarFillInset * 2f);
-                var fillImg = fillGo.GetComponent<Image>();
-                fillImg.color = new Color(0.85f, 0.16f, 0.16f, 1f); // 어두운 프레임 위에서 잘 보이는 붉은색
-                fillImg.raycastTarget = false;
+                var fillImg = NewHpBarFill(bgGo.transform, "Fill", new Color(0.85f, 0.16f, 0.16f, 1f));
 
                 _hpBarRoots.Add(bgRt);
                 _hpBarFills.Add(fillImg);
+                _hpBarGhosts.Add(ghostImg);
             }
             return _hpBarRoots[index];
+        }
+
+        /// <summary>HP바 안쪽 채움용 Image(좌측 정렬·프레임 테두리 안쪽)를 만든다 — 고스트와 현재 체력이 공유한다.</summary>
+        private static Image NewHpBarFill(Transform parent, string name, Color color)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(0f, 0f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 0.5f);
+            rt.anchoredPosition = new Vector2(HpBarFillInset, 0f);
+            rt.sizeDelta = new Vector2(HpBarFillWidth, -HpBarFillInset * 2f);
+            var img = go.GetComponent<Image>();
+            img.color = color;
+            img.raycastTarget = false;
+            return img;
         }
     }
 }

@@ -70,6 +70,32 @@ namespace TaskbarHero.Client.Battle
         /// 종료 처리돼 이펙트만 나오고 애니메이션이 보이지 않는다.</summary>
         private const float MinChargeMotion = 0.45f;
 
+        /// <summary>방패 돌진이 적을 밀어내는 범위 = 공격 사거리 + 이 값(유닛). 사거리 안에서 데미지를 받는
+        /// 대상뿐 아니라 그 바로 뒤에 몰려 있던 적들까지 방패에 밀려 함께 날아가도록 조금 넓게 잡는다.</summary>
+        private const float ChargeShoveExtraRange = 1.8f;
+
+        // ---- 근접 lunge(찔러 들어갔다 복귀) ----
+        // 제자리 스윙은 "때렸다"가 약하게 읽힌다. 평타마다 0.1초 앞으로 파고들었다 돌아오면 체감이 확 다르다.
+        private const float LungeDistance = 0.32f;      // 앞으로 파고드는 거리(유닛)
+        private const float LungeOutSeconds = 0.06f;    // 나가는 시간(짧고 빠르게)
+        private const float LungeBackSeconds = 0.12f;   // 돌아오는 시간(조금 느리게 — 무게감)
+        private Coroutine _lungeAnim;
+        private float _lungeApplied;                    // 지금 위치에 반영돼 있는 lunge 오프셋
+
+        // ---- 스킬별 화면 효과(3순위) ----
+        // 마스터 데이터의 스킬 코드는 고정 키라 연출 분기 기준으로 안전하다(이름 문자열로 비교하지 않는다).
+        private const int KnightPowerStrikeSkillCode = 103; // 강타 — 바닥 데칼
+        private const int FrostNovaSkillCode = 302;         // 프로스트 노바 — 빙결(파란 틴트 + 이동 정지)
+        private const int LightningBoltSkillCode = 303;      // 라이트닝 볼트 — 화면 백색 섬광
+        private const int SlayerGroundSlamSkillCode = 401;   // 내려찍기 — 바닥 데칼(착지 시점)
+
+        private const float FrostNovaFreezeSeconds = 0.5f;
+        private const float FrostNovaFreezeRadius = 3.2f;
+        private const float LightningFlashSeconds = 0.09f;
+        private const float DecalWidthStrike = 1.6f;
+        private const float DecalWidthSlam = 2.4f;
+        private static readonly Color LightningFlashColor = new Color(1f, 1f, 1f, 0.35f); // 상주 창이라 옅게
+
         private bool _chargeImpacted;  // 이번 돌진의 타격을 이미 예약했는지(중복 데미지 방지)
         private float _chargeElapsed;  // 돌진 시작 후 경과 시간
         private float _chargeMotion;   // 이번 돌진의 자세 유지 시간(이펙트 길이와 최소 시간 중 큰 값)
@@ -754,17 +780,22 @@ namespace TaskbarHero.Client.Battle
         /// <summary>
         /// 단일 대상 데미지를 컨트롤러에 넘기면서 흡혈을 함께 처리한다.
         /// 모든 데미지 경로가 이 창구를 지나므로 기본공격·스킬·투사체·돌진 어디서든 흡혈이 동작한다.
+        /// <paramref name="bigHit"/>는 <b>스킬 타격</b> 표시로, 컨트롤러가 히트스톱·셰이크를 걸지 판단하는 데만 쓴다.
+        /// <paramref name="knockback"/>은 대상이 밀려날 거리다 — <b>기본공격은 0</b>(밀지 않음),
+        /// 스킬은 <see cref="MonsterUnit.SkillKnockback"/>, 방패 돌진은 <see cref="MonsterUnit.ChargeKnockback"/>.
         /// </summary>
-        private void DealDamage(float delay, long dmg, bool crit, string label)
+        private void DealDamage(float delay, long dmg, bool crit, string label, bool bigHit = false,
+                                float knockback = 0f)
         {
-            _ctrl.DealDamageAfter(delay, dmg, crit, label);
+            _ctrl.DealDamageAfter(delay, dmg, crit, label, bigHit, knockback);
             ScheduleLifesteal(delay, dmg);
         }
 
         /// <summary>광역 데미지 + 흡혈. 회복량은 대상 1기분 피해 기준이다(적중 수만큼 배로 늘리지 않는다).</summary>
-        private void DealAreaDamage(float delay, long dmg, bool crit, string label, Vector3 center, float radius)
+        private void DealAreaDamage(float delay, long dmg, bool crit, string label, Vector3 center, float radius,
+                                    bool bigHit = false, float knockback = 0f)
         {
-            _ctrl.DealAreaDamageAfter(delay, dmg, crit, label, center, radius);
+            _ctrl.DealAreaDamageAfter(delay, dmg, crit, label, center, radius, bigHit, knockback);
             ScheduleLifesteal(delay, dmg);
         }
 
@@ -790,6 +821,96 @@ namespace TaskbarHero.Client.Battle
         {
             yield return new WaitForSeconds(delay);
             Heal(heal);
+        }
+
+        /// <summary>
+        /// 근접 기본공격용 lunge — 앞(적 방향 = +x)으로 짧게 파고들었다 제자리로 돌아온다.
+        /// <para><b>절대 좌표가 아니라 "이번 프레임에 더할 차이"만 적용한다</b>(<see cref="_lungeApplied"/>).
+        /// 대형 추격(<see cref="UpdateMovement"/>)·돌진이 같은 transform을 움직이므로, 절대 위치로 되돌리면
+        /// 그 이동을 취소해 캐릭터가 뒤로 끌린다.</para>
+        /// </summary>
+        private void StartLunge()
+        {
+            if (_lungeAnim != null)
+            {
+                StopCoroutine(_lungeAnim);
+                ApplyLungeOffset(0f); // 진행 중이던 lunge를 정리하고 다시 시작
+            }
+            _lungeAnim = StartCoroutine(LungeRoutine());
+        }
+
+        private IEnumerator LungeRoutine()
+        {
+            float t = 0f;
+            while (t < LungeOutSeconds)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / LungeOutSeconds);
+                ApplyLungeOffset(Mathf.Sin(k * Mathf.PI * 0.5f) * LungeDistance); // ease-out으로 튀어나감
+                yield return null;
+            }
+            t = 0f;
+            while (t < LungeBackSeconds)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / LungeBackSeconds);
+                ApplyLungeOffset(Mathf.Lerp(LungeDistance, 0f, k));
+                yield return null;
+            }
+            ApplyLungeOffset(0f);
+            _lungeAnim = null;
+        }
+
+        /// <summary>lunge 오프셋을 목표값으로 맞춘다(차이만 위치에 더한다).</summary>
+        private void ApplyLungeOffset(float offset)
+        {
+            float delta = offset - _lungeApplied;
+            if (Mathf.Approximately(delta, 0f)) return;
+            var p = transform.position;
+            p.x += delta;
+            transform.position = p;
+            _lungeApplied = offset;
+        }
+
+        /// <summary>
+        /// 스킬 코드별 화면 효과를 타격 시점에 맞춰 예약한다 — <b>스킬마다 다른 기억</b>을 남기는 장치다.
+        /// <list type="bullet">
+        /// <item>프로스트 노바(302): 범위 내 적 <b>파란 틴트 + 이동 정지</b>(빙결 시각화)</item>
+        /// <item>라이트닝 볼트(303): <b>화면 전체 백색 섬광</b> 한 번</item>
+        /// <item>강타(103)·내려찍기(401): 바닥에 <b>지속 데칼</b>(전투가 지나간 흔적)</item>
+        /// </list>
+        /// <para>스킬 코드로 분기하는 이유: 이 셋은 마스터 데이터의 수치(계수·범위)로는 구분되지 않는
+        /// <b>연출 고유 특성</b>이다. 코드는 마스터 데이터의 고정 키라 안전한 분기 기준이다.</para>
+        /// <para>데미지·상태에는 손대지 않는다(빙결은 이동만 멈추고 공격 주기는 그대로 — 연출이 난이도를
+        /// 바꾸지 않게 한다).</para>
+        /// </summary>
+        private void ApplySkillScreenEffect(Skill sk, float hitDelay)
+        {
+            switch (sk.code)
+            {
+                case FrostNovaSkillCode:
+                {
+                    Vector3 center = _allSkillsAoe ? SelfEffectPos(sk.offset) : TargetOrForwardPos();
+                    _ctrl.FreezeEnemiesNear(hitDelay, center, FrostNovaFreezeRadius, FrostNovaFreezeSeconds);
+                    break;
+                }
+                case LightningBoltSkillCode:
+                    _ctrl.FlashScreenAfter(hitDelay, LightningFlashColor, LightningFlashSeconds);
+                    break;
+                case KnightPowerStrikeSkillCode:
+                    _ctrl.SpawnGroundDecalAfter(hitDelay, TargetOrForwardPos(), DecalWidthStrike);
+                    break;
+                // 내려찍기는 착지 시점에 데칼을 남긴다(SlamImpactAfter에서 직접 호출).
+            }
+        }
+
+        /// <summary>대상(최전방 몬스터) 위치, 없으면 자기 앞쪽 사거리 절반 지점(연출 기준점).</summary>
+        private Vector3 TargetOrForwardPos()
+        {
+            var t = _ctrl.MonsterTransform;
+            return t != null
+                ? t.position
+                : transform.position + Vector3.right * Mathf.Max(0.5f, _attackRange * 0.5f);
         }
 
         /// <summary>지연 뒤 효과음을 1회 재생한다(타격 시점과 소리를 맞춰야 하는 임팩트음용 — 사운드 정의서 §9.3).</summary>
@@ -830,6 +951,10 @@ namespace TaskbarHero.Client.Battle
                     _weaponTrail.SetBuffed(true);
                 }
 
+                // 버프 지속 중 화면 가장자리를 붉게 물들이는 비네트는 넣지 않는다 —
+                // 광전사의 힘은 재사용 대기시간이 짧아 화면이 거의 상시 붉어져 시야를 방해했다(2026-08-04 제거).
+                // 버프 표현은 무기 잔상(붉은색)·버프 이펙트로 충분하다.
+
                 _busyTimer = _ctrl.BasicHitDelay;
             }
             else // 공격 스킬
@@ -840,6 +965,7 @@ namespace TaskbarHero.Client.Battle
                 // 멤버 설정의 hitTimeRatio로 앞당긴다(모션·쿨타임은 motion 그대로 유지).
                 float hitDelay = motion * (sk.hitTimeRatio > 0f ? sk.hitTimeRatio : 1f);
                 string label = $"[{_name}] 스킬 {sk.name} ×{sk.coef:0.##}";
+                ApplySkillScreenEffect(sk, hitDelay); // 스킬별 화면 효과(빙결 틴트·섬광·지속 데칼)
 
                 if (_rainSkillCode != 0 && sk.code == _rainSkillCode)
                 {
@@ -850,7 +976,7 @@ namespace TaskbarHero.Client.Battle
                     SpawnEffectAt(sk.effect, ArrowRainTargetPos(), sk.scale);
                     // 화살비 착탄음은 데미지가 들어가는 시점에 맞춘다(시전음은 활 소리, §8).
                     StartCoroutine(PlaySfxAfter(hitDelay, SoundId.ArcherArrowImpact));
-                    DealDamage(hitDelay, dmg, crit, label);
+                    DealDamage(hitDelay, dmg, crit, label, bigHit: true, knockback: MonsterUnit.SkillKnockback);
                     _busyTimer = motion + 0.4f; // 점프+홀드+착지 동안 대기
                 }
                 else if (_slamSkillCode != 0 && sk.code == _slamSkillCode)
@@ -871,7 +997,8 @@ namespace TaskbarHero.Client.Battle
                         PlayAttackAnim();
                     Vector3 center = SelfEffectPos(sk.offset);
                     var fx = SpawnEffectAt(sk.effect, center, sk.scale);
-                    DealAreaDamage(hitDelay, dmg, crit, label, center, EffectRadius(fx));
+                    DealAreaDamage(hitDelay, dmg, crit, label, center, EffectRadius(fx), bigHit: true,
+                        knockback: MonsterUnit.SkillKnockback);
                     _busyTimer = motion;
                 }
                 else if (_ranged && sk.effect != null && _ctrl.MonsterTransform != null)
@@ -884,7 +1011,7 @@ namespace TaskbarHero.Client.Battle
                     var proj = fx.GetComponent<ProjectileEffect>();
                     if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
                     proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
-                                () => DealDamage(0f, dmg, crit, label));
+                                () => DealDamage(0f, dmg, crit, label, bigHit: true, knockback: MonsterUnit.SkillKnockback));
                     _busyTimer = motion;
                 }
                 else
@@ -900,11 +1027,12 @@ namespace TaskbarHero.Client.Battle
                     {
                         // 광역(강타·강한일격 등): 이펙트 범위 내 모든 적에게 데미지.
                         DealAreaDamage(hitDelay, dmg, crit, label,
-                            EffectCenter(fx, SelfEffectPos(sk.offset)), EffectRadius(fx));
+                            EffectCenter(fx, SelfEffectPos(sk.offset)), EffectRadius(fx), bigHit: true,
+                            knockback: MonsterUnit.SkillKnockback);
                     }
                     else
                     {
-                        DealDamage(hitDelay, dmg, crit, label);
+                        DealDamage(hitDelay, dmg, crit, label, bigHit: true, knockback: MonsterUnit.SkillKnockback);
                     }
                     _busyTimer = motion;
                 }
@@ -948,6 +1076,7 @@ namespace TaskbarHero.Client.Battle
             }
             else // 근접
             {
+                StartLunge(); // 제자리 스윙 대신 살짝 찔러 들어갔다 복귀
                 if (_basicAttackAoe)
                 {
                     // 광역 기본공격: 대상(최전방 몬스터) 위치를 중심으로 사거리 내 모든 적에게 명중.
@@ -1029,7 +1158,12 @@ namespace TaskbarHero.Client.Battle
                 // 돌진 충돌음은 강타음을 재사용한다(§8) — 데미지와 같은 시점에 울린다.
                 StartCoroutine(PlaySfxAfter(impactDelay, SoundId.KnightPowerStrike));
                 DealDamage(impactDelay, dmg, crit,
-                    $"[{_name}] 돌진 {_chargeSkill.name} ×{_chargeSkill.coef:0.##}");
+                    $"[{_name}] 돌진 {_chargeSkill.name} ×{_chargeSkill.coef:0.##}",
+                    bigHit: true, knockback: MonsterUnit.ChargeKnockback);
+                // 방패 돌진은 '밀치는 것'이 스킬의 정체성이라, 방패에 부딪힌 <b>전방의 적 전부</b>가 함께 날아간다.
+                // 데미지는 위의 단일 대상만 받는다(전투 수치는 그대로 두고 연출만 확장).
+                _ctrl.ShoveEnemiesAhead(impactDelay, transform.position.x,
+                    _attackRange + ChargeShoveExtraRange, MonsterUnit.ChargeKnockback);
             }
 
             // 타격 후 남은 자세 유지(이 동안 _charging이 다른 행동을 막으므로 별도 _busyTimer는 불필요).
@@ -1079,15 +1213,21 @@ namespace TaskbarHero.Client.Battle
 
             var fx = SpawnEffectAtSelf(sk.effect, sk.offset);
             if (fx != null && sk.scale > 0f && sk.scale != 1f) fx.transform.localScale *= sk.scale;
+            // 내려찍은 자리에 지속 데칼(전투가 지나간 흔적) — 착지 시점이라 여기서 남긴다.
+            if (sk.code == SlayerGroundSlamSkillCode)
+            {
+                _ctrl.SpawnGroundDecal(SelfEffectPos(sk.offset), DecalWidthSlam);
+            }
             // 내리찍은 순간이 곧 타격. 광역 지정이면 먼지 이펙트 범위 안의 적 전부를 때린다.
             if (_aoeSkillCodes.Contains(sk.code))
             {
                 DealAreaDamage(0f, dmg, crit, label,
-                    EffectCenter(fx, SelfEffectPos(sk.offset)), EffectRadius(fx));
+                    EffectCenter(fx, SelfEffectPos(sk.offset)), EffectRadius(fx), bigHit: true,
+                            knockback: MonsterUnit.SkillKnockback);
             }
             else
             {
-                DealDamage(0f, dmg, crit, label);
+                DealDamage(0f, dmg, crit, label, bigHit: true, knockback: MonsterUnit.SkillKnockback);
             }
         }
 

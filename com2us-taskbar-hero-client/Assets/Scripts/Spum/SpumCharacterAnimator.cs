@@ -216,9 +216,17 @@ public class SpumCharacterAnimator : MonoBehaviour
     {
         EnsureInitialized();
         if (_spum == null || _spum._anim == null) return;
-        StopCoroutine(nameof(CastHoldRoutine));
-        StartCoroutine(CastHoldRoutine(holdSeconds));
+        // 코루틴 핸들로 중단한다 — StopCoroutine(문자열)은 StartCoroutine(문자열)로 시작한 것만 멈추므로
+        // 이전 홀드가 살아남아 speed를 0/1로 서로 엎어쓰다 애니메이터가 멈춘 채 남을 수 있다.
+        if (_castHold != null)
+        {
+            StopCoroutine(_castHold);
+            _spum._anim.speed = 1f; // 중단 시 정지 상태로 남지 않게 반드시 복구
+        }
+        _castHold = StartCoroutine(CastHoldRoutine(holdSeconds));
     }
+
+    private Coroutine _castHold;
 
     private IEnumerator CastHoldRoutine(float holdSeconds)
     {
@@ -263,6 +271,7 @@ public class SpumCharacterAnimator : MonoBehaviour
         yield return new WaitForSeconds(Mathf.Max(0.05f, holdSeconds));
 
         anim.speed = 1f; // 재개 → 공격 애니 마무리 후 IDLE(차렷) 복귀
+        _castHold = null;
     }
 
     [Tooltip("화살비: 점프 높이(유닛)")]
@@ -285,9 +294,16 @@ public class SpumCharacterAnimator : MonoBehaviour
     {
         EnsureInitialized();
         if (_spum == null || _spum._anim == null) return;
-        StopCoroutine(nameof(ArrowRainRoutine));
-        StartCoroutine(ArrowRainRoutine(holdSeconds));
+        // 문자열 StopCoroutine은 무효다(PlayCastHold와 같은 이유) — 핸들로 중단하고 speed를 복구한다.
+        if (_arrowRain != null)
+        {
+            StopCoroutine(_arrowRain);
+            _spum._anim.speed = 1f;
+        }
+        _arrowRain = StartCoroutine(ArrowRainRoutine(holdSeconds));
     }
+
+    private Coroutine _arrowRain;
 
     private IEnumerator ArrowRainRoutine(float holdSeconds)
     {
@@ -367,6 +383,7 @@ public class SpumCharacterAnimator : MonoBehaviour
         { var p = transform.position; p.y = baseY; transform.position = p; }
         transform.localScale = baseScale; // 원래 크기 복원
         if (sg != null) sg.sortingOrder = origOrder; // 정렬 순서 복원
+        _arrowRain = null;
     }
 
     [Tooltip("내려찍기: 점프 높이(유닛)")]
