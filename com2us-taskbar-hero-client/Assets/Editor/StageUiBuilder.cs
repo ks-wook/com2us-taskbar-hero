@@ -16,6 +16,11 @@ namespace TaskbarHero.ClientEditor
         private const string ArtDir = "Assets/Art/UI/Stage";
         // 지역 창 배경은 공용 모달 배경을 재사용한다(Stage 전용 아트가 없어 팝업 톤을 맞춘다).
         private const string RegionWindowBgPath = "Assets/Art/UI/modal_bg.png";
+        // 지역별 스테이지 창 배경(1~5지역 = 평원·얼음·화산·사막·묘지). 파일명 숫자가 곧 지역 번호다.
+        private const string RegionBgDir = "Assets/Art/Background/stage_ui_bg";
+        // 지역 창 테두리 — 가운데가 빈 9-slice 프레임(거래소 픽셀 UI 키트 공용 아트를 재사용한다).
+        private const string RegionWindowFramePath =
+            "Assets/Art/UI/Trade/01_Frames_Panels/window_frame_hollow.png";
         private const string PrefabPath = "Assets/Prefabs/UI/StagePanel.prefab";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
@@ -61,6 +66,8 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("nameplateBar").objectReferenceValue = LoadSprite("ui_nameplate_bar");
             so.FindProperty("mapBackground").objectReferenceValue = LoadSprite("dungeon_map_bg");
             so.FindProperty("regionWindowBackground").objectReferenceValue = LoadSpriteAt(RegionWindowBgPath);
+            so.FindProperty("regionWindowFrame").objectReferenceValue = LoadSpriteAt(RegionWindowFramePath);
+            FillRegionBackgrounds(so.FindProperty("regionBackgrounds"));
             so.FindProperty("iconCleared").objectReferenceValue = LoadSprite("stage_cleared");
             so.FindProperty("iconInProgress").objectReferenceValue = LoadSprite("stage_ing");
             so.ApplyModifiedPropertiesWithoutUndo();
@@ -127,6 +134,27 @@ namespace TaskbarHero.ClientEditor
                 }
             }
             return null;
+        }
+
+        /// <summary>
+        /// 지역별 스테이지 창 배경 5장을 배선한다(<c>stage_ui_bg_1~5</c> = 1~5지역).
+        /// 없는 지역은 비워 두며, 컨트롤러가 기본(모달) 배경으로 폴백한다.
+        /// </summary>
+        private static void FillRegionBackgrounds(SerializedProperty array)
+        {
+            const int regions = 5;
+            array.arraySize = regions;
+            int found = 0;
+            for (int i = 0; i < regions; i++)
+            {
+                var sprite = LoadSpriteAt($"{RegionBgDir}/stage_ui_bg_{i + 1}.png");
+                array.GetArrayElementAtIndex(i).objectReferenceValue = sprite;
+                if (sprite != null)
+                {
+                    found++;
+                }
+            }
+            Debug.Log($"[StageUiBuilder] 지역 배경 배선: {found}/{regions}장");
         }
 
         private static Sprite LoadSprite(string fileName)

@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ec019f41ad0f942429ff8f5265b9395e, type: 3}
+  m_Name: CharacterIllustrationDatabase
+  m_EditorClassIdentifier: TaskbarHero.Client.Managers::TaskbarHero.Client.Managers.CharacterIllustrationDatabase
+  entries:
+  - classCode: 1
+    gender: 1
+    sprite: {fileID: 21300000, guid: fd1d4d139beac674d8874518e6cfbc0a, type: 3}
+    faceCenter: {x: 0.521, y: 0.205}
+    cropHeight: 0.46
+  - classCode: 1
+    gender: 2
+    sprite: {fileID: 21300000, guid: 7b502cd9d6c3a8246ad9678f56aca98f, type: 3}
+    faceCenter: {x: 0.511, y: 0.189}
+    cropHeight: 0.46
+  - classCode: 2
+    gender: 1
+    sprite: {fileID: 21300000, guid: 3c8d689e179fd7d4f8ed4c1ee2d4a3c0, type: 3}
+    faceCenter: {x: 0.5, y: 0.247}
+    cropHeight: 0.46
+  - classCode: 2
+    gender: 2
+    sprite: {fileID: 21300000, guid: 9d6bccec68ca8b646ad0d485d48e7601, type: 3}
+    faceCenter: {x: 0.477, y: 0.227}
+    cropHeight: 0.46
+  - classCode: 3
+    gender: 1
+    sprite: {fileID: 21300000, guid: b6c1cde0a29bac04c869d01869097ca9, type: 3}
+    faceCenter: {x: 0.518, y: 0.179}
+    cropHeight: 0.46
+  - classCode: 3
+    gender: 2
+    sprite: {fileID: 21300000, guid: af82e275fe41e2b4d8143bc74c19f83c, type: 3}
+    faceCenter: {x: 0.518, y: 0.179}
+    cropHeight: 0.46
+  - classCode: 4
+    gender: 1
+    sprite: {fileID: 21300000, guid: 9151c72eefbb5cf48935a7252df2e044, type: 3}
+    faceCenter: {x: 0.518, y: 0.172}
+    cropHeight: 0.46
+  - classCode: 4
+    gender: 2
+    sprite: {fileID: 21300000, guid: a0fc673c10984004f9baa8e9edb8db6f, type: 3}
+    faceCenter: {x: 0.522, y: 0.205}
+    cropHeight: 0.46

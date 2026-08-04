@@ -56,19 +56,20 @@ namespace TaskbarHero.Client.UI
         // pixelsPerUnitMultiplier로 테두리를 축소한다(HUD 배경과 같은 방식).
         private const float PanelPixelsPerUnitMultiplier = 3f;
 
-        // 초상화 렌더 설정. 슬롯마다 화면 밖 격리 위치에 캐릭터를 두고 전용 카메라로 렌더한다(인벤토리와 동일 방식).
-        // orthographicSize가 작을수록 확대 — 전투 초상화(PortraitCameraRig, 0.27/aim 0.48)와 같은 '얼굴 위주' 프레이밍을 쓴다.
+        // 파티 카드(우측)는 **캐릭터 일러스트의 얼굴을 확대**해 보여준다(CharacterIllustrationDatabase).
+        // 슬롯 아트 안쪽 창의 비율 = 카드 비율 × 창이 카드에서 차지하는 가로/세로 비율.
+        // 이 값으로 크롭 폭을 정해야 얼굴이 늘어나거나 눌리지 않는다.
+        private const float SlotWindowAspect =
+            CardAspect * ((SlotWindowXMax - SlotWindowXMin) / (SlotWindowYMax - SlotWindowYMin));
+        // 크롭 안에서 얼굴이 놓이는 세로 위치(0=크롭 위쪽, 1=아래쪽). 얼굴을 살짝 위로 둬 어깨까지 보이게 한다.
+        private const float FaceInCrop = 0.34f;
+
+        // 좌측 목록 초상화는 캐릭터 프리팹을 화면 밖 전용 카메라로 렌더해 쓴다(인벤토리와 동일 방식).
+        // orthographicSize가 작을수록 확대 — 전투 초상화(PortraitCameraRig, 0.27/aim 0.48)와 같은 '얼굴 위주' 프레이밍이다.
         private const int PortraitLayer = 28;      // 인벤토리와 공유(동시 표시되지 않음), 전투 초상(29~31)과 비겹침
-        // 카드 초상화 RT는 슬롯 아트 '안쪽 창'과 같은 비율로 만든다(늘어남·잘림 없이 창을 정확히 채우도록).
-        private const int CardPortraitWidth = 288;
-        private const int CardPortraitHeight = 492;
-        private const float CardPortraitOrtho = 0.33f;   // 값이 크면 캐릭터가 작게 보인다(창 대비 여유를 둔 얼굴 클로즈업)
-        private static readonly Vector2 CardPortraitAim = new Vector2(0f, 0.48f);
         private const int RowPortraitPixels = 96;
         private const float RowPortraitOrtho = 0.32f;
         private static readonly Vector2 RowPortraitAim = new Vector2(0f, 0.48f);
-        // 파티 카드 초상화는 배경을 <b>투명</b>하게 렌더해 슬롯 아트(party_slot) 위에 캐릭터만 겹쳐 보이게 한다.
-        private static readonly Color CardPortraitBg = new Color(0f, 0f, 0f, 0f);
         // 좌측 목록 초상화는 작은 칸이라 배경을 채워(어두운 남색) 썸네일처럼 보이게 둔다.
         private static readonly Color RowPortraitBg = new Color(0.169f, 0.176f, 0.247f, 1f);
         private const int MaxRowPortraits = 6;     // 좌측 목록 초상화 상한(카메라 수 제한). 초과 행은 이름만 표시
@@ -102,7 +103,6 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite _titleIcon;
 
         private readonly List<GameObject> _spawned = new List<GameObject>();
-        private PortraitSlot[] _cardPortraits;   // 우측 카드 3개용(고정 RT 크기)
         private PortraitSlot[] _rowPortraits;    // 좌측 목록용(고정 RT 크기)
         private int _selectedSlot;               // 선택된 파티 자리(0 = 선택 없음)
         private bool _busy;
@@ -156,9 +156,7 @@ namespace TaskbarHero.Client.UI
         /// <summary>파괴 시 화면 밖 초상화 스테이지(카메라·RT·캐릭터 인스턴스)를 함께 정리한다.</summary>
         private void OnDestroy()
         {
-            ReleasePortraits(_cardPortraits);
             ReleasePortraits(_rowPortraits);
-            _cardPortraits = null;
             _rowPortraits = null;
         }
 
@@ -493,23 +491,13 @@ namespace TaskbarHero.Client.UI
 
                 if (filled)
                 {
-                    // 아트 안쪽 창에 얼굴 초상화를 채운다(RT가 창과 같은 비율이라 늘어남·잘림 없음).
-                    // 초상화 배경이 불투명해 아트의 '빈 자리 실루엣'을 그대로 덮는다.
+                    // 아트 안쪽 창에 캐릭터 일러스트의 '얼굴'을 확대해 채운다.
+                    // 창이 컷아웃을 잘라내는 마스크가 되고, 일러스트는 얼굴이 창 중앙에 오도록 확대·이동한다.
                     var window = NewRect("Window", card);
                     PlaceFraction(window, SlotWindowXMin, SlotWindowYMin, SlotWindowXMax, SlotWindowYMax, 0f);
-
-                    var render = NewRawImage("Portrait", window);
-                    render.raycastTarget = false;
-                    var fitter = render.gameObject.AddComponent<AspectRatioFitter>();
-                    fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
-                    fitter.aspectRatio = CardPortraitWidth / (float)CardPortraitHeight;
-                    AssignPortrait(_cardPortraits, index, render, c);
+                    BuildFaceIllustration(window, c);
                 }
-                else
-                {
-                    // 빈 자리는 아트의 물음표 실루엣이 그대로 보이게 둔다(덧그리는 문구 없음).
-                    ClearPortrait(_cardPortraits, index);
-                }
+                // 빈 자리는 아트의 물음표 실루엣이 그대로 보이게 둔다(덧그리는 문구 없음).
 
                 BuildCardInfo(column, slot, filled ? c : null);
 
@@ -517,6 +505,59 @@ namespace TaskbarHero.Client.UI
                 int captured = slot;
                 btn.onClick.AddListener(() => OnSlotClicked(captured));
             }
+        }
+
+        /// <summary>
+        /// 파티 카드의 안쪽 창에 <b>캐릭터 일러스트의 얼굴만 확대해</b> 채운다.
+        ///
+        /// <para><b>방식</b> — 창(<paramref name="window"/>)에 <see cref="RectMask2D"/>를 붙여 잘라내는 틀로 쓰고,
+        /// 그 안에 일러스트 <see cref="Image"/>를 <b>창보다 크게</b> 놓아 얼굴 부분만 창에 남게 한다.
+        /// 크기·위치는 픽셀이 아니라 <b>앵커 비율</b>로 지정하므로 창이 커지든 작아지든(해상도·레이아웃 변화)
+        /// 같은 얼굴 프레이밍이 유지되고, 매 프레임 계산이 필요 없다.</para>
+        ///
+        /// <para><b>크롭 계산</b> — 보여줄 영역의 높이는 DB의 <c>cropHeight</c>(이미지 높이 대비)이고,
+        /// 폭은 창 비율(<see cref="SlotWindowAspect"/>)을 지키도록 이미지 픽셀 비율에서 역산한다.
+        /// 이렇게 해야 얼굴이 늘어나거나 눌리지 않는다. 그 영역의 중심을 DB의 <c>faceCenter</c>에 맞춘다.</para>
+        ///
+        /// 일러스트가 없는 직업·성별이면 아무것도 만들지 않고 아트의 빈 자리 실루엣을 그대로 남긴다.
+        /// </summary>
+        private void BuildFaceIllustration(RectTransform window, CharacterDto c)
+        {
+            if (!CharacterIllustrationDatabase.TryGetIllustration(c.classCode, c.gender, out var illust))
+            {
+                return;
+            }
+            var sprite = illust.sprite;
+            Rect spriteRect = sprite.rect;
+            if (spriteRect.width <= 0f || spriteRect.height <= 0f)
+            {
+                return;
+            }
+
+            window.gameObject.AddComponent<RectMask2D>(); // 창 밖으로 나간 일러스트를 잘라낸다
+
+            var img = NewImage("Illust", window, Color.white);
+            img.sprite = sprite;
+            img.type = Image.Type.Simple;
+            img.raycastTarget = false; // 클릭은 카드(부모)가 받는다
+
+            // 보여줄 영역(normalized, y는 아래에서부터 — 앵커 좌표계와 같은 방향).
+            float cropH = Mathf.Clamp(illust.cropHeight, 0.02f, 1f);
+            float cropW = Mathf.Clamp(
+                cropH * (spriteRect.height / spriteRect.width) * SlotWindowAspect, 0.02f, 1f);
+            float cropX = illust.faceCenter.x - cropW * 0.5f;
+            // faceCenter.y는 위에서부터라 아래 기준으로 뒤집는다. 얼굴은 크롭 위쪽(FaceInCrop)에 놓는다.
+            float cropY = 1f - illust.faceCenter.y - cropH * (1f - FaceInCrop);
+            // 크롭이 이미지를 넘어가면(머리가 그림 맨 위에 붙은 일러스트) 창에 빈 공간이 생기므로 안으로 당긴다.
+            cropX = Mathf.Clamp(cropX, 0f, Mathf.Max(0f, 1f - cropW));
+            cropY = Mathf.Clamp(cropY, 0f, Mathf.Max(0f, 1f - cropH));
+
+            // 크롭 영역이 창을 정확히 채우도록 이미지 rect를 창 밖까지 늘린다(앵커만으로 표현).
+            var rt = img.rectTransform;
+            rt.anchorMin = new Vector2(-cropX / cropW, -cropY / cropH);
+            rt.anchorMax = new Vector2((1f - cropX) / cropW, (1f - cropY) / cropH);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
         }
 
         /// <summary>슬롯 아트 아래쪽(칸 하단)에 직업·레벨 + [제외] 버튼, 또는 빈 자리 배치 안내를 만든다.</summary>
@@ -549,17 +590,17 @@ namespace TaskbarHero.Client.UI
 
         // ---- 초상화 렌더러 ----
 
-        /// <summary>카드·목록용 초상화 렌더러를 1회 생성한다(런타임 전용). 이미 있으면 그대로 재사용한다.</summary>
+        /// <summary>
+        /// 좌측 목록용 초상화 렌더러를 1회 생성한다(런타임 전용). 이미 있으면 그대로 재사용한다.
+        /// <para>우측 파티 카드는 캐릭터 프리팹 렌더가 아니라 <b>일러스트 컷아웃</b>을 쓰므로
+        /// (<see cref="BuildFaceIllustration"/>) 카드용 카메라·RenderTexture를 만들지 않는다 — 카메라 3대와
+        /// RT 3장이 줄었다.</para>
+        /// </summary>
         private void EnsurePortraits()
         {
             if (!Application.isPlaying)
             {
                 return;
-            }
-            if (_cardPortraits == null)
-            {
-                _cardPortraits = CreatePortraits(MaxSlots, 0f, CardPortraitWidth, CardPortraitHeight,
-                    CardPortraitOrtho, CardPortraitAim, CardPortraitBg);
             }
             if (_rowPortraits == null)
             {
@@ -622,10 +663,9 @@ namespace TaskbarHero.Client.UI
             slot.stage.SetActive(false);
         }
 
-        /// <summary>모든 초상화 렌더러를 비운다(보유 캐릭터가 없을 때).</summary>
+        /// <summary>좌측 목록 초상화 렌더러를 모두 비운다(보유 캐릭터가 없을 때).</summary>
         private void HideAllPortraits()
         {
-            for (int i = 0; _cardPortraits != null && i < _cardPortraits.Length; i++) ClearPortrait(_cardPortraits, i);
             for (int i = 0; _rowPortraits != null && i < _rowPortraits.Length; i++) ClearPortrait(_rowPortraits, i);
         }
 
