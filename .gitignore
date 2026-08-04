@@ -156,3 +156,4 @@ com2us-taskbar-hero-client/Assets/Thirdparty
 __pycache__/
 *.py[cod]
 docs/공통/trade-테스트-데이터.sql
+docs/거래소-목록-캐시-제거-판단.md
