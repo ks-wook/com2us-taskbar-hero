@@ -538,8 +538,7 @@ erDiagram
 | `grade` | tinyint PK | 천장 대상 등급 |
 | `pity_type` | tinyint PK | 1:소프트(가중치 가산) 2:하드(확정 지급) |
 | `threshold` | int | **이번 뽑기가 마지막 획득 이후 `threshold`회차**가 되면 발동(회차 = `pity_count + 1`) |
-| `weight_up` | int | 소프트 전용 — 발동 후 1회당 가산할 가중치 |
-| `weight_up_max` | int | 소프트 전용 — 누적 가산 상한(0=무제한) |
+| `prob_step` | decimal(6,5) | 소프트 전용 — 발동 후 1회당 올릴 **확률(%p, 0~1)**. 하드는 0 |
 
 **천장 기준값(확정)**: 최고 등급(5)에 소프트 `threshold=70`, 하드 `threshold=90`. 1~69회차 기본 확률 → 70~89회차 상승 → **90회차 100% 확정**이다([가챠 기획서](../gacha-기획서.md) 6.3).
 

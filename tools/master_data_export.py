@@ -360,8 +360,7 @@ def export_gacha(conn):
             "grade": _i(r["grade"]),
             "pityType": _i(r["pity_type"]),
             "threshold": _i(r["threshold"]),
-            "weightUp": _i(r["weight_up"]),
-            "weightUpMax": _i(r["weight_up_max"]),
+            "probStep": _f(r["prob_step"]),
         })
 
     result = []

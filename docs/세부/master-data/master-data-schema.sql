@@ -1429,12 +1429,15 @@ INSERT INTO gacha_item_pool (gacha_code, grade, item_code, quantity) VALUES
 --      비교한다. 그래야 "90회째에 확정"이 threshold=90으로 그대로 읽힌다(누적값과 직접 비교하면 91회째에 터진다).
 --
 --    ▶ 확정값 (두 배너 공통, 최고 등급 5(전설)에 2단계):
---        (grade=5, pity_type=1 소프트) threshold=70  weight_up=100  weight_up_max=0
---        (grade=5, pity_type=2 하드)   threshold=90  weight_up=0    weight_up_max=0
---      → 1~69회차 1.00% / 70~89회차 상승(1.98% → 17.50%) / 90회차 100% 확정.
+--        (grade=5, pity_type=1 소프트) threshold=70  prob_step=0.049  (회차당 +4.9%p)
+--        (grade=5, pity_type=2 하드)   threshold=90  prob_step=0
+--      → 1~69회차 1.00% / 70~89회차 상승(5.90% -> 99.00%) / 90회차 100% 확정 — 곡선이 끊기지 않는다.
 --        5등급을 받으면 즉시 카운터가 0으로 리셋되어 다음 주기가 시작된다.
---      → weight_up=100은 5등급 기본 가중치(12b)와 같은 값이다(발동 후 k회차째 가중치 = 100 × (1+k)).
---        weight_up_max는 0 — 소프트 구간이 90회차 하드에서 끊기므로 상한이 필요 없다.
+--      → 소프트는 "가중치 가산"이 아니라 "확률 가산"이다 - 가중치만 더하면 p=(w+up)/(total+up) 이라
+--        up 을 무한히 키워도 100%에 닿지 못해 89회차 17.5% -> 90회차 100% 로 끊긴다.
+--        서버는 목표 확률 p 를 가중치로 환산해(up=(p*total-w)/(1-p)) 기존 추첨 엔진에 넣는다.
+--        가산 상한 컬럼은 두지 않는다 — 소프트 구간(70~89회차)이 90회차 하드에서 끊기므로 가산치가
+--        무한정 커질 수 없다. 하드 없이 소프트만 두는 배너가 생기면 그때 상한 컬럼을 다시 둔다.
 --
 --    ▶ 90회차 확정은 "5등급 슬롯에서 균등 추첨"이며, 배너에 따라 결과가 갈리는 것은
 --      슬롯의 후보 구성 차이(12c) 때문이다 — 추첨 로직에 픽업 분기가 없다:
@@ -1452,8 +1455,7 @@ CREATE TABLE gacha_pity_rule (
     grade         TINYINT NOT NULL COMMENT '천장 대상 등급(grade_master)',
     pity_type     TINYINT NOT NULL COMMENT '1=소프트(가중치 가산) 2=하드(확정 지급)',
     threshold     INT     NOT NULL COMMENT '발동 회차(= player_gacha_counter.pity_count + 1과 비교). 기준값 소프트 70 / 하드 90',
-    weight_up     INT     NOT NULL DEFAULT 0 COMMENT '소프트 전용 — 발동 후 1회당 가산할 가중치(= 그 등급 기본 가중치). 하드는 0',
-    weight_up_max INT     NOT NULL DEFAULT 0 COMMENT '소프트 전용 — 누적 가산 상한(0=무제한). 하드가 끊어 주므로 기준값 0',
+    prob_step     DECIMAL(6,5) NOT NULL DEFAULT 0 COMMENT '소프트 전용 - 발동 후 1회당 올릴 확률(%p, 0~1). 하드는 0',
     PRIMARY KEY (gacha_code, grade, pity_type),
     CONSTRAINT fk_gpr_gacha FOREIGN KEY (gacha_code)
         REFERENCES gacha_master (gacha_code) ON DELETE CASCADE,
@@ -1461,11 +1463,11 @@ CREATE TABLE gacha_pity_rule (
         REFERENCES grade_master (grade) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='가챠 천장 규칙(등급별 소프트·하드 각 1행)';
 
-INSERT INTO gacha_pity_rule (gacha_code, grade, pity_type, threshold, weight_up, weight_up_max) VALUES
-    (60001, 5, 1, 70, 100, 0),   -- 상시 소프트: 70회차부터 회차마다 5등급 가중치를 100씩 가산
-    (60001, 5, 2, 90, 0,   0),   -- 상시 하드:   90회차에 5등급(전설) 확정 — 슬롯 내 균등 추첨
-    (60002, 5, 1, 70, 100, 0),   -- 픽업 소프트: 상시와 동일 곡선
-    (60002, 5, 2, 90, 0,   0);   -- 픽업 하드:   90회차에 5등급 슬롯 추첨 → 후보가 31151 하나뿐이라 확정
+INSERT INTO gacha_pity_rule (gacha_code, grade, pity_type, threshold, prob_step) VALUES
+    (60001, 5, 1, 70, 0.04900),   -- 상시 소프트: 70회차부터 회차마다 전설 확률 +4.9%p (70회차 5.9% -> 89회차 99.0%)
+    (60001, 5, 2, 90, 0.00000),   -- 상시 하드:   90회차에 5등급(전설) 확정 - 슬롯 내 균등 추첨
+    (60002, 5, 1, 70, 0.04900),   -- 픽업 소프트: 상시와 동일 곡선
+    (60002, 5, 2, 90, 0.00000);   -- 픽업 하드:   90회차에 5등급 슬롯 추첨 -> 후보가 31151 하나뿐이라 확정
 
 
 -- =====================================================================

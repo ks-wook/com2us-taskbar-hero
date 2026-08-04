@@ -270,8 +270,7 @@ namespace TaskbarHero.Common.MasterData
         public int grade;          // 천장 대상 등급
         public int pityType;       // 1:소프트(가중치 가산) 2:하드(확정 지급)
         public int threshold;      // 발동 회차(기준값 소프트 70 / 하드 90)
-        public int weightUp;       // 소프트 전용 — 발동 이후 1회당 가산 가중치
-        public int weightUpMax;    // 소프트 전용 — 가산 상한(0 = 무제한)
+        public float probStep;     // 소프트 전용 — 발동 후 1회당 올릴 확률(%p, 0~1). 하드는 0
     }
 
     /// <summary>

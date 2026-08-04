@@ -62,11 +62,13 @@ public sealed record NewbieRewardDef(int Seq, int RewardType, int RewardCode, lo
 public sealed record GachaPoolEntry(int ItemCode, int Quantity);
 
 /// <summary>
-/// 가챠 천장 규칙 1건(gacha_pity_rule). PityType 1:소프트(가중치 가산) 2:하드(확정 지급).
+/// 가챠 천장 규칙 1건(gacha_pity_rule). PityType 1:소프트(확률 가산) 2:하드(확정 지급).
 /// Threshold는 <b>이번 뽑기의 회차 번호</b>(player_gacha_counter.pity_count + 1)와 비교한다 —
 /// 누적 미획득 횟수와 직접 비교하면 한 회차 늦게 발동한다(가챠 기획서 §4.1·6.3).
+/// <para><see cref="ProbStep"/>은 소프트 전용으로 <b>발동 후 회차 1번당 올릴 확률(%p, 0~1)</b>이다.
+/// 하드 규칙은 0이다.</para>
 /// </summary>
-public sealed record GachaPityRule(int Grade, int PityType, int Threshold, int WeightUp, int WeightUpMax);
+public sealed record GachaPityRule(int Grade, int PityType, int Threshold, double ProbStep);
 
 /// <summary>
 /// 가챠(뽑기) 배너 정의(gacha_master + 자식 3종). 한 행이 하나의 배너다.
@@ -298,8 +300,7 @@ file sealed class GachaPityRuleRow
     public int Grade { get; set; }
     public int PityType { get; set; }
     public int Threshold { get; set; }
-    public int WeightUp { get; set; }
-    public int WeightUpMax { get; set; }
+    public decimal ProbStep { get; set; }   // DECIMAL 컬럼 → decimal 로 받아 double 로 캐스팅
 }
 
 /// <summary>
@@ -522,30 +523,44 @@ public sealed class MasterDataProvider
             return PickFromSlot(banner, hard.Grade, pityApplied: true, guaranteed: false);
         }
 
-        // 2) 소프트 천장 — 발동 이후 회차 수만큼 그 등급 가중치를 가산한다.
-        //    가중치 합을 정규화하지 않으므로 나머지 등급 확률은 자동으로 비례 감소한다(기획서 §4.1).
+        // 2) 소프트 천장 — 발동 이후 회차마다 그 등급의 <b>확률</b>을 ProbStep 만큼 올린다(기획서 §4.1).
+        //    목표 확률을 가중치로 환산해 더하므로 추첨 엔진은 하나(가중치 추첨)로 유지되고,
+        //    나머지 등급 확률은 정규화 없이 자동으로 비례 감소한다.
         var weights = new Dictionary<int, long>();
         foreach (var (grade, weight) in banner.GradeWeights)
         {
             weights[grade] = weight;
         }
 
+        long baseTotal = banner.GradeWeights.Values.Sum();
         foreach (var rule in banner.PityRules.Where(r => r.PityType == GachaPityTypes.Soft))
         {
             int k = PullNo(rule.Grade) - rule.Threshold + 1;
-            if (k <= 0 || !weights.ContainsKey(rule.Grade))
+            if (k <= 0 || rule.ProbStep <= 0 || !banner.GradeWeights.TryGetValue(rule.Grade, out int baseWeight))
             {
                 continue;
             }
 
-            long up = (long)k * rule.WeightUp;
-            if (rule.WeightUpMax > 0)
+            // 목표 확률 = 그 등급 기본 확률 + 발동 후 회차 수 × ProbStep.
+            double targetP = (double)baseWeight / baseTotal + k * rule.ProbStep;
+            if (targetP >= 1.0)
             {
-                up = Math.Min(up, rule.WeightUpMax);
+                // 소프트만으로 100%에 도달 — 하드와 같은 확정 경로로 지급한다(하드가 먼저 걸리는 게 정상이며,
+                // 이 분기는 하드 threshold 를 소프트 도달 지점보다 크게 잡은 마스터에서만 쓰인다).
+                return PickFromSlot(banner, rule.Grade, pityApplied: true, guaranteed: false);
             }
 
-            weights[rule.Grade] += up;
+            // 목표 확률 p 를 만드는 가산량: p = (w + up) / (total + up)  →  up = (p·total − w) / (1 − p).
+            // 가중치 가산 방식만으로는 p 가 1에 닿지 못하므로(분자·분모에 같은 up 이 더해진다) 확률로 정의한다.
+            long up = (long)Math.Round((targetP * baseTotal - baseWeight) / (1.0 - targetP));
+            if (up > 0)
+            {
+                weights[rule.Grade] = baseWeight + up;
+            }
         }
+
+        // 소프트 규칙이 여러 등급에 동시에 걸리면 위 환산이 서로의 분모를 반영하지 못해 근사가 된다.
+        // 현재 확정 설계는 최고 등급 1개에만 소프트를 두므로 정확하다(여러 등급이 필요해지면 재설계).
 
         // 3) 등급 추첨(누적 가중치). 순회 순서를 등급 오름차순으로 고정해 결과가 재현·검증 가능하게 한다.
         long total = weights.Values.Sum();
@@ -911,7 +926,7 @@ public sealed class MasterDataProvider
             .GetAsync<GachaItemPoolRow>();
 
         var pityRows = await db.Query("gacha_pity_rule")
-            .Select("gacha_code", "grade", "pity_type", "threshold", "weight_up", "weight_up_max")
+            .Select("gacha_code", "grade", "pity_type", "threshold", "prob_step")
             .OrderBy("gacha_code", "grade", "pity_type")
             .GetAsync<GachaPityRuleRow>();
 
@@ -959,7 +974,7 @@ public sealed class MasterDataProvider
                 pityByGacha[row.GachaCode] = list;
             }
 
-            list.Add(new GachaPityRule(row.Grade, row.PityType, row.Threshold, row.WeightUp, row.WeightUpMax));
+            list.Add(new GachaPityRule(row.Grade, row.PityType, row.Threshold, (double)row.ProbStep));
         }
 
         var byCode = new Dictionary<int, GachaBannerDef>();
