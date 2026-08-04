@@ -1803,6 +1803,7 @@ MonoBehaviour:
   mailPanelPrefab: {fileID: 89407125405729913, guid: a2ddddf23b25419429d92a2a115397d2, type: 3}
   attendancePanelPrefab: {fileID: 1145327173041529558, guid: 8e9b1c934473d6d4f885167f9adbdf7d, type: 3}
   tradePanelPrefab: {fileID: 3281263510454333301, guid: cbe47ea4bf92c7d44bd641e48defd342, type: 3}
+  gachaPanelPrefab: {fileID: 1055090032571380420, guid: 5756dfa0faaaba0489158b6f47b240b5, type: 3}
   settingsPanelPrefab: {fileID: 6153933301113318958, guid: cfde72febb76d0b45884e1d1db6a2556, type: 3}
   showOnStart: 0
   startPanel: 0

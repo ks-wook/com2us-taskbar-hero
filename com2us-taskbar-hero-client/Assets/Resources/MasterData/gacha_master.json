@@ -1,0 +1,637 @@
+[
+  {
+    "gachaCode": 60002,
+    "name": "성검 엑스칼리버 픽업",
+    "bannerImage": "gacha_banner_pickup_31151",
+    "isActive": 1,
+    "openAt": 1785682800,
+    "closeAt": 1786892400,
+    "sortOrder": 1,
+    "costCurrencyCode": 1,
+    "costSingle": 60000,
+    "costMulti": 540000,
+    "multiCount": 10,
+    "multiGuaranteedGrade": 3,
+    "pickupItemCode": 31151,
+    "gradeWeights": [
+      {
+        "grade": 1,
+        "weight": 5000
+      },
+      {
+        "grade": 2,
+        "weight": 3000
+      },
+      {
+        "grade": 3,
+        "weight": 1500
+      },
+      {
+        "grade": 4,
+        "weight": 400
+      },
+      {
+        "grade": 5,
+        "weight": 100
+      }
+    ],
+    "itemPool": [
+      {
+        "grade": 1,
+        "itemCode": 41001,
+        "quantity": 5
+      },
+      {
+        "grade": 1,
+        "itemCode": 41002,
+        "quantity": 2
+      },
+      {
+        "grade": 2,
+        "itemCode": 41002,
+        "quantity": 5
+      },
+      {
+        "grade": 2,
+        "itemCode": 41010,
+        "quantity": 2
+      },
+      {
+        "grade": 2,
+        "itemCode": 42001,
+        "quantity": 1
+      },
+      {
+        "grade": 2,
+        "itemCode": 42002,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31131,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31132,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31231,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31232,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31331,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31332,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31431,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31432,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 32131,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 32231,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 32331,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 32431,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 33031,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 33032,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 34031,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 34032,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 35031,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 35032,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 36031,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 36032,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31141,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31142,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31241,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31242,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31341,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31342,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31441,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31442,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 32141,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 32241,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 32341,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 32441,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 33041,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 34041,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 35041,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 36041,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 31151,
+        "quantity": 1
+      }
+    ],
+    "pityRules": [
+      {
+        "grade": 5,
+        "pityType": 1,
+        "threshold": 70,
+        "weightUp": 100,
+        "weightUpMax": 0
+      },
+      {
+        "grade": 5,
+        "pityType": 2,
+        "threshold": 90,
+        "weightUp": 0,
+        "weightUpMax": 0
+      }
+    ]
+  },
+  {
+    "gachaCode": 60001,
+    "name": "상시 뽑기",
+    "bannerImage": "gacha_banner_normal",
+    "isActive": 1,
+    "openAt": 0,
+    "closeAt": 0,
+    "sortOrder": 2,
+    "costCurrencyCode": 1,
+    "costSingle": 50000,
+    "costMulti": 450000,
+    "multiCount": 10,
+    "multiGuaranteedGrade": 3,
+    "pickupItemCode": 0,
+    "gradeWeights": [
+      {
+        "grade": 1,
+        "weight": 5000
+      },
+      {
+        "grade": 2,
+        "weight": 3000
+      },
+      {
+        "grade": 3,
+        "weight": 1500
+      },
+      {
+        "grade": 4,
+        "weight": 400
+      },
+      {
+        "grade": 5,
+        "weight": 100
+      }
+    ],
+    "itemPool": [
+      {
+        "grade": 1,
+        "itemCode": 41001,
+        "quantity": 5
+      },
+      {
+        "grade": 1,
+        "itemCode": 41002,
+        "quantity": 2
+      },
+      {
+        "grade": 2,
+        "itemCode": 41002,
+        "quantity": 5
+      },
+      {
+        "grade": 2,
+        "itemCode": 41010,
+        "quantity": 2
+      },
+      {
+        "grade": 2,
+        "itemCode": 42001,
+        "quantity": 1
+      },
+      {
+        "grade": 2,
+        "itemCode": 42002,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31131,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31132,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31231,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31232,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31331,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31332,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31431,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 31432,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 32131,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 32231,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 32331,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 32431,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 33031,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 33032,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 34031,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 34032,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 35031,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 35032,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 36031,
+        "quantity": 1
+      },
+      {
+        "grade": 3,
+        "itemCode": 36032,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31141,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31142,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31241,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31242,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31341,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31342,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31441,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 31442,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 32141,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 32241,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 32341,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 32441,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 33041,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 34041,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 35041,
+        "quantity": 1
+      },
+      {
+        "grade": 4,
+        "itemCode": 36041,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 31151,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 31152,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 31251,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 31252,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 31351,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 31352,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 31451,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 31452,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 32151,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 32251,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 32351,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 32451,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 33051,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 33052,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 34051,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 34052,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 35051,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 35052,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 36051,
+        "quantity": 1
+      },
+      {
+        "grade": 5,
+        "itemCode": 36052,
+        "quantity": 1
+      }
+    ],
+    "pityRules": [
+      {
+        "grade": 5,
+        "pityType": 1,
+        "threshold": 70,
+        "weightUp": 100,
+        "weightUpMax": 0
+      },
+      {
+        "grade": 5,
+        "pityType": 2,
+        "threshold": 90,
+        "weightUp": 0,
+        "weightUpMax": 0
+      }
+    ]
+  }
+]
