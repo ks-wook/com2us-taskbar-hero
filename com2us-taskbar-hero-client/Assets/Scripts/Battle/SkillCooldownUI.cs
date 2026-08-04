@@ -328,17 +328,19 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
-        /// <summary>생성물을 묶어 통째로 이동시킬 컨테이너(DockRoot)를 1회 생성한다(캔버스 전체 스트레치라 좌표계 동일).</summary>
+        /// <summary>
+        /// 생성물을 묶어 통째로 이동시킬 컨테이너(DockRoot)를 1회 생성한다.
+        /// <para>GameScene에서는 캔버스 전체가 아니라 <b>전투 화면 밴드</b>에만 걸친다
+        /// (<see cref="GameAreaRect"/>) — 초상화(좌상단 앵커)·툴팁(우상단 앵커)이 좌우 패널 여백으로
+        /// 밀려나지 않게 한다. 레이아웃이 꺼진 BattleDevScene에서는 종전대로 전체 스트레치가 된다.</para>
+        /// </summary>
         private void EnsureDockRoot()
         {
             if (_dockRoot != null) return;
             var go = new GameObject("DockRoot", typeof(RectTransform));
             _dockRoot = (RectTransform)go.transform;
             _dockRoot.SetParent(transform, false);
-            _dockRoot.anchorMin = Vector2.zero;
-            _dockRoot.anchorMax = Vector2.one;
-            _dockRoot.offsetMin = Vector2.zero;
-            _dockRoot.offsetMax = Vector2.zero;
+            GameAreaRect.Attach(_dockRoot);
         }
 
         /// <summary>uGUI hover 이벤트 전제 조건을 보장한다: 씬에 EventSystem이 없으면 생성, 캔버스에 GraphicRaycaster 부착.</summary>

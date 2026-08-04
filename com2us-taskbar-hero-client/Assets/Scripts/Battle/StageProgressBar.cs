@@ -106,11 +106,19 @@ namespace TaskbarHero.Client.Battle
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
+            // 현재 씬 규격(GameScene은 높이 1440 기준)으로 즉시 맞춘다 — 주기 스윕을 기다리면 첫 표시 때 잠깐 크게 그려진다.
+            GameViewLayout.ApplyCurrentScaler(scaler);
             // GraphicRaycaster는 붙이지 않는다 — 표시 전용 UI(클릭 대상 아님).
+
+            // 전투 화면 밴드 컨테이너 — GameScene 창은 좌우에 패널 여백이 붙어 캔버스가 전투 화면보다
+            // 넓으므로, 우측 하단 도킹인 바를 캔버스 직속으로 두면 빈 여백으로 밀려난다.
+            var gameArea = new GameObject("GameArea", typeof(RectTransform));
+            gameArea.transform.SetParent(transform, false);
+            GameAreaRect.Attach((RectTransform)gameArea.transform);
 
             // 바 루트(우측 하단 도킹, 표시 토글 대상)
             _root = new GameObject("Bar", typeof(RectTransform));
-            _root.transform.SetParent(transform, false);
+            _root.transform.SetParent(gameArea.transform, false);
             var rootRt = (RectTransform)_root.transform;
             rootRt.anchorMin = rootRt.anchorMax = new Vector2(1f, 0f);
             rootRt.pivot = new Vector2(1f, 0f);

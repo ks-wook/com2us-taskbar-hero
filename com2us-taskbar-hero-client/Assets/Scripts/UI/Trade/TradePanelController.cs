@@ -204,10 +204,9 @@ namespace TaskbarHero.Client.UI.Trade
             var img = NewImage("PanelRoot", (RectTransform)transform, new Color(0.12f, 0.10f, 0.08f, 0.98f));
             ApplySliced(img, _windowFrame);
             var rt = img.rectTransform;
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-            rt.anchoredPosition = Vector2.zero;
+            // 화면 중앙이 아니라 전투 화면 왼쪽 옆에 일정 간격(GameViewLayout.PanelGap)을 두고 붙인다 — 전투를 가리지 않는다.
+            SidePanel.Attach(rt, SidePanel.Side.Left);
             return rt;
         }
 

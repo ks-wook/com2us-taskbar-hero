@@ -197,14 +197,55 @@ namespace TaskbarHero.Client.Managers
 #endif
         }
 
-        /// <summary>패널/메뉴 표시 상태를 알린다. GameScene 창은 항상 확장이라 변하지 않고,
-        /// BattleDevScene 등 개발용 투명 씬에서만 열리면 확장/닫히면 16:9로 복귀한다.</summary>
+        /// <summary>
+        /// 패널/메뉴 표시 상태를 알린다. GameScene 창은 항상 확장이라 크기가 변하지 않고,
+        /// BattleDevScene 등 개발용 투명 씬에서만 열리면 확장/닫히면 16:9로 복귀한다.
+        /// <para><b>패널을 여닫는다고 창을 다시 배치하지 않는다</b> — <see cref="Apply"/>는 창을 작업영역 안으로
+        /// 클램프하므로, 창을 화면 가장자리에 걸쳐 둔 상태에서 패널을 열면 창이 화면 안쪽으로 끌려와
+        /// <b>전투 화면이 갑자기 움직였다</b>. 패널은 창을 건드리는 대신 화면에 보이는 공간 쪽으로 열린다
+        /// (<c>SidePanel.Place</c>). 창을 다시 잡는 것은 <b>패널 상태에 따라 창 크기가 달라지는</b>
+        /// 개발용 투명 씬뿐이다.</para>
+        /// </summary>
         public void SetExpanded(bool panelOpen)
         {
+            if (_panelOpen == panelOpen)
+            {
+                return;
+            }
             _panelOpen = panelOpen;
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
-            Apply();
+            if (PanelStateChangesWindowSize)
+            {
+                Apply();
+            }
 #endif
+        }
+
+        /// <summary>패널 표시 여부가 창 <b>크기</b>를 바꾸는 모드인지(개발용 투명 전투 씬 전용).
+        /// GameScene·타이틀 계열은 패널과 무관하게 크기가 고정이라 다시 배치할 이유가 없다.</summary>
+        private bool PanelStateChangesWindowSize => _transparentScene && !_inGameScene && !_inWideScene;
+
+        /// <summary>
+        /// 화면(작업영역)에 <b>실제로 보이는 창 영역</b> — Unity 스크린 좌표(좌하단 원점·픽셀).
+        /// 창을 화면 밖으로 걸쳐 두면 그만큼 좁아진다. 창 제어가 없는 환경(에디터·타 플랫폼)에서는 화면 전체.
+        /// <para>패널이 <b>창을 움직이지 않고</b> 보이는 공간 쪽에 열리도록 <c>SidePanel.Place</c>가 참조한다.</para>
+        /// </summary>
+        public static Rect VisibleArea
+        {
+            get
+            {
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+                if (Instance != null)
+                {
+                    var area = Instance.ComputeVisibleArea();
+                    if (area.width > 0f && area.height > 0f)
+                    {
+                        return area;
+                    }
+                }
+#endif
+                return new Rect(0f, 0f, Screen.width, Screen.height);
+            }
         }
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
@@ -545,8 +586,12 @@ namespace TaskbarHero.Client.Managers
                 return true;
             }
             var cam = Camera.main;
-            if (cam != null)
+            if (cam != null && cam.pixelRect.Contains(Input.mousePosition))
             {
+                // 커서가 카메라 뷰포트(GameScene에서는 가운데 전투 화면 밴드) 안일 때만 월드 판정을 한다.
+                // 좌우 패널 여백은 카메라가 그리지 않는 투명 영역이라 콘텐츠가 아니며, 이 가드가 없으면
+                // 아래 길 스트립 밴드 판정이 y만 보기 때문에 여백까지 콘텐츠로 잡아 클릭 통과가 꺼진다.
+
                 // 창 히트테스트 용도의 시스템 커서 좌표 조회(게임플레이 입력이 아니므로 액션 에셋 대상 아님,
                 // Active Input Handling=Both라 레거시 API 사용 가능).
                 Vector2 world = cam.ScreenToWorldPoint(Input.mousePosition);
@@ -594,6 +639,44 @@ namespace TaskbarHero.Client.Managers
             return GetActiveWindow();
         }
 
+        /// <summary>
+        /// 창 사각형과 작업영역의 교집합을 <b>Unity 스크린 좌표</b>(좌하단 원점·픽셀)로 환산한다.
+        /// 창이 화면 안에 온전히 들어와 있으면 화면 전체와 같다.
+        /// <para>Windows 창 좌표는 좌상단 원점이라 세로를 뒤집고, 창 픽셀 크기와 렌더 해상도가
+        /// 다를 수 있으므로 비율로 환산한다.</para>
+        /// </summary>
+        private Rect ComputeVisibleArea()
+        {
+            if (_hwnd == IntPtr.Zero || !GetWindowRect(_hwnd, out RECT wr))
+            {
+                return default;
+            }
+
+            RECT wa = default;
+            if (!SystemParametersInfo(SPI_GETWORKAREA, 0, ref wa, 0))
+            {
+                wa.left = 0; wa.top = 0; wa.right = Display.main.systemWidth; wa.bottom = Display.main.systemHeight;
+            }
+
+            // 창 좌상단 기준 교집합(창 픽셀)
+            int left = Mathf.Max(wr.left, wa.left) - wr.left;
+            int right = Mathf.Min(wr.right, wa.right) - wr.left;
+            int top = Mathf.Max(wr.top, wa.top) - wr.top;
+            int bottom = Mathf.Min(wr.bottom, wa.bottom) - wr.top;
+            if (right <= left || bottom <= top)
+            {
+                return default; // 창이 통째로 화면 밖 — 판단 불가, 호출부가 화면 전체로 폴백한다
+            }
+
+            float sx = Screen.width / (float)Mathf.Max(1, wr.right - wr.left);
+            float sy = Screen.height / (float)Mathf.Max(1, wr.bottom - wr.top);
+            float xMin = left * sx;
+            float xMax = right * sx;
+            float yMin = Screen.height - bottom * sy; // 세로 뒤집기
+            float yMax = Screen.height - top * sy;
+            return new Rect(xMin, yMin, xMax - xMin, yMax - yMin);
+        }
+
         /// <summary>현재 모드에 맞는 창 크기·위치를 계산해 적용하고, 렌더 해상도를 창 크기에 동기화한다.</summary>
         private void Apply()
         {
@@ -620,7 +703,21 @@ namespace TaskbarHero.Client.Managers
                     h = Mathf.RoundToInt(w / TitleAspect); // 좁은 작업영역에서도 16:9 유지
                 }
             }
-            else if (_transparentScene && !_inGameScene && !_panelOpen)
+            else if (_inGameScene)
+            {
+                // GameScene: [좌 패널 여백][전투 화면][우 패널 여백] 3분할 창(GameViewLayout).
+                // 높이는 종전 정사각형 창과 동일하게 잡고 폭만 2.5:1로 넓힌다 — 늘어난 좌우는
+                // 투명 여백이라 패널이 거기 들어가면 전투 화면을 가리지 않는다.
+                // 전투 화면 자체는 GameViewLayout이 카메라 rect를 가운데 밴드로 제한해 그대로 유지된다.
+                h = Mathf.Min(waH, Mathf.RoundToInt(waH * ExpandedHeightFrac * PortraitAspect));
+                w = Mathf.RoundToInt(h * GameViewLayout.WindowAspect);
+                if (w > waW)
+                {
+                    w = waW;
+                    h = Mathf.RoundToInt(w / GameViewLayout.WindowAspect); // 좁은 작업영역에서도 비율 유지
+                }
+            }
+            else if (_transparentScene && !_panelOpen)
             {
                 // 개발용 투명 전투 씬(BattleDevScene 등): 낮고 넓은 16:9 창 — 세로 투명 여백을 줄이고 가로 전장을 확보.
                 h = Mathf.RoundToInt(waH * BattleHeightFrac);
@@ -633,9 +730,9 @@ namespace TaskbarHero.Client.Managers
             }
             else
             {
-                // 확장 창(캐릭터 생성/GameScene 상시/패널·ESC 메뉴): 가로 폭(9:16 설계 기준 폭)은 유지하고
+                // 확장 창(개발용 투명 씬에서 패널·ESC 메뉴가 열렸을 때): 가로 폭(9:16 설계 기준 폭)은 유지하고
                 // 세로를 가로 길이에 맞춘 정사각형으로 줄인다(세로로 과하게 길지 않게).
-                // GameScene은 패널 유무와 무관하게 항상 이 창을 써서 평상시 UI가 ESC 메뉴가 열렸을 때와 동일하게 구성된다.
+                // GameScene은 위 3분할 분기가 먼저 잡으므로 여기로 오지 않는다.
                 w = Mathf.Min(waW, Mathf.RoundToInt(waH * ExpandedHeightFrac * PortraitAspect));
                 h = Mathf.Min(waH, w);
                 w = h; // 작업영역에 걸려 잘렸을 때도 1:1(정사각형)을 유지한다

@@ -14,7 +14,8 @@ namespace TaskbarHero.Client.UI
     /// 버튼 줄은 던전 배경 띠보다 아래(화면 최하단)에 놓여 배경 아트에 묻히지 않는다 —
     /// 배경 띠를 위로 띄우는 쪽은 <c>DungeonBattleBuilder</c>가 GameScene을 구울 때 처리한다.
     /// <para>
-    /// 하단 바는 <b>토글 버튼으로 열고 닫는다</b>(기본 펼침). 열면 접히는 영역이 오른쪽에서 왼쪽으로 펼쳐지고
+    /// 하단 바는 <b>토글 버튼으로 열고 닫는다</b>(<b>기본 접힘</b> — 손잡이만 보이고 눌러야 펼쳐진다).
+    /// 열면 접히는 영역이 오른쪽에서 왼쪽으로 펼쳐지고
     /// 이어서 아이콘이 왼쪽부터 오른쪽으로 작아진 상태에서 원래 크기까지 커지며, 닫을 때는 이를 역재생한다
     /// (아이콘이 오른쪽부터 왼쪽으로 작아진 뒤 바가 말려 접힘 — <see cref="AnimateMenuBar"/>).
     /// 토글 버튼은 하단 바에 붙지 않고 <b>우측 상단 버프 아이콘 바로 아래</b>에 있어 접혀도 남는다
@@ -138,7 +139,7 @@ namespace TaskbarHero.Client.UI
         private Sprite _menuToggleSprite;        // 메뉴 아이콘 텍스처로 런타임에 만든 스프라이트(OnDestroy에서 정리)
         private ButtonPunchScale _menuTogglePunch; // 클릭 시 아이콘이 커졌다 작아지는 연출(아이콘/화살표에 부착)
         private Coroutine _menuAnim;             // 진행 중인 열기/닫기 연출
-        private bool _menuOpen = true;           // 기본은 펼친 상태
+        private bool _menuOpen = false;          // 기본은 접힌 상태(손잡이만 보이고, 눌러야 펼쳐진다)
 
         private void Awake()
         {
@@ -285,13 +286,20 @@ namespace TaskbarHero.Client.UI
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
 
+            // HUD는 캔버스 전체가 아니라 '전투 화면 밴드' 안에만 둔다. GameScene 창은 좌우에 패널
+            // 여백이 붙어 캔버스가 전투 화면보다 훨씬 넓으므로(GameViewLayout), 캔버스 직속으로 두면
+            // 우측 정렬 요소(메뉴 손잡이·버프 아이콘)가 빈 여백까지 밀려난다.
+            var gameArea = new GameObject("GameArea", typeof(RectTransform));
+            gameArea.transform.SetParent(canvasGo.transform, false);
+            GameAreaRect.Attach((RectTransform)gameArea.transform);
+
             // 하단 바: 화면 하단 '가로 중앙'에 놓는다(예전에는 우하단 정렬이었다).
             // 구조 — MenuBar(중앙 정렬, 피벗 오른쪽) ├ MenuArea(접히는 영역: 배경+아이콘, 마스크로 클리핑)
             //                                        └ MenuToggleButton(오른쪽 끝 고정, 접혀도 남는 손잡이)
-            var bar = CreateBottomCenterBar(canvasGo.transform);
+            var bar = CreateBottomCenterBar(gameArea.transform);
             _menuArea = CreateMenuArea(bar);
             BuildMenuBackground(_menuArea);      // 아이콘보다 먼저 만들어 뒤에 깔리게 한다(자식 순서 = 그리기 순서)
-            CreateMenuToggleButton(canvasGo.transform, font); // 바가 아니라 캔버스 직속(게임 화면 안쪽 우측에 배치)
+            CreateMenuToggleButton(gameArea.transform, font); // 바가 아니라 전투 화면 밴드 직속(게임 화면 안쪽 우측에 배치)
 
             // 접히는 영역 안에 한 줄로: 오른쪽부터 [환경설정] [가방] [스테이지] [편성] [메일] [출석부] [거래소].
             _menuButtons = new RectTransform[MenuSlotCount];
@@ -309,7 +317,19 @@ namespace TaskbarHero.Client.UI
             // 가방 버튼 우측 상단 레드닷: 잔여 스킬 포인트가 있으면 표시(스킬 레벨업은 가방 안에서 진입).
             RedDot.AttachTopRight((RectTransform)inventoryBtn.transform).Bind(RedDotConditions.HasUnspentSkillPoints);
 
-            BuildBuffIndicator(canvasGo.transform, font);
+            BuildBuffIndicator(gameArea.transform, font);
+
+            // 기본 상태(_menuOpen)를 연출 없이 즉시 반영한다. 접힌 상태가 기본이므로 폭 0·아이콘 축소로
+            // 만들어 둬야 첫 프레임에 펼쳐진 바가 잠깐 보였다가 사라지는 일이 없다.
+            ApplyMenuBarState(_menuOpen);
+        }
+
+        /// <summary>메뉴바를 지정 상태로 <b>연출 없이</b> 즉시 맞춘다(초기 상태 적용용).</summary>
+        private void ApplyMenuBarState(bool open)
+        {
+            SetMenuAreaWidth(open ? MenuAreaWidth : 0f);
+            SetMenuIconScale(open ? 1f : MenuIconPopStartScale);
+            _menuArea.gameObject.SetActive(open); // 접혀 있으면 꺼 둔다(잔여 클릭·갱신 비용 제거)
         }
 
         /// <summary>화면 우측 상단의 '적용 중인 버프' 아이콘을 만든다(활성 버프가 있을 때만 스스로 노출한다).</summary>

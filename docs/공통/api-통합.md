@@ -161,12 +161,13 @@
 
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
-| `POST /api/game/gacha/banners` | **가챠 배너 조회** — 지금 돌릴 수 있는 배너 목록(서버 시각으로 노출 판정) + 배너별 천장 진행도 | 없음 | `serverTime`, `banners[]`(`gachaCode`·`sortOrder`·`openAt`·`closeAt`·`counters[]`) | `MasterDataNotLoaded(10001)` |
+| `POST /api/game/gacha/banners` | **가챠 배너 조회** — 지금 돌릴 수 있는 배너 목록(서버 시각으로 노출 판정) + 배너별 천장 진행도 | 없음 | `serverTime`, `banners[]`(`gachaCode`·`sortOrder`·`openAt`·`closeAt`·`counters[]`(`grade`·`pityCount`·`pityThreshold`·`remainingToPity`)) | `MasterDataNotLoaded(10001)` |
 | `POST /api/game/gacha/pull` | **가챠 뽑기(1연·10연 공통)** — `pullType` 1:1연(`cost_single`, 1회) / 2:10연(`cost_multi`, `multi_count`회 + 보장 등급 대체). 등급 가중치 추첨 → 등급 슬롯 내 균등 선택 | `{ gachaCode, pullType }` | `gachaCode`, `pullId`, `pullType`, `pulledAt`, `results[]`, `cost`, `balance`, `counters[]`, `inventoryDelta` | `GachaNotFound(12001)`, `GachaNotAvailable(12003)`, `InvalidRequest(1006)`, `GachaPoolEmpty(12002)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)`, `MasterDataNotLoaded(10001)` |
 | `POST /api/game/gacha/history` | 뽑기 기록 조회(`pull_id` 커서 keyset 페이징, 최신순). 페이징 단위는 **뽑기 요청**(10연 1건 = 1행) | `{ gachaCode?, cursor?, limit? }` | `pulls[]`(각 `items[]` 포함), `nextCursor`, `hasMore` | 인증 실패 계열만 |
 
 - **1연·10연은 한 엔드포인트에서 `pullType`으로 가른다.** 요청·응답 스키마와 처리 흐름이 같아 엔드포인트를 둘로 두면 같은 계약이 두 벌 생긴다. 다른 것은 비용·횟수·보장 적용뿐이며 셋 다 마스터 값이라 서버가 `pullType`에서 파생한다.
 - **뽑을 횟수(`count`)는 요청 필드가 아니다.** 횟수는 확률·결과와 함께 서버 소유 값이며 `gacha_master.multi_count`에서 읽는다 — 클라이언트가 `10`을 박아 두면 마스터를 바꾸는 순간 깨지고, "몇 번 뽑는가"의 출처가 요청과 마스터 두 곳이 된다. 정의되지 않은 `pullType`은 `InvalidRequest(1006)`로 거부한다.
+- **천장 진행도(`counters[]`)는 남은 횟수까지 서버가 계산해 내려준다.** `pityCount`/`pityThreshold`(게이지)와 함께 `remainingToPity`(= `pityThreshold - pityCount`, 하드 천장 규칙이 없거나 기준을 넘어서면 **0**)를 담아 클라이언트가 "천장까지 N회"를 뺄셈 없이 표시한다. 배너 조회와 뽑기 응답이 같은 필드 구성이다.
 - **배너 목록은 서버가, 확률표는 클라 번들이 담당한다.** 마스터가 클라이언트 번들이라 이름·비용·등급 확률·후보 목록은 클라가 직접 그리고, 서버는 **번들만으로 알 수 없는 것**(지금 열려 있는 배너인가 · 내 천장이 얼마인가)만 내려준다. 확률표 조회(`gacha/detail` 류) API는 두지 않는다.
 - **배너 노출 판정은 서버 시각 기준**이다(`gacha_master`의 `is_active`·`open_at`·`close_at`). **뽑기 요청도 노출을 다시 검증**하며, 목록을 받아 둔 사이 배너가 닫혔으면 비용 차감 전에 `GachaNotAvailable(12003)`으로 거부한다 — 클라이언트는 이 코드를 받으면 배너 목록을 재조회한다.
 - 등급·아이템·천장·보장 판정은 전부 서버가 확정한다(요청에 결과·확률·횟수를 넣을 필드가 없다). 비용 차감 → 추첨 → 지급 → 카운터 갱신 → 기록 적재가 **하나의 트랜잭션**이며, 가방 용량 초과(`InventoryFull`) 시 골드 차감까지 전체 롤백된다.

@@ -36,9 +36,9 @@ namespace TaskbarHero.ClientEditor
             EnsureFolder("Assets/Prefabs");
             EnsureFolder("Assets/Prefabs/UI");
 
-            // 사용자가 조정한 PanelRoot 크기/위치 보존.
+            // 사용자가 조정한 PanelRoot 크기 보존. 위치는 보존하지 않는다 — 패널은
+            // SidePanel.Dock이 전투 화면 오른쪽 옆(일정 간격)에 붙이므로, 옛 좌표를 되살리면 도킹이 어긋난다.
             Vector2? keepSize = null;
-            Vector2? keepPos = null;
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
             if (existing != null)
             {
@@ -46,7 +46,6 @@ namespace TaskbarHero.ClientEditor
                 if (pr != null)
                 {
                     keepSize = pr.sizeDelta;
-                    keepPos = pr.anchoredPosition;
                 }
             }
 
@@ -74,7 +73,7 @@ namespace TaskbarHero.ClientEditor
                 if (pr != null)
                 {
                     pr.sizeDelta = keepSize.Value;
-                    pr.anchoredPosition = keepPos.Value;
+                    SidePanel.Dock(pr, SidePanel.Side.Right); // 크기 복원 후 도킹 좌표를 다시 잡는다
                 }
             }
 

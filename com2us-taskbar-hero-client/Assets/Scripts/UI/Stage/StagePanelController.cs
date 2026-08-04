@@ -173,10 +173,9 @@ namespace TaskbarHero.Client.UI
         {
             var panel = NewImage("PanelRoot", _rootRect, mapBackground);
             var prt = panel.rectTransform;
-            prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0.5f);
-            prt.pivot = new Vector2(0.5f, 0.5f);
             prt.sizeDelta = new Vector2(PanelWidth, PanelHeight);
-            prt.anchoredPosition = Vector2.zero;
+            // 화면 중앙이 아니라 전투 화면 오른쪽 옆에 일정 간격(GameViewLayout.PanelGap)을 두고 붙인다 — 전투를 가리지 않는다.
+            SidePanel.Attach(prt, SidePanel.Side.Right);
 
             var content = NewRect("MapContent", prt);
             content.anchorMin = Vector2.zero;
@@ -284,10 +283,9 @@ namespace TaskbarHero.Client.UI
                 ? Color.white
                 : new Color(0.10f, 0.12f, 0.18f, 0.98f); // 아트 미배선 시 단색 폴백
             var prt = panel.rectTransform;
-            prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0.5f);
-            prt.pivot = new Vector2(0.5f, 0.5f);
             prt.sizeDelta = new Vector2(RegionWindowWidth, RegionWindowHeight);
-            prt.anchoredPosition = Vector2.zero;
+            // 지도(1단계)와 같은 쪽(오른쪽)에 붙여 두 단계가 같은 자리에서 열리게 한다.
+            SidePanel.Attach(prt, SidePanel.Side.Right);
 
             var content = NewRect("WinContent", prt);
             content.anchorMin = Vector2.zero;

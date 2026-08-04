@@ -7,8 +7,13 @@ namespace TaskbarHero.Client.UI
 {
     /// <summary>
     /// 개발용 로그 출력창. Debug.Log 계열과 예외/네트워크 로그를 화면 좌측 하단에 표시한다.
-    /// 씬이 바뀌어도 유지되며(DontDestroyOnLoad), 좌측 하단 버튼 또는 백쿼트(`) 키로 껐다 켤 수 있다.
-    /// UI를 코드로 직접 구성하므로 프리팹/씬 배선이 필요 없다.
+    /// 씬이 바뀌어도 유지된다(DontDestroyOnLoad). UI를 코드로 직접 구성하므로 프리팹/씬 배선이 필요 없다.
+    /// <para><b>기본은 화면에 아무것도 없다</b> — 접기 버튼(화살표)조차 만들지 않은 것처럼 숨겨 두고,
+    /// <b><see cref="revealKey"/>(L) 키를 <see cref="RevealPressCount"/>번 빠르게</b>
+    /// (<see cref="RevealWindowSeconds"/>초 안에) 눌러야 드러난다. 같은 방법으로 다시 숨긴다.
+    /// 개발용 창이 플레이 화면에 상시 노출되지 않도록 한 조치이며, 실수로 눌려 열리지 않게
+    /// 연타를 요구한다(입력창에 타이핑 중이면 세지 않는다).</para>
+    /// <para>드러난 뒤에는 좌측 하단 화살표 버튼으로 로그 패널만 접었다 펼 수 있다.</para>
     /// </summary>
     public class DevLogConsole : MonoBehaviour
     {
@@ -31,11 +36,17 @@ namespace TaskbarHero.Client.UI
         [Tooltip("보관할 최대 로그 줄 수.")]
         [SerializeField] private int maxLines = 200;
 
-        [Tooltip("시작 시 로그창을 펼친 상태로 둘지 여부.")]
+        [Tooltip("시작 시 로그창을 드러낼지 여부(기본 꺼짐 — 화살표 버튼조차 보이지 않는다).")]
         [SerializeField] private bool visibleOnStart = false;
 
-        [Tooltip("로그창 토글 키.")]
-        [SerializeField] private Key toggleKey = Key.Backquote;
+        [Tooltip("로그창을 드러내는 키. 짧은 시간 안에 여러 번 눌러야 한다.")]
+        [SerializeField] private Key revealKey = Key.L;
+
+        /// <summary>로그창을 드러내려면 눌러야 하는 횟수.</summary>
+        private const int RevealPressCount = 3;
+
+        /// <summary>연타로 인정하는 간격(초). 이 시간이 지나면 횟수가 처음부터 다시 센다.</summary>
+        private const float RevealWindowSeconds = 0.8f;
 
         // 토글 버튼 크기/여백(캔버스 참조 해상도 360×640 기준). 이 캔버스는 ScaleWithScreenSize라
         // 실제 픽셀 크기는 창 크기에 비례해 커진다 — 하단 UI를 가리지 않도록 작게 유지한다.
@@ -49,12 +60,16 @@ namespace TaskbarHero.Client.UI
         private const string ExpandedLabel = "▾";
 
         private readonly List<string> _lines = new List<string>();
+        private GameObject _canvasGo;   // 로그창 UI 전체(토글 버튼 포함) — 드러나기 전에는 통째로 꺼 둔다
         private GameObject _logPanel;
         private Text _logText;
         private ScrollRect _scroll;
         private Text _toggleLabel;
-        private bool _visible;
+        private bool _revealed;         // 로그창 UI가 화면에 나와 있는지(연타로 전환)
+        private bool _visible;          // 드러난 상태에서 로그 패널이 펼쳐져 있는지
         private bool _dirty;
+        private int _revealPresses;     // 현재까지 이어진 연타 횟수
+        private float _lastRevealPress; // 마지막 입력 시각(unscaled)
 
         private void Awake()
         {
@@ -68,7 +83,7 @@ namespace TaskbarHero.Client.UI
             DontDestroyOnLoad(gameObject);
 
             BuildUI();
-            SetVisible(visibleOnStart);
+            SetRevealed(visibleOnStart);
         }
 
         private void OnEnable()
@@ -91,17 +106,46 @@ namespace TaskbarHero.Client.UI
 
         private void Update()
         {
-            var keyboard = Keyboard.current;
-            if (keyboard != null && keyboard[toggleKey].wasPressedThisFrame)
+            UpdateRevealInput();
+
+            if (_dirty && _revealed && _visible)
             {
-                SetVisible(!_visible);
+                RebuildText(); // 숨겨져 있는 동안은 갱신하지 않는다(드러날 때 SetVisible이 한 번에 그린다)
+            }
+        }
+
+        /// <summary>
+        /// 드러내기 키 연타를 판정한다. <see cref="RevealWindowSeconds"/>초 안에
+        /// <see cref="RevealPressCount"/>번 이어서 누르면 로그창을 드러내거나 다시 숨긴다.
+        /// 간격이 벌어지면 횟수는 1부터 다시 센다.
+        /// </summary>
+        private void UpdateRevealInput()
+        {
+            var keyboard = Keyboard.current;
+            if (keyboard == null || !keyboard[revealKey].wasPressedThisFrame || IsTypingInInputField())
+            {
+                return;
             }
 
-            if (_dirty)
+            float now = Time.unscaledTime;
+            _revealPresses = now - _lastRevealPress <= RevealWindowSeconds ? _revealPresses + 1 : 1;
+            _lastRevealPress = now;
+            if (_revealPresses < RevealPressCount)
             {
-                RebuildText();
-                _dirty = false;
+                return;
             }
+
+            _revealPresses = 0;
+            SetRevealed(!_revealed);
+        }
+
+        /// <summary>입력창(아이디·비밀번호·검색 등)에 타이핑 중인지 — 그때는 연타로 세지 않는다.</summary>
+        private static bool IsTypingInInputField()
+        {
+            var selected = UnityEngine.EventSystems.EventSystem.current != null
+                ? UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject
+                : null;
+            return selected != null && selected.GetComponent<InputField>() != null;
         }
 
         private void HandleLog(string message, string stackTrace, LogType type)
@@ -144,6 +188,20 @@ namespace TaskbarHero.Client.UI
             _dirty = true;
         }
 
+        /// <summary>
+        /// 로그창 UI 전체(토글 버튼 포함)를 드러내거나 숨긴다. 드러날 때는 로그 패널까지 펼친다 —
+        /// 작은 화살표 버튼만 나오면 열렸는지 알아보기 어렵다.
+        /// </summary>
+        private void SetRevealed(bool value)
+        {
+            _revealed = value;
+            if (_canvasGo != null)
+            {
+                _canvasGo.SetActive(value);
+            }
+            SetVisible(value);
+        }
+
         private void SetVisible(bool value)
         {
             _visible = value;
@@ -171,6 +229,7 @@ namespace TaskbarHero.Client.UI
             }
 
             _logText.text = string.Join("\n", _lines);
+            _dirty = false;
 
             // 콘텐츠 크기 갱신 후 하단으로 자동 스크롤.
             Canvas.ForceUpdateCanvases();
@@ -188,6 +247,7 @@ namespace TaskbarHero.Client.UI
 
             var canvasGo = new GameObject("DevLogCanvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             canvasGo.transform.SetParent(transform, false);
+            _canvasGo = canvasGo; // 드러나기 전에는 이 캔버스를 통째로 꺼 둔다(토글 버튼도 보이지 않게)
             var canvas = canvasGo.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 1000; // 항상 최상단

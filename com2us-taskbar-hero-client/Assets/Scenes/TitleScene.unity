@@ -1836,6 +1836,7 @@ MonoBehaviour:
   accountServerBaseUrl: http://localhost:5160
   gameServerBaseUrl: http://localhost:5247
   timeoutSeconds: 10
+  showNetworkErrorModal: 1
 --- !u!1 &1178964606
 GameObject:
   m_ObjectHideFlags: 0

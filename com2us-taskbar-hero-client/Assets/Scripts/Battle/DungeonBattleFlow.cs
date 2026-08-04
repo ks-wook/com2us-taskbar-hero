@@ -215,6 +215,8 @@ namespace TaskbarHero.Client.Battle
             if (stageEnterBannerPrefab != null)
             {
                 var go = Instantiate(stageEnterBannerPrefab);
+                // 프리팹에 구워진 기본 규격 캔버스를 현재 씬 규격으로 즉시 맞춘다(첫 표시 때 크게 그려지는 것 방지).
+                GameViewLayout.ApplyCurrentScalers(go);
                 var banner = go.GetComponent<StageEnterBanner>();
                 if (banner != null)
                 {

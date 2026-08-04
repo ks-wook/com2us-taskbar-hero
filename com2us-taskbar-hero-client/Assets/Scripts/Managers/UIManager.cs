@@ -331,6 +331,10 @@ namespace TaskbarHero.Client.Managers
 
             var instance = Instantiate(prefab);
             instance.name = prefab.name;
+            // 패널 프리팹에는 기본 규격(1080×1920) 캔버스 스케일러가 구워져 있다. GameViewLayout의 주기
+            // 스윕을 기다리면 첫 표시 때 최대 0.4초 동안 잘못된 배율(폭 넓은 GameScene 창에서 약 1.6배)로
+            // 렌더돼 패널이 크게 나왔다가 줄어들므로, 만든 즉시 현재 씬 규격으로 맞춘다.
+            GameViewLayout.ApplyCurrentScalers(instance);
             _instances[type] = instance;
             return instance;
         }

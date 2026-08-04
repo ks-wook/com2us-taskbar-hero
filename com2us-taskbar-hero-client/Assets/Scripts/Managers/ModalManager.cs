@@ -71,6 +71,9 @@ namespace TaskbarHero.Client.Managers
             }
             var go = Instantiate(modalPrefab);
             go.name = modalPrefab.name;
+            // 프리팹에 구워진 기본 규격 캔버스를 현재 씬 규격으로 즉시 맞춘다
+            // (주기 스윕을 기다리면 첫 표시 때 잠깐 크게 그려진다).
+            GameViewLayout.ApplyCurrentScalers(go);
             DontDestroyOnLoad(go);
             _modal = go.GetComponent<ModalController>();
             if (_modal == null)

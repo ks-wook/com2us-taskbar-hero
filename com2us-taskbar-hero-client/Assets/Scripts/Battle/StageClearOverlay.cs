@@ -99,6 +99,8 @@ namespace TaskbarHero.Client.Battle
             if (assets != null && assets.overlayPrefab != null)
             {
                 var go = Instantiate(assets.overlayPrefab);
+                // 프리팹에 구워진 기본 규격 캔버스를 현재 씬 규격으로 즉시 맞춘다(첫 표시 때 크게 그려지는 것 방지).
+                GameViewLayout.ApplyCurrentScalers(go);
                 overlay = go.GetComponent<StageClearOverlay>();
             }
             else
@@ -188,6 +190,8 @@ namespace TaskbarHero.Client.Battle
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
+            // 현재 씬 규격(GameScene은 높이 1440 기준)으로 즉시 맞춘다 — 주기 스윕을 기다리면 첫 표시 때 잠깐 크게 그려진다.
+            GameViewLayout.ApplyCurrentScaler(scaler);
             gameObject.AddComponent<GraphicRaycaster>();
 
             // 어두운 배경(클릭 시 닫힘).

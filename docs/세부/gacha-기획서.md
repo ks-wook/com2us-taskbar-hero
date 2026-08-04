@@ -300,14 +300,14 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
         "sortOrder": 1,
         "openAt": 0,
         "closeAt": 0,
-        "counters": [ { "grade": 5, "pityCount": 37, "pityThreshold": 90 } ]
+        "counters": [ { "grade": 5, "pityCount": 37, "pityThreshold": 90, "remainingToPity": 53 } ]
       },
       {
         "gachaCode": 60002,
         "sortOrder": 2,
         "openAt": 1752192000,
         "closeAt": 1752796800,
-        "counters": [ { "grade": 5, "pityCount": 4, "pityThreshold": 90 } ]
+        "counters": [ { "grade": 5, "pityCount": 4, "pityThreshold": 90, "remainingToPity": 86 } ]
       }
     ]
   }
@@ -319,7 +319,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | `serverTime` | 응답 시각(Unix ts). 클라이언트가 **남은 기간 카운트다운**을 자기 시계가 아니라 이 값 기준으로 계산한다 |
 | `banners[]` | 노출 조건(4.1)을 만족하는 배너만, `sortOrder` 오름차순(동률이면 `gachaCode` 오름차순)으로 |
 | `openAt` / `closeAt` | 그 배너의 노출 기간. **`closeAt=0`이면 상시 배너**라 카운트다운을 표시하지 않는다 |
-| `counters[]` | 그 배너의 천장 진행도(천장 규칙이 있는 등급만, 없으면 빈 배열). `pityCount`는 마지막 획득 이후 누적 뽑기 횟수, `pityThreshold`는 **하드 천장 기준**(기준값 90)이라 클라이언트가 "37/90"을 바로 그린다. 소프트 발동 기준(70)은 클라이언트가 번들 마스터에서 읽어 "확률 상승 중" 표시에 쓴다 |
+| `counters[]` | 그 배너의 천장 진행도(천장 규칙이 있는 등급만, 없으면 빈 배열). `pityCount`는 마지막 획득 이후 누적 뽑기 횟수, `pityThreshold`는 **하드 천장 기준**(기준값 90)이라 클라이언트가 "37/90"을 바로 그린다. `remainingToPity`는 **천장까지 남은 뽑기 횟수**(= `pityThreshold - pityCount`)라 "천장까지 53회"를 뺄셈 없이 표시한다 — **하드 천장 규칙이 없는 등급**(소프트 규칙만 있어 `pityThreshold=0`)이나 카운터가 기준을 넘어선 경우 **0**이며 음수가 나가지 않는다. 소프트 발동 기준(70)은 클라이언트가 번들 마스터에서 읽어 "확률 상승 중" 표시에 쓴다 |
 
 - **이름·배너 이미지·비용·등급 확률·후보 목록은 응답에 넣지 않는다.** 전부 클라이언트 번들 마스터(`gacha_master`·`gacha_grade_weight`·`gacha_item_pool`)에 있는 정적 값이고, 서버가 같은 값을 다시 내려보내면 같은 표시 값의 출처가 둘이 되어 어긋날 수 있다. 서버는 **번들만으로는 알 수 없는 것**(지금 열려 있는가, 내 천장이 얼마인가)만 내려준다.
 - **응답에는 클라이언트 번들에 없는 `gachaCode`가 올 수 있다.** 서버 마스터가 먼저 갱신된 경우다. 클라이언트는 **모르는 코드를 조용히 건너뛰고** 목록을 그린 뒤, 하나도 그리지 못했으면 클라이언트 갱신 안내를 띄운다(오류로 처리하지 않는다).
@@ -360,7 +360,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
     ],
     "cost": { "currencyType": 1, "amount": 50000 },
     "balance": [ { "currencyType": 1, "amount": 9890421 } ],
-    "counters": [ { "grade": 5, "pityCount": 38, "pityThreshold": 90 } ],
+    "counters": [ { "grade": 5, "pityCount": 38, "pityThreshold": 90, "remainingToPity": 52 } ],
     "inventoryDelta": {
       "upserted": [ { "itemId": 6200, "slot": 31, "itemCode": 30105, "quantity": 1, "enhanceLevel": 0 } ],
       "removed": []
@@ -375,7 +375,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | `pullType` | 요청과 같은 값(1:1연 2:10연). 기록 조회 응답에도 같은 필드로 나온다 |
 | `results[]` | 회차별 결과. **1연은 1개, 10연은 항상 `multi_count`개**가 순서대로 들어간다. `seq`는 1부터, `grade`는 추첨된 등급 슬롯, `isPity`는 하드 천장 확정, `isGuaranteed`는 10연 보장 대체 여부 |
 | `cost` / `balance` | 이번에 차감한 금액(`pullType`에 따라 `cost_single`/`cost_multi`) / 차감 후 재화 잔액 |
-| `counters[]` | 갱신 후 천장 진행도(천장 규칙이 있는 등급만). `pityCount`는 마지막 획득 이후 누적 뽑기 횟수, `pityThreshold`는 **하드 천장 기준**(기준값 90)이라 클라이언트가 "38/90"을 바로 그린다. 소프트 발동 기준(70)은 클라이언트가 번들 마스터에서 읽어 "확률 상승 중" 표시에 쓴다 |
+| `counters[]` | 갱신 후 천장 진행도(천장 규칙이 있는 등급만). `pityCount`는 마지막 획득 이후 누적 뽑기 횟수, `pityThreshold`는 **하드 천장 기준**(기준값 90)이라 클라이언트가 "38/90"을 바로 그린다. `remainingToPity`는 **천장까지 남은 뽑기 횟수**(= `pityThreshold - pityCount`, 하드 천장 규칙이 없거나 기준을 넘어서면 0)로 배너 조회(5.1)와 같은 규칙이다. 소프트 발동 기준(70)은 클라이언트가 번들 마스터에서 읽어 "확률 상승 중" 표시에 쓴다 |
 | `inventoryDelta` | 가방 변경분([인벤토리 기획서](inventory-item-cube-기획서.md) 5.0). 10연에서 같은 아이템이 여러 번 나오면 **스택 병합되어 행 하나로 합쳐진다**(예: 강화석 3개 × 3회 → 기존 18 + 9 = 27). **클라이언트는 이 응답만으로 가방·재화·천장 표시를 갱신하고 재조회하지 않는다** |
 
 **10연 응답의 차이** — `pullType`이 `2`, `results`가 `multi_count`개, `cost`가 `cost_multi`(= `cost_single × 10`이 아니다)라는 점뿐이다. 마지막 회차에 `isGuaranteed: true`가 붙어 있으면 10회 중 보장 등급 이상이 없어 그 회차가 보장 등급으로 대체됐음을 뜻한다(6.4).
