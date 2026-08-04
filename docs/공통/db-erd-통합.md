@@ -59,7 +59,7 @@
 |---|---|---|
 | MySQL (Account DB) | `AccountServer` | 계정·인증 토큰 영속 저장 |
 | Redis | `AccountServer` 발급 / `GameServer` 검증 | 인증 토큰 캐시(`auth:token:{userId}`) — **필수 의존**(없으면 인증 불가) |
-| Redis | `GameServer` | 거래소 — 목록 캐시(`trade:index:{itemCode}`·`trade:listing:{listingId}`)와 **판매 등록용 판매자 락**(`trade:lock:seller:{userId}`). **상시 사용**하되 모두 파생 데이터이며, 장애 시 MySQL 폴백·락 없이 축소 운전([거래소 기획서](../세부/trade-기획서.md) 7.3·7.4). 구매·취소·만료는 Redis를 쓰지 않고 `trade_listing` 행의 조건부 갱신(행 잠금)으로 직렬화한다 |
+| Redis | `GameServer` | 거래소 **목록 캐시**(`trade:index:{itemCode}`·`trade:listing:{listingId}`). **상시 사용**하되 파생 데이터이며 장애 시 MySQL 폴백([거래소 기획서](../세부/trade-기획서.md) 7.3). **락 키는 두지 않는다** — 등록·구매·취소·만료의 직렬화는 전부 MySQL 행 잠금이 담당한다(같은 문서 7.4) |
 | Redis | `GameServer` | 배치 리더 락(`batch:lock:{배치키}`) — 거래 만료·메일 GC 등 주기 배치의 중복 실행 방지 |
 | MySQL (Game DB) | `GameServer` | 플레이어 진행 세이브 데이터. **가방 조회(`inventory/list`)를 포함한 개인 데이터 읽기에는 캐시를 두지 않는다** — `(user_id, slot)` 인덱스 keyset 질의로 직접 읽는다([인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 6.5) |
 | 인메모리 캐시(원천 CSV/JSON) | `GameServer` | 마스터(정적 기획) 데이터. 관계형 영속 테이블이 아닌 읽기 전용 정의 |

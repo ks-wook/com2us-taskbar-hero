@@ -27,17 +27,15 @@ public sealed class GachaService : IGachaService
 
     private readonly IGachaRepository _gachaRepository;
     private readonly MasterDataProvider _masterData;
-    private readonly InventoryBagCache _bagCache;
     private readonly ILogger<GachaService> _logger;
 
     /// <summary>의존성(가챠 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
     public GachaService(
         IGachaRepository gachaRepository, MasterDataProvider masterData,
-        InventoryBagCache bagCache, ILogger<GachaService> logger)
+        ILogger<GachaService> logger)
     {
         _gachaRepository = gachaRepository;
         _masterData = masterData;
-        _bagCache = bagCache;
         _logger = logger;
     }
 
@@ -154,7 +152,6 @@ public sealed class GachaService : IGachaService
             inventoryDelta = outcome.Delta,
         };
 
-        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through)
         return new SaveResult(ErrorCode.Success, "GachaPulled", data);
     }
 
@@ -260,14 +257,24 @@ public sealed class GachaService : IGachaService
         }
     }
 
-    /// <summary>천장 진행도를 응답 DTO로 변환한다. pityThreshold는 하드 천장 발동 회차(없으면 0)다.</summary>
+    /// <summary>
+    /// 천장 진행도를 응답 DTO로 변환한다. pityThreshold는 하드 천장 발동 회차(없으면 0)다.
+    /// remainingToPity("천장까지 몇 회 남았는가")는 클라이언트가 뺄셈하지 않도록 서버가 계산해 담는다 —
+    /// 천장 규칙이 없거나(threshold 0) 카운터가 기준을 넘어선 경우 모두 0으로 내려 음수가 나가지 않게 한다.
+    /// </summary>
     private static List<GachaPityCounterDto> ToCounterDtos(
         GachaBannerDef banner, IReadOnlyDictionary<int, int> counters)
-        => banner.PityGrades.Select(grade => new GachaPityCounterDto
+        => banner.PityGrades.Select(grade =>
         {
-            grade = grade,
-            pityCount = counters.TryGetValue(grade, out var c) ? c : 0,
-            pityThreshold = banner.HardThreshold(grade),
+            int pityCount = counters.TryGetValue(grade, out var c) ? c : 0;
+            int threshold = banner.HardThreshold(grade);
+            return new GachaPityCounterDto
+            {
+                grade = grade,
+                pityCount = pityCount,
+                pityThreshold = threshold,
+                remainingToPity = threshold <= 0 ? 0 : Math.Max(threshold - pityCount, 0),
+            };
         }).ToList();
 
     /// <summary>item_code → (itemType, stackMax) 마스터 조회. 미정의 코드는 장비처럼(스택 1) 취급한다.</summary>

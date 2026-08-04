@@ -52,18 +52,16 @@ public sealed class TradeService : ITradeService
     private readonly ITradeRepository _tradeRepository;
     private readonly TradeCache _cache;
     private readonly MasterDataProvider _masterData;
-    private readonly InventoryBagCache _bagCache;
     private readonly ILogger<TradeService> _logger;
 
     /// <summary>의존성(거래 리포지토리·Redis 목록 캐시·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
     public TradeService(
         ITradeRepository tradeRepository, TradeCache cache, MasterDataProvider masterData,
-        InventoryBagCache bagCache, ILogger<TradeService> logger)
+        ILogger<TradeService> logger)
     {
         _tradeRepository = tradeRepository;
         _cache = cache;
         _masterData = masterData;
-        _bagCache = bagCache;
         _logger = logger;
     }
 
@@ -107,6 +105,10 @@ public sealed class TradeService : ITradeService
     /// <summary>
     /// 인벤토리 아이템을 거래소에 등록한다(5.2). 한도·소유·장착·판매 가능 여부·가격 범위 검증과
     /// 에스크로 이동(인벤토리 제거 + 등록 생성)을 리포지토리 트랜잭션으로 원자 적용하고, 커밋 후 캐시에 추가한다.
+    /// <para><b>애플리케이션 락을 쓰지 않는다(§7.4).</b> 같은 아이템을 두 번 등록하려는 경합은 에스크로
+    /// <c>DELETE</c>의 행 잠금이 막고(뒤에 온 쪽은 0행 → <c>ItemNotFound</c>), 동시 등록 한도(10건)는
+    /// best-effort로 둔다 — 응답을 기다리지 않고 <b>서로 다른 아이템</b>을 겹쳐 보내야만 초과가 생기며,
+    /// 초과해도 자산 정합성에 영향이 없고 판매·취소·만료로 스스로 수렴한다.</para>
     /// </summary>
     public async Task<SaveResult> RegisterAsync(long userId, long itemId, long price)
     {
@@ -120,54 +122,38 @@ public sealed class TradeService : ITradeService
             return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
         }
 
-        // 같은 계정의 동시 등록을 판매자 단위 락으로 직렬화한다 — 한도 검사(COUNT)와 삽입 사이에
-        // 다른 요청이 끼어들어 동시 등록 한도를 넘기는 경합을 막는다(§7.4). Redis 장애면 락 없이 진행한다.
-        var handle = await _cache.AcquireSellerLockAsync(userId);
-        if (!handle.Acquired && !handle.Degraded)
+        var now = NowUnix();
+        var outcome = await _tradeRepository.ApplyRegisterAsync(
+            userId, itemId, price, LookupItem, ListingLimit, now, now + ListingDurationSeconds);
+
+        switch (outcome.Status)
         {
-            return new SaveResult(ErrorCode.TradeBusy, string.Empty, null);
+            case TradeRegisterStatus.ItemNotFound:
+                return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
+            case TradeRegisterStatus.ItemEquipped:
+                return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
+            case TradeRegisterStatus.NotSellable:
+                return new SaveResult(ErrorCode.TradeNotSellable, string.Empty, null);
+            case TradeRegisterStatus.PriceOutOfRange:
+                return new SaveResult(ErrorCode.TradePriceOutOfRange, string.Empty, null);
+            case TradeRegisterStatus.ListingLimitExceeded:
+                return new SaveResult(ErrorCode.TradeListingLimitExceeded, string.Empty, null);
         }
 
-        try
+        var listing = outcome.Listing!;
+        await _cache.AddAsync(listing, now); // 커밋 이후에만 캐시를 고친다(§7.3)
+
+        _logger.ZLogInformation($"거래소 등록: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}, price {listing.Price:@Price}");
+
+        return new SaveResult(ErrorCode.Success, "Registered", new TradeRegisterResultData
         {
-            var now = NowUnix();
-            var outcome = await _tradeRepository.ApplyRegisterAsync(
-                userId, itemId, price, LookupItem, ListingLimit, now, now + ListingDurationSeconds);
-
-            switch (outcome.Status)
-            {
-                case TradeRegisterStatus.ItemNotFound:
-                    return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
-                case TradeRegisterStatus.ItemEquipped:
-                    return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
-                case TradeRegisterStatus.NotSellable:
-                    return new SaveResult(ErrorCode.TradeNotSellable, string.Empty, null);
-                case TradeRegisterStatus.PriceOutOfRange:
-                    return new SaveResult(ErrorCode.TradePriceOutOfRange, string.Empty, null);
-                case TradeRegisterStatus.ListingLimitExceeded:
-                    return new SaveResult(ErrorCode.TradeListingLimitExceeded, string.Empty, null);
-            }
-
-            var listing = outcome.Listing!;
-            await _cache.AddAsync(listing, now); // 커밋 이후에만 캐시를 고친다(§7.3)
-
-            _logger.ZLogInformation($"거래소 등록: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}, price {listing.Price:@Price}");
-
-            await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
-            return new SaveResult(ErrorCode.Success, "Registered", new TradeRegisterResultData
-            {
-                listingId = listing.ListingId,
-                itemCode = listing.ItemCode,
-                enhanceLevel = listing.EnhanceLevel,
-                quantity = listing.Quantity,
-                price = listing.Price,
-                inventoryDelta = outcome.Delta,
-            });
-        }
-        finally
-        {
-            await _cache.ReleaseSellerLockAsync(userId, handle);
-        }
+            listingId = listing.ListingId,
+            itemCode = listing.ItemCode,
+            enhanceLevel = listing.EnhanceLevel,
+            quantity = listing.Quantity,
+            price = listing.Price,
+            inventoryDelta = outcome.Delta,
+        });
     }
 
     /// <summary>
@@ -280,7 +266,6 @@ public sealed class TradeService : ITradeService
 
         _logger.ZLogInformation($"거래소 취소: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}");
 
-        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         return new SaveResult(ErrorCode.Success, "Cancelled", new TradeCancelResultData
         {
             listingId = listing.ListingId,

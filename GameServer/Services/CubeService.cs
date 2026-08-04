@@ -26,17 +26,15 @@ public sealed class CubeService : ICubeService
 
     private readonly ICubeRepository _cubeRepository;
     private readonly MasterDataProvider _masterData;
-    private readonly InventoryBagCache _bagCache;
     private readonly ILogger<CubeService> _logger;
 
     /// <summary>의존성(큐브 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
     public CubeService(
         ICubeRepository cubeRepository, MasterDataProvider masterData,
-        InventoryBagCache bagCache, ILogger<CubeService> logger)
+        ILogger<CubeService> logger)
     {
         _cubeRepository = cubeRepository;
         _masterData = masterData;
-        _bagCache = bagCache;
         _logger = logger;
     }
 
@@ -84,7 +82,6 @@ public sealed class CubeService : ICubeService
             inventoryDelta = outcome.Delta,
         };
 
-        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogInformation($"큐브 합성: userId {userId:@UserId}, consumed {ids.Count:@Count}, resultItemCode {outcome.ResultItemCode:@ResultCode}, grade {outcome.ResultGrade:@Grade}");
         return new SaveResult(ErrorCode.Success, "Combined", data);
     }
@@ -133,7 +130,6 @@ public sealed class CubeService : ICubeService
             inventoryDelta = outcome.Delta,
         };
 
-        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogInformation($"큐브 분해: userId {userId:@UserId}, items {pairs.Count:@Count}, gold {outcome.Gold:@Gold}, cubeExp {outcome.CubeExp:@CubeExp}");
         return new SaveResult(ErrorCode.Success, "Dismantled", data);
     }
@@ -197,7 +193,6 @@ public sealed class CubeService : ICubeService
             inventoryDelta = outcome.Delta,
         };
 
-        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogInformation($"큐브 제작: userId {userId:@UserId}, recipeCode {recipeCode:@RecipeCode}, resultItemCode {recipe.ResultItemCode:@ResultCode} x{recipe.ResultQuantity:@Quantity}");
         return new SaveResult(ErrorCode.Success, "Crafted", data);
     }

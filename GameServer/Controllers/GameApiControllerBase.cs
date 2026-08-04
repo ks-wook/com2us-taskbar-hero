@@ -47,11 +47,10 @@ public abstract class GameApiControllerBase : ControllerBase
         // 메일: 없음/타인 메일은 404, 중복 수령(동시 요청 경합 포함)은 409, 만료는 400(기본 매핑).
         ErrorCode.MailNotFound => StatusCodes.Status404NotFound,
         ErrorCode.MailAlreadyClaimed => StatusCodes.Status409Conflict,
-        // 거래소: 등록 없음은 404, 이미 닫힌 등록·자기 등록·다른 요청 처리 중은 409.
+        // 거래소: 등록 없음은 404, 이미 닫힌 등록·자기 등록은 409.
         ErrorCode.TradeListingNotFound => StatusCodes.Status404NotFound,
         ErrorCode.TradeAlreadyClosed => StatusCodes.Status409Conflict,
         ErrorCode.TradeSelfPurchase => StatusCodes.Status409Conflict,
-        ErrorCode.TradeBusy => StatusCodes.Status409Conflict,
         // 출석: 오늘자 중복 수령(동시 요청 경합 포함)은 409.
         ErrorCode.AttendanceAlreadyClaimed => StatusCodes.Status409Conflict,
         // 가챠: 없는 배너 코드는 404, 후보 풀 부재는 마스터 결함이라 500.
@@ -114,7 +113,6 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.TradeAlreadyClosed => "Trade listing already closed",
         ErrorCode.TradePriceOutOfRange => "Price out of allowed range",
         ErrorCode.TradeListingLimitExceeded => "Trade listing limit exceeded",
-        ErrorCode.TradeBusy => "Another trade registration is in progress, retry shortly",
         // 출석부
         ErrorCode.AttendanceAlreadyClaimed => "Attendance already claimed",
         // 가챠(뽑기)

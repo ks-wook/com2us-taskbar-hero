@@ -77,7 +77,8 @@ namespace TaskbarHero.Common
         TradeAlreadyClosed = 7005,
         TradePriceOutOfRange = 7006,
         TradeListingLimitExceeded = 7007,
-        TradeBusy = 7008,
+        // 7008(구 TradeBusy): 판매 등록의 Redis 판매자 락을 제거하며 폐기(결번, 재사용 금지).
+        //   같은 아이템 중복 등록은 에스크로 DELETE의 행 잠금이 막고, 동시 등록 한도는 best-effort로 둔다.
 
         // 메일(보상) (8000번대)
         MailNotFound = 8001,

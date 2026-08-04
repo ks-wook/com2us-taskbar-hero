@@ -85,20 +85,24 @@ public enum InventoryPageStatus
     NoPlayer, // game_player 없음(세이브 미생성)
 }
 
-/// <summary>가방 전량 조회 결과. Items는 slot 오름차순 가방 아이템 전체다.</summary>
-public sealed record InventoryBagOutcome(InventoryPageStatus Status, IReadOnlyList<InventoryItemDto> Items)
+/// <summary>
+/// 가방 페이지 조회 결과. Items는 요청 커서 다음부터 slot 오름차순으로 <b>limit개까지</b>이고,
+/// Total은 그 계정의 가방 점유 칸 수 전체다(페이지 크기와 무관).
+/// </summary>
+public sealed record InventoryBagOutcome(InventoryPageStatus Status, IReadOnlyList<InventoryItemDto> Items, int Total)
 {
     public static InventoryBagOutcome Fail(InventoryPageStatus status) =>
-        new(status, Array.Empty<InventoryItemDto>());
+        new(status, Array.Empty<InventoryItemDto>(), 0);
 }
 
 public interface IInventoryRepository
 {
     /// <summary>
-    /// 그 계정의 가방 아이템 <b>전량</b>을 slot 오름차순으로 조회한다. 페이지 응답 조립(커서·limit·total)과
-    /// 가방 캐시 적재(§6.5)가 모두 완전 집합을 요구하므로 부분 조회 API를 두지 않는다.
+    /// 그 계정의 가방 아이템을 <b>slot 커서 keyset 페이징</b>으로 조회한다(<c>slot &gt; cursor</c>, slot 오름차순,
+    /// 최대 limit개) — 다음 페이지 존재 판정을 위해 한 건 더 읽어 돌려주므로 호출측이 잘라 쓴다.
+    /// 총 점유 칸 수(<c>Total</c>)를 함께 반환한다.
     /// </summary>
-    Task<InventoryBagOutcome> GetAllAsync(long userId);
+    Task<InventoryBagOutcome> GetPageAsync(long userId, int cursor, int limit);
 
     /// <summary>
     /// 장착을 한 트랜잭션으로 적용한다: 캐릭터·아이템 존재/미장착 확인 → validate(마스터 검증)로 장착 가능 여부·대상 슬롯 판정
@@ -172,65 +176,60 @@ public sealed class InventoryRepository : IInventoryRepository
     public InventoryRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
     /// <summary>
-    /// 그 계정의 가방 아이템 전량을 slot 오름차순으로 조회한다. 계정 세이브가 없으면 NoPlayer.
+    /// 그 계정의 가방 아이템을 slot 커서 keyset 페이징으로 조회한다. 계정 세이브가 없으면 NoPlayer.
     /// </summary>
     /// <remarks>
-    /// 한 트랜잭션(REPEATABLE READ 스냅샷)으로 묶는 읽기:
+    /// 읽기 3개(읽기 전용이라 트랜잭션으로 묶지 않는다 — 페이지 간 정합성은 애초에 보장 대상이 아니고,
+    /// 클라이언트가 itemId 기준 병합으로 흡수한다):
     /// <para>1) game_player SELECT — 계정 세이브 존재 확인(행 없으면 NoPlayer)</para>
-    /// <para>2) player_item SELECT — row_type=1이고 slot이 NULL이 아닌 행 전체를 slot 오름차순.
-    ///     (user_id, slot) 유니크 인덱스가 이 스캔을 커버한다. 재화 행과 장착 중인 장비는 slot이 NULL이라
-    ///     자동으로 빠진다</para>
+    /// <para>2) player_item SELECT — <c>row_type=1 AND slot &gt; cursor</c>를 slot 오름차순으로 limit개.
+    ///     <c>(user_id, slot)</c> 유니크 인덱스가 범위 스캔과 정렬을 모두 담당해 filesort가 없다.
+    ///     재화 행과 장착 중인 장비는 slot이 NULL이라 자동으로 빠진다</para>
+    /// <para>3) player_item COUNT — 총 점유 칸 수(응답 <c>total</c>). 같은 인덱스를 타며 페이지와 무관하다</para>
     /// </remarks>
     /// <remarks>
-    /// 용량 상한이 있어(기본 100·상한 120) 행 수가 제한적이므로 전량을 한 번에 읽는다. 응답의 페이지 분할과
-    /// 총계 산출, 가방 캐시 적재(§6.5)는 이 완전 집합을 재료로 서비스 계층이 수행한다.
+    /// <b>전량을 읽어 메모리에서 자르지 않는다.</b> 필요한 구간만 DB에서 잘라 오므로 페이지 크기에 비례한 비용만
+    /// 든다(가방 캐시를 두지 않는 이유이자 전제다 — 기획서 6.5).
     /// </remarks>
-    public async Task<InventoryBagOutcome> GetAllAsync(long userId)
+    public async Task<InventoryBagOutcome> GetPageAsync(long userId, int cursor, int limit)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
+        var db = _dbFactory.Create(connection);
 
-        try
+        // 1) 계정 세이브 확인. 없으면 인벤토리도 없다.
+        var playerId = await db.Query("game_player")
+            .Select("user_id")
+            .Where("user_id", userId)
+            .FirstOrDefaultAsync<long?>();
+        if (playerId is null)
         {
-            var db = _dbFactory.Create(connection);
-
-            // 1) 계정 세이브 확인. 없으면 인벤토리도 없다.
-            var playerId = await db.Query("game_player")
-                .Select("user_id")
-                .Where("user_id", userId)
-                .FirstOrDefaultAsync<long?>(transaction);
-            if (playerId is null)
-            {
-                await transaction.RollbackAsync();
-                return InventoryBagOutcome.Fail(InventoryPageStatus.NoPlayer);
-            }
-
-            // 2) 가방 전량(slot 오름차순).
-            var rows = await db.Query("player_item")
-                .Select("player_item_id", "slot", "item_code", "quantity", "enhance_level")
-                .Where("user_id", userId).Where("row_type", RowTypeItem).WhereNotNull("slot")
-                .OrderBy("slot")
-                .GetAsync<BagItemRow>(transaction);
-
-            await transaction.CommitAsync();
-
-            var items = rows.Select(r => new InventoryItemDto
-            {
-                itemId = r.PlayerItemId,
-                slot = r.Slot,
-                itemCode = r.ItemCode,
-                quantity = r.Quantity,
-                enhanceLevel = r.EnhanceLevel,
-            }).ToList();
-
-            return new InventoryBagOutcome(InventoryPageStatus.Ok, items);
+            return InventoryBagOutcome.Fail(InventoryPageStatus.NoPlayer);
         }
-        catch
+
+        // 2) 요청 구간만(커서 다음부터 limit개). 한 건 더 읽어 호출측이 hasMore를 판정한다.
+        var rows = await db.Query("player_item")
+            .Select("player_item_id", "slot", "item_code", "quantity", "enhance_level")
+            .Where("user_id", userId).Where("row_type", RowTypeItem).Where("slot", ">", cursor)
+            .OrderBy("slot")
+            .Limit(limit)
+            .GetAsync<BagItemRow>();
+
+        // 3) 총 점유 칸 수(페이지와 무관한 전체 집계).
+        var total = await db.Query("player_item")
+            .Where("user_id", userId).Where("row_type", RowTypeItem).WhereNotNull("slot")
+            .CountAsync<int>();
+
+        var items = rows.Select(r => new InventoryItemDto
         {
-            await transaction.RollbackAsync();
-            throw;
-        }
+            itemId = r.PlayerItemId,
+            slot = r.Slot,
+            itemCode = r.ItemCode,
+            quantity = r.Quantity,
+            enhanceLevel = r.EnhanceLevel,
+        }).ToList();
+
+        return new InventoryBagOutcome(InventoryPageStatus.Ok, items, total);
     }
 
     /// <summary>

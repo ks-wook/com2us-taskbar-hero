@@ -30,19 +30,16 @@ public sealed class ConsumableService : IConsumableService
 
     private readonly IConsumableRepository _consumableRepository;
     private readonly MasterDataProvider _masterData;
-    private readonly InventoryBagCache _bagCache;
     private readonly ILogger<ConsumableService> _logger;
 
     /// <summary>리포지토리·마스터 데이터·가방 조회 캐시·로거를 주입받는다.</summary>
     public ConsumableService(
         IConsumableRepository consumableRepository,
         MasterDataProvider masterData,
-        InventoryBagCache bagCache,
         ILogger<ConsumableService> logger)
     {
         _consumableRepository = consumableRepository;
         _masterData = masterData;
-        _bagCache = bagCache;
         _logger = logger;
     }
 
@@ -86,7 +83,6 @@ public sealed class ConsumableService : IConsumableService
             inventoryDelta = outcome.Delta,
         };
 
-        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         return new SaveResult(ErrorCode.Success, "Consumable used", data);
     }
 

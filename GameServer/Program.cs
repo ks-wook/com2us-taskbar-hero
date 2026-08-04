@@ -72,9 +72,8 @@ builder.Services.AddScoped<IStageRepository, StageRepository>();
 builder.Services.AddScoped<IStageService, StageService>();
 
 // 인벤토리/아이템 액션 계층(장착·해제·배치 이동).
-// InventoryBagCache는 가방 조회(/inventory/list)의 Redis write-through 캐시(기획서 6.5, 싱글턴).
-// 가방을 바꾸는 모든 서비스가 커밋 후 이 캐시에 변경분을 반영한다.
-builder.Services.AddSingleton<InventoryBagCache>();
+// 가방 조회(/inventory/list)에는 캐시를 두지 않는다 — slot 커서 keyset 질의가 (user_id, slot) 유니크
+// 인덱스를 그대로 타서 조인·정렬 없이 필요한 구간만 읽는다(기획서 6.5).
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 

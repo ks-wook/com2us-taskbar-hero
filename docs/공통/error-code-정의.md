@@ -134,10 +134,9 @@
 | TradeAlreadyClosed | 7005 | 이미 판매/취소된 등록 |
 | TradePriceOutOfRange | 7006 | 등록 가격이 기준가 ±20% 범위 밖 |
 | TradeListingLimitExceeded | 7007 | 계정 동시 등록 한도(10개) 초과 |
-| TradeBusy | 7008 | 같은 계정의 다른 판매 등록 요청이 처리 중(재시도 가능) |
 
 - 등록 아이템 없음·장착 중은 `ItemNotFound(4001)`·`ItemEquipped(4007)`, 구매 골드 부족은 `InsufficientCurrency(4005)`, 아이템 지급 용량 초과는 `InventoryFull(4002)`를 재사용한다.
-- `TradeBusy(7008)`는 거래소 **판매 등록**에서 판매자 단위 락(`trade:lock:seller:{userId}`) 획득에 재시도까지 실패했을 때 반환한다([거래소 기획서](../세부/trade-기획서.md) 7.4). HTTP 409. **구매·취소는 Redis 락을 쓰지 않으므로 이 코드를 반환하지 않는다** — 동시 구매에서 진 요청은 조건부 갱신 0행으로 `TradeAlreadyClosed(7005)`를 받는다. 재시도가 무의미한 7005와 의미가 다르므로 혼용하지 않는다.
+- **`7008`(구 `TradeBusy`)은 결번이다.** 판매 등록의 Redis 판매자 락을 제거하며 폐기했다([거래소 기획서](../세부/trade-기획서.md) 7.4). 재사용하지 않는다. 동시 구매에서 진 요청은 조건부 갱신 0행으로 `TradeAlreadyClosed(7005)`를, 같은 아이템을 겹쳐 등록하려다 진 요청은 에스크로 행 잠금으로 `ItemNotFound(4001)`를 받는다.
 
 ### 2.9 메일(보상) (8000번대)
 
@@ -266,7 +265,7 @@ namespace TaskbarHero.Common
         TradeAlreadyClosed = 7005,
         TradePriceOutOfRange = 7006,
         TradeListingLimitExceeded = 7007,
-        TradeBusy = 7008,
+        // 7008(구 TradeBusy): 판매 등록의 Redis 판매자 락 제거로 폐기(결번, 재사용 금지)
 
         // 메일(보상) (8000번대)
         MailNotFound = 8001,

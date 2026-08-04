@@ -23,17 +23,15 @@ public sealed class StageService : IStageService
 
     private readonly IStageRepository _stageRepository;
     private readonly MasterDataProvider _masterData;
-    private readonly InventoryBagCache _bagCache;
     private readonly ILogger<StageService> _logger;
 
     /// <summary>의존성(스테이지 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
     public StageService(
         IStageRepository stageRepository, MasterDataProvider masterData,
-        InventoryBagCache bagCache, ILogger<StageService> logger)
+        ILogger<StageService> logger)
     {
         _stageRepository = stageRepository;
         _masterData = masterData;
-        _bagCache = bagCache;
         _logger = logger;
     }
 
@@ -166,7 +164,6 @@ public sealed class StageService : IStageService
             inventoryDelta = outcome.Delta,
         };
 
-        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogInformation($"스테이지 클리어: userId {userId:@UserId}, act {act:@Act}, difficulty {difficulty:@Difficulty}, stage {stage:@Stage}, gold {outcome.GrantedGold:@Gold}, exp {outcome.GrantedExp:@Exp}, goldMul {outcome.GoldMultiplier:@GoldMultiplier}, expMul {outcome.ExpMultiplier:@ExpMultiplier}");
         return new SaveResult(ErrorCode.Success, "Stage cleared", data);
     }

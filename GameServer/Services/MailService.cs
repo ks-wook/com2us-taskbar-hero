@@ -23,17 +23,15 @@ public sealed class MailService : IMailService
 
     private readonly IMailRepository _mailRepository;
     private readonly MasterDataProvider _masterData;
-    private readonly InventoryBagCache _bagCache;
     private readonly ILogger<MailService> _logger;
 
     /// <summary>의존성(메일 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
     public MailService(
         IMailRepository mailRepository, MasterDataProvider masterData,
-        InventoryBagCache bagCache, ILogger<MailService> logger)
+        ILogger<MailService> logger)
     {
         _mailRepository = mailRepository;
         _masterData = masterData;
-        _bagCache = bagCache;
         _logger = logger;
     }
 
@@ -102,7 +100,6 @@ public sealed class MailService : IMailService
             inventoryDelta = outcome.Delta,
         };
 
-        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogInformation($"메일 수령: userId {userId:@UserId}, mailId {mailId:@MailId}, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
         return new SaveResult(ErrorCode.Success, "Claimed", data);
     }
@@ -135,7 +132,6 @@ public sealed class MailService : IMailService
             inventoryDelta = outcome.Delta,
         };
 
-        await _bagCache.ApplyAsync(userId, outcome.Delta); // 커밋 후 가방 캐시 반영(write-through, 6.5)
         _logger.ZLogInformation($"메일 일괄 수령: userId {userId:@UserId}, mails {outcome.ClaimedMailIds.Count:@MailCount}건, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
         return new SaveResult(ErrorCode.Success, "Claimed all", data);
     }
