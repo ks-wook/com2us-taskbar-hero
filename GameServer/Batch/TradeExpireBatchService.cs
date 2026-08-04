@@ -29,21 +29,19 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
 
     private readonly int _intervalSeconds;
     private readonly int _batchSize;
-    private readonly TradeCache _cache;
     private readonly MasterDataProvider _masterData;
     private readonly ILogger<TradeExpireBatchService> _logger;
 
-    /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 캐시·마스터 데이터를 주입받는다.</summary>
+    /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터를 주입받는다.</summary>
     public TradeExpireBatchService(
         IServiceScopeFactory scopeFactory, RedisConnection redis, IConfiguration configuration,
-        TradeCache cache, MasterDataProvider masterData, ILogger<TradeExpireBatchService> logger)
+        MasterDataProvider masterData, ILogger<TradeExpireBatchService> logger)
         : base(scopeFactory, redis, logger)
     {
         var interval = configuration.GetValue("TradeExpireBatch:IntervalSeconds", DefaultIntervalSeconds);
         var batchSize = configuration.GetValue("TradeExpireBatch:BatchSize", DefaultBatchSize);
         _intervalSeconds = interval > 0 ? interval : DefaultIntervalSeconds;
         _batchSize = batchSize > 0 ? batchSize : DefaultBatchSize;
-        _cache = cache;
         _masterData = masterData;
         _logger = logger;
     }
@@ -113,7 +111,6 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
                     continue;
                 }
 
-                await _cache.RemoveAsync(expired);
                 processed++;
             }
             catch (Exception ex)

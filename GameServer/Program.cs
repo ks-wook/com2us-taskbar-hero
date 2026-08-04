@@ -105,8 +105,8 @@ builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 builder.Services.AddScoped<IGachaRepository, GachaRepository>();
 builder.Services.AddScoped<IGachaService, GachaService>();
 
-// 거래소(교역선) 계층(목록·등록·구매·취소). TradeCache는 Redis 목록 캐시 + 구매 락(싱글턴).
-builder.Services.AddSingleton<TradeCache>();
+// 거래소(교역선) 계층(목록·등록·구매·취소). Redis를 쓰지 않는다 — 목록은 전용 색인을 타는 MySQL 직접 조회,
+// 등록·구매·취소·만료의 직렬화는 MySQL 행 잠금이 담당한다(거래소 기획서 7.3·7.4).
 builder.Services.AddScoped<ITradeRepository, TradeRepository>();
 builder.Services.AddScoped<ITradeService, TradeService>();
 

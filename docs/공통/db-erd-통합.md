@@ -59,8 +59,7 @@
 |---|---|---|
 | MySQL (Account DB) | `AccountServer` | 계정·인증 토큰 영속 저장 |
 | Redis | `AccountServer` 발급 / `GameServer` 검증 | 인증 토큰 캐시(`auth:token:{userId}`) — **필수 의존**(없으면 인증 불가) |
-| Redis | `GameServer` | 거래소 **목록 캐시**(`trade:index:{itemCode}`·`trade:listing:{listingId}`). **상시 사용**하되 파생 데이터이며 장애 시 MySQL 폴백([거래소 기획서](../세부/trade-기획서.md) 7.3). **락 키는 두지 않는다** — 등록·구매·취소·만료의 직렬화는 전부 MySQL 행 잠금이 담당한다(같은 문서 7.4) |
-| Redis | `GameServer` | 배치 리더 락(`batch:lock:{배치키}`) — 거래 만료·메일 GC 등 주기 배치의 중복 실행 방지 |
+| Redis | `GameServer` | 배치 리더 락(`batch:lock:{배치키}`) — 거래 만료·메일 GC 등 주기 배치의 중복 실행 방지. **GameServer가 Redis를 쓰는 유일한 용도**이며, 게임 데이터 조회에는 캐시를 두지 않는다([거래소 기획서](../세부/trade-기획서.md) 7.3 · [인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 6.5) |
 | MySQL (Game DB) | `GameServer` | 플레이어 진행 세이브 데이터. **가방 조회(`inventory/list`)를 포함한 개인 데이터 읽기에는 캐시를 두지 않는다** — `(user_id, slot)` 인덱스 keyset 질의로 직접 읽는다([인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 6.5) |
 | 인메모리 캐시(원천 CSV/JSON) | `GameServer` | 마스터(정적 기획) 데이터. 관계형 영속 테이블이 아닌 읽기 전용 정의 |
 

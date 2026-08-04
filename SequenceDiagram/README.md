@@ -765,7 +765,7 @@ sequenceDiagram
 
 ## 거래소/교역선
 
-판매 등록·목록 조회·구매·취소 (GameTradeController, `/api/game/trade`, GameServer)와 만료 배치(TradeExpireBatchService). 저장소: MySQL `taskbar_hero_game`(`trade_listing`·`player_item`·`player_mail`) + **Redis**(목록 캐시 `trade:index:{itemCode}`·`trade:listing:{listingId}` — 락 키는 없다) + 인메모리 마스터(item — `sellable`·`base_price`, mail 템플릿 201·202).
+판매 등록·목록 조회·구매·취소 (GameTradeController, `/api/game/trade`, GameServer)와 만료 배치(TradeExpireBatchService). 저장소: MySQL `taskbar_hero_game`(`trade_listing`·`player_item`·`player_mail`) + 인메모리 마스터(item — `sellable`·`base_price`, mail 템플릿 201·202).
 
 핵심 규약(trade 기획서 §4·§7):
 
@@ -781,29 +781,20 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
-    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /trade/list { userId, token, data:{ itemCode, mine, page, pageSize } }
     S->>S: 입력 정규화 — pageSize 상한 강제(기본 50 · 최대 100)
-    S->>R: 가격순 색인 전량 조회(trade:index:{itemCode}) + 스냅샷 일괄 조회
-    alt 캐시 적중(색인 + 스냅샷 전건 존재 = 완전 집합)
-        R-->>S: listingId 전량 + 등록 스냅샷
-        S->>S: 뷰어 필터(mine=false 본인 제외 / mine=true 본인만) + 가격·listingId 순 페이징 — 메모리
-        S-->>C: 성공 { listings[], page, pageSize, hasMore }
-    else 캐시 미적재·Redis 장애
-        S->>DB: 뷰어 필터·페이징 없이 전량 조회(가격 오름차순·LIMIT 없음)
-        DB-->>S: 등록 전량
-        S->>R: 캐시 적재(lazy — 색인 + 스냅샷, TTL 3일)
-        S->>S: 뷰어 필터(mine) + 페이징 — 메모리
-        S-->>C: 성공 { listings[], page, pageSize, hasMore }
-    end
+    S->>DB: 페이지 조회(status=1 [+ item_code] + 뷰어 필터, ORDER BY price, listing_id, LIMIT pageSize+1 OFFSET page*pageSize)
+    DB-->>S: 최대 pageSize+1건(idx_trade_browse / idx_trade_price)
+    S->>S: 초과분 1건을 잘라 hasMore 판정
+    S-->>C: 성공 { listings[], page, pageSize, hasMore }
 ```
 
 - 조회는 상태를 바꾸지 않는다. 아이템 이름·등급은 클라이언트가 `itemCode`로 마스터 번들에서 조회해 표시한다.
-- **캐시가 적재돼 있으면 두 모드 모두 DB를 타지 않는다.** 색인이 항상 완전 집합이고 스냅샷에 판매자가 들어 있어, 뷰어 필터와 페이징을 메모리에서 정확히 적용할 수 있다.
-- **캐시가 비어 있으면 무조건 전량을 읽어 채운다.** 규모 확인용 건수 조회나 대형 집합용 별도 경로를 두지 않는다(이용자 수가 적어 판매중 등록이 페이지 상한 100건을 넘지 않는 규모를 전제).
-- **메모리 필터는 완전 집합에서만 정확하다.** 부분 집합에 적용하면 `OFFSET`이 필터 전 기준이라 항목이 누락·중복된다. 그래서 적재용 조회에는 `LIMIT`을 걸지 않는다 — 잘라 읽으면 부분 집합이 완전 집합처럼 캐시돼 나머지 등록을 영구히 가린다. 전제가 깨져 전량이 상한을 넘으면 Warning 로그로 남긴다.
+- **뷰어 필터를 쿼리에 넣는다.** `mine=false`면 `seller_user_id <> viewer`, `true`면 `= viewer`다. SQL 처리 순서가 `WHERE → ORDER BY → LIMIT`이라 **걸러낸 결과에서 세므로 페이지 건수가 정확하다** — 자른 뒤 메모리에서 거르면 본인 등록이 섞인 페이지만 건수가 줄어든다.
+- **필요한 한 페이지만 읽는다.** `LIMIT pageSize + 1`로 한 건 더 읽어 `hasMore`를 판정하고, 전체 등록 수와 무관하게 비용이 페이지 크기에 비례한다(거래소 기획서 7.3).
+- **깊은 페이지는 clamp한다.** `OFFSET`은 건너뛸 행을 실제로 세므로 상한(10,000)을 두고, 넘는 `page`는 거부하지 않고 빈 페이지로 응답한다.
 
 ### POST /api/game/trade/register — 판매 등록(에스크로)
 
@@ -812,7 +803,6 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트
     participant S as GameServer
-    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /trade/register { userId, token, data:{ itemId, price } }
@@ -835,7 +825,6 @@ sequenceDiagram
     else 정상
         S->>DB: 인벤토리 아이템 데이터 제거(에스크로 이동, 스택형은 행 전체 수량)
         S->>DB: 등록 데이터 적재(trade_listing status=1, expires_at = now + 3일)
-        S->>R: 커밋 후 캐시 추가(색인 2종 + 스냅샷)
         S-->>C: 성공 { listingId, itemCode, enhanceLevel, quantity, price, inventoryDelta }
         C->>C: 응답으로 캐시 반영(재조회 없음) — 등록한 아이템을 가방에서 제거
     end
@@ -848,7 +837,6 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트(구매자)
     participant S as GameServer
-    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /trade/buy { userId, token, data:{ listingId } }
@@ -872,7 +860,6 @@ sequenceDiagram
         S->>DB: 구매자 골드 차감
         S->>DB: 구매 아이템 메일 데이터 적재(구매자, 템플릿 203, 무기한, 강화 단계 보존)
         S->>DB: 판매 대금 메일 데이터 적재(판매자, 템플릿 201, 판매가의 80%)
-        S->>R: 커밋 후 캐시에서 등록 제거
         S-->>C: 성공 { listingId, gained, cost, balance, mailId }
         C->>C: 응답으로 캐시 반영(재조회 없음) — 골드 잔액만(산 아이템은 우편함이라 가방 변화 없음)
     end
@@ -892,7 +879,6 @@ sequenceDiagram
     autonumber
     actor C as 클라이언트(판매자)
     participant S as GameServer
-    participant R as Redis
     participant DB as MySQL(game)
 
     C->>S: POST /trade/cancel { userId, token, data:{ listingId } }
@@ -910,7 +896,6 @@ sequenceDiagram
         alt 빈 칸 부족
             S-->>C: 실패 { errorCode: InventoryFull(4002) }
         end
-        S->>R: 커밋 후 캐시에서 등록 제거
         S-->>C: 성공 { listingId, restored, inventoryDelta }
         C->>C: 응답으로 캐시 반영(재조회 없음) — 복원된 아이템을 서버가 준 칸에 배치
     end
@@ -943,8 +928,7 @@ sequenceDiagram
                 S->>S: 스킵
             else 선점 성공
                 S->>DB: 반송 스냅샷 조회 후 반송 메일 데이터 적재(판매자, 템플릿 202, 만료 없음)
-                S->>R: 커밋 후 캐시에서 등록 제거
-            end
+                    end
         end
         S->>S: 요약 로그 1줄(처리 n건 / 스킵 s건 / 실패 f건)
     end

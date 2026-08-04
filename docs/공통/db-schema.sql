@@ -298,8 +298,13 @@ CREATE TABLE trade_listing (
     closed_at      BIGINT  NOT NULL DEFAULT 0 COMMENT '판매/취소 시각(Unix ts). 미완료 0',
     PRIMARY KEY (listing_id),
     KEY idx_trade_seller (seller_user_id, status)   COMMENT '내 판매 목록·동시 등록 한도(10개) 검사',
-    KEY idx_trade_browse (status, item_code, price) COMMENT '판매중 목록: 아이템 코드 검색 + 가격 정렬·페이징(filesort 제거)',
-    KEY idx_trade_price  (status, price)            COMMENT '전체 목록(코드 미지정) 가격 정렬·페이징',
+    -- 목록 조회는 ORDER BY price, listing_id 이므로 정렬키를 인덱스 끝까지 넣어 인덱스 순서로 정렬이 끝나게 한다.
+    -- (listing_id 를 빼면 가격 동률 구간의 tie-break 때문에 filesort 가 붙는다 — 실측 확인)
+    -- ⚠️ 등록이 적을 때는 옵티마이저가 "인덱스 정렬 + PK 룩업"보다 "스캔 + filesort"를 싸다고 보고 후자를 고를 수 있다
+    --    (61행 기준 실측). 인덱스가 정렬을 커버하는지는 FORCE INDEX 로 확인되며, 규모가 커지면 자동 전환된다.
+    --    FORCE INDEX 를 쿼리에 박지 않는다 — 옵티마이저 판단이 그 규모에서 실제로 더 싸다.
+    KEY idx_trade_browse (status, item_code, price, listing_id) COMMENT '판매중 목록: 아이템 코드 검색 + 가격·listing_id 정렬',
+    KEY idx_trade_price  (status, price, listing_id)            COMMENT '전체 목록(코드 미지정) 가격·listing_id 정렬',
     KEY idx_trade_expire (status, expires_at)       COMMENT '만료 배치 대상 스캔',
     CONSTRAINT fk_trade_seller FOREIGN KEY (seller_user_id)
         REFERENCES game_player (user_id) ON DELETE CASCADE

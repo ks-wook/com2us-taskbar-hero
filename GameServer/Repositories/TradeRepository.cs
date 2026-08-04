@@ -66,13 +66,14 @@ public sealed record TradeItemInfo(int ItemType, int StackMax, int Sellable, lon
 public interface ITradeRepository
 {
     /// <summary>
-    /// 해당 itemCode(0이면 전체)의 판매중 등록 <b>전량</b>을 가격 오름차순·listing_id 보조 정렬로 조회한다.
-    /// 뷰어 필터도, 페이징도 하지 않는다 — 캐시에 담을 완전 집합을 만드는 용도이고, 뷰어별 필터와 페이징은
-    /// 서비스가 그 완전 집합 위에서 처리한다(trade 기획서 §7.3).
+    /// 해당 itemCode(0이면 전체)의 판매중 등록 <b>한 페이지</b>를 가격 오름차순·listing_id 보조 정렬로 조회한다.
+    /// <b>뷰어 필터와 페이징을 모두 쿼리에서 처리</b>하므로(<c>WHERE → ORDER BY → LIMIT</c>) 페이지 크기가 정확하다.
+    /// <paramref name="limit"/>에 <b>페이지 크기 + 1</b>을 넘기면 호출측이 hasMore를 판정할 수 있다(trade 기획서 §7.3).
     /// </summary>
-    Task<IReadOnlyList<TradeListingSnapshot>> GetActiveListingsAsync(int itemCode);
+    Task<IReadOnlyList<TradeListingSnapshot>> GetActiveListingPageAsync(
+        int itemCode, long viewerUserId, bool mine, int offset, int limit);
 
-    /// <summary>등록 스냅샷 1건(캐시 적재용). 없으면 null.</summary>
+    /// <summary>등록 스냅샷 1건. 없으면 null.</summary>
     Task<TradeListingSnapshot?> GetListingAsync(long listingId);
 
     /// <summary>판매 등록(에스크로): 한도·아이템·가격 검증 → player_item 제거 → trade_listing 생성을 한 트랜잭션으로 적용한다.</summary>
@@ -126,12 +127,18 @@ public sealed class TradeRepository : ITradeRepository
     public TradeRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
 
     /// <summary>
-    /// 판매중 등록 전량을 가격 오름차순·listing_id 보조 정렬로 조회한다(idx_trade_browse·idx_trade_price가 커버).
-    /// <para>뷰어 필터·페이징을 쿼리에 넣지 않는다 — 결과는 <b>캐시에 담는 완전 집합</b>이고, 뷰어별 필터와 페이징은
-    /// 서비스가 그 완전 집합 위에서 처리한다. 부분 집합에 필터를 적용하면 OFFSET이 필터 전 기준이 되어
-    /// 항목이 누락·중복되므로, "완전 집합 조회 → 메모리 필터·페이징" 순서를 지키는 것이 중요하다.</para>
+    /// 판매중 등록 <b>한 페이지</b>를 가격 오름차순·listing_id 보조 정렬로 조회한다
+    /// (<c>idx_trade_browse (status, item_code, price, listing_id)</c>·<c>idx_trade_price</c>가 커버).
+    /// <para><b>뷰어 필터를 쿼리에 넣는다.</b> <paramref name="mine"/>=false면 <c>seller_user_id &lt;&gt; viewer</c>,
+    /// true면 <c>= viewer</c>다. SQL의 처리 순서가 <c>WHERE → ORDER BY → LIMIT</c>이므로 <b>걸러낸 결과에서
+    /// limit만큼 세어</b> 페이지 크기가 정확하다. 반대로 자른 뒤 애플리케이션에서 거르면(LIMIT 먼저 → 메모리 필터)
+    /// 본인 등록이 섞인 페이지만 건수가 줄어든다.</para>
+    /// <para><b>전량을 읽지 않는다.</b> 예전에는 캐시에 담을 완전 집합이 필요해 전량을 읽고 메모리에서
+    /// 필터·페이징했는데, 캐시를 제거하면서 그 전제가 사라졌다(거래소 기획서 7.3).</para>
+    /// <para>호출측은 <c>limit</c>에 <b>페이지 크기 + 1</b>을 넘겨, 한 건 더 오는지로 <c>hasMore</c>를 판정한다.</para>
     /// </summary>
-    public async Task<IReadOnlyList<TradeListingSnapshot>> GetActiveListingsAsync(int itemCode)
+    public async Task<IReadOnlyList<TradeListingSnapshot>> GetActiveListingPageAsync(
+        int itemCode, long viewerUserId, bool mine, int offset, int limit)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -145,8 +152,14 @@ public sealed class TradeRepository : ITradeRepository
             query = query.Where("item_code", itemCode);
         }
 
+        // 뷰어 필터: 구매 대상 목록은 본인 등록 제외, 취소 화면은 본인 등록만.
+        query = mine
+            ? query.Where("seller_user_id", viewerUserId)
+            : query.Where("seller_user_id", "<>", viewerUserId);
+
         var rows = await query
             .OrderBy("price").OrderBy("listing_id")
+            .Offset(offset).Limit(limit)
             .GetAsync<TradeListingRow>();
 
         return rows
