@@ -1,0 +1,27 @@
+{
+  "_note": "이번에 추가한 아이템의 아이콘 작업 지시서. pixel-item-icons 스킬로 iconSourceName(한글) 파일을 만든 뒤 `link-icons`로 iconFile 이름으로 옮긴다.",
+  "_generatedBy": "tools/master_item_tool.py",
+  "_iconDir": "com2us-taskbar-hero-client/Assets/Art/Icon/Item",
+  "_iconSourceDirs": [
+    "com2us-taskbar-hero-client/Assets/Art/Icon",
+    "com2us-taskbar-hero-client/Assets/Art/Icon/Item"
+  ],
+  "items": [
+    {
+      "itemCode": 31333,
+      "name": "서리 지팡이",
+      "itemType": 1,
+      "itemTypeName": "장비",
+      "grade": 3,
+      "gradeName": "희귀",
+      "equipSlot": 1,
+      "equipSlotName": "무기",
+      "classReq": 3,
+      "classReqName": "마법사",
+      "iconSourceName": "서리 지팡이.png",
+      "iconFile": "item_31333.png",
+      "iconPath": "com2us-taskbar-hero-client/Assets/Art/Icon/Item/item_31333.png",
+      "iconExists": false
+    }
+  ]
+}
