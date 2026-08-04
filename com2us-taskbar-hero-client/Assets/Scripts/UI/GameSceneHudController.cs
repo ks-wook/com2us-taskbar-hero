@@ -139,6 +139,11 @@ namespace TaskbarHero.Client.UI
         // 하단 메뉴바 토글 상태·연출 대상.
         private RectTransform _menuArea;         // 접히는 영역(폭을 0↔MenuAreaWidth로 애니메이션)
         private RectTransform[] _menuButtons;    // 인덱스 = 칸 번호(0 = 맨 오른쪽)
+        private RectTransform _menuToggleRect;   // 접혀 있을 때도 남는 손잡이(보상 연출 폴백 목표)
+
+        // 보상 획득 연출이 날아갈 칸 번호(위 CreateMenuButton 호출 순서와 같아야 한다).
+        private const int InventorySlot = 1;     // 가방 — 골드·전리품이 들어가는 곳
+        private const int PartySlot = 3;         // 편성 — 경험치를 받는 캐릭터들이 있는 곳
         private Text _menuToggleLabel;           // 토글 버튼의 화살표 폴백(아이콘이 없을 때만 생성)
         private Sprite _menuToggleSprite;        // 메뉴 아이콘 텍스처로 런타임에 만든 스프라이트(OnDestroy에서 정리)
         private ButtonPunchScale _menuTogglePunch; // 클릭 시 아이콘이 커졌다 작아지는 연출(아이콘/화살표에 부착)
@@ -303,7 +308,7 @@ namespace TaskbarHero.Client.UI
             var bar = CreateBottomCenterBar(gameArea.transform);
             _menuArea = CreateMenuArea(bar);
             BuildMenuBackground(_menuArea);      // 아이콘보다 먼저 만들어 뒤에 깔리게 한다(자식 순서 = 그리기 순서)
-            CreateMenuToggleButton(gameArea.transform, font); // 바가 아니라 전투 화면 밴드 직속(게임 화면 안쪽 우측에 배치)
+            _menuToggleRect = CreateMenuToggleButton(gameArea.transform, font); // 바가 아니라 전투 화면 밴드 직속(게임 화면 안쪽 우측에 배치)
 
             // 접히는 영역 안에 한 줄로: 오른쪽부터 [환경설정] [가방] [스테이지] [편성] [메일] [출석부] [거래소] [뽑기].
             _menuButtons = new RectTransform[MenuSlotCount];
@@ -323,6 +328,10 @@ namespace TaskbarHero.Client.UI
             RedDot.AttachTopRight((RectTransform)inventoryBtn.transform).Bind(RedDotConditions.HasUnspentSkillPoints);
 
             BuildBuffIndicator(gameArea.transform, font);
+
+            // 클리어 보상이 날아올 목표를 전투 연출 쪽에 등록한다(어셈블리 참조가 UI → Battle 한 방향이라
+            // 전투 쪽에서 HUD를 직접 찾을 수 없다 — 여기서 함수를 넘겨 준다).
+            Battle.RewardFlyFx.TargetProvider = RewardFlyTarget;
 
             // 기본 상태(_menuOpen)를 연출 없이 즉시 반영한다. 접힌 상태가 기본이므로 폭 0·아이콘 축소로
             // 만들어 둬야 첫 프레임에 펼쳐진 바가 잠깐 보였다가 사라지는 일이 없다.
@@ -420,7 +429,7 @@ namespace TaskbarHero.Client.UI
         /// 아이콘은 <c>Assets/Art/Icon/메뉴.png</c>(메뉴 버튼 아이콘)이며, 배선되지 않았으면
         /// 화살표 텍스트로 대체한다 — 펼쳐져 있으면 '&gt;', 접혀 있으면 '&lt;'.
         /// </summary>
-        private void CreateMenuToggleButton(Transform parent, Font font)
+        private RectTransform CreateMenuToggleButton(Transform parent, Font font)
         {
             var go = new GameObject("MenuToggleButton", typeof(RectTransform), typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
@@ -456,6 +465,7 @@ namespace TaskbarHero.Client.UI
                 }
                 ToggleMenuBar();
             });
+            return rt;
         }
 
         /// <summary>
@@ -508,13 +518,18 @@ namespace TaskbarHero.Client.UI
             _menuTogglePunch = labelGo.AddComponent<ButtonPunchScale>();
         }
 
-        /// <summary>런타임에 만든 토글 아이콘 스프라이트를 정리한다(에셋이 아니라 런타임 생성물이라 직접 파괴한다).</summary>
+        /// <summary>런타임에 만든 토글 아이콘 스프라이트를 정리하고, 보상 연출 목표 등록을 해제한다.</summary>
         private void OnDestroy()
         {
             if (_menuToggleSprite != null)
             {
                 Destroy(_menuToggleSprite);
                 _menuToggleSprite = null;
+            }
+            // 내가 등록한 것일 때만 해제한다(씬 전환 중 새 HUD가 이미 등록했을 수 있다).
+            if (Battle.RewardFlyFx.TargetProvider == RewardFlyTarget)
+            {
+                Battle.RewardFlyFx.TargetProvider = null;
             }
         }
 
@@ -822,6 +837,26 @@ namespace TaskbarHero.Client.UI
             {
                 Debug.LogWarning("[HUD] UIManager 인스턴스를 찾을 수 없습니다.");
             }
+        }
+
+        /// <summary>
+        /// 클리어 보상 획득 연출(<see cref="Battle.RewardFlyFx"/>)이 날아갈 HUD 목표를 돌려준다 —
+        /// 경험치는 <b>편성</b>(캐릭터), 골드·전리품은 <b>가방</b>으로 향한다.
+        /// <para>메뉴 바가 접혀 있으면 버튼이 폭 0으로 눌려 있어 그 자리로 보내면 어디로 갔는지 알 수 없다.
+        /// 그때는 항상 보이는 <b>토글 손잡이</b>를 목표로 준다.</para>
+        /// </summary>
+        public RectTransform RewardFlyTarget(bool toParty)
+        {
+            if (!_menuOpen)
+            {
+                return _menuToggleRect;
+            }
+            int slot = toParty ? PartySlot : InventorySlot;
+            if (_menuButtons != null && slot < _menuButtons.Length && _menuButtons[slot] != null)
+            {
+                return _menuButtons[slot];
+            }
+            return _menuToggleRect;
         }
 
         /// <summary>인벤토리 패널 토글(UIManager 위임).</summary>
