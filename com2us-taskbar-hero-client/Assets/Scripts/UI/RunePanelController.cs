@@ -459,6 +459,7 @@ namespace TaskbarHero.Client.UI
 
             int code = rune.runeCode;
             var btn = node.gameObject.AddComponent<Button>();
+            UiClickSound.Suppress(btn); // 룬 선택음(sfx_ui_slot_select)을 직접 재생하므로 전역 클릭음 제외
             btn.onClick.AddListener(() => OnSelectRune(code));
 
             _treeChildren.Add(node.gameObject);

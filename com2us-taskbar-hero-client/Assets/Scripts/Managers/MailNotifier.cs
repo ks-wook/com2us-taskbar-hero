@@ -25,6 +25,7 @@ namespace TaskbarHero.Client.Managers
         private static readonly HashSet<long> AliveMailIds = new HashSet<long>();
 
         private static long _snapshotUserId; // 스냅샷을 받은 유저(계정 전환 시 이전 계정 캐시를 쓰지 않도록)
+        private static bool _notifiedUnclaimed; // 미수령 보상 알림음을 이미 울렸는지(점등 순간에만 1회)
         private static bool _fetching;
 
         /// <summary>스냅샷이 갱신돼 알림 상태가 바뀔 수 있을 때 발생한다(레드닷이 구독해 자동 재평가한다).</summary>
@@ -47,21 +48,31 @@ namespace TaskbarHero.Client.Managers
                 {
                     return false;
                 }
-                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                foreach (var mail in SnapshotMails)
-                {
-                    if (mail.claimed != 0 || mail.attachments == null || mail.attachments.Count == 0)
-                    {
-                        continue;
-                    }
-                    if (mail.expiresAt != 0 && now > mail.expiresAt)
-                    {
-                        continue; // 만료된 메일은 수령할 수 없으므로 알리지 않는다
-                    }
-                    return true;
-                }
-                return false;
+                return SnapshotHasUnclaimedReward();
             }
+        }
+
+        /// <summary>
+        /// 스냅샷만 보고 미수령 보상 메일이 있는지 판정한다(유저 일치 검사 없음).
+        /// <see cref="ApplySnapshot"/>이 <b>스냅샷 주인을 기록하기 전에</b> 점등 여부를 비교해야 하므로
+        /// 그 검사를 뺀 계산을 따로 둔다(알림음이 로그인 직후 한 박자 늦게 울리는 것을 막는다).
+        /// </summary>
+        private static bool SnapshotHasUnclaimedReward()
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            foreach (var mail in SnapshotMails)
+            {
+                if (mail.claimed != 0 || mail.attachments == null || mail.attachments.Count == 0)
+                {
+                    continue;
+                }
+                if (mail.expiresAt != 0 && now > mail.expiresAt)
+                {
+                    continue; // 만료된 메일은 수령할 수 없으므로 알리지 않는다
+                }
+                return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -119,6 +130,18 @@ namespace TaskbarHero.Client.Managers
             }
             UnreadMailIds.IntersectWith(AliveMailIds); // 삭제·만료 정리된 메일의 미열람 표시 제거
 
+            // 레드닷이 **새로 점등되는 순간**(미수령 보상 메일이 없다가 생김)에만 알림음을 울린다
+            // (사운드 정의서 §4.1 — 폴링마다 울리면 상주 창에서 청각 피로가 크다).
+            // 로그인 직후 첫 스냅샷은 "이전 상태"가 없으므로 소리를 내지 않고 상태만 기록한다
+            // (기록하지 않으면 다음 폴링에서 새로 도착한 것처럼 울린다).
+            bool hasUnclaimed = SnapshotHasUnclaimedReward();
+            bool hadPreviousSnapshot = _snapshotUserId == Session.UserId;
+            if (hasUnclaimed && hadPreviousSnapshot && !_notifiedUnclaimed)
+            {
+                SoundManager.Sfx(SoundId.UiNotify);
+            }
+            _notifiedUnclaimed = hasUnclaimed;
+
             _snapshotUserId = Session.UserId;
             Changed?.Invoke();
         }
@@ -143,6 +166,7 @@ namespace TaskbarHero.Client.Managers
             UnreadMailIds.Clear();
             AliveMailIds.Clear();
             _snapshotUserId = 0;
+            _notifiedUnclaimed = false; // 계정이 바뀌면 다음 점등에서 다시 알린다
             _fetching = false;
             Changed?.Invoke();
         }

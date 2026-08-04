@@ -949,6 +949,8 @@ namespace TaskbarHero.Client.Battle
             {
                 yield break;
             }
+            // 피격음은 대상 계열에 따라 살점/금속으로 갈린다(사운드 정의서 §5.1·§8).
+            SoundManager.Sfx(BattleSounds.MonsterHitFor(target.MonsterName));
             target.TakeDamage(dmg);
             // 피격 데미지를 붉은 숫자로 표시(치명타는 노란색). 오브젝트 풀 재사용.
             DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f), crit);
@@ -990,6 +992,12 @@ namespace TaskbarHero.Client.Battle
                 if (mu == null || !mu.Alive) continue;
                 if (((Vector2)mu.transform.position - (Vector2)center).sqrMagnitude <= r2)
                 {
+                    // 광역은 대상 수만큼 루프를 돌지만 피격음은 **첫 대상 한 번만** 울린다 —
+                    // 대상마다 재생하면 소리가 찢어진다(사운드 정의서 §9.3).
+                    if (hit == 0)
+                    {
+                        SoundManager.Sfx(BattleSounds.MonsterHitFor(mu.MonsterName));
+                    }
                     mu.TakeDamage(dmg);
                     DamageNumberPool.GetOrCreate().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f), crit);
                     hit++;

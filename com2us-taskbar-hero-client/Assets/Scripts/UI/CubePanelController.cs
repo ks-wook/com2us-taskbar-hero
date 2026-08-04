@@ -219,6 +219,10 @@ namespace TaskbarHero.Client.UI
             _combineTab = BuildTab(container, "CombineTab", "합성", 40f);
             _dismantleTab = BuildTab(container, "DismantleTab", "연금술", 296f);
             _craftTab = BuildTab(container, "CraftTab", "제작", 552f);
+            // 탭은 전환음(sfx_ui_tab)을 직접 재생하므로 전역 클릭음에서 제외한다.
+            UiClickSound.Suppress(_combineTab);
+            UiClickSound.Suppress(_dismantleTab);
+            UiClickSound.Suppress(_craftTab);
         }
 
         private Button BuildTab(RectTransform container, string name, string label, float x)

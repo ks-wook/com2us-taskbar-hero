@@ -276,6 +276,23 @@ namespace TaskbarHero.Client.Managers
             src.PlayOneShot(clip, Mathf.Clamp01(volumeScale) * SfxOutputVolume());
         }
 
+        /// <summary>
+        /// 재생 중인 효과음을 모두 멈춘다. 긴 연출음(가챠 등급 연출 4초 등)이 도중에 <b>연출을 건너뛸 때</b>
+        /// 남아 다음 소리와 겹치는 것을 막는 용도다(<c>PlayOneShot</c>은 개별 정지가 불가하므로 보이스를 비운다).
+        /// 같은 ID 재생 쿨다운도 함께 초기화해 정지 직후 다시 울릴 수 있게 한다.
+        /// </summary>
+        public void StopSfx()
+        {
+            foreach (var src in _sfxSources)
+            {
+                if (src != null)
+                {
+                    src.Stop();
+                }
+            }
+            _lastPlayedAt.Clear();
+        }
+
         /// <summary>연출 징글(클리어·패배)을 재생한다. 루프하지 않으며 BGM 채널을 건드리지 않는다.</summary>
         public void PlayJingle(SoundId id)
         {
@@ -371,6 +388,9 @@ namespace TaskbarHero.Client.Managers
         /// <summary>효과음 재생.</summary>
         public static void Sfx(SoundId id, float volumeScale = 1f)
             => EnsureInstance()?.PlaySfx(id, volumeScale);
+
+        /// <summary>재생 중인 효과음 전체 정지(긴 연출음을 건너뛸 때).</summary>
+        public static void StopAllSfx() => Instance?.StopSfx();
 
         /// <summary>징글 재생.</summary>
         public static void Jingle(SoundId id) => EnsureInstance()?.PlayJingle(id);

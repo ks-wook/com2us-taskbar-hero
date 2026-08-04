@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using UnityEngine;
+using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.Battle
 {
@@ -80,6 +81,8 @@ namespace TaskbarHero.Client.Battle
             if (isBoss)
             {
                 transform.localScale *= BossScale; // 부호(좌우 방향) 유지한 채 3배 확대
+                // 보스 등장 포효 — Warning!! 배너·경보음과 같은 시점이다(사운드 정의서 §5.6).
+                SoundManager.Sfx(SoundId.BossRoar);
                 if (bossIcon != null)
                 {
                     StartCoroutine(AttachCrown(bossIcon));
@@ -241,6 +244,8 @@ namespace TaskbarHero.Client.Battle
                 _attackTimer = 0f;
                 if (_onAttack(this))
                 {
+                    // 몬스터·보스 공격은 전 계열 공용음 하나를 쓴다(사운드 정의서 §5.6·§8).
+                    SoundManager.Sfx(SoundId.MonAttack);
                     SendMessage("PlayAttackOnce", SendMessageOptions.DontRequireReceiver);
                 }
             }
@@ -258,6 +263,9 @@ namespace TaskbarHero.Client.Battle
         private void Die()
         {
             _alive = false;
+            // 몬스터·보스 사망 공용음(§5.1·§8). 웨이브 전멸처럼 여러 마리가 동시에 죽어도
+            // SoundManager의 같은 클립 쿨다운(0.05초)이 소리가 찢어지는 것을 막는다(§9.3).
+            SoundManager.Sfx(SoundId.MonsterDeath);
             SendMessage("PlayDeathOnce", SendMessageOptions.DontRequireReceiver);
             _onDeath?.Invoke(this);
             StartCoroutine(DespawnAfter());

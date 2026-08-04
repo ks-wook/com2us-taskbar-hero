@@ -289,6 +289,8 @@ namespace TaskbarHero.Client.Battle
         {
             for (int i = 0; i < slots.Length; i++)
             {
+                // 보상 칸이 하나 뜰 때마다 획득음(골드·경험치·아이템 공용 — 사운드 정의서 §5.1·§8).
+                SoundManager.Sfx(SoundId.RewardGet);
                 StartCoroutine(RewardPopIn(slots[i]));
                 yield return new WaitForSecondsRealtime(RewardPopInterval);
             }

@@ -30,6 +30,7 @@ namespace TaskbarHero.Client.MasterData
         public const string TableAttendance = "attendance_master";
         public const string TableInventoryExpand = "inventory_expand_master";
         public const string TableCharacterCreateCost = "character_create_cost";
+        public const string TableGacha = "gacha_master";
 
         /// <summary>신규 계정 기본 인벤토리 용량(서버 BaseInventoryCapacity와 동일 계약). 확장 단계 산출에 사용.</summary>
         public const int BaseInventoryCapacity = 100;
@@ -40,6 +41,7 @@ namespace TaskbarHero.Client.MasterData
             TableEquipSlot, TableGrade, TableClass, TableLevel, TableSkill, TableRune,
             TableItem, TableMonster, TableStage, TableStageReward, TableCube,
             TableCubeRecipe, TableAttendance, TableInventoryExpand, TableCharacterCreateCost,
+            TableGacha,
         };
 
         public readonly Dictionary<int, EquipSlotMaster> EquipSlots = new Dictionary<int, EquipSlotMaster>();
@@ -58,6 +60,9 @@ namespace TaskbarHero.Client.MasterData
         // 인벤토리 확장 비용(step→비용)·캐릭터 추가 생성 비용(characterId→비용). UI 사전 안내용.
         public readonly Dictionary<int, InventoryExpandCost> InventoryExpandCosts = new Dictionary<int, InventoryExpandCost>();
         public readonly Dictionary<int, CharacterCreateCost> CharacterCreateCosts = new Dictionary<int, CharacterCreateCost>();
+        // 가챠(뽑기) 배너 정의(배너 이름·이미지·비용·등급 확률·후보·천장 규칙). 지금 열려 있는 배너 판정은
+        // 서버(POST /api/game/gacha/banners)가 하고, 이 표는 그 목록을 그리는 정적 값을 제공한다.
+        public readonly Dictionary<int, GachaMaster> Gachas = new Dictionary<int, GachaMaster>();
 
         /// <summary>파싱해 캐싱한 총 행 수(로드 검증·로그용).</summary>
         public int TotalRows { get; private set; }
@@ -91,12 +96,13 @@ namespace TaskbarHero.Client.MasterData
             Fill(Attendances, Parse<AttendanceMaster>(jsonForTable, TableAttendance), x => x.day);
             Fill(InventoryExpandCosts, Parse<InventoryExpandCost>(jsonForTable, TableInventoryExpand), x => x.step);
             Fill(CharacterCreateCosts, Parse<CharacterCreateCost>(jsonForTable, TableCharacterCreateCost), x => x.characterId);
+            Fill(Gachas, Parse<GachaMaster>(jsonForTable, TableGacha), x => x.gachaCode);
 
             TotalRows =
                 EquipSlots.Count + Grades.Count + Classes.Count + Levels.Count + Skills.Count +
                 Runes.Count + Items.Count + Monsters.Count + Stages.Count + StageRewards.Count +
                 Cubes.Count + CubeRecipes.Count + Attendances.Count +
-                InventoryExpandCosts.Count + CharacterCreateCosts.Count;
+                InventoryExpandCosts.Count + CharacterCreateCosts.Count + Gachas.Count;
         }
 
         /// <summary>모든 캐시를 비운다.</summary>
@@ -117,6 +123,7 @@ namespace TaskbarHero.Client.MasterData
             Attendances.Clear();
             InventoryExpandCosts.Clear();
             CharacterCreateCosts.Clear();
+            Gachas.Clear();
             TotalRows = 0;
         }
 
@@ -131,6 +138,76 @@ namespace TaskbarHero.Client.MasterData
         public long CharacterCreateCostOf(int characterId)
         {
             return CharacterCreateCosts.TryGetValue(characterId, out var row) ? row.goldCost : 0L;
+        }
+
+        /// <summary>가챠(배너) 정의. 번들에 없는 코드면 null(서버 마스터가 먼저 갱신된 경우 — 조용히 건너뛴다).</summary>
+        public GachaMaster GachaOf(int gachaCode)
+        {
+            return Gachas.TryGetValue(gachaCode, out var row) ? row : null;
+        }
+
+        /// <summary>
+        /// 그 배너의 등급별 기본 확률(0~1). 확률 = 등급 가중치 / 가중치 합이며 정규화하지 않는다
+        /// (가챠 기획서 6.2). 천장 소프트 가산은 서버가 추첨 시점에 더하므로 여기에는 반영되지 않는다.
+        /// </summary>
+        public float GachaGradeChance(int gachaCode, int grade)
+        {
+            var gacha = GachaOf(gachaCode);
+            if (gacha == null || gacha.gradeWeights == null)
+            {
+                return 0f;
+            }
+            int total = 0;
+            int target = 0;
+            foreach (var w in gacha.gradeWeights)
+            {
+                total += w.weight;
+                if (w.grade == grade)
+                {
+                    target = w.weight;
+                }
+            }
+            return total > 0 ? (float)target / total : 0f;
+        }
+
+        /// <summary>그 배너의 등급 슬롯에 들어 있는 지급 후보 수(확률 공시의 "후보 N종" 표시용).</summary>
+        public int GachaPoolCount(int gachaCode, int grade)
+        {
+            var gacha = GachaOf(gachaCode);
+            if (gacha == null || gacha.itemPool == null)
+            {
+                return 0;
+            }
+            int count = 0;
+            foreach (var entry in gacha.itemPool)
+            {
+                if (entry.grade == grade)
+                {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        /// <summary>
+        /// 그 배너·등급의 천장 규칙 발동 회차. <paramref name="pityType"/>는 1:소프트 2:하드다.
+        /// 규칙이 없으면 0("천장 없음")이다.
+        /// </summary>
+        public int GachaPityThreshold(int gachaCode, int grade, int pityType)
+        {
+            var gacha = GachaOf(gachaCode);
+            if (gacha == null || gacha.pityRules == null)
+            {
+                return 0;
+            }
+            foreach (var rule in gacha.pityRules)
+            {
+                if (rule.grade == grade && rule.pityType == pityType)
+                {
+                    return rule.threshold;
+                }
+            }
+            return 0;
         }
 
         /// <summary>
@@ -157,15 +234,23 @@ namespace TaskbarHero.Client.MasterData
                 cubeIngredients += r.ingredients != null ? r.ingredients.Length : 0;
             }
 
+            int gachaPoolEntries = 0;
+            foreach (var g in Gachas.Values)
+            {
+                gachaPoolEntries += g.itemPool != null ? g.itemPool.Length : 0;
+            }
+
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"[MasterDatabase] {AllTables.Length}개 테이블 / 총 {TotalRows}행");
             sb.AppendLine(
                 $"equipSlots={EquipSlots.Count} grades={Grades.Count} classes={Classes.Count} " +
                 $"levels={Levels.Count} skills={Skills.Count} runes={Runes.Count} items={Items.Count} " +
                 $"monsters={Monsters.Count} stages={Stages.Count} stageRewards={StageRewards.Count} " +
-                $"cubes={Cubes.Count} cubeRecipes={CubeRecipes.Count} attendances={Attendances.Count}");
+                $"cubes={Cubes.Count} cubeRecipes={CubeRecipes.Count} attendances={Attendances.Count} " +
+                $"gachas={Gachas.Count}");
             sb.AppendLine(
-                $"중첩배열: skillCoefs={skillCoefs} stageSpawns={stageSpawns} cubeIngredients={cubeIngredients}");
+                $"중첩배열: skillCoefs={skillCoefs} stageSpawns={stageSpawns} cubeIngredients={cubeIngredients} " +
+                $"gachaPool={gachaPoolEntries}");
             return sb.ToString();
         }
 

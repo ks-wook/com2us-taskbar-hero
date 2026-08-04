@@ -3,7 +3,8 @@ namespace TaskbarHero.Client.Managers
     /// <summary>
     /// 사운드 식별자. 값은 <c>Assets/Sound</c> 아래 파일명(확장자 제외)과 1:1로 대응하며,
     /// 에디터 빌더(SoundDatabaseBuilder)가 이 이름으로 클립을 찾아 <see cref="SoundDatabase"/>에 채운다.
-    /// <b>현재 생성된 36종만 정의한다</b> — 미생성분(사운드 리소스 정의서 §5·§6의 20종)은 파일이 만들어질 때 추가한다.
+    /// <b>클라이언트가 배선한 사운드만 정의한다</b> — 아직 쓰지 않는 파일은 배선 시점에 추가한다
+    /// (사운드 리소스 정의서 §5·§6의 전투·성장 전용음은 미배선).
     /// </summary>
     public enum SoundId
     {
@@ -54,5 +55,51 @@ namespace TaskbarHero.Client.Managers
         HitFlesh,
         HitArmor,
         AllyDeath,
+        MonsterDeath,
+        LevelUp,
+        RewardGet,
+
+        // ── SFX/Battle/Knight (사운드 리소스 정의서 §5.2) ──
+        KnightBasic,
+        KnightShieldChargeStart,
+        KnightPowerStrike,
+        KnightRage,
+
+        // ── SFX/Battle/Archer (§5.3) ──
+        ArcherBowShot,
+        ArcherArrowImpact,
+        ArcherMultiShot,
+
+        // ── SFX/Battle/Mage (§5.4) ──
+        MageFireball,
+        MageFrostNova,
+        MageLightningBolt,
+
+        // ── SFX/Battle/Slayer (§5.5) ──
+        SlayerBasic,
+        SlayerLeap,
+        SlayerGroundSlam,
+        SlayerBerserk,
+        SlayerCleave,
+
+        // ── SFX/Battle/Monster (§5.6) ──
+        MonAttack,
+        BossRoar,
+
+        // ── SFX/Growth (§6) ──
+        ItemEquip,
+        GoldSpend,
+        UpgradeSuccess,
+        CubeCombine,
+        RewardClaim,
+
+        // ── SFX/Gacha (사운드 리소스 정의서 §7) ──
+        // 등급 연출음은 3·4·5등급만 둔다 — 노말·고급은 연출 영상이 없어 슬롯 공개음으로 끝난다.
+        GachaPullSingle,
+        GachaPullMulti,
+        GachaSlotReveal,
+        GachaGrade3,
+        GachaGrade4,
+        GachaGrade5,
     }
 }

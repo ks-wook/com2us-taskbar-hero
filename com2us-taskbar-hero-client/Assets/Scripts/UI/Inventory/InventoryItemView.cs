@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.UI
 {
@@ -162,6 +163,7 @@ namespace TaskbarHero.Client.UI
             }
 
             _dragging = true;
+            SoundManager.Sfx(SoundId.UiSlotSelect); // 아이템 칸을 집는 순간(사운드 정의서 §4.1)
             _originSlot = GetComponentInParent<InventoryItemSlot>();
             Controller.RequestHideTooltip();
 

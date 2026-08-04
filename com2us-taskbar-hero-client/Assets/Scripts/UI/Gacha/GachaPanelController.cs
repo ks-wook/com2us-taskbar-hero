@@ -675,6 +675,11 @@ namespace TaskbarHero.Client.UI.Gacha
             Rewire(_historyMoreButton, RequestHistoryMore);
             Rewire(_chanceButton, ToggleChancePopup);
             Rewire(_chanceCloseButton, HideChancePopup);
+
+            // 자체 사운드를 재생하는 버튼은 전역 클릭음에서 제외한다(사운드 정의서 §8 매핑을 그대로 유지).
+            UiClickSound.Suppress(_chanceButton);        // 열림/닫힘음
+            UiClickSound.Suppress(_historyButton);       // 기록 화면 표시음
+            UiClickSound.Suppress(_historyMoreButton);   // 더 보기 클릭음
         }
 
         private static void Rewire(Button button, UnityEngine.Events.UnityAction action)
@@ -824,7 +829,9 @@ namespace TaskbarHero.Client.UI.Gacha
             }
 
             int code = gachaCode;
-            img.gameObject.AddComponent<Button>().onClick.AddListener(() => SelectBanner(code));
+            var button = img.gameObject.AddComponent<Button>();
+            UiClickSound.Suppress(button); // 탭 전환음(sfx_ui_tab)을 직접 재생하므로 전역 클릭음 제외
+            button.onClick.AddListener(() => SelectBanner(code));
             return img.gameObject;
         }
 

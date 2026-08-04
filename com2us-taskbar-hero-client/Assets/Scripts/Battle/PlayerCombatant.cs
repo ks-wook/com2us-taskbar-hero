@@ -495,6 +495,7 @@ namespace TaskbarHero.Client.Battle
             if (_dead) return;
             _dead = true;
             _charging = false;
+            SoundManager.Sfx(SoundId.AllyDeath); // 아군 사망(사운드 정의서 §5.1)
             SendMessage("PlayDeathOnce", SendMessageOptions.DontRequireReceiver);
             if (_ctrl != null) _ctrl.OnAllyKilled(this);
             StartCoroutine(DespawnAfter());
@@ -791,9 +792,23 @@ namespace TaskbarHero.Client.Battle
             Heal(heal);
         }
 
+        /// <summary>지연 뒤 효과음을 1회 재생한다(타격 시점과 소리를 맞춰야 하는 임팩트음용 — 사운드 정의서 §9.3).</summary>
+        private IEnumerator PlaySfxAfter(float delay, SoundId id)
+        {
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
+            SoundManager.Sfx(id);
+        }
+
         private void CastSkill(Skill sk)
         {
             _moving = false; // 스킬 모션 후 idle 복귀 → 이후 이동 시 PlayMove 재전송
+            // 스킬 시전음(사운드 정의서 §5.2~§5.5). 타격이 시전과 떨어진 스킬(내려찍기·화살비)의 임팩트음은
+            // 그 도달 콜백에서 따로 울린다(§9.3 동기화 주의 지점).
+            SoundManager.Sfx(BattleSounds.SkillFor(sk.code));
+
             if (sk.coefType == 2) // 버프(자기 강화)
             {
                 SendMessage("PlayRage", SendMessageOptions.DontRequireReceiver); // 분노/기합 자세
@@ -833,6 +848,8 @@ namespace TaskbarHero.Client.Battle
                     _moving = false;
                     SendMessage("PlayArrowRain", motion, SendMessageOptions.DontRequireReceiver);
                     SpawnEffectAt(sk.effect, ArrowRainTargetPos(), sk.scale);
+                    // 화살비 착탄음은 데미지가 들어가는 시점에 맞춘다(시전음은 활 소리, §8).
+                    StartCoroutine(PlaySfxAfter(hitDelay, SoundId.ArcherArrowImpact));
                     DealDamage(hitDelay, dmg, crit, label);
                     _busyTimer = motion + 0.4f; // 점프+홀드+착지 동안 대기
                 }
@@ -897,6 +914,7 @@ namespace TaskbarHero.Client.Battle
         private void BasicAttack()
         {
             PlayAttackAnim();
+            SoundManager.Sfx(BattleSounds.BasicAttackFor(_classCode)); // 직업별 기본 공격음(§5.2~§5.5)
             long dmg = Damage(1f, out bool crit);
 
             if (_basicAttackProjectile != null && _ctrl.MonsterTransform != null)
@@ -971,6 +989,7 @@ namespace TaskbarHero.Client.Battle
                 var fx = Instantiate(_chargeSkill.effect, transform, false);
                 fx.transform.localPosition = new Vector3(0f, _ctrl.EffectYOffset, 0f);
             }
+            SoundManager.Sfx(BattleSounds.SkillFor(_chargeSkill.code)); // 돌진 개시음(§5.2)
             SendMessage("PlayChargeDash", SendMessageOptions.DontRequireReceiver);
             return true;
         }
@@ -1006,7 +1025,10 @@ namespace TaskbarHero.Client.Battle
                 // 도달(또는 발동 시점부터 사거리 안). 데미지는 자세가 끝나는 순간에 들어간다.
                 _chargeImpacted = true;
                 long dmg = Damage(_chargeSkill.coef, out bool crit);
-                DealDamage(Mathf.Max(0f, _chargeMotion - _chargeElapsed), dmg, crit,
+                float impactDelay = Mathf.Max(0f, _chargeMotion - _chargeElapsed);
+                // 돌진 충돌음은 강타음을 재사용한다(§8) — 데미지와 같은 시점에 울린다.
+                StartCoroutine(PlaySfxAfter(impactDelay, SoundId.KnightPowerStrike));
+                DealDamage(impactDelay, dmg, crit,
                     $"[{_name}] 돌진 {_chargeSkill.name} ×{_chargeSkill.coef:0.##}");
             }
 
@@ -1051,6 +1073,9 @@ namespace TaskbarHero.Client.Battle
         private System.Collections.IEnumerator SlamImpactAfter(float airTime, Skill sk, long dmg, bool crit, string label)
         {
             yield return new WaitForSeconds(Mathf.Max(0.05f, airTime));
+
+            // 착지 임팩트음 — 시전음(도약 whoosh)과 나눠 울린다(사운드 정의서 §5.5·§9.3).
+            SoundManager.Sfx(SoundId.SlayerGroundSlam);
 
             var fx = SpawnEffectAtSelf(sk.effect, sk.offset);
             if (fx != null && sk.scale > 0f && sk.scale != 1f) fx.transform.localScale *= sk.scale;

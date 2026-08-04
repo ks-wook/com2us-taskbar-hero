@@ -95,6 +95,12 @@ namespace TaskbarHero.Client.Managers
         /// <summary>상세 문구를 채우고 배경을 적용해 커서 근처에 표시한다.</summary>
         private void ShowInternal(Sprite background, int itemCode, long quantity, Vector2 screenPos)
         {
+            // 상세 팝업 표시음(사운드 정의서 §4.1). 이미 떠 있는 팝업이 칸 사이를 옮겨 다닐 때는 울리지 않는다.
+            if (_root != null && !_root.gameObject.activeSelf)
+            {
+                SoundManager.Sfx(SoundId.UiTooltip);
+            }
+
             if (background != null)
             {
                 _background.sprite = background;

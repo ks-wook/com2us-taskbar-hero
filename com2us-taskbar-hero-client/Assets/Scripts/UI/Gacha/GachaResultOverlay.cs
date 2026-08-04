@@ -217,6 +217,8 @@ namespace TaskbarHero.Client.UI.Gacha
             }
             if (_skipButton != null)
             {
+                // 스킵 판(딤)은 상황에 따라 다른 소리를 직접 내므로 전역 클릭음에서 제외한다.
+                UiClickSound.Suppress(_skipButton);
                 _skipButton.onClick.RemoveAllListeners();
                 _skipButton.onClick.AddListener(OnSkipClick);
             }

@@ -61,6 +61,44 @@ namespace TaskbarHero.ClientEditor
             { SoundId.HitFlesh, "sfx_hit_flesh" },
             { SoundId.HitArmor, "sfx_hit_armor" },
             { SoundId.AllyDeath, "sfx_ally_death" },
+            { SoundId.MonsterDeath, "sfx_monster_death" },
+            { SoundId.LevelUp, "sfx_levelup" },
+            { SoundId.RewardGet, "sfx_reward_get" },
+
+            { SoundId.KnightBasic, "sfx_knight_basic" },
+            { SoundId.KnightShieldChargeStart, "sfx_knight_shield_charge_start" },
+            { SoundId.KnightPowerStrike, "sfx_knight_power_strike" },
+            { SoundId.KnightRage, "sfx_knight_rage" },
+
+            { SoundId.ArcherBowShot, "sfx_archer_bow_shot" },
+            { SoundId.ArcherArrowImpact, "sfx_archer_arrow_impact" },
+            { SoundId.ArcherMultiShot, "sfx_archer_multi_shot" },
+
+            { SoundId.MageFireball, "sfx_mage_fireball" },
+            { SoundId.MageFrostNova, "sfx_mage_frost_nova" },
+            { SoundId.MageLightningBolt, "sfx_mage_lightning_bolt" },
+
+            { SoundId.SlayerBasic, "sfx_slayer_basic" },
+            { SoundId.SlayerLeap, "sfx_slayer_leap" },
+            { SoundId.SlayerGroundSlam, "sfx_slayer_ground_slam" },
+            { SoundId.SlayerBerserk, "sfx_slayer_berserk" },
+            { SoundId.SlayerCleave, "sfx_slayer_cleave" },
+
+            { SoundId.MonAttack, "sfx_mon_attack" },
+            { SoundId.BossRoar, "sfx_boss_roar" },
+
+            { SoundId.ItemEquip, "sfx_item_equip" },
+            { SoundId.GoldSpend, "sfx_gold_spend" },
+            { SoundId.UpgradeSuccess, "sfx_upgrade_success" },
+            { SoundId.CubeCombine, "sfx_cube_combine" },
+            { SoundId.RewardClaim, "sfx_reward_claim" },
+
+            { SoundId.GachaPullSingle, "sfx_gacha_pull_single" },
+            { SoundId.GachaPullMulti, "sfx_gacha_pull_multi" },
+            { SoundId.GachaSlotReveal, "sfx_gacha_slot_reveal" },
+            { SoundId.GachaGrade3, "sfx_gacha_grade3" },
+            { SoundId.GachaGrade4, "sfx_gacha_grade4" },
+            { SoundId.GachaGrade5, "sfx_gacha_grade5" },
         };
 
         [MenuItem("TaskbarHero/Sound/사운드 DB 빌드")]

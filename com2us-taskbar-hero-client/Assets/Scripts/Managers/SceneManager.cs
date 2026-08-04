@@ -52,6 +52,9 @@ namespace TaskbarHero.Client.Managers
                 return;
             }
 
+            // 씬 전환음(사운드 정의서 §4.2). 로드 직전에 울려야 소리가 끊기지 않는다
+            // (SoundManager는 DontDestroyOnLoad라 씬이 바뀌어도 재생이 이어진다).
+            SoundManager.Sfx(SoundId.SceneTransition);
             USceneManager.LoadScene(sceneName);
             SceneLoaded?.Invoke(sceneName);
         }
@@ -83,6 +86,7 @@ namespace TaskbarHero.Client.Managers
         private IEnumerator LoadSceneRoutine(string sceneName)
         {
             IsLoading = true;
+            SoundManager.Sfx(SoundId.SceneTransition); // 비동기 로드도 같은 전환음으로 시작한다(§4.2)
             LoadProgressChanged?.Invoke(0f);
 
             var operation = USceneManager.LoadSceneAsync(sceneName);

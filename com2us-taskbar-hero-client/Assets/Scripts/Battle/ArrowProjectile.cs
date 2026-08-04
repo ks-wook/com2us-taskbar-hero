@@ -1,4 +1,5 @@
 using UnityEngine;
+using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.Battle
 {
@@ -45,6 +46,8 @@ namespace TaskbarHero.Client.Battle
             if (dist <= step)
             {
                 transform.position = tp;
+                // 화살 명중음 — 도달 콜백이 곧 명중 시점이다(사운드 정의서 §5.3·§9.3).
+                SoundManager.Sfx(SoundId.ArcherArrowImpact);
                 _onHit?.Invoke();
                 Destroy(gameObject);
                 return;

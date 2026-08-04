@@ -610,7 +610,12 @@ namespace TaskbarHero.Client.UI
         {
             if (StageStateOf(_openRegion, node.Stage) != StageState.Locked)
             {
+                SoundManager.Sfx(SoundId.UiSlotSelect); // 노드 선택음(사운드 정의서 §8)
                 SetSelected(node.Stage);
+            }
+            else
+            {
+                SoundManager.Sfx(SoundId.UiError); // 잠긴 스테이지 클릭(§8)
             }
         }
 

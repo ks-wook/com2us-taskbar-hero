@@ -136,6 +136,10 @@ namespace TaskbarHero.Client.Managers
 
         private void WireRuntime()
         {
+            // 이 두 버튼은 전용 확인/취소음을 직접 재생하므로 전역 클릭음에서 제외한다(두 소리가 겹치지 않게).
+            UiClickSound.Suppress(_okButton);
+            UiClickSound.Suppress(_cancelButton);
+
             if (_okButton != null) _okButton.onClick.AddListener(OnOkClicked);
             if (_cancelButton != null) _cancelButton.onClick.AddListener(OnCancelClicked);
         }

@@ -426,6 +426,9 @@ namespace TaskbarHero.Client.Battle
         /// 좌하단 피벗·큰 스프라이트를 몸통 중심에 맞춰 스케일·정렬하고, 재생이 끝나면 자동 파괴된다.</summary>
         private void PlayLevelUpEffect(int characterId)
         {
+            // 레벨업음은 글로우 프레임 배선과 무관하게 울린다(사운드 정의서 §5.1).
+            SoundManager.Sfx(SoundId.LevelUp);
+
             if (levelUpFrames == null || levelUpFrames.Length == 0 || battle == null)
             {
                 return;

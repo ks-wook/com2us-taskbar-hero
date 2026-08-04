@@ -25,6 +25,7 @@ namespace TaskbarHero.Client.Managers
             Mail,
             Attendance,
             Trade,
+            Gacha,
             Settings,
         }
 
@@ -51,6 +52,8 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private GameObject attendancePanelPrefab;
         [Tooltip("Assets/Prefabs/UI/TradePanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject tradePanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/GachaPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject gachaPanelPrefab;
         [Tooltip("Assets/Prefabs/UI/SettingsPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject settingsPanelPrefab;
 
@@ -243,6 +246,22 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
+        /// <summary>뽑기(가챠) 패널을 표시한다.</summary>
+        public void ShowGacha() => Show(PanelType.Gacha);
+
+        /// <summary>뽑기(가챠) 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleGacha()
+        {
+            if (Current == PanelType.Gacha)
+            {
+                Hide(PanelType.Gacha);
+            }
+            else
+            {
+                Show(PanelType.Gacha);
+            }
+        }
+
         /// <summary>환경설정 패널을 표시한다.</summary>
         public void ShowSettings() => Show(PanelType.Settings);
 
@@ -287,9 +306,12 @@ namespace TaskbarHero.Client.Managers
         /// <summary>지정한 패널을 숨긴다.</summary>
         public void Hide(PanelType type)
         {
-            // 닫힘 사운드는 넣지 않는다 — 패널을 자주 여닫는 조작이라 소리가 과하다(열림음만 유지).
             if (_instances.TryGetValue(type, out var panel) && panel != null)
             {
+                if (panel.activeSelf)
+                {
+                    SoundManager.Sfx(SoundId.UiPanelClose); // 열림음과 짝이 되는 닫힘음(사운드 정의서 §4.1)
+                }
                 panel.SetActive(false);
             }
 
@@ -369,6 +391,8 @@ namespace TaskbarHero.Client.Managers
                     return attendancePanelPrefab;
                 case PanelType.Trade:
                     return tradePanelPrefab;
+                case PanelType.Gacha:
+                    return gachaPanelPrefab;
                 case PanelType.Settings:
                     return settingsPanelPrefab;
                 default:
