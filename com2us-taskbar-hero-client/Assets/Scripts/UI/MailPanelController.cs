@@ -512,6 +512,7 @@ namespace TaskbarHero.Client.UI
             NetworkManager.Instance.PostToGame<MailClaimResponse>("/api/game/mail/claim", req, resp =>
             {
                 Debug.Log($"[Mail] 수령 완료 mailId={mailId}");
+                PlayClaimSound();
                 var data = resp != null ? resp.data : null;
                 ShowGainedRewards(data != null ? data.gained : null);
                 ApplyClaimResult(data != null ? data.inventoryDelta : null, data != null ? data.balance : null);
@@ -537,6 +538,7 @@ namespace TaskbarHero.Client.UI
                     return;
                 }
                 Debug.Log($"[Mail] 일괄 수령 완료 {data.claimedMailIds.Count}건");
+                PlayClaimSound();
                 ShowGainedRewards(data.gained);
                 ApplyClaimResult(data.inventoryDelta, data.balance);
             }, OnClaimError);
@@ -545,6 +547,9 @@ namespace TaskbarHero.Client.UI
         /// <summary>지급된 첨부(골드·아이템)를 <b>스테이지 클리어 연출 UI를 재활용</b>해 보여준다
         /// (<see cref="StageClearOverlay.ShowRewards"/> — 팡파레 + 보상 칸이 왼쪽부터 하나씩 등장).
         /// 첨부가 없는 안내 메일을 수령한 경우엔 보여줄 보상이 없으므로 기존 텍스트 모달로 안내한다.</summary>
+        /// <summary>메일 수령 성공음(사운드 정의서 §6 — 단건·일괄 수령 공용).</summary>
+        private static void PlayClaimSound() => SoundManager.Sfx(SoundId.RewardClaim);
+
         private static void ShowGainedRewards(MailGainedDto gained)
         {
             var rewards = ToStageRewards(gained);

@@ -103,6 +103,13 @@ namespace TaskbarHero.Client.UI
                     return "등록 가격이 허용 범위(기준가 ±20%)를 벗어났습니다.";
                 case ErrorCode.TradeListingLimitExceeded:
                     return "판매 등록은 최대 10개까지 가능합니다.";
+                // 가챠(뽑기) 도메인(gacha 기획서 §7)
+                case ErrorCode.GachaNotFound:
+                    return "존재하지 않는 뽑기입니다. 클라이언트를 갱신해 주세요.";
+                case ErrorCode.GachaNotAvailable:
+                    return "지금은 진행 중인 뽑기가 아닙니다.";
+                case ErrorCode.GachaPoolEmpty:
+                    return "뽑기 데이터에 문제가 있어 취소되었습니다(골드는 차감되지 않습니다).";
                 default:
                     return string.IsNullOrEmpty(fallback) ? ("오류가 발생했습니다. (" + code + ")") : fallback;
             }

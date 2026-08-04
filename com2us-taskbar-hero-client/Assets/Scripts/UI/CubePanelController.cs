@@ -386,6 +386,7 @@ namespace TaskbarHero.Client.UI
         private void SwitchMode(Mode mode)
         {
             _mode = mode;
+            SoundManager.Sfx(SoundId.UiTab); // 탭 전환음(사운드 정의서 §4.1)
             _selCombine.Clear();
             _selDismantle.Clear();
             _selRecipe = 0;
@@ -606,6 +607,7 @@ namespace TaskbarHero.Client.UI
                     var data = resp != null ? resp.data : null;
                     string name = ItemName(data != null ? data.result.itemCode : 0);
                     int grade = data != null ? data.result.grade : 0;
+                    SoundManager.Sfx(SoundId.CubeCombine); // 합성 성공음(사운드 정의서 §6)
                     ShowResult("합성 완료", $"{name} (등급 {grade}) 획득!");
                     if (data != null)
                     {
@@ -651,6 +653,7 @@ namespace TaskbarHero.Client.UI
                 {
                     var data = resp != null ? resp.data : null;
                     long gold = data != null ? data.gold : 0;
+                    SoundManager.Sfx(SoundId.RewardGet); // 분해는 골드 획득이라 획득음을 쓴다(§8)
                     ShowResult("연금술 완료", $"골드 {GoldFormat.Highlight(gold)} 획득!");
                     if (data != null)
                     {
@@ -691,6 +694,9 @@ namespace TaskbarHero.Client.UI
                         var g = data.gained.items[0];
                         gained = $"{ItemName(g.itemCode)} x{g.quantity} 제작!";
                     }
+                    // 제작 성공음 + 골드 차감음(제작은 골드를 소모한다 — §6).
+                    SoundManager.Sfx(SoundId.CubeCombine);
+                    SoundManager.Sfx(SoundId.GoldSpend);
                     ShowResult("제작 완료", gained);
                     if (data != null)
                     {

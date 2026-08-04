@@ -914,7 +914,11 @@ namespace TaskbarHero.Client.UI
             Debug.Log($"[Skill] 레벨업 요청 char={characterId} skill={skillCode}");
             NetworkManager.Instance.PostToGame<ApiResponse>(
                 "/api/game/growth/skill/levelup", req,
-                _ => ReloadAndRefresh("스킬 레벨업 완료"),
+                _ =>
+                {
+                    SoundManager.Sfx(SoundId.UpgradeSuccess); // 스킬 레벨업 성공음(사운드 정의서 §6)
+                    ReloadAndRefresh("스킬 레벨업 완료");
+                },
                 OnActionError);
         }
 

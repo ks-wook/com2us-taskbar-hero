@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.UI
 {
@@ -31,6 +32,7 @@ namespace TaskbarHero.Client.UI
 
         private void OnEnable()
         {
+            SoundManager.Sfx(SoundId.TitleLogo); // 로고 인트로 등장음(사운드 정의서 §4.2)
             StartCoroutine(Run());
         }
 

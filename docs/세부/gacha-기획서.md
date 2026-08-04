@@ -588,7 +588,6 @@ pullType 검증(1|2 외 → InvalidRequest(1006))         # 횟수는 요청이 
   7) player_gacha_counter UPSERT
   8) player_gacha_pull 1행 + player_gacha_pull_item n행 INSERT
 COMMIT
-→ 커밋 후 Redis 가방 캐시 write-through 갱신(inventoryDelta 그대로 적용)
 → { gachaCode, pullId, pullType, pulledAt, results, cost, balance, counters, inventoryDelta }
 ```
 
@@ -622,7 +621,7 @@ COMMIT
 ### 6.8 동시성 · 캐시 · 로깅
 
 - **Redis 락을 두지 않는다(확정).** 경합 대상이 그 계정의 재화 행·카운터 행뿐이라 MySQL 행 잠금이 곧 직렬화다. 락을 얹으면 정합성은 그대로인데 TTL 만료·해제 실패·Redis 장애라는 실패 경계만 늘어난다(거래소가 구매·취소에 락을 두지 않는 것과 같은 판단 — [거래소 기획서](trade-기획서.md) 7.4).
-- **가방 캐시는 기존 write-through 규약을 그대로 따른다.** 커밋 후 `inventoryDelta`를 `inv:bag:{userId}`에 적용하고, 적용에 실패하면 키를 삭제한다([인벤토리 기획서](inventory-item-cube-기획서.md) 6.5). 가챠는 그 문서의 「갱신 주체」 목록에 추가되는 경로다.
+- **가방 조회 캐시는 없다.** 지급 결과는 커밋으로 끝이고, 클라이언트는 응답의 `inventoryDelta`로 자기 표시를 갱신한다. 서버가 커밋 후에 따로 갱신할 캐시가 없다([인벤토리 기획서](inventory-item-cube-기획서.md) 6.5).
 - **마스터 조회는 인메모리다.** `gacha_master` 계열은 기동 시 `MasterDataProvider`가 적재하므로 추첨 중 DB 조회가 없다. 참고 구현이 가챠 마스터를 Redis에 캐싱하는 단계는 본 프로젝트에 해당하지 않는다.
 - **로깅**([로깅 규칙](../공통/로깅-규칙.md)):
   - 성공한 뽑기는 **별도 정보 로그를 남기지 않는다.** `player_gacha_pull`이 이미 원장이고, 뽑기마다 로그를 찍으면 가장 빈번한 액션이 로그를 뒤덮는다.
@@ -666,7 +665,7 @@ COMMIT
 ## 9. 참고
 
 - [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) — 도메인 4.11(가챠), 4.4(인벤토리)
-- [인벤토리 / 아이템 / 큐브 기획서](inventory-item-cube-기획서.md) — 지급 아이템 적재·`inventoryDelta`(5.0)·가방 캐시(6.5)
+- [인벤토리 / 아이템 / 큐브 기획서](inventory-item-cube-기획서.md) — 지급 아이템 적재·`inventoryDelta`(5.0)·가방 조회에 캐시를 두지 않는 판단(6.5)
 - [마스터 데이터 기획서](master-data/master-data-기획서.md) — `gacha_master`·`gacha_grade_weight`·`gacha_item_pool`·`gacha_pity_rule`(5.13)
 - [마스터 데이터 값](master-data/master-data-값.md) — §12 가챠 값(미작성)
 - [소모품 아이템 / 계정 버프 기획서](consumable-buff-기획서.md) — 소모품은 가챠로만 확률 지급(4.3)

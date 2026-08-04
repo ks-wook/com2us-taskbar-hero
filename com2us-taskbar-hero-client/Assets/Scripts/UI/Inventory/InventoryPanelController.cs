@@ -578,6 +578,10 @@ namespace TaskbarHero.Client.UI
         /// 소모 골드·잔액·확장 후 용량을 공용 모달로 안내한다.</summary>
         private void OnExpandSuccess(ExpandResponse resp)
         {
+            // 확장 성공음 + 골드 차감음(사운드 정의서 §6 — 강화 계열과 같은 성공음을 쓴다).
+            SoundManager.Sfx(SoundId.UpgradeSuccess);
+            SoundManager.Sfx(SoundId.GoldSpend);
+
             long cost = 0, balance = 0;
             int capacity = 0;
             if (resp != null && resp.data != null)
@@ -1521,6 +1525,7 @@ namespace TaskbarHero.Client.UI
             NetworkManager.Instance.PostToGame<EquipResponse>("/api/game/inventory/equip", req, resp =>
             {
                 // 응답만으로 캐시를 맞춘다(재조회 없음) — 장착품은 가방에서 빠지고, 스왑된 장비는 서버가 알려준 칸으로.
+                SoundManager.Sfx(SoundId.ItemEquip); // 장착 성공음(사운드 정의서 §6)
                 Session.ApplyEquipResult(resp != null ? resp.data : null);
                 RefreshAfterInventoryChange();
             }, OnActionError);
@@ -1546,6 +1551,7 @@ namespace TaskbarHero.Client.UI
             NetworkManager.Instance.PostToGame<UnequipResponse>("/api/game/inventory/unequip", req, resp =>
             {
                 // 해제한 장비는 서버가 알려준 가방 칸(bagSlot)으로 되돌린다(재조회 없음).
+                SoundManager.Sfx(SoundId.ItemEquip); // 장착·해제 공용음(§6)
                 Session.ApplyUnequipResult(resp != null ? resp.data : null);
                 RefreshAfterInventoryChange();
             }, OnActionError);

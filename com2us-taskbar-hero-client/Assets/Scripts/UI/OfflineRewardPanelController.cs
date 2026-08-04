@@ -89,6 +89,8 @@ namespace TaskbarHero.Client.UI
                 Close();
                 return;
             }
+            // 오프라인 보상은 팝업이 뜨는 순간이 곧 수령이다(사운드 정의서 §6·§8).
+            SoundManager.Sfx(SoundId.RewardClaim);
             Populate(result);
         }
 

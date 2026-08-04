@@ -241,6 +241,7 @@ namespace TaskbarHero.Client.UI
                 return; // 이미 보유한 직업은 선택 차단
             }
             _selected = sc;
+            SoundManager.Sfx(SoundId.CharFocus); // 직업 슬롯 선택음(사운드 정의서 §4.2)
             SetAnchorsEnabled(false);      // 화면좌표 고정 해제(카메라 줌 반영)
             ShowOnlySelected(sc);          // 비선택 캐릭터 숨김
             if (_topUi != null) _topUi.SetActive(false); // 상단 로고 숨김
@@ -332,6 +333,13 @@ namespace TaskbarHero.Client.UI
         {
             // 생성 성공 → 생성된 캐릭터 포함 최신 세이브를 load로 다시 가져온다.
             Debug.Log("[CharacterSelect] 캐릭터 생성 성공 → 세이브 로드(/api/game/load)");
+            SoundManager.Sfx(SoundId.CharCreate); // 캐릭터 생성 성공음(§4.2)
+            // 2번째 이후 캐릭터는 골드를 소모하므로 차감음을 함께 울린다(§6).
+            if (Session.GameData != null && Session.GameData.characters != null &&
+                Session.GameData.characters.Count >= 1)
+            {
+                SoundManager.Sfx(SoundId.GoldSpend);
+            }
             var request = new AuthRequest { userId = Session.UserId, token = Session.Token };
             NetworkManager.Instance.PostToGame<LoadResponse>("/api/game/load", request, OnLoadedAfterCreate, OnCreateError);
         }

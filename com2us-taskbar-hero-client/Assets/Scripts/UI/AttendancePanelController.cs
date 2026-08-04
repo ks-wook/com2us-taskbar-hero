@@ -482,6 +482,7 @@ namespace TaskbarHero.Client.UI
                 _canClaim = false; // 오늘은 더 받을 수 없다(다음 조회에서 서버 판정으로 갱신)
                 var data = resp != null ? resp.data : null;
                 Debug.Log($"[Attendance] 출석 보상 획득 완료 day={(data != null ? data.day : 0)} mailId={(data != null ? data.mailId : 0)}");
+                SoundManager.Sfx(SoundId.RewardClaim); // 출석 도장 수령음(사운드 정의서 §6)
 
                 UpdateClaimButton();
                 MailNotifier.Refresh(); // 보상이 메일로 발급됐으므로 미수령 메일 레드닷을 즉시 갱신

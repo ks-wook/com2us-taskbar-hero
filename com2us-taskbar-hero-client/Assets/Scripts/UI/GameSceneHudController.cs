@@ -9,7 +9,7 @@ using TaskbarHero.Common.Dto;
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// GameScene 상시 HUD. <b>화면 하단 가로 중앙</b>에 기능 버튼(거래소·출석부·메일·편성·스테이지·가방·환경설정)을
+    /// GameScene 상시 HUD. <b>화면 하단 가로 중앙</b>에 기능 버튼(뽑기·거래소·출석부·메일·편성·스테이지·가방·환경설정)을
     /// 한 줄로 노출하고, ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
     /// 버튼 줄은 던전 배경 띠보다 아래(화면 최하단)에 놓여 배경 아트에 묻히지 않는다 —
     /// 배경 띠를 위로 띄우는 쪽은 <c>DungeonBattleBuilder</c>가 GameScene을 구울 때 처리한다.
@@ -38,6 +38,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite attendanceIcon; // 출석부
         [Tooltip("거래소 아이콘(Assets/Art/UI/Trade/거래소.png).")]
         [SerializeField] private Sprite tradeIcon;      // 거래소
+        [Tooltip("뽑기 아이콘(Assets/Art/Icon/뽑기.png).")]
+        [SerializeField] private Sprite gachaIcon;      // 뽑기(가챠)
         [Tooltip("환경설정 아이콘(Assets/Art/Icon/환경설정.png).")]
         [SerializeField] private Sprite settingsIcon;   // 환경설정
         [Tooltip("하단 아이콘 줄 뒷배경 프레임(Assets/Art/UI/ui_bg.png, 9-slice). 없으면 배경 없이 아이콘만 표시.")]
@@ -73,11 +75,13 @@ namespace TaskbarHero.Client.UI
         [Tooltip("접속 시 오늘자 출석 보상이 아직 남아 있으면 출석부 패널을 자동으로 연다.")]
         [SerializeField] private bool autoOpenAttendance = true;
 
-        // 하단 버튼 줄: 접히는 영역 안에서 오른쪽 끝부터 왼쪽으로 한 칸씩. GameScene 창은 정사각형이라
-        // 캔버스 가로가 약 1440 단위 — 버튼 7개 + 토글 버튼(합 1380)이 들어간다.
-        private const int MenuSlotCount = 7;
-        private const float MenuSlotStep = 180f;
-        private const float MenuButtonWidth = 160f;
+        // 하단 버튼 줄: 접히는 영역 안에서 오른쪽 끝부터 왼쪽으로 한 칸씩. 바는 전투 화면 밴드
+        // (GameViewLayout.GameWidth = 1440) 안에 놓이므로 칸 수 × 간격이 그 폭을 넘지 않아야 한다 —
+        // 뽑기를 더해 8칸이 되면서 종전 간격(180)으로는 1468이 되어 넘치므로 간격·버튼 폭을 함께 줄였다
+        // (7 × 164 + 152 + 48 = 1348 ≤ 1440).
+        private const int MenuSlotCount = 8;
+        private const float MenuSlotStep = 164f;
+        private const float MenuButtonWidth = 152f;
         private const float MenuButtonHeight = 150f;
         private const float MenuRowY = 28f;       // 화면 하단에서 띄우는 높이(던전 배경 띠 아래)
 
@@ -301,7 +305,7 @@ namespace TaskbarHero.Client.UI
             BuildMenuBackground(_menuArea);      // 아이콘보다 먼저 만들어 뒤에 깔리게 한다(자식 순서 = 그리기 순서)
             CreateMenuToggleButton(gameArea.transform, font); // 바가 아니라 전투 화면 밴드 직속(게임 화면 안쪽 우측에 배치)
 
-            // 접히는 영역 안에 한 줄로: 오른쪽부터 [환경설정] [가방] [스테이지] [편성] [메일] [출석부] [거래소].
+            // 접히는 영역 안에 한 줄로: 오른쪽부터 [환경설정] [가방] [스테이지] [편성] [메일] [출석부] [거래소] [뽑기].
             _menuButtons = new RectTransform[MenuSlotCount];
             CreateMenuButton(font, "SettingsButton", "환경설정", settingsIcon, 0, OnSettingsButton);
             var inventoryBtn = CreateMenuButton(font, "InventoryButton", "가방", inventoryIcon, 1, OnInventoryButton);
@@ -310,6 +314,7 @@ namespace TaskbarHero.Client.UI
             var mailBtn = CreateMenuButton(font, "MailButton", "메일", mailIcon, 4, OnMailButton);
             CreateMenuButton(font, "AttendanceButton", "출석부", attendanceIcon, 5, OnAttendanceButton);
             CreateMenuButton(font, "TradeButton", "거래소", tradeIcon, 6, OnTradeButton);
+            CreateMenuButton(font, "GachaButton", "뽑기", gachaIcon, 7, OnGachaButton);
 
             // 메일 버튼 우측 상단 레드닷: 아직 수령하지 않은 보상 첨부가 남은 메일이 있으면 표시(만료 전 수령 유도).
             RedDot.AttachTopRight((RectTransform)mailBtn.transform).Bind(RedDotConditions.HasUnclaimedMailReward);
@@ -799,6 +804,19 @@ namespace TaskbarHero.Client.UI
             if (UIManager.Instance != null)
             {
                 UIManager.Instance.ToggleTrade();
+            }
+            else
+            {
+                Debug.LogWarning("[HUD] UIManager 인스턴스를 찾을 수 없습니다.");
+            }
+        }
+
+        /// <summary>뽑기(가챠) 패널 토글(UIManager 위임).</summary>
+        private void OnGachaButton()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.ToggleGacha();
             }
             else
             {

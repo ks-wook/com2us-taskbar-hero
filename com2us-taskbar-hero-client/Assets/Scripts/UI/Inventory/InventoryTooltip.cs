@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.UI
 {
@@ -96,9 +97,15 @@ namespace TaskbarHero.Client.UI
         /// <summary>상세 정보를 채우고 커서 근처에 표시한다.</summary>
         public void Show(InventoryItemView.Display data, Vector2 screenPos)
         {
+            bool wasHidden = !gameObject.activeSelf;
             _hideAt = -1f;
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
+            if (wasHidden)
+            {
+                // 툴팁 표시음(사운드 정의서 §4.1). 같은 툴팁이 칸 사이를 옮겨 다닐 때는 울리지 않는다.
+                SoundManager.Sfx(SoundId.UiTooltip);
+            }
 
             _current = data;
             _nameText.text = data.name;

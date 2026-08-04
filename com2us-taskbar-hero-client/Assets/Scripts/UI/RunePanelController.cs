@@ -733,6 +733,7 @@ namespace TaskbarHero.Client.UI
         private void OnSelectRune(int runeCode)
         {
             _selectedRune = runeCode;
+            SoundManager.Sfx(SoundId.UiSlotSelect); // 룬 선택음(사운드 정의서 §8 공용음 매핑)
             SetMessage(string.Empty);
             RebuildTree();
             RefreshDetail();
@@ -764,6 +765,10 @@ namespace TaskbarHero.Client.UI
         /// 룬 강화는 가방을 바꾸지 않으므로 반영할 것이 이 둘뿐이며, 세이브를 재조회하지 않는다.</summary>
         private void ApplyUpgradeResult(RuneUpgradeResultData data, string message)
         {
+            // 강화 성공음 + 골드 차감음(사운드 정의서 §6).
+            SoundManager.Sfx(SoundId.UpgradeSuccess);
+            SoundManager.Sfx(SoundId.GoldSpend);
+
             if (data != null)
             {
                 Session.ApplyRuneLevel(data.runeCode, data.level);

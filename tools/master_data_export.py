@@ -332,6 +332,62 @@ def export_inventory_expand_cost(conn):
     } for r in rows]
 
 
+def export_gacha(conn):
+    """가챠 배너 + 자식 3종(등급 가중치 / 지급 후보 / 천장 규칙)을 배너 JSON에 중첩한다.
+
+    클라이언트는 이 번들로 배너 이름·이미지·비용·등급 확률·후보 목록·천장 기준을 그리고,
+    "지금 열려 있는가 · 내 천장이 얼마인가"만 서버(POST /api/game/gacha/banners)에서 받는다.
+    """
+    banners = q(conn, "SELECT * FROM gacha_master ORDER BY sort_order, gacha_code")
+    weights = q(conn, "SELECT * FROM gacha_grade_weight ORDER BY gacha_code, grade")
+    pools = q(conn, "SELECT * FROM gacha_item_pool ORDER BY gacha_code, grade, item_code")
+    pities = q(conn, "SELECT * FROM gacha_pity_rule ORDER BY gacha_code, grade, pity_type")
+
+    by_weight, by_pool, by_pity = {}, {}, {}
+    for w in weights:
+        by_weight.setdefault(_i(w["gacha_code"]), []).append({
+            "grade": _i(w["grade"]),
+            "weight": _i(w["weight"]),
+        })
+    for p in pools:
+        by_pool.setdefault(_i(p["gacha_code"]), []).append({
+            "grade": _i(p["grade"]),
+            "itemCode": _i(p["item_code"]),
+            "quantity": _i(p["quantity"]),
+        })
+    for r in pities:
+        by_pity.setdefault(_i(r["gacha_code"]), []).append({
+            "grade": _i(r["grade"]),
+            "pityType": _i(r["pity_type"]),
+            "threshold": _i(r["threshold"]),
+            "weightUp": _i(r["weight_up"]),
+            "weightUpMax": _i(r["weight_up_max"]),
+        })
+
+    result = []
+    for b in banners:
+        code = _i(b["gacha_code"])
+        result.append({
+            "gachaCode": code,
+            "name": b["name"],
+            "bannerImage": b["banner_image"],
+            "isActive": _i(b["is_active"]),
+            "openAt": _i(b["open_at"]),
+            "closeAt": _i(b["close_at"]),
+            "sortOrder": _i(b["sort_order"]),
+            "costCurrencyCode": _i(b["cost_currency_code"]),
+            "costSingle": _i(b["cost_single"]),
+            "costMulti": _i(b["cost_multi"]),
+            "multiCount": _i(b["multi_count"]),
+            "multiGuaranteedGrade": _i(b["multi_guaranteed_grade"]),
+            "pickupItemCode": _i(b["pickup_item_code"]),
+            "gradeWeights": by_weight.get(code, []),
+            "itemPool": by_pool.get(code, []),
+            "pityRules": by_pity.get(code, []),
+        })
+    return result
+
+
 # 파일명(테이블명) -> 추출 함수
 EXPORTERS = [
     ("equip_slot_master", export_equip_slot),
@@ -349,6 +405,7 @@ EXPORTERS = [
     ("attendance_master", export_attendance),
     ("character_create_cost", export_character_create_cost),
     ("inventory_expand_master", export_inventory_expand_cost),
+    ("gacha_master", export_gacha),
 ]
 
 
