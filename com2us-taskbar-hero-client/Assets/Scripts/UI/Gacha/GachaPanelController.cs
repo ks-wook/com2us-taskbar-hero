@@ -33,7 +33,8 @@ namespace TaskbarHero.Client.UI.Gacha
         private const float CanvasRefHeight = 1920f;
         // 좌측 패널 최대 폭(GameViewLayout.WidestLeftPanel과 같은 값)까지 쓴다 — 배너(620) + 정보 열(404)이 나란히 들어간다.
         private const float PanelWidth = 1120f;
-        private const float PanelHeight = 1180f;
+        // 배너 아래에 천장 게이지가 없어져(천장은 배너 안 텍스트로 옮겼다) 하단 줄까지만 담는 높이로 줄였다.
+        private const float PanelHeight = 1090f;
         private const float Inset = 36f;
 
         private const float TabWidth = 500f;      // gacha_btn_* 원본 512×160 비율
@@ -52,24 +53,26 @@ namespace TaskbarHero.Client.UI.Gacha
         private const float BannerStripHeight = 96f;
         private const float BannerPadding = 24f;
 
-        // 배너 좌측 하단 뽑기 버튼(세로로 쌓는다 — 배너 아트의 가운데·오른쪽을 가리지 않게).
-        private const float PullButtonWidth = 340f;
-        private const float PullButtonHeight = 116f;
-        private const float PullButtonGap = 12f;
+        // 배너 좌측 하단 뽑기 버튼 — 가로로 나란히 두고 **10연을 오른쪽**에 둔다(무게가 큰 상품이 뒤에 온다).
+        private const float PullButtonWidth = 260f;
+        private const float PullButtonHeight = 92f;
+        private const float PullButtonGap = 16f;
 
-        // 배너 우측 하단 '확률 보기' 버튼 → 확률 공시 팝업을 열고 닫는다(기본은 닫힘).
-        private const float ChanceButtonWidth = 240f;
-        private const float ChanceButtonHeight = 64f;
-        // 팝업은 '확률 보기' 버튼 바로 위(배너 우측)에서 펼쳐진다 — 좌측 하단 뽑기 버튼을 가리지 않는 크기·위치다.
+        // 천장 잔여 횟수는 10연 버튼 바로 위에 한 줄로 얹는다(게이지 없이 텍스트만).
+        private const float PityTextHeight = 36f;
+        private const float PityTextGap = 8f;
+
+        // '확률 보기' 버튼은 창 우측 상단(닫기 버튼 왼쪽)에 두고, 팝업은 그 아래로 펼쳐진다.
+        private const float ChanceButtonWidth = 200f;
+        private const float ChanceButtonHeight = 52f;
+        private const float ChanceButtonTop = 24f;
+        private const float ChanceButtonRight = 96f;   // 닫기 버튼(우측 24 + 폭 60) 왼쪽으로 비켜 놓는다
         private const float ChancePopupWidth = 500f;
         private const float ChancePopupHeight = 430f;
-        private const float ChancePopupGap = 12f;
+        private const float ChancePopupGap = 10f;
 
-        private const float PityTop = BannerBottom + 12f;               // 1011
-        private const float PityHeight = 80f;
-        private const float GaugeHeight = 22f;
-
-        private const float BottomRowTop = PityTop + PityHeight + 12f;  // 1103
+        // 배너 아래에는 하단 줄(기록 버튼 · 안내 메시지)만 남는다.
+        private const float BottomRowTop = BannerBottom + 12f;   // 1011
         private const float BottomRowHeight = 56f;
 
         private const int GoldCurrencyType = 1;   // 재화 타입 1 = 골드
@@ -104,7 +107,6 @@ namespace TaskbarHero.Client.UI.Gacha
         [SerializeField] private Image _bannerImage;
         [SerializeField] private Text _bannerFallbackName;
         [SerializeField] private GameObject _bannerStrip;
-        [SerializeField] private GameObject _pityBox;
         [SerializeField] private Text _periodText;
         [SerializeField] private Text _pickupText;
         [SerializeField] private Button _chanceButton;
@@ -113,7 +115,6 @@ namespace TaskbarHero.Client.UI.Gacha
         [SerializeField] private RectTransform _chanceContent;
         [SerializeField] private Button _chanceCloseButton;
         [SerializeField] private Text _pityText;
-        [SerializeField] private Image _pityGauge;
         [SerializeField] private Button _singleButton;
         [SerializeField] private Text _singleCostText;
         [SerializeField] private Button _multiButton;
@@ -351,10 +352,9 @@ namespace TaskbarHero.Client.UI.Gacha
             _bannerFallbackName.gameObject.SetActive(false);
 
             BuildBannerStrip(brt);
-            BuildPullButtons(brt);
-            BuildChanceToggle(brt);
-            BuildChancePopup(brt); // 마지막 자식 = 가장 위. '확률 보기' 버튼 위에서 펼쳐진다
-            BuildPityArea(root);
+            BuildPullButtons(brt);      // 좌측 하단: [1연] [10연] 가로 배치 + 그 위 천장 텍스트
+            BuildChanceToggle(root);    // 창 우측 상단(닫기 버튼 왼쪽)
+            BuildChancePopup(root);     // 마지막 자식 = 가장 위. '확률 보기' 버튼 아래로 펼쳐진다
 
             _historyButton = BuildTextButton(root, "HistoryButton", "뽑기 기록", 26,
                 new Vector2(0f, 1f), new Vector2(Inset, -BottomRowTop), new Vector2(220f, BottomRowHeight));
@@ -398,69 +398,107 @@ namespace TaskbarHero.Client.UI.Gacha
         }
 
         /// <summary>
-        /// 배너 <b>좌측 하단</b>에 1연·10연 뽑기 버튼을 세로로 쌓는다(10연을 위, 1연을 아래).
-        /// 세로로 쌓는 이유는 배너 아트의 가운데·오른쪽을 가리지 않기 위해서다.
+        /// 배너 <b>좌측 하단</b>에 1연·10연 뽑기 버튼을 <b>가로로 나란히</b> 두고(왼쪽 1연 · 오른쪽 10연),
+        /// 10연 버튼 <b>위</b>에 천장 잔여 횟수 한 줄을 얹는다. 10연이 오른쪽인 이유는 무게가 큰 상품을
+        /// 시선 흐름의 끝에 두기 위해서다.
         /// </summary>
         private void BuildPullButtons(RectTransform banner)
         {
-            _multiButton = BuildPullButton(banner, "MultiButton", "10연 뽑기",
-                PullButtonHeight + PullButtonGap + BannerPadding, out _multiCostText, out _multiGuaranteeText);
+            float multiX = BannerPadding + PullButtonWidth + PullButtonGap;
             _singleButton = BuildPullButton(banner, "SingleButton", "1연 뽑기",
-                BannerPadding, out _singleCostText, out _);
+                BannerPadding, out _singleCostText);
+            _multiButton = BuildPullButton(banner, "MultiButton", "10연 뽑기",
+                multiX, out _multiCostText);
+
+            // 10연 보장 안내 — 버튼이 작아져 안에 넣을 자리가 없으므로 버튼 오른쪽 빈 자리에 둔다.
+            // 천장 텍스트와 같이 반투명 판을 깔아 배너 아트 위에서도 읽히게 한다.
+            var guaranteeBackdrop = NewImage("GuaranteeBackdrop", banner, new Color(0f, 0f, 0f, 0.5f));
+            var brt = guaranteeBackdrop.rectTransform;
+            brt.anchorMin = brt.anchorMax = new Vector2(0f, 0f);
+            brt.pivot = new Vector2(0f, 0f);
+            brt.anchoredPosition = new Vector2(multiX + PullButtonWidth + 16f,
+                BannerPadding + (PullButtonHeight - PityTextHeight) * 0.5f);
+            brt.sizeDelta = new Vector2(320f, PityTextHeight);
+            guaranteeBackdrop.raycastTarget = false;
+
+            _multiGuaranteeText = NewText("GuaranteeText", brt, string.Empty, 22, TextAnchor.MiddleLeft);
+            _multiGuaranteeText.color = new Color(0.88f, 0.94f, 1f);
+            var grt = _multiGuaranteeText.rectTransform;
+            grt.anchorMin = Vector2.zero;
+            grt.anchorMax = Vector2.one;
+            grt.offsetMin = new Vector2(12f, 0f);
+            grt.offsetMax = new Vector2(-12f, 0f);
+
+            BuildPityText(banner, multiX);
         }
 
         /// <summary>
-        /// 뽑기 버튼 하나(제목 · 비용 · 보조 안내 3줄). <paramref name="bottom"/>은 배너 아래쪽에서 띄우는 높이다.
+        /// 10연 버튼 위에 얹는 천장 잔여 횟수 한 줄(게이지 없음). 아트 위 글자라 반투명 판을 깔아 가독성을 확보한다.
         /// </summary>
-        private Button BuildPullButton(RectTransform banner, string name, string label, float bottom,
-            out Text costText, out Text noteText)
+        private void BuildPityText(RectTransform banner, float multiX)
+        {
+            var backdrop = NewImage("PityBackdrop", banner, new Color(0f, 0f, 0f, 0.5f));
+            var rt = backdrop.rectTransform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 0f);
+            rt.pivot = new Vector2(0f, 0f);
+            rt.anchoredPosition = new Vector2(multiX, BannerPadding + PullButtonHeight + PityTextGap);
+            rt.sizeDelta = new Vector2(PullButtonWidth + 200f, PityTextHeight);
+            backdrop.raycastTarget = false;
+
+            _pityText = NewText("PityText", rt, string.Empty, 24, TextAnchor.MiddleLeft);
+            _pityText.color = new Color(0.92f, 0.96f, 1f);
+            _pityText.fontStyle = FontStyle.Bold;
+            var prt = _pityText.rectTransform;
+            prt.anchorMin = Vector2.zero;
+            prt.anchorMax = Vector2.one;
+            prt.offsetMin = new Vector2(12f, 0f);
+            prt.offsetMax = new Vector2(-12f, 0f);
+        }
+
+        /// <summary>
+        /// 뽑기 버튼 하나(제목 · 비용 2줄). <paramref name="left"/>은 배너 왼쪽에서 띄우는 거리다.
+        /// </summary>
+        private Button BuildPullButton(RectTransform banner, string name, string label, float left,
+            out Text costText)
         {
             var img = NewImage(name, banner, new Color(0.24f, 0.28f, 0.44f, 0.96f));
             ApplySliced(img, _buttonSprite);
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 0f); // 배너 좌측 하단 기준
             rt.pivot = new Vector2(0f, 0f);
-            rt.anchoredPosition = new Vector2(BannerPadding, bottom);
+            rt.anchoredPosition = new Vector2(left, BannerPadding);
             rt.sizeDelta = new Vector2(PullButtonWidth, PullButtonHeight);
 
-            var t = NewText("Label", rt, label, 32, TextAnchor.MiddleCenter);
+            var t = NewText("Label", rt, label, 28, TextAnchor.MiddleCenter);
             t.fontStyle = FontStyle.Bold;
             t.color = new Color(1f, 0.96f, 0.86f);
             var lrt = t.rectTransform;
             lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 1f);
             lrt.pivot = new Vector2(0.5f, 1f);
             lrt.anchoredPosition = new Vector2(0f, -12f);
-            lrt.sizeDelta = new Vector2(PullButtonWidth - 24f, 40f);
+            lrt.sizeDelta = new Vector2(PullButtonWidth - 20f, 34f);
 
-            costText = NewText("Cost", rt, string.Empty, 26, TextAnchor.MiddleCenter);
+            costText = NewText("Cost", rt, string.Empty, 24, TextAnchor.MiddleCenter);
             costText.fontStyle = FontStyle.Bold;
             costText.color = new Color(1f, 0.88f, 0.46f);
             var crt = costText.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 1f);
-            crt.pivot = new Vector2(0.5f, 1f);
-            crt.anchoredPosition = new Vector2(0f, -52f);
-            crt.sizeDelta = new Vector2(PullButtonWidth - 24f, 34f);
-
-            noteText = NewText("Note", rt, string.Empty, 20, TextAnchor.MiddleCenter);
-            noteText.color = new Color(0.82f, 0.92f, 1f, 0.95f);
-            var nrt = noteText.rectTransform;
-            nrt.anchorMin = nrt.anchorMax = new Vector2(0.5f, 0f);
-            nrt.pivot = new Vector2(0.5f, 0f);
-            nrt.anchoredPosition = new Vector2(0f, 8f);
-            nrt.sizeDelta = new Vector2(PullButtonWidth - 24f, 26f);
+            crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0f);
+            crt.pivot = new Vector2(0.5f, 0f);
+            crt.anchoredPosition = new Vector2(0f, 12f);
+            crt.sizeDelta = new Vector2(PullButtonWidth - 20f, 32f);
 
             return img.gameObject.AddComponent<Button>();
         }
 
-        /// <summary>배너 <b>우측 하단</b>의 '확률 보기' 버튼(확률 공시 팝업 토글).</summary>
-        private void BuildChanceToggle(RectTransform banner)
+        /// <summary>창 <b>우측 상단</b>(닫기 버튼 왼쪽)의 '확률 보기' 버튼(확률 공시 팝업 토글).</summary>
+        private void BuildChanceToggle(RectTransform root)
         {
-            var img = NewImage("ChanceButton", banner, new Color(0.20f, 0.24f, 0.38f, 0.96f));
+            var img = NewImage("ChanceButton", root, new Color(0.20f, 0.24f, 0.38f, 0.96f));
             ApplySliced(img, _buttonSprite);
             var rt = img.rectTransform;
-            rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f); // 배너 우측 하단 기준
-            rt.pivot = new Vector2(1f, 0f);
-            rt.anchoredPosition = new Vector2(-BannerPadding, BannerPadding);
+            rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f); // 창 우측 상단 기준
+            rt.pivot = new Vector2(1f, 1f);
+            rt.anchoredPosition = new Vector2(-ChanceButtonRight, -ChanceButtonTop);
             rt.sizeDelta = new Vector2(ChanceButtonWidth, ChanceButtonHeight);
 
             _chanceButtonLabel = NewText("Label", rt, "확률 보기", 26, TextAnchor.MiddleCenter);
@@ -474,17 +512,17 @@ namespace TaskbarHero.Client.UI.Gacha
         /// <summary>
         /// 등급 확률 공시 팝업(기본 숨김 — '확률 보기'를 눌렀을 때만 보인다).
         /// 값은 <b>번들 마스터</b>에서 읽으므로 서버 조회가 없다(기획서 §2 확률 공시).
-        /// 배너 <b>우측 하단의 '확률 보기' 버튼 바로 위</b>에서 펼쳐지므로 좌측 하단 뽑기 버튼을 가리지 않는다.
+        /// 우측 상단 '확률 보기' 버튼 <b>바로 아래</b>로 펼쳐지므로 좌측 하단 뽑기 버튼을 가리지 않는다.
         /// </summary>
-        private void BuildChancePopup(RectTransform banner)
+        private void BuildChancePopup(RectTransform root)
         {
-            var popup = NewImage("ChancePopup", banner, new Color(0.10f, 0.12f, 0.20f, 0.98f));
+            var popup = NewImage("ChancePopup", root, new Color(0.10f, 0.12f, 0.20f, 0.98f));
             ApplySliced(popup, _detailBackground);
             var rt = popup.rectTransform;
-            rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f); // 배너 우측 하단 기준
-            rt.pivot = new Vector2(1f, 0f);
-            rt.anchoredPosition = new Vector2(-BannerPadding,
-                BannerPadding + ChanceButtonHeight + ChancePopupGap);
+            rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f); // 창 우측 상단 기준
+            rt.pivot = new Vector2(1f, 1f);
+            rt.anchoredPosition = new Vector2(-Inset,
+                -(ChanceButtonTop + ChanceButtonHeight + ChancePopupGap));
             rt.sizeDelta = new Vector2(ChancePopupWidth, ChancePopupHeight);
             _chancePopup = popup.gameObject;
 
@@ -530,53 +568,6 @@ namespace TaskbarHero.Client.UI.Gacha
             layout.childForceExpandHeight = false;
 
             _chancePopup.SetActive(false);
-        }
-
-        /// <summary>천장 진행도 영역(설명 텍스트 + 게이지). 값은 서버 응답 <c>counters</c>로 채운다.</summary>
-        private void BuildPityArea(RectTransform root)
-        {
-            var box = NewImage("PityBox", root, new Color(0.12f, 0.14f, 0.22f, 0.92f));
-            ApplySliced(box, _boxBackground);
-            var rt = box.rectTransform;
-            rt.anchorMin = new Vector2(0f, 1f);
-            rt.anchorMax = new Vector2(1f, 1f);
-            rt.pivot = new Vector2(0.5f, 1f);
-            rt.offsetMin = new Vector2(Inset, 0f);
-            rt.offsetMax = new Vector2(-Inset, 0f);
-            rt.sizeDelta = new Vector2(rt.sizeDelta.x, PityHeight);
-            rt.anchoredPosition = new Vector2(0f, -PityTop);
-            box.raycastTarget = false;
-            _pityBox = box.gameObject;
-
-            _pityText = NewText("PityText", rt, string.Empty, 26, TextAnchor.MiddleLeft);
-            _pityText.color = new Color(0.90f, 0.94f, 1f);
-            var ptrt = _pityText.rectTransform;
-            ptrt.anchorMin = new Vector2(0f, 1f);
-            ptrt.anchorMax = new Vector2(1f, 1f);
-            ptrt.pivot = new Vector2(0.5f, 1f);
-            ptrt.offsetMin = new Vector2(22f, 0f);
-            ptrt.offsetMax = new Vector2(-22f, 0f);
-            ptrt.sizeDelta = new Vector2(ptrt.sizeDelta.x, 38f);
-            ptrt.anchoredPosition = new Vector2(0f, -12f);
-
-            // 게이지: 배경 트랙 위에 채움 이미지를 Filled로 얹는다.
-            var track = NewImage("GaugeTrack", rt, new Color(0f, 0f, 0f, 0.45f));
-            var trt = track.rectTransform;
-            trt.anchorMin = new Vector2(0f, 0f);
-            trt.anchorMax = new Vector2(1f, 0f);
-            trt.pivot = new Vector2(0.5f, 0f);
-            trt.offsetMin = new Vector2(22f, 0f);
-            trt.offsetMax = new Vector2(-22f, 0f);
-            trt.sizeDelta = new Vector2(trt.sizeDelta.x, GaugeHeight);
-            trt.anchoredPosition = new Vector2(0f, 16f);
-            track.raycastTarget = false;
-
-            _pityGauge = NewImage("GaugeFill", trt, new Color(1f, 0.78f, 0.34f, 1f));
-            _pityGauge.type = Image.Type.Filled;
-            _pityGauge.fillMethod = Image.FillMethod.Horizontal;
-            _pityGauge.fillAmount = 0f;
-            _pityGauge.raycastTarget = false;
-            Stretch(_pityGauge.rectTransform);
         }
 
         /// <summary>뽑기 기록 화면(최신순 커서 페이징. 10연 한 묶음이 한 줄).</summary>
@@ -1023,22 +1014,17 @@ namespace TaskbarHero.Client.UI.Gacha
             }
             if (counter == null || counter.pityThreshold <= 0)
             {
-                // 천장 규칙이 없는 배너(또는 하드 천장이 없는 등급)는 진행도를 그리지 않는다.
+                // 천장 규칙이 없는 배너(또는 하드 천장이 없는 등급)는 누적 횟수만 알린다.
                 _pityText.text = counter != null
                     ? $"누적 {counter.pityCount}회 (천장 없음)"
                     : "천장 없음";
-                if (_pityGauge != null) _pityGauge.fillAmount = 0f;
+                _pityText.color = new Color(0.92f, 0.96f, 1f);
                 return;
             }
 
-            float ratio = Mathf.Clamp01(counter.pityCount / (float)counter.pityThreshold);
-            if (_pityGauge != null)
-            {
-                _pityGauge.fillAmount = ratio;
-            }
-
-            string text = $"천장 {counter.pityCount} / {counter.pityThreshold}" +
-                          $" · 천장까지 {counter.remainingToPity}회";
+            // 게이지 없이 텍스트 한 줄로 알린다 — 남은 횟수를 앞세우고 진행도를 괄호로 덧붙인다.
+            string text = $"천장까지 {counter.remainingToPity}회" +
+                          $" ({counter.pityCount} / {counter.pityThreshold})";
             MasterDataManager.EnsureLoaded();
             var db = MasterDataManager.Db;
             int soft = db != null ? db.GachaPityThreshold(_selectedCode, counter.grade, SoftPityType) : 0;
@@ -1049,7 +1035,7 @@ namespace TaskbarHero.Client.UI.Gacha
             }
             else
             {
-                _pityText.color = new Color(0.90f, 0.94f, 1f);
+                _pityText.color = new Color(0.92f, 0.96f, 1f);
             }
             _pityText.text = text;
         }
@@ -1245,6 +1231,7 @@ namespace TaskbarHero.Client.UI.Gacha
             if (_mainRoot != null) _mainRoot.SetActive(false);
             if (_historyRoot != null) _historyRoot.SetActive(true);
             if (_tabRow != null) _tabRow.gameObject.SetActive(false);
+            HideChancePopup(); // 확률 팝업이 열려 있었으면 닫고 버튼 라벨도 되돌린다
             SetMessage(string.Empty);
             SoundManager.Sfx(SoundId.UiPanelOpen); // 기록 화면 표시(§8)
 
@@ -1387,10 +1374,11 @@ namespace TaskbarHero.Client.UI.Gacha
         /// <summary>배너가 하나도 없을 때 배너 화면 위젯을 감춘다(안내 문구만 남긴다).</summary>
         private void SetMainVisible(bool visible)
         {
-            // 배너 이미지를 끄면 그 자식(안내 띠·뽑기 버튼·확률 보기 버튼)도 함께 사라진다.
+            // 배너 이미지를 끄면 그 자식(안내 띠·뽑기 버튼·천장 텍스트)도 함께 사라진다.
             if (_bannerImage != null) _bannerImage.gameObject.SetActive(visible);
             if (_historyButton != null) _historyButton.gameObject.SetActive(visible);
-            if (_pityBox != null) _pityBox.SetActive(visible);
+            // '확률 보기'는 창 우측 상단(배너 밖)이라 따로 감춘다 — 배너가 없으면 보여 줄 확률도 없다.
+            if (_chanceButton != null) _chanceButton.gameObject.SetActive(visible);
             if (!visible)
             {
                 HideChancePopup();

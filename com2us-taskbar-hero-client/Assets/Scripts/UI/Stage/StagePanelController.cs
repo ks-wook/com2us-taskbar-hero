@@ -25,8 +25,14 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite pathConnector;  // ui_path_connector
         [SerializeField] private Sprite nameplateBar;   // ui_nameplate_bar
         [SerializeField] private Sprite mapBackground;  // dungeon_map_bg(월드맵)
-        [Tooltip("지역 스테이지 창 배경(Assets/Art/UI/modal_bg.png). 없으면 단색 패널로 폴백.")]
-        [SerializeField] private Sprite regionWindowBackground; // modal_bg(지역 창)
+        [Tooltip("지역 스테이지 창 기본 배경(Assets/Art/UI/modal_bg.png). 지역 배경이 없을 때만 쓰는 폴백.")]
+        [SerializeField] private Sprite regionWindowBackground; // modal_bg(지역 창 폴백)
+        [Tooltip("지역별 스테이지 창 배경(Assets/Art/Background/stage_ui_bg/stage_ui_bg_1~5.png). " +
+                 "인덱스 0 = 1지역(평원) … 4 = 5지역(묘지). 비어 있으면 위 기본 배경으로 폴백한다.")]
+        [SerializeField] private Sprite[] regionBackgrounds = new Sprite[0];
+        [Tooltip("지역 창 테두리(Assets/Art/UI/Trade/01_Frames_Panels/window_frame_hollow.png, 9-slice). " +
+                 "가운데가 비어 있어 배경 위에 액자처럼 얹힌다. 없으면 테두리 없이 배경만 보인다.")]
+        [SerializeField] private Sprite regionWindowFrame;
         [SerializeField] private Sprite iconCleared;    // stage_cleared(별) — 지역 전부 클리어
         [SerializeField] private Sprite iconInProgress; // stage_ing(해골) — 진행 중 지역
 
@@ -38,6 +44,10 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Text _regionTitle;
         [SerializeField] private Text _nameplateText;
         [SerializeField] private List<StageNodeView> _regionNodes = new List<StageNodeView>();
+        [Tooltip("지역 창 배경 이미지. 지역을 열 때 그 지역 배경으로 갈아 끼운다.")]
+        [SerializeField] private Image _windowPanel;
+        [Tooltip("노드 사이 경로선(9개 = 10노드를 잇는 한 줄 경로). 지역마다 위치·길이·각도를 다시 잡는다.")]
+        [SerializeField] private List<Image> _pathConnectors = new List<Image>();
         [SerializeField] private Button _enterButton;
         // 닫기(X)·뒤로(X) 버튼은 두지 않는다(미관상 제거) — 지역 창은 창 바깥(_windowDimButton) 클릭으로 지도에 돌아가고,
         // 패널 전체는 지도 바깥(_dimButton) 클릭으로 닫는다.
@@ -59,24 +69,81 @@ namespace TaskbarHero.Client.UI
         // 지역당 스테이지 수. 서버 GameServer/MasterData/StageCoords.StagesPerAct(=10)·stage_master와 같은 값이어야
         // 클리어 시퀀스((지역-1)×10 + 스테이지) 판정이 서버와 일치한다.
         private const int StagesPerRegion = 10;
-        private const int StageNodeColumns = 5;   // 한 줄에 5칸(위 줄 1~5, 아래 줄 6~10)
         private const int BossStage = 10;         // 각 지역 마지막(10) 스테이지가 보스
+        private const int PathCount = StagesPerRegion - 1; // 10노드를 한 줄로 잇는 경로선 수(9)
 
         private const float CanvasRefWidth = 1080f;
         private const float CanvasRefHeight = 1920f;
         private const float PanelWidth = 1040f;
         private const float PanelHeight = 580f;
 
-        // 지역 창(2단계). 스테이지가 3개에서 10개로 늘어 창을 넓히고 노드를 두 줄로 나눴다.
-        private const float RegionWindowWidth = 900f;
-        private const float RegionWindowHeight = 600f;
-        // 배경(modal_bg)은 나무 테두리가 두꺼워, 콘텐츠는 프레임 안쪽(대략 세로 0.14~0.86)에만 둔다.
-        private const float NodeLeftX = 0.16f;    // 노드 줄의 좌우 끝(창 폭 정규화)
-        private const float NodeRightX = 0.84f;
-        private const float TopRowY = 0.66f;      // 위 줄(1~5) · 아래 줄(6~10)의 세로 위치
-        private const float BottomRowY = 0.45f;
-        private const float NodeSize = 84f;
-        private const float BossNodeSize = 100f;  // 보스(10스테이지)는 조금 크게
+        // 지역 창(2단계). 배경이 지역별 풍경 아트(stage_ui_bg_*, 2816×1536)로 바뀌었으므로
+        // 창도 그 비율(1.833:1)에 맞춰 잡는다 — 비율이 어긋나면 풍경이 늘어난다.
+        // 폭은 우측 패널 여백(GameViewLayout.WidestRightPanel = 1040) 안에 들어가는 값이다.
+        private const float RegionWindowWidth = 990f;
+        private const float RegionWindowHeight = 540f;   // 990 / 540 = 1.8333 = 2816 / 1536
+        private const float NodeSize = 76f;
+        private const float BossNodeSize = 92f;   // 보스(10스테이지)는 조금 크게
+        private const float PathThickness = 14f;  // 노드를 잇는 경로선 굵기(px)
+
+        // 테두리(액자) 두께(UI px). 원본 9-slice 경계가 20px이라 그대로 쓰면 990×540 창에서 지나치게 얇다.
+        // 실제 배율은 BuildRegionFrame이 원본 경계 두께에서 계산한다(아트가 바뀌어도 두께가 유지된다).
+        private const float FrameThickness = 40f;
+
+        /// <summary>
+        /// 지역별 스테이지 노드 배치(창 기준 정규화 좌표, <b>y는 아래에서부터</b>). 지역마다 10개.
+        ///
+        /// <para><b>왜 지역마다 다른가</b> — 전에는 다섯 지역이 모두 같은 'ㄷ' 자(5칸 두 줄 뱀 모양)였다.
+        /// 배경이 지역별 풍경으로 바뀌었으므로 경로도 그 풍경을 따라가게 해 지역마다 다른 곳이라는 인상을 준다.</para>
+        ///
+        /// <para><b>배경 구도를 피해서 잡은 좌표다</b> — 위쪽(y &gt; 0.86)은 제목 이름표, 아래쪽(y &lt; 0.18)은
+        /// 스테이지 이름표·입장 버튼이 쓰므로 노드는 그 사이 띠에 둔다. 지역별로는
+        /// ③ 화산의 <b>가운데 분화구</b>(밝아서 노드가 묻힌다)를 비켜 둘레를 오르고,
+        /// ② 얼음은 오른쪽 <b>오두막</b>, ④ 사막은 오른쪽 <b>오아시스</b>가 보스 자리가 되도록 끝점을 맞췄다.</para>
+        /// </summary>
+        private static readonly Vector2[][] RegionNodeLayouts =
+        {
+            // 1 평원 — 완만한 S 곡선(강과 흙길을 따라 오르는 흐름)
+            new[]
+            {
+                new Vector2(0.10f, 0.29f), new Vector2(0.21f, 0.23f), new Vector2(0.33f, 0.27f),
+                new Vector2(0.43f, 0.36f), new Vector2(0.50f, 0.48f), new Vector2(0.44f, 0.60f),
+                new Vector2(0.34f, 0.70f), new Vector2(0.46f, 0.77f), new Vector2(0.62f, 0.78f),
+                new Vector2(0.78f, 0.70f),
+            },
+            // 2 얼음 — 지그재그 계단(설원을 오르내리며 오른쪽 오두막까지)
+            new[]
+            {
+                new Vector2(0.12f, 0.24f), new Vector2(0.26f, 0.34f), new Vector2(0.14f, 0.44f),
+                new Vector2(0.28f, 0.54f), new Vector2(0.16f, 0.64f), new Vector2(0.32f, 0.72f),
+                new Vector2(0.48f, 0.66f), new Vector2(0.62f, 0.72f), new Vector2(0.74f, 0.62f),
+                new Vector2(0.84f, 0.48f),
+            },
+            // 3 화산 — 분화구 둘레를 돌아 정상으로(가운데 밝은 화구를 피해 아래→왼쪽 사면→정상)
+            new[]
+            {
+                new Vector2(0.86f, 0.24f), new Vector2(0.72f, 0.23f), new Vector2(0.56f, 0.23f),
+                new Vector2(0.40f, 0.24f), new Vector2(0.24f, 0.27f), new Vector2(0.12f, 0.36f),
+                new Vector2(0.16f, 0.51f), new Vector2(0.26f, 0.61f), new Vector2(0.36f, 0.70f),
+                new Vector2(0.50f, 0.77f),
+            },
+            // 4 사막 — 모래언덕 물결(좌→우 파형)로 오른쪽 오아시스까지
+            new[]
+            {
+                new Vector2(0.10f, 0.30f), new Vector2(0.19f, 0.40f), new Vector2(0.28f, 0.48f),
+                new Vector2(0.38f, 0.42f), new Vector2(0.46f, 0.32f), new Vector2(0.55f, 0.27f),
+                new Vector2(0.64f, 0.32f), new Vector2(0.71f, 0.43f), new Vector2(0.77f, 0.55f),
+                new Vector2(0.86f, 0.66f),
+            },
+            // 5 묘지 — 바깥에서 안으로 감기는 나선(묘지를 헤매다 가운데에서 보스와 마주친다)
+            new[]
+            {
+                new Vector2(0.14f, 0.28f), new Vector2(0.30f, 0.23f), new Vector2(0.50f, 0.22f),
+                new Vector2(0.70f, 0.25f), new Vector2(0.84f, 0.36f), new Vector2(0.80f, 0.53f),
+                new Vector2(0.66f, 0.64f), new Vector2(0.48f, 0.70f), new Vector2(0.34f, 0.60f),
+                new Vector2(0.46f, 0.46f),
+            },
+        };
 
         private static readonly Color DarkText = new Color(0.20f, 0.14f, 0.06f, 1f);
 
@@ -275,13 +342,14 @@ namespace TaskbarHero.Client.UI
             _windowDimButton = dim.gameObject.AddComponent<Button>();
             _windowDimButton.transition = Selectable.Transition.None;
 
-            // 배경: 공용 모달 배경(modal_bg)을 그대로 써 다른 팝업과 톤을 맞춘다.
-            // 테두리 값이 없는 텍스처라 9-slice가 아니라 Simple로 늘려 쓴다(공용 모달 ModalController와 동일 취급).
+            // 배경: 지역을 열 때 그 지역 풍경 아트로 갈아 끼운다(ApplyRegionLayout). 여기서는 폴백을 넣어 둔다.
+            // 창 비율을 배경 아트 비율(1.833:1)에 맞춰 두었으므로 Simple로 늘려도 풍경이 왜곡되지 않는다.
             var panel = NewImage("WinPanel", winRt, regionWindowBackground);
             panel.type = Image.Type.Simple;
             panel.color = regionWindowBackground != null
                 ? Color.white
                 : new Color(0.10f, 0.12f, 0.18f, 0.98f); // 아트 미배선 시 단색 폴백
+            _windowPanel = panel;
             var prt = panel.rectTransform;
             prt.sizeDelta = new Vector2(RegionWindowWidth, RegionWindowHeight);
             // 지도(1단계)와 같은 쪽(오른쪽)에 붙여 두 단계가 같은 자리에서 열리게 한다.
@@ -295,21 +363,27 @@ namespace TaskbarHero.Client.UI
 
             // 지역 이름표(바 + 텍스트). 지도 제목과 같은 아트를 써 두 화면의 제목 표기를 통일한다.
             // 지도로 돌아가는 X(뒤로) 버튼은 두지 않는다(미관상 제거) — 창 바깥(WinDim) 클릭이 지도 복귀를 담당한다.
+            // 그리는 순서 = 자식 순서다. 경로·노드(아래) → 테두리 → 제목·이름표·입장(위) 순으로 만들어,
+            // 테두리가 노드를 덮되 제목·이름표는 테두리 위에 얹혀 <b>액자에 걸린 명패</b>처럼 보이게 한다.
+            BuildStageNodes(content);
+            BuildRegionFrame(content);
+
+            // 제목 명패는 테두리 위쪽 가장자리에 걸친다(테두리보다 나중에 그려 위에 온다).
             var titleBar = NewImage("RegionTitleBar", content, nameplateBar);
             titleBar.raycastTarget = false;
-            PlaceCenter(titleBar.rectTransform, 0.5f, 0.84f, 400f, 64f);
+            PlaceCenter(titleBar.rectTransform, 0.5f, 0.94f, 400f, 60f);
             _regionTitle = NewText("RegionTitle", titleBar.rectTransform, "", 32, TextAnchor.MiddleCenter);
             Stretch(_regionTitle.rectTransform);
 
-            BuildStageNodes(content);
-
+            // 스테이지 이름표와 입장 버튼은 창 맨 아래에 <b>나란히</b> 둔다.
+            // 위아래로 쌓으면 노드가 쓸 세로 공간을 두 줄이나 먹어 지역별 경로를 그릴 자리가 없다.
             var plate = NewImage("Nameplate", content, nameplateBar);
-            PlaceCenter(plate.rectTransform, 0.5f, 0.28f, 440f, 60f);
-            _nameplateText = NewText("NameplateText", plate.rectTransform, "", 28, TextAnchor.MiddleCenter);
+            PlaceCenter(plate.rectTransform, 0.34f, 0.09f, 400f, 56f);
+            _nameplateText = NewText("NameplateText", plate.rectTransform, "", 26, TextAnchor.MiddleCenter);
             Stretch(_nameplateText.rectTransform);
 
             var enter = NewImage("EnterButton", content, nodeUnlocked);
-            PlaceCenter(enter.rectTransform, 0.5f, 0.16f, 220f, 66f);
+            PlaceCenter(enter.rectTransform, 0.74f, 0.09f, 200f, 62f);
             var el = NewText("EnterLabel", enter.rectTransform, "입장", 30, TextAnchor.MiddleCenter);
             el.color = DarkText;
             Stretch(el.rectTransform);
@@ -319,39 +393,29 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>
-        /// 지역 창의 스테이지 노드 10개와 경로를 뱀 모양으로 배치한다 —
-        /// 위 줄에 1→5(좌→우), 아래 줄에 6→10(우→좌)을 두고, 두 줄은 우측 끝 세로 경로로 잇는다.
+        /// 지역 창의 스테이지 노드 10개와 경로선 9개를 만든다.
+        /// <para>위치는 여기서 정하지 않는다 — 지역마다 다르므로 <see cref="ApplyRegionLayout"/>이 지역을 열 때
+        /// <see cref="RegionNodeLayouts"/>로 다시 잡는다. 여기서는 개수만큼 만들어 두고 참조를 배선한다.</para>
         /// 경로선은 노드보다 먼저 만들어 노드 아래에 깔리게 한다(같은 부모에서는 자식 순서 = 그리기 순서).
         /// </summary>
         private void BuildStageNodes(RectTransform content)
         {
-            // 줄 안 노드가 5개라 좌우 여백을 남기고 균등 배치한다.
-            var fx = new float[StageNodeColumns];
-            for (int c = 0; c < StageNodeColumns; c++)
+            _pathConnectors.Clear();
+            for (int i = 0; i < PathCount; i++)
             {
-                fx[c] = NodeLeftX + (NodeRightX - NodeLeftX) * c / (StageNodeColumns - 1);
+                var img = NewImage($"Path{i}", content, pathConnector);
+                img.type = Image.Type.Simple;   // 각도가 있는 경로라 타일링하지 않고 늘려 쓴다
+                img.raycastTarget = false;
+                _pathConnectors.Add(img);
             }
-
-            // 각 줄의 인접 노드를 잇는 수평 경로 + 위/아래 줄을 잇는 우측 세로 경로.
-            int path = 0;
-            for (int c = 0; c < StageNodeColumns - 1; c++)
-            {
-                BuildWindowConnector(content, fx[c], fx[c + 1], TopRowY, path++);
-                BuildWindowConnector(content, fx[c], fx[c + 1], BottomRowY, path++);
-            }
-            BuildWindowConnectorVertical(content, fx[StageNodeColumns - 1], BottomRowY, TopRowY, path);
 
             for (int i = 0; i < StagesPerRegion; i++)
             {
                 int stage = i + 1;
-                bool topRow = i < StageNodeColumns;
-                // 아래 줄은 오른쪽에서 왼쪽으로 진행한다(6번이 5번 바로 아래).
-                int col = topRow ? i : StagesPerRegion - 1 - i;
-                float fy = topRow ? TopRowY : BottomRowY;
                 float size = stage == BossStage ? BossNodeSize : NodeSize; // 보스(10)는 조금 크게
 
                 var nodeGo = NewImage($"StageNode{stage}", content, nodeUnlocked);
-                PlaceCenter(nodeGo.rectTransform, fx[col], fy, size, size);
+                PlaceCenter(nodeGo.rectTransform, 0.5f, 0.5f, size, size); // 실제 위치는 ApplyRegionLayout이 잡는다
 
                 var hl = NewImage("Highlight", nodeGo.rectTransform, nodeHighlight);
                 hl.raycastTarget = false;
@@ -382,25 +446,105 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>지역 창의 인접 노드 사이 수평 경로 연결선.</summary>
-        private void BuildWindowConnector(RectTransform content, float fx1, float fx2, float fy, int idx)
+        /// <summary>
+        /// 지역 창 테두리(액자)를 만든다. 배경 아트가 프레임 없는 풍경 그림이라 창 경계가 화면에 그냥 잘려
+        /// 보이므로, <b>가운데가 빈 9-slice 프레임</b>을 배경 위에 얹어 창의 경계를 만든다.
+        /// <para>가운데는 그리지 않고(<c>fillCenter = false</c>) 클릭도 받지 않으므로(노드·버튼이 받아야 한다)
+        /// 순수한 장식이다. 두께는 <see cref="FrameThickness"/>가 되도록 <c>pixelsPerUnitMultiplier</c>를 계산한다
+        /// (이 값은 <b>낮출수록 경계가 두꺼워진다</b>).</para>
+        /// </summary>
+        private void BuildRegionFrame(RectTransform content)
         {
-            var img = NewImage($"Path{idx}", content, pathConnector);
-            img.type = Image.Type.Tiled;
-            img.raycastTarget = false;
-            PlaceBox(img.rectTransform, (fx1 + fx2) * 0.5f, fy, fx2 - fx1, 0.045f);
+            if (regionWindowFrame == null)
+            {
+                return; // 아트가 없으면 테두리 없이 배경만 보인다(기존 동작)
+            }
+            var frame = NewImage("WinFrame", content, regionWindowFrame);
+            frame.type = Image.Type.Sliced;
+            frame.fillCenter = false;          // 가운데(배경·노드)를 덮지 않는다
+            float srcBorder = Mathf.Max(regionWindowFrame.border.x, 1f); // 원본 9-slice 경계(20px)
+            frame.pixelsPerUnitMultiplier = srcBorder / FrameThickness;
+            frame.raycastTarget = false;        // 클릭은 아래의 노드·버튼이 받는다
+            frame.color = Color.white;
+            Stretch(frame.rectTransform);
         }
 
-        /// <summary>위/아래 줄을 잇는 세로 경로 연결선. 가로 타일 스프라이트를 90° 돌려 쓴다.</summary>
-        private void BuildWindowConnectorVertical(RectTransform content, float fx, float fy1, float fy2, int idx)
+        /// <summary>
+        /// 지역에 맞는 배경과 노드·경로 배치를 적용한다(지역을 열 때마다 호출).
+        /// <para>노드 10개는 <see cref="RegionNodeLayouts"/>의 좌표로 옮기고, 경로선 9개는 인접 노드를 잇도록
+        /// 중점·길이·각도를 다시 잡는다(대각선 경로를 쓰므로 회전이 필요하다). 오브젝트를 만들거나 버리지 않고
+        /// 이미 있는 것을 다시 배치하므로, 지역을 여닫아도 쓰레기가 생기지 않는다.</para>
+        /// </summary>
+        private void ApplyRegionLayout(int region)
         {
-            var img = NewImage($"Path{idx}", content, pathConnector);
-            img.type = Image.Type.Tiled;
-            img.raycastTarget = false;
-            var rt = img.rectTransform;
-            // 회전은 크기 계산 뒤 적용해야 하므로, 먼저 '가로 막대'로 잡고 90° 돌린다.
-            PlaceCenter(rt, fx, (fy1 + fy2) * 0.5f, RegionWindowHeight * (fy2 - fy1), RegionWindowHeight * 0.045f);
-            rt.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            // 배경: 지역 아트가 있으면 갈아 끼우고, 없으면 기본(모달) 배경으로 폴백한다.
+            if (_windowPanel != null)
+            {
+                var bg = regionBackgrounds != null && region >= 1 && region <= regionBackgrounds.Length
+                    ? regionBackgrounds[region - 1]
+                    : null;
+                if (bg == null)
+                {
+                    bg = regionWindowBackground;
+                }
+                _windowPanel.sprite = bg;
+                _windowPanel.color = bg != null ? Color.white : new Color(0.10f, 0.12f, 0.18f, 0.98f);
+            }
+
+            var layout = LayoutFor(region);
+            foreach (var node in _regionNodes)
+            {
+                if (node == null)
+                {
+                    continue;
+                }
+                int index = Mathf.Clamp(node.Stage - 1, 0, layout.Length - 1);
+                float size = node.Stage == BossStage ? BossNodeSize : NodeSize;
+                PlaceCenter((RectTransform)node.transform, layout[index].x, layout[index].y, size, size);
+            }
+
+            for (int i = 0; i < _pathConnectors.Count; i++)
+            {
+                var img = _pathConnectors[i];
+                if (img == null)
+                {
+                    continue;
+                }
+                if (i + 1 >= layout.Length)
+                {
+                    img.gameObject.SetActive(false);
+                    continue;
+                }
+                img.gameObject.SetActive(true);
+                PlacePath(img.rectTransform, layout[i], layout[i + 1]);
+            }
+        }
+
+        /// <summary>지역 번호(1~5)의 노드 배치. 표에 없는 번호는 1지역 배치로 폴백한다.</summary>
+        private static Vector2[] LayoutFor(int region)
+        {
+            int index = region - 1;
+            return index >= 0 && index < RegionNodeLayouts.Length
+                ? RegionNodeLayouts[index]
+                : RegionNodeLayouts[0];
+        }
+
+        /// <summary>
+        /// 두 노드(정규화 좌표)를 잇는 경로선을 배치한다 — 중점에 놓고 길이는 두 점 거리, 각도는 두 점의 기울기다.
+        /// 창 중앙을 기준으로 픽셀 좌표를 계산하므로 대각선·수직 어느 방향이든 같은 코드로 처리된다.
+        /// </summary>
+        private static void PlacePath(RectTransform rt, Vector2 a, Vector2 b)
+        {
+            Vector2 pa = new Vector2(a.x * RegionWindowWidth, a.y * RegionWindowHeight);
+            Vector2 pb = new Vector2(b.x * RegionWindowWidth, b.y * RegionWindowHeight);
+            Vector2 center = new Vector2(RegionWindowWidth, RegionWindowHeight) * 0.5f;
+
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.localRotation = Quaternion.identity;         // 길이를 재기 전에 회전을 초기화한다
+            rt.sizeDelta = new Vector2(Vector2.Distance(pa, pb), PathThickness);
+            rt.anchoredPosition = (pa + pb) * 0.5f - center;
+            rt.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(pb.y - pa.y, pb.x - pa.x) * Mathf.Rad2Deg);
         }
 
         // ── 런타임 배선 ──
@@ -543,6 +687,9 @@ namespace TaskbarHero.Client.UI
             {
                 _regionTitle.text = $"{RegionNames[region - 1]} 지역";
             }
+
+            // 지역별 배경·경로 배치를 먼저 적용한 뒤 해금 상태를 그린다.
+            ApplyRegionLayout(region);
 
             int frontier = -1;
             foreach (var node in _regionNodes)
