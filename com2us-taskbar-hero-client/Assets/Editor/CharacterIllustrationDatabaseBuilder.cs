@@ -44,27 +44,35 @@ namespace TaskbarHero.ClientEditor
         /// <summary>
         /// 일러스트별 얼굴 중심(normalized, <b>y는 위에서부터</b>).
         ///
-        /// <para><b>2026-08-05 편집본(배경 제거 + 좌우 크롭) 기준으로 다시 측정한 값이다.</b> 그림마다 좌우로
-        /// 잘라낸 폭이 달라 <c>x</c>가 전부 바뀌었고, 기사(여)·슬레이어(남)는 아예 다른 고해상도 원화로 교체됐다.
-        /// <c>y</c>는 캐릭터가 그림 위쪽에 붙어 있어 크롭이 상단으로 clamp되므로 프레이밍에 거의 영향이 없다.</para>
+        /// <para><b>2026-08-05 편집본(배경 제거 + 좌우 크롭) 기준 값이며, 편성창 파티 카드를 보면서
+        /// 8종 전부 눈으로 맞춘 결과다.</b> 그림마다 좌우로 잘라낸 폭이 달라 <c>x</c>가 전부 다르고,
+        /// <c>y</c>도 이제 <b>전 종이 clamp 범위 안</b>(<c>cropY</c> 0.45~0.54)에 들어와 실제로 프레이밍에 반영된다
+        /// (이전 값들은 <c>cropY</c>가 상단으로 clamp돼 <c>y</c>를 무엇으로 두든 결과가 같았다).
+        /// 마법사 남·여도 원화 구도가 갈려 값을 분리했다.</para>
         ///
-        /// <para><b>다시 맞추는 법</b> — 편성창을 띄우지 않고도 검증할 수 있다.
-        /// <c>TeamListController.BuildFaceIllustration</c>의 크롭 계산(<c>cropW = cropH × (이미지높이/이미지폭) ×
-        /// SlotWindowAspect</c>, <c>cropX = faceX − cropW/2</c>, <c>cropY = 1 − faceY − cropH×(1−FaceInCrop)</c>,
-        /// 둘 다 0~1로 clamp)을 그대로 적용해 잘라낸 대지를 만들어 눈으로 확인하고 <c>x</c>를 조정한다.
-        /// 얼굴이 프레임 오른쪽으로 치우쳐 잘리면 <c>x</c>를 키운다.</para>
+        /// <para><b>다시 맞추는 법(권장)</b> — 편성창을 플레이 모드로 띄우고 파티 카드의
+        /// <c>…/Slot_N/Window/Illust</c>를 인스펙터에서 끌어 맞춘 뒤, 그 rect를 크롭 수식의 역산으로 되돌려
+        /// 이 표에 적는다. 창(<c>Window</c>) 기준으로
+        /// <c>cropW = 창폭/일러스트폭</c>, <c>cropX = (창좌 − 일러스트좌)/일러스트폭</c>,
+        /// <c>faceX = cropX + cropW/2</c>, <c>faceY = 1 − cropY − cropH×(1−FaceInCrop)</c>다
+        /// (<c>FaceInCrop = 0.34</c>). 파티 카드는 세션 캐릭터로 그려지므로 서버 없이
+        /// <c>Session.SetGameData</c>에 더미 캐릭터를 넣고 <c>TeamListController.Refresh()</c>만 불러도 된다.</para>
+        ///
+        /// <para><b>계산으로 검증하려면</b> — <c>TeamListController.BuildFaceIllustration</c>의 정방향 계산
+        /// (<c>cropW = cropH × (이미지높이/이미지폭) × SlotWindowAspect</c>, <c>cropX = faceX − cropW/2</c>,
+        /// <c>cropY = 1 − faceY − cropH×(1−FaceInCrop)</c>, 둘 다 0~1로 clamp)을 그대로 적용해 잘라낸 대지를
+        /// 만들어 눈으로 확인한다. 얼굴이 프레임 오른쪽으로 치우쳐 잘리면 <c>x</c>를 키운다.</para>
         /// </summary>
         private static readonly Dictionary<string, Vector2> FaceAnchors = new Dictionary<string, Vector2>
         {
-            { "Knight_Male", new Vector2(0.460f, 0.120f) },
-            { "Knight_Female", new Vector2(0.575f, 0.110f) },
-            { "Archer_Male", new Vector2(0.470f, 0.120f) },
-            { "Archer_Female", new Vector2(0.555f, 0.110f) },
-            // 마법사는 남·여 일러스트의 구도가 같아 한 값을 두 성별에 함께 쓴다.
-            { "Mage_Male", new Vector2(0.470f, 0.140f) },
-            { "Mage_Female", new Vector2(0.470f, 0.140f) },
-            { "Slayer_Male", new Vector2(0.605f, 0.150f) },
-            { "Slayer_Female", new Vector2(0.500f, 0.140f) },
+            { "Knight_Male", new Vector2(0.500f, 0.197f) },
+            { "Knight_Female", new Vector2(0.575f, 0.217f) },
+            { "Archer_Male", new Vector2(0.439f, 0.156f) },
+            { "Archer_Female", new Vector2(0.451f, 0.245f) },
+            { "Mage_Male", new Vector2(0.559f, 0.199f) },
+            { "Mage_Female", new Vector2(0.555f, 0.204f) },
+            { "Slayer_Male", new Vector2(0.643f, 0.187f) },
+            { "Slayer_Female", new Vector2(0.563f, 0.199f) },
         };
 
         /// <summary>표시할 크롭 높이(이미지 높이 대비). 얼굴 좌표의 ±0.02 오차에도 얼굴이 프레임에 남는 여유값.</summary>

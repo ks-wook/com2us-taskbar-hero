@@ -15,6 +15,7 @@ namespace TaskbarHero.ClientEditor
     /// - MailPanel.prefab → MailPanelController._itemSlotPrefab (우편함 첨부)
     /// - InventoryPanel.prefab → InventoryPanelController._itemSlotPrefab (가방 칸·장비 부위 칸)
     /// - CubePanel.prefab → CubePanelController._itemSlotPrefab (합성·분해·제작·강화 타일)
+    /// - GachaPanel.prefab → GachaPanelController._itemSlotPrefab (천장 픽업 아이템 칸)
     /// - InventoryPanel.prefab → InventoryTooltip._backgroundSprite (인벤토리 툴팁 배경 통일)
     /// 메뉴: TaskbarHero/UI/아이템 슬롯·상세 팝업 배선
     /// </summary>
@@ -28,6 +29,7 @@ namespace TaskbarHero.ClientEditor
         private const string MailPanelPath = "Assets/Prefabs/UI/MailPanel.prefab";
         private const string InventoryPanelPath = "Assets/Prefabs/UI/InventoryPanel.prefab";
         private const string CubePanelPath = "Assets/Prefabs/UI/CubePanel.prefab";
+        private const string GachaPanelPath = "Assets/Prefabs/UI/GachaPanel.prefab";
 
         [MenuItem("TaskbarHero/UI/아이템 슬롯·상세 팝업 배선")]
         public static void Build()
@@ -37,9 +39,10 @@ namespace TaskbarHero.ClientEditor
             WireMailPanel(prefab);
             WireSlotPrefabField<InventoryPanelController>(InventoryPanelPath, prefab);
             WireSlotPrefabField<CubePanelController>(CubePanelPath, prefab);
+            WireSlotPrefabField<TaskbarHero.Client.UI.Gacha.GachaPanelController>(GachaPanelPath, prefab);
             WireInventoryTooltip();
             AssetDatabase.SaveAssets();
-            Debug.Log("[ItemSlotBuilder] 완료: 아이템 슬롯 프리팹 생성 + 클리어 연출/메일/인벤토리/큐브 배선.");
+            Debug.Log("[ItemSlotBuilder] 완료: 아이템 슬롯 프리팹 생성 + 클리어 연출/메일/인벤토리/큐브/뽑기 배선.");
         }
 
         /// <summary>패널 프리팹의 컨트롤러가 가진 <c>_itemSlotPrefab</c> 필드에 공용 슬롯 프리팹을 배선한다
