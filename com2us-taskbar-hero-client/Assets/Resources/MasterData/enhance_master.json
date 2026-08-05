@@ -1,0 +1,62 @@
+[
+  {
+    "enhanceLevel": 1,
+    "cost": 1000,
+    "currencyType": 1,
+    "statMultiplier": 1.05
+  },
+  {
+    "enhanceLevel": 2,
+    "cost": 2000,
+    "currencyType": 1,
+    "statMultiplier": 1.1
+  },
+  {
+    "enhanceLevel": 3,
+    "cost": 4000,
+    "currencyType": 1,
+    "statMultiplier": 1.15
+  },
+  {
+    "enhanceLevel": 4,
+    "cost": 7000,
+    "currencyType": 1,
+    "statMultiplier": 1.2
+  },
+  {
+    "enhanceLevel": 5,
+    "cost": 11000,
+    "currencyType": 1,
+    "statMultiplier": 1.25
+  },
+  {
+    "enhanceLevel": 6,
+    "cost": 16000,
+    "currencyType": 1,
+    "statMultiplier": 1.3
+  },
+  {
+    "enhanceLevel": 7,
+    "cost": 23000,
+    "currencyType": 1,
+    "statMultiplier": 1.35
+  },
+  {
+    "enhanceLevel": 8,
+    "cost": 32000,
+    "currencyType": 1,
+    "statMultiplier": 1.4
+  },
+  {
+    "enhanceLevel": 9,
+    "cost": 45000,
+    "currencyType": 1,
+    "statMultiplier": 1.45
+  },
+  {
+    "enhanceLevel": 10,
+    "cost": 65000,
+    "currencyType": 1,
+    "statMultiplier": 1.5
+  }
+]

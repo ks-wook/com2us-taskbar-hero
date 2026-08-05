@@ -8,10 +8,16 @@ namespace TaskbarHero.ClientEditor
     /// <summary>
     /// 캐릭터 선택 패널(CharacterSelectPanel.prefab)에 class_master 기본 능력치 블록을 심는 도구.
     /// 기존 계층(Title·Description·Select/Back 버튼·픽셀 스프라이트)은 유지하고 위치만 재배치한 뒤,
-    /// 'StatsHeader' + 'StatRadar'(5각형 레이더 + 꼭짓점 라벨/수치)를 다시 생성한다
+    /// 'StatRadar'(5각형 레이더 + 꼭짓점 라벨/수치)를 다시 생성한다
     /// (멱등 — 재실행 시 기존 블록 제거 후 재생성).
     /// 표시 능력치는 <see cref="ClassStatInfo.DisplayKinds"/>(체력·공격력·공격속도·이동속도·방어력) 5종이며
     /// 치명확률·치명피해는 표시하지 않는다.
+    ///
+    /// <para>레이아웃은 <b>제목 → 설명 → 레이더 → 뒤로/선택 버튼</b> 순이다(위에서부터).
+    /// 캔버스가 Screen Space - Camera인 이유는 선택 캐릭터가 이 패널 위에 그려질 수 있어야 하기 때문이다
+    /// (<see cref="ConfigureCanvas"/>). 다만 캐릭터는 패널 왼쪽 바깥에 세우므로 글자를 덮지 않는다 —
+    /// 그 배치 근거는 <see cref="TaskbarHero.Client.UI.CharacterSelectManager"/> 상단 주석에 있다.</para>
+    ///
     /// 패널 크기는 그대로 둔다(1920x1080 기준 CanvasScaler 논리 높이가 약 360px이라 더 키우면 화면을 벗어남).
     /// 메뉴: TaskbarHero/UI/캐릭터 선택 패널 능력치 배선
     /// </summary>
@@ -19,9 +25,9 @@ namespace TaskbarHero.ClientEditor
     {
         private const string PrefabPath = "Assets/Prefabs/UI/CharacterSelectPanel.prefab";
 
-        private const float RadarCenterY = 178f;  // 패널 상단에서 레이더 중심까지의 거리
-        private const float RadarRadius = 34f;    // 바깥 링 반지름
-        private const float LabelRadius = 52f;    // 꼭짓점 라벨(이름+수치) 중심까지의 거리
+        private const float RadarCenterY = 194f;   // 패널 상단에서 레이더 중심까지의 거리
+        private const float RadarRadius = 34f;     // 바깥 링 반지름
+        private const float LabelRadius = 52f;     // 꼭짓점 라벨(이름+수치) 중심까지의 거리
         private const float LabelWidth = 44f;
         private const float LabelHeight = 24f;
 
@@ -44,6 +50,7 @@ namespace TaskbarHero.ClientEditor
                     return;
                 }
 
+                ConfigureCanvas(root);
                 Relayout(panel);
                 var radar = BuildRadarBlock(panel, out var valueTexts);
                 WireController(root, radar, valueTexts);
@@ -59,7 +66,34 @@ namespace TaskbarHero.ClientEditor
             }
         }
 
-        /// <summary>능력치 블록 자리를 만들기 위해 제목·설명·버튼을 재배치한다(패널 크기는 유지).</summary>
+        /// <summary>
+        /// 패널 캔버스를 <b>Screen Space - Camera</b>로 바꾼다.
+        ///
+        /// <para><b>왜 필요한가</b> — Overlay 캔버스는 정렬 순서와 무관하게 항상 월드 스프라이트 위에 그려지므로,
+        /// 선택한 캐릭터를 이 패널 위에 세울 방법이 없다(캐릭터가 패널 뒤로 숨는다). 카메라 스페이스로 바꾸면
+        /// 캔버스가 스프라이트와 같은 기준(sortingLayer → sortingOrder)으로 정렬된다.</para>
+        ///
+        /// 정렬 순서 0은 배경 캔버스(-100)보다 위, 선택 캐릭터(100)보다 아래다.
+        /// 씬 카메라 연결은 프리팹이 씬을 참조할 수 없어 런타임에 <c>CharacterSelectManager</c>가 한다.
+        /// </summary>
+        private static void ConfigureCanvas(GameObject root)
+        {
+            var canvas = root.GetComponent<Canvas>();
+            if (canvas == null)
+            {
+                Debug.LogWarning("[CharacterSelectUiBuilder] 루트에 Canvas가 없어 렌더 모드 설정을 건너뜁니다.");
+                return;
+            }
+
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.planeDistance = 50f; // 배경 캔버스(100)보다 카메라 쪽
+            canvas.sortingOrder = 0;
+        }
+
+        /// <summary>
+        /// 제목·설명·버튼을 재배치한다(패널 크기는 유지). 설명은 제목 바로 아래에 놓아 직업 소개를 먼저 읽히게 하고,
+        /// 능력치 레이더는 그 아래(<see cref="RadarCenterY"/>), 뒤로/선택 버튼은 맨 아래 한 줄에 나란히 둔다.
+        /// </summary>
         private static void Relayout(RectTransform panel)
         {
             var title = panel.Find("Title") as RectTransform;
@@ -74,12 +108,13 @@ namespace TaskbarHero.ClientEditor
             var description = panel.Find("Description") as RectTransform;
             if (description != null)
             {
-                description.anchoredPosition = new Vector2(0f, -42f);
-                description.sizeDelta = new Vector2(130f, 52f);
+                description.anchoredPosition = new Vector2(0f, -61f);
+                description.sizeDelta = new Vector2(130f, 42.7f);
                 var text = description.GetComponent<Text>();
                 if (text != null)
                 {
-                    text.fontSize = 11;
+                    text.fontSize = 10;
+                    text.alignment = TextAnchor.UpperCenter;
                     text.verticalOverflow = VerticalWrapMode.Overflow; // 설명이 길어도 잘리지 않게
                 }
             }
@@ -87,34 +122,28 @@ namespace TaskbarHero.ClientEditor
             var select = panel.Find("SelectButton") as RectTransform;
             if (select != null)
             {
-                select.anchoredPosition = new Vector2(0f, 54f);
-                select.sizeDelta = new Vector2(112f, 42f);
+                select.anchoredPosition = new Vector2(34.85f, 15.7f);
+                select.sizeDelta = new Vector2(60.29f, 33.19f);
             }
 
             var back = panel.Find("BackButton") as RectTransform;
             if (back != null)
             {
-                back.anchoredPosition = new Vector2(0f, 12f);
-                back.sizeDelta = new Vector2(112f, 38f);
+                back.anchoredPosition = new Vector2(-30.35f, 15.7f);
+                back.sizeDelta = new Vector2(60.71f, 33.19f);
             }
         }
 
         /// <summary>
-        /// '기본 능력치' 헤더와 5각형 레이더(축별 이름 + 수치 라벨)를 생성한다(기존 블록은 제거).
+        /// 5각형 레이더(축별 이름 + 수치 라벨)를 생성한다(기존 블록은 제거).
         /// 꼭짓점 순서는 <see cref="ClassStatInfo.DisplayKinds"/>와 같고, 맨 위에서 시계 방향으로 배치된다.
+        /// 축 라벨이 무엇을 가리키는지 그 자체로 드러나므로 '기본 능력치' 헤더는 두지 않는다(공간 절약).
         /// </summary>
         private static StatRadarChart BuildRadarBlock(RectTransform panel, out Text[] valueTexts)
         {
-            DestroyIfExists(panel, "StatsHeader");
-            DestroyIfExists(panel, "Stats");      // 구버전(7행 게이지) 블록 제거
+            DestroyIfExists(panel, "StatsHeader"); // 구버전 헤더 제거
+            DestroyIfExists(panel, "Stats");       // 구버전(7행 게이지) 블록 제거
             DestroyIfExists(panel, "StatRadar");
-
-            var header = CreateText(panel, "StatsHeader", "기본 능력치", 11, FontStyle.Bold,
-                new Color(0.68f, 0.65f, 0.56f), TextAnchor.MiddleCenter);
-            header.anchorMin = header.anchorMax = new Vector2(0.5f, 1f);
-            header.pivot = new Vector2(0.5f, 1f);
-            header.anchoredPosition = new Vector2(0f, -98f);
-            header.sizeDelta = new Vector2(130f, 14f);
 
             // 레이더 본체(스프라이트 없이 메시로 그리는 Graphic).
             var chartRect = CreateRect(panel, "StatRadar");

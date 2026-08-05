@@ -19,11 +19,30 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Camera cam;
         [SerializeField] private GameObject selectPanelPrefab;
 
+        // ── 화면 배치 ───────────────────────────────────────────────────────────────
+        // 좌: 큰 일러스트(주인공) + 그 아래 성별 버튼 │ 중: 선택 캐릭터(SPUM) │ 우: 정보 패널
+        //
+        // 일러스트와 캐릭터는 <b>겹쳐도 된다</b> — 캐릭터 정렬 순서를 올려 두어(SelectedSortingOrder) 위에 그려진다.
+        // 반드시 지켜야 하는 선은 하나뿐이다:
+        //   · <b>패널 텍스트 최좌측 x ≈ 0.756</b>(레이더의 '방어력' 라벨) — 캐릭터 오른쪽 끝이 이보다 커지면 글자를 덮는다.
+        //   · 캐릭터 최대 우측 돌출(발 기준, zoomSize 3.4)은 0.185로 8종 중 기사(여)가 가장 크다.
+        //   → focusScreen.x 상한 = 0.756 − 0.185 = <b>0.571</b>.
+        // 캐릭터를 키우거나(zoomSize↓) 오른쪽으로 옮길 때 이 상한을 넘지 않는지 확인할 것.
+
         [Header("줌 설정")]
-        [SerializeField] private float zoomSize = 3f;
+        [Tooltip("선택 시 카메라 orthographicSize. 값이 클수록 캐릭터가 작게 보인다.")]
+        [SerializeField] private float zoomSize = 3.4f;
         [SerializeField] private float zoomDuration = 0.4f;
-        [Tooltip("줌인 시 선택 캐릭터가 위치할 화면 정규화 좌표(발밑 기준).")]
-        [SerializeField] private Vector2 focusScreen = new Vector2(0.3f, 0.42f);
+        [Tooltip("줌인 시 선택 캐릭터가 위치할 화면 정규화 좌표(발밑 기준). x 상한 0.571 — 위 배치 주석 참고.")]
+        [SerializeField] private Vector2 focusScreen = new Vector2(0.551f, 0.20f);
+
+        [Header("좌측 일러스트 · 성별 선택")]
+        [Tooltip("캐릭터 일러스트의 화면 정규화 위치. 그림의 아래변 중앙이 이 지점에 온다.")]
+        [SerializeField] private Vector2 illustrationScreen = new Vector2(0.306f, 0.140f);
+        [Tooltip("일러스트 크기(캔버스 단위). 그림 비율은 preserveAspect로 유지되므로 실제 표시 크기는 높이(y)가 정한다.")]
+        [SerializeField] private Vector2 illustrationSize = new Vector2(1098f, 710f);
+        [Tooltip("성별 토글 줄의 화면 정규화 위치(줄의 상단 중앙 기준).")]
+        [SerializeField] private Vector2 genderRowScreen = new Vector2(0.334f, 0.12f);
 
         private CharacterSelectPanelController _panel;
         private Vector3 _defaultCamPos;
@@ -34,12 +53,17 @@ namespace TaskbarHero.Client.UI
         private SelectableCharacter[] _characters;
         private GameObject _topUi;
 
-        // 성별 선택(캐릭터 발밑 토글). 선택 중인 직업의 외형만 바꾸며 스탯·비용에는 영향이 없다.
+        // 성별 선택(좌측 하단 토글). 선택 중인 직업의 외형만 바꾸며 스탯·비용에는 영향이 없다.
         private int _gender = (int)CharacterGender.Male;
         private GameObject _genderRoot;      // 토글 UI 캔버스(선택 중에만 노출)
         private Button _maleButton;
         private Button _femaleButton;
+        private Image _illustration;         // 성별 버튼 위에 세우는 직업·성별 일러스트
         private GameObject _variant;         // 선택 캐릭터를 반대 성별 프리팹으로 교체해 띄운 인스턴스
+
+        // 선택 중인 캐릭터를 우측 정보 패널 위에 그리기 위해 올려 둔 정렬 순서(해제 시 원래 값으로 복원).
+        private UnityEngine.Rendering.SortingGroup _raisedSorting;
+        private int _raisedSortingOrder;
 
         private void Awake()
         {
@@ -61,6 +85,7 @@ namespace TaskbarHero.Client.UI
             if (selectPanelPrefab != null)
             {
                 var go = Instantiate(selectPanelPrefab);
+                WirePanelCanvas(go);
                 _panel = go.GetComponent<CharacterSelectPanelController>();
                 if (_panel != null)
                 {
@@ -77,6 +102,27 @@ namespace TaskbarHero.Client.UI
             {
                 CreateBackButton();
             }
+        }
+
+        /// <summary>
+        /// 선택 패널 캔버스를 Screen Space - Camera로 살려낸다 — 씬 카메라를 연결하고 렌더 모드를 다시 지정한다.
+        ///
+        /// <para>프리팹은 씬 카메라를 참조할 수 없어 런타임 배선이 필요하다. 그리고 카메라가 비어 있는 동안
+        /// <c>Canvas.renderMode</c>는 프리팹에 저장된 값과 무관하게 <b>Overlay로 읽힌다</b> — 그래서
+        /// "카메라 모드일 때만 배선"하는 식의 조건 검사는 절대 통과하지 못한다(카메라를 넣어야 모드가 살아나는데
+        /// 모드가 살아야 카메라를 넣는 순환). 조건 없이 카메라 → 모드 순서로 지정한다.
+        /// 이 배선이 빠지면 패널이 Overlay로 그려져 정렬 순서와 무관하게 선택 캐릭터를 덮는다.</para>
+        /// </summary>
+        private void WirePanelCanvas(GameObject panelRoot)
+        {
+            var canvas = panelRoot.GetComponent<Canvas>();
+            if (canvas == null)
+            {
+                return;
+            }
+
+            canvas.worldCamera = cam;
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
         }
 
         /// <summary>좌측 상단 '뒤로가기' 버튼을 만들어 GameScene으로 복귀한다(게임 안에서 캐릭터 추가로 진입한 경우 전용).</summary>
@@ -248,6 +294,7 @@ namespace TaskbarHero.Client.UI
 
             // 성별은 클릭한 프리팹의 외형 성별에서 시작한다(선택 직후 외형이 튀지 않도록).
             _gender = sc.Gender > 0 ? sc.Gender : (int)CharacterGender.Male;
+            RaiseCharacterSorting(sc.gameObject, remember: true); // 우측 정보 패널 위에 세운다
             ShowGenderToggle(true);
 
             // 공격 애니메이션은 여기서 재생하지 않는다 — 성별을 바꿀 때만 1회 재생한다(ApplyGenderAppearance).
@@ -267,6 +314,7 @@ namespace TaskbarHero.Client.UI
         private void Deselect()
         {
             _selected = null;
+            RestoreCharacterSorting();
             ShowGenderToggle(false);
             if (_panel != null) _panel.Show(false);
 
@@ -380,7 +428,7 @@ namespace TaskbarHero.Client.UI
             return gender == (int)CharacterGender.Female ? "여" : "남";
         }
 
-        /// <summary>줌인된 캐릭터 발밑에 '남 / 여' 토글 UI를 만든다(최초 1회 생성 후 재사용).</summary>
+        /// <summary>화면 좌측 하단에 '남 / 여' 토글 UI와 그 위의 캐릭터 일러스트를 만든다(최초 1회 생성 후 재사용).</summary>
         private void EnsureGenderToggle()
         {
             if (_genderRoot != null)
@@ -398,11 +446,14 @@ namespace TaskbarHero.Client.UI
             scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.matchWidthOrHeight = 0.5f;
 
-            // 캐릭터의 발밑(focusScreen)보다 조금 아래에 가로로 배치 — 화면 비율이 바뀌어도 캐릭터를 따라간다.
+            // 일러스트를 먼저 만들어 성별 버튼보다 뒤에 그린다. 둘 다 각자의 화면 정규화 좌표에 고정하므로
+            // 화면 비율이 바뀌어도 좌측 구도가 유지된다.
+            _illustration = CreateIllustration(canvasGo.transform);
+
             var rowGo = new GameObject("GenderRow", typeof(RectTransform));
             rowGo.transform.SetParent(canvasGo.transform, false);
             var rowRt = (RectTransform)rowGo.transform;
-            rowRt.anchorMin = rowRt.anchorMax = new Vector2(focusScreen.x, Mathf.Max(0.02f, focusScreen.y - 0.055f));
+            rowRt.anchorMin = rowRt.anchorMax = genderRowScreen;
             rowRt.pivot = new Vector2(0.5f, 1f);
             rowRt.anchoredPosition = Vector2.zero;
             rowRt.sizeDelta = new Vector2(300f, 76f);
@@ -413,6 +464,53 @@ namespace TaskbarHero.Client.UI
                 new Vector2(76f, 0f), (int)CharacterGender.Female);
 
             _genderRoot = canvasGo;
+        }
+
+        /// <summary>
+        /// 화면 좌측에 선택 캐릭터 일러스트를 띄울 Image를 만든다(그림은 선택·성별 전환 때 채운다).
+        /// 그림의 <b>아래변 중앙</b>(pivot y=0)을 <see cref="illustrationScreen"/>에 맞추므로,
+        /// 그림마다 세로 비율이 달라도 발밑 선이 일정하게 유지된다.
+        /// </summary>
+        private Image CreateIllustration(Transform parent)
+        {
+            var go = new GameObject("Illustration", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            go.transform.SetAsFirstSibling(); // 성별 버튼보다 먼저(=뒤에) 그린다
+
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = illustrationScreen;
+            rt.pivot = new Vector2(0.5f, 0f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = illustrationSize;
+
+            var image = go.GetComponent<Image>();
+            image.preserveAspect = true; // 일러스트가 가로로 늘어나지 않게
+            image.raycastTarget = false; // 뒤쪽 캐릭터 클릭을 막지 않게
+            image.enabled = false;       // 스프라이트를 채우기 전까지는 흰 사각형이 보이지 않게
+            return image;
+        }
+
+        /// <summary>
+        /// 선택한 직업·성별에 해당하는 일러스트를 좌측에 표시한다.
+        /// 등록된 그림이 없으면(일러스트 DB 미배선) 이미지를 꺼서 빈 사각형이 남지 않게 한다.
+        /// </summary>
+        private void UpdateIllustration()
+        {
+            if (_illustration == null)
+            {
+                return;
+            }
+
+            if (_selected != null &&
+                CharacterIllustrationDatabase.TryGetIllustration(_selected.ClassCode, _gender, out var entry))
+            {
+                _illustration.sprite = entry.sprite;
+                _illustration.enabled = true;
+                return;
+            }
+
+            _illustration.sprite = null;
+            _illustration.enabled = false;
         }
 
         /// <summary>성별 토글 버튼 1개를 만든다(배경 이미지 + 라벨, 클릭 시 그 성별로 전환).</summary>
@@ -446,13 +544,14 @@ namespace TaskbarHero.Client.UI
             return button;
         }
 
-        /// <summary>성별 토글 UI를 표시/숨김한다(캐릭터 선택 중에만 노출).</summary>
+        /// <summary>성별 토글 UI와 일러스트를 표시/숨김한다(캐릭터 선택 중에만 노출).</summary>
         private void ShowGenderToggle(bool visible)
         {
             if (visible)
             {
                 EnsureGenderToggle();
                 UpdateGenderButtons();
+                UpdateIllustration();
             }
             if (_genderRoot != null)
             {
@@ -460,7 +559,7 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>선택 성별을 바꾸고(같은 값이면 무시) 캐릭터 외형을 그 성별 프리팹으로 교체한다.</summary>
+        /// <summary>선택 성별을 바꾸고(같은 값이면 무시) 캐릭터 외형과 좌측 일러스트를 그 성별로 교체한다.</summary>
         private void SetGender(int gender)
         {
             if (_selected == null || _gender == gender)
@@ -469,8 +568,15 @@ namespace TaskbarHero.Client.UI
             }
             _gender = gender;
             UpdateGenderButtons();
+            UpdateIllustration();
             ApplyGenderAppearance();
         }
+
+        /// <summary>
+        /// 선택 중인 캐릭터의 정렬 순서. 우측 정보 패널 캔버스(sortingOrder 0)보다 커야 패널 위에 그려진다
+        /// (배경 캔버스 -100 &lt; 패널 0 &lt; 선택 캐릭터 100 &lt; 모달·로딩 Overlay).
+        /// </summary>
+        private const int SelectedSortingOrder = 100;
 
         /// <summary>'남' 버튼 배경색(파랑).</summary>
         private static readonly Color MaleButtonColor = new Color(0.22f, 0.45f, 0.88f, 0.98f);
@@ -541,8 +647,45 @@ namespace TaskbarHero.Client.UI
             var t = _selected.transform;
             _variant = Instantiate(prefab, t.position, t.rotation);
             _variant.transform.localScale = t.localScale; // SPUM은 scale.x 부호로 좌우를 뒤집는다
+            RaiseCharacterSorting(_variant, remember: false); // 교체 외형도 패널 위에 그린다(임시라 복원 불필요)
             _selected.gameObject.SetActive(false);
             PlayAttackOnce(_variant);
+        }
+
+        /// <summary>
+        /// 캐릭터 외형의 정렬 순서를 <see cref="SelectedSortingOrder"/>로 올려 우측 정보 패널
+        /// (Screen Space - Camera 캔버스, sortingOrder 0) 위에 그려지게 한다.
+        /// remember면 원래 값을 기억해 뒀다가 선택 해제 시 <see cref="RestoreCharacterSorting"/>으로 되돌린다.
+        /// </summary>
+        private void RaiseCharacterSorting(GameObject character, bool remember)
+        {
+            if (character == null)
+            {
+                return;
+            }
+
+            var group = character.GetComponentInChildren<UnityEngine.Rendering.SortingGroup>(includeInactive: true);
+            if (group == null)
+            {
+                return;
+            }
+
+            if (remember)
+            {
+                _raisedSorting = group;
+                _raisedSortingOrder = group.sortingOrder;
+            }
+            group.sortingOrder = SelectedSortingOrder;
+        }
+
+        /// <summary>올려 뒀던 캐릭터 정렬 순서를 원래 값으로 되돌린다(선택 해제 시).</summary>
+        private void RestoreCharacterSorting()
+        {
+            if (_raisedSorting != null)
+            {
+                _raisedSorting.sortingOrder = _raisedSortingOrder;
+                _raisedSorting = null;
+            }
         }
 
         /// <summary>캐릭터 외형의 공격 애니메이션을 1회 재생한다(SPUM 헬퍼는 Assembly-CSharp이라 SendMessage로 호출).</summary>

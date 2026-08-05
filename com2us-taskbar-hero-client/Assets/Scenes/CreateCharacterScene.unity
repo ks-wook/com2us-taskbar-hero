@@ -541,9 +541,12 @@ MonoBehaviour:
   m_EditorClassIdentifier: TaskbarHero.Client.UI::TaskbarHero.Client.UI.CharacterSelectManager
   cam: {fileID: 1864903867}
   selectPanelPrefab: {fileID: 7250920551284720571, guid: 0e2fa557e8ab4ae4290a8b8e5a9bd3fd, type: 3}
-  zoomSize: 3
+  zoomSize: 3.4
   zoomDuration: 0.4
-  focusScreen: {x: 0.3, y: 0.42}
+  focusScreen: {x: 0.551, y: 0.2}
+  illustrationScreen: {x: 0.306, y: 0.14}
+  illustrationSize: {x: 1098, y: 710}
+  genderRowScreen: {x: 0.334, y: 0.12}
 --- !u!4 &961966726
 Transform:
   m_ObjectHideFlags: 0

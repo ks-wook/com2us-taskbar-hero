@@ -13,10 +13,9 @@ namespace TaskbarHero.Client.Managers
     /// 그림마다 <see cref="Entry.faceCenter"/>·<see cref="Entry.cropHeight"/>를 데이터로 들고 있으면
     /// 표시하는 쪽은 "창에 얼굴을 채워라"만 알면 되고, 그림을 교체할 때 코드를 고치지 않는다.</para>
     ///
-    /// <para>원본 일러스트(<c>Assets/Art/Character/Image/*.png</c>)는 <b>초록 크로마키 배경</b>이라 그대로 쓰면
-    /// 얼굴 주변에 초록 사각형이 남는다. 그래서 이 DB는 배경을 지운 컷아웃
-    /// (<c>Assets/Art/Character/Image/Cutout/*.png</c>)을 참조한다 — 컷아웃 생성은
-    /// <c>tools/character_illust_cutout.py</c>, 에셋 배선은 <c>CharacterIllustrationDatabaseBuilder</c>(에디터)가 한다.</para>
+    /// <para>참조 대상은 <c>Assets/Art/Character/Image/*.png</c> 8종이다. 이 그림들은 <b>배경이 제거되고
+    /// 캐릭터에 맞춰 크롭</b>되어 있어 그대로 겹쳐 쓸 수 있다(예전의 초록 크로마키 원본 + <c>Cutout/</c> 파생본
+    /// 구조는 폐기됐다). 에셋 배선은 <c>CharacterIllustrationDatabaseBuilder</c>(에디터)가 한다.</para>
     /// </summary>
     [CreateAssetMenu(fileName = "CharacterIllustrationDatabase", menuName = "TaskbarHero/CharacterIllustrationDatabase")]
     public class CharacterIllustrationDatabase : ScriptableObject
@@ -27,7 +26,7 @@ namespace TaskbarHero.Client.Managers
         /// <summary>성별 값이 비어 있을 때 사용하는 기본값(서버 기본값과 동일한 1:남).</summary>
         public const int DefaultGender = 1;
 
-        [Tooltip("직업 코드 + 성별(1:남 2:여) → 일러스트 컷아웃과 얼굴 위치.")]
+        [Tooltip("직업 코드 + 성별(1:남 2:여) → 일러스트와 얼굴 위치.")]
         public Entry[] entries = new Entry[0];
 
         /// <summary>일러스트 한 장과 그 안에서의 얼굴 위치.</summary>
@@ -37,7 +36,7 @@ namespace TaskbarHero.Client.Managers
             public int classCode;
             [Tooltip("1:남 2:여")]
             public int gender;
-            [Tooltip("배경을 지운 일러스트 컷아웃(Assets/Art/Character/Image/Cutout).")]
+            [Tooltip("배경을 지운 캐릭터 일러스트(Assets/Art/Character/Image).")]
             public Sprite sprite;
             [Tooltip("얼굴 중심의 normalized 좌표. x는 왼쪽부터, **y는 위에서부터** 0~1.")]
             public Vector2 faceCenter;

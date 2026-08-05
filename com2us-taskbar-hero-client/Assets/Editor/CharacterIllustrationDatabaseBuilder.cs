@@ -7,18 +7,22 @@ namespace TaskbarHero.ClientEditor
 {
     /// <summary>
     /// 캐릭터 일러스트 DB(<see cref="CharacterIllustrationDatabase"/>) 빌드 도구.
-    /// <c>Assets/Art/Character/Image/Cutout/{직업}_{성별}.png</c>을 훑어 (직업, 성별) → 스프라이트로 채우고,
+    /// <c>Assets/Art/Character/Image/{직업}_{성별}.png</c>을 훑어 (직업, 성별) → 스프라이트로 채우고,
     /// 그림마다 측정한 <b>얼굴 좌표</b>를 함께 적어 넣는다.
     ///
-    /// <para><b>컷아웃이 없으면 먼저 만든다</b> — 원본 일러스트는 초록 크로마키 배경이라 그대로 쓸 수 없다.
-    /// <c>python tools/character_illust_cutout.py --sheet out.png</c>로 배경을 지운 컷아웃을 만들고,
-    /// 같은 스크립트가 출력하는 얼굴 좌표를 아래 <see cref="FaceAnchors"/>에 옮긴다(대지 PNG로 프레이밍을 눈으로 확인).</para>
+    /// <para><b>원본이 곧 컷아웃이다(2026-08-05~)</b> — 예전에는 원본이 초록 크로마키 배경이라
+    /// <c>tools/character_illust_cutout.py</c>로 만든 <c>Image/Cutout/</c> 파생본을 참조했다. 지금은
+    /// <b>원본 8종이 배경 제거 + 캐릭터에 맞춘 크롭 상태로 직접 편집</b>되어 있어 파생본이 필요 없다.
+    /// <c>Cutout/</c> 폴더는 더 이상 참조하지 않는다(이 빌더도 훑지 않는다).</para>
+    ///
+    /// <para><b>그림을 교체하면 얼굴 좌표를 다시 맞춰야 한다</b> — 아래 <see cref="FaceAnchors"/> 참조.</para>
     ///
     /// 메뉴: TaskbarHero/캐릭터/일러스트 DB 빌드
     /// </summary>
     public static class CharacterIllustrationDatabaseBuilder
     {
-        private const string CutoutDir = "Assets/Art/Character/Image/Cutout";
+        private const string SourceDir = "Assets/Art/Character/Image";
+        private const string LegacyCutoutDir = "Assets/Art/Character/Image/Cutout"; // 미참조(임포트 교정 제외용)
         private const string DatabasePath = "Assets/Resources/CharacterIllustrationDatabase.asset";
 
         /// <summary>파일명의 직업 이름 → class_master 코드.</summary>
@@ -40,25 +44,27 @@ namespace TaskbarHero.ClientEditor
         /// <summary>
         /// 일러스트별 얼굴 중심(normalized, <b>y는 위에서부터</b>).
         ///
-        /// <para><b>8종 전부 플레이 모드에서 실제 카드를 보며 맞춘 값이다</b> — 스크립트의 살색 픽셀 추정은
-        /// 첫 값을 잡는 용도였고(손·팔의 살색을 얼굴로 잡는 한계가 있다), 최종 값은 화면에서 확인해 정했다.</para>
+        /// <para><b>2026-08-05 편집본(배경 제거 + 좌우 크롭) 기준으로 다시 측정한 값이다.</b> 그림마다 좌우로
+        /// 잘라낸 폭이 달라 <c>x</c>가 전부 바뀌었고, 기사(여)·슬레이어(남)는 아예 다른 고해상도 원화로 교체됐다.
+        /// <c>y</c>는 캐릭터가 그림 위쪽에 붙어 있어 크롭이 상단으로 clamp되므로 프레이밍에 거의 영향이 없다.</para>
         ///
-        /// <para>다시 맞추려면 편성창을 플레이 모드로 띄우고 카드 안 <c>Illust</c>를 옮긴 뒤, 창 대비 보이는 영역을
-        /// 역산해(<c>cropW = 창폭/이미지폭</c>, <c>faceX = cropX + cropW/2</c>,
-        /// <c>faceY = 1 − (cropY + cropH×0.66)</c>) 그 값을 여기와 DB 에셋에 옮긴다.
-        /// 파티에 없는 캐릭터는 <c>tools/character_illust_cutout.py --sheet</c> 대지로 프레이밍을 확인할 수 있다.</para>
+        /// <para><b>다시 맞추는 법</b> — 편성창을 띄우지 않고도 검증할 수 있다.
+        /// <c>TeamListController.BuildFaceIllustration</c>의 크롭 계산(<c>cropW = cropH × (이미지높이/이미지폭) ×
+        /// SlotWindowAspect</c>, <c>cropX = faceX − cropW/2</c>, <c>cropY = 1 − faceY − cropH×(1−FaceInCrop)</c>,
+        /// 둘 다 0~1로 clamp)을 그대로 적용해 잘라낸 대지를 만들어 눈으로 확인하고 <c>x</c>를 조정한다.
+        /// 얼굴이 프레임 오른쪽으로 치우쳐 잘리면 <c>x</c>를 키운다.</para>
         /// </summary>
         private static readonly Dictionary<string, Vector2> FaceAnchors = new Dictionary<string, Vector2>
         {
-            { "Knight_Male", new Vector2(0.521f, 0.205f) },
-            { "Knight_Female", new Vector2(0.511f, 0.189f) },
-            { "Archer_Male", new Vector2(0.500f, 0.247f) },
-            { "Archer_Female", new Vector2(0.477f, 0.227f) },
+            { "Knight_Male", new Vector2(0.460f, 0.120f) },
+            { "Knight_Female", new Vector2(0.575f, 0.110f) },
+            { "Archer_Male", new Vector2(0.470f, 0.120f) },
+            { "Archer_Female", new Vector2(0.555f, 0.110f) },
             // 마법사는 남·여 일러스트의 구도가 같아 한 값을 두 성별에 함께 쓴다.
-            { "Mage_Male", new Vector2(0.518f, 0.179f) },
-            { "Mage_Female", new Vector2(0.518f, 0.179f) },
-            { "Slayer_Male", new Vector2(0.518f, 0.172f) },
-            { "Slayer_Female", new Vector2(0.522f, 0.205f) },
+            { "Mage_Male", new Vector2(0.470f, 0.140f) },
+            { "Mage_Female", new Vector2(0.470f, 0.140f) },
+            { "Slayer_Male", new Vector2(0.605f, 0.150f) },
+            { "Slayer_Female", new Vector2(0.500f, 0.140f) },
         };
 
         /// <summary>표시할 크롭 높이(이미지 높이 대비). 얼굴 좌표의 ±0.02 오차에도 얼굴이 프레임에 남는 여유값.</summary>
@@ -67,7 +73,7 @@ namespace TaskbarHero.ClientEditor
         [MenuItem("TaskbarHero/캐릭터/일러스트 DB 빌드")]
         public static void Build()
         {
-            FixCutoutImport();
+            FixIllustrationImport();
             var db = LoadOrCreate();
             var entries = new List<CharacterIllustrationDatabase.Entry>();
             var missing = new List<string>();
@@ -77,7 +83,7 @@ namespace TaskbarHero.ClientEditor
                 foreach (var gender in Genders)
                 {
                     string name = $"{cls.Key}_{gender.Key}";
-                    var sprite = LoadSprite($"{CutoutDir}/{name}.png");
+                    var sprite = LoadSprite($"{SourceDir}/{name}.png");
                     if (sprite == null)
                     {
                         missing.Add(name);
@@ -85,10 +91,10 @@ namespace TaskbarHero.ClientEditor
                     }
                     if (!FaceAnchors.TryGetValue(name, out var face))
                     {
-                        // 좌표를 모르는 새 일러스트는 가운데 위쪽으로 가정해 둔다(스크립트로 재측정 권장).
+                        // 좌표를 모르는 새 일러스트는 가운데 위쪽으로 가정해 둔다(크롭 대지로 재측정 권장).
                         face = new Vector2(0.5f, 0.2f);
                         Debug.LogWarning($"[CharacterIllustrationDatabaseBuilder] {name}의 얼굴 좌표가 없어 기본값을 씁니다. " +
-                                         "tools/character_illust_cutout.py로 측정해 FaceAnchors에 추가하세요.");
+                                         "FaceAnchors 주석의 '다시 맞추는 법'대로 측정해 추가하세요.");
                     }
                     entries.Add(new CharacterIllustrationDatabase.Entry
                     {
@@ -107,29 +113,34 @@ namespace TaskbarHero.ClientEditor
 
             Debug.Log($"[CharacterIllustrationDatabaseBuilder] 완료: {entries.Count}종 배선"
                       + (missing.Count > 0
-                          ? $" · 컷아웃 없음 {missing.Count}종({string.Join(", ", missing)}) — "
-                            + "python tools/character_illust_cutout.py 로 생성하세요."
+                          ? $" · 일러스트 없음 {missing.Count}종({string.Join(", ", missing)}) — "
+                            + $"{SourceDir}/(직업)_(성별).png 로 넣어 주세요."
                           : string.Empty));
         }
 
         /// <summary>
-        /// 컷아웃의 임포트 규격을 교정한다 — <b>Sprite · Single · Full Rect</b>.
+        /// 일러스트의 임포트 규격을 교정한다 — <b>Sprite · Single · Full Rect</b>.
         ///
-        /// <para><b>왜 필요한가</b> — 새 PNG가 프로젝트 기본값(Multiple)으로 들어오면 Unity가 자동 슬라이스해
+        /// <para><b>왜 필요한가</b> — PNG가 프로젝트 기본값(Multiple)으로 들어오면 Unity가 자동 슬라이스해
         /// 스프라이트가 <b>여백을 잘라낸 부분 영역</b>이 된다(예: 텍스처 1024×558인데 스프라이트 rect 691×512).
         /// 얼굴 좌표는 <b>이미지 전체</b> 기준이므로, 부분 영역 스프라이트를 쓰면 크롭이 어긋난다.
+        /// (2026-08-05 편집본이 실제로 Multiple로 들어와 있었다.)</para>
         ///
         /// <para><b>왜 이 폴더는 임포트를 고쳐도 되는가</b> — 공용 아트의 임포트를 바꾸지 말라는 규칙은
-        /// <c>Multiple</c>로 쪼개 둔 기존 스프라이트의 서브 참조가 끊기는 사고를 막기 위한 것이다.
-        /// 이 폴더는 <c>tools/character_illust_cutout.py</c>가 만든 <b>파생 에셋</b>이고 이 DB만 참조하므로
-        /// 끊길 서브 참조가 없다(원본 <c>Image/*.png</c>는 건드리지 않는다).</para>
+        /// <c>Multiple</c>로 쪼개 둔 기존 스프라이트의 <b>서브 참조가 끊기는 사고</b>를 막기 위한 것이다.
+        /// 이 8장은 서브 스프라이트를 참조하는 프리팹·씬·에셋이 하나도 없고(GUID 검색으로 확인) 이 DB만 쓰므로
+        /// 끊길 참조가 없다. 하위 <c>Cutout/</c>(구 파생본)은 이제 미참조라 대상에서 제외한다.</para>
         /// </summary>
-        private static void FixCutoutImport()
+        private static void FixIllustrationImport()
         {
             int fixedCount = 0;
-            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { CutoutDir }))
+            foreach (var guid in AssetDatabase.FindAssets("t:Texture2D", new[] { SourceDir }))
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path.StartsWith(LegacyCutoutDir))
+                {
+                    continue; // 미참조 구 파생본은 건드리지 않는다
+                }
                 var ti = AssetImporter.GetAtPath(path) as TextureImporter;
                 if (ti == null)
                 {
@@ -149,7 +160,7 @@ namespace TaskbarHero.ClientEditor
                 }
                 if (!ti.alphaIsTransparency)
                 {
-                    ti.alphaIsTransparency = true; // 배경을 지운 컷아웃이라 알파 경계가 깨지지 않게
+                    ti.alphaIsTransparency = true; // 배경을 지운 그림이라 알파 경계가 깨지지 않게
                     changed = true;
                 }
                 if (ti.mipmapEnabled)
@@ -174,7 +185,7 @@ namespace TaskbarHero.ClientEditor
             }
             if (fixedCount > 0)
             {
-                Debug.Log($"[CharacterIllustrationDatabaseBuilder] 컷아웃 임포트 교정: {fixedCount}개 재임포트(Sprite·Single·Full Rect)");
+                Debug.Log($"[CharacterIllustrationDatabaseBuilder] 일러스트 임포트 교정: {fixedCount}개 재임포트(Sprite·Single·Full Rect)");
             }
         }
 

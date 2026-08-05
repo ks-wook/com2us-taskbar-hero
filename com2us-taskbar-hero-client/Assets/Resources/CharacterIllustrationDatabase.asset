@@ -15,41 +15,41 @@ MonoBehaviour:
   entries:
   - classCode: 1
     gender: 1
-    sprite: {fileID: 21300000, guid: fd1d4d139beac674d8874518e6cfbc0a, type: 3}
-    faceCenter: {x: 0.521, y: 0.205}
+    sprite: {fileID: 21300000, guid: f7918921d0163154da29aac0f2770cfb, type: 3}
+    faceCenter: {x: 0.46, y: 0.12}
     cropHeight: 0.46
   - classCode: 1
     gender: 2
-    sprite: {fileID: 21300000, guid: 7b502cd9d6c3a8246ad9678f56aca98f, type: 3}
-    faceCenter: {x: 0.511, y: 0.189}
+    sprite: {fileID: 21300000, guid: b2c927ef7e5bb3741b5a5a14a1afab82, type: 3}
+    faceCenter: {x: 0.575, y: 0.11}
     cropHeight: 0.46
   - classCode: 2
     gender: 1
-    sprite: {fileID: 21300000, guid: 3c8d689e179fd7d4f8ed4c1ee2d4a3c0, type: 3}
-    faceCenter: {x: 0.5, y: 0.247}
+    sprite: {fileID: 21300000, guid: 955095108bd3050438837bd02068be8c, type: 3}
+    faceCenter: {x: 0.47, y: 0.12}
     cropHeight: 0.46
   - classCode: 2
     gender: 2
-    sprite: {fileID: 21300000, guid: 9d6bccec68ca8b646ad0d485d48e7601, type: 3}
-    faceCenter: {x: 0.477, y: 0.227}
+    sprite: {fileID: 21300000, guid: be923955833fdae45afc842224ca56ce, type: 3}
+    faceCenter: {x: 0.555, y: 0.11}
     cropHeight: 0.46
   - classCode: 3
     gender: 1
-    sprite: {fileID: 21300000, guid: b6c1cde0a29bac04c869d01869097ca9, type: 3}
-    faceCenter: {x: 0.518, y: 0.179}
+    sprite: {fileID: 21300000, guid: b9b080e048c248846a3c85a8febafced, type: 3}
+    faceCenter: {x: 0.47, y: 0.14}
     cropHeight: 0.46
   - classCode: 3
     gender: 2
-    sprite: {fileID: 21300000, guid: af82e275fe41e2b4d8143bc74c19f83c, type: 3}
-    faceCenter: {x: 0.518, y: 0.179}
+    sprite: {fileID: 21300000, guid: db688af2c63336744a16eab48cee278d, type: 3}
+    faceCenter: {x: 0.47, y: 0.14}
     cropHeight: 0.46
   - classCode: 4
     gender: 1
-    sprite: {fileID: 21300000, guid: 9151c72eefbb5cf48935a7252df2e044, type: 3}
-    faceCenter: {x: 0.518, y: 0.172}
+    sprite: {fileID: 21300000, guid: 1307b269211cc8f4d8aae06bf0fb14fc, type: 3}
+    faceCenter: {x: 0.605, y: 0.15}
     cropHeight: 0.46
   - classCode: 4
     gender: 2
-    sprite: {fileID: 21300000, guid: a0fc673c10984004f9baa8e9edb8db6f, type: 3}
-    faceCenter: {x: 0.522, y: 0.205}
+    sprite: {fileID: 21300000, guid: f8513d127b698804baa4e94f8b107d04, type: 3}
+    faceCenter: {x: 0.5, y: 0.14}
     cropHeight: 0.46
