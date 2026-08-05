@@ -23,6 +23,11 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite slotHighlight;   // ui_slot_highlight
         [SerializeField] private Sprite slotPortrait;    // ui_slot_portrait
 
+        [Header("공용 아이템 슬롯 프리팹 (에디터 빌더가 배선)")]
+        [Tooltip("Assets/Prefabs/UI/ItemSlot.prefab — 가방 칸·장비 부위 칸의 아이콘·등급 배경·수량·강화 배지를 " +
+                 "그리는 공용 슬롯. 큐브·거래소·우편함 등 다른 화면과 같은 프리팹을 써서 외형을 통일한다.")]
+        [SerializeField] private GameObject _itemSlotPrefab;
+
         [Header("초상화 캐릭터 프리팹 (classCode → 프리팹, 에디터 빌더가 배선)")]
         [Tooltip("초상화에 렌더할 캐릭터 프리팹. classCode 기준으로 선택된다(기사1·레인저2·마법사3).")]
         [SerializeField] private List<ClassCharacter> _classCharacters = new List<ClassCharacter>();
@@ -519,7 +524,7 @@ namespace TaskbarHero.Client.UI
         {
             var go = NewRect($"Item_{item.itemId}", transform);
             var view = go.gameObject.AddComponent<InventoryItemView>();
-            view.Setup(BuildDisplay(item), _font);
+            view.Setup(BuildDisplay(item), _font, _itemSlotPrefab);
             return view;
         }
 
@@ -1435,7 +1440,7 @@ namespace TaskbarHero.Client.UI
                         }
                     }
                 }
-                _equipSlots[slot].SetEquipped(display, _font);
+                _equipSlots[slot].SetEquipped(display, _font, _itemSlotPrefab);
             }
         }
 
@@ -1479,6 +1484,8 @@ namespace TaskbarHero.Client.UI
 
             return new InventoryItemView.Display
             {
+                itemCode = itemCode,   // 공용 슬롯이 이 코드로 아이콘·등급을 조회한다
+                quantity = quantity,   // 2 이상이면 슬롯 우하단에 "xN"
                 name = name,
                 grade = info.grade,
                 gradeValue = info.gradeValue,
@@ -1493,7 +1500,7 @@ namespace TaskbarHero.Client.UI
                 equippable = isEquip && classOk && levelOk,
                 equipLocked = equipLocked,
                 usable = isConsumable && equippedSlot == 0, // 가방에 있는 소모품만 사용할 수 있다
-                enhanceLevel = enhanceLevel,               // 슬롯 좌상단 "+N" 배지
+                enhanceLevel = enhanceLevel,               // 슬롯 좌측 하단 흰 "+N" 배지(검은 외곽선)
             };
         }
 

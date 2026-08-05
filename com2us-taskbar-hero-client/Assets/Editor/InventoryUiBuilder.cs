@@ -18,6 +18,7 @@ namespace TaskbarHero.ClientEditor
         private const string ArtDir = "Assets/Art/UI/Inventory";
         // UI 프리팹은 Assets/Prefabs/ 아래 카테고리 폴더로 정리한다.
         private const string PrefabPath = "Assets/Prefabs/UI/InventoryPanel.prefab";
+        private const string ItemSlotPrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
 
@@ -59,6 +60,9 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
             so.FindProperty("slotPortrait").objectReferenceValue = LoadSprite("ui_slot_portrait");
+            // 가방 칸·장비 부위 칸의 아이템 그림은 공용 슬롯 프리팹이 그린다(큐브·거래소와 외형 통일).
+            so.FindProperty("_itemSlotPrefab").objectReferenceValue =
+                AssetDatabase.LoadAssetAtPath<GameObject>(ItemSlotPrefabPath);
             WireClassCharacters(so); // 초상화 캐릭터 프리팹(기사1·레인저2·마법사3)
             so.ApplyModifiedPropertiesWithoutUndo();
 

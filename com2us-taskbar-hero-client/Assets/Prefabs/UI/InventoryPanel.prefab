@@ -4263,6 +4263,7 @@ MonoBehaviour:
   slotNormal: {fileID: 4400792897899385541, guid: cb28c7fa533a14947b14614134767b11, type: 3}
   slotHighlight: {fileID: 3474996413312397351, guid: 48cadfe87fef0424ab552ecfa9dc1229, type: 3}
   slotPortrait: {fileID: -8546645418315630018, guid: 0d2df9350eb66de4f9c455c6aee3a5ba, type: 3}
+  _itemSlotPrefab: {fileID: 5356247894179942916, guid: 9fc225956eac96745b3125df87824f94, type: 3}
   _classCharacters:
   - classCode: 1
     prefab: {fileID: 7715552558439874258, guid: aec85af960a9b5641a641a8fb6bb0cb0, type: 3}

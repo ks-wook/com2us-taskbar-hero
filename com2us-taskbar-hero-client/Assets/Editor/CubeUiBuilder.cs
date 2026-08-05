@@ -20,6 +20,7 @@ namespace TaskbarHero.ClientEditor
         private const string HammerFxDir = "Assets/Art/Effect/UI/EquipEnhanceHammer";
         private const string BurstFxDir = "Assets/Art/Effect/UI/EnhanceSuccessBurst";
         private const string PrefabPath = "Assets/Prefabs/UI/CubePanel.prefab";
+        private const string ItemSlotPrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
 
@@ -60,6 +61,9 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("panelBackground").objectReferenceValue = LoadSprite("cube_bg");
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
+            // 아이템 타일은 공용 슬롯 프리팹으로 그린다(인벤토리·거래소와 같은 외형·같은 강화 배지).
+            so.FindProperty("_itemSlotPrefab").objectReferenceValue =
+                AssetDatabase.LoadAssetAtPath<GameObject>(ItemSlotPrefabPath);
             FillFrames(so.FindProperty("enhanceHammerFrames"), HammerFxDir);
             FillFrames(so.FindProperty("enhanceBurstFrames"), BurstFxDir);
             so.ApplyModifiedPropertiesWithoutUndo();

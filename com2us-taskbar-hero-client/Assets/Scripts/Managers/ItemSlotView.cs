@@ -30,6 +30,27 @@ namespace TaskbarHero.Client.Managers
         [Tooltip("획득 완료 표시(Assets/Art/UI/Attendance/check). 슬롯 레이어 가장 위(마지막 자식)에 그려진다. 기본 숨김.")]
         [SerializeField] private Image _claimedOverlay;
 
+        // 강화 단계 배지 규격 — <b>모든 UI가 같은 자리·같은 색·같은 크기</b>로 보이도록 이 상수만 쓴다.
+        // (인벤토리는 좌하단 금색 32px, 큐브는 우상단 금색 20px으로 서로 달랐다 — 2026-08-05 통일.)
+        // 배지는 이 컴포넌트가 만들고 꾸미므로, 슬롯 프리팹을 쓰는 화면은 자동으로 같은 규격을 얻는다.
+        private static readonly Color EnhanceBadgeColor = Color.white;                    // 글자색(흰색)
+        private static readonly Color EnhanceBadgeOutlineColor = new Color(0f, 0f, 0f, 0.95f); // 검은 외곽선
+        private const float EnhanceBadgeOutlineDistance = 2f;
+        private const int EnhanceBadgeMinFontSize = 14;  // 작은 슬롯(거래 72px)에서의 하한
+        private const int EnhanceBadgeMaxFontSize = 96;  // 큰 슬롯(보상 150px)에서의 상한 — "크게" 요구
+        // 글자 크기는 <b>슬롯 높이에 비례해 직접 정한다</b>(BestFit 금지 — 아래 SetEnhanceLevel 주석 참고).
+        // 0.352 = 배지 칸 높이 비율(0.40) × 그 안을 채우는 비율(0.88)로, BestFit이 고르던 값과 같아진다
+        // (실측: 150px 슬롯 53 · 118px 슬롯 42 · 72px 슬롯 25).
+        private const float EnhanceBadgeFontHeightRatio = 0.352f;
+        // 레이아웃 전(부모가 아직 크기를 안 준 상태)에는 이 높이 미만이면 그리지 않는다 — 엉뚱한 크기로
+        // 한 프레임 보이는 것을 막고, 크기가 정해지는 순간(OnRectTransformDimensionsChange) 한 번에 띄운다.
+        private const float EnhanceBadgeMinSlotHeight = 24f;
+        // 슬롯 좌측 하단 영역(칸 비율). 높이 비율(40%)이 수량 표기(30%)보다 커서 강화 단계가 더 크게 읽힌다.
+        // 수량 텍스트는 같은 아래쪽이지만 우측 정렬이라 겹치지 않는다(강화 대상인 장비는 stack_max=1이라
+        // 수량 표기 자체가 없고, 재료가 우연히 강화 단계를 가져도 좌/우로 갈린다).
+        private static readonly Vector2 EnhanceBadgeAnchorMin = new Vector2(0.08f, 0.05f);
+        private static readonly Vector2 EnhanceBadgeAnchorMax = new Vector2(0.62f, 0.45f);
+
         // 획득 연출: 체크 표시가 슬롯 밖으로 크게 부풀었다가 원래 크기로 잦아든다.
         private const float ClaimedPopExpandScale = 3f;   // 최대 크기(원래 크기 배수)
         private const float ClaimedPopDuration = 0.45f;   // 연출 전체 길이
@@ -40,6 +61,10 @@ namespace TaskbarHero.Client.Managers
         private bool _showDetail;
         private int _enhanceLevel;      // 장비 강화 단계(0 = 미강화). 배지 표시 + 상세 팝업 스탯 배율에 쓴다
         private Text _enhanceBadge;     // "+N" 배지(강화 단계가 있을 때만 생성)
+        private Color? _frameBaseColor; // 프레임 원래 색(SetFrameVisible로 감췄다 되살릴 때 기준)
+        private float _iconBaseAlpha = 1f; // 구성이 정한 아이콘 알파(SetIconDimmed의 기준값)
+
+        private const float DimmedIconAlphaRatio = 0.35f; // 흐리게 표시할 때의 알파 배수
         private Coroutine _claimedPopRoutine;
         private Canvas _claimedLift; // 획득 연출 동안만 붙는 정렬 덮어쓰기 Canvas(끝나면 제거)
 
@@ -78,6 +103,7 @@ namespace TaskbarHero.Client.Managers
                 _iconImage.color = icon != null
                     ? Color.white
                     : GradeColors.IconFallback(grade) * new Color(1f, 1f, 1f, 0.6f); // 아이콘 없을 때 색 폴백
+                _iconBaseAlpha = _iconImage.color.a; // SetIconDimmed가 되돌릴 기준 밝기
             }
             if (_iconLabelText != null)
             {
@@ -117,6 +143,7 @@ namespace TaskbarHero.Client.Managers
                 _iconImage.enabled = icon != null;
                 _iconImage.sprite = icon;
                 _iconImage.color = Color.white;
+                _iconBaseAlpha = 1f;
             }
             if (_iconLabelText != null)
             {
@@ -174,9 +201,17 @@ namespace TaskbarHero.Client.Managers
         }
 
         /// <summary>
-        /// 장비 강화 단계를 표시한다(슬롯 <b>좌측 하단</b> "+N" 배지 + 상세 팝업의 스탯 배율 기준).
-        /// 0 이하면 배지를 감춘다. <see cref="Setup(int,long,string,bool)"/> 뒤에 호출한다
+        /// 장비 강화 단계를 표시한다(슬롯 <b>좌측 하단</b>의 <b>흰 "+N"</b> 배지 + 검은 외곽선, 그리고 상세 팝업의
+        /// 스탯 배율 기준). 0 이하면 배지를 감춘다. <see cref="Setup(int,long,string,bool)"/> 뒤에 호출한다
         /// (구성이 강화 단계를 알 수 없는 화면 — 뽑기·클리어 보상 등 — 은 호출하지 않으면 그대로 미강화로 표시된다).
+        /// <para>자리·색·크기는 <see cref="EnhanceBadgeColor"/> 등 상수로 고정되어 있어, 이 슬롯을 쓰는 모든 화면
+        /// (인벤토리·큐브·거래소·우편함·출석부·뽑기·클리어 보상)에서 동일하게 보인다.</para>
+        /// <para><b>글자 크기는 BestFit(<c>resizeTextForBestFit</c>)으로 정하지 않는다</b> — BestFit은 rect·overflow
+        /// 설정이 바뀔 때마다 크기를 다시 계산하는데, <c>UiTextStyle</c>이 0.4초 주기로 훑으며 줄이 잘릴 것 같은
+        /// 텍스트의 <c>verticalOverflow</c>를 Truncate → Overflow로 바꾸기 때문에, 그 순간 BestFit의 기준이 사라져
+        /// <b>글자가 작아졌다 커지는 현상</b>이 보였다(큐브에서 타일을 누르면 그리드를 다시 만들어 배지가 새로
+        /// 생성되므로 클릭마다 재현됐다). 지금은 슬롯 높이에 비례한 값을 직접 넣고 overflow를 양방향 Overflow로
+        /// 두어(그래서 <c>UiTextStyle</c>도 손대지 않는다) 크기가 한 번 정해지면 변하지 않는다.</para>
         /// </summary>
         public void SetEnhanceLevel(int enhanceLevel)
         {
@@ -192,29 +227,96 @@ namespace TaskbarHero.Client.Managers
 
             if (_enhanceBadge == null)
             {
-                var go = new GameObject("EnhanceBadge", typeof(RectTransform), typeof(Text));
+                var go = new GameObject("EnhanceBadge", typeof(RectTransform), typeof(Text), typeof(Outline));
                 go.transform.SetParent(transform, false);
                 _enhanceBadge = go.GetComponent<Text>();
                 _enhanceBadge.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 _enhanceBadge.alignment = TextAnchor.LowerLeft;
                 _enhanceBadge.fontStyle = FontStyle.Bold;
-                _enhanceBadge.color = new Color(1f, 0.86f, 0.42f); // 강화 강조색(금색)
-                _enhanceBadge.raycastTarget = false;               // 슬롯 hover 판정을 가로채지 않는다
-                // 슬롯 크기가 화면마다 다르므로(보상 150 · 거래 72) 칸 비율로 잡고 BestFit으로 키운다.
-                _enhanceBadge.resizeTextForBestFit = true;
-                _enhanceBadge.resizeTextMinSize = 12;
-                _enhanceBadge.resizeTextMaxSize = 56;
-                // 좌측 하단. 수량 텍스트는 같은 아래쪽이지만 우측 정렬이라 글자끼리 겹치지 않는다
-                // (강화 대상인 장비는 stack_max=1이라 수량 표기 자체가 없다).
+                _enhanceBadge.color = EnhanceBadgeColor;
+                _enhanceBadge.raycastTarget = false;               // 슬롯 hover·클릭 판정을 가로채지 않는다
+                _enhanceBadge.resizeTextForBestFit = false;         // 크기는 슬롯 높이로 직접 정한다(위 주석)
+                // 양방향 Overflow — 글자 크기를 우리가 정하므로 칸에 맞출 필요가 없고, Truncate였다면
+                // UiTextStyle이 overflow를 바꿔 크기 재계산을 유발한다(줄이 사라지는 문제도 함께 피한다).
+                _enhanceBadge.horizontalOverflow = HorizontalWrapMode.Overflow;
+                _enhanceBadge.verticalOverflow = VerticalWrapMode.Overflow;
+                var outline = go.GetComponent<Outline>();          // 밝은 아이콘 위에서도 읽히도록
+                outline.effectColor = EnhanceBadgeOutlineColor;
+                outline.effectDistance = new Vector2(EnhanceBadgeOutlineDistance, -EnhanceBadgeOutlineDistance);
                 var rt = _enhanceBadge.rectTransform;
-                rt.anchorMin = new Vector2(0.07f, 0.06f);
-                rt.anchorMax = new Vector2(0.58f, 0.40f);
+                rt.anchorMin = EnhanceBadgeAnchorMin;
+                rt.anchorMax = EnhanceBadgeAnchorMax;
                 rt.offsetMin = Vector2.zero;
                 rt.offsetMax = Vector2.zero;
             }
             _enhanceBadge.transform.SetAsLastSibling(); // 아이콘·등급 배경 위에 그린다
             _enhanceBadge.text = $"+{_enhanceLevel}";
+            ApplyEnhanceBadgeFontSize();
+        }
+
+        /// <summary>
+        /// 배지 글자 크기를 <b>슬롯 높이에 비례한 고정값</b>으로 넣고 표시 여부를 정한다.
+        /// 부모 레이아웃이 아직 크기를 주지 않았으면(높이 &lt; <see cref="EnhanceBadgeMinSlotHeight"/>) 그리지 않고,
+        /// 크기가 정해질 때 <see cref="OnRectTransformDimensionsChange"/>가 다시 불러 한 번에 제 크기로 띄운다 —
+        /// 엉뚱한 크기로 한 프레임 보이는 것을 막는다.
+        /// </summary>
+        private void ApplyEnhanceBadgeFontSize()
+        {
+            if (_enhanceBadge == null || _enhanceLevel <= 0)
+            {
+                return;
+            }
+            float slotHeight = ((RectTransform)transform).rect.height;
+            if (slotHeight < EnhanceBadgeMinSlotHeight)
+            {
+                _enhanceBadge.gameObject.SetActive(false);
+                return;
+            }
+            _enhanceBadge.fontSize = Mathf.Clamp(
+                Mathf.RoundToInt(slotHeight * EnhanceBadgeFontHeightRatio),
+                EnhanceBadgeMinFontSize, EnhanceBadgeMaxFontSize);
             _enhanceBadge.gameObject.SetActive(true);
+        }
+
+        /// <summary>슬롯 크기가 바뀌면(부모 레이아웃 확정·창 크기 변경) 배지 글자 크기를 다시 맞춘다.</summary>
+        private void OnRectTransformDimensionsChange()
+        {
+            ApplyEnhanceBadgeFontSize();
+        }
+
+        /// <summary>
+        /// 아이콘을 흐리게 표시한다(착용 불가 장비처럼 "가질 수는 있으나 쓸 수 없는" 상태 표현).
+        /// 기준 알파는 <see cref="Setup(int,long,string,bool)"/>이 정한 값(아이콘 있음 1, 폴백 색 0.6)이고
+        /// 여기서는 그 값에 배수만 적용하므로, 껐다 켜도 원래 밝기로 정확히 돌아온다.
+        /// </summary>
+        public void SetIconDimmed(bool dimmed)
+        {
+            if (_iconImage == null)
+            {
+                return;
+            }
+            var c = _iconImage.color;
+            _iconImage.color = new Color(c.r, c.g, c.b, _iconBaseAlpha * (dimmed ? DimmedIconAlphaRatio : 1f));
+        }
+
+        /// <summary>
+        /// 슬롯 테두리 프레임을 감춘다/보인다. <b>이미 자기 칸 프레임을 그리는 UI 안에 이 슬롯을 넣을 때</b>
+        /// (인벤토리 격자·장비 부위 칸) 프레임이 이중으로 겹쳐 보이지 않게 끄는 용도다.
+        /// 프레임을 꺼도 레이캐스트 대상 여부는 <see cref="Setup(int,long,string,bool)"/>의 showDetail이 정한다
+        /// (투명 이미지도 클릭·hover를 받으므로, 끄는 것은 그림뿐이다).
+        /// </summary>
+        public void SetFrameVisible(bool visible)
+        {
+            if (_frameImage == null)
+            {
+                return;
+            }
+            if (!_frameBaseColor.HasValue)
+            {
+                _frameBaseColor = _frameImage.color; // 프레임 스프라이트가 없을 때의 폴백 색까지 그대로 되살리기 위해
+            }
+            var c = _frameBaseColor.Value;
+            _frameImage.color = visible ? c : new Color(c.r, c.g, c.b, 0f);
         }
 
         /// <summary>슬롯 테두리 프레임을 화면 전용 아트로 교체한다(예: 출석부 달력 칸 = attendance_item_slot).

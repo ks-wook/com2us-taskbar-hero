@@ -291,6 +291,12 @@ namespace TaskbarHero.Client.Managers
                 SoundManager.Sfx(SoundId.UiPanelOpen); // 이미 열린 패널을 다시 Show하면 울리지 않는다
             }
 
+            // 캔버스 규격을 표시 직전에 다시 맞춘다. 만들 때 한 번만 맞추면 **처음 열 때 패널이 크게** 그려진다
+            // (프리팹 기본 규격 1080×1920·match 0.5의 배율 0.84 vs GameScene 규격의 0.63 = 약 1.33배. 실측).
+            // 창 크기가 바뀐 뒤 처음 여는 경우도 이 시점에 함께 교정된다.
+            GameViewLayout.ApplyCurrentScalers(panel);
+            AlignToInventoryPanel(type, panel);
+
             foreach (var pair in _instances)
             {
                 if (pair.Value != null)
@@ -321,6 +327,46 @@ namespace TaskbarHero.Client.Managers
 
         /// <summary>패널 프리팹들이 공통으로 쓰는 창 본체 오브젝트 이름(각 패널 컨트롤러의 Construct가 만든다).</summary>
         private const string PanelRootName = "PanelRoot";
+
+        /// <summary>인벤토리 창 자리에 이어서 띄우는 패널들 — 모두 인벤토리 안의 버튼으로 진입한다.</summary>
+        private static bool FollowsInventoryPlacement(PanelType type)
+            => type == PanelType.Cube || type == PanelType.Skill || type == PanelType.Rune;
+
+        /// <summary>
+        /// 인벤토리에서 이어 여는 패널(큐브·스킬·룬)을 <b>인벤토리 창이 있던 자리</b>에 맞춘다.
+        /// 화면 중앙에 뜨면 방금 보고 있던 창에서 시선이 크게 튄다.
+        /// <para>기준 창의 <b>오른쪽 변·세로 중심</b>에 맞춘다 — 인벤토리 창은 화면 오른쪽에 붙어 있고 이 패널들이
+        /// 더 넓으므로(820~860 vs 765), 중심을 맞추면 오른쪽이 화면 밖으로 밀린다.</para>
+        /// <para>인벤토리 인스턴스가 아직 없으면(다른 경로로 먼저 열린 경우) 프리팹에 구워진 배치를 그대로 둔다.
+        /// 패널들은 모두 ScreenSpaceOverlay 캔버스라 월드 좌표가 곧 화면 픽셀이며, 그 화면 좌표를 대상 패널
+        /// 캔버스의 로컬 좌표로 되돌려 배치한다(캔버스 배율을 직접 가정하지 않는다).</para>
+        /// </summary>
+        private void AlignToInventoryPanel(PanelType type, GameObject panel)
+        {
+            if (!FollowsInventoryPlacement(type) || panel == null)
+            {
+                return;
+            }
+            var canvasRect = panel.transform as RectTransform;
+            var target = panel.transform.Find(PanelRootName) as RectTransform;
+            var reference = FindPanelRoot(PanelType.Inventory);
+            if (canvasRect == null || target == null || reference == null || reference == target)
+            {
+                return;
+            }
+
+            var corners = new Vector3[4]; // 0=좌하 1=좌상 2=우상 3=우하
+            reference.GetWorldCorners(corners);
+            var rightCenter = new Vector2(corners[2].x, (corners[0].y + corners[2].y) * 0.5f);
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, rightCenter, null, out var local))
+            {
+                return;
+            }
+
+            target.anchorMin = target.anchorMax = new Vector2(0.5f, 0.5f);
+            target.pivot = new Vector2(1f, 0.5f); // 오른쪽 변 기준
+            target.anchoredPosition = local;
+        }
 
         /// <summary>지정한 패널을 숨긴다.</summary>
         public void Hide(PanelType type)

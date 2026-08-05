@@ -13,6 +13,8 @@ namespace TaskbarHero.ClientEditor
     /// 배경의 공용 상세 팝업(ItemDetailPopup)을 띄운다(ItemSlotView). 배선 대상:
     /// - StageClearAssets(Resources) → itemSlotPrefab (스테이지 클리어 보상)
     /// - MailPanel.prefab → MailPanelController._itemSlotPrefab (우편함 첨부)
+    /// - InventoryPanel.prefab → InventoryPanelController._itemSlotPrefab (가방 칸·장비 부위 칸)
+    /// - CubePanel.prefab → CubePanelController._itemSlotPrefab (합성·분해·제작·강화 타일)
     /// - InventoryPanel.prefab → InventoryTooltip._backgroundSprite (인벤토리 툴팁 배경 통일)
     /// 메뉴: TaskbarHero/UI/아이템 슬롯·상세 팝업 배선
     /// </summary>
@@ -25,6 +27,7 @@ namespace TaskbarHero.ClientEditor
         private const string StageClearAssetPath = "Assets/Resources/StageClearAssets.asset";
         private const string MailPanelPath = "Assets/Prefabs/UI/MailPanel.prefab";
         private const string InventoryPanelPath = "Assets/Prefabs/UI/InventoryPanel.prefab";
+        private const string CubePanelPath = "Assets/Prefabs/UI/CubePanel.prefab";
 
         [MenuItem("TaskbarHero/UI/아이템 슬롯·상세 팝업 배선")]
         public static void Build()
@@ -32,9 +35,35 @@ namespace TaskbarHero.ClientEditor
             var prefab = BuildPrefab();
             WireStageClearAssets(prefab);
             WireMailPanel(prefab);
+            WireSlotPrefabField<InventoryPanelController>(InventoryPanelPath, prefab);
+            WireSlotPrefabField<CubePanelController>(CubePanelPath, prefab);
             WireInventoryTooltip();
             AssetDatabase.SaveAssets();
-            Debug.Log("[ItemSlotBuilder] 완료: 아이템 슬롯 프리팹 생성 + 클리어 연출/메일/인벤토리 배선.");
+            Debug.Log("[ItemSlotBuilder] 완료: 아이템 슬롯 프리팹 생성 + 클리어 연출/메일/인벤토리/큐브 배선.");
+        }
+
+        /// <summary>패널 프리팹의 컨트롤러가 가진 <c>_itemSlotPrefab</c> 필드에 공용 슬롯 프리팹을 배선한다
+        /// (아이템 칸을 그리는 화면이 늘어날 때 이 호출만 추가하면 된다).</summary>
+        private static void WireSlotPrefabField<T>(string panelPath, GameObject prefab) where T : Component
+        {
+            var panel = AssetDatabase.LoadAssetAtPath<GameObject>(panelPath);
+            var ctrl = panel != null ? panel.GetComponent<T>() : null;
+            if (ctrl == null)
+            {
+                Debug.LogWarning($"[ItemSlotBuilder] {panelPath}의 {typeof(T).Name}을 찾지 못해 건너뜁니다.");
+                return;
+            }
+            var so = new SerializedObject(ctrl);
+            var prop = so.FindProperty("_itemSlotPrefab");
+            if (prop == null)
+            {
+                Debug.LogWarning($"[ItemSlotBuilder] {typeof(T).Name}에 _itemSlotPrefab 필드가 없습니다.");
+                return;
+            }
+            prop.objectReferenceValue = prefab;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(panel);
+            Debug.Log($"[ItemSlotBuilder] {typeof(T).Name}._itemSlotPrefab 배선 완료.");
         }
 
         /// <summary>슬롯 프리팹(프레임 + 등급 배경 + 아이콘 + 수량 + ItemSlotView)을 생성한다.

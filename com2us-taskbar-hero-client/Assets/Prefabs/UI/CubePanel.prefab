@@ -56,6 +56,7 @@ MonoBehaviour:
   panelBackground: {fileID: 6087259527093396297, guid: 35992c9faeed732498c40979623eddc2, type: 3}
   slotNormal: {fileID: 4400792897899385541, guid: aa5361d4b048af8479389b3fba1ab0ea, type: 3}
   slotHighlight: {fileID: 3474996413312397351, guid: a1a5a4f1c6463ef4685538cee4b3bb8c, type: 3}
+  _itemSlotPrefab: {fileID: 5356247894179942916, guid: 9fc225956eac96745b3125df87824f94, type: 3}
   enhanceHammerFrames:
   - {fileID: -8812155563677022715, guid: 7932b36457aa21f4b8003d39253eaf55, type: 3}
   - {fileID: 7937478815330106677, guid: 7de4d963f89a25f4cb8fe9156253c2c3, type: 3}

@@ -29,6 +29,11 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite slotNormal;
         [SerializeField] private Sprite slotHighlight;
 
+        [Header("공용 아이템 슬롯 프리팹 (에디터 빌더가 배선)")]
+        [Tooltip("Assets/Prefabs/UI/ItemSlot.prefab — 타일의 아이콘·등급 배경·수량·강화 배지를 그리는 공용 슬롯. " +
+                 "인벤토리·거래소·우편함과 같은 프리팹을 써서 아이템 칸 외형을 통일한다.")]
+        [SerializeField] private GameObject _itemSlotPrefab;
+
         [Header("강화 연출 프레임 (Assets/Art/Effect/UI — 에디터 빌더가 배선)")]
         [Tooltip("강화 망치질 프레임(EquipEnhanceHammer_01~). 요청 시작과 함께 재생된다.")]
         [SerializeField] private Sprite[] enhanceHammerFrames;
@@ -119,7 +124,6 @@ namespace TaskbarHero.Client.UI
             }
             SetMessage(string.Empty);
             _selEnhance = 0; // 닫았다 다시 열면 선택은 초기화한다(그 사이 장비가 사라졌을 수 있다)
-            AlignToInventoryPanel(); // 방금 보고 있던 인벤토리 창 자리에 띄운다
             RefreshFromSession();
             InventoryLoader.ReloadBag(RefreshIfOpen, OnBagLoadError);
         }
@@ -208,40 +212,6 @@ namespace TaskbarHero.Client.UI
             rt.anchoredPosition = Vector2.zero;
             _panelRoot = rt;
             return rt;
-        }
-
-        /// <summary>
-        /// 큐브 패널을 <b>인벤토리 패널이 있던 자리</b>에 맞춘다(표시할 때마다). 큐브는 인벤토리의 '큐브' 버튼으로만
-        /// 열리므로, 화면 중앙에 뜨면 방금 보고 있던 창에서 시선이 크게 튄다.
-        /// <para>기준 창의 <b>오른쪽 변·세로 중심</b>에 맞춘다 — 인벤토리 창은 화면 오른쪽에 붙어 있고 큐브 창이 더
-        /// 넓으므로, 중심을 맞추면 오른쪽이 화면 밖으로 밀린다.</para>
-        /// <para>인벤토리 인스턴스가 아직 없으면(단독 호출) 프리팹에 구워진 중앙 배치를 그대로 둔다.
-        /// 두 패널 모두 ScreenSpaceOverlay 캔버스라 월드 좌표가 곧 화면 픽셀이고, 화면 픽셀을 이 패널 캔버스의
-        /// 로컬 좌표로 되돌려 배치한다(두 캔버스의 배율이 같아도 좌표계를 직접 가정하지 않는다).</para>
-        /// </summary>
-        private void AlignToInventoryPanel()
-        {
-            if (_panelRoot == null || _rootRect == null || UIManager.Instance == null)
-            {
-                return;
-            }
-            var reference = UIManager.Instance.FindPanelRoot(UIManager.PanelType.Inventory);
-            if (reference == null || reference == _panelRoot)
-            {
-                return;
-            }
-
-            var corners = new Vector3[4]; // 0=좌하 1=좌상 2=우상 3=우하
-            reference.GetWorldCorners(corners);
-            var rightCenter = new Vector2(corners[2].x, (corners[0].y + corners[2].y) * 0.5f);
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_rootRect, rightCenter, null, out var local))
-            {
-                return;
-            }
-
-            _panelRoot.anchorMin = _panelRoot.anchorMax = new Vector2(0.5f, 0.5f);
-            _panelRoot.pivot = new Vector2(1f, 0.5f); // 오른쪽 변 기준
-            _panelRoot.anchoredPosition = local;
         }
 
         /// <summary>제목(중앙) + 보유 골드(좌상단) + 닫기(우상단).</summary>
@@ -503,7 +473,8 @@ namespace TaskbarHero.Client.UI
             {
                 bool selected = _selCombine.Contains(it.itemId);
                 long id = it.itemId;
-                CreateItemTile(content, it.itemCode, EnhanceBadge(it), selected, () => ToggleCombine(id));
+                CreateItemTile(content, it.itemCode, it != null ? it.enhanceLevel : 0,
+                    string.Empty, string.Empty, selected, () => ToggleCombine(id));
                 count++;
             }
             if (count == 0)
@@ -534,7 +505,8 @@ namespace TaskbarHero.Client.UI
             {
                 bool selected = _selDismantle.Contains(it.itemId);
                 long id = it.itemId;
-                CreateItemTile(content, it.itemCode, QuantityBadge(it), selected, () => ToggleDismantle(id));
+                CreateItemTile(content, it.itemCode, it != null ? it.enhanceLevel : 0,
+                    QuantityBadge(it), string.Empty, selected, () => ToggleDismantle(id));
                 count++;
             }
             if (count == 0)
@@ -558,7 +530,8 @@ namespace TaskbarHero.Client.UI
             {
                 bool selected = r.recipeCode == _selRecipe;
                 int code = r.recipeCode;
-                CreateItemTile(content, r.resultItemCode, $"Lv.{r.reqCubeLevel}", selected, () => SelectRecipe(code));
+                CreateItemTile(content, r.resultItemCode, 0, string.Empty,
+                    $"Lv.{r.reqCubeLevel}", selected, () => SelectRecipe(code));
             }
             if (recipes.Count == 0)
             {
@@ -617,8 +590,9 @@ namespace TaskbarHero.Client.UI
             {
                 bool selected = cand.itemId == _selEnhance;
                 long id = cand.itemId;
-                CreateItemTile(content, cand.itemCode,
-                    EnhanceTileBadge(cand.enhanceLevel, cand.equipped), selected, () => SelectEnhance(id));
+                // 강화 단계는 공용 슬롯 배지(좌측 하단 흰 "+N")가 그리고, 우상단 태그에는 '장착'만 남긴다.
+                CreateItemTile(content, cand.itemCode, cand.enhanceLevel, string.Empty,
+                    cand.equipped ? "장착" : string.Empty, selected, () => SelectEnhance(id));
                 count++;
             }
             if (count == 0)
@@ -1185,17 +1159,6 @@ namespace TaskbarHero.Client.UI
             return null;
         }
 
-        /// <summary>강화 후보 타일의 배지 문구("장착 +3" / "+3" / "장착").</summary>
-        private static string EnhanceTileBadge(int enhanceLevel, bool equipped)
-        {
-            string level = enhanceLevel > 0 ? $"+{enhanceLevel}" : string.Empty;
-            if (!equipped)
-            {
-                return level;
-            }
-            return string.IsNullOrEmpty(level) ? "장착" : $"장착 {level}";
-        }
-
         /// <summary>선택된 분해 아이템의 예상 획득 골드 합계(gold_per_scrap × 등급 × 개수, 서버가 최종 확정).</summary>
         private long EstimateDismantleGold()
         {
@@ -1288,9 +1251,7 @@ namespace TaskbarHero.Client.UI
             return itemCode.ToString();
         }
 
-        private static string EnhanceBadge(InventoryItemDto it)
-            => it != null && it.enhanceLevel > 0 ? $"+{it.enhanceLevel}" : string.Empty;
-
+        /// <summary>슬롯 우하단 수량 표기("xN", 1개면 표기 없음). 강화 단계는 공용 슬롯 배지가 그린다.</summary>
         private static string QuantityBadge(InventoryItemDto it)
             => it != null && it.quantity > 1 ? $"x{it.quantity}" : string.Empty;
 
@@ -1334,40 +1295,33 @@ namespace TaskbarHero.Client.UI
             return content;
         }
 
-        /// <summary>아이템/레시피 타일 하나(등급 배경·아이콘·이름·배지·선택 프레임·클릭)를 만든다.
-        /// 만들어진 타일의 RectTransform을 돌려준다(강화 연출을 그 위에서 터뜨리기 위해 위치가 필요하다).</summary>
-        private RectTransform CreateItemTile(RectTransform parent, int itemCode, string badge, bool selected, System.Action onClick)
+        /// <summary>
+        /// 아이템/레시피 타일 하나를 만든다. <b>아이템 칸(아이콘·등급 배경·수량·강화 배지)은 공용 슬롯
+        /// 프리팹(<see cref="ItemSlotView"/>)이 그린다</b> — 인벤토리·거래소·우편함과 같은 외형·같은 강화 표시
+        /// (좌측 하단 흰 "+N")를 쓰기 위한 통일 지점이다. 큐브 고유 표시는 슬롯 밖/위에 얹는다:
+        /// 아래쪽 <b>이름</b>, 우상단 <b>태그</b>(레시피 "Lv.3" · 강화 후보의 "장착"), 선택 프레임.
+        /// <para><paramref name="enhanceLevel"/>은 슬롯 배지로, <paramref name="quantityText"/>는 슬롯 우하단
+        /// 수량으로 넘어간다(이전에는 이 셋을 하나의 배지 문자열로 합쳐 우상단에 금색으로 찍고 있었다).</para>
+        /// 돌려주는 RectTransform은 타일 컨테이너다(강화 연출을 그 위에서 터뜨리기 위해 위치가 필요하다).
+        /// </summary>
+        private RectTransform CreateItemTile(RectTransform parent, int itemCode, int enhanceLevel,
+            string quantityText, string tag, bool selected, System.Action onClick)
         {
             var db = MasterDataManager.Db;
             db.Items.TryGetValue(itemCode, out var im);
             int grade = im != null ? im.grade : 1;
             string itemName = im != null ? im.name : itemCode.ToString();
 
-            var tile = NewImage($"Tile_{itemCode}", parent, slotNormal);
-            tile.color = GradeColors.RewardSlotBackground(grade);
+            // 타일 컨테이너: 그림 없는 투명 판(클릭 대상). 그림은 공용 슬롯이 그린다.
+            var tile = NewImage($"Tile_{itemCode}", parent, null);
+            tile.color = new Color(0f, 0f, 0f, 0f);
 
-            var icon = NewImage("Icon", tile.rectTransform, null);
-            icon.raycastTarget = false;
-            icon.preserveAspect = true;
-            var irt = icon.rectTransform;
-            irt.anchorMin = new Vector2(0f, 0f);
-            irt.anchorMax = new Vector2(1f, 1f);
-            irt.pivot = new Vector2(0.5f, 0.5f);
-            irt.offsetMin = new Vector2(14f, 40f);
-            irt.offsetMax = new Vector2(-14f, -8f);
-            var sp = _iconDb != null ? _iconDb.Get(itemCode) : null;
-            if (sp != null)
-            {
-                icon.sprite = sp;
-                icon.color = Color.white;
-            }
-            else
-            {
-                icon.color = GradeColors.IconFallback(grade);
-            }
+            // 공용 슬롯 — 이름 줄(아래 36px)을 남기고 그 위 영역을 채운다.
+            var slotView = CreateSlot(tile.rectTransform, itemCode, enhanceLevel, quantityText);
 
             var name = NewText("Name", tile.rectTransform, itemName, 18, TextAnchor.LowerCenter);
             name.color = GradeColors.Name(grade);
+            name.raycastTarget = false;
             var nrt = name.rectTransform;
             nrt.anchorMin = new Vector2(0f, 0f);
             nrt.anchorMax = new Vector2(1f, 0f);
@@ -1376,11 +1330,13 @@ namespace TaskbarHero.Client.UI
             nrt.offsetMax = new Vector2(-2f, 36f);
             name.horizontalOverflow = HorizontalWrapMode.Wrap;
 
-            if (!string.IsNullOrEmpty(badge))
+            // 태그(우상단): 강화 단계가 아니라 큐브 화면 고유 정보다 — 레시피 요구 큐브 레벨, 장착 중 표시.
+            if (!string.IsNullOrEmpty(tag))
             {
-                var b = NewText("Badge", tile.rectTransform, badge, 20, TextAnchor.UpperRight);
+                var b = NewText("Tag", tile.rectTransform, tag, 20, TextAnchor.UpperRight);
                 b.fontStyle = FontStyle.Bold;
                 b.color = new Color(1f, 0.9f, 0.5f);
+                b.raycastTarget = false;
                 var brt = b.rectTransform;
                 brt.anchorMin = new Vector2(0f, 1f);
                 brt.anchorMax = new Vector2(1f, 1f);
@@ -1400,7 +1356,42 @@ namespace TaskbarHero.Client.UI
 
             var btn = tile.gameObject.AddComponent<Button>();
             btn.onClick.AddListener(() => onClick());
+            if (slotView == null)
+            {
+                // 프리팹 미배선 폴백: 등급 배경만이라도 칸으로 보이게 한다(경고는 CreateSlot이 남긴다).
+                tile.sprite = slotNormal;
+                tile.color = GradeColors.RewardSlotBackground(grade);
+            }
             return tile.rectTransform;
+        }
+
+        /// <summary>
+        /// 타일 안에 공용 아이템 슬롯 프리팹을 붙이고 구성한다(이름 줄 위 영역).
+        /// hover 상세 팝업·레이캐스트는 끈다 — 타일 전체가 선택 버튼이므로 슬롯이 클릭을 가로채면 안 된다.
+        /// 프리팹이 배선되지 않았으면 경고를 남기고 null을 돌려준다.
+        /// </summary>
+        private ItemSlotView CreateSlot(RectTransform tile, int itemCode, int enhanceLevel, string quantityText)
+        {
+            if (_itemSlotPrefab == null)
+            {
+                Debug.LogWarning("[Cube] 공용 아이템 슬롯 프리팹이 배선되지 않았습니다. " +
+                                 "메뉴 'TaskbarHero/UI/아이템 슬롯·상세 팝업 배선'을 실행하세요.");
+                return null;
+            }
+            var go = Instantiate(_itemSlotPrefab, tile);
+            go.name = "ItemSlot";
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(0f, 36f); // 아래 36px은 이름 줄
+            rt.offsetMax = Vector2.zero;
+            var view = go.GetComponent<ItemSlotView>();
+            if (view != null)
+            {
+                view.Setup(itemCode, 0L, quantityText ?? string.Empty, false);
+                view.SetEnhanceLevel(enhanceLevel);
+            }
+            return view;
         }
 
         private void ShowEmptyHint(string text)

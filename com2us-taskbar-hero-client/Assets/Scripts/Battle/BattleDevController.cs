@@ -684,11 +684,13 @@ namespace TaskbarHero.Client.Battle
 
             if (_cam == null || _members.Count == 0) return;
 
+            // 팔로우 기준은 <b>연출 오프셋을 뺀</b> 위치(`CameraFollowX`)다 — 근접 평타의 lunge(0.32유닛을
+            // 0.18초에 앞뒤로 왕복)를 그대로 따라가면 기본공격마다 카메라가 왕복해 셰이크처럼 보인다.
             float front = float.NegativeInfinity, rear = float.PositiveInfinity;
             foreach (var m in _members)
             {
                 if (m == null) continue;
-                float x = m.transform.position.x;
+                float x = m.CameraFollowX;
                 if (x > front) front = x;
                 if (x < rear) rear = x;
             }
@@ -1379,9 +1381,10 @@ namespace TaskbarHero.Client.Battle
             {
                 RequestHitStop(isBoss ? BossHitStopSeconds : HitStopSeconds);
             }
-            // 카메라 셰이크는 <b>스킬 타격만</b>이다. 치명타·보스 피격까지 넣었더니 기본공격에도 치명타가
-            // 자주 떠서(그리고 보스전에서는 평타마다) 화면이 거의 상시 흔들렸다(2026-08-04 축소).
-            if (bigHit)
+            // 카메라 셰이크는 <b>스킬 타격</b>과 <b>처치</b>에만 건다. 치명타·보스 피격까지 넣었더니 기본공격에도
+            // 치명타가 자주 떠서(그리고 보스전에서는 평타마다) 화면이 거의 상시 흔들렸다(2026-08-04 축소).
+            // 처치는 평타로 쓰러뜨려도 흔든다 — 자주 일어나지 않는 '성과'라 상시 흔들림이 되지 않는다.
+            if (bigHit || killed)
             {
                 RequestShake(isBoss ? ShakeHeavy : ShakeLight);
             }
@@ -1424,6 +1427,8 @@ namespace TaskbarHero.Client.Battle
             }
 
             int hit = 0;
+            int killedCount = 0; // 처치 셰이크 판단용(광역 한 방에 여러 마리가 함께 죽는다)
+            bool killedBoss = false;
             bool hitBoss = false;
             float r2 = radius * radius;
             foreach (var mu in targets)
@@ -1439,6 +1444,11 @@ namespace TaskbarHero.Client.Battle
                         SoundManager.Sfx(BattleSounds.MonsterHitFor(mu.MonsterName));
                     }
                     bool killed = mu.TakeDamage(dmg);
+                    if (killed)
+                    {
+                        killedCount++;
+                        killedBoss |= mu.IsBoss;
+                    }
                     // 피격음과 같은 기준으로 나눈다 — 대표(첫) 대상만 모션·넉백까지, 나머지는 틴트만.
                     // 전원에게 모션·넉백을 주면 광역 한 방에 화면이 찢어진다(사운드 정의서 §9.3과 같은 이유).
                     if (!killed)
@@ -1456,11 +1466,12 @@ namespace TaskbarHero.Client.Battle
             {
                 RequestHitStop(hitBoss ? BossHitStopSeconds : HitStopSeconds);
             }
-            // 셰이크는 스킬 타격만(광역 <b>평타</b>도 있으므로 여기서도 bigHit로 가른다).
+            // 셰이크는 스킬 타격과 <b>처치</b>에 건다(광역 <b>평타</b>도 있으므로 타격은 bigHit로 가른다).
             // 보스이거나 여러 대상을 한 번에 쓸었으면 강하게 준다.
-            if (hit > 0 && bigHit)
+            if (hit > 0 && (bigHit || killedCount > 0))
             {
-                RequestShake(hitBoss || hit >= 3 ? ShakeHeavy : ShakeLight);
+                bool heavy = killedBoss || hitBoss || killedCount >= 3 || (bigHit && hit >= 3);
+                RequestShake(heavy ? ShakeHeavy : ShakeLight);
             }
             Log($"{label} (광역 r{radius:0.#}) → {hit}체 -{dmg}{(crit ? " (치명타)" : string.Empty)}");
         }
@@ -1525,8 +1536,9 @@ namespace TaskbarHero.Client.Battle
             }
             Log($"{(m != null ? m.MonsterName : _monsterName)} 처치! (누적 {_killCount})");
 
-            // 웨이브의 <b>마지막 한 마리</b>를 잡는 순간만 짧게 슬로우 + 셰이크 — 한 웨이브를 정리했다는
-            // 마무리 박자를 준다(매 처치에 걸면 방치형 처치 빈도상 전투가 계속 끊긴다).
+            // 웨이브의 <b>마지막 한 마리</b>를 잡는 순간만 짧게 슬로우 + 강한 셰이크 — 한 웨이브를 정리했다는
+            // 마무리 박자를 준다. <b>슬로우</b>는 전투를 실제로 멈추므로 매 처치에 걸지 않는다(방치형 처치
+            // 빈도상 전투가 계속 끊긴다). 개별 처치의 약한 셰이크는 데미지 관문(`DoDamageAfter` 등)이 건다.
             if (AliveEnemyCount() == 0)
             {
                 RequestSlowMotion(WaveClearSlowScale, WaveClearSlowSeconds);

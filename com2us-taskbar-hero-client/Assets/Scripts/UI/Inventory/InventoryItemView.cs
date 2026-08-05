@@ -27,16 +27,20 @@ namespace TaskbarHero.Client.UI
             public string description; // 아이템 설명
             public Color iconColor;   // 아이콘 스프라이트가 없을 때의 폴백 색
             public Sprite icon;       // 실제 아이템 아이콘(없으면 iconColor로 폴백)
+            public int itemCode;      // 마스터 아이템 코드(공용 슬롯이 아이콘·등급을 직접 조회하는 키)
+            public long quantity;     // 보유 수량(2 이상이면 슬롯 우하단에 "xN")
             public long itemId;       // 서버 아이템 id(장착/해제 요청용)
             public int equippedSlot;  // 현재 장착 슬롯(1~6). 0 = 가방(미장착)
             public bool equippable;   // 착용 가능 여부(장비 + 현재 캐릭터 클래스·레벨 허용). 장착 버튼 활성 조건
             public bool equipLocked;  // 착용 불가 장비(클래스 불일치 또는 레벨 미달) → 슬롯에 X 표시 + 흐림
             public bool usable;       // 소모품(item_type=4) 여부. true면 툴팁 버튼이 '장착'이 아니라 '사용'이 된다
-            public int enhanceLevel;  // 장비 강화 단계(0 = 미강화). 1 이상이면 슬롯 좌상단에 "+N" 배지를 그린다
+            public int enhanceLevel;  // 장비 강화 단계(0 = 미강화). 1 이상이면 슬롯 좌측 하단에 흰 "+N" 배지
         }
 
         [SerializeField] private Display _data;
         [SerializeField] private Image _icon;
+
+        private ItemSlotView _slotView; // 공용 슬롯 프리팹 인스턴스(아이콘·등급 배경·수량·강화 배지를 그린다)
 
         public Display Data => _data;
 
@@ -60,43 +64,40 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>표시 데이터로 등급 배경 + 아이콘/라벨을 구성한다.
-        /// GO 자체 Image는 등급 배경색(레이캐스트 대상), 실제 아이콘 스프라이트는 자식으로 그린다.</summary>
-        public void Setup(Display display, Font font)
+        /// <summary>표시 데이터로 슬롯을 구성한다. <b>아이콘·등급 배경·수량·강화 배지는 공용 슬롯 프리팹
+        /// (<see cref="ItemSlotView"/>)이 그린다</b> — 모든 UI가 같은 아이템 칸 외형을 쓰도록 통일한 지점이다.
+        /// 이 오브젝트 자체는 <b>드래그·hover를 받는 투명 판</b>이고, 인벤토리 고유 표시(착용 불가 X, 아이콘
+        /// 없는 아이템의 첫 글자 폴백)만 슬롯 위에 얹는다.
+        /// <paramref name="slotPrefab"/>이 없으면(프리팹 미배선) 경고를 남기고 아이콘 없는 빈 칸이 된다.</summary>
+        public void Setup(Display display, Font font, GameObject slotPrefab)
         {
             _data = display;
             _rt = (RectTransform)transform;
 
-            // 배경(GO 이미지) = 등급 색. 드래그/hover 레이캐스트 대상.
+            // 루트 이미지 = 투명한 입력 판(드래그/hover 레이캐스트 대상). 그림은 공용 슬롯이 담당한다.
             _icon = gameObject.GetComponent<Image>();
             if (_icon == null)
             {
                 _icon = gameObject.AddComponent<Image>();
             }
             _icon.sprite = null;
-            _icon.color = InventoryPanelController.GradeBackgroundColor(display.gradeValue);
+            _icon.color = new Color(0f, 0f, 0f, 0f);
             _icon.raycastTarget = true;
 
             bool hasSprite = display.icon != null;
             bool locked = display.equipLocked; // 착용 불가(클래스 불일치·레벨 미달): 흐리게 + X 표시
 
-            // 아이콘 스프라이트(자식) — 배경 위에 표시.
-            var iconTf = transform.Find("IconSprite");
-            var iconGo = iconTf != null ? iconTf.gameObject
-                : new GameObject("IconSprite", typeof(RectTransform), typeof(Image));
-            iconGo.transform.SetParent(transform, false);
-            var iconImg = iconGo.GetComponent<Image>();
-            iconImg.raycastTarget = false;
-            iconImg.preserveAspect = true;
-            iconImg.sprite = hasSprite ? display.icon : null;
-            Color iconBase = hasSprite ? Color.white : display.iconColor;
-            iconImg.color = locked ? new Color(iconBase.r, iconBase.g, iconBase.b, 0.35f) : iconBase; // 잠금 시 흐리게
-            iconImg.enabled = hasSprite || string.IsNullOrEmpty(display.name); // 스프라이트 없고 이름도 없으면 색 사각형
-            var irt = (RectTransform)iconGo.transform;
-            irt.anchorMin = Vector2.zero;
-            irt.anchorMax = Vector2.one;
-            irt.offsetMin = new Vector2(6f, 6f);
-            irt.offsetMax = new Vector2(-6f, -6f);
+            EnsureSlotView(slotPrefab);
+            if (_slotView != null)
+            {
+                // 격자 칸이 이미 자기 프레임을 그리므로 슬롯 프레임은 감춘다(이중 테두리 방지).
+                // hover 상세는 인벤토리 전용 툴팁(장착·사용 버튼 포함)이 담당하므로 showDetail = false.
+                _slotView.Setup(display.itemCode, display.quantity,
+                    display.quantity > 1 ? $"x{display.quantity}" : string.Empty, false);
+                _slotView.SetFrameVisible(false);
+                _slotView.SetEnhanceLevel(display.enhanceLevel);
+                _slotView.SetIconDimmed(locked);
+            }
 
             // 라벨: 실제 아이콘이 없을 때만 첫 글자 폴백 표시.
             var labelTf = transform.Find("Label");
@@ -137,43 +138,41 @@ namespace TaskbarHero.Client.UI
             krt.offsetMin = Vector2.zero;
             krt.offsetMax = Vector2.zero;
             lockGo.SetActive(locked);
-
-            SetupEnhanceBadge(display.enhanceLevel, font);
         }
 
-        /// <summary>강화 단계 "+N" 배지(슬롯 <b>좌측 하단</b>, 금색). 0이면 감춘다.
-        /// 슬롯은 재사용되므로(칸 위치에 다른 아이템이 들어온다) 매 구성마다 표시 여부를 다시 정한다.</summary>
-        private void SetupEnhanceBadge(int enhanceLevel, Font font)
+        /// <summary>
+        /// 공용 아이템 슬롯 프리팹 인스턴스를 이 오브젝트의 <b>첫 번째 자식</b>으로 확보한다(최초 1회 생성).
+        /// 첫 자식으로 두어 인벤토리 고유 표시(첫 글자 라벨·착용 불가 X)가 항상 슬롯 그림 위에 오게 한다.
+        /// 프리팹이 배선되지 않았으면 경고만 남긴다 — 아이콘 표현을 코드로 따로 만들면 화면마다 외형이
+        /// 다시 갈라지므로, 폴백을 두지 않고 <c>TaskbarHero/UI/아이템 슬롯·상세 팝업 배선</c> 실행을 유도한다.
+        /// </summary>
+        private void EnsureSlotView(GameObject slotPrefab)
         {
-            var tf = transform.Find("EnhanceBadge");
-            if (enhanceLevel <= 0 && tf == null)
+            if (_slotView != null)
             {
-                return; // 만들 필요도 없다(미강화 아이템이 대다수)
+                return;
             }
-
-            var go = tf != null ? tf.gameObject
-                : new GameObject("EnhanceBadge", typeof(RectTransform), typeof(Text));
-            go.transform.SetParent(transform, false);
-            go.transform.SetAsLastSibling(); // 아이콘·X 표시 위에 그린다
-            var text = go.GetComponent<Text>();
-            text.font = font;
-            text.text = $"+{enhanceLevel}";
-            text.fontSize = 32;
-            text.fontStyle = FontStyle.Bold;
-            text.alignment = TextAnchor.LowerLeft;
-            text.color = new Color(1f, 0.86f, 0.42f);
-            text.raycastTarget = false; // 드래그·hover는 슬롯 배경이 받아야 한다
-            var rt = (RectTransform)go.transform;
-            rt.anchorMin = Vector2.zero;   // 슬롯 좌측 하단
-            rt.anchorMax = Vector2.zero;
-            rt.pivot = Vector2.zero;
-            rt.anchoredPosition = new Vector2(4f, 2f);
-            rt.sizeDelta = new Vector2(80f, 40f); // 글자 크기(32)보다 넉넉하게 — Text는 줄 높이가 넘치면 그 줄을 안 그린다
-            go.SetActive(enhanceLevel > 0);
+            _slotView = GetComponentInChildren<ItemSlotView>(true); // 프리팹에 이미 구워져 있으면 재사용
+            if (_slotView != null)
+            {
+                return;
+            }
+            if (slotPrefab == null)
+            {
+                Debug.LogWarning("[Inventory] 공용 아이템 슬롯 프리팹이 배선되지 않았습니다. " +
+                                 "메뉴 'TaskbarHero/UI/아이템 슬롯·상세 팝업 배선'을 실행하세요.");
+                return;
+            }
+            var go = Instantiate(slotPrefab, transform);
+            go.name = "ItemSlot";
+            go.transform.SetAsFirstSibling();
+            var srt = (RectTransform)go.transform;
+            srt.anchorMin = Vector2.zero;
+            srt.anchorMax = Vector2.one;
+            srt.offsetMin = Vector2.zero;
+            srt.offsetMax = Vector2.zero;
+            _slotView = go.GetComponent<ItemSlotView>();
         }
-
-        /// <summary>에디터 빌드 호환용 별칭.</summary>
-        public void EditorSetup(Display display, Font font) => Setup(display, font);
 
         /// <summary>지정 슬롯 아래로 배치하고 패딩만큼 여백을 준다.</summary>
         public void AttachTo(InventoryItemSlot slot)

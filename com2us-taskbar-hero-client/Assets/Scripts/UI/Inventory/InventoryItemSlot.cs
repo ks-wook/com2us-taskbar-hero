@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.UI
 {
@@ -22,6 +23,7 @@ namespace TaskbarHero.Client.UI
 
         private InventoryPanelController _controller;
         private GameObject _equippedIcon;
+        private ItemSlotView _equippedSlotView; // 장착 아이템을 그리는 공용 슬롯(아이콘·등급·강화 배지)
         private Text _equippedLabel;
         private InventoryItemView.Display? _equipped;
 
@@ -72,8 +74,10 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>장비 슬롯에 장착 아이템을 표시하거나(값 있음), 비운다(null).
-        /// Display.icon이 있으면 실제 아이콘 스프라이트, 없으면 색+첫글자로 폴백한다.</summary>
-        public void SetEquipped(InventoryItemView.Display? data, Font font)
+        /// 그림은 <b>공용 아이템 슬롯 프리팹</b>(<see cref="ItemSlotView"/>)이 그리므로 가방 칸·큐브·거래소와
+        /// 같은 외형이 되고, <b>강화 단계도 같은 자리(좌측 하단 흰 "+N")에</b> 나온다
+        /// (이전에는 장착 칸에만 강화 표시가 없었다). 아이콘이 없는 아이템은 첫 글자를 폴백으로 얹는다.</summary>
+        public void SetEquipped(InventoryItemView.Display? data, Font font, GameObject slotPrefab)
         {
             _equipped = data;
 
@@ -90,12 +94,20 @@ namespace TaskbarHero.Client.UI
                 return;
             }
 
-            EnsureEquippedIcon(font);
-            var img = _equippedIcon.GetComponent<Image>();
+            EnsureEquippedIcon(font, slotPrefab);
+            if (_equippedIcon == null)
+            {
+                return; // 프리팹 미배선(경고는 EnsureEquippedIcon이 남긴다)
+            }
             bool hasSprite = data.Value.icon != null;
-            img.sprite = hasSprite ? data.Value.icon : null;
-            img.color = hasSprite ? Color.white : data.Value.iconColor;
-            img.preserveAspect = hasSprite;
+            if (_equippedSlotView != null)
+            {
+                // 부위 칸이 이미 자기 프레임을 그리므로 슬롯 프레임은 감춘다. hover 상세는 이 칸이 직접
+                // 인벤토리 툴팁을 띄우므로(OnPointerEnter) 슬롯의 공용 팝업은 끈다.
+                _equippedSlotView.Setup(data.Value.itemCode, 1L, string.Empty, false);
+                _equippedSlotView.SetFrameVisible(false);
+                _equippedSlotView.SetEnhanceLevel(data.Value.enhanceLevel);
+            }
             if (_equippedLabel != null)
             {
                 _equippedLabel.text = hasSprite || string.IsNullOrEmpty(data.Value.name)
@@ -109,26 +121,35 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>장착 아이콘 오브젝트를 최초 1회 생성한다(런타임).</summary>
-        private void EnsureEquippedIcon(Font font)
+        /// <summary>장착 표시 계층을 최초 1회 만든다(런타임) — 공용 슬롯 프리팹 인스턴스 + 첫 글자 폴백 라벨.
+        /// 프리팹이 배선되지 않았으면 경고만 남기고 아무것도 만들지 않는다(코드로 다른 외형을 만들면
+        /// 화면마다 아이템 칸이 다시 갈라진다).</summary>
+        private void EnsureEquippedIcon(Font font, GameObject slotPrefab)
         {
             if (_equippedIcon != null)
             {
                 return;
             }
+            if (slotPrefab == null)
+            {
+                Debug.LogWarning("[Inventory] 공용 아이템 슬롯 프리팹이 배선되지 않았습니다. " +
+                                 "메뉴 'TaskbarHero/UI/아이템 슬롯·상세 팝업 배선'을 실행하세요.");
+                return;
+            }
 
-            var go = new GameObject("EquippedIcon", typeof(RectTransform), typeof(Image));
-            go.transform.SetParent(transform, false);
+            var go = Instantiate(slotPrefab, transform);
+            go.name = "EquippedIcon";
             var rt = (RectTransform)go.transform;
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;
             rt.offsetMin = new Vector2(14f, 14f);
             rt.offsetMax = new Vector2(-14f, -14f);
-            go.GetComponent<Image>().raycastTarget = false; // 슬롯 배경이 hover를 받도록
+            _equippedSlotView = go.GetComponent<ItemSlotView>();
             _equippedIcon = go;
 
             var lgo = new GameObject("Label", typeof(RectTransform), typeof(Text));
             lgo.transform.SetParent(go.transform, false);
+            lgo.transform.SetAsLastSibling(); // 슬롯 그림 위
             var lrt = (RectTransform)lgo.transform;
             lrt.anchorMin = Vector2.zero;
             lrt.anchorMax = Vector2.one;

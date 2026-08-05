@@ -82,6 +82,14 @@ namespace TaskbarHero.Client.Battle
         private Coroutine _lungeAnim;
         private float _lungeApplied;                    // 지금 위치에 반영돼 있는 lunge 오프셋
 
+        /// <summary>
+        /// 카메라 팔로우가 기준으로 삼을 x — <b>연출용 lunge 오프셋을 뺀 위치</b>다.
+        /// <para>카메라 x는 최전방 아군을 그대로 따라가므로, 평타마다 0.32유닛을 앞뒤로 오가는 lunge를
+        /// 그대로 따라가면 <b>기본공격마다 카메라가 왕복해 셰이크처럼 보인다</b>(2026-08-05 수정).
+        /// 대형 이동·돌진처럼 <b>실제로 이동한 결과</b>는 이 값에 그대로 반영되므로 카메라가 따라간다.</para>
+        /// </summary>
+        public float CameraFollowX => transform.position.x - _lungeApplied;
+
         // ---- 스킬별 화면 효과(3순위) ----
         // 마스터 데이터의 스킬 코드는 고정 키라 연출 분기 기준으로 안전하다(이름 문자열로 비교하지 않는다).
         private const int KnightPowerStrikeSkillCode = 103; // 강타 — 바닥 데칼
