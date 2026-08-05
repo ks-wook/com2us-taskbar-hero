@@ -92,6 +92,9 @@ namespace TaskbarHero.Client.Managers
         UpgradeSuccess,
         CubeCombine,
         RewardClaim,
+        // 장비 강화 2단 연출(사운드 리소스 정의서 §6) — 망치음은 요청 시작에, 성공음은 망치질이 끝나는 시점에.
+        EnhanceHammer,
+        EnhanceSuccess,
 
         // ── SFX/Gacha (사운드 리소스 정의서 §7) ──
         // 등급 연출음은 3·4·5등급만 둔다 — 노말·고급은 연출 영상이 없어 슬롯 공개음으로 끝난다.

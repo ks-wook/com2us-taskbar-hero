@@ -744,6 +744,7 @@ namespace TaskbarHero.Client.UI.Trade
                 {
                     view.SetFrameSprite(SlotSpriteFor(listing.itemCode));
                     view.Setup(listing.itemCode, listing.quantity);
+                    view.SetEnhanceLevel(listing.enhanceLevel); // 강화 장비는 슬롯에도 "+N"을 표시한다
                 }
                 return;
             }
@@ -926,6 +927,7 @@ namespace TaskbarHero.Client.UI.Trade
                 {
                     view.SetFrameSprite(SlotSpriteFor(item.itemCode));
                     view.Setup(item.itemCode, item.quantity);
+                    view.SetEnhanceLevel(item.enhanceLevel); // 강화 장비는 슬롯에도 "+N"을 표시한다
                 }
             }
 

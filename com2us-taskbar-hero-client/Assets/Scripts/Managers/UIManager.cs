@@ -303,6 +303,25 @@ namespace TaskbarHero.Client.Managers
             TaskbarWindow.Instance?.SetExpanded(true); // 패널 표시 → 창 확장
         }
 
+        /// <summary>
+        /// 이미 만들어진 패널의 창 본체(<c>PanelRoot</c>) RectTransform을 돌려준다. 없으면 null이며
+        /// <b>새로 만들지 않는다</b>.
+        /// <para>한 패널이 다른 패널이 있던 자리에 뜨게 할 때 쓴다(예: 인벤토리에서 여는 큐브 패널) —
+        /// 사용자가 창을 옮겼거나 크기를 바꿨을 수 있으므로 프리팹 값이 아니라 <b>살아 있는 인스턴스</b>를 기준으로
+        /// 삼아야 실제로 보고 있던 위치와 맞는다.</para>
+        /// </summary>
+        public RectTransform FindPanelRoot(PanelType type)
+        {
+            if (_instances.TryGetValue(type, out var panel) && panel != null)
+            {
+                return panel.transform.Find(PanelRootName) as RectTransform;
+            }
+            return null;
+        }
+
+        /// <summary>패널 프리팹들이 공통으로 쓰는 창 본체 오브젝트 이름(각 패널 컨트롤러의 Construct가 만든다).</summary>
+        private const string PanelRootName = "PanelRoot";
+
         /// <summary>지정한 패널을 숨긴다.</summary>
         public void Hide(PanelType type)
         {

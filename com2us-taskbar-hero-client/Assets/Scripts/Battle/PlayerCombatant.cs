@@ -291,11 +291,14 @@ namespace TaskbarHero.Client.Battle
                     if (it != null && it.equippedCharacterId == _characterId
                         && db.Items.TryGetValue(it.itemCode, out ItemMaster im))
                     {
-                        atk += im.baseStats.atk;
-                        hp += im.baseStats.hp;
-                        def += im.baseStats.def;
-                        critChance += im.baseStats.critChance;
-                        critDamage += im.baseStats.critDamage;
+                        // 강화 단계 배율(enhance_master)을 그 장비의 옵션 스탯에 곱한다 — 서버는 단계만 확정하고
+                        // 배율은 응답에 담지 않으므로(기획서 §5.3) 인벤토리 능력치 패널과 같은 규칙으로 계산한다.
+                        float em = db.EnhanceMultiplier(it.enhanceLevel);
+                        atk += (long)System.Math.Round(im.baseStats.atk * (double)em);
+                        hp += (long)System.Math.Round(im.baseStats.hp * (double)em);
+                        def += (long)System.Math.Round(im.baseStats.def * (double)em);
+                        critChance += im.baseStats.critChance * em;
+                        critDamage += im.baseStats.critDamage * em;
                     }
                 }
             }

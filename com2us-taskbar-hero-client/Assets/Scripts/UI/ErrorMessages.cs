@@ -68,6 +68,11 @@ namespace TaskbarHero.Client.UI
                     return "골드가 부족합니다.";
                 case ErrorCode.InventoryCapacityMax:
                     return "인벤토리가 이미 최대 용량입니다.";
+                // 장비 강화 도메인(inventory-item-cube 기획서 §5.3)
+                case ErrorCode.MaxEnhanceReached:
+                    return "이미 최대 강화 단계입니다.";
+                case ErrorCode.ItemNotEquippable:
+                    return "장비가 아니어서 강화할 수 없습니다.";
                 case ErrorCode.InventoryFull:
                     return "인벤토리가 가득 차 받을 수 없습니다.";
                 // 소모품/버프 도메인(consumable-buff 기획서 §7)

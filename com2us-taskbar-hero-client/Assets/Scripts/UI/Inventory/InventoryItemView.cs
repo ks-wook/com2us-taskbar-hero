@@ -32,6 +32,7 @@ namespace TaskbarHero.Client.UI
             public bool equippable;   // 착용 가능 여부(장비 + 현재 캐릭터 클래스·레벨 허용). 장착 버튼 활성 조건
             public bool equipLocked;  // 착용 불가 장비(클래스 불일치 또는 레벨 미달) → 슬롯에 X 표시 + 흐림
             public bool usable;       // 소모품(item_type=4) 여부. true면 툴팁 버튼이 '장착'이 아니라 '사용'이 된다
+            public int enhanceLevel;  // 장비 강화 단계(0 = 미강화). 1 이상이면 슬롯 좌상단에 "+N" 배지를 그린다
         }
 
         [SerializeField] private Display _data;
@@ -136,6 +137,39 @@ namespace TaskbarHero.Client.UI
             krt.offsetMin = Vector2.zero;
             krt.offsetMax = Vector2.zero;
             lockGo.SetActive(locked);
+
+            SetupEnhanceBadge(display.enhanceLevel, font);
+        }
+
+        /// <summary>강화 단계 "+N" 배지(슬롯 <b>좌측 하단</b>, 금색). 0이면 감춘다.
+        /// 슬롯은 재사용되므로(칸 위치에 다른 아이템이 들어온다) 매 구성마다 표시 여부를 다시 정한다.</summary>
+        private void SetupEnhanceBadge(int enhanceLevel, Font font)
+        {
+            var tf = transform.Find("EnhanceBadge");
+            if (enhanceLevel <= 0 && tf == null)
+            {
+                return; // 만들 필요도 없다(미강화 아이템이 대다수)
+            }
+
+            var go = tf != null ? tf.gameObject
+                : new GameObject("EnhanceBadge", typeof(RectTransform), typeof(Text));
+            go.transform.SetParent(transform, false);
+            go.transform.SetAsLastSibling(); // 아이콘·X 표시 위에 그린다
+            var text = go.GetComponent<Text>();
+            text.font = font;
+            text.text = $"+{enhanceLevel}";
+            text.fontSize = 32;
+            text.fontStyle = FontStyle.Bold;
+            text.alignment = TextAnchor.LowerLeft;
+            text.color = new Color(1f, 0.86f, 0.42f);
+            text.raycastTarget = false; // 드래그·hover는 슬롯 배경이 받아야 한다
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero;   // 슬롯 좌측 하단
+            rt.anchorMax = Vector2.zero;
+            rt.pivot = Vector2.zero;
+            rt.anchoredPosition = new Vector2(4f, 2f);
+            rt.sizeDelta = new Vector2(80f, 40f); // 글자 크기(32)보다 넉넉하게 — Text는 줄 높이가 넘치면 그 줄을 안 그린다
+            go.SetActive(enhanceLevel > 0);
         }
 
         /// <summary>에디터 빌드 호환용 별칭.</summary>

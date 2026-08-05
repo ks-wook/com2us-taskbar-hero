@@ -1289,7 +1289,9 @@ namespace TaskbarHero.Client.UI
             return total;
         }
 
-        /// <summary>이 캐릭터에 장착된 장비 스탯 합산(가산분). 장착 정보는 코어 로드의 equipped가 정본이다.</summary>
+        /// <summary>이 캐릭터에 장착된 장비 스탯 합산(가산분). 장착 정보는 코어 로드의 equipped가 정본이다.
+        /// 각 장비의 옵션 스탯에는 그 장비의 <b>강화 단계 배율</b>(enhance_master)을 먼저 곱한다 —
+        /// 서버는 단계만 확정하고 배율은 내려주지 않으므로(기획서 §5.3) 전투 계산(PlayerCombatant)과 같은 규칙을 쓴다.</summary>
         private static Stats EquipStats(CharacterDto c)
         {
             var db = MasterDataManager.Db;
@@ -1304,10 +1306,25 @@ namespace TaskbarHero.Client.UI
                 if (item != null && item.equippedCharacterId == c.characterId
                     && db.Items.TryGetValue(item.itemCode, out var im))
                 {
-                    total = Add(total, im.baseStats);
+                    total = Add(total, Enhanced(im.baseStats, db.EnhanceMultiplier(item.enhanceLevel)));
                 }
             }
             return total;
+        }
+
+        /// <summary>장비 옵션 스탯에 강화 배율을 적용한 사본(이동속도·쿨다운은 배율 대상이 아니다 — ItemInfoText.Stats와 같은 규칙).</summary>
+        private static Stats Enhanced(Stats s, float mult)
+        {
+            if (mult == 1f)
+            {
+                return s;
+            }
+            s.atk = (long)System.Math.Round(s.atk * (double)mult);
+            s.def = (long)System.Math.Round(s.def * (double)mult);
+            s.hp = (long)System.Math.Round(s.hp * (double)mult);
+            s.critChance *= mult;
+            s.critDamage *= mult;
+            return s;
         }
 
         /// <summary>이 캐릭터가 습득(레벨 ≥ 1)한 패시브 스킬 중 대상 statType을 올리는 것들의 레벨별 배율 곱(전투와 동일 규칙).
@@ -1444,13 +1461,9 @@ namespace TaskbarHero.Client.UI
 
             // 상세 문구(등급명·종류·요구조건·설명)는 공용 헬퍼로 통일한다 — 스테이지 클리어 보상·우편함·
             // (추후) 거래소의 아이템 상세 팝업(ItemDetailPopup)과 완전히 같은 텍스트가 나오도록 한다.
-            var info = ItemInfoText.Build(itemCode, quantity);
-
+            // 강화 단계를 함께 넘겨 이름 "+N"과 옵션 스탯 배율(enhance_master)이 한곳에서 정해지게 한다.
+            var info = ItemInfoText.Build(itemCode, quantity, enhanceLevel);
             string name = info.name;
-            if (enhanceLevel > 0)
-            {
-                name += $" +{enhanceLevel}";
-            }
 
             // 착용 가능 판정: 장비이면서 (공용이거나 현재 캐릭터의 직업과 클래스 제한 일치) + (요구 레벨 이하)여야 한다.
             // 클래스 불일치 또는 레벨 미달 장비는 착용 불가(슬롯에 X 표시 + 장착 버튼 비활성).
@@ -1471,7 +1484,7 @@ namespace TaskbarHero.Client.UI
                 gradeValue = info.gradeValue,
                 slotName = info.category,
                 requirement = info.requirement,
-                stats = ItemInfoText.Stats(im),
+                stats = ItemInfoText.Stats(im, enhanceLevel),
                 description = info.description,
                 iconColor = GradeColor(info.gradeValue),
                 icon = _iconDb != null ? _iconDb.Get(itemCode) : null,
@@ -1480,6 +1493,7 @@ namespace TaskbarHero.Client.UI
                 equippable = isEquip && classOk && levelOk,
                 equipLocked = equipLocked,
                 usable = isConsumable && equippedSlot == 0, // 가방에 있는 소모품만 사용할 수 있다
+                enhanceLevel = enhanceLevel,               // 슬롯 좌상단 "+N" 배지
             };
         }
 

@@ -309,6 +309,40 @@ namespace TaskbarHero.Client.Managers
             }
         }
 
+        /// <summary>
+        /// 장비 강화 응답을 캐시에 반영한다 — 그 아이템의 강화 단계만 올리고 재화 잔액을 갱신한다.
+        /// <para>강화는 가방 구성을 바꾸지 않아 서버가 <c>inventoryDelta</c>를 주지 않으므로(기획서 §5.3),
+        /// <c>itemId</c>로 찾아 단계를 덮어쓰는 것으로 끝난다. <b>장착 중인 장비도 강화할 수 있어</b>
+        /// 가방 행과 장착 행(코어 로드의 <c>equipped</c>) 양쪽을 모두 본다 — 장착 행을 놓치면 전투·능력치가
+        /// 옛 단계로 계산된다(서버도 같은 이유로 두 테이블을 함께 갱신한다).</para>
+        /// </summary>
+        public static void ApplyEnhanceResult(EnhanceResultData data)
+        {
+            if (data == null || data.itemId == 0)
+            {
+                return;
+            }
+
+            var bagRow = FindBagItem(data.itemId);
+            if (bagRow != null)
+            {
+                bagRow.enhanceLevel = data.enhanceLevel;
+            }
+            var equipped = Equipped;
+            if (equipped != null)
+            {
+                foreach (var it in equipped)
+                {
+                    if (it != null && it.itemId == data.itemId)
+                    {
+                        it.enhanceLevel = data.enhanceLevel;
+                        break;
+                    }
+                }
+            }
+            ApplyBalance(data.balance);
+        }
+
         /// <summary>룬 1개의 레벨을 응답 값으로 갱신한다(캐시에 없던 룬이면 추가). 룬 강화 후.</summary>
         public static void ApplyRuneLevel(int runeCode, int level)
         {

@@ -92,6 +92,8 @@ namespace TaskbarHero.ClientEditor
             { SoundId.UpgradeSuccess, "sfx_upgrade_success" },
             { SoundId.CubeCombine, "sfx_cube_combine" },
             { SoundId.RewardClaim, "sfx_reward_claim" },
+            { SoundId.EnhanceHammer, "sfx_enhance_hammer" },
+            { SoundId.EnhanceSuccess, "sfx_enhance_success" },
 
             { SoundId.GachaPullSingle, "sfx_gacha_pull_single" },
             { SoundId.GachaPullMulti, "sfx_gacha_pull_multi" },

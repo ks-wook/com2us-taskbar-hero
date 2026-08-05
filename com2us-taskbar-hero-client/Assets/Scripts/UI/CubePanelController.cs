@@ -22,12 +22,18 @@ namespace TaskbarHero.Client.UI
     /// </summary>
     public class CubePanelController : MonoBehaviour
     {
-        private enum Mode { Combine, Dismantle, Craft }
+        private enum Mode { Combine, Dismantle, Craft, Enhance }
 
         [Header("UI 리소스 (Assets/Art/UI/Cube)")]
         [SerializeField] private Sprite panelBackground; // cube_bg
         [SerializeField] private Sprite slotNormal;
         [SerializeField] private Sprite slotHighlight;
+
+        [Header("강화 연출 프레임 (Assets/Art/Effect/UI — 에디터 빌더가 배선)")]
+        [Tooltip("강화 망치질 프레임(EquipEnhanceHammer_01~). 요청 시작과 함께 재생된다.")]
+        [SerializeField] private Sprite[] enhanceHammerFrames;
+        [Tooltip("강화 성공 버스트 프레임(EnhanceSuccessBurst_01~). 망치질이 끝나는 시점에 터진다.")]
+        [SerializeField] private Sprite[] enhanceBurstFrames;
 
         [Header("구성 참조 (에디터 빌더가 배선 — 직접 수정 불필요)")]
         [SerializeField] private Image _goldIcon;
@@ -37,6 +43,7 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Button _combineTab;
         [SerializeField] private Button _dismantleTab;
         [SerializeField] private Button _craftTab;
+        [SerializeField] private Button _enhanceTab;
         [SerializeField] private Text _levelText;
         [SerializeField] private RectTransform _expFill;
         [SerializeField] private RectTransform _contentArea;
@@ -44,6 +51,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Text _actionLabel;
         [SerializeField] private Text _footerText;
         [SerializeField] private Text _messageText;
+        [Tooltip("창 본체(PanelRoot). 표시할 때 인벤토리 패널 자리에 맞추는 데 쓴다.")]
+        [SerializeField] private RectTransform _panelRoot;
 
         private const float CanvasRefWidth = 1080f;
         private const float CanvasRefHeight = 1920f;
@@ -51,6 +60,16 @@ namespace TaskbarHero.Client.UI
         private const int GoldItemCode = 1;
         private const float ExpTrackWidth = 520f;
         private const int GridColumns = 5;
+        // 탭 4개(합성·연금술·제작·강화)를 내용 영역 폭(x 40 ~ 780) 안에 균등 배치하는 값.
+        private const float TabWidth = 170f;
+        private const float TabGap = 20f;
+
+        // 내용 영역(아이템 그리드) 여백. 높이를 고정값으로 두면 PanelRoot 높이를 줄였을 때 아래로 넘쳐
+        // 실행바·문구를 덮거나(넘침) 반대로 0에 가깝게 눌려 아무것도 안 보이므로, 위·아래·좌우 여백만 정하고
+        // **PanelRoot 크기에 맞춰 늘어나도록** 앵커로 잡는다(사용자가 프리팹에서 패널 크기를 조절해도 따라온다).
+        private const float ContentSideMargin = 40f;   // 좌우 여백(폭 820 기준 내용 폭 740)
+        private const float ContentTopMargin = 260f;   // 제목·탭·큐브 레벨바가 차지하는 상단
+        private const float ContentBottomMargin = 260f; // 실행 버튼(150~246)·하단 문구가 차지하는 하단
 
         private Font _font;
         private RectTransform _rootRect;
@@ -61,6 +80,9 @@ namespace TaskbarHero.Client.UI
         private readonly List<long> _selCombine = new List<long>();
         private readonly List<long> _selDismantle = new List<long>();
         private int _selRecipe;
+
+        // 강화는 한 번에 장비 1개만 다룬다(1회 호출 = 1단계, 기획서 §5.3).
+        private long _selEnhance;
 
         private readonly List<GameObject> _contentChildren = new List<GameObject>();
 
@@ -73,6 +95,11 @@ namespace TaskbarHero.Client.UI
             if (AlreadyBuilt)
             {
                 _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                if (_panelRoot == null)
+                {
+                    // 프리팹이 이 참조가 없던 시절에 구워졌을 때의 폴백(빌더를 다시 실행하면 배선된다).
+                    _panelRoot = transform.Find("PanelRoot") as RectTransform;
+                }
             }
             else
             {
@@ -91,6 +118,8 @@ namespace TaskbarHero.Client.UI
                 return;
             }
             SetMessage(string.Empty);
+            _selEnhance = 0; // 닫았다 다시 열면 선택은 초기화한다(그 사이 장비가 사라졌을 수 있다)
+            AlignToInventoryPanel(); // 방금 보고 있던 인벤토리 창 자리에 띄운다
             RefreshFromSession();
             InventoryLoader.ReloadBag(RefreshIfOpen, OnBagLoadError);
         }
@@ -177,7 +206,42 @@ namespace TaskbarHero.Client.UI
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(820f, 1400f);
             rt.anchoredPosition = Vector2.zero;
+            _panelRoot = rt;
             return rt;
+        }
+
+        /// <summary>
+        /// 큐브 패널을 <b>인벤토리 패널이 있던 자리</b>에 맞춘다(표시할 때마다). 큐브는 인벤토리의 '큐브' 버튼으로만
+        /// 열리므로, 화면 중앙에 뜨면 방금 보고 있던 창에서 시선이 크게 튄다.
+        /// <para>기준 창의 <b>오른쪽 변·세로 중심</b>에 맞춘다 — 인벤토리 창은 화면 오른쪽에 붙어 있고 큐브 창이 더
+        /// 넓으므로, 중심을 맞추면 오른쪽이 화면 밖으로 밀린다.</para>
+        /// <para>인벤토리 인스턴스가 아직 없으면(단독 호출) 프리팹에 구워진 중앙 배치를 그대로 둔다.
+        /// 두 패널 모두 ScreenSpaceOverlay 캔버스라 월드 좌표가 곧 화면 픽셀이고, 화면 픽셀을 이 패널 캔버스의
+        /// 로컬 좌표로 되돌려 배치한다(두 캔버스의 배율이 같아도 좌표계를 직접 가정하지 않는다).</para>
+        /// </summary>
+        private void AlignToInventoryPanel()
+        {
+            if (_panelRoot == null || _rootRect == null || UIManager.Instance == null)
+            {
+                return;
+            }
+            var reference = UIManager.Instance.FindPanelRoot(UIManager.PanelType.Inventory);
+            if (reference == null || reference == _panelRoot)
+            {
+                return;
+            }
+
+            var corners = new Vector3[4]; // 0=좌하 1=좌상 2=우상 3=우하
+            reference.GetWorldCorners(corners);
+            var rightCenter = new Vector2(corners[2].x, (corners[0].y + corners[2].y) * 0.5f);
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_rootRect, rightCenter, null, out var local))
+            {
+                return;
+            }
+
+            _panelRoot.anchorMin = _panelRoot.anchorMax = new Vector2(0.5f, 0.5f);
+            _panelRoot.pivot = new Vector2(1f, 0.5f); // 오른쪽 변 기준
+            _panelRoot.anchoredPosition = local;
         }
 
         /// <summary>제목(중앙) + 보유 골드(좌상단) + 닫기(우상단).</summary>
@@ -213,22 +277,28 @@ namespace TaskbarHero.Client.UI
             _closeButton = closeImg.gameObject.AddComponent<Button>();
         }
 
-        /// <summary>합성/연금술/제작 탭 버튼 3개(가로 배치).</summary>
+        /// <summary>합성/연금술/제작/강화 탭 버튼 4개(가로 배치). 네 칸이 내용 영역 폭(740) 안에 들어가도록
+        /// 칸 폭을 <see cref="TabWidth"/>로 좁혀 균등 배치한다.</summary>
         private void BuildTabs(RectTransform container)
         {
-            _combineTab = BuildTab(container, "CombineTab", "합성", 40f);
-            _dismantleTab = BuildTab(container, "DismantleTab", "연금술", 296f);
-            _craftTab = BuildTab(container, "CraftTab", "제작", 552f);
+            _combineTab = BuildTab(container, "CombineTab", "합성", TabX(0));
+            _dismantleTab = BuildTab(container, "DismantleTab", "연금술", TabX(1));
+            _craftTab = BuildTab(container, "CraftTab", "제작", TabX(2));
+            _enhanceTab = BuildTab(container, "EnhanceTab", "강화", TabX(3));
             // 탭은 전환음(sfx_ui_tab)을 직접 재생하므로 전역 클릭음에서 제외한다.
             UiClickSound.Suppress(_combineTab);
             UiClickSound.Suppress(_dismantleTab);
             UiClickSound.Suppress(_craftTab);
+            UiClickSound.Suppress(_enhanceTab);
         }
+
+        /// <summary>탭 i번(0-based)의 왼쪽 x 좌표.</summary>
+        private static float TabX(int index) => 40f + index * (TabWidth + TabGap);
 
         private Button BuildTab(RectTransform container, string name, string label, float x)
         {
             var img = NewImage(name, container, slotNormal);
-            TopLeft(img.rectTransform, x, 108f, 228f, 64f);
+            TopLeft(img.rectTransform, x, 108f, TabWidth, 64f);
             var t = NewText("Label", img.rectTransform, label, 30, TextAnchor.MiddleCenter);
             t.fontStyle = FontStyle.Bold;
             Stretch(t.rectTransform);
@@ -259,13 +329,19 @@ namespace TaskbarHero.Client.UI
             _expFill = fill.rectTransform;
         }
 
-        /// <summary>모드별 내용(아이템 그리드·레시피 목록)이 채워지는 영역.</summary>
+        /// <summary>모드별 내용(아이템 그리드·레시피 목록)이 채워지는 영역.
+        /// 크기를 고정하지 않고 PanelRoot에 맞춰 늘어나게 앵커로 잡는다(<see cref="ContentTopMargin"/> 참고).</summary>
         private void BuildContentArea(RectTransform container)
         {
             var bg = NewImage("ContentArea", container, null);
             bg.color = new Color(0.05f, 0.06f, 0.10f, 0.6f);
-            TopLeft(bg.rectTransform, 40f, 260f, 740f, 900f);
-            _contentArea = bg.rectTransform;
+            var rt = bg.rectTransform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = new Vector2(ContentSideMargin, ContentBottomMargin);
+            rt.offsetMax = new Vector2(-ContentSideMargin, -ContentTopMargin);
+            _contentArea = rt;
         }
 
         /// <summary>실행 버튼(합성/연금술/제작).</summary>
@@ -309,6 +385,7 @@ namespace TaskbarHero.Client.UI
             if (_combineTab != null) _combineTab.onClick.AddListener(() => SwitchMode(Mode.Combine));
             if (_dismantleTab != null) _dismantleTab.onClick.AddListener(() => SwitchMode(Mode.Dismantle));
             if (_craftTab != null) _craftTab.onClick.AddListener(() => SwitchMode(Mode.Craft));
+            if (_enhanceTab != null) _enhanceTab.onClick.AddListener(() => SwitchMode(Mode.Enhance));
             if (_actionButton != null) _actionButton.onClick.AddListener(OnAction);
         }
 
@@ -371,6 +448,7 @@ namespace TaskbarHero.Client.UI
             SetTabActive(_combineTab, _mode == Mode.Combine);
             SetTabActive(_dismantleTab, _mode == Mode.Dismantle);
             SetTabActive(_craftTab, _mode == Mode.Craft);
+            SetTabActive(_enhanceTab, _mode == Mode.Enhance);
         }
 
         private static void SetTabActive(Button tab, bool active)
@@ -394,6 +472,7 @@ namespace TaskbarHero.Client.UI
             _selCombine.Clear();
             _selDismantle.Clear();
             _selRecipe = 0;
+            _selEnhance = 0;
             SetMessage(string.Empty);
             RefreshTabs();
             RebuildContent();
@@ -410,6 +489,7 @@ namespace TaskbarHero.Client.UI
                 case Mode.Combine: BuildCombineContent(); break;
                 case Mode.Dismantle: BuildDismantleContent(); break;
                 case Mode.Craft: BuildCraftContent(); break;
+                case Mode.Enhance: BuildEnhanceContent(); break;
             }
         }
 
@@ -527,6 +607,94 @@ namespace TaskbarHero.Client.UI
             SetAction("제작", hasAll && levelOk && goldOk);
         }
 
+        /// <summary>강화: 장비 그리드(가방 + <b>장착 중</b>). 한 개만 선택하며 하단에 다음 단계·비용·스탯 변화를 안내한다.
+        /// 장착 중인 장비도 해제 없이 강화할 수 있으므로(기획서 §5.3) 후보에 함께 올리고 '장착' 표시를 붙인다.</summary>
+        private void BuildEnhanceContent()
+        {
+            var content = BuildScrollGrid();
+            int count = 0;
+            foreach (var cand in EligibleEnhanceItems())
+            {
+                bool selected = cand.itemId == _selEnhance;
+                long id = cand.itemId;
+                CreateItemTile(content, cand.itemCode,
+                    EnhanceTileBadge(cand.enhanceLevel, cand.equipped), selected, () => SelectEnhance(id));
+                count++;
+            }
+            if (count == 0)
+            {
+                ShowEmptyHint("강화할 장비가 없습니다.");
+            }
+            RefreshEnhanceFooter();
+        }
+
+        /// <summary>선택 장비의 현재/다음 단계·비용·스탯 변화를 하단에 표시하고 실행 버튼을 갱신한다.
+        /// 최대 단계(enhance_master 행 수 = +10)에 도달했거나 골드가 부족하면 실행할 수 없다 —
+        /// 서버도 각각 MaxEnhanceReached(4004)·InsufficientCurrency(4005)로 거부한다.</summary>
+        private void RefreshEnhanceFooter()
+        {
+            var db = MasterDataManager.Db;
+            var cand = FindEnhanceCandidate(_selEnhance);
+            if (cand == null || db == null)
+            {
+                SetFooter("강화할 장비를 선택하세요.");
+                SetAction("강화", false);
+                return;
+            }
+
+            db.Items.TryGetValue(cand.Value.itemCode, out var im);
+            string name = im != null ? im.name : cand.Value.itemCode.ToString();
+            int cur = cand.Value.enhanceLevel;
+            var next = db.NextEnhance(cur);
+            if (next == null)
+            {
+                SetFooter($"{name} +{cur}\n최대 강화 단계입니다.");
+                SetAction("강화", false);
+                return;
+            }
+
+            long gold = CurrentGold();
+            bool goldOk = gold >= next.cost;
+            string statLine = EnhanceStatPreview(im, cur, next.enhanceLevel);
+            string equippedMark = cand.Value.equipped ? " (장착 중)" : string.Empty;
+            // 부족 안내는 메시지 줄이 아니라 하단 정보에 붙인다 — 메시지 줄은 액션 결과("강화 성공! +4")를 위해 비워 둔다.
+            SetFooter($"{name} +{cur} → +{next.enhanceLevel}{equippedMark}"
+                      + (string.IsNullOrEmpty(statLine) ? string.Empty : $"\n{statLine}")
+                      + $"\n비용: {GoldFormat.Highlight(next.cost)}"
+                      + (goldOk ? string.Empty : "  (골드 부족)"));
+            SetAction("강화", goldOk);
+        }
+
+        /// <summary>강화 전/후 옵션 스탯 비교 한 줄(예: "ATK 105 → 110"). 옵션이 없으면 빈 문자열.
+        /// 배율은 서버가 내려주지 않으므로 마스터(enhance_master)에서 읽는다(기획서 §5.3).</summary>
+        private static string EnhanceStatPreview(ItemMaster im, int currentLevel, int nextLevel)
+        {
+            var db = MasterDataManager.Db;
+            if (im == null || db == null || im.itemType != 1)
+            {
+                return string.Empty;
+            }
+            float curMult = db.EnhanceMultiplier(currentLevel);
+            float nextMult = db.EnhanceMultiplier(nextLevel);
+            var parts = new List<string>();
+            if (im.baseStats.atk != 0)
+            {
+                parts.Add($"ATK {ItemInfoText.ApplyMultiplier(im.baseStats.atk, curMult)}"
+                          + $" → {ItemInfoText.ApplyMultiplier(im.baseStats.atk, nextMult)}");
+            }
+            if (im.baseStats.def != 0)
+            {
+                parts.Add($"DEF {ItemInfoText.ApplyMultiplier(im.baseStats.def, curMult)}"
+                          + $" → {ItemInfoText.ApplyMultiplier(im.baseStats.def, nextMult)}");
+            }
+            if (im.baseStats.hp != 0)
+            {
+                parts.Add($"HP {ItemInfoText.ApplyMultiplier(im.baseStats.hp, curMult)}"
+                          + $" → {ItemInfoText.ApplyMultiplier(im.baseStats.hp, nextMult)}");
+            }
+            return parts.Count > 0 ? string.Join(" · ", parts) : string.Empty;
+        }
+
         // ── 상호작용(선택) ──
 
         private void ToggleCombine(long itemId)
@@ -573,6 +741,14 @@ namespace TaskbarHero.Client.UI
             RebuildContent();
         }
 
+        /// <summary>강화 대상 선택(단일). 같은 장비를 다시 누르면 선택을 해제한다.</summary>
+        private void SelectEnhance(long itemId)
+        {
+            _selEnhance = _selEnhance == itemId ? 0 : itemId;
+            SetMessage(string.Empty);
+            RebuildContent();
+        }
+
         // ── 실행(서버 요청) ──
 
         private void OnAction()
@@ -586,7 +762,92 @@ namespace TaskbarHero.Client.UI
                 case Mode.Combine: DoCombine(); break;
                 case Mode.Dismantle: DoDismantle(); break;
                 case Mode.Craft: DoCraft(); break;
+                case Mode.Enhance: DoEnhance(); break;
             }
+        }
+
+        /// <summary>
+        /// 장비 강화 요청(POST /api/game/inventory/enhance · 1회 = 1단계).
+        /// <para>연출은 <b>요청 시작과 동시에 망치질</b>을 시작하고(응답을 기다리지 않는다 — 강화는 실패·하락이
+        /// 없어 결과와 어긋날 위험이 없고, 왕복 지연 동안 무반응으로 느껴지는 것을 막는다), 성공 응답이 오면
+        /// <b>망치질이 끝나는 시점</b>에 성공 버스트와 함께 화면을 갱신한다(사운드 리소스 정의서 §6).</para>
+        /// </summary>
+        private void DoEnhance()
+        {
+            var cand = FindEnhanceCandidate(_selEnhance);
+            if (cand == null)
+            {
+                return;
+            }
+            var db = MasterDataManager.Db;
+            if (db == null || db.NextEnhance(cand.Value.enhanceLevel) == null)
+            {
+                SetMessage("이미 최대 강화 단계입니다.");
+                return;
+            }
+
+            long itemId = cand.Value.itemId;
+            _busy = true;
+            SetMessage(string.Empty);
+            EnhanceFxOverlay.PlayHammer(enhanceHammerFrames, EnhanceFxScreenPos());
+
+            var req = new EnhanceRequest
+            {
+                userId = Session.UserId,
+                token = Session.Token,
+                data = new EnhanceData { itemId = itemId },
+            };
+            Debug.Log($"[Cube] 강화 요청 itemId={itemId} current=+{cand.Value.enhanceLevel}");
+            NetworkManager.Instance.PostToGame<EnhanceResponse>(
+                "/api/game/inventory/enhance", req,
+                resp =>
+                {
+                    var data = resp != null ? resp.data : null;
+                    if (data != null)
+                    {
+                        // 캐시는 즉시 맞춘다(가방·장착 행의 강화 단계 + 골드 잔액). 화면 갱신만 연출에 맞춰 늦춘다.
+                        Session.ApplyEnhanceResult(data);
+                    }
+                    int level = data != null ? data.enhanceLevel : 0;
+                    EnhanceFxOverlay.PlaySuccess(enhanceBurstFrames, EnhanceFxScreenPos(), () =>
+                    {
+                        if (this == null || !gameObject.activeInHierarchy)
+                        {
+                            return; // 연출 도중 패널이 닫혔으면 갱신할 화면이 없다(캐시는 이미 반영됐다)
+                        }
+                        RefreshAfterAction();               // 먼저 다시 그리고(단계·비용·잔액 갱신)
+                        SetMessage($"강화 성공! +{level}"); // 그 위에 결과 메시지를 남긴다
+                    });
+                    _busy = false;
+                },
+                OnEnhanceError);
+        }
+
+        /// <summary>강화 실패: 망치질을 끊고 오류음을 낸 뒤 공통 실패 처리로 넘긴다(사운드 정의서 §9).</summary>
+        private void OnEnhanceError(NetworkError error)
+        {
+            EnhanceFxOverlay.Cancel();
+            SoundManager.Sfx(SoundId.UiError);
+            OnActionError(error);
+        }
+
+        /// <summary>
+        /// 강화 연출(망치질·성공 버스트)을 터뜨릴 화면 좌표 = <b>큐브 창 중앙</b>.
+        /// 선택한 타일 위에서 터뜨리면 목록 스크롤 위치·칸 순서에 따라 연출이 화면 구석이나 잘린 칸에서 나와
+        /// 크기가 큰 망치 이펙트가 창 밖으로 새어 나간다. 대상 장비는 하단 정보(이름·단계·비용)로 이미 알 수 있으므로
+        /// 연출은 항상 같은 자리(창 중앙)에서 보여 준다.
+        /// </summary>
+        private Vector2 EnhanceFxScreenPos()
+        {
+            var target = _panelRoot != null ? _panelRoot : _rootRect;
+            if (target == null)
+            {
+                return new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            }
+            // 창을 인벤토리 자리에 맞출 때 피벗을 오른쪽 변으로 옮기므로(AlignToInventoryPanel),
+            // transform.position이 아니라 rect 중심을 변환해야 실제 창 중앙이 나온다.
+            Vector3 sp = RectTransformUtility.WorldToScreenPoint(null, target.TransformPoint(target.rect.center));
+            return new Vector2(sp.x, sp.y);
         }
 
         /// <summary>큐브 합성 요청(POST /api/game/cube/combine). 성공 시 결과 안내 후 재로드.</summary>
@@ -848,6 +1109,93 @@ namespace TaskbarHero.Client.UI
             }
         }
 
+        /// <summary>강화 후보 한 개(가방 장비 또는 장착 중 장비). 두 목록의 DTO가 서로 달라 공통 필드만 모아 쓴다.</summary>
+        private struct EnhanceCandidate
+        {
+            public long itemId;
+            public int itemCode;
+            public int enhanceLevel;
+            public bool equipped;   // 장착 중(해제 없이 강화 가능 — 기획서 §5.3)
+        }
+
+        /// <summary>
+        /// 강화 후보: 가방의 장비(item_type=1) + <b>장착 중인 장비</b>(코어 로드의 equipped).
+        /// 장착 장비는 가방 칸을 반납해 가방 캐시에 없으므로 따로 훑어야 한다(그렇지 않으면 강화할 수 있는 장비가
+        /// 목록에서 빠진다 — 실제로 쓰는 장비가 대부분 장착 중이다).
+        /// </summary>
+        private static IEnumerable<EnhanceCandidate> EligibleEnhanceItems()
+        {
+            var db = MasterDataManager.Db;
+            if (db == null)
+            {
+                yield break;
+            }
+
+            var equipped = Session.Equipped;
+            if (equipped != null)
+            {
+                foreach (var it in equipped)
+                {
+                    if (it != null && db.Items.TryGetValue(it.itemCode, out var em) && em.itemType == 1)
+                    {
+                        yield return new EnhanceCandidate
+                        {
+                            itemId = it.itemId,
+                            itemCode = it.itemCode,
+                            enhanceLevel = it.enhanceLevel,
+                            equipped = true,
+                        };
+                    }
+                }
+            }
+
+            var bag = Session.Bag;
+            if (bag != null)
+            {
+                foreach (var it in bag)
+                {
+                    if (it != null && db.Items.TryGetValue(it.itemCode, out var im) && im.itemType == 1)
+                    {
+                        yield return new EnhanceCandidate
+                        {
+                            itemId = it.itemId,
+                            itemCode = it.itemCode,
+                            enhanceLevel = it.enhanceLevel,
+                            equipped = false,
+                        };
+                    }
+                }
+            }
+        }
+
+        /// <summary>선택된 강화 후보를 찾는다(선택이 없거나 목록에서 사라졌으면 null).</summary>
+        private static EnhanceCandidate? FindEnhanceCandidate(long itemId)
+        {
+            if (itemId == 0)
+            {
+                return null;
+            }
+            foreach (var cand in EligibleEnhanceItems())
+            {
+                if (cand.itemId == itemId)
+                {
+                    return cand;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>강화 후보 타일의 배지 문구("장착 +3" / "+3" / "장착").</summary>
+        private static string EnhanceTileBadge(int enhanceLevel, bool equipped)
+        {
+            string level = enhanceLevel > 0 ? $"+{enhanceLevel}" : string.Empty;
+            if (!equipped)
+            {
+                return level;
+            }
+            return string.IsNullOrEmpty(level) ? "장착" : $"장착 {level}";
+        }
+
         /// <summary>선택된 분해 아이템의 예상 획득 골드 합계(gold_per_scrap × 등급 × 개수, 서버가 최종 확정).</summary>
         private long EstimateDismantleGold()
         {
@@ -986,8 +1334,9 @@ namespace TaskbarHero.Client.UI
             return content;
         }
 
-        /// <summary>아이템/레시피 타일 하나(등급 배경·아이콘·이름·배지·선택 프레임·클릭)를 만든다.</summary>
-        private void CreateItemTile(RectTransform parent, int itemCode, string badge, bool selected, System.Action onClick)
+        /// <summary>아이템/레시피 타일 하나(등급 배경·아이콘·이름·배지·선택 프레임·클릭)를 만든다.
+        /// 만들어진 타일의 RectTransform을 돌려준다(강화 연출을 그 위에서 터뜨리기 위해 위치가 필요하다).</summary>
+        private RectTransform CreateItemTile(RectTransform parent, int itemCode, string badge, bool selected, System.Action onClick)
         {
             var db = MasterDataManager.Db;
             db.Items.TryGetValue(itemCode, out var im);
@@ -1051,6 +1400,7 @@ namespace TaskbarHero.Client.UI
 
             var btn = tile.gameObject.AddComponent<Button>();
             btn.onClick.AddListener(() => onClick());
+            return tile.rectTransform;
         }
 
         private void ShowEmptyHint(string text)

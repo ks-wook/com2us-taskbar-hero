@@ -31,6 +31,7 @@ namespace TaskbarHero.Client.MasterData
         public const string TableInventoryExpand = "inventory_expand_master";
         public const string TableCharacterCreateCost = "character_create_cost";
         public const string TableGacha = "gacha_master";
+        public const string TableEnhance = "enhance_master";
 
         /// <summary>신규 계정 기본 인벤토리 용량(서버 BaseInventoryCapacity와 동일 계약). 확장 단계 산출에 사용.</summary>
         public const int BaseInventoryCapacity = 100;
@@ -41,7 +42,7 @@ namespace TaskbarHero.Client.MasterData
             TableEquipSlot, TableGrade, TableClass, TableLevel, TableSkill, TableRune,
             TableItem, TableMonster, TableStage, TableStageReward, TableCube,
             TableCubeRecipe, TableAttendance, TableInventoryExpand, TableCharacterCreateCost,
-            TableGacha,
+            TableGacha, TableEnhance,
         };
 
         public readonly Dictionary<int, EquipSlotMaster> EquipSlots = new Dictionary<int, EquipSlotMaster>();
@@ -63,6 +64,9 @@ namespace TaskbarHero.Client.MasterData
         // 가챠(뽑기) 배너 정의(배너 이름·이미지·비용·등급 확률·후보·천장 규칙). 지금 열려 있는 배너 판정은
         // 서버(POST /api/game/gacha/banners)가 하고, 이 표는 그 목록을 그리는 정적 값을 제공한다.
         public readonly Dictionary<int, GachaMaster> Gachas = new Dictionary<int, GachaMaster>();
+        // 장비 강화 단계별 비용·스탯 배율(enhance_master, key = 강화 단계 1~10). 서버는 단계만 권위로 확정하고
+        // 배율은 응답에 담지 않으므로(§5.3), 표시·전투 계산에 쓰는 배율은 이 표에서 읽는다.
+        public readonly Dictionary<int, EnhanceMaster> Enhances = new Dictionary<int, EnhanceMaster>();
 
         /// <summary>파싱해 캐싱한 총 행 수(로드 검증·로그용).</summary>
         public int TotalRows { get; private set; }
@@ -97,12 +101,14 @@ namespace TaskbarHero.Client.MasterData
             Fill(InventoryExpandCosts, Parse<InventoryExpandCost>(jsonForTable, TableInventoryExpand), x => x.step);
             Fill(CharacterCreateCosts, Parse<CharacterCreateCost>(jsonForTable, TableCharacterCreateCost), x => x.characterId);
             Fill(Gachas, Parse<GachaMaster>(jsonForTable, TableGacha), x => x.gachaCode);
+            Fill(Enhances, Parse<EnhanceMaster>(jsonForTable, TableEnhance), x => x.enhanceLevel);
 
             TotalRows =
                 EquipSlots.Count + Grades.Count + Classes.Count + Levels.Count + Skills.Count +
                 Runes.Count + Items.Count + Monsters.Count + Stages.Count + StageRewards.Count +
                 Cubes.Count + CubeRecipes.Count + Attendances.Count +
-                InventoryExpandCosts.Count + CharacterCreateCosts.Count + Gachas.Count;
+                InventoryExpandCosts.Count + CharacterCreateCosts.Count + Gachas.Count +
+                Enhances.Count;
         }
 
         /// <summary>모든 캐시를 비운다.</summary>
@@ -124,7 +130,47 @@ namespace TaskbarHero.Client.MasterData
             InventoryExpandCosts.Clear();
             CharacterCreateCosts.Clear();
             Gachas.Clear();
+            Enhances.Clear();
             TotalRows = 0;
+        }
+
+        /// <summary>정의된 최대 강화 단계(enhance_master 행 수 = 현재 +10). 번들이 비면 0.</summary>
+        public int MaxEnhanceLevel
+        {
+            get
+            {
+                int max = 0;
+                foreach (var lv in Enhances.Keys)
+                {
+                    if (lv > max)
+                    {
+                        max = lv;
+                    }
+                }
+                return max;
+            }
+        }
+
+        /// <summary>
+        /// 강화 단계에 해당하는 장비 옵션 스탯 배율. 0단계(미강화)나 번들에 없는 단계는 1(배율 없음).
+        /// <para>서버는 단계만 확정하고 배율은 응답에 담지 않으므로(인벤토리/아이템/큐브 기획서 §5.3),
+        /// 표시(상세 팝업·능력치)와 전투 계산 양쪽이 이 값을 같은 기준으로 써야 한다.</para>
+        /// </summary>
+        public float EnhanceMultiplier(int enhanceLevel)
+        {
+            if (enhanceLevel <= 0)
+            {
+                return 1f;
+            }
+            return Enhances.TryGetValue(enhanceLevel, out var row) && row.statMultiplier > 0f
+                ? row.statMultiplier
+                : 1f;
+        }
+
+        /// <summary>다음 강화 단계(현재 +1) 정의. 상한 도달(정의 없음)이면 null — 서버도 이때 MaxEnhanceReached(4004)로 거부한다.</summary>
+        public EnhanceMaster NextEnhance(int currentLevel)
+        {
+            return Enhances.TryGetValue(currentLevel + 1, out var row) ? row : null;
         }
 
         /// <summary>현재 용량에서 다음 1칸 확장에 드는 골드 비용. 상한 도달(정의된 step 없음)이면 -1.</summary>

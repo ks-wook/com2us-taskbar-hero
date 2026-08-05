@@ -27,11 +27,17 @@ namespace TaskbarHero.Client.Managers
         private Text _reqText;
         private Text _descText;
 
-        /// <summary>아이템 코드·수량의 상세 문구를 채워 커서 근처에 팝업을 표시한다.
+        /// <summary>아이템 코드·수량의 상세 문구를 채워 커서 근처에 팝업을 표시한다(강화 단계 없음 = 미강화).
         /// background가 있으면 배경 이미지(item_detail_bg)로, 없으면 단색으로 폴백한다.</summary>
         public static void Show(Sprite background, int itemCode, long quantity, Vector2 screenPos)
         {
-            Ensure().ShowInternal(background, itemCode, quantity, screenPos);
+            Show(background, itemCode, quantity, 0, screenPos);
+        }
+
+        /// <summary>강화 단계를 포함해 상세 문구를 표시한다(이름에 "+N", 옵션 스탯에 강화 배율 반영).</summary>
+        public static void Show(Sprite background, int itemCode, long quantity, int enhanceLevel, Vector2 screenPos)
+        {
+            Ensure().ShowInternal(background, itemCode, quantity, enhanceLevel, screenPos);
         }
 
         /// <summary>팝업을 숨긴다(hover 이탈 시).</summary>
@@ -93,7 +99,7 @@ namespace TaskbarHero.Client.Managers
         }
 
         /// <summary>상세 문구를 채우고 배경을 적용해 커서 근처에 표시한다.</summary>
-        private void ShowInternal(Sprite background, int itemCode, long quantity, Vector2 screenPos)
+        private void ShowInternal(Sprite background, int itemCode, long quantity, int enhanceLevel, Vector2 screenPos)
         {
             // 상세 팝업 표시음(사운드 정의서 §4.1). 이미 떠 있는 팝업이 칸 사이를 옮겨 다닐 때는 울리지 않는다.
             if (_root != null && !_root.gameObject.activeSelf)
@@ -113,7 +119,7 @@ namespace TaskbarHero.Client.Managers
                 _background.color = new Color(0.08f, 0.09f, 0.14f, 0.98f); // 배경 이미지 미배선 폴백
             }
 
-            var info = ItemInfoText.Build(itemCode, quantity);
+            var info = ItemInfoText.Build(itemCode, quantity, enhanceLevel);
             _nameText.text = info.name;
             _nameText.color = GradeColors.Name(info.gradeValue); // 이름을 등급 색으로
             _subText.text = string.IsNullOrEmpty(info.category) ? info.grade : $"{info.grade} · {info.category}";

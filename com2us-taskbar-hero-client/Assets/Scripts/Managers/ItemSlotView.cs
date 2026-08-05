@@ -38,6 +38,8 @@ namespace TaskbarHero.Client.Managers
         private int _itemCode;
         private long _quantity;
         private bool _showDetail;
+        private int _enhanceLevel;      // 장비 강화 단계(0 = 미강화). 배지 표시 + 상세 팝업 스탯 배율에 쓴다
+        private Text _enhanceBadge;     // "+N" 배지(강화 단계가 있을 때만 생성)
         private Coroutine _claimedPopRoutine;
         private Canvas _claimedLift; // 획득 연출 동안만 붙는 정렬 덮어쓰기 Canvas(끝나면 제거)
 
@@ -94,6 +96,7 @@ namespace TaskbarHero.Client.Managers
             }
 
             ResetClaimedOverlay();
+            SetEnhanceLevel(0); // 슬롯은 재사용되므로 구성마다 강화 배지를 초기화한다(필요하면 호출측이 다시 지정)
         }
 
         /// <summary>마스터 데이터에 없는 재화(경험치 등)를 <b>스프라이트를 직접 지정해</b> 아이템과 동일한
@@ -130,6 +133,7 @@ namespace TaskbarHero.Client.Managers
             }
 
             ResetClaimedOverlay();
+            SetEnhanceLevel(0); // 슬롯은 재사용되므로 구성마다 강화 배지를 초기화한다(필요하면 호출측이 다시 지정)
         }
 
         /// <summary>아이템 아이콘이 없는 보상(경험치 등)을 위한 구성. 아이콘 대신 텍스트 라벨을 슬롯 중앙에
@@ -166,6 +170,51 @@ namespace TaskbarHero.Client.Managers
             }
 
             ResetClaimedOverlay();
+            SetEnhanceLevel(0); // 슬롯은 재사용되므로 구성마다 강화 배지를 초기화한다(필요하면 호출측이 다시 지정)
+        }
+
+        /// <summary>
+        /// 장비 강화 단계를 표시한다(슬롯 <b>좌측 하단</b> "+N" 배지 + 상세 팝업의 스탯 배율 기준).
+        /// 0 이하면 배지를 감춘다. <see cref="Setup(int,long,string,bool)"/> 뒤에 호출한다
+        /// (구성이 강화 단계를 알 수 없는 화면 — 뽑기·클리어 보상 등 — 은 호출하지 않으면 그대로 미강화로 표시된다).
+        /// </summary>
+        public void SetEnhanceLevel(int enhanceLevel)
+        {
+            _enhanceLevel = enhanceLevel > 0 ? enhanceLevel : 0;
+            if (_enhanceLevel <= 0)
+            {
+                if (_enhanceBadge != null)
+                {
+                    _enhanceBadge.gameObject.SetActive(false);
+                }
+                return;
+            }
+
+            if (_enhanceBadge == null)
+            {
+                var go = new GameObject("EnhanceBadge", typeof(RectTransform), typeof(Text));
+                go.transform.SetParent(transform, false);
+                _enhanceBadge = go.GetComponent<Text>();
+                _enhanceBadge.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                _enhanceBadge.alignment = TextAnchor.LowerLeft;
+                _enhanceBadge.fontStyle = FontStyle.Bold;
+                _enhanceBadge.color = new Color(1f, 0.86f, 0.42f); // 강화 강조색(금색)
+                _enhanceBadge.raycastTarget = false;               // 슬롯 hover 판정을 가로채지 않는다
+                // 슬롯 크기가 화면마다 다르므로(보상 150 · 거래 72) 칸 비율로 잡고 BestFit으로 키운다.
+                _enhanceBadge.resizeTextForBestFit = true;
+                _enhanceBadge.resizeTextMinSize = 12;
+                _enhanceBadge.resizeTextMaxSize = 56;
+                // 좌측 하단. 수량 텍스트는 같은 아래쪽이지만 우측 정렬이라 글자끼리 겹치지 않는다
+                // (강화 대상인 장비는 stack_max=1이라 수량 표기 자체가 없다).
+                var rt = _enhanceBadge.rectTransform;
+                rt.anchorMin = new Vector2(0.07f, 0.06f);
+                rt.anchorMax = new Vector2(0.58f, 0.40f);
+                rt.offsetMin = Vector2.zero;
+                rt.offsetMax = Vector2.zero;
+            }
+            _enhanceBadge.transform.SetAsLastSibling(); // 아이콘·등급 배경 위에 그린다
+            _enhanceBadge.text = $"+{_enhanceLevel}";
+            _enhanceBadge.gameObject.SetActive(true);
         }
 
         /// <summary>슬롯 테두리 프레임을 화면 전용 아트로 교체한다(예: 출석부 달력 칸 = attendance_item_slot).
@@ -299,7 +348,7 @@ namespace TaskbarHero.Client.Managers
         {
             if (_showDetail)
             {
-                ItemDetailPopup.Show(_detailBackgroundSprite, _itemCode, _quantity, eventData.position);
+                ItemDetailPopup.Show(_detailBackgroundSprite, _itemCode, _quantity, _enhanceLevel, eventData.position);
             }
         }
 
