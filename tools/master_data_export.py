@@ -177,6 +177,21 @@ def export_item(conn):
     } for r in rows]
 
 
+def export_enhance(conn):
+    """장비 강화 단계별 비용·스탯 배율(enhance_master).
+
+    기획서 5.4의 stat_multiplier(JSON)는 폐기되어 단일 DECIMAL 배율 컬럼이다(JSON 컬럼 금지 규칙).
+    클라이언트는 이 배율을 장비 baseStats 전체에 곱해 강화된 장비 스탯을 표시·계산한다.
+    """
+    rows = q(conn, "SELECT * FROM enhance_master ORDER BY enhance_level")
+    return [{
+        "enhanceLevel": _i(r["enhance_level"]),
+        "cost": _i(r["cost"]),
+        "currencyType": _i(r["currency_type"]),
+        "statMultiplier": _f(r["stat_multiplier"]),
+    } for r in rows]
+
+
 def export_skill(conn):
     skills = q(conn, "SELECT * FROM skill_master ORDER BY skill_code")
     coefs = q(conn, "SELECT * FROM skill_coefficient ORDER BY skill_code, skill_level, coef_type")
@@ -396,6 +411,7 @@ EXPORTERS = [
     ("skill_master", export_skill),
     ("rune_master", export_rune),
     ("item_master", export_item),
+    ("enhance_master", export_enhance),
     ("monster_master", export_monster),
     ("stage_master", export_stage),
     ("stage_reward", export_stage_reward),

@@ -482,6 +482,22 @@ namespace TaskbarHero.Common.Dto
         public UnequipData data;
     }
 
+    /// <summary>장비 강화 요청 데이터. { itemId }(강화 단계는 서버가 현재 값 +1로 확정한다)</summary>
+    [Serializable]
+    public class EnhanceData
+    {
+        public long itemId;
+    }
+
+    /// <summary>장비 강화 요청 body(인증). { userId, token, data:{ itemId } }</summary>
+    [Serializable]
+    public class EnhanceRequest
+    {
+        public long userId;
+        public string token;
+        public EnhanceData data;
+    }
+
     /// <summary>배치 이동 요청 데이터. { itemId, toSlot }(toSlot은 0-based 인벤토리 칸)</summary>
     [Serializable]
     public class MoveData
@@ -537,6 +553,33 @@ namespace TaskbarHero.Common.Dto
     {
         public SlotItemDto moved;
         public SlotItemDto swapped;      // 목표 칸이 비어 있었으면 null
+    }
+
+    /// <summary>
+    /// 장비 강화 결과(5.3). 강화는 1회당 1단계이며 실패·하락이 없다(비용을 내면 확정 상승).
+    /// enhanceLevel은 상승 후 단계, cost=차감된 재화, balance=차감 후 잔액이다.
+    /// 장착 중인 장비도 강화할 수 있어(해제 불필요) equipped=true면 장착 정보의 강화 단계도 함께 갱신됐다는 뜻이다.
+    /// <para>가방 행은 이 아이템의 enhanceLevel만 바뀌므로 <c>inventoryDelta</c>를 두지 않는다 —
+    /// 클라이언트는 itemId·enhanceLevel로 캐시를 갱신하고 재조회하지 않는다(§5.0).</para>
+    /// </summary>
+    [Serializable]
+    public class EnhanceResultData
+    {
+        public long itemId;
+        public int enhanceLevel;          // 상승 후 강화 단계
+        public bool equipped;             // 장착 중인 장비였는지(장착 정보의 강화 단계도 갱신됨)
+        public CurrencyDto cost = new CurrencyDto();
+        public List<CurrencyDto> balance = new List<CurrencyDto>();
+    }
+
+    /// <summary>장비 강화 응답 { success, errorCode, message, data(EnhanceResultData) }.</summary>
+    [Serializable]
+    public class EnhanceResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public EnhanceResultData data = new EnhanceResultData();
     }
 
     /// <summary>인벤토리 용량 확장 결과(5.4). 확장은 1회당 1칸이며, cost=차감 골드·balance=차감 후 잔액.</summary>

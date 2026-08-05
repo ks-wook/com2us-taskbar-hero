@@ -77,7 +77,7 @@
 |---|---|---|---|---|
 | `POST /api/game/inventory/equip` | 지정 캐릭터에 장비 장착(스왑). 장착 아이템은 가방 칸 반납 | `{ characterId, itemId }` | `equipped`, `unequipped`, `unequippedBagSlot` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `ItemEquipped(4007)`, `InvalidCharacterId(2006)`, `InventoryFull(4002)` |
 | `POST /api/game/inventory/unequip` | 지정 슬롯 장비 해제. 가방 빈 칸으로 복귀 | `{ characterId, slot }` | `slot`, `itemId`, `bagSlot` | `ItemNotFound(4001)`, `InvalidCharacterId(2006)`, `InventoryFull(4002)` |
-| `POST /api/game/inventory/enhance` ⚠️보류 | 장비 강화 단계 +1(재화 소모) | `{ itemId }` | `enhanceLevel`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
+| `POST /api/game/inventory/enhance` | 장비 강화 단계 +1(재화 소모, 확정 상승). 장착 중인 장비도 가능 | `{ itemId }` | `enhanceLevel`, `equipped`, `cost`, `balance` | `ItemNotFound(4001)`, `ItemNotEquippable(4003)`, `MaxEnhanceReached(4004)`, `InsufficientCurrency(4005)` |
 | `POST /api/game/inventory/expand` | 인벤토리 용량 확장(골드 소모) | `{ count }` | `inventoryCapacity`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InventoryCapacityMax(4008)` |
 | `POST /api/game/inventory/move` | 인벤토리 배치 이동/교환(드래그 저장) | `{ itemId, toSlot }` | `moved`, `swapped` | `ItemNotFound(4001)`, `InvalidInventorySlot(4009)` |
 | `POST /api/game/cube/combine` | 큐브 합성(동급 아이템 3개→상위 등급 1개, 슬롯·클래스 무관) | `{ itemIds[] }` | `consumed`, `result`, `cube`, `inventoryDelta` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `CubeRecipeNotMet(4010)` |
@@ -87,7 +87,8 @@
 | `POST /api/game/consumable/buffs` | 적용 중인 획득량 버프 조회(버프 UI 재동기화용 경량 조회) | 없음 | `serverTime`, `activeBuffs` | 인증 실패 계열만 |
 
 - **가방을 바꾸는 액션은 변경분을 `inventoryDelta`(`upserted[]`·`removed[]`)로 응답에 담는다.** 클라이언트는 응답만으로 자기 로컬 가방 캐시를 갱신하며 **액션 뒤에 `/api/game/load`·`/api/game/inventory/list`를 재조회하지 않는다**(공통 규약: [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 5.0). 장착·해제·용량 확장은 기존 `equipped`/`unequipped`/`bagSlot`/`inventoryCapacity` 필드로 충분해 이 블록을 두지 않는다. 이 도메인 밖에서도 가방을 바꾸는 **`gacha/pull`(뽑기 지급)·`stage/clear`(전리품)·`mail/claim`·`mail/claim-all`(첨부)·`trade/register`·`trade/cancel`(에스크로 이동)** 이 같은 규약을 따르며, `trade/buy`는 구매 아이템이 우편함으로 가므로 이 블록이 없다.
-- 장비는 **캐릭터별**(장착 시 `characterId` 필수), 인벤토리·골드·큐브는 계정 공유. 큐브 합성·분해·제작(`cube/*`)은 **구현 완료**. `inventory/enhance`(장비 강화)는 `enhance_master` 값 미확정으로 **보류**.
+- 장비는 **캐릭터별**(장착 시 `characterId` 필수), 인벤토리·골드·큐브는 계정 공유. 큐브 합성·분해·제작(`cube/*`)과 장비 강화(`inventory/enhance`)는 **구현 완료**.
+- **강화**는 1회 호출당 1단계이며 비용·상한(현재 +10)은 마스터 `enhance_master`가 정의한다(서버 권위 차감, 실패·하락 없음). 장착 중인 장비도 해제 없이 강화하며, 이때 장착 정보의 강화 단계까지 함께 갱신되고 응답 `equipped`가 `true`로 온다. 스탯 배율은 응답에 없다 — 클라이언트가 마스터 번들의 `stat_multiplier`로 계산한다.
 - `consumable/use`는 **1회 1개 고정**(수량 필드 없음)이며 버프도 **계정 단위**다. 활성 버프를 받는 창구는 세 곳 — 접속 직후는 코어 로드(`/api/game/load`)의 `activeBuffs`, 사용 직후는 `consumable/use` 응답, 이후 재동기화는 `consumable/buffs`([소모품/버프 기획서](../세부/consumable-buff-기획서.md) 5.2).
 - 버프 배율은 **스테이지 클리어 보상(`stage/clear`)에만** 곱해진다. 오프라인 정산(`offline/claim`)·메일·출석·큐브 분해·거래 대금에는 적용하지 않는다(같은 문서 6.3·6.5).
 

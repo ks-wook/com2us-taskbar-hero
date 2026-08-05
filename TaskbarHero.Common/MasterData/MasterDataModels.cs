@@ -84,6 +84,20 @@ namespace TaskbarHero.Common.MasterData
     }
 
     /// <summary>
+    /// 장비 강화 단계별 규칙(enhance_master). player_item.enhance_level·player_item_equipped.enhance_level 이 참조한다.
+    /// 한 행 = "그 단계로 올릴 때의 비용" + "그 단계에 도달했을 때의 스탯 배율"이며, 0단계(미강화)는 배율 1.0이라 행이 없다.
+    /// 강화는 실패·하락·파괴가 없다(비용을 내면 확정 상승, 인벤토리/아이템/큐브 기획서 §5.3).
+    /// </summary>
+    [Serializable]
+    public class EnhanceMaster
+    {
+        public int enhanceLevel;       // 강화 단계(1~10)
+        public long cost;              // 이 단계로 올리는 데 드는 재화량
+        public int currencyType;       // 소모 재화 item_code(골드 = 1)
+        public float statMultiplier;   // 이 단계에서 장비 baseStats 전체에 곱할 배율(1.05 = 105%)
+    }
+
+    /// <summary>
     /// 스킬 레벨·타입별 계수 1행(skill_coefficient 자식 테이블).
     /// 번들 JSON 은 SkillMaster.coefs 배열로 직렬화된다.
     /// </summary>

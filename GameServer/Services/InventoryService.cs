@@ -12,13 +12,15 @@ public interface IInventoryService
     Task<SaveResult> EquipAsync(long userId, int characterId, long itemId);
     Task<SaveResult> UnequipAsync(long userId, int characterId, int slot);
     Task<SaveResult> MoveAsync(long userId, long itemId, int toSlot);
+    Task<SaveResult> EnhanceAsync(long userId, long itemId);
     Task<SaveResult> ExpandAsync(long userId);
 }
 
 /// <summary>
-/// 인벤토리/아이템 액션 처리(inventory-item-cube 기획서 §5.1·5.2·5.5). 큐브·강화·확장·상자는 범위 밖.
+/// 인벤토리/아이템 액션 처리(inventory-item-cube 기획서 §5.1·5.2·5.3·5.4·5.5). 큐브·상자는 범위 밖.
 /// 장착: 마스터로 장비/슬롯/클래스/레벨을 검증하고 같은 슬롯 기존 장비를 스왑한다(서버 권위).
 /// 해제: 지정 캐릭터-슬롯 장비를 미장착으로 되돌린다. 이동: 인벤토리 칸 배치를 이동/교환한다.
+/// 강화: 마스터(enhance_master)로 다음 단계 비용을 확정해 재화를 차감하고 단계를 1 올린다(확정 상승).
 /// 상태 변경은 모두 리포지토리 트랜잭션으로 원자적으로 반영한다.
 /// </summary>
 public sealed class InventoryService : IInventoryService
@@ -182,6 +184,49 @@ public sealed class InventoryService : IInventoryService
     }
 
     /// <summary>
+    /// 장비 강화(단계 +1)를 처리한다. 마스터 로드를 확인하고, 리포지토리 트랜잭션으로 비용 재화를 차감한 뒤
+    /// 강화 단계를 1 올린다(장착 중인 장비면 장착 정보의 강화 단계도 함께 갱신된다). 강화 가능 여부와 비용은
+    /// PlanEnhance(마스터 조회)가 판정하며, 결과 상태를 에러 코드로 매핑한다. 실패·하락 확률은 없다(확정 상승).
+    /// </summary>
+    public async Task<SaveResult> EnhanceAsync(long userId, long itemId)
+    {
+        if (!_masterData.IsLoaded)
+        {
+            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+        }
+
+        var outcome = await _inventoryRepository.ApplyEnhanceAsync(userId, itemId, PlanEnhance);
+
+        switch (outcome.Status)
+        {
+            case EnhanceStatus.ItemNotFound:
+                return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
+            case EnhanceStatus.NotEquippable:
+                // 장비가 아니면 강화 대상이 아니다(재료·소모품·재화).
+                return new SaveResult(ErrorCode.ItemNotEquippable, string.Empty, null);
+            case EnhanceStatus.MaxEnhanceReached:
+                return new SaveResult(ErrorCode.MaxEnhanceReached, string.Empty, null);
+            case EnhanceStatus.InsufficientCurrency:
+                return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+        }
+
+        var data = new EnhanceResultData
+        {
+            itemId = itemId,
+            enhanceLevel = outcome.EnhanceLevel,
+            equipped = outcome.Equipped,
+            cost = new CurrencyDto { currencyType = outcome.CurrencyCode, amount = outcome.Cost },
+            balance = new List<CurrencyDto>
+            {
+                new CurrencyDto { currencyType = outcome.CurrencyCode, amount = outcome.CurrencyBalance },
+            },
+        };
+
+        _logger.ZLogInformation($"장비 강화 성공: userId {userId:@UserId}, itemId {itemId:@ItemId}, enhanceLevel {outcome.EnhanceLevel:@EnhanceLevel}, cost {outcome.Cost:@Cost}, equipped {outcome.Equipped:@Equipped}");
+        return new SaveResult(ErrorCode.Success, "Enhanced", data);
+    }
+
+    /// <summary>
     /// 인벤토리 용량을 1칸 확장한다. 마스터 로드를 확인하고, 리포지토리 트랜잭션으로 확장 비용(마스터 산출)을
     /// 골드에서 차감한 뒤 용량을 1 올린다. 상한 도달·골드 부족 등 결과 상태를 에러 코드로 매핑한다.
     /// </summary>
@@ -217,6 +262,28 @@ public sealed class InventoryService : IInventoryService
 
         _logger.ZLogInformation($"인벤토리 확장 성공: userId {userId:@UserId}, capacity {outcome.InventoryCapacity:@Capacity}, cost {outcome.Cost:@Cost}");
         return new SaveResult(ErrorCode.Success, "Expanded", data);
+    }
+
+    /// <summary>
+    /// 강화 가능 여부와 이번 단계의 비용·소모 재화를 마스터로 판정한다(리포지토리 트랜잭션에 델리게이트로 전달).
+    /// 장비(item_type=1)여야 하고, 다음 단계(현재 단계 + 1)가 enhance_master에 정의되어 있어야 한다
+    /// (없으면 최대 단계 도달). 배율은 클라이언트가 번들에서 읽으므로 여기서는 비용만 산출한다.
+    /// </summary>
+    private (EnhancePlanStatus status, long cost, int currencyCode) PlanEnhance(int itemCode, int currentLevel)
+    {
+        var def = _masterData.GetItem(itemCode);
+        if (def is null || def.ItemType != ItemTypeEquip)
+        {
+            return (EnhancePlanStatus.NotEquippable, 0, 0);
+        }
+
+        var rule = _masterData.GetEnhance(currentLevel + 1);
+        if (rule is null)
+        {
+            return (EnhancePlanStatus.MaxReached, 0, 0);
+        }
+
+        return (EnhancePlanStatus.Ok, rule.Cost, rule.CurrencyCode);
     }
 
     /// <summary>

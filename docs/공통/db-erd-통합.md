@@ -434,8 +434,8 @@ erDiagram
 
 ### enhance_master
 
-- **역할**: 장비 강화 단계별 규칙 정의. `player_item.enhance_level`·`player_item_equipped.enhance_level`이 참조.
-- **정의 데이터**: 강화 단계별 요구 비용·소모 재화·스탯 배율. (값 미확정, 작성 예정)
+- **역할**: 장비 강화 단계별 규칙 정의. `player_item.enhance_level`·`player_item_equipped.enhance_level`이 참조하며, 강화 API(`inventory/enhance`)가 **다음 단계 행**으로 비용을 확정한다. 행 개수가 곧 **최대 강화 단계**(현재 10 → +10)이고, 0단계(미강화)는 배율 1.0이라 행이 없다.
+- **정의 데이터**: `enhance_level`(PK, 1~10), `cost`(그 단계로 올릴 재화량, 1,000→65,000 누진), `currency_type`(소모 재화 `item_code`, 골드=1), `stat_multiplier`(그 단계 도달 시 장비 옵션 스탯 전체에 곱할 배율 `DECIMAL(5,3)`, 단계당 +0.05 → +10에서 1.5배). **JSON 배율 컬럼은 폐기**하고 단일 DECIMAL로 둔다(JSON 컬럼 금지 규칙). 강화는 실패·하락·파괴가 없다(비용 지불 시 확정 상승).
 
 ### skill_master
 

@@ -6,8 +6,8 @@ namespace GameServer.Controllers;
 
 /// <summary>
 /// 인벤토리 API(inventory-item-cube 기획서 §5.1·5.2·5.5). 인증 필요.
-/// 가방 아이템 페이지 조회(세이브 데이터 기획서 §5.2)와 장착·해제·배치 이동·용량 확장을 제공하며,
-/// 강화·큐브·상자는 범위 밖이다.
+/// 가방 아이템 페이지 조회(세이브 데이터 기획서 §5.2)와 장착·해제·강화·배치 이동·용량 확장을 제공하며,
+/// 큐브·상자는 범위 밖이다.
 /// </summary>
 [ApiController]
 [Route("api/game/inventory")]
@@ -46,6 +46,15 @@ public sealed class GameInventoryController(IInventoryService inventoryService) 
     {
         var data = request?.data ?? new MoveData();
         var result = await inventoryService.MoveAsync(AuthenticatedUserId(), data.itemId, data.toSlot);
+        return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
+    }
+
+    /// <summary>장비 강화 단계 +1(재화 소모). POST /api/game/inventory/enhance</summary>
+    [HttpPost("enhance")]
+    public async Task<IActionResult> Enhance([FromBody] EnhanceRequest request)
+    {
+        var data = request?.data ?? new EnhanceData();
+        var result = await inventoryService.EnhanceAsync(AuthenticatedUserId(), data.itemId);
         return ApiResult(result.ErrorCode, result.SuccessMessage, result.Data);
     }
 

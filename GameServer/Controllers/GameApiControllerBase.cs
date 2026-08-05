@@ -85,6 +85,7 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.ItemNotEquippable => "Item not equippable",
         ErrorCode.ItemEquipped => "Item already equipped",
         ErrorCode.InvalidInventorySlot => "Invalid inventory slot",
+        ErrorCode.MaxEnhanceReached => "Max enhance level reached",
         ErrorCode.InsufficientCurrency => "Insufficient currency",
         ErrorCode.InsufficientQuantity => "Insufficient quantity",
         ErrorCode.InventoryCapacityMax => "Inventory capacity max",

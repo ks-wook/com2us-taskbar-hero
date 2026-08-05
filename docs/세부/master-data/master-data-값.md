@@ -8,9 +8,9 @@
 >
 > **설계 규칙(중요)**: DB 테이블에는 **JSON 문자열이 그대로 들어가는 컬럼을 두지 않는다.** 고정 스키마 값은 개별 스칼라 컬럼으로, **배열·중첩 등 반복 구조는 무조건 별도(자식) 테이블**로 분리한다(예: `stage_master`의 스폰 → `stage_spawn`). 클라이언트 번들 JSON·POCO는 전송 편의상 중첩 객체/배열로 직렬화할 수 있다(DB↔번들 매핑, 기획서 5.1·7장).
 >
-> **현재 상태**: `equip_slot_master`·`grade_master`·`class_master`·`level_master`·`skill_master`·`rune_master`·`rune_cost`·`item_master`·`cube_master`·`monster_master`·`stage_reward`·`stage_master`·`attendance_master`·`gacha_master`(+자식 3종)·`inventory_expand_master`·`mail_master`는 데이터를 채웠고, **남은 미작성은 `enhance_master`(§7) 하나뿐**이다(각 절의 `🚧`는 미작성 표시).
+> **현재 상태**: `equip_slot_master`·`grade_master`·`class_master`·`level_master`·`skill_master`·`rune_master`·`rune_cost`·`item_master`·`enhance_master`·`cube_master`·`monster_master`·`stage_reward`·`stage_master`·`attendance_master`·`gacha_master`(+자식 3종)·`inventory_expand_master`·`mail_master`까지 **모든 마스터 테이블의 데이터를 채웠다**(미작성 없음).
 >
-> **SQL**: 값이 확정된 테이블(현재 1~6번 및 8·9·10·11·13번, 14번 `grade_master`, 부록 `inventory_expand_master`·`character_create_cost`·`mail_master`)의 DDL + 시드 INSERT는 [`master-data-schema.sql`](master-data-schema.sql)에 정리한다. 마스터 데이터는 런타임에 "클라 번들 + 서버 인메모리 로드"로 쓰므로 이 SQL은 값 보관·시드·검수용 편의 스크립트다(플레이 경로에서 조회하지 않음). 나머지 테이블도 값이 확정되는 대로 이 파일에 이어서 추가한다.
+> **SQL**: 모든 마스터 테이블(1~14번 및 부록 `inventory_expand_master`·`character_create_cost`·`mail_master`·`newbie_reward_master`)의 DDL + 시드 INSERT는 [`master-data-schema.sql`](master-data-schema.sql)에 정리한다. 마스터 데이터는 런타임에 "클라 번들 + 서버 인메모리 로드"로 쓰므로 이 SQL은 값 보관·시드·검수용 편의 스크립트다(플레이 경로에서 조회하지 않음).
 
 ## 목차
 
@@ -605,11 +605,26 @@
 
 ## 7. enhance_master (강화)
 
-- **무엇**: 장비 강화 단계별 요구 비용과 스탯 배율.
-- **규모**: 강화 단계 수만큼.
-- **채울 필드**: `enhance_level`, `cost`, `currency_type`(재화 item_code), `stat_multiplier` (기획서 5.4).
+- **무엇**: 장비 강화 단계별 요구 비용과 스탯 배율. `player_item.enhance_level`·`player_item_equipped.enhance_level`이 참조한다.
+- **규모/현황**: **최대 강화 +10 확정**(행 10개 = 상한). 0단계(미강화)는 배율 1.0이라 행이 없다.
+- **설계(중요)**: 기획서 5.4의 `stat_multiplier`(JSON)는 **폐기**한다(JSON 문자열 컬럼 금지 규칙). 스탯별로 배율이 갈리지 않으므로 자식 테이블도 두지 않고 **단일 `DECIMAL(5,3)` 배율**로 두고, 장비 옵션 스탯(`base_stats`) 전체에 곱한다.
+- **필드**: `enhance_level`(PK, 1~10), `cost`(그 단계로 올릴 재화량), `currency_type`(소모 재화 `item_code`, 골드=1), `stat_multiplier`(그 단계 도달 시 배율).
+- **규칙**: 1회 호출 = 1단계 상승이며 **실패·하락·파괴가 없다**(비용을 내면 확정 상승). 장착 중인 장비도 해제 없이 강화한다([인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 5.3).
 
-> 🚧 데이터 미작성 — 작성 예정.
+| enhance_level | cost | currency_type | stat_multiplier |
+|---|---|---|---|
+| 1 | 1,000 | 1 | 1.050 |
+| 2 | 2,000 | 1 | 1.100 |
+| 3 | 4,000 | 1 | 1.150 |
+| 4 | 7,000 | 1 | 1.200 |
+| 5 | 11,000 | 1 | 1.250 |
+| 6 | 16,000 | 1 | 1.300 |
+| 7 | 23,000 | 1 | 1.350 |
+| 8 | 32,000 | 1 | 1.400 |
+| 9 | 45,000 | 1 | 1.450 |
+| 10 | 65,000 | 1 | 1.500 |
+
+> 배율은 **단계당 +0.05 선형**이라 +10에서 장비 옵션 스탯이 1.5배가 된다. 비용은 누진이며 0→+10 총액은 **206,000골드**로, 캐릭터 추가 생성(50만)보다 싸고 인벤토리 1칸 확장(1만)보다 비싼 중간 지출 축으로 잡았다. 소모 재화는 현재 골드 하나뿐이다(재료 소모는 두지 않는다 — 재료는 큐브 제작이 담당). **학습용 임시값**이며 스키마 변경 없이 값만 조정한다.
 
 ## 8. cube_master (큐브)
 

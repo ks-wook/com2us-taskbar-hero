@@ -4,14 +4,13 @@
 -- 정본(single source of truth): docs/세부/master-data/master-data-값.md (실제 값) 및
 --   docs/세부/master-data/master-data-기획서.md (테이블 구조·필드·enum).  불일치 시 그 문서를 따른다.
 --
--- 범위: master-data-값.md에서 값이 확정된 테이블(1~6번 및 8·9·10·11·13·14번)을 담는다.
+-- 범위: master-data-값.md에서 값이 확정된 **전 테이블**을 담는다(미작성 테이블 없음).
 --   1) equip_slot_master  1b) grade_master  2) class_master  3) level_master  4) skill_master  4b) skill_coefficient  5) rune_master  5b) rune_cost
---   6) item_master  6b) consumable_master  8) cube_master  8b) cube_recipe  8c) cube_recipe_ingredient
+--   6) item_master  6b) consumable_master  7) enhance_master  8) cube_master  8b) cube_recipe  8c) cube_recipe_ingredient
 --   9) monster_master  10) stage_reward  10b) stage_reward_drop  11) stage_master  11b) stage_spawn
 --   12) gacha_master  12b) gacha_grade_weight  12c) gacha_item_pool  12d) gacha_pity_rule
 --   13) attendance_master  14) grade_master  · inventory_expand_master(인벤토리 확장 비용)  · character_create_cost(캐릭터 추가 생성 비용)  · mail_master(메일 템플릿)
 --   · newbie_reward_master(신규 가입 지원금 메일 첨부)
---   (7 enhance만 값 미확정이라 제외)
 --   * grade_master(값 문서 §14)는 item_master.grade가 FK로 참조하므로 물리적으로 item_master보다 앞(1b)에 생성한다.
 --
 -- 성격 안내(중요)
@@ -610,6 +609,43 @@ CREATE TABLE consumable_master (
 INSERT INTO consumable_master (item_code, buff_type, buff_value, duration_sec) VALUES
     (42001, 1, 1.500, 1800),   -- 경험치 부스터: 경험치 획득량 150%, 30분
     (42002, 2, 1.500, 1800);   -- 골드 부스터: 골드 획득량 150%, 30분
+
+
+-- =====================================================================
+-- 7. enhance_master — 장비 강화 단계별 규칙 (값 문서 §7)
+--    출처: master-data-값.md §7, 기획서 5.4 / 인벤토리·큐브 기획서 5.3
+--    한 행 = "그 단계로 올릴 때의 비용" + "그 단계에 도달했을 때의 스탯 배율".
+--      · enhance_level 1~10(= 최대 강화 +10). player_item.enhance_level 0(미강화)은 배율 1.0이라 행이 없다.
+--      · cost/currency_type: 그 단계로 올리는 데 드는 재화(현재 골드=1 전용, 누진).
+--      · stat_multiplier: 기획서 5.4의 JSON stat_multiplier는 폐기(JSON 컬럼 금지 규칙).
+--        스탯별로 배율이 갈리지 않으므로 자식 테이블도 두지 않고 **단일 DECIMAL 배율**로 둔다 —
+--        장비의 base_stats 전체에 이 값을 곱한다(단계당 +0.05, +10에서 1.5배).
+--      · 강화는 실패·하락·파괴가 없다(비용을 내면 확정 상승). 확률을 도입하면 이 테이블에 컬럼을 추가한다.
+--    값은 학습용 임시값(스키마 불변, 값만 조정).
+-- =====================================================================
+DROP TABLE IF EXISTS enhance_master;
+CREATE TABLE enhance_master (
+    enhance_level   INT          NOT NULL COMMENT '강화 단계(1~10). 이 단계로 올릴 비용과 도달 시 배율',
+    cost            BIGINT       NOT NULL COMMENT '이 단계로 올리는 데 드는 재화량',
+    currency_type   INT          NOT NULL DEFAULT 1 COMMENT '소모 재화(item_master.item_code, item_type=3. 골드=1)',
+    stat_multiplier DECIMAL(5,3) NOT NULL COMMENT '이 단계에서 장비 base_stats에 곱할 배율(1.050=105%)',
+    PRIMARY KEY (enhance_level),
+    KEY idx_enhance_currency (currency_type),
+    CONSTRAINT fk_enhance_currency FOREIGN KEY (currency_type)
+        REFERENCES item_master (item_code) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='장비 강화 단계별 비용·스탯 배율';
+
+INSERT INTO enhance_master (enhance_level, cost, currency_type, stat_multiplier) VALUES
+    (1,   1000, 1, 1.050),
+    (2,   2000, 1, 1.100),
+    (3,   4000, 1, 1.150),
+    (4,   7000, 1, 1.200),
+    (5,  11000, 1, 1.250),
+    (6,  16000, 1, 1.300),
+    (7,  23000, 1, 1.350),
+    (8,  32000, 1, 1.400),
+    (9,  45000, 1, 1.450),
+    (10, 65000, 1, 1.500);
 
 
 -- =====================================================================
@@ -1612,5 +1648,5 @@ INSERT INTO newbie_reward_master (seq, reward_type, reward_code, quantity) VALUE
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- =====================================================================
--- 끝. (7 enhance는 값 확정 후 추가한다. inventory_expand_master는 인벤토리 확장 기능으로 추가됨.)
+-- 끝. (inventory_expand_master는 인벤토리 확장 기능으로, enhance_master(7)는 장비 강화 기능으로 추가됨.)
 -- =====================================================================

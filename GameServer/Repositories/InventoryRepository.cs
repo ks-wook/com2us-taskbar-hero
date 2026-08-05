@@ -63,6 +63,34 @@ public sealed record MoveOutcome(MoveStatus Status, long MovedItemId, int MovedS
     public static MoveOutcome Fail(MoveStatus status) => new(status, 0, 0, null, null);
 }
 
+/// <summary>강화 판정(마스터) 결과 상태. 리포지토리가 델리게이트로 받아 트랜잭션 안에서 사용한다.</summary>
+public enum EnhancePlanStatus
+{
+    Ok,
+    NotEquippable, // 장비가 아님(재료·소모품·재화 등)
+    MaxReached,    // 다음 강화 단계가 enhance_master에 없음
+}
+
+/// <summary>장비 강화 트랜잭션 결과 상태.</summary>
+public enum EnhanceStatus
+{
+    Ok,
+    ItemNotFound,         // 계정 소유 아이템이 아님
+    NotEquippable,        // 장비가 아님
+    MaxEnhanceReached,    // 최대 강화 단계 도달
+    InsufficientCurrency, // 비용 재화 부족
+}
+
+/// <summary>
+/// 장비 강화 트랜잭션 결과. EnhanceLevel=상승 후 단계, Cost=차감한 재화량,
+/// CurrencyCode=소모 재화 item_code, CurrencyBalance=차감 후 잔액, Equipped=장착 중인 장비였는지.
+/// </summary>
+public sealed record EnhanceOutcome(
+    EnhanceStatus Status, int EnhanceLevel, long Cost, int CurrencyCode, long CurrencyBalance, bool Equipped)
+{
+    public static EnhanceOutcome Fail(EnhanceStatus status) => new(status, 0, 0, 0, 0, false);
+}
+
 /// <summary>인벤토리 용량 확장 트랜잭션 결과 상태.</summary>
 public enum ExpandStatus
 {
@@ -117,6 +145,15 @@ public interface IInventoryRepository
 
     /// <summary>아이템을 목표 칸으로 이동한다. 목표 칸이 차 있으면 두 칸을 교환(swap)하며, 한 트랜잭션으로 처리한다.</summary>
     Task<MoveOutcome> ApplyMoveAsync(long userId, long itemId, int toSlot);
+
+    /// <summary>
+    /// 장비 강화를 한 트랜잭션으로 적용한다: 아이템 소유 확인 → plan(마스터 검증)으로 강화 가능 여부·비용 판정
+    /// → 비용 재화 확인·차감 → enhance_level += 1(장착 중이면 장착 행의 강화 단계도 함께 갱신).
+    /// plan은 (itemCode, 현재 강화 단계)→(status, cost, currencyCode).
+    /// </summary>
+    Task<EnhanceOutcome> ApplyEnhanceAsync(
+        long userId, long itemId,
+        Func<int, int, (EnhancePlanStatus status, long cost, int currencyCode)> plan);
 
     /// <summary>
     /// 인벤토리 용량을 1칸 확장한다: 현재 용량으로 planOne(비용·가능 여부)을 산출 → 골드 확인·차감 → inventory_capacity += 1.
@@ -557,6 +594,103 @@ public sealed class InventoryRepository : IInventoryRepository
 
             await transaction.CommitAsync();
             return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null) { Delta = delta };
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 장비 강화(단계 +1)를 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(ItemNotFound·NotEquippable·MaxEnhanceReached·InsufficientCurrency)는 즉시 롤백 후 Fail 상태로
+    /// 반환하고, 예외는 롤백 후 전파한다. <b>장착 중인 장비도 강화할 수 있다</b> — 가방이 가득 차면 해제 자체가
+    /// 실패해(InventoryFull) 강화가 막히므로, 해제를 요구하지 않고 장착 행의 강화 단계까지 같은 트랜잭션에서 올린다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 재화만 빠지고 단계가 안 오르는 상태를 막는다):
+    /// <para>1) player_item SELECT — 대상의 계정 소유 확인 및 row_type·item_code·현재 enhance_level 확보</para>
+    /// <para>2) plan 델리게이트 — 마스터 검증(장비 여부·다음 단계 존재)과 비용·소모 재화 산출(DB 접근 없음)</para>
+    /// <para>3) player_item(재화 행) SELECT — 비용 재화 잔액 확인(부족 → InsufficientCurrency)</para>
+    /// <para>4) player_item UPDATE — 비용 재화 차감</para>
+    /// <para>5) player_item UPDATE — 대상의 enhance_level += 1</para>
+    /// <para>6) player_item_equipped UPDATE — 장착 중이면 장착 행의 enhance_level도 같은 값으로 갱신
+    ///     (코어 로드의 equipped가 이 컬럼을 그대로 내려주므로 갱신하지 않으면 장착 스탯이 옛 단계로 남는다)</para>
+    /// </remarks>
+    public async Task<EnhanceOutcome> ApplyEnhanceAsync(
+        long userId, long itemId,
+        Func<int, int, (EnhancePlanStatus status, long cost, int currencyCode)> plan)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var db = _dbFactory.Create(connection);
+
+            // 1) 대상 아이템 존재 확인(계정 소유).
+            var itemRow = await db.Query("player_item")
+                .Select("row_type", "slot", "item_code", "quantity", "enhance_level")
+                .Where("player_item_id", itemId).Where("user_id", userId)
+                .FirstOrDefaultAsync<ItemRowTypeSlotRow>(transaction);
+            if (itemRow is null)
+            {
+                await transaction.RollbackAsync();
+                return EnhanceOutcome.Fail(EnhanceStatus.ItemNotFound);
+            }
+
+            // 재화 행(row_type≠1)은 강화 대상이 아니다(마스터 판정 전에 걸러낸다).
+            if (itemRow.RowType != RowTypeItem)
+            {
+                await transaction.RollbackAsync();
+                return EnhanceOutcome.Fail(EnhanceStatus.NotEquippable);
+            }
+
+            // 2) 마스터 검증: 장비 여부 · 다음 단계 존재 · 비용/소모 재화.
+            var (planStatus, cost, currencyCode) = plan(itemRow.ItemCode, itemRow.EnhanceLevel);
+            if (planStatus != EnhancePlanStatus.Ok)
+            {
+                await transaction.RollbackAsync();
+                return EnhanceOutcome.Fail(planStatus == EnhancePlanStatus.MaxReached
+                    ? EnhanceStatus.MaxEnhanceReached
+                    : EnhanceStatus.NotEquippable);
+            }
+
+            // 3) 비용 재화 잔액 확인.
+            var currencyRow = await db.Query("player_item")
+                .Select("player_item_id", "quantity")
+                .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", currencyCode)
+                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
+
+            long balance = currencyRow is null ? 0 : currencyRow.Quantity;
+            if (balance < cost)
+            {
+                await transaction.RollbackAsync();
+                return EnhanceOutcome.Fail(EnhanceStatus.InsufficientCurrency);
+            }
+
+            // 4) 비용 차감(재화 행 UPDATE).
+            long newBalance = balance - cost;
+            if (currencyRow is not null && cost > 0)
+            {
+                await db.Query("player_item").Where("player_item_id", currencyRow.PlayerItemId)
+                    .UpdateAsync(new { quantity = newBalance }, transaction);
+            }
+
+            // 5) 강화 단계 +1.
+            int newLevel = itemRow.EnhanceLevel + 1;
+            await db.Query("player_item").Where("player_item_id", itemId)
+                .UpdateAsync(new { enhance_level = newLevel }, transaction);
+
+            // 6) 장착 중이면 장착 행의 강화 단계 스냅샷도 함께 갱신(코어 로드 equipped가 이 값을 내려준다).
+            int equippedUpdated = await db.Query("player_item_equipped").Where("player_item_id", itemId)
+                .UpdateAsync(new { enhance_level = newLevel }, transaction);
+
+            await transaction.CommitAsync();
+            return new EnhanceOutcome(
+                EnhanceStatus.Ok, newLevel, cost, currencyCode, newBalance, equippedUpdated > 0);
         }
         catch
         {

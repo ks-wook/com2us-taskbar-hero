@@ -49,7 +49,7 @@
 ![재료 아이템 — stack_max까지 한 칸에 겹쳐 쌓이는 재료](../images/inventory-item-cube-재료아이템.png)
 
 - **장착 / 해제**: 장비 아이템을 슬롯(무기·보조무기·투구·갑옷·장갑·신발, [마스터 데이터 기획서](master-data/master-data-기획서.md) 5.2)에 장착/해제한다. 이미 장착된 슬롯에 새 장비를 끼우면 기존 장비는 인벤토리로 되돌아온다(스왑).
-- **강화**: 장비를 재화(골드 등)를 소모해 강화 단계(`enhance_level`)를 올린다. 단계별 비용·스탯 배율은 `enhance_master`가 정의한다.
+- **강화**: 장비를 재화(현재 골드)를 소모해 강화 단계(`enhance_level`)를 **1씩** 올린다(최대 **+10**). 단계별 비용·스탯 배율은 `enhance_master`가 정의하며, 실패·하락·파괴 없이 비용을 내면 확정 상승한다. 장착 중인 장비도 해제 없이 강화할 수 있다(5.3).
 - **큐브(Hero-dric Cube)**: 원작의 성장형 큐브. 사용할수록 큐브 자신이 성장(`cube_level`)한다. 필요 없는 아이템은 **분해**로 골드로 전환한다(별도 폐기 기능은 두지 않음).
   - **합성(combine)**: 같은 등급의 아이템 여러 개를 소모해 **한 등급 높은** 아이템을 만든다(`cube_master.combine_grade_up`·`combine_count`). **슬롯·클래스는 서로 달라도 된다.**
   - **분해(dismantle)**: 아이템을 분해해 **골드로 전환**한다(`cube_master.gold_per_scrap`).
@@ -158,7 +158,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | **스테이지** | `stage/clear` | **전리품 적재**(스택 병합·새 칸) |
 | **거래소** | `trade/register` · `trade/cancel` | **등록 = 에스크로로 제거 / 취소 = 가방 복귀** |
 
-`trade/buy`는 구매 아이템이 우편함으로 가고 구매자 가방은 그대로이므로 이 블록을 두지 않는다(골드 변동은 `balance`). 장착·해제(5.1·5.2)와 용량 확장(5.4)도 기존 필드로 충분해 생략한다.
+`trade/buy`는 구매 아이템이 우편함으로 가고 구매자 가방은 그대로이므로 이 블록을 두지 않는다(골드 변동은 `balance`). 장착·해제(5.1·5.2)와 강화(5.3)·용량 확장(5.4)도 기존 필드로 충분해 생략한다 — 강화는 대상 행의 `enhanceLevel` 하나만 바뀌므로 응답의 `itemId`·`enhanceLevel`로 갱신한다.
 ### 5.1 장착 — `POST /api/game/inventory/equip`
 
 지정 캐릭터에게 아이템을 장착한다. 장착 슬롯은 아이템의 `item_master.equip_slot`에서 파생하며, 서버는 `player_item_equipped`에 대상 아이템의 장착 행(`equipped_character_id`/`equipped_slot`)을 INSERT한다. 그 캐릭터의 같은 슬롯에 이미 장착된 장비가 있으면 그 장착 행을 DELETE해 스왑한다. 장비의 **클래스 제한**(`item_master.class_req`, `0`은 전 클래스 공용)이 **대상 캐릭터의 직업**(`player_character.class_code`, 기사/레인저/마법사/슬레이어)과 일치해야 하고, 그 캐릭터 `level`이 **요구 레벨**(`item_master.level_req`, **5레벨 단위**, `0`은 제한 없음) 이상이어야 하며, 어느 하나라도 위반하면 `ItemNotEquippable(4003)`로 거부한다.
@@ -216,9 +216,13 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 5.3 강화 — `POST /api/game/inventory/enhance`
 
-> **상태: 보류.** 장비 강화는 `enhance_master`(강화 단계별 비용·배율) 값이 아직 확정되지 않아 현재 **보류**한다([마스터 데이터 값](master-data/master-data-값.md) §7 미작성). 아래 명세는 도입이 확정될 경우의 기준안이다.
+> **상태: 구현 완료.** 강화 단계별 비용·스탯 배율은 `enhance_master`가 확정값으로 정의한다([마스터 데이터 값](master-data/master-data-값.md) §7).
 
-장비의 강화 단계를 1 올린다. 비용·배율은 `enhance_master`의 다음 단계 정의를 따른다.
+장비의 강화 단계를 **1 올린다**(1회 호출 = 1단계, 수량 지정 필드 없음). 비용은 `enhance_master`의 **다음 단계**(`현재 enhance_level + 1`) 정의를 서버가 산출하며(클라이언트 입력 불신), **실패·하락·파괴가 없다 — 비용을 내면 확정 상승한다.**
+
+- **최대 단계는 `enhance_master` 행 수로 결정된다**(현재 **+10**). 다음 단계 정의가 없으면 `MaxEnhanceReached(4004)`.
+- **스탯 배율**은 그 단계의 `stat_multiplier`(단일 배율)를 장비 옵션 스탯 전체에 곱한다(현재 단계당 +0.05 → +10에서 1.5배). 서버는 배율을 응답에 담지 않는다 — 클라이언트가 마스터 번들에서 읽어 표시·전투 계산에 쓰고, 서버는 **단계(`enhance_level`)만 권위로 확정**한다.
+- **장착 중인 장비도 그대로 강화할 수 있다(확정).** 해제를 요구하면 가방이 가득 찼을 때 해제 자체가 실패해(`InventoryFull(4002)`) 강화가 막히므로, 같은 트랜잭션에서 `player_item.enhance_level`과 **장착 행(`player_item_equipped.enhance_level`) 스냅샷을 함께** 올린다(코어 로드의 `equipped`가 이 컬럼을 그대로 내려주므로 갱신하지 않으면 장착 스탯이 옛 단계로 남는다).
 
 **Request**
 ```json
@@ -234,14 +238,17 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "data": {
     "itemId": 5001,
     "enhanceLevel": 4,
-    "cost": { "currencyType": 1, "amount": 8000 },
+    "equipped": false,
+    "cost": { "currencyType": 1, "amount": 7000 },
     "balance": [ { "currencyType": 1, "amount": 9867421 } ]
   }
 }
 ```
 
-- 트랜잭션: 재화 차감 → `enhance_level += 1`. 강화 성공/실패 확률 도입 여부는 8장 미결(현행은 비용 지불 시 **확정 상승**으로 가정).
-- 오류: `ItemNotFound(4001)`, `ItemNotEquippable(4003)`(장비만 강화 가능), `MaxEnhanceReached(4004)`(다음 단계가 `enhance_master`에 없음), `InsufficientCurrency(4005)`.
+- `enhanceLevel`은 **상승 후** 단계, `cost`는 이번에 차감된 재화(`currencyType` = 소모 재화 `item_code`, 골드=1), `balance`는 차감 후 잔액이다. `equipped`는 그 장비가 장착 중이어서 장착 정보의 강화 단계까지 갱신됐음을 뜻한다.
+- 트랜잭션: 비용 재화 차감 → `player_item.enhance_level += 1` → (장착 중이면) `player_item_equipped.enhance_level` 동일 값 갱신. 중도 실패 시 전체 롤백한다(재화만 빠지고 단계가 안 오르는 상태를 막는다).
+- 가방 행은 이 아이템의 `enhanceLevel`만 바뀌므로 **`inventoryDelta`를 두지 않는다** — 클라이언트는 `itemId`·`enhanceLevel`로 캐시를 갱신하고 재조회하지 않는다(5.0).
+- 오류: `ItemNotFound(4001)`, `ItemNotEquippable(4003)`(장비가 아님 — 재료·소모품·재화 행), `MaxEnhanceReached(4004)`(다음 단계가 `enhance_master`에 없음), `InsufficientCurrency(4005)`.
 
 ### 5.4 인벤토리 용량 확장 — `POST /api/game/inventory/expand`
 
@@ -490,7 +497,9 @@ unequip(characterId, slot):
 - **가방이 가득 찬 상태에서 스왑 장착**: 장착 아이템이 반납한 칸을 밀려난 장비가 그대로 물려받아 점유 칸 수가 그대로이므로 **정상 처리된다**.
 - **장착 중 아이템 이동(`move`) 시도**: 장착 중에는 `slot`이 NULL이라 배치 대상이 아니므로 `ItemNotFound(4001)`로 거부한다.
 - **스택 초과 획득**: 지급 시 `stack_max`까지 채우고 초과분은 새 행으로 분할. 인벤토리 용량(`game_player.inventory_capacity`)을 초과하면 `InventoryFull(4002)`. 용량은 골드로 확장할 수 있다(5.4).
-- **최대 강화 초과**: 다음 `enhance_level`이 `enhance_master`에 없으면 `MaxEnhanceReached(4004)`.
+- **최대 강화 초과**: 다음 `enhance_level`이 `enhance_master`에 없으면 `MaxEnhanceReached(4004)`(현재 상한 +10).
+- **장착 중 아이템 강화**: 허용한다(분해·거래와 달리 `ItemEquipped(4007)`로 막지 않는다). 보유 행과 장착 행의 강화 단계를 한 트랜잭션에서 함께 올려 두 값이 어긋나지 않게 한다(5.3).
+- **비장비 강화 시도**: 재료·소모품·재화 행을 강화하려 하면 `ItemNotEquippable(4003)`.
 - **재화/재료 부족**: 비용 재화 부족은 `InsufficientCurrency(4005)`, 아이템/재료 수량 부족은 `InsufficientQuantity(4006)`. 검증은 반영 전에 수행하고 부족 시 롤백.
 - **동시 중복 요청**: 같은 `player_item_id`에 대한 강화/소모/분해가 겹치면 행 잠금으로 직렬화하여 이중 소모를 방지한다.
 - **큐브 조건 미충족**: 합성/제작의 등급·개수·재료·큐브 레벨 조건 위반은 `CubeRecipeNotMet(4010)`/`CubeLevelInsufficient(4011)`.
@@ -556,9 +565,9 @@ SELECT player_item_id, slot, item_code, quantity, enhance_level
 
 ## 8. 미결 사항 / TODO
 
-- **장비 강화 도입 여부**: 5.3은 `enhance_master`(단계별 비용·배율) 값 미확정으로 **보류** 중이다([마스터 데이터 값](master-data/master-data-값.md) §7 미작성). 도입 시 실패/하락/파괴 확률을 둘지 함께 정하고(현행 기준안은 비용 지불 시 확정 상승) 확률 필드를 `enhance_master`에 추가한다.
 - **직업 추가**: 현재 클래스는 기사·레인저·마법사·슬레이어 4종이다([마스터 데이터 기획서](master-data/master-data-기획서.md) 5.1 `class_master`). 추후 확인 후 추가할 예정이며, 추가 시 각 장비의 `item_master.class_req` 배정을 함께 갱신한다.
-- **밸런스 수치**: 요구 레벨(`level_req`)별 장비 스탯 곡선, 큐브 경험치 획득량(합성 `50 × 등급` 등)·확장 비용(칸당 10,000골드 정액)은 **학습용 임시값**이다. 스키마 변경 없이 값만 조정한다.
+- **밸런스 수치**: 요구 레벨(`level_req`)별 장비 스탯 곡선, 큐브 경험치 획득량(합성 `50 × 등급` 등)·확장 비용(칸당 10,000골드 정액)·**강화 비용 곡선(1,000→65,000골드)과 배율(단계당 +0.05)** 은 **학습용 임시값**이다. 스키마 변경 없이 값만 조정한다.
+- **강화 실패 확률**: 현재 강화는 **확정 상승**으로 확정했다(5.3). 추후 실패·하락·파괴를 도입한다면 `enhance_master`에 확률 컬럼을 추가하고 5.3 응답에 결과 필드를 더한다(등급별 상한 차등도 그때 함께 검토).
 
 ## 9. 참고
 

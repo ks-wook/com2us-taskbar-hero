@@ -10,7 +10,7 @@
 | [**세이브 데이터/캐릭터 생성**](#세이브-데이터캐릭터-생성) (코어 로드 · 가방 페이지 조회 · 생성 · 파티 편성 저장 · heartbeat) | GameSaveController · GameInventoryController(가방 조회) | Game | `POST /api/game/load` · `inventory/list` · `create-character` · `party/arrange` · `update-last-active` |
 | [**스테이지**](#스테이지) (던전 입장·클리어 보상) | GameStageController | Game | `POST /api/game/stage/enter` · `clear` |
 | [**방치형 오프라인 보상**](#방치형-오프라인-보상) | GameOfflineController | Game | `POST /api/game/offline/claim` |
-| [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·배치·용량 확장. 가방 조회는 세이브 데이터 섹션) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `move` · `expand` |
+| [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·강화·배치·용량 확장. 가방 조회는 세이브 데이터 섹션) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `enhance` · `move` · `expand` |
 | [**소모품/버프**](#소모품버프) (소모품 사용 → 경험치·골드 획득량 버프 부여·연장, 적용 중인 버프 조회) | GameConsumableController | Game | `POST /api/game/consumable/use`, `POST /api/game/consumable/buffs` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**가챠**](#가챠뽑기) (배너 조회 / 뽑기 1연·10연 / 뽑기 기록 조회) | GameGachaController | Game | `POST /api/game/gacha/banners` · `pull` · `history` |
@@ -23,7 +23,7 @@
 >
 > - **서버는 가방을 캐시하지 않는다.** 커밋으로 끝이며 커밋 후 갱신할 Redis 스냅샷이 없다(같은 문서 6.5). 아래 다이어그램에서 클라이언트 쪽 반영은 `C->>C: 응답으로 캐시 반영(재조회 없음)`으로 줄여 표기한다.
 > - 클라이언트는 `removed` → `upserted` 순으로 `itemId`를 키 삼아 적용하며(멱등), **서버가 응답한 `slot`이 최종 위치**다(스택 병합·빈 칸 배정은 서버 권위). 재화는 각 응답의 `balance`, 큐브 상태는 `cube`가 담당한다.
-> - **`inventory/equip`·`unequip`·`move`는 응답에 `inventoryDelta`를 담지 않는다.** 바뀐 내용이 `equipped`/`unequipped`/`unequippedBagSlot`/`bagSlot`/`moved`/`swapped`로 이미 특정되므로 클라이언트는 그 필드로 캐시를 옮긴다.
+> - **`inventory/equip`·`unequip`·`enhance`·`move`는 응답에 `inventoryDelta`를 담지 않는다.** 바뀐 내용이 `equipped`/`unequipped`/`unequippedBagSlot`/`bagSlot`/`enhanceLevel`/`moved`/`swapped`로 이미 특정되므로 클라이언트는 그 필드로 캐시를 옮긴다.
 > - 재조회가 남아 있는 경우는 두 가지뿐이다 — **가방을 보여주는 화면을 열 때**(창고·큐브·거래 판매 탭 → `inventory/list`)와 **캐시가 서버와 어긋났을 때**(`ItemNotFound(4001)`·배치 이동 저장 실패 → `inventory/list` 1회).
 
 ## 공통 아키텍처
@@ -404,7 +404,7 @@ sequenceDiagram
 
 ## 인벤토리/아이템
 
-장비 장착·해제·배치 이동·용량 확장 (GameInventoryController, `/api/game/inventory`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_item`·`player_item_equipped`·`game_player`) + 인메모리 마스터 데이터(item·확장 비용).
+장비 장착·해제·강화·배치 이동·용량 확장 (GameInventoryController, `/api/game/inventory`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_item`·`player_item_equipped`·`game_player`) + 인메모리 마스터 데이터(item·강화 규칙·확장 비용).
 
 ### POST /api/game/inventory/equip — 장착(스왑)
 
@@ -486,6 +486,45 @@ sequenceDiagram
         C->>C: 캐시의 칸 번호를 서버 확정값으로 맞춤(재조회 없음)
     end
 ```
+
+### POST /api/game/inventory/enhance — 장비 강화(단계 +1, 재화 소모)
+
+비용·상한은 마스터 `enhance_master`의 **다음 단계**(현재 단계 + 1) 행이 정한다(현재 상한 +10). 실패·하락·파괴가 없어 비용을 내면 확정 상승하며, **장착 중인 장비도 해제 없이 강화한다** — 보유 행과 장착 행의 강화 단계를 같은 트랜잭션에서 함께 올려 두 값이 어긋나지 않게 한다.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /inventory/enhance { userId, token, data:{ itemId } }
+    Note over S,DB: 단일 트랜잭션(재화 차감과 단계 상승을 함께 커밋)
+    S->>DB: 대상 아이템 데이터 확인(계정 소유·현재 강화 단계)
+    alt 아이템 없음 / 재화 행
+        S-->>C: 실패 { errorCode: ItemNotFound(4001) }
+    else 보유 중
+        S->>S: 마스터 데이터 확인(인메모리) — 장비 여부·다음 단계 정의·비용 산출
+        alt 장비 아님
+            S-->>C: 실패 { errorCode: ItemNotEquippable(4003) }
+        else 다음 단계 없음(상한 도달)
+            S-->>C: 실패 { errorCode: MaxEnhanceReached(4004) }
+        else 강화 가능
+            S->>DB: 비용 재화 데이터 확인·차감
+            alt 재화 부족
+                S-->>C: 실패 { errorCode: InsufficientCurrency(4005) }
+            else 충분
+                S->>DB: 아이템 강화 단계 갱신(+1)
+                S->>DB: 장착 중이면 장착 데이터의 강화 단계도 동일 값으로 갱신
+                S-->>C: 성공 { itemId, 상승 후 단계, 장착 여부, 소모 재화, 잔액 }
+                C->>C: 응답으로 캐시 반영(재조회 없음) — 그 아이템의 강화 단계·재화 잔액만
+            end
+        end
+    end
+```
+
+- 응답에 `inventoryDelta`는 없다. 바뀐 값이 그 아이템 한 행의 `enhanceLevel` 하나뿐이라 `itemId`·`enhanceLevel`로 특정되기 때문이다.
+- **스탯 배율은 서버가 내려주지 않는다.** 서버는 단계만 권위로 확정하고, 클라이언트가 마스터 번들의 `stat_multiplier`(단계당 +0.05)를 장비 옵션 스탯에 곱해 표시·전투 계산한다.
 
 ### POST /api/game/inventory/expand — 용량 1칸 확장(골드 소모)
 

@@ -30,6 +30,13 @@ public sealed record ItemDef(
 /// </summary>
 public sealed record ConsumableDef(int ItemCode, int BuffType, float BuffValue, int DurationSec);
 
+/// <summary>
+/// 장비 강화 단계별 규칙(enhance_master). 한 행 = "그 단계로 올릴 때의 비용"(Cost·CurrencyCode)과
+/// "그 단계에 도달했을 때의 스탯 배율"(StatMultiplier)이다. 0단계(미강화)는 배율 1.0이라 행이 없고,
+/// 정의된 최대 단계 다음이 없으면 강화 불가(MaxEnhanceReached)다.
+/// </summary>
+public sealed record EnhanceRule(int EnhanceLevel, long Cost, int CurrencyCode, float StatMultiplier);
+
 /// <summary>스킬 정의(skill_master). 성장 검증(직업 소속·액티브/패시브·최대 레벨)에 사용한다. SkillType 1:액티브 2:패시브.</summary>
 public sealed record SkillDef(int SkillCode, int ClassCode, int SkillType, int MaxLevel);
 
@@ -161,6 +168,14 @@ file sealed class LevelMasterRow
     public int Level { get; set; }
     public long RequiredExp { get; set; }
     public int SkillPoints { get; set; }
+}
+
+file sealed class EnhanceMasterRow
+{
+    public int EnhanceLevel { get; set; }
+    public long Cost { get; set; }
+    public int CurrencyType { get; set; }
+    public decimal StatMultiplier { get; set; } // DECIMAL(5,3) → decimal로 받아 float로 캐스팅
 }
 
 file sealed class SkillMasterRow
@@ -354,6 +369,9 @@ public sealed class MasterDataProvider
     // 소모품 버프 효과: item_code → 정의(consumable_master).
     private IReadOnlyDictionary<int, ConsumableDef> _consumablesByCode = new Dictionary<int, ConsumableDef>();
 
+    // 장비 강화: enhance_level → 그 단계의 규칙(비용·소모 재화·스탯 배율, enhance_master).
+    private IReadOnlyDictionary<int, EnhanceRule> _enhanceByLevel = new Dictionary<int, EnhanceRule>();
+
     // 인벤토리 확장 비용: index i(0-based) = 기본 용량 이후 (i+1)번째 칸을 여는 골드 비용(inventory_expand_master, step 오름차순).
     // 배열 길이 = 확장 가능한 총 칸 수이며, 상한 용량 = BaseInventoryCapacity + 길이.
     private IReadOnlyList<long> _expandCosts = new List<long>();
@@ -401,6 +419,13 @@ public sealed class MasterDataProvider
     /// <summary>소모품(item_type=4)의 버프 효과 정의(consumable_master). 소모품이 아니거나 미정의 코드는 null.</summary>
     public ConsumableDef? GetConsumable(int itemCode)
         => _consumablesByCode.TryGetValue(itemCode, out var def) ? def : null;
+
+    /// <summary>강화 단계 level의 규칙(그 단계로 올리는 비용·소모 재화·도달 시 스탯 배율). 정의가 없으면 null.</summary>
+    public EnhanceRule? GetEnhance(int enhanceLevel)
+        => _enhanceByLevel.TryGetValue(enhanceLevel, out var rule) ? rule : null;
+
+    /// <summary>정의된 최대 강화 단계(= enhance_master의 최대 enhance_level, 현재 10). 정의가 비었으면 0(강화 불가).</summary>
+    public int MaxEnhanceLevel => _enhanceByLevel.Count == 0 ? 0 : _enhanceByLevel.Keys.Max();
 
     /// <summary>현재 용량에서 1칸 확장 가능 여부와 그 비용을 산출한다.
     /// 확장할 칸의 step = currentCapacity - 기본 용량 + 1이며, 상한(=기본 용량 + 확장 정의 수)을 넘으면 불가(false).</summary>
@@ -643,6 +668,7 @@ public sealed class MasterDataProvider
             (_levelRequiredExp, _maxLevel, _levelSkillPoints) = await LoadLevelsAsync(db);
             (_itemsByGrade, _itemsByCode) = await LoadItemsAsync(db);
             _consumablesByCode = await LoadConsumablesAsync(db);
+            _enhanceByLevel = await LoadEnhanceRulesAsync(db);
             _skillsByCode = await LoadSkillsAsync(db);
             _runesByCode = await LoadRunesAsync(db);
             _runeCosts = await LoadRuneCostsAsync(db);
@@ -663,7 +689,7 @@ public sealed class MasterDataProvider
             }
 
             IsLoaded = true;
-            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · item {_itemsByCode.Count:@Items} · dropGrades {_itemsByGrade.Count:@Grades} · consumable {_consumablesByCode.Count:@Consumables} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates} · newbieReward {_newbieRewards.Count:@NewbieRewards} · gacha {_gachaByCode.Count:@Gachas}");
+            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · item {_itemsByCode.Count:@Items} · dropGrades {_itemsByGrade.Count:@Grades} · consumable {_consumablesByCode.Count:@Consumables} · enhance {_enhanceByLevel.Count:@Enhances} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates} · newbieReward {_newbieRewards.Count:@NewbieRewards} · gacha {_gachaByCode.Count:@Gachas}");
         }
         catch (Exception ex)
         {
@@ -1168,6 +1194,27 @@ public sealed class MasterDataProvider
         }
 
         return byCode;
+    }
+
+    /// <summary>
+    /// enhance_master를 enhance_level → 강화 규칙(비용·소모 재화·스탯 배율)으로 적재한다.
+    /// 강화 API가 "현재 단계 + 1" 행을 찾아 비용을 확정하며, 행이 없으면 최대 단계로 판정한다.
+    /// </summary>
+    private static async Task<Dictionary<int, EnhanceRule>> LoadEnhanceRulesAsync(QueryFactory db)
+    {
+        var rows = await db.Query("enhance_master")
+            .Select("enhance_level", "cost", "currency_type", "stat_multiplier")
+            .GetAsync<EnhanceMasterRow>();
+
+        var byLevel = new Dictionary<int, EnhanceRule>();
+        foreach (var row in rows)
+        {
+            // DECIMAL 컬럼은 POCO에서 decimal로 받아 float로 캐스팅한다(프로젝트 DB 매핑 규칙).
+            byLevel[row.EnhanceLevel] = new EnhanceRule(
+                row.EnhanceLevel, row.Cost, row.CurrencyType, (float)row.StatMultiplier);
+        }
+
+        return byLevel;
     }
 
     /// <summary>attendance_master를 day(출석 일차) → 보상 정의로 적재한다(정상 운영에선 1~30 전부 정의).</summary>

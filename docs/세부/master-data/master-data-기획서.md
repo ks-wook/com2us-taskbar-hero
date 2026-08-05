@@ -237,22 +237,27 @@ erDiagram
 
 ### 5.4 `enhance_master` — 강화 규칙
 
-`player_item.enhance_level`·`player_item_equipped.enhance_level`(강화/각인 단계)별 요구 비용과 효과 배율. 강화 성공 시 적용될 스탯 배율을 정의한다.
+`player_item.enhance_level`·`player_item_equipped.enhance_level`(강화 단계)별 요구 비용과 효과 배율. **한 행 = "그 단계로 올릴 때의 비용" + "그 단계에 도달했을 때의 스탯 배율"** 이며, 0단계(미강화)는 배율 1.0이라 행이 없다. 행 개수가 곧 **최대 강화 단계**(현재 10 → +10)다.
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
-| `enhance_level` | int PK | 강화 단계 |
-| `cost` | bigint | 요구 재화량 |
+| `enhance_level` | int PK | 강화 단계(1~10) |
+| `cost` | bigint | 이 단계로 올리는 데 드는 재화량 |
 | `currency_type` | int | 소모 재화 `item_code`(FK `item_master` 재화, 골드=1) |
-| `stat_multiplier` | json | 해당 단계에서의 스탯 배율 |
+| `stat_multiplier` | decimal(5,3) | 이 단계에서 장비 옵션 스탯(`base_stats`) **전체**에 곱할 배율(`1.050`=105%) |
+
+> **`stat_multiplier`의 JSON 폐기(변경)**: 구 `stat_multiplier`(JSON, 스탯별 배율)는 폐기한다(JSON 문자열 컬럼 금지 규칙). 스탯별로 배율이 갈리지 않으므로 자식 테이블도 두지 않고 **단일 DECIMAL 배율 컬럼**으로 둔다 — 장비의 스탯 집합 전체에 같은 배율을 곱한다. 스탯마다 다른 배율이 필요해지면 그때 자식 테이블(`enhance_stat`)로 분리한다.
 
 **담기는 데이터 예시**
 
 | enhance_level | cost | currency_type | stat_multiplier |
 |---|---|---|---|
-| 1 | 1000 | 1 | `{ "atk": 1.05 }` |
-| 2 | 3000 | 1 | `{ "atk": 1.10 }` |
-| 3 | 8000 | 1 | `{ "atk": 1.18 }` |
+| 1 | 1000 | 1 | 1.050 |
+| 2 | 2000 | 1 | 1.100 |
+| 10 | 65000 | 1 | 1.500 |
+
+- 강화는 **실패·하락·파괴가 없다**(비용을 내면 확정 상승, [인벤토리/아이템/큐브 기획서](../inventory-item-cube-기획서.md) 5.3). 확률을 도입하면 이 테이블에 확률 컬럼을 추가한다.
+- 서버는 이 테이블에서 **비용만** 읽어 차감하고 단계를 권위로 확정한다. 배율은 클라이언트가 번들에서 읽어 표시·전투 계산에 쓴다. 전체 값은 [마스터 데이터 값](master-data-값.md) §7.
 
 ### 5.5 재화 — `item_master`로 통합(별도 `currency_master` 없음)
 
@@ -605,7 +610,7 @@ erDiagram
 | `level_master` | 레벨별 스탯 보너스·요구 경험치 | 🔴 전투 필수 |
 | `item_master` | 장비 기본 옵션 + 재화(골드)·소모품 정의 | 🔴 전투 필수 |
 | `consumable_master` | 소모품 버프 종류·배율·지속시간(사용 확인 UI 표시용, 확정은 서버) | 🟡 표시용 |
-| `enhance_master` | 강화 단계별 스탯 배율 | 🔴 전투 필수 |
+| `enhance_master` | 강화 단계별 스탯 배율(전투 계산) + 다음 단계 비용 표시(차감은 서버 권위) | 🔴 전투 필수 |
 | `skill_master` (+`skill_coefficient`) | 스킬 정의 + 레벨·타입별(공격/버프/디버프) 계수·지속시간 | 🔴 전투 필수 |
 | `rune_master` | 룬 효과(% 보너스) | 🔴 전투 필수 |
 | `monster_master` | 몬스터 스탯(HP·공격력) | 🔴 전투 필수 |
@@ -634,6 +639,9 @@ erDiagram
 // consumable_master.json
 [ { "itemCode": 42001, "buffType": 1, "buffValue": 1.5, "durationSec": 1800 },
   { "itemCode": 42002, "buffType": 2, "buffValue": 1.5, "durationSec": 1800 } ]
+// enhance_master.json
+[ { "enhanceLevel": 1, "cost": 1000, "currencyType": 1, "statMultiplier": 1.05 },
+  { "enhanceLevel": 10, "cost": 65000, "currencyType": 1, "statMultiplier": 1.5 } ]
 ```
 
 **설계 원칙**
@@ -696,15 +704,13 @@ namespace TaskbarHero.Common.MasterData
         public long basePrice;    // 거래소 기준가(±20% 등록), 0=거래 불가
     }
 
-    [Serializable] public struct StatMultiplier { public float hp; public float atk; public float def; }
-
     [Serializable]
     public class EnhanceMaster
     {
-        public int enhanceLevel;
-        public long cost;
-        public int currencyType;  // 소모 재화 item_code(골드=1)
-        public StatMultiplier statMultiplier;
+        public int enhanceLevel;      // 강화 단계(1~10)
+        public long cost;             // 이 단계로 올리는 데 드는 재화량
+        public int currencyType;      // 소모 재화 item_code(골드=1)
+        public float statMultiplier;  // 이 단계에서 장비 baseStats 전체에 곱할 배율(1.05 = 105%)
     }
 
     // 스킬 레벨·타입별 계수 1행. DB skill_coefficient 자식 테이블에 대응(번들 JSON은 배열로 직렬화).
@@ -862,7 +868,7 @@ public class CombatCalculator
     private readonly MasterDatabase db;
     public CombatCalculator(MasterDatabase database) { db = database; }
 
-    // 캐릭터 종합 스탯 = 클래스 기본 + 레벨 보너스 + 장비(공격력에 강화 배율) + 룬 %
+    // 캐릭터 종합 스탯 = 클래스 기본 + 레벨 보너스 + 장비(옵션 스탯 전체에 강화 배율) + 룬 %
     public Stats AggregateStats(int classCode, int level, IEnumerable<EquippedItem> equips, IEnumerable<OwnedRune> runes)
     {
         Stats s = db.Classes[classCode].baseStats;                      // 클래스 기본 스탯
@@ -874,15 +880,15 @@ public class CombatCalculator
             s.critDamage += lv.statBonus.critDamage; s.cooldown += lv.statBonus.cooldown;
         }
 
-        foreach (var e in equips)                                       // 장비 합(공격력에 강화 배율 적용)
+        foreach (var e in equips)                                       // 장비 합(옵션 스탯 전체에 강화 배율 적용)
         {
             if (!db.Items.TryGetValue(e.itemCode, out var im)) continue;
-            float atkMult = 1f;
-            if (db.Enhances.TryGetValue(e.enhanceLevel, out var en) && en.statMultiplier.atk > 0f)
-                atkMult = en.statMultiplier.atk;
-            s.hp += im.baseStats.hp; s.atk += (long)(im.baseStats.atk * atkMult); s.def += im.baseStats.def;
-            s.moveSpeed += im.baseStats.moveSpeed; s.critChance += im.baseStats.critChance;
-            s.critDamage += im.baseStats.critDamage; s.cooldown += im.baseStats.cooldown;
+            float m = 1f;                                               // 미강화(0단계)는 행이 없어 배율 1.0
+            if (db.Enhances.TryGetValue(e.enhanceLevel, out var en) && en.statMultiplier > 0f)
+                m = en.statMultiplier;
+            s.hp += (long)(im.baseStats.hp * m); s.atk += (long)(im.baseStats.atk * m); s.def += (long)(im.baseStats.def * m);
+            s.moveSpeed += im.baseStats.moveSpeed * m; s.critChance += im.baseStats.critChance * m;
+            s.critDamage += im.baseStats.critDamage * m; s.cooldown += im.baseStats.cooldown * m;
         }
 
         float atkPct = 0f;                                              // 룬 공격력 % 합(statType=1만 예시로 반영)
