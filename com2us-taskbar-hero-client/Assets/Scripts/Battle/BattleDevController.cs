@@ -1784,14 +1784,17 @@ namespace TaskbarHero.Client.Battle
             foreach (var go in _om.Active(CatEnemy))
             {
                 var m = go.GetComponent<MonsterUnit>();
-                if (m == null || !m.Alive || m.MaxHp <= 0)
+                // 살아 있는 동안 + <b>사망 직후 juice가 남아 있는 동안</b>(MonsterUnit.ShowHpBar) 그린다.
+                // 사망 즉시 건너뛰면 한 방에 죽는 몬스터는 바가 한 번도 안 보인 채 사라진다.
+                if (m == null || !m.ShowHpBar || m.MaxHp <= 0)
                 {
                     continue;
                 }
                 // 머리 위 기준점은 몬스터가 스폰 직후 1회 측정해 캐시한 오프셋을 쓴다.
                 // 매 프레임 스프라이트 경계를 재면 애니메이션(걷기·공격·피격)이 파트를 움직일 때마다
                 // 상단·중앙이 요동쳐 HP바가 떨리므로, 애니메이션과 무관한 transform 위치 + 고정 오프셋으로 따라간다.
-                Vector3 pos = m.transform.position;
+                // 사망 후에는 시신이 날아가므로 바 기준 위치가 사망 지점에 고정된다(MonsterUnit.HpBarAnchorPos).
+                Vector3 pos = m.HpBarAnchorPos;
                 float bodyTop, centerX;
                 if (m.TryGetHeadAnchor(out Vector2 anchor))
                 {
@@ -1806,7 +1809,7 @@ namespace TaskbarHero.Client.Battle
                 float barY = m.IsBoss
                     ? bodyTop + MonsterUnit.BossHpBarBand * 0.5f
                     : bodyTop + HpBarAboveMargin;
-                Vector3 sp = _cam.WorldToScreenPoint(new Vector3(centerX, barY, m.transform.position.z));
+                Vector3 sp = _cam.WorldToScreenPoint(new Vector3(centerX, barY, pos.z));
                 if (sp.z <= 0f)
                 {
                     continue;
@@ -1843,7 +1846,7 @@ namespace TaskbarHero.Client.Battle
         /// </summary>
         private static void MeasureBodyTop(MonsterUnit m, out float centerX, out float bodyTop)
         {
-            Vector3 pos = m.transform.position;
+            Vector3 pos = m.HpBarAnchorPos; // 사망 후에는 사망 지점(시신을 따라가지 않는다)
             centerX = pos.x;
             bodyTop = pos.y + 1.2f; // 렌더러가 아직 없을 때의 최종 폴백
 

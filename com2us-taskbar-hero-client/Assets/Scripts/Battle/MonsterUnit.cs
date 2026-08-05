@@ -109,15 +109,27 @@ namespace TaskbarHero.Client.Battle
         private const float GhostHoldSeconds = 0.18f;   // 깎인 직후 고스트를 이만큼 그대로 둔다(방금 잃은 양 노출)
         private const float GhostCatchUpPerSec = 1.4f;  // 그 뒤 비율/초로 현재 체력까지 따라 내려온다
         private const float BarShakeSeconds = 0.16f;    // 피격 시 바가 흔들리는 시간
+        // 사망 후에도 HP바를 잠깐 남겨 <b>마지막 한 방의 juice를 끝까지</b> 보여 준다 — 이게 없으면 바를 그리는
+        // 쪽이 죽은 몬스터를 건너뛰어, <b>한 방에 죽는 몬스터는 바가 아예 안 보인다</b>(연출 없이 즉사).
+        private const float HpBarDeathLinger = 0.55f;      // 유지 시간 상한(고스트가 다 빠지면 그 즉시 치운다)
+        private const float GhostCatchUpDeadPerSec = 3f;   // 사망 후 고스트 하강 속도(0.18 유지 + 0.33 하강 = 0.51초)
 
         private float _ghostRatio = 1f;
         private float _ghostHold;
         private float _barShakeTimer;
+        private float _hpBarLinger;
+        private Vector3 _hpBarDeathPos;
 
         /// <summary>HP바 고스트(지연) 비율 0~1 — 현재 체력 비율보다 크면 그 차이가 "방금 깎인 양"이다.</summary>
         public float HpGhostRatio => _ghostRatio;
         /// <summary>피격 직후 HP바를 흔드는 강도 0~1(시간이 지나며 0으로 감쇠).</summary>
         public float HpBarShake01 => BarShakeSeconds > 0f ? Mathf.Clamp01(_barShakeTimer / BarShakeSeconds) : 0f;
+        /// <summary>HP바를 그려야 하는지 — 살아 있거나, <b>사망 직후 마지막 juice가 남아 있는 동안</b> true.
+        /// 한 방에 죽어도 바가 나타나 고스트가 끝까지 빠지는 것이 보이게 하는 조건이다.</summary>
+        public bool ShowHpBar => _alive || _hpBarLinger > 0f;
+        /// <summary>HP바가 따라갈 기준 위치. 사망 후에는 시신이 날아가므로(<c>DeathFlight</c>)
+        /// <b>사망 지점에 고정</b>해 바가 시신과 함께 회전·비행하지 않게 한다.</summary>
+        public Vector3 HpBarAnchorPos => _alive ? transform.position : _hpBarDeathPos;
 
         private SpriteRenderer[] _tintParts;   // 틴트 대상 SPUM 파트(스폰 후 1회 캐시)
         private Color[] _tintOriginals;        // 파트별 원래 색(SPUM은 파트마다 색이 다르다)
@@ -181,6 +193,7 @@ namespace TaskbarHero.Client.Battle
             _ghostRatio = 1f;
             _ghostHold = 0f;
             _barShakeTimer = 0f;
+            _hpBarLinger = 0f;
             gameObject.name = (isBoss ? "Boss_" : "Monster_") + _name;
 
             if (isBoss)
@@ -564,6 +577,9 @@ namespace TaskbarHero.Client.Battle
         /// <summary>
         /// HP바 연출 상태를 진행한다 — 고스트 바가 <see cref="GhostHoldSeconds"/> 동안 멈춰 방금 깎인 양을
         /// 보여준 뒤 현재 체력까지 내려오고, 피격 흔들림 강도는 시간에 따라 0으로 감쇠한다.
+        /// <para><b>사망 후에도 계속 돈다</b>(<see cref="TickHitReaction"/>에서 호출되므로 사망·일시정지와 무관).
+        /// 죽은 뒤에는 고스트를 <see cref="GhostCatchUpDeadPerSec"/>로 더 빠르게 0까지 내리고, 다 빠지면
+        /// 유지 시간을 끝내 바를 치운다 — 한 방에 죽어도 "바가 쭉 빠지는" 연출이 보이게 하는 부분이다.</para>
         /// </summary>
         private void TickHpBarJuice(float dt)
         {
@@ -579,11 +595,21 @@ namespace TaskbarHero.Client.Battle
             }
             else if (_ghostRatio > current)
             {
-                _ghostRatio = Mathf.MoveTowards(_ghostRatio, current, GhostCatchUpPerSec * dt);
+                _ghostRatio = Mathf.MoveTowards(_ghostRatio, current,
+                    (_alive ? GhostCatchUpPerSec : GhostCatchUpDeadPerSec) * dt);
             }
             if (_ghostRatio < current)
             {
                 _ghostRatio = current; // 회복(디버그 등)으로 현재가 더 높아지면 즉시 맞춘다
+            }
+
+            if (!_alive && _hpBarLinger > 0f)
+            {
+                _hpBarLinger -= dt;
+                if (_ghostHold <= 0f && _ghostRatio <= 0.001f)
+                {
+                    _hpBarLinger = 0f; // 다 빠졌으면 빈 바를 남기지 않고 즉시 숨긴다
+                }
             }
         }
 
@@ -797,6 +823,10 @@ namespace TaskbarHero.Client.Battle
         private void Die()
         {
             _alive = false;
+            // HP바를 잠깐 더 남겨 마지막 타격의 juice(고스트 하강 + 흔들림)를 끝까지 보여 준다.
+            // 위치는 지금 자리로 고정한다 — 시신은 DeathFlight로 날아가므로 바가 따라가면 안 된다.
+            _hpBarLinger = HpBarDeathLinger;
+            _hpBarDeathPos = transform.position;
             // 피격 연출을 즉시 걷어낸다 — 붉은 틴트가 사망 모션 내내 남거나, 피격 모션 복원이
             // 사망 모션을 idle로 덮어쓰지 않게 한다.
             _damagedMotionTimer = 0f;
