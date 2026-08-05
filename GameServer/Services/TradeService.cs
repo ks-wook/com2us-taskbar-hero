@@ -77,6 +77,8 @@ public sealed class TradeService : ITradeService
     /// <para><b>캐시를 두지 않고, 필요한 한 페이지만 읽는다(§7.3).</b> 뷰어 필터·정렬·페이징을 전부 쿼리에서
     /// 처리하므로(<c>WHERE → ORDER BY → LIMIT</c>) 비용이 전체 등록 수와 무관하게 페이지 크기에 비례하고,
     /// 본인 등록이 섞여도 페이지 건수가 줄지 않는다. 한 건 더 읽어(<c>pageSize + 1</c>) hasMore를 판정한다.</para>
+    /// <para><b>만료 시각이 지난 등록은 목록에서 빠진다(§7.6).</b> 요청 시각을 쿼리에 넘겨 걸러내므로,
+    /// 만료 배치(하루 1회)가 아직 돌지 않았어도 만료된 매물이 보이지 않는다.</para>
     /// </summary>
     public async Task<SaveResult> ListAsync(long userId, int itemCode, bool mine, int page, int pageSize)
     {
@@ -85,8 +87,9 @@ public sealed class TradeService : ITradeService
         // 깊은 페이지 방어: OFFSET 은 앞의 행을 세어 버리므로 상한을 둔다. 넘으면 빈 페이지로 응답한다.
         var normalizedPage = Math.Clamp(page, 0, MaxOffset / normalizedSize);
 
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var pageItems = await _tradeRepository.GetActiveListingPageAsync(
-            normalizedItem, userId, mine, normalizedPage * normalizedSize, normalizedSize + 1);
+            normalizedItem, userId, mine, normalizedPage * normalizedSize, normalizedSize + 1, now);
 
         bool hasMore = pageItems.Count > normalizedSize;
         if (hasMore)

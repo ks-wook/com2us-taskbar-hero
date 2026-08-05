@@ -110,11 +110,37 @@ builder.Services.AddScoped<IGachaService, GachaService>();
 builder.Services.AddScoped<ITradeRepository, TradeRepository>();
 builder.Services.AddScoped<ITradeService, TradeService>();
 
-// 거래소 만료 배치(등록 3일 경과 → 자동 취소 + 아이템 메일 반송, trade 기획서 7.6).
+// ── 주기 배치(BackgroundService) ───────────────────────────────────────────────────────────────
+// 두 배치 모두 공통 골격 PeriodicBatchService를 상속하며, 그 골격이 다음을 보장한다:
+//   · 기동 직후 즉시 1회 실행 → 그 뒤 각자의 주기(Interval)로 반복(PeriodicTimer.WaitForNextTickAsync).
+//     서버가 내려가 있던 동안 쌓인 대상을 첫 주기까지 기다리지 않고 바로 소화한다.
+//   · 이전 주기가 끝난 뒤에야 다음 tick을 기다리므로 재진입(주기 겹침)이 구조적으로 불가능하다.
+//     따라서 아래 "주기"는 정확히는 "이전 주기 종료 후 다음 실행까지의 간격"이다.
+//   · 주기마다 Redis 리더 락(batch:lock:{배치키}, SET NX)을 먼저 잡고, 잡은 인스턴스만 실행한다
+//     (scale-out 시 동시 실행 방지). **주기가 끝나면 소유자 확인 후 즉시 해제**하며, TTL은 락을 잡은 채
+//     프로세스가 죽었을 때 자동으로 풀리게 하는 안전망이다(= min(주기, 5분), 1주기 실행 시간의 상한 기준).
+//     "주기당 1회"는 락이 아니라 각 인스턴스의 타이머가 페이싱하고, 중복 실행은 작업의 멱등성이 흡수한다.
+//   · 1주기 실패는 Error 로그만 남기고 루프를 유지한다(배치 사망으로 대상이 영구 방치되는 것 방지).
+// 주기·1회 처리 상한은 appsettings에서 조절하며, 값이 없거나 0 이하이면 각 서비스의 기본값을 쓴다.
+
+// 거래소 만료 배치(등록 3일 경과 → status 정리 + 에스크로 아이템 메일 반송, trade 기획서 7.6).
+//   실행 주기: **86400초 = 24시간(하루 1회)** — appsettings "TradeExpireBatch:IntervalSeconds"(기본 86400).
+//   1회 처리 상한 1000건("BatchSize") — 하루치 만료 물량을 한 주기에 소화하기 위한 값이다.
+//   주기를 하루로 길게 잡을 수 있는 이유: **만료 판정을 이 배치가 하지 않는다.** 목록·단건 조회·구매·등록 한도
+//   쿼리가 모두 `expires_at > now`를 직접 검사하므로(TradeRepository), 만료된 매물은 배치를 기다리지 않고
+//   즉시 목록에서 빠지고 구매는 TradeAlreadyClosed로 거부되며 판매자 등록 칸도 곧바로 풀린다.
+//   따라서 이 주기는 "판매 기간 3일"의 정확도가 아니라 **에스크로 아이템이 메일로 반송되기까지의 지연 상한**
+//   (최대 24시간)만 결정한다. 반송을 더 빨리 돌려주려면 IntervalSeconds만 줄이면 된다(코드 변경 불필요).
 builder.Services.AddHostedService<TradeExpireBatchService>();
 
-// 메일 보관 GC 배치(발급 7일 경과 메일 삭제, mail 기획서 6.5). 공통 골격은 PeriodicBatchService.
+// 메일 보관 GC 배치(발급 7일 경과 메일 삭제, mail 기획서 6.5).
+//   실행 주기: **3600초 = 1시간** — appsettings "MailGcBatch:IntervalSeconds"(기본 3600). 1회 처리 상한 500건("BatchSize").
+//   보관 기간(7일)에 비해 삭제가 몇 분~한 시간 늦어도 사용자에게 보이는 차이가 없어 시간 단위로 넉넉히 잡았다.
+//   상한을 넘긴 분량은 다음 주기로 이월된다(1시간마다 최대 500건 정리).
 builder.Services.AddHostedService<MailGcBatchService>();
+
+// 리더 락은 주기 종료와 함께 해제되므로, 정상 종료·재기동 후에는 곧바로 다시 실행된다(옛 방식처럼 주기만큼
+// 스킵되지 않는다). 프로세스가 락을 잡은 채 강제 종료된 경우에만 TTL(최대 5분)이 지나야 풀린다.
 
 var app = builder.Build();
 

@@ -69,12 +69,14 @@ public interface ITradeRepository
     /// 해당 itemCode(0이면 전체)의 판매중 등록 <b>한 페이지</b>를 가격 오름차순·listing_id 보조 정렬로 조회한다.
     /// <b>뷰어 필터와 페이징을 모두 쿼리에서 처리</b>하므로(<c>WHERE → ORDER BY → LIMIT</c>) 페이지 크기가 정확하다.
     /// <paramref name="limit"/>에 <b>페이지 크기 + 1</b>을 넘기면 호출측이 hasMore를 판정할 수 있다(trade 기획서 §7.3).
+    /// <para><b>만료 시각이 지난 등록은 제외한다</b>(<c>expires_at &gt; nowUnix</c>) — 만료는 배치를 기다리지 않고
+    /// 읽는 순간 효력을 갖는다(trade 기획서 §7.6).</para>
     /// </summary>
     Task<IReadOnlyList<TradeListingSnapshot>> GetActiveListingPageAsync(
-        int itemCode, long viewerUserId, bool mine, int offset, int limit);
+        int itemCode, long viewerUserId, bool mine, int offset, int limit, long nowUnix);
 
-    /// <summary>등록 스냅샷 1건. 없으면 null.</summary>
-    Task<TradeListingSnapshot?> GetListingAsync(long listingId);
+    /// <summary>등록 스냅샷 1건(판매중 + 미만료). 없거나 이미 닫혔거나 만료 시각이 지났으면 null.</summary>
+    Task<TradeListingSnapshot?> GetListingAsync(long listingId, long nowUnix);
 
     /// <summary>판매 등록(에스크로): 한도·아이템·가격 검증 → player_item 제거 → trade_listing 생성을 한 트랜잭션으로 적용한다.</summary>
     Task<TradeRegisterOutcome> ApplyRegisterAsync(
@@ -135,10 +137,15 @@ public sealed class TradeRepository : ITradeRepository
     /// 본인 등록이 섞인 페이지만 건수가 줄어든다.</para>
     /// <para><b>전량을 읽지 않는다.</b> 예전에는 캐시에 담을 완전 집합이 필요해 전량을 읽고 메모리에서
     /// 필터·페이징했는데, 캐시를 제거하면서 그 전제가 사라졌다(거래소 기획서 7.3).</para>
+    /// <para><b>만료 시각이 지난 등록은 status가 아직 1이어도 제외한다</b>(<c>expires_at &gt; nowUnix</c>).
+    /// 만료 판정을 배치 시점이 아니라 <b>읽는 시점</b>으로 두므로, 만료된 매물이 목록에 남아 있다가 구매 실패로
+    /// 이어지는 구간이 없다 — 배치는 에스크로 반송·status 정리만 담당한다(거래소 기획서 7.6).
+    /// 이 조건은 인덱스 <c>idx_trade_browse</c>의 선두 컬럼이 아니라 <b>잔여 술어</b>로 평가되지만, 걸러지는 행이
+    /// 극소수(3일 지난 매물)라 페이지 조회 비용에 영향이 없다.</para>
     /// <para>호출측은 <c>limit</c>에 <b>페이지 크기 + 1</b>을 넘겨, 한 건 더 오는지로 <c>hasMore</c>를 판정한다.</para>
     /// </summary>
     public async Task<IReadOnlyList<TradeListingSnapshot>> GetActiveListingPageAsync(
-        int itemCode, long viewerUserId, bool mine, int offset, int limit)
+        int itemCode, long viewerUserId, bool mine, int offset, int limit, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -146,7 +153,7 @@ public sealed class TradeRepository : ITradeRepository
         var db = _dbFactory.Create(connection);
         var query = db.Query("trade_listing")
             .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at", "expires_at")
-            .Where("status", StatusOnSale);
+            .Where("status", StatusOnSale).Where("expires_at", ">", nowUnix);
         if (itemCode > 0)
         {
             query = query.Where("item_code", itemCode);
@@ -169,8 +176,11 @@ public sealed class TradeRepository : ITradeRepository
             .ToList();
     }
 
-    /// <summary>등록 1건을 조회해 스냅샷으로 돌려준다(상태 무관 — 캐시 적재는 호출측이 판매중만 넣는다).</summary>
-    public async Task<TradeListingSnapshot?> GetListingAsync(long listingId)
+    /// <summary>
+    /// 등록 1건을 조회해 스냅샷으로 돌려준다. <b>판매중(status=1)이고 만료 시각이 남은 등록만</b> 반환하므로,
+    /// 목록 조회와 같은 기준으로 "지금 살 수 있는 매물"을 가리킨다(거래소 기획서 7.6).
+    /// </summary>
+    public async Task<TradeListingSnapshot?> GetListingAsync(long listingId, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -178,7 +188,7 @@ public sealed class TradeRepository : ITradeRepository
         var db = _dbFactory.Create(connection);
         var row = await db.Query("trade_listing")
             .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at", "expires_at")
-            .Where("listing_id", listingId).Where("status", StatusOnSale)
+            .Where("listing_id", listingId).Where("status", StatusOnSale).Where("expires_at", ">", nowUnix)
             .FirstOrDefaultAsync<TradeListingRow>();
         return row is null
             ? null
@@ -210,9 +220,10 @@ public sealed class TradeRepository : ITradeRepository
         {
             var db = _dbFactory.Create(connection);
 
-            // 1) 동시 등록 한도.
+            // 1) 동시 등록 한도. 만료 시각이 지난 등록은 배치가 아직 정리하지 않았어도 한도에서 제외한다
+            //    (읽기 시점 만료 판정 — 그렇지 않으면 하루 1회 배치가 돌기 전까지 판매자의 등록 칸이 묶인다).
             var active = await db.Query("trade_listing")
-                .Where("seller_user_id", userId).Where("status", StatusOnSale)
+                .Where("seller_user_id", userId).Where("status", StatusOnSale).Where("expires_at", ">", nowUnix)
                 .CountAsync<int>(transaction: transaction);
             if (active >= listingLimit)
             {
@@ -340,7 +351,11 @@ public sealed class TradeRepository : ITradeRepository
                 return TradeBuyOutcome.Fail(TradeCloseStatus.ListingNotFound);
             }
 
-            if (row.Status != StatusOnSale)
+            // 이미 닫힌 등록, 그리고 **만료 시각이 지난 등록**(배치가 아직 status를 4로 바꾸지 못한 상태)은 모두 거부한다.
+            // 만료 판정을 배치 시점이 아니라 읽기 시점으로 두는 규칙이며(거래소 기획서 7.6), 판매 기간 3일이
+            // 배치 주기(하루 1회)만큼 늘어나 보이는 문제를 없앤다. 사용자에게는 "이미 닫힌 등록"과 구분할 이유가
+            // 없으므로 같은 상태 코드(→ TradeAlreadyClosed)로 응답한다.
+            if (row.Status != StatusOnSale || row.ExpiresAt <= nowUnix)
             {
                 await transaction.RollbackAsync();
                 return TradeBuyOutcome.Fail(TradeCloseStatus.AlreadyClosed);

@@ -462,7 +462,7 @@ SELECT listing_id, seller_user_id, item_code, enhance_level, quantity, price, cr
 | 1주기 상한 | **최대 1000건**, `listing_id` 오름차순 | 하루치 만료 물량을 한 주기에 소화하기 위한 값(분 단위 주기 때의 200건에서 상향). 초과분은 다음 주기로 이월되며 상한 도달은 요약 로그로 확인 |
 | 종료 | `stoppingToken` 취소 시 처리 중인 1건만 마무리하고 루프 종료 | `OperationCanceledException`은 정상 종료로 처리 |
 | 설정 | `appsettings.json`에 `"TradeExpireBatch": { "IntervalSeconds": 86400, "BatchSize": 1000 }` | 설정이 없으면 코드 기본값(동일 수치)으로 동작. 반송을 더 빨리 돌려주려면 `IntervalSeconds`만 줄인다(코드 변경 불필요) |
-| ⚠️ 리더 락 TTL | 락(`batch:lock:trade-expire`) TTL = 주기 = **24시간** | 한 주기를 실행한 뒤 서버를 재기동하면 락이 살아 있어 **그 하루 동안 배치가 스킵**된다. 개발 중 반송을 즉시 확인하려면 이 키를 지우고 기동한다 |
+| 리더 락 | `batch:lock:trade-expire`를 `SET NX`로 잡고 **주기가 끝나면 소유자 확인 후 즉시 해제**(Lua CAS) | TTL은 주기가 아니라 **1주기 실행 시간의 상한**(= min(주기, 5분))이며, 락을 잡은 채 프로세스가 죽었을 때 자동으로 풀리게 하는 안전망이다. 주기와 같게 두면 재기동 시 하루 동안 배치가 멈춘다. "주기당 1회"는 락이 아니라 각 인스턴스의 타이머가 페이싱하고, 중복 실행은 조건부 갱신 선점의 멱등성이 흡수한다 |
 | DI 등록 | `builder.Services.AddHostedService<TradeExpireBatchService>()` | `Program.cs` |
 | 의존성 수명 | 호스티드 서비스는 싱글턴이므로 scoped 리포지토리를 직접 주입받지 않고, **주기마다 `IServiceScopeFactory`로 스코프를 생성**해 `ITradeRepository`를 해석한다 | 리더 락(`batch:lock:trade-expire`)만 Redis를 쓴다 |
 | 시간 기준 | `DateTimeOffset.UtcNow.ToUnixTimeSeconds()` | 거래·메일과 동일한 Unix ts 기준 |

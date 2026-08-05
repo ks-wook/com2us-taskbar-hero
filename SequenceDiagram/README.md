@@ -824,7 +824,7 @@ sequenceDiagram
 
     C->>S: POST /trade/list { userId, token, data:{ itemCode, mine, page, pageSize } }
     S->>S: 입력 정규화 — pageSize 상한 강제(기본 50 · 최대 100)
-    S->>DB: 페이지 조회(status=1 [+ item_code] + 뷰어 필터, ORDER BY price, listing_id, LIMIT pageSize+1 OFFSET page*pageSize)
+    S->>DB: 페이지 조회(status=1 + 만료 전(expires_at > now) [+ item_code] + 뷰어 필터, ORDER BY price, listing_id, LIMIT pageSize+1 OFFSET page*pageSize)
     DB-->>S: 최대 pageSize+1건(idx_trade_browse / idx_trade_price)
     S->>S: 초과분 1건을 잘라 hasMore 판정
     S-->>C: 성공 { listings[], page, pageSize, hasMore }
@@ -834,6 +834,7 @@ sequenceDiagram
 - **뷰어 필터를 쿼리에 넣는다.** `mine=false`면 `seller_user_id <> viewer`, `true`면 `= viewer`다. SQL 처리 순서가 `WHERE → ORDER BY → LIMIT`이라 **걸러낸 결과에서 세므로 페이지 건수가 정확하다** — 자른 뒤 메모리에서 거르면 본인 등록이 섞인 페이지만 건수가 줄어든다.
 - **필요한 한 페이지만 읽는다.** `LIMIT pageSize + 1`로 한 건 더 읽어 `hasMore`를 판정하고, 전체 등록 수와 무관하게 비용이 페이지 크기에 비례한다(거래소 기획서 7.3).
 - **깊은 페이지는 clamp한다.** `OFFSET`은 건너뛸 행을 실제로 세므로 상한(10,000)을 두고, 넘는 `page`는 거부하지 않고 빈 페이지로 응답한다.
+- **만료 매물은 목록에 나오지 않는다.** 요청 시각을 쿼리에 넘겨 `expires_at > now`로 거르므로, 만료 배치(하루 1회)가 아직 `status`를 정리하지 않았어도 보이지 않는다 — "목록에 있는데 구매하면 실패"하는 구간이 없다(거래소 기획서 7.6).
 
 ### POST /api/game/trade/register — 판매 등록(에스크로)
 
@@ -846,7 +847,7 @@ sequenceDiagram
 
     C->>S: POST /trade/register { userId, token, data:{ itemId, price } }
     Note over S,DB: 단일 트랜잭션(애플리케이션 락 없음 — 같은 아이템 중복 등록은 아래 에스크로 DELETE의 행 잠금이 막는다)
-    S->>DB: 동시 등록 수 확인(trade_listing, seller_user_id + status=1)
+    S->>DB: 동시 등록 수 확인(trade_listing, seller_user_id + status=1 + 만료 전)
     alt 판매중 등록 10개 이상
         S-->>C: 실패 { errorCode: TradeListingLimitExceeded(7007) }
     end
@@ -883,7 +884,7 @@ sequenceDiagram
     S->>DB: 등록 조회(trade_listing)
     alt 등록 없음
         S-->>C: 실패 { errorCode: TradeListingNotFound(7001) }
-    else 판매중 아님
+    else 판매중 아님 / 만료 시각 경과(배치 정리 전)
         S-->>C: 실패 { errorCode: TradeAlreadyClosed(7005) }
     else 자기 등록
         S-->>C: 실패 { errorCode: TradeSelfPurchase(7004) }
@@ -945,7 +946,9 @@ sequenceDiagram
 
 ### 거래소 만료 배치 — TradeExpireBatchService (엔드포인트 없음)
 
-등록 후 3일이 지난 판매중 등록을 자동 취소하고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchService`)로, 기동 직후 1회 + 60초 주기(설정 `TradeExpireBatch`)로 실행되고 1회 최대 200건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:trade-expire`)을 획득한 인스턴스만 실행한다.
+등록 후 3일이 지난 판매중 등록을 `status=4`(만료)로 닫고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchService`)로, 기동 직후 1회 + **24시간(하루 1회) 주기**(설정 `TradeExpireBatch`)로 실행되고 1회 최대 1000건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:trade-expire`)을 획득한 인스턴스만 실행한다.
+
+**이 배치는 만료를 판정하지 않는다.** 목록 조회·구매·등록 한도가 `expires_at > now`를 직접 검사해 만료를 즉시 반영하므로, 배치의 역할은 **에스크로 아이템 반송과 `status` 정리**뿐이다. 그래서 주기가 판매 기간(3일)의 정확도에 영향을 주지 않고, 하루 1회로 충분하다 — 주기가 결정하는 것은 판매자가 아이템을 되돌려받기까지의 **지연 상한(최대 24시간)** 이다.
 
 ```mermaid
 sequenceDiagram
@@ -954,11 +957,11 @@ sequenceDiagram
     participant R as Redis
     participant DB as MySQL(game)
 
-    S->>R: 리더 락 획득(batch:lock:trade-expire, SET NX + TTL=주기)
+    S->>R: 리더 락 획득(batch:lock:trade-expire, SET NX + TTL=min(주기,5분) — 죽었을 때 풀리는 안전망)
     alt 미획득(다른 인스턴스가 실행 중)
         S->>S: 이번 주기 스킵
     else 획득
-        S->>DB: 만료 대상 조회(trade_listing, status=1 이면서 expires_at 경과, 최대 200건)
+        S->>DB: 만료 대상 조회(trade_listing, status=1 이면서 expires_at 경과, 최대 1000건)
         DB-->>S: listingId 목록
         loop 등록 1건씩
             Note over S,DB: 단일 트랜잭션 — 구매·취소와의 충돌은 선점 UPDATE의 행 잠금이 직렬화(등록 단위 락 없음)
@@ -976,6 +979,7 @@ sequenceDiagram
 - **골드 이동은 없다.** 만료 반송은 에스크로 아이템을 메일 첨부로 되돌릴 뿐이다.
 - 메일 첨부가 **강화 단계를 보존**하므로 반송 장비는 등록 당시 강화 단계 그대로 돌아온다(`player_mail_reward.enhance_level`).
 - 건별 예외는 그 건만 실패로 세고 다음 건을 계속 처리한다(주기 전체를 중단하지 않는다).
+- **리더 락은 주기가 끝나면 해제한다**(소유자 확인 Lua CAS). TTL은 주기가 아니라 `min(주기, 5분)`이며 "락을 잡은 채 프로세스가 죽었을 때 풀리게 하는 안전망"일 뿐이라, 재기동 후 곧바로 다시 실행된다(주기를 하루로 늘려도 하루 동안 멈추지 않는다).
 
 ## 가챠(뽑기)
 
@@ -1261,7 +1265,7 @@ sequenceDiagram
 
     Note over S: MailGcBatchService — 기동 직후 1회 실행 후 1시간 주기 반복(재진입 없음)
     loop 매 주기
-        S->>R: 리더 락 시도(batch:lock:mail-gc, SET NX + TTL=주기 — 명시 해제 없이 자연 만료)
+        S->>R: 리더 락 시도(batch:lock:mail-gc, SET NX + TTL=min(주기,5분) — 주기 종료 시 소유자 확인 후 해제)
         alt 락 미획득(다른 인스턴스가 이번 주기 실행)
             S->>S: 스킵(Debug 로그)
         else 락 획득(Redis 장애 시에도 락 없이 진행 — 축소 운전)
