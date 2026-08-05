@@ -46,7 +46,7 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private GameObject _itemSlotPrefab;
 
         [Header("구성 참조 (에디터 빌더가 배선)")]
-        [SerializeField] private Button _closeButton;
+        // 닫기(X) 버튼은 미관상 두지 않는다 — 창 밖(딤)을 눌러 닫는다.
         [SerializeField] private Button _dimButton;
         [SerializeField] private Button _claimAllButton;
         [SerializeField] private RectTransform _listContent;
@@ -84,14 +84,15 @@ namespace TaskbarHero.Client.UI
 
         // ── 정적 계층 구성 ──
 
-        /// <summary>캔버스·딤·패널·헤더·스크롤 목록·모두 받기 버튼·메시지 텍스트를 생성한다.</summary>
+        /// <summary>캔버스·딤·패널·스크롤 목록·모두 받기 버튼·메시지 텍스트를 생성한다.
+        /// 제목('우편함')과 닫기(X) 버튼은 미관상 두지 않고 창 밖(딤) 클릭으로 닫는다
+        /// (스테이지 지도·지역 창, 뽑기·인벤토리 창과 같은 규칙).</summary>
         private void Construct()
         {
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildCanvas();
             BuildDim();
             var panel = BuildPanel();
-            BuildHeader(panel);
             BuildList(panel);
             BuildFooter(panel);
         }
@@ -144,27 +145,6 @@ namespace TaskbarHero.Client.UI
             // 화면 중앙이 아니라 전투 화면 왼쪽 옆에 일정 간격(GameViewLayout.PanelGap)을 두고 붙인다 — 전투를 가리지 않는다.
             SidePanel.Attach(rt, SidePanel.Side.Left);
             return rt;
-        }
-
-        private void BuildHeader(RectTransform panel)
-        {
-            var title = NewText("Title", panel, "우편함", 44, TextAnchor.MiddleCenter);
-            title.fontStyle = FontStyle.Bold;
-            var trt = title.rectTransform;
-            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
-            trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -26f);
-            trt.sizeDelta = new Vector2(400f, 56f);
-
-            var close = NewImage("CloseButton", panel, new Color(0.25f, 0.28f, 0.4f, 1f));
-            var crt = close.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
-            crt.pivot = new Vector2(1f, 1f);
-            crt.anchoredPosition = new Vector2(-24f, -24f);
-            crt.sizeDelta = new Vector2(60f, 60f);
-            var xt = NewText("X", close.rectTransform, "X", 32, TextAnchor.MiddleCenter);
-            Stretch(xt.rectTransform);
-            _closeButton = close.gameObject.AddComponent<Button>();
         }
 
         /// <summary>메일 목록 스크롤 뷰(뷰포트 마스크 + 세로 레이아웃 콘텐츠 + 빈 목록 안내).</summary>
@@ -240,7 +220,6 @@ namespace TaskbarHero.Client.UI
 
         private void WireRuntime()
         {
-            if (_closeButton != null) _closeButton.onClick.AddListener(Close);
             if (_dimButton != null) _dimButton.onClick.AddListener(Close);
             if (_claimAllButton != null) _claimAllButton.onClick.AddListener(OnClaimAll);
         }

@@ -46,6 +46,16 @@ namespace TaskbarHero.Client.Battle
         private RectTransform _root;
         private readonly List<Image> _pool = new List<Image>();
 
+        /// <summary>목표별 도착 팝 상태 — <b>원래 크기</b>와 진행 중인 코루틴(겹칠 때 이전 것을 버린다).</summary>
+        private sealed class PunchState
+        {
+            public Vector3 BaseScale;
+            public Coroutine Routine;
+        }
+
+        private readonly Dictionary<RectTransform, PunchState> _punches =
+            new Dictionary<RectTransform, PunchState>();
+
         /// <summary>
         /// 보상 오브 하나를 날린다. <paramref name="fromScreen"/>은 시작 화면 좌표(보상 칸 위치),
         /// <paramref name="target"/>은 도착할 HUD 요소, <paramref name="delay"/>는 여러 개를 시차로 보낼 때 쓴다.
@@ -78,8 +88,15 @@ namespace TaskbarHero.Client.Battle
             _instance._root = (RectTransform)go.transform;
         }
 
+        private void OnDisable()
+        {
+            // 연출 도중 이 오브젝트가 꺼지면 코루틴이 멈춰 목표가 커진 채 남는다 → 즉시 원래 크기로.
+            RestoreAllPunchTargets();
+        }
+
         private void OnDestroy()
         {
+            RestoreAllPunchTargets(); // 씬 전환으로 파괴될 때도 HUD 크기를 되돌린다
             if (_instance == this)
             {
                 _instance = null;
@@ -125,28 +142,66 @@ namespace TaskbarHero.Client.Battle
 
             orb.gameObject.SetActive(false); // 풀로 반환
             SoundManager.Sfx(SoundId.RewardGet); // 도착 = 획득음(§5.1 공용 획득음)
-            if (target != null)
-            {
-                StartCoroutine(PunchTarget(target));
-            }
+            PunchTarget(target);
         }
 
-        /// <summary>도착 지점(HUD 요소)을 한 번 크게 튀겼다 되돌린다 — "여기로 들어갔다"를 읽히게 한다.</summary>
-        private static IEnumerator PunchTarget(RectTransform target)
+        /// <summary>
+        /// 도착 지점(HUD 요소)을 한 번 크게 튀겼다 되돌린다 — "여기로 들어갔다"를 읽히게 한다.
+        /// <para><b>이미 진행 중인 팝이 있으면 그것을 버리고 원래 크기에서 다시 시작한다.</b> 보상은 여러 개가
+        /// <b>시차로</b> 같은 목표(가방)에 도착하므로 팝이 겹치는데, 겹칠 때 <c>target.localScale</c>을 기준으로
+        /// 새로 잡으면 이전 팝이 키워 둔 값(1.25배)이 기준이 되어 배율이 곱해지고, 마지막 팝이 그 커진 값으로
+        /// 되돌리는 탓에 <b>가방 아이콘이 커진 채 고정</b>됐다(2026-08-05 수정). 목표별 원래 크기를
+        /// <see cref="_punches"/>에 들고 있어 몇 번 겹쳐도 항상 원래 크기로 돌아온다.</para>
+        /// </summary>
+        private void PunchTarget(RectTransform target)
         {
-            Vector3 baseScale = target.localScale;
+            if (target == null)
+            {
+                return;
+            }
+            if (!_punches.TryGetValue(target, out var state) || state == null)
+            {
+                state = new PunchState { BaseScale = target.localScale }; // 첫 팝 = 지금 크기가 원래 크기
+                _punches[target] = state;
+            }
+            else if (state.Routine != null)
+            {
+                StopCoroutine(state.Routine); // 진행 중이던 팝을 버리고
+                state.Routine = null;
+                target.localScale = state.BaseScale; // 원래 크기에서 다시 시작(배율 누적 방지)
+            }
+            state.Routine = StartCoroutine(PunchRoutine(target, state));
+        }
+
+        private IEnumerator PunchRoutine(RectTransform target, PunchState state)
+        {
             float t = 0f;
             while (t < TargetPunchSeconds && target != null)
             {
                 t += Time.unscaledDeltaTime;
                 float k = Mathf.Clamp01(t / TargetPunchSeconds);
-                target.localScale = baseScale * Mathf.Lerp(TargetPunchScale, 1f, k);
+                target.localScale = state.BaseScale * Mathf.Lerp(TargetPunchScale, 1f, k);
                 yield return null;
             }
             if (target != null)
             {
-                target.localScale = baseScale;
+                target.localScale = state.BaseScale;
             }
+            state.Routine = null;
+            _punches.Remove(target); // 끝났으면 추적 해제(다음 팝은 다시 현재 = 원래 크기를 기준으로 잡는다)
+        }
+
+        /// <summary>추적 중인 모든 목표를 원래 크기로 되돌리고 팝 추적을 비운다(비활성·파괴 시 안전망).</summary>
+        private void RestoreAllPunchTargets()
+        {
+            foreach (var pair in _punches)
+            {
+                if (pair.Key != null && pair.Value != null)
+                {
+                    pair.Key.localScale = pair.Value.BaseScale;
+                }
+            }
+            _punches.Clear();
         }
 
         /// <summary>오버레이 캔버스 기준 화면 좌표(캔버스가 ConstantPixelSize·배율 1이라 픽셀과 같다).</summary>

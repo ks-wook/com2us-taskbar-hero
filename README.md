@@ -43,5 +43,5 @@
 | 인벤토리 조회 캐싱, 페이징 처리 | Game | ☑ | ☑ |
 | 캐릭터 성별(남/여) 선택(`player_character.gender` · 생성 시 확정 · 외형 전용) | Game | ☑ | ☑ |
 | 가챠(뽑기) 시스템 구현 ([기획서](docs/세부/gacha-기획서.md)) | Game | ☑ | ☑ |
-| 장비 강화 시스템(`inventory/enhance` · `enhance_master` +10 · 확정 상승) | Game | ☑ | ☐ |
+| 장비 강화 시스템(`inventory/enhance` · `enhance_master` +10 · 확정 상승) | Game | ☑ | ◐ |
 | 소모품 사용·활성 버프 조회(경험치·골드 부스터 · [기획서](docs/세부/consumable-buff-기획서.md)) | Game | ☑ | ☑ |
