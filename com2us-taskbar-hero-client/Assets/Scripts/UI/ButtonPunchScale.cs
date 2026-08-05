@@ -27,6 +27,23 @@ namespace TaskbarHero.Client.UI
             _baseScale = _rect.localScale;
         }
 
+        /// <summary>
+        /// 비활성화될 때 크기를 원래대로 되돌린다. 연출 중에 오브젝트가 꺼지면 Unity가 코루틴을 멈추므로
+        /// (예: 스테이지 노드를 누른 직후 창을 닫는 경우) 그대로 두면 <b>커진 상태로 굳어</b> 다음에 켤 때도 크게 보인다.
+        /// </summary>
+        private void OnDisable()
+        {
+            if (_routine != null)
+            {
+                StopCoroutine(_routine);
+                _routine = null;
+            }
+            if (_rect != null)
+            {
+                _rect.localScale = _baseScale;
+            }
+        }
+
         /// <summary>펀치 효과를 처음부터 재생하고, 끝나면 <paramref name="onComplete"/>를 호출한다.</summary>
         public void Play(Action onComplete = null)
         {

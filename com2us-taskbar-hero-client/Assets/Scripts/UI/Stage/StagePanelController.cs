@@ -441,6 +441,9 @@ namespace TaskbarHero.Client.UI
                 lockImg.gameObject.SetActive(false);
 
                 var view = nodeGo.gameObject.AddComponent<StageNodeView>();
+                // 클릭 피드백(살짝 커졌다 원래 크기로) — 노드는 버튼처럼 보이지 않는 지도 위 점이라
+                // 눌린 순간이 눈에 보이지 않으면 반응이 없는 것처럼 느껴진다.
+                nodeGo.gameObject.AddComponent<ButtonPunchScale>();
                 view.EditorInit(stage, nodeGo, lockImg.gameObject, hl.gameObject);
                 _regionNodes.Add(view);
             }
