@@ -122,7 +122,7 @@
 
 | 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|
-| `POST /api/game/trade/list` | 거래소 목록 조회(판매중, 아이템 코드 검색). `mine=false`(기본) 본인 등록 제외 / `mine=true` 본인 등록만 | `{ itemCode?, mine?, page?, pageSize? }` | `listings[]`, `page`, `hasMore` | — |
+| `POST /api/game/trade/list` | 거래소 목록 조회(판매중 **&middot; 미만료**, 아이템 코드 검색). `mine=false`(기본) 본인 등록 제외 / `mine=true` 본인 등록만 | `{ itemCode?, mine?, page?, pageSize? }` | `listings[]`, `page`, `hasMore` | — |
 | `POST /api/game/trade/register` | 판매 등록(에스크로) | `{ itemId, price }` | `listingId`, `itemCode`, `price`, `inventoryDelta` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `TradeNotSellable(7002)`, `TradePriceOutOfRange(7006)`, `TradeListingLimitExceeded(7007)`, `InvalidSaveData(2002)` |
 | `POST /api/game/trade/buy` | 구매(골드 차감 → 아이템·대금 모두 메일 발급) | `{ listingId }` | `gained`, `cost`, `balance`, `mailId` | `TradeListingNotFound(7001)`, `TradeAlreadyClosed(7005)`, `TradeSelfPurchase(7004)`, `InsufficientCurrency(4005)` |
 | `POST /api/game/trade/cancel` | 판매 취소(아이템 복귀) | `{ listingId }` | `restored`, `inventoryDelta` | `TradeListingNotFound(7001)`, `TradeNotOwner(7003)`, `TradeAlreadyClosed(7005)`, `InventoryFull(4002)` |
@@ -131,6 +131,7 @@
 - 등록은 아이템을 인벤토리에서 거래소 보관(에스크로)으로 이동. 구매 시 **구매 아이템(구매자)·판매 대금(판매자) 모두 메일(3.7, `category=2` 거래)로 지급**되며 수령 시 계정에 반영된다. 구매 단계에서는 인벤토리 용량을 검사하지 않는다.
 - 동시 구매 경합은 **MySQL 조건부 갱신**(`status=1`일 때만 전이)의 행 잠금으로 직렬화한다 — 뒤에 온 요청은 0행을 받아 `TradeAlreadyClosed(7005)`가 되며 복제·이중 판매가 불가하다. 취소·만료 배치도 같은 방식이며 **거래소 전 경로에 애플리케이션 락이 없다**. 판매 등록에서 같은 아이템을 겹쳐 등록하려는 경합도 에스크로 `DELETE`의 행 잠금이 막고 뒤에 온 요청이 `ItemNotFound(4001)`를 받는다([거래소 기획서](../세부/trade-기획서.md) 7.4).
 - 목록 조회는 전역 공유 읽기지만 **캐시를 두지 않는다** — 전용 색인(`idx_trade_browse`·`idx_trade_price`)을 타는 MySQL 직접 조회이며, **뷰어 필터(`mine`)·정렬·페이징을 모두 쿼리에서 처리**해 필요한 한 페이지만 읽는다. `pageSize`는 서버가 상한을 강제하고, 깊은 페이지는 `page`를 clamp한다. 판단 근거는 [거래소 기획서](../세부/trade-기획서.md) 7.3.
+- **만료 판정은 배치가 아니라 읽는 시점에 한다.** 목록·구매·등록 한도 쿼리가 `expires_at > now`를 함께 검사하므로, 만료 시각이 지난 등록은 만료 배치가 돌기 전이라도 목록에서 빠지고 구매는 `TradeAlreadyClosed(7005)`로 거부되며 판매자 등록 한도에서도 제외된다. 배치(**하루 1회**)는 에스크로 아이템 반송과 `status=4` 정리만 담당하므로, 주기는 판매 기간(3일) 정확도가 아니라 **반송 지연 상한**만 결정한다([거래소 기획서](../세부/trade-기획서.md) 7.6).
 
 ### 3.7 메일(보상)
 

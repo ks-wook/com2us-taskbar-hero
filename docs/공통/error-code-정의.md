@@ -131,7 +131,7 @@
 | TradeNotSellable | 7002 | 판매 불가 아이템(`sellable=0`) |
 | TradeNotOwner | 7003 | 본인 등록이 아님(취소 불가) |
 | TradeSelfPurchase | 7004 | 자기 등록은 구매 불가 |
-| TradeAlreadyClosed | 7005 | 이미 판매/취소된 등록 |
+| TradeAlreadyClosed | 7005 | 이미 판매/취소된 등록 · **만료 시각이 지난 등록**(배치 정리 전 포함) |
 | TradePriceOutOfRange | 7006 | 등록 가격이 기준가 ±20% 범위 밖 |
 | TradeListingLimitExceeded | 7007 | 계정 동시 등록 한도(10개) 초과 |
 

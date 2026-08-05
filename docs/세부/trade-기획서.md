@@ -160,6 +160,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 ```
 
 - **검색은 아이템 코드**로 한다. 클라이언트가 이름 검색 UI에서 고른 아이템을 `itemCode`로 변환해 보낸다(`itemCode=0` 또는 생략이면 전체). 서버가 `page`/`pageSize`로 페이징한다. 기본 정렬은 **가격 오름차순**이며 별도 정렬 옵션은 두지 않는다. `mine`은 생략 시 `false`(제외 모드)다.
+- **만료된 등록은 목록에 나오지 않는다.** 조회 쿼리가 `status=1 AND expires_at > now`를 함께 검사하므로, 만료 배치(하루 1회)가 아직 돌지 않아 `status`가 1로 남아 있어도 제외된다([7.6](#76-만료-배치)). `mine=true`(내 판매 목록)에도 같은 기준이 적용되며, 만료 매물은 곧 반송 메일로 돌아온다.
 
 **Response (성공, 200 OK)**
 ```json
@@ -257,6 +258,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   1) L = trade_listing[listingId]
      if 없음: TradeListingNotFound(7001)
      if L.status != 1(판매중): TradeAlreadyClosed(7005)
+     if L.expires_at <= now: TradeAlreadyClosed(7005)   # 만료 시각 경과 — 배치가 아직 status를 4로 못 바꿔도 거부(7.6)
   2) if L.seller_user_id == 구매자: TradeSelfPurchase(7004)
   3) if 구매자 골드(player_item 재화 행) < L.price: InsufficientCurrency(4005)
      # 인벤토리 용량은 보지 않는다 — 아이템을 메일로 주므로 수령 시점에 판정된다
@@ -284,7 +286,7 @@ COMMIT → { listingId, gained, cost, balance, mailId }
 
 ### 6.2 등록 / 취소 / 만료
 
-- **등록(5.2)**: `user_id` 잠금 → **동시 등록 수 확인**(판매중 등록 ≥ 10이면 `TradeListingLimitExceeded(7007)`) → 아이템 검증(존재·미장착·`sellable=1`) → **가격 검증**(`base_price×0.8 ≤ price ≤ base_price×1.2`, 위반 시 `TradePriceOutOfRange(7006)`) → `player_item`에서 제거(스택형은 전체 수량) → `trade_listing` 생성(status=1, `expires_at=now+3일`). 실패 시 전체 롤백.
+- **등록(5.2)**: `user_id` 잠금 → **동시 등록 수 확인**(판매중 **&middot; 미만료** 등록 ≥ 10이면 `TradeListingLimitExceeded(7007)` — 만료 시각이 지난 등록은 배치 정리 전이라도 한도에서 빼므로 판매자의 등록 칸이 배치 주기만큼 묶이지 않는다, [7.6](#76-만료-배치)) → 아이템 검증(존재·미장착·`sellable=1`) → **가격 검증**(`base_price×0.8 ≤ price ≤ base_price×1.2`, 위반 시 `TradePriceOutOfRange(7006)`) → `player_item`에서 제거(스택형은 전체 수량) → `trade_listing` 생성(status=1, `expires_at=now+3일`). 실패 시 전체 롤백.
 - **취소(5.4)**: 본인·판매중 확인 → `player_item`에 아이템 복원 → 조건부 갱신으로 `status=3`(수동 취소) → 캐시에서 제거. 구매·만료 배치가 같은 등록을 동시에 닫으려 해도 **조건부 갱신의 행 잠금**이 직렬화하므로 별도 락은 쓰지 않는다. 인벤토리 용량 초과면 `InventoryFull(4002)`.
 - **만료(자동, 배치)**: `status=1 AND expires_at < now`인 등록을 주기적으로 처리 → **`status=4`(만료)** 로 닫고, 아이템을 판매자에게 **메일로 반송**(`category=2`, 첨부=반송 아이템, **만료 없음**). 판매자가 오프라인·인벤토리 가득이어도 안전하게 반송하기 위해 취소(수동)와 달리 **메일 반송**을 사용한다. 실행 주기·처리 건수 제한은 [7.6](#76-만료-배치)에 정의한다.
 
@@ -358,6 +360,7 @@ WHERE listing_id=? AND status=1        → 반영 0행이면 이미 팔린 등�
 SELECT listing_id, seller_user_id, item_code, enhance_level, quantity, price, created_at, expires_at
   FROM trade_listing
  WHERE status = 1
+   AND expires_at > ?                       -- 요청 시각. 만료 매물은 배치 정리 전이라도 제외(7.6)
    [AND item_code = ?]                      -- itemCode=0 이면 생략(전체 목록)
    AND seller_user_id <> ?                  -- mine=false(구매 대상). mine=true 면 = ?
  ORDER BY price, listing_id
@@ -366,6 +369,7 @@ SELECT listing_id, seller_user_id, item_code, enhance_level, quantity, price, cr
 
 - **뷰어 필터·정렬·페이징을 전부 쿼리에서 처리한다(확정).** SQL 처리 순서가 `WHERE → ORDER BY → LIMIT`이라 **걸러낸 결과에서 limit만큼 세므로 페이지 건수가 정확하다.** 반대로 자른 뒤 애플리케이션에서 거르면(LIMIT 먼저 → 메모리 필터) **본인 등록이 섞인 페이지만 건수가 줄어든다**(10건 요청에 9건). 실측으로 두 순서의 차이를 확인했다.
 - 색인 `idx_trade_browse (status, item_code, price, listing_id)`·`idx_trade_price (status, price, listing_id)`가 검색·정렬·커서를 함께 담당한다. 정렬 축이 가격 하나뿐이라(9장 확정) 색인 하나로 끝난다.
+- **`expires_at > now`는 색인 선두가 아니라 잔여 술어로 평가된다.** 색인을 새로 만들지 않는다 — 걸러지는 행은 "3일이 지났고 아직 배치가 정리하지 않은" 극소수라, 페이지를 채우기 위해 추가로 읽는 행이 사실상 없다. 만료분이 오래 쌓일 수 있는 구조(배치 주기 24시간)이지만 그 총량도 하루치 만료 물량에 그친다.
 - **전량을 읽지 않는다.** 예전에는 캐시에 담을 완전 집합이 필요해 `LIMIT` 없이 전량을 읽고 메모리에서 필터·페이징했다. 캐시를 제거하면서 그 전제가 사라졌으므로 필요한 한 페이지만 읽는다 — 판매중 10,000건 기준 **읽는 행이 10,000 → 페이지 크기**로 줄어든다.
 - **깊은 페이지 방어**: `OFFSET`은 건너뛸 행을 실제로 세므로 상한(`MaxOffset = 10,000`)을 두고, 넘는 `page`는 거부하지 않고 clamp해 빈 페이지로 응답한다.
 - **`OFFSET`을 쓰고 keyset 커서를 쓰지 않는 이유**: keyset(`(price, listing_id) > (?, ?)`)이 더 우수하지만 응답 계약이 `page` → `cursor`로 바뀌어 클라이언트 거래소 UI를 함께 고쳐야 한다. 거래소는 첫 페이지 위주 조회이고 목록이 몇 초 낡아도 무해하므로 `OFFSET`의 약점(깊은 페이지 비용·동시 변경 시 경계 밀림)이 실질적으로 드러나지 않는다. 깊은 페이지가 실제로 쓰이거나 등록이 수만 건으로 늘면 keyset으로 전환한다(8장 미결).
@@ -441,20 +445,24 @@ SELECT listing_id, seller_user_id, item_code, enhance_level, quantity, price, cr
 
 ### 7.6 만료 배치
 
-`status=1 AND expires_at < now`인 등록을 자동 취소(status=3)하고 아이템을 판매자에게 메일로 반송한다([6.2](#62-등록--취소--만료)). 본 절은 스케줄러 구현에 바로 착수할 수 있도록 실행 모델·처리 절차·실패 처리·구현 체크리스트를 정리한다.
+`status=1 AND expires_at < now`인 등록을 **`status=4`(만료)** 로 닫고 아이템을 판매자에게 메일로 반송한다([6.2](#62-등록--취소--만료)). 본 절은 스케줄러 구현에 바로 착수할 수 있도록 실행 모델·처리 절차·실패 처리·구현 체크리스트를 정리한다.
 
-- 만료 시각이 지났지만 배치가 아직 돌지 않은 등록에 구매가 들어오면 **아직 판매중이므로 구매를 성립시킨다**(만료 판정 기준을 배치 시점으로 통일 — "성공 응답 후 반송" 같은 모순 방지). 만료 판정 기준은 배치 시점으로 통일한다(확정).
+- **만료 판정 기준은 배치 시점이 아니라 "읽는 시점"이다(확정).** 만료 시각이 지난 등록은 배치가 아직 `status`를 4로 바꾸지 못했어도 **없는 것처럼 취급**한다 — 목록 조회·단건 조회에서 빠지고(`expires_at > now`), 구매는 `TradeAlreadyClosed(7005)`로 거부되며, 판매자의 동시 등록 한도 집계에서도 제외된다. 즉 판매 기간 3일은 배치 주기와 무관하게 정확하다.
+  - **배치는 만료를 판정하지 않는다.** 남은 역할은 **에스크로 아이템 반송과 `status` 정리**뿐이므로 주기를 길게(하루 1회) 잡아도 사용자 체감이 달라지지 않는다([7.6.1](#761-실행-모델스케줄러)).
+  - 이 결정으로 **"만료된 매물이 목록에 보여 구매를 시도했는데 실패"** 하는 구간이 사라진다. 반대급부는 만료 직후 그 매물을 판매자가 되돌려받기까지 최대 배치 주기(24시간)가 걸리는 것인데, 그 동안 아이템은 에스크로에 안전하게 보관되므로 유실 위험이 없다.
+  - 만료 매물의 **수동 취소는 막지 않는다**(`trade/cancel`은 `expires_at`을 보지 않는다). 판매자가 반송을 기다리지 않고 즉시 회수하려는 시도를 굳이 거부할 이유가 없으며, 취소가 먼저 이기면 배치의 조건부 갱신이 0행으로 스킵된다.
 
 #### 7.6.1 실행 모델(스케줄러)
 
 | 항목 | 설계 | 비고 |
 |---|---|---|
 | 호스팅 | GameServer 프로세스 내 `BackgroundService` 파생 `TradeExpireBatchService`(`GameServer/Batch/`) | 별도 프로세스·외부 스케줄러(cron 등)를 두지 않는다 — 단일 인스턴스 전제([7.7](#77-하지-않는-것)) |
-| 주기 | `PeriodicTimer` + `WaitForNextTickAsync` 루프, **60초**(잠정) | 이전 주기가 끝나야 다음 tick을 기다리므로 **재진입이 구조적으로 불가**(별도 잠금 불필요) |
-| 기동 직후 | 첫 tick을 기다리지 않고 **즉시 1회 실행** | 서버 중단 동안 쌓인 만료분을 바로 소화 |
-| 1주기 상한 | **최대 200건**(잠정), `listing_id` 오름차순 | 초과분은 다음 주기로 이월(긴 점유 방지). 상한 도달은 요약 로그로 확인 |
+| 주기 | `PeriodicTimer` + `WaitForNextTickAsync` 루프, **86400초 = 24시간(하루 1회)** | 이전 주기가 끝나야 다음 tick을 기다리므로 **재진입이 구조적으로 불가**(별도 잠금 불필요). 만료 효력은 읽기 경로가 즉시 내므로(7.6 서두) 이 주기는 **반송 지연 상한**일 뿐이다 |
+| 기동 직후 | 첫 tick을 기다리지 않고 **즉시 1회 실행** | 서버 중단 동안 쌓인 만료분을 바로 소화. 하루 주기에서는 특히 중요하다 — 재기동이 곧 반송 기회다 |
+| 1주기 상한 | **최대 1000건**, `listing_id` 오름차순 | 하루치 만료 물량을 한 주기에 소화하기 위한 값(분 단위 주기 때의 200건에서 상향). 초과분은 다음 주기로 이월되며 상한 도달은 요약 로그로 확인 |
 | 종료 | `stoppingToken` 취소 시 처리 중인 1건만 마무리하고 루프 종료 | `OperationCanceledException`은 정상 종료로 처리 |
-| 설정 | `appsettings.json`에 `"TradeExpireBatch": { "IntervalSeconds": 60, "BatchSize": 200 }` | 설정이 없으면 코드 기본값(동일 수치)으로 동작. 수치는 측정 후 확정([9장](#9-미결-사항--todo)) |
+| 설정 | `appsettings.json`에 `"TradeExpireBatch": { "IntervalSeconds": 86400, "BatchSize": 1000 }` | 설정이 없으면 코드 기본값(동일 수치)으로 동작. 반송을 더 빨리 돌려주려면 `IntervalSeconds`만 줄인다(코드 변경 불필요) |
+| ⚠️ 리더 락 TTL | 락(`batch:lock:trade-expire`) TTL = 주기 = **24시간** | 한 주기를 실행한 뒤 서버를 재기동하면 락이 살아 있어 **그 하루 동안 배치가 스킵**된다. 개발 중 반송을 즉시 확인하려면 이 키를 지우고 기동한다 |
 | DI 등록 | `builder.Services.AddHostedService<TradeExpireBatchService>()` | `Program.cs` |
 | 의존성 수명 | 호스티드 서비스는 싱글턴이므로 scoped 리포지토리를 직접 주입받지 않고, **주기마다 `IServiceScopeFactory`로 스코프를 생성**해 `ITradeRepository`를 해석한다 | 리더 락(`batch:lock:trade-expire`)만 Redis를 쓴다 |
 | 시간 기준 | `DateTimeOffset.UtcNow.ToUnixTimeSeconds()` | 거래·메일과 동일한 Unix ts 기준 |
@@ -470,7 +478,7 @@ ids = SELECT listing_id FROM trade_listing
       ORDER BY listing_id LIMIT {BatchSize}            # idx_trade_expire가 커버
 for listingId in ids:                                  # 등록 1건 = 트랜잭션 1개(락 없음)
   트랜잭션(BEGIN)
-    1) 선점(CAS): UPDATE trade_listing SET status=3, closed_at={now}
+    1) 선점(CAS): UPDATE trade_listing SET status=4, closed_at={now}
          WHERE listing_id={listingId} AND status=1 AND expires_at < {now}
        반영 0행 → ROLLBACK, 스킵                        # 그 사이 구매·취소로 이미 닫힘
     2) L = SELECT trade_listing[listingId]              # 반송 스냅샷(item_code·quantity·seller_user_id)
@@ -531,7 +539,7 @@ for listingId in ids:                                  # 등록 1건 = 트랜잭
 | TradeNotSellable | 7002 | 판매 불가 아이템(`sellable=0`) |
 | TradeNotOwner | 7003 | 본인 등록이 아님(취소 불가) |
 | TradeSelfPurchase | 7004 | 자기 등록은 구매 불가 |
-| TradeAlreadyClosed | 7005 | 이미 판매/취소된 등록 |
+| TradeAlreadyClosed | 7005 | 이미 판매/취소된 등록 · **만료 시각이 지난 등록**(배치가 status를 4로 정리하기 전이라도 거부, 7.6) |
 | TradePriceOutOfRange | 7006 | 등록 가격이 기준가 ±20% 범위 밖 |
 | TradeListingLimitExceeded | 7007 | 계정 동시 등록 한도(10개) 초과 |
 
