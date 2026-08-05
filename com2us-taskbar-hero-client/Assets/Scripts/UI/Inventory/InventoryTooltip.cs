@@ -94,18 +94,13 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>상세 정보를 채우고 커서 근처에 표시한다.</summary>
+        /// <summary>상세 정보를 채우고 커서 근처에 표시한다.
+        /// <b>표시음은 재생하지 않는다</b> — hover만으로 뜨는 툴팁이라 아이템 칸 위를 지나갈 때마다 울려 거슬린다.</summary>
         public void Show(InventoryItemView.Display data, Vector2 screenPos)
         {
-            bool wasHidden = !gameObject.activeSelf;
             _hideAt = -1f;
             gameObject.SetActive(true);
             transform.SetAsLastSibling();
-            if (wasHidden)
-            {
-                // 툴팁 표시음(사운드 정의서 §4.1). 같은 툴팁이 칸 사이를 옮겨 다닐 때는 울리지 않는다.
-                SoundManager.Sfx(SoundId.UiTooltip);
-            }
 
             _current = data;
             _nameText.text = data.name;

@@ -22,6 +22,11 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite slotNormal;      // ui_slot_normal
         [SerializeField] private Sprite slotHighlight;   // ui_slot_highlight
         [SerializeField] private Sprite slotPortrait;    // ui_slot_portrait
+        [Tooltip("캐릭터 전환 화살표(Assets/Art/UI/화살표버튼.png). 아트는 <b>오른쪽(다음)</b> 방향이며 " +
+                 "이전 버튼은 같은 스프라이트를 좌우 반전해 쓴다.")]
+        [SerializeField] private Sprite navArrow;
+        [Tooltip("경험치 막대 배경 프레임(Assets/Art/Icon/Combat/체력바.png). 전투 몬스터 HP바와 같은 아트를 쓴다.")]
+        [SerializeField] private Sprite expBarFrame;
 
         [Header("공용 아이템 슬롯 프리팹 (에디터 빌더가 배선)")]
         [Tooltip("Assets/Prefabs/UI/ItemSlot.prefab — 가방 칸·장비 부위 칸의 아이콘·등급 배경·수량·강화 배지를 " +
@@ -52,16 +57,20 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private RawImage _portraitImage;     // 초상화 캐릭터 렌더 표시(런타임 텍스처 배정)
         [SerializeField] private Button _prevButton;
         [SerializeField] private Button _nextButton;
+        // 화살표 클릭 피드백(잠깐 커졌다 원래대로). 화살표 자식에 붙어 있어 가운데 기준으로 커진다.
+        [SerializeField] private ButtonPunchScale _prevPunch;
+        [SerializeField] private ButtonPunchScale _nextPunch;
         [SerializeField] private Button _skillButton;   // 스킬 레벨업 패널 진입
         [SerializeField] private Button _runeButton;    // 룬 패널 진입
         [SerializeField] private Button _cubeButton;    // 큐브 패널 진입
-        [SerializeField] private Button _closeButton;
+        // 닫기(X) 버튼은 미관상 두지 않는다 — 창 밖(딤)을 눌러 닫는다.
         [SerializeField] private Button _dimButton;
         [SerializeField] private RectTransform _gridContent; // 스크롤 콘텐츠(슬롯 부모)
         [SerializeField] private Button _expandButton;        // 확장 요청 버튼(항상 마지막 칸)
         [SerializeField] private Image _goldIcon;             // 골드 아이콘(item_1, 런타임 배정)
         [SerializeField] private Text _goldText;              // 보유 골드량
-        [SerializeField] private Text _statPanelText;         // 초상화 좌측 능력치(장비 포함)
+        [SerializeField] private Text _statNameText;          // 능력치 패널 왼쪽 열(능력치명)
+        [SerializeField] private Text _statValueText;         // 능력치 패널 오른쪽 열(값 — 오른쪽 정렬로 줄 맞춤)
         [SerializeField] private RectTransform _expFill;       // 경험치 막대 채움(anchorMax.x = 진행률로 폭 조절)
         [SerializeField] private Text _expText;                // 경험치 텍스트(현재/필요 + 레벨업까지 남은 양)
 
@@ -328,11 +337,11 @@ namespace TaskbarHero.Client.UI
             BuildTooltip();
         }
 
-        /// <summary>성장 진입 버튼(스킬 레벨업·룬)을 패널 최하단(인벤토리 아이템 아래)에 가로 중앙으로 배치한다.
-        /// 가방 격자와 패널 바닥 사이 여백에 맞춰 낮은 높이로 둔다(겹침 방지).</summary>
+        /// <summary>성장 진입 버튼(스킬 레벨업·룬·큐브)을 패널 최하단(인벤토리 아이템 아래)에 가로 중앙으로 배치한다.
+        /// 가방 격자와 패널 바닥 사이 여백에 맞춰 낮은 높이로 두고, 바닥에서 <c>y</c>만큼 띄운다(겹침 방지).</summary>
         private void BuildGrowthButtons(RectTransform container)
         {
-            const float w = 210f, h = 44f, y = 3f, dx = 224f;
+            const float w = 210f, h = 44f, y = 62f, dx = 224f;
             var skillImg = NewImage("SkillButton", container, slotNormal);
             skillImg.color = new Color(0.24f, 0.20f, 0.34f, 0.98f);
             BottomCenter(skillImg.rectTransform, -dx, y, w, h);
@@ -355,7 +364,11 @@ namespace TaskbarHero.Client.UI
             _cubeButton = cubeImg.gameObject.AddComponent<Button>();
         }
 
-        /// <summary>좌상단 보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 아이콘/수량은 런타임에 세션에서 채운다.</summary>
+        // 보유 골드 블록의 표시 배율(1이면 원래 크기). 자식 좌표를 다시 잡지 않고 블록째로 줄인다.
+        private const float GoldAreaScale = 0.7f;
+
+        /// <summary>좌상단 보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 아이콘/수량은 런타임에 세션에서 채운다.
+        /// 제목 옆에서 과하게 커 보이지 않도록 블록 전체를 0.7배로 축소해 얹는다(자식 크기는 그대로 둔다).</summary>
         private void BuildGoldArea(RectTransform container)
         {
             var area = NewRect("GoldArea", container);
@@ -363,6 +376,7 @@ namespace TaskbarHero.Client.UI
             area.pivot = new Vector2(0f, 1f);
             area.anchoredPosition = new Vector2(40f, -40f);
             area.sizeDelta = new Vector2(280f, 60f);
+            area.localScale = new Vector3(GoldAreaScale, GoldAreaScale, GoldAreaScale);
 
             var bg = NewImage("GoldBg", area, null);
             bg.color = new Color(0f, 0f, 0f, 0.35f);
@@ -402,10 +416,6 @@ namespace TaskbarHero.Client.UI
             if (_cubeButton != null)
             {
                 _cubeButton.onClick.AddListener(OnOpenCubePanel);
-            }
-            if (_closeButton != null)
-            {
-                _closeButton.onClick.AddListener(Close);
             }
             if (_dimButton != null)
             {
@@ -666,7 +676,8 @@ namespace TaskbarHero.Client.UI
             return rt;
         }
 
-        /// <summary>제목(가로 중앙) + 닫기 버튼(우측 상단).</summary>
+        /// <summary>제목(가로 중앙). 닫기(X) 버튼은 미관상 두지 않고 창 밖(딤) 클릭으로 닫는다
+        /// (스테이지 지도·지역 창, 뽑기 창과 같은 규칙).</summary>
         private void BuildHeader(RectTransform container)
         {
             // 제목: 패널 가로 중앙 정렬
@@ -676,23 +687,13 @@ namespace TaskbarHero.Client.UI
             trt.pivot = new Vector2(0.5f, 1f);
             trt.anchoredPosition = new Vector2(0f, -40f);
             trt.sizeDelta = new Vector2(500f, 56f);
-
-            // 닫기: 중앙 정렬 콘텐츠(가방 블록 폭)의 우측 상단에 배치
-            var closeImg = NewImage("CloseButton", container, slotNormal);
-            var crt = closeImg.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 1f);
-            crt.pivot = new Vector2(0.5f, 1f);
-            crt.anchoredPosition = new Vector2(BagBlockWidth * 0.5f - 44f, -36f);
-            crt.sizeDelta = new Vector2(72f, 72f);
-            var x = NewText("X", crt, "X", 36, TextAnchor.MiddleCenter);
-            Stretch(x.rectTransform);
-            _closeButton = closeImg.gameObject.AddComponent<Button>();
         }
 
         // 장비 영역 블록의 내부 폭(능력치 패널 + 초상 + 6부위 슬롯을 포함). 이 블록을 패널 가로 중앙에 둔다.
-        private const float StatPanelWidth = 190f;
-        private const float PortraitX = 214f;   // 능력치 패널(190) + 간격(24)
-        private const float EquipSlotsX = 466f; // 초상(PortraitX+220) + 간격(32)
+        private const float StatPanelWidth = 220f;
+        private const float PortraitWidth = 220f;
+        private const float PortraitX = 232f;   // 능력치 패널(220) + 간격(12)
+        private const float EquipSlotsX = 466f; // 초상(PortraitX+220=452) + 간격(14)
         private const float EquipBlockWidth = 682f; // EquipSlotsX + (2*100 + 16)
 
         /// <summary>장비 영역(캐릭터 네비 + 능력치 패널 + 초상 + 6부위 슬롯)을 패널 가로 중앙 컨테이너에 구성한다.</summary>
@@ -706,18 +707,13 @@ namespace TaskbarHero.Client.UI
             area.anchoredPosition = new Vector2(0f, -104f);
 
             // 캐릭터 전환 네비게이션 (◀ 인디케이터 ▶)
-            var prev = NewImage("PrevCharButton", area, slotNormal);
-            TopLeft(prev.rectTransform, 0f, 0f, 64f, 64f);
-            Stretch(NewText("PrevLabel", prev.rectTransform, "<", 36, TextAnchor.MiddleCenter).rectTransform);
-            _prevButton = prev.gameObject.AddComponent<Button>();
+            _prevButton = BuildNavButton(area, "PrevCharButton", "<", 0f, true, out _prevPunch);
 
             _charIndicatorText = NewText("CharIndicator", area, "", 28, TextAnchor.MiddleCenter);
             TopLeft(_charIndicatorText.rectTransform, 70f, 0f, EquipBlockWidth - 140f, 64f);
 
-            var next = NewImage("NextCharButton", area, slotNormal);
-            TopLeft(next.rectTransform, EquipBlockWidth - 64f, 0f, 64f, 64f);
-            Stretch(NewText("NextLabel", next.rectTransform, ">", 36, TextAnchor.MiddleCenter).rectTransform);
-            _nextButton = next.gameObject.AddComponent<Button>();
+            _nextButton = BuildNavButton(area, "NextCharButton", ">", EquipBlockWidth - NavButtonSize, false,
+                out _nextPunch);
 
             // '장비' 라벨
             var label = NewText("EquipLabel", area, "장비", 32, TextAnchor.UpperLeft);
@@ -728,7 +724,7 @@ namespace TaskbarHero.Client.UI
 
             // 캐릭터 초상 슬롯(능력치 패널 우측)
             var portrait = NewImage("PortraitSlot", area, slotPortrait);
-            TopLeft(portrait.rectTransform, PortraitX, 144f, 220f, 300f);
+            TopLeft(portrait.rectTransform, PortraitX, 144f, PortraitWidth, 300f);
 
             // 캐릭터 프리팹 렌더 표시(초상 프레임 안쪽). 텍스처/표시는 런타임에 CharacterPortrait가 배정.
             var render = NewRawImage("PortraitRender", portrait.rectTransform);
@@ -783,21 +779,43 @@ namespace TaskbarHero.Client.UI
             BuildExpBar(area);
         }
 
+        // 경험치 막대 규격과 프레임 아트 여백.
+        // 프레임(체력바.png)은 768×144 · 사방 테두리 24px(12배로 그린 픽셀아트의 2픽셀)인데 <b>9-slice 테두리 값이
+        // 없다</b>(spriteBorder 0). 임포트 설정은 건드리지 않는 규칙이라 그대로 늘려 쓰고, 채움이 테두리를 덮지 않도록
+        // 축 배율대로 계산한 여백을 준다 — 가로 24 × (220/768) ≈ 7, 세로 24 × (24/144) = 4.
+        private const float ExpBarHeight = 24f;
+        private const float ExpFrameInsetX = 7f;
+        private const float ExpFrameInsetY = 4f;
+
         /// <summary>초상화 아래 캐릭터 경험치 막대(가로 진행바 + 현재/필요·남은 경험치 텍스트)를 구성한다.
         /// 값은 런타임 <see cref="RefreshExp"/>에서 세션·마스터 데이터로 채운다.</summary>
         private void BuildExpBar(RectTransform area)
         {
-            // 장비 블록 하단 가로 중앙에 배치(초상·능력치·장비 슬롯 행 바로 아래).
-            const float barWidth = 250f; // 기존 400에서 150 축소
+            // **초상화 바로 아래**에 초상과 같은 x·폭으로 둔다(장비 블록 가로 중앙이 아니라 초상 기준).
+            // 폭은 400 → 250 → 220으로 줄여 왔다.
             var container = NewRect("ExpBar", area);
-            TopLeft(container, (EquipBlockWidth - barWidth) * 0.5f, 448f, barWidth, 24f);
+            TopLeft(container, PortraitX, 448f, PortraitWidth, ExpBarHeight);
 
-            var bg = NewImage("ExpBarBg", container, null);
-            bg.color = new Color(0f, 0f, 0f, 0.55f);
+            // 배경 = 전투 HP바와 같은 프레임 아트(체력바.png). 아트가 없으면 어두운 사각형으로 폴백한다.
+            var bg = NewImage("ExpBarBg", container, expBarFrame);
+            if (expBarFrame == null)
+            {
+                bg.color = new Color(0f, 0f, 0f, 0.55f);
+            }
             Stretch(bg.rectTransform);
 
-            // 채움 막대: 좌측 고정, 폭은 런타임에 anchorMax.x = 진행률로 조절.
-            var fill = NewImage("ExpBarFill", bg.rectTransform, null);
+            // 프레임 테두리 <b>안쪽</b> 영역. 채움을 여기 넣어 테두리를 덮지 않게 한다 — 여백을 채움 자신에게
+            // 주면 진행률이 낮을 때 rect 폭이 음수가 되어(= 여백×2보다 좁아짐) 막대가 반대로 뒤집혀 그려진다.
+            var inner = NewRect("ExpBarInner", bg.rectTransform);
+            Stretch(inner);
+            if (expBarFrame != null)
+            {
+                inner.offsetMin = new Vector2(ExpFrameInsetX, ExpFrameInsetY);
+                inner.offsetMax = new Vector2(-ExpFrameInsetX, -ExpFrameInsetY);
+            }
+
+            // 채움 막대: 좌측 고정, 폭은 런타임에 anchorMax.x = 진행률로 조절(0이면 폭 0).
+            var fill = NewImage("ExpBarFill", inner, null);
             fill.color = new Color(0.30f, 0.80f, 0.55f, 1f); // 경험치(초록)
             fill.raycastTarget = false;
             var frt = fill.rectTransform;
@@ -814,20 +832,94 @@ namespace TaskbarHero.Client.UI
             Stretch(_expText.rectTransform);
         }
 
-        /// <summary>초상화 좌측 능력치 패널(제목 + 능력치 텍스트). 값은 런타임에 RefreshStatPanel로 채운다.</summary>
+        private const float NavButtonSize = 64f;      // 캐릭터 전환 화살표 버튼 한 변
+        private const float NavArrowPadding = 6f;     // 버튼 안쪽에서 화살표를 줄이는 여백(클릭 영역은 그대로)
+
+        /// <summary>
+        /// 캐릭터 전환 화살표 버튼 하나(이전/다음). 구조는 <b>투명한 루트(클릭 영역) + 화살표 자식</b>이다.
+        /// <list type="bullet">
+        /// <item>아트(<c>navArrow</c>)는 <b>오른쪽 방향</b> 하나뿐이라 이전 버튼은 화살표 자식만
+        ///   <c>localScale.x = -1</c>로 좌우 반전해 쓴다. 반전을 <b>루트가 아니라 자식</b>에 거는 이유는
+        ///   루트의 pivot이 좌상단(0, 1)이어서 루트를 반전하면 버튼이 앵커 왼쪽으로 밀려나기 때문이다.</item>
+        /// <item>클릭 피드백(<see cref="ButtonPunchScale"/> — 잠깐 커졌다 원래대로)은 화살표 자식에 붙인다.
+        ///   자식은 pivot이 가운데(0.5, 0.5)라 <b>가운데 기준으로</b> 커지고, punch가 기준 스케일에 배율만
+        ///   곱하므로 반전(-1)도 그대로 유지된다.</item>
+        /// <item>아트가 없으면 기존처럼 슬롯 배경 + 꺽쇠 텍스트로 폴백해 버튼이 사라지지 않게 한다.</item>
+        /// </list>
+        /// </summary>
+        private Button BuildNavButton(RectTransform area, string name, string fallbackLabel, float x,
+            bool mirrored, out ButtonPunchScale punch)
+        {
+            bool hasArt = navArrow != null;
+
+            // 루트는 클릭 영역만 담당한다(아트가 있으면 완전 투명 — 알파 0이어도 레이캐스트는 받는다).
+            var root = NewImage(name, area, hasArt ? null : slotNormal);
+            if (hasArt)
+            {
+                root.color = new Color(1f, 1f, 1f, 0f);
+            }
+            TopLeft(root.rectTransform, x, 0f, NavButtonSize, NavButtonSize);
+            var button = root.gameObject.AddComponent<Button>();
+
+            if (!hasArt)
+            {
+                var label = NewText($"{name}Label", root.rectTransform, fallbackLabel, 36, TextAnchor.MiddleCenter);
+                Stretch(label.rectTransform);
+                punch = label.gameObject.AddComponent<ButtonPunchScale>();
+                return button;
+            }
+
+            var arrow = NewImage("Arrow", root.rectTransform, navArrow);
+            arrow.preserveAspect = true;
+            arrow.raycastTarget = false; // 클릭은 루트가 받는다(반전·확대 중에도 판정이 흔들리지 않게)
+            var art = arrow.rectTransform;
+            Stretch(art);
+            art.offsetMin = new Vector2(NavArrowPadding, NavArrowPadding);
+            art.offsetMax = new Vector2(-NavArrowPadding, -NavArrowPadding);
+            art.localScale = new Vector3(mirrored ? -1f : 1f, 1f, 1f);
+            punch = arrow.gameObject.AddComponent<ButtonPunchScale>();
+            return button;
+        }
+
+        // 능력치 패널의 두 열. 능력치명은 왼쪽 정렬, 값은 <b>오른쪽 정렬</b>로 두어 자릿수가 달라도 세로 줄이 맞는다.
+        // 두 Text는 같은 폰트 크기·줄 간격·같은 줄 수를 쓰므로 행이 어긋나지 않는다(값이 없는 능력치는 양쪽에서 함께 빠진다).
+        private const int StatFontSize = 17;
+        private const float StatLineSpacing = 1.4f;
+        private const float StatPanelPadding = 25f;   // 테두리(초상 슬롯 아트) 안쪽 여백 = 이름 열 왼쪽
+        private const float StatNameWidth = 64f;
+        private const float StatColumnGap = 6f;
+        private const float StatValueWidth = 98f;     // 값 열 폭(오른쪽 여백 27을 남긴다)
+        private const float StatTitleInset = 15f;     // 제목 좌우 여백
+        private const float StatTitleTop = 35f;
+        private const float StatRowsTop = 77f;        // 제목 아래 = 첫 행 위쪽
+        private const float StatRowsHeight = 240f;
+
+        /// <summary>초상화 좌측 능력치 패널(제목 + 능력치명 열 + 값 열). 값은 런타임에 RefreshStatPanel로 채운다.
+        /// 배경은 초상·장비 칸과 같은 <c>ui_slot_portrait</c> 아트를 써서 <b>같은 톤의 테두리</b>를 얻는다
+        /// (바로 옆 초상 슬롯이 220×300, 이 패널이 190×300이라 테두리 두께도 비슷하게 보인다).</summary>
         private void BuildStatPanel(RectTransform area)
         {
-            var bg = NewImage("StatPanel", area, null);
-            bg.color = new Color(0.09f, 0.11f, 0.18f, 0.9f);
+            var bg = NewImage("StatPanel", area, slotPortrait);
+            if (slotPortrait == null)
+            {
+                bg.color = new Color(0.09f, 0.11f, 0.18f, 0.9f); // 아트 미배선 폴백
+            }
             TopLeft(bg.rectTransform, 0f, 144f, StatPanelWidth, 300f);
 
-            var title = NewText("StatTitle", bg.rectTransform, "능력치", 26, TextAnchor.UpperCenter);
+            var title = NewText("StatTitle", bg.rectTransform, "능력치", 22, TextAnchor.UpperCenter);
             title.fontStyle = FontStyle.Bold;
-            TopLeft(title.rectTransform, 0f, 10f, StatPanelWidth, 34f);
+            TopLeft(title.rectTransform, StatTitleInset, StatTitleTop,
+                StatPanelWidth - StatTitleInset * 2f, 30f);
 
-            _statPanelText = NewText("StatValues", bg.rectTransform, "", 22, TextAnchor.UpperLeft);
-            _statPanelText.lineSpacing = 1.25f;
-            TopLeft(_statPanelText.rectTransform, 14f, 54f, StatPanelWidth - 24f, 236f);
+            _statNameText = NewText("StatNames", bg.rectTransform, "", StatFontSize, TextAnchor.UpperLeft);
+            _statNameText.lineSpacing = StatLineSpacing;
+            TopLeft(_statNameText.rectTransform, StatPanelPadding, StatRowsTop, StatNameWidth, StatRowsHeight);
+
+            // 값 열은 오른쪽 정렬한다 — 긴 값(체력 등)은 짧은 이름 쪽 여백으로 넘어가 겹치지 않는다.
+            float valueLeft = StatPanelPadding + StatNameWidth + StatColumnGap;
+            _statValueText = NewText("StatValues", bg.rectTransform, "", StatFontSize, TextAnchor.UpperRight);
+            _statValueText.lineSpacing = StatLineSpacing;
+            TopLeft(_statValueText.rectTransform, valueLeft, StatRowsTop, StatValueWidth, StatRowsHeight);
         }
 
         private const float GridCell = 120f;
@@ -1022,8 +1114,9 @@ namespace TaskbarHero.Client.UI
         {
             if (_partyCount <= 1)
             {
-                return;
+                return; // 전환할 캐릭터가 없으면 연출도 하지 않는다(바뀐 것처럼 보이지 않게)
             }
+            if (_prevPunch != null) _prevPunch.Play();
             _selectedCharacter = (_selectedCharacter - 1 + _partyCount) % _partyCount;
             RefreshCharacter();
             RefreshGrid(); // 선택 캐릭터 클래스 변경 → 다른 클래스 장비 X 표시 갱신
@@ -1034,8 +1127,9 @@ namespace TaskbarHero.Client.UI
         {
             if (_partyCount <= 1)
             {
-                return;
+                return; // 전환할 캐릭터가 없으면 연출도 하지 않는다
             }
+            if (_nextPunch != null) _nextPunch.Play();
             _selectedCharacter = (_selectedCharacter + 1) % _partyCount;
             RefreshCharacter();
             RefreshGrid(); // 선택 캐릭터 클래스 변경 → 다른 클래스 장비 X 표시 갱신
@@ -1217,13 +1311,14 @@ namespace TaskbarHero.Client.UI
         /// 최종값 = (클래스+레벨 기본 + 장착 장비) × 학습 패시브 배율. 아이템·패시브로 인한 상승분은 (+상승분)으로 병기한다.</summary>
         private void RefreshStatPanel(List<CharacterDto> chars)
         {
-            if (_statPanelText == null)
+            if (_statNameText == null || _statValueText == null)
             {
                 return;
             }
             if (chars == null || _selectedCharacter >= chars.Count)
             {
-                _statPanelText.text = string.Empty;
+                _statNameText.text = string.Empty;
+                _statValueText.text = string.Empty;
                 return;
             }
 
@@ -1240,38 +1335,51 @@ namespace TaskbarHero.Client.UI
             float critDF = (baseS.critDamage + eqS.critDamage) * PassiveMult(c, 5) * RuneMult(5);
             float moveF = (baseS.moveSpeed + eqS.moveSpeed) * PassiveMult(c, 6) * RuneMult(6);
 
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine(LongStatLine("공격력", baseS.atk, atkF));
-            sb.AppendLine(LongStatLine("방어력", baseS.def, defF));
-            sb.AppendLine(LongStatLine("체력", baseS.hp, hpF));
-            if (critF != 0f) sb.AppendLine(PercentStatLine("치명확률", baseS.critChance, critF));
-            if (critDF != 0f) sb.AppendLine(PercentStatLine("치명피해", baseS.critDamage, critDF));
-            if (moveF != 0f) sb.AppendLine(MoveStatLine("이동속도", baseS.moveSpeed, moveF));
-            _statPanelText.text = sb.ToString().TrimEnd();
+            // 두 열을 같은 순서·같은 줄 수로 채운다(값이 없는 능력치는 양쪽에서 함께 빠져 행이 어긋나지 않는다).
+            var names = new System.Text.StringBuilder();
+            var values = new System.Text.StringBuilder();
+            AppendStatRow(names, values, "공격력", LongStatValue(baseS.atk, atkF));
+            AppendStatRow(names, values, "방어력", LongStatValue(baseS.def, defF));
+            AppendStatRow(names, values, "체력", LongStatValue(baseS.hp, hpF));
+            if (critF != 0f) AppendStatRow(names, values, "치명확률", PercentStatValue(baseS.critChance, critF));
+            if (critDF != 0f) AppendStatRow(names, values, "치명피해", PercentStatValue(baseS.critDamage, critDF));
+            if (moveF != 0f) AppendStatRow(names, values, "이동속도", MoveStatValue(baseS.moveSpeed, moveF));
+            _statNameText.text = names.ToString().TrimEnd();
+            _statValueText.text = values.ToString().TrimEnd();
         }
 
-        /// <summary>정수 스탯 한 줄: "라벨  최종  (+상승분)". 상승분(장비+패시브)은 연한 파란색으로 병기.</summary>
-        private static string LongStatLine(string label, long baseV, long finalV)
+        /// <summary>능력치 한 행을 두 열에 함께 넣는다(이름 열 · 값 열의 줄 수를 반드시 같게 유지하기 위한 통로).</summary>
+        private static void AppendStatRow(System.Text.StringBuilder names, System.Text.StringBuilder values,
+            string label, string value)
+        {
+            names.AppendLine(label);
+            values.AppendLine(value);
+        }
+
+        /// <summary>정수 스탯 값: "최종 +상승분". 상승분(장비+패시브+룬)은 연한 파란색으로 병기.
+        /// 좁은 열에 들어가야 하므로 괄호 없이 <c>+N</c>으로만 적는다.</summary>
+        private static string LongStatValue(long baseV, long finalV)
         {
             long bonus = finalV - baseV;
-            string extra = bonus > 0 ? $"  <color={BonusColorHex}>(+{bonus})</color>" : string.Empty;
-            return $"{label}  {finalV}{extra}";
+            return bonus > 0 ? $"{finalV} <color={BonusColorHex}>+{bonus}</color>" : finalV.ToString();
         }
 
-        /// <summary>퍼센트 스탯 한 줄(치명확률/치명피해). 값은 0~1 → % 표기.</summary>
-        private static string PercentStatLine(string label, float baseV, float finalV)
+        /// <summary>퍼센트 스탯 값(치명확률/치명피해). 값은 0~1 → % 표기.</summary>
+        private static string PercentStatValue(float baseV, float finalV)
         {
             float bonus = finalV - baseV;
-            string extra = bonus > 0.0001f ? $"  <color={BonusColorHex}>(+{bonus * 100f:0.#}%)</color>" : string.Empty;
-            return $"{label}  {finalV * 100f:0.#}%{extra}";
+            string value = $"{finalV * 100f:0.#}%";
+            return bonus > 0.0001f
+                ? $"{value} <color={BonusColorHex}>+{bonus * 100f:0.#}%</color>"
+                : value;
         }
 
-        /// <summary>이동속도 한 줄.</summary>
-        private static string MoveStatLine(string label, float baseV, float finalV)
+        /// <summary>이동속도 값.</summary>
+        private static string MoveStatValue(float baseV, float finalV)
         {
             float bonus = finalV - baseV;
-            string extra = bonus > 0.001f ? $"  <color={BonusColorHex}>(+{bonus:0.##})</color>" : string.Empty;
-            return $"{label}  {finalV:0.##}{extra}";
+            string value = $"{finalV:0.##}";
+            return bonus > 0.001f ? $"{value} <color={BonusColorHex}>+{bonus:0.##}</color>" : value;
         }
 
         /// <summary>캐릭터 고유 기본 능력치(클래스 + 레벨 보너스, 장비·패시브 제외).</summary>

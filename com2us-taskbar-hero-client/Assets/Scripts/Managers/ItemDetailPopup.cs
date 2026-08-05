@@ -98,15 +98,10 @@ namespace TaskbarHero.Client.Managers
             _root.gameObject.SetActive(false);
         }
 
-        /// <summary>상세 문구를 채우고 배경을 적용해 커서 근처에 표시한다.</summary>
+        /// <summary>상세 문구를 채우고 배경을 적용해 커서 근처에 표시한다.
+        /// <b>표시음은 재생하지 않는다</b> — hover만으로 뜨는 팝업이라 아이템 칸 위를 지나갈 때마다 울려 거슬린다.</summary>
         private void ShowInternal(Sprite background, int itemCode, long quantity, int enhanceLevel, Vector2 screenPos)
         {
-            // 상세 팝업 표시음(사운드 정의서 §4.1). 이미 떠 있는 팝업이 칸 사이를 옮겨 다닐 때는 울리지 않는다.
-            if (_root != null && !_root.gameObject.activeSelf)
-            {
-                SoundManager.Sfx(SoundId.UiTooltip);
-            }
-
             if (background != null)
             {
                 _background.sprite = background;

@@ -19,6 +19,10 @@ namespace TaskbarHero.ClientEditor
         // UI 프리팹은 Assets/Prefabs/ 아래 카테고리 폴더로 정리한다.
         private const string PrefabPath = "Assets/Prefabs/UI/InventoryPanel.prefab";
         private const string ItemSlotPrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
+        // 캐릭터 전환 화살표(공용 아트 — 인벤토리 전용 폴더가 아니라 Assets/Art/UI 루트에 있다).
+        private const string NavArrowPath = "Assets/Art/UI/화살표버튼.png";
+        // 경험치 막대 프레임(전투 몬스터 HP바와 같은 아트).
+        private const string ExpBarFramePath = "Assets/Art/Icon/Combat/체력바.png";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
 
@@ -32,7 +36,7 @@ namespace TaskbarHero.ClientEditor
             Debug.Log("[InventoryUiBuilder] 완료: 프리팹 생성 + Title/GameScene UIManager 배선.");
         }
 
-        /// <summary>InventoryPanel 프리팹(컨트롤러 + 4개 스프라이트 참조)을 Assets/Prefabs/UI에 저장한다.</summary>
+        /// <summary>InventoryPanel 프리팹(컨트롤러 + 스프라이트 참조)을 Assets/Prefabs/UI에 저장한다.</summary>
         private static GameObject BuildPrefab()
         {
             EnsureFolder("Assets/Prefabs");
@@ -60,6 +64,10 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
             so.FindProperty("slotPortrait").objectReferenceValue = LoadSprite("ui_slot_portrait");
+            // 캐릭터 전환 화살표(공용 아트). 오른쪽 방향 하나만 있고 이전 버튼은 컨트롤러가 좌우 반전해 쓴다.
+            so.FindProperty("navArrow").objectReferenceValue = LoadSpriteAt(NavArrowPath);
+            // 경험치 막대 배경 = 전투 몬스터 HP바와 같은 프레임 아트.
+            so.FindProperty("expBarFrame").objectReferenceValue = LoadSpriteAt(ExpBarFramePath);
             // 가방 칸·장비 부위 칸의 아이템 그림은 공용 슬롯 프리팹이 그린다(큐브·거래소와 외형 통일).
             so.FindProperty("_itemSlotPrefab").objectReferenceValue =
                 AssetDatabase.LoadAssetAtPath<GameObject>(ItemSlotPrefabPath);
