@@ -44,6 +44,8 @@ namespace TaskbarHero.ClientEditor
 
         // 배너 아트 파일명 규칙(가챠 코드가 접미사로 붙는다).
         private const string BannerPrefix = "gacha_banner_";
+        private const string BannerFramesPrefix = "BannerFrames_"; // 움직이는 배너 프레임 폴더(코드별)
+        private const float DefaultBannerFps = 12f;                // 원본 GIF와 같은 재생 속도
         private const string TabNormalPrefix = "gacha_btn_normal_";
         private const string TabSelectedPrefix = "gacha_btn_selected_";
 
@@ -90,6 +92,9 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("_boxBackground").objectReferenceValue = LoadSprite(BoxBgPath);
             so.FindProperty("_detailBackground").objectReferenceValue = LoadSprite(DetailBgPath);
             so.FindProperty("_buttonSprite").objectReferenceValue = LoadSprite(ButtonPath);
+            // 천장 픽업 아이템 칸도 공용 슬롯 프리팹을 쓴다(결과 오버레이와 같은 아트).
+            so.FindProperty("_itemSlotPrefab").objectReferenceValue =
+                AssetDatabase.LoadAssetAtPath<GameObject>(ItemSlotPrefabPath);
             so.FindProperty("_resultOverlay").objectReferenceValue = overlay;
             FillBannerArt(so.FindProperty("_bannerArt"));
             so.ApplyModifiedPropertiesWithoutUndo();
@@ -113,6 +118,13 @@ namespace TaskbarHero.ClientEditor
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 string file = System.IO.Path.GetFileNameWithoutExtension(path);
+
+                // GIF은 정적 배너 후보로 쓰지 않는다 — Unity가 <b>첫 프레임짜리 정지 텍스처</b>로 임포트하므로
+                // 같은 코드의 png와 둘 다 잡혀 어느 쪽이 배선될지 순서에 좌우된다(움직임은 BannerFrames_<코드>가 담당).
+                if (path.EndsWith(".gif", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
 
                 string prefix = file.StartsWith(TabSelectedPrefix) ? TabSelectedPrefix
                     : file.StartsWith(TabNormalPrefix) ? TabNormalPrefix
@@ -149,9 +161,40 @@ namespace TaskbarHero.ClientEditor
                 element.FindPropertyRelative("banner").objectReferenceValue = pair.Value.banner;
                 element.FindPropertyRelative("tabNormal").objectReferenceValue = pair.Value.tabNormal;
                 element.FindPropertyRelative("tabSelected").objectReferenceValue = pair.Value.tabSelected;
+                WireBannerFrames(element, pair.Key);
             }
             Debug.Log($"[GachaUiBuilder] 배너 아트 배선: {byCode.Count}개 코드 " +
                       $"({string.Join(", ", new List<int>(byCode.Keys).ConvertAll(c => c.ToString()))})");
+        }
+
+        /// <summary>
+        /// 배너의 <b>움직이는 배경</b> 프레임을 배선한다 — <c>Assets/Art/UI/Gacha/BannerFrames_&lt;code&gt;/</c> 폴더가
+        /// 있으면 그 안의 프레임을 파일명 순서로 담고, 없으면 배열을 비워 정적 배너(<c>gacha_banner_&lt;code&gt;.png</c>)로
+        /// 그려지게 한다.
+        /// <para><b>왜 폴더인가</b>: 원본은 GIF(<c>gacha_banner_60002.gif</c>)인데 <b>Unity는 GIF를 첫 프레임짜리
+        /// 정지 텍스처로만 임포트</b>하므로 애니메이션이 살지 않는다. 그래서 GIF에서 프레임을 뽑아 이 폴더에 두고
+        /// 스프라이트 시퀀스로 돌린다(프레임 추출은 아트 작업 단계에서 수행).</para>
+        /// </summary>
+        private static void WireBannerFrames(SerializedProperty element, int code)
+        {
+            var frames = element.FindPropertyRelative("bannerFrames");
+            var fps = element.FindPropertyRelative("bannerFps");
+            if (frames == null)
+            {
+                return;
+            }
+            string dir = $"{ArtDir}/{BannerFramesPrefix}{code}";
+            if (!AssetDatabase.IsValidFolder(dir))
+            {
+                frames.arraySize = 0; // 정적 배너 사용
+                return;
+            }
+            FillFrames(frames, dir);
+            if (fps != null && fps.floatValue <= 0f)
+            {
+                fps.floatValue = DefaultBannerFps;
+            }
+            Debug.Log($"[GachaUiBuilder] 배너 {code} 애니메이션 프레임 {frames.arraySize}장 배선 ({dir}).");
         }
 
         /// <summary>스프라이트 시퀀스 폴더의 프레임을 <b>파일명 순서</b>(…_01, _02 …)로 배열에 채운다.</summary>

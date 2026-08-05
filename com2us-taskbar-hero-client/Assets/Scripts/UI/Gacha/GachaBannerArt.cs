@@ -17,8 +17,17 @@ namespace TaskbarHero.Client.UI.Gacha
         [Tooltip("가챠(배너) 코드 — gacha_master.gacha_code")]
         public int gachaCode;
 
-        [Tooltip("배너 이미지(gacha_banner_<code>.png). 배너 이름이 아트에 새겨져 있어 이름 텍스트를 겹쳐 그리지 않는다.")]
+        [Tooltip("배너 이미지(gacha_banner_<code>.png). 배너 이름이 아트에 새겨져 있어 이름 텍스트를 겹쳐 그리지 않는다. " +
+                 "애니메이션 프레임(bannerFrames)이 있으면 그쪽이 우선이고 이 이미지는 폴백으로만 쓰인다.")]
         public Sprite banner;
+
+        [Tooltip("움직이는 배너 프레임(BannerFrames_<code>/frame_000… 순서). 1장 이상이면 정적 이미지 대신 " +
+                 "이 시퀀스를 반복 재생한다. Unity는 GIF를 첫 프레임짜리 정지 텍스처로만 임포트하므로, " +
+                 "원본 GIF에서 뽑아 둔 프레임을 이 배열로 돌린다.")]
+        public Sprite[] bannerFrames;
+
+        [Tooltip("배너 프레임 재생 속도(초당 프레임). 원본 GIF의 프레임 간격과 같게 둔다(60002 = 12fps).")]
+        public float bannerFps = 12f;
 
         [Tooltip("탭 버튼 기본 상태(gacha_btn_normal_<code>.png)")]
         public Sprite tabNormal;

@@ -26,6 +26,8 @@ namespace TaskbarHero.Client.UI.Gacha
     /// (기획서 §5.2). 외형은 <c>Assets/Art/UI/Gacha</c>의 배너·탭·결과 아트와 공용 프레임(<c>modal_bg</c>·
     /// <c>ui_bg</c>·<c>pixel_rpg_button</c>)을 쓰며, 정적 계층은 에디터 빌더(<c>GachaUiBuilder</c>)가 프리팹에 굽고
     /// 배너 탭·기록 행은 조회 결과로 런타임에 생성한다.
+    /// <para>알림(로그인 필요·골드 부족·뽑기 실패 등)은 <b>패널 안에 메시지 줄을 두지 않고</b> 공용 모달
+    /// (<see cref="ModalManager"/>)로 띄운다. 닫기(X) 버튼도 미관상 두지 않고 창 밖(딤) 클릭으로 닫는다.</para>
     /// </summary>
     public class GachaPanelController : MonoBehaviour
     {
@@ -33,7 +35,7 @@ namespace TaskbarHero.Client.UI.Gacha
         private const float CanvasRefHeight = 1920f;
         // 좌측 패널 최대 폭(GameViewLayout.WidestLeftPanel과 같은 값)까지 쓴다 — 배너(620) + 정보 열(404)이 나란히 들어간다.
         private const float PanelWidth = 1120f;
-        // 배너 아래에 천장 게이지가 없어져(천장은 배너 안 텍스트로 옮겼다) 하단 줄까지만 담는 높이로 줄였다.
+        // 배너 아래에 남는 위젯이 없어(천장·보장·뽑기 버튼·기록·확률 보기를 모두 배너 위에 얹었다) 배너까지만 담는다.
         private const float PanelHeight = 1090f;
         private const float Inset = 36f;
 
@@ -44,36 +46,63 @@ namespace TaskbarHero.Client.UI.Gacha
 
         private const float ContentTop = 268f;    // 탭 줄 아래 = 콘텐츠 시작
         // 배너는 창 폭 대부분을 쓰는 주인공이다(원본 718×558 비율 유지 — 940 / 731 = 1.2866).
-        // 기간·픽업 안내와 뽑기 버튼을 배너 <b>안에</b> 얹으므로 배너 밖에는 천장 줄과 하단 줄만 남는다.
+        // 기간·픽업 안내와 뽑기 버튼·천장·보장 안내를 배너 <b>위에</b> 얹으므로 배너 밖에 남는 위젯이 없다.
+        // 움직이는 배너의 기본 재생 속도(아트에 값이 없을 때). 원본 GIF가 12fps라 그 값을 기본으로 둔다.
+        private const float DefaultBannerFps = 12f;
         private const float BannerWidth = 940f;
         private const float BannerHeight = 731f;
-        private const float BannerBottom = ContentTop + BannerHeight;   // 999
 
         // 배너 위쪽 안내 띠(기간 + 픽업 설명). 아트 위에 글자를 얹으므로 반투명 판을 깔아 가독성을 확보한다.
         private const float BannerStripHeight = 96f;
         private const float BannerPadding = 24f;
 
-        // 배너 좌측 하단 뽑기 버튼 — 가로로 나란히 두고 **10연을 오른쪽**에 둔다(무게가 큰 상품이 뒤에 온다).
+        // 배너 <b>우측</b> 하단 뽑기 버튼 — 가로로 나란히 두고 **10연을 오른쪽**에 둔다(무게가 큰 상품이 뒤에 온다).
+        // 배너 아트의 캐릭터가 왼쪽을 차지하므로 버튼 묶음을 오른쪽 끝에 붙인다.
         private const float PullButtonWidth = 260f;
         private const float PullButtonHeight = 92f;
         private const float PullButtonGap = 16f;
+        private const float PullButtonBottom = 32f;   // 배너 아래쪽에서 버튼 아래쪽까지
+        private const float PullRowRight = 12f;       // 배너 오른쪽에서 10연 버튼 오른쪽까지
+        // 1연 버튼의 x(배너 왼쪽 기준) = 940 - 260×2 - 16 - 12 = 392.
+        private const float PullRowLeft = BannerWidth - PullButtonWidth * 2f - PullButtonGap - PullRowRight;
 
-        // 천장 잔여 횟수는 10연 버튼 바로 위에 한 줄로 얹는다(게이지 없이 텍스트만).
-        private const float PityTextHeight = 36f;
-        private const float PityTextGap = 8f;
+        // 천장 잔여 횟수와 10연 보장 안내는 뽑기 버튼 <b>위쪽 같은 열</b>에 각각 한 줄로 얹는다(게이지 없이 텍스트만).
+        private const float InfoTextHeight = 36f;
+        private const float InfoColumnLeft = 480f;         // 두 줄 공통 x(배너 왼쪽 기준)
+        private const float GuaranteeTextBottom = 168f;    // 아래 줄 = 10연 보장 안내
+        private const float GuaranteeTextWidth = 320f;
+        private const float PityTextBottom = 221f;         // 위 줄 = 천장 잔여 횟수
+        private const float PityTextWidth = 460f;          // 480 + 460 = 배너 오른쪽 끝
 
-        // '확률 보기' 버튼은 창 우측 상단(닫기 버튼 왼쪽)에 두고, 팝업은 그 아래로 펼쳐진다.
+        // '확률 보기' 버튼은 배너 <b>우측</b>에 얹고, 팝업은 창 우측 상단에 뜬다(버튼 아래로 펼치면 창을 넘어간다).
         private const float ChanceButtonWidth = 200f;
         private const float ChanceButtonHeight = 52f;
-        private const float ChanceButtonTop = 24f;
-        private const float ChanceButtonRight = 96f;   // 닫기 버튼(우측 24 + 폭 60) 왼쪽으로 비켜 놓는다
+        private const float ChanceButtonTop = 650f;    // 창 위쪽에서 버튼 위쪽까지
+        private const float ChanceButtonRight = 109f;  // 창 오른쪽에서 버튼 오른쪽까지
         private const float ChancePopupWidth = 500f;
         private const float ChancePopupHeight = 430f;
-        private const float ChancePopupGap = 10f;
+        private const float ChancePopupTop = 86f;      // 창 위쪽에서 팝업 위쪽까지(버튼 위치와 독립)
 
-        // 배너 아래에는 하단 줄(기록 버튼 · 안내 메시지)만 남는다.
-        private const float BottomRowTop = BannerBottom + 12f;   // 1011
-        private const float BottomRowHeight = 56f;
+        // '뽑기 기록' 버튼은 배너 <b>좌측</b>에 얹는다(배너 밖에는 아무 위젯도 두지 않는다).
+        private const float HistoryButtonLeft = 104f;
+        private const float HistoryButtonTop = 387f;
+        private const float HistoryButtonWidth = 220f;
+        private const float HistoryButtonHeight = 56f;
+
+        // 천장 픽업 안내(창 <b>우측 상단</b> — 탭 줄 위, 보유 골드 오른쪽 빈 자리).
+        // "천장으로 무엇이 확정되는지"를 공용 아이템 슬롯 + 이름으로 보여 주고, 상세는 슬롯 hover 팝업이 담당한다.
+        private const float PickupBoxWidth = 380f;
+        private const float PickupBoxHeight = 80f;
+        private const float PickupBoxTop = 12f;
+        private const float PickupSlotSize = 64f;
+        private const float PickupSlotLeft = 8f;
+        private const float PickupTextLeft = PickupSlotLeft + PickupSlotSize + 10f;
+        private const int HardPityType = 2;   // 천장 규칙 타입 2 = 하드 천장(확정)
+
+        // 기록 목록은 창 폭을 꽉 채우지 않고 <b>배너와 같은 폭</b>으로 줄인다(한 줄이 너무 길면 읽기 나쁘다).
+        private const float HistoryListWidth = BannerWidth;                                 // 940
+        private const float HistoryListSideInset = (PanelWidth - HistoryListWidth) * 0.5f;  // 90
+        private const float HistoryRowTextWidth = HistoryListWidth - 64f;                   // 행 안쪽 여백(14×2 + 18×2)을 뺀 폭
 
         private const int GoldCurrencyType = 1;   // 재화 타입 1 = 골드
         private const int GoldItemCode = 1;       // item_master 골드 코드(아이콘 item_1)
@@ -96,15 +125,18 @@ namespace TaskbarHero.Client.UI.Gacha
         [SerializeField] private Sprite _detailBackground;
         [Tooltip("버튼 배경(Assets/Art/UI/pixel_rpg_button.png, 9-slice).")]
         [SerializeField] private Sprite _buttonSprite;
+        [Tooltip("공용 아이템 슬롯 프리팹(Assets/Prefabs/UI/ItemSlot) — 천장 픽업 아이템 칸에 쓴다.")]
+        [SerializeField] private GameObject _itemSlotPrefab;
 
         [Header("구성 참조 (에디터 빌더가 배선)")]
-        [SerializeField] private Button _closeButton;
+        // 닫기(X) 버튼은 미관상 두지 않는다 — 창 밖(딤)을 눌러 닫는다(스테이지 지도·지역 창과 같은 규칙).
         [SerializeField] private Button _dimButton;
         [SerializeField] private Image _goldIcon;
         [SerializeField] private Text _goldText;
         [SerializeField] private RectTransform _tabRow;
         [SerializeField] private GameObject _mainRoot;
         [SerializeField] private Image _bannerImage;
+        private SpriteSequenceAnimator _bannerAnimator; // 움직이는 배너 재생(프레임이 있는 배너에서만 사용)
         [SerializeField] private Text _bannerFallbackName;
         [SerializeField] private GameObject _bannerStrip;
         [SerializeField] private Text _periodText;
@@ -115,13 +147,17 @@ namespace TaskbarHero.Client.UI.Gacha
         [SerializeField] private RectTransform _chanceContent;
         [SerializeField] private Button _chanceCloseButton;
         [SerializeField] private Text _pityText;
+        [SerializeField] private GameObject _pickupBox;
+        [SerializeField] private RectTransform _pickupSlotRoot;
+        [SerializeField] private Text _pickupCaption;
+        [SerializeField] private Text _pickupName;
+        private ItemSlotView _pickupSlot;   // 공용 슬롯 인스턴스(첫 표시 때 생성해 캐싱)
         [SerializeField] private Button _singleButton;
         [SerializeField] private Text _singleCostText;
         [SerializeField] private Button _multiButton;
         [SerializeField] private Text _multiCostText;
         [SerializeField] private Text _multiGuaranteeText;
         [SerializeField] private Button _historyButton;
-        [SerializeField] private Text _messageText;
         [SerializeField] private Text _emptyText;
 
         [Header("기록 화면 (에디터 빌더가 배선)")]
@@ -165,7 +201,6 @@ namespace TaskbarHero.Client.UI.Gacha
         {
             if (Application.isPlaying && AlreadyBuilt)
             {
-                SetMessage(string.Empty);
                 ShowMainView();
                 RefreshGold();
                 // 기간 종료로 인한 목록 재조회는 패널을 열 때마다 한 번만 허용한다(시계 오차로 무한 재조회 방지).
@@ -197,19 +232,20 @@ namespace TaskbarHero.Client.UI.Gacha
 
         // ── 정적 계층 구성 ──
 
-        /// <summary>캔버스·딤·창·헤더·탭 줄·배너 화면·천장·뽑기 버튼·기록 화면을 생성한다.</summary>
+        /// <summary>
+        /// 캔버스·딤·창·보유 골드·탭 줄·배너 화면·천장·뽑기 버튼·기록 화면을 생성한다.
+        /// 제목·닫기 버튼은 두지 않고(딤 클릭으로 닫는다), 안내·오류는 패널 안 메시지 줄 대신 공용 모달로 알린다.
+        /// </summary>
         private void Construct()
         {
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildCanvas();
             BuildDim();
             var panel = BuildPanel();
-            BuildHeader(panel);
             BuildGoldArea(panel);
             BuildTabRow(panel);
             BuildMainView(panel);
             BuildHistoryView(panel);
-            BuildMessage(panel);
             EnsureResultOverlay();
         }
 
@@ -257,31 +293,6 @@ namespace TaskbarHero.Client.UI.Gacha
             return rt;
         }
 
-        /// <summary>상단 제목과 닫기 버튼.</summary>
-        private void BuildHeader(RectTransform panel)
-        {
-            var title = NewText("Title", panel, "뽑기", 44, TextAnchor.MiddleCenter);
-            title.fontStyle = FontStyle.Bold;
-            title.color = new Color(1f, 0.92f, 0.72f);
-            var trt = title.rectTransform;
-            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
-            trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -22f);
-            trt.sizeDelta = new Vector2(400f, 60f);
-
-            var close = NewImage("CloseButton", panel, new Color(0.42f, 0.20f, 0.20f, 1f));
-            ApplySliced(close, _buttonSprite);
-            var crt = close.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
-            crt.pivot = new Vector2(1f, 1f);
-            crt.anchoredPosition = new Vector2(-24f, -22f);
-            crt.sizeDelta = new Vector2(60f, 56f);
-            var xt = NewText("X", crt, "X", 30, TextAnchor.MiddleCenter);
-            xt.fontStyle = FontStyle.Bold;
-            Stretch(xt.rectTransform);
-            _closeButton = close.gameObject.AddComponent<Button>();
-        }
-
         /// <summary>좌상단 보유 골드(아이콘 + 수량). 인벤토리·거래소와 같은 규격이며 값은 런타임에 채운다.</summary>
         private void BuildGoldArea(RectTransform panel)
         {
@@ -324,9 +335,9 @@ namespace TaskbarHero.Client.UI.Gacha
         }
 
         /// <summary>
-        /// 배너 화면. 배너 이미지가 창 폭 대부분을 쓰고, 그 <b>안에</b> 기간·픽업 안내(위)와
-        /// 뽑기 버튼(좌측 하단)·확률 보기 버튼(우측 하단)을 얹는다. 배너 밖에는 천장 줄과 하단 줄만 둔다.
-        /// 등급 확률은 팝업이라 기본 화면을 차지하지 않는다.
+        /// 배너 화면. 배너 이미지가 창 폭 대부분을 쓰고, 그 <b>위에</b> 기간·픽업 안내(위쪽 띠) ·
+        /// 뽑기 버튼과 천장·보장 안내(우측 하단) · 확률 보기 버튼(우측) · 뽑기 기록 버튼(좌측)을 모두 얹는다.
+        /// 배너 밖에 남는 위젯은 없다. 등급 확률은 팝업이라 기본 화면을 차지하지 않는다.
         /// </summary>
         private void BuildMainView(RectTransform panel)
         {
@@ -351,13 +362,15 @@ namespace TaskbarHero.Client.UI.Gacha
             Stretch(_bannerFallbackName.rectTransform);
             _bannerFallbackName.gameObject.SetActive(false);
 
+            BuildPickupBox(root);       // 창 우측 상단: 천장으로 확정되는 아이템(슬롯 + 이름)
             BuildBannerStrip(brt);
-            BuildPullButtons(brt);      // 좌측 하단: [1연] [10연] 가로 배치 + 그 위 천장 텍스트
-            BuildChanceToggle(root);    // 창 우측 상단(닫기 버튼 왼쪽)
-            BuildChancePopup(root);     // 마지막 자식 = 가장 위. '확률 보기' 버튼 아래로 펼쳐진다
+            BuildPullButtons(brt);      // 우측 하단: [1연] [10연] 가로 배치 + 그 위 천장·보장 텍스트
+            BuildChanceToggle(root);    // 배너 우측
+            BuildChancePopup(root);     // 마지막 자식 = 가장 위. 창 우측 상단에 뜬다
 
             _historyButton = BuildTextButton(root, "HistoryButton", "뽑기 기록", 26,
-                new Vector2(0f, 1f), new Vector2(Inset, -BottomRowTop), new Vector2(220f, BottomRowHeight));
+                new Vector2(0f, 1f), new Vector2(HistoryButtonLeft, -HistoryButtonTop),
+                new Vector2(HistoryButtonWidth, HistoryButtonHeight));
 
             _emptyText = NewText("EmptyText", root, "진행 중인 뽑기가 없습니다", 30, TextAnchor.MiddleCenter);
             _emptyText.color = new Color(0.82f, 0.86f, 0.96f, 0.9f);
@@ -367,6 +380,41 @@ namespace TaskbarHero.Client.UI.Gacha
             ert.anchoredPosition = Vector2.zero;
             ert.sizeDelta = new Vector2(700f, 60f);
             _emptyText.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// 창 <b>우측 상단</b>의 천장 픽업 안내 — "천장 90회 확정" + <b>공용 아이템 슬롯</b> + 아이템 이름.
+        /// 슬롯은 공용 프리팹(<c>ItemSlot</c>)이라 아이콘·등급 배경과 <b>hover 상세 팝업</b>(이름·등급·부위·요구·스탯)을
+        /// 그대로 얻는다 — 그래서 어떤 아이템이 천장으로 확정되는지와 그 아이템 정보를 한자리에서 확인할 수 있다.
+        /// 슬롯 인스턴스는 런타임에 한 번 만들고(<see cref="EnsurePickupSlot"/>), 픽업이 없는 상시 배너에서는 상자를 숨긴다.
+        /// </summary>
+        private void BuildPickupBox(RectTransform root)
+        {
+            var box = NewImage("PickupBox", root, new Color(0f, 0f, 0f, 0.45f));
+            var rt = box.rectTransform;
+            rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(1f, 1f);
+            rt.anchoredPosition = new Vector2(-Inset, -PickupBoxTop);
+            rt.sizeDelta = new Vector2(PickupBoxWidth, PickupBoxHeight);
+            box.raycastTarget = false; // 클릭·hover는 안쪽 슬롯만 받는다
+            _pickupBox = box.gameObject;
+
+            _pickupSlotRoot = NewChild("PickupSlot", rt);
+            _pickupSlotRoot.anchorMin = _pickupSlotRoot.anchorMax = new Vector2(0f, 0.5f);
+            _pickupSlotRoot.pivot = new Vector2(0f, 0.5f);
+            _pickupSlotRoot.anchoredPosition = new Vector2(PickupSlotLeft, 0f);
+            _pickupSlotRoot.sizeDelta = new Vector2(PickupSlotSize, PickupSlotSize);
+
+            float textWidth = PickupBoxWidth - PickupTextLeft - 10f;
+            _pickupCaption = NewText("PickupCaption", rt, string.Empty, 20, TextAnchor.MiddleLeft);
+            _pickupCaption.color = new Color(1f, 0.86f, 0.52f);
+            PlaceTopLeft(_pickupCaption.rectTransform, PickupTextLeft, textWidth, 26f, 12f);
+
+            _pickupName = NewText("PickupName", rt, string.Empty, 24, TextAnchor.MiddleLeft);
+            _pickupName.fontStyle = FontStyle.Bold;
+            PlaceTopLeft(_pickupName.rectTransform, PickupTextLeft, textWidth, 30f, 40f);
+
+            _pickupBox.SetActive(false); // 배너를 받은 뒤 픽업이 있을 때만 켠다
         }
 
         /// <summary>
@@ -398,27 +446,25 @@ namespace TaskbarHero.Client.UI.Gacha
         }
 
         /// <summary>
-        /// 배너 <b>좌측 하단</b>에 1연·10연 뽑기 버튼을 <b>가로로 나란히</b> 두고(왼쪽 1연 · 오른쪽 10연),
-        /// 10연 버튼 <b>위</b>에 천장 잔여 횟수 한 줄을 얹는다. 10연이 오른쪽인 이유는 무게가 큰 상품을
-        /// 시선 흐름의 끝에 두기 위해서다.
+        /// 배너 <b>우측 하단</b>에 1연·10연 뽑기 버튼을 <b>가로로 나란히</b> 두고(왼쪽 1연 · 오른쪽 10연),
+        /// 그 <b>위</b>에 10연 보장 안내와 천장 잔여 횟수를 각각 한 줄 얹는다. 10연이 오른쪽인 이유는
+        /// 무게가 큰 상품을 시선 흐름의 끝에 두기 위해서다.
         /// </summary>
         private void BuildPullButtons(RectTransform banner)
         {
-            float multiX = BannerPadding + PullButtonWidth + PullButtonGap;
             _singleButton = BuildPullButton(banner, "SingleButton", "1연 뽑기",
-                BannerPadding, out _singleCostText);
+                PullRowLeft, out _singleCostText);
             _multiButton = BuildPullButton(banner, "MultiButton", "10연 뽑기",
-                multiX, out _multiCostText);
+                PullRowLeft + PullButtonWidth + PullButtonGap, out _multiCostText);
 
-            // 10연 보장 안내 — 버튼이 작아져 안에 넣을 자리가 없으므로 버튼 오른쪽 빈 자리에 둔다.
+            // 10연 보장 안내 — 버튼이 작아져 안에 넣을 자리가 없으므로 버튼 묶음 위에 한 줄로 둔다.
             // 천장 텍스트와 같이 반투명 판을 깔아 배너 아트 위에서도 읽히게 한다.
             var guaranteeBackdrop = NewImage("GuaranteeBackdrop", banner, new Color(0f, 0f, 0f, 0.5f));
             var brt = guaranteeBackdrop.rectTransform;
             brt.anchorMin = brt.anchorMax = new Vector2(0f, 0f);
             brt.pivot = new Vector2(0f, 0f);
-            brt.anchoredPosition = new Vector2(multiX + PullButtonWidth + 16f,
-                BannerPadding + (PullButtonHeight - PityTextHeight) * 0.5f);
-            brt.sizeDelta = new Vector2(320f, PityTextHeight);
+            brt.anchoredPosition = new Vector2(InfoColumnLeft, GuaranteeTextBottom);
+            brt.sizeDelta = new Vector2(GuaranteeTextWidth, InfoTextHeight);
             guaranteeBackdrop.raycastTarget = false;
 
             _multiGuaranteeText = NewText("GuaranteeText", brt, string.Empty, 22, TextAnchor.MiddleLeft);
@@ -429,20 +475,20 @@ namespace TaskbarHero.Client.UI.Gacha
             grt.offsetMin = new Vector2(12f, 0f);
             grt.offsetMax = new Vector2(-12f, 0f);
 
-            BuildPityText(banner, multiX);
+            BuildPityText(banner);
         }
 
         /// <summary>
-        /// 10연 버튼 위에 얹는 천장 잔여 횟수 한 줄(게이지 없음). 아트 위 글자라 반투명 판을 깔아 가독성을 확보한다.
+        /// 보장 안내 줄 위에 얹는 천장 잔여 횟수 한 줄(게이지 없음). 아트 위 글자라 반투명 판을 깔아 가독성을 확보한다.
         /// </summary>
-        private void BuildPityText(RectTransform banner, float multiX)
+        private void BuildPityText(RectTransform banner)
         {
             var backdrop = NewImage("PityBackdrop", banner, new Color(0f, 0f, 0f, 0.5f));
             var rt = backdrop.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 0f);
             rt.pivot = new Vector2(0f, 0f);
-            rt.anchoredPosition = new Vector2(multiX, BannerPadding + PullButtonHeight + PityTextGap);
-            rt.sizeDelta = new Vector2(PullButtonWidth + 200f, PityTextHeight);
+            rt.anchoredPosition = new Vector2(InfoColumnLeft, PityTextBottom);
+            rt.sizeDelta = new Vector2(PityTextWidth, InfoTextHeight);
             backdrop.raycastTarget = false;
 
             _pityText = NewText("PityText", rt, string.Empty, 24, TextAnchor.MiddleLeft);
@@ -466,7 +512,7 @@ namespace TaskbarHero.Client.UI.Gacha
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 0f); // 배너 좌측 하단 기준
             rt.pivot = new Vector2(0f, 0f);
-            rt.anchoredPosition = new Vector2(left, BannerPadding);
+            rt.anchoredPosition = new Vector2(left, PullButtonBottom);
             rt.sizeDelta = new Vector2(PullButtonWidth, PullButtonHeight);
 
             var t = NewText("Label", rt, label, 28, TextAnchor.MiddleCenter);
@@ -490,7 +536,7 @@ namespace TaskbarHero.Client.UI.Gacha
             return img.gameObject.AddComponent<Button>();
         }
 
-        /// <summary>창 <b>우측 상단</b>(닫기 버튼 왼쪽)의 '확률 보기' 버튼(확률 공시 팝업 토글).</summary>
+        /// <summary>배너 <b>우측</b>에 얹는 '확률 보기' 버튼(확률 공시 팝업 토글). 위치는 창 우측 상단 기준으로 잡는다.</summary>
         private void BuildChanceToggle(RectTransform root)
         {
             var img = NewImage("ChanceButton", root, new Color(0.20f, 0.24f, 0.38f, 0.96f));
@@ -512,7 +558,8 @@ namespace TaskbarHero.Client.UI.Gacha
         /// <summary>
         /// 등급 확률 공시 팝업(기본 숨김 — '확률 보기'를 눌렀을 때만 보인다).
         /// 값은 <b>번들 마스터</b>에서 읽으므로 서버 조회가 없다(기획서 §2 확률 공시).
-        /// 우측 상단 '확률 보기' 버튼 <b>바로 아래</b>로 펼쳐지므로 좌측 하단 뽑기 버튼을 가리지 않는다.
+        /// 창 <b>우측 상단</b>에 뜨므로 우측 하단 뽑기 버튼을 가리지 않는다('확률 보기' 버튼은 배너 우측에 있어
+        /// 그 아래로 펼치면 창을 넘어가므로 버튼 위치와 독립적으로 배치한다).
         /// </summary>
         private void BuildChancePopup(RectTransform root)
         {
@@ -521,8 +568,7 @@ namespace TaskbarHero.Client.UI.Gacha
             var rt = popup.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f); // 창 우측 상단 기준
             rt.pivot = new Vector2(1f, 1f);
-            rt.anchoredPosition = new Vector2(-Inset,
-                -(ChanceButtonTop + ChanceButtonHeight + ChancePopupGap));
+            rt.anchoredPosition = new Vector2(-Inset, -ChancePopupTop);
             rt.sizeDelta = new Vector2(ChancePopupWidth, ChancePopupHeight);
             _chancePopup = popup.gameObject;
 
@@ -582,8 +628,8 @@ namespace TaskbarHero.Client.UI.Gacha
             var lbrt = listBg.rectTransform;
             lbrt.anchorMin = new Vector2(0f, 0f);
             lbrt.anchorMax = new Vector2(1f, 1f);
-            lbrt.offsetMin = new Vector2(Inset, 190f);
-            lbrt.offsetMax = new Vector2(-Inset, -ContentTop);
+            lbrt.offsetMin = new Vector2(HistoryListSideInset, 190f);
+            lbrt.offsetMax = new Vector2(-HistoryListSideInset, -ContentTop);
             listBg.gameObject.AddComponent<RectMask2D>();
 
             var contentGo = new GameObject("Content", typeof(RectTransform));
@@ -628,20 +674,6 @@ namespace TaskbarHero.Client.UI.Gacha
             _historyRoot.SetActive(false);
         }
 
-        /// <summary>하단 공용 안내/오류 메시지.</summary>
-        private void BuildMessage(RectTransform panel)
-        {
-            // 하단 줄에서 '뽑기 기록' 버튼 오른쪽 공간을 쓴다(버튼과 겹치지 않게 왼쪽 여백을 더 준다).
-            _messageText = NewText("Message", panel, string.Empty, 24, TextAnchor.MiddleLeft);
-            _messageText.color = new Color(1f, 0.72f, 0.42f);
-            _messageText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            var mrt = _messageText.rectTransform;
-            mrt.anchorMin = mrt.anchorMax = new Vector2(0f, 1f);
-            mrt.pivot = new Vector2(0f, 1f);
-            mrt.anchoredPosition = new Vector2(Inset + 240f, -BottomRowTop);
-            mrt.sizeDelta = new Vector2(PanelWidth - Inset * 2f - 250f, BottomRowHeight);
-        }
-
         /// <summary>결과 연출 오버레이 자식을 확보한다(패널 캔버스 안에서 정렬만 위로 덮어쓴다).</summary>
         private void EnsureResultOverlay()
         {
@@ -657,7 +689,6 @@ namespace TaskbarHero.Client.UI.Gacha
         /// <summary>구워진 고정 버튼의 리스너를 실행 시점에 다시 연결한다(비영구 리스너는 프리팹에 저장되지 않는다).</summary>
         private void WireRuntime()
         {
-            Rewire(_closeButton, Close);
             Rewire(_dimButton, Close);
             Rewire(_singleButton, OnSinglePull);
             Rewire(_multiButton, OnMultiPull);
@@ -694,7 +725,7 @@ namespace TaskbarHero.Client.UI.Gacha
         {
             if (NetworkManager.Instance == null || !Session.IsLoggedIn)
             {
-                SetMessage("로그인이 필요합니다.");
+                ShowNotice("로그인 필요", "로그인이 필요합니다.");
                 return;
             }
             var req = new AuthRequest { userId = Session.UserId, token = Session.Token };
@@ -707,7 +738,7 @@ namespace TaskbarHero.Client.UI.Gacha
             }, error =>
             {
                 Debug.LogWarning($"[Gacha] 배너 조회 실패: {error}");
-                SetMessage(ErrorMessages.ToKorean(error));
+                ShowNotice("뽑기 목록", ErrorMessages.ToKorean(error));
             });
         }
 
@@ -834,7 +865,6 @@ namespace TaskbarHero.Client.UI.Gacha
                 return;
             }
             _selectedCode = gachaCode;
-            SetMessage(string.Empty);
             SoundManager.Sfx(SoundId.UiTab); // 배너 전환(사운드 정의서 §8 공용음 매핑)
             RebuildTabs();
             RefreshSelectedBanner();
@@ -848,7 +878,9 @@ namespace TaskbarHero.Client.UI.Gacha
 
             if (_bannerImage != null)
             {
-                var sprite = art != null ? art.banner : null;
+                var frames = art != null ? art.bannerFrames : null;
+                bool animated = ApplyBannerFrames(frames, art != null ? art.bannerFps : 0f);
+                var sprite = animated ? frames[0] : (art != null ? art.banner : null);
                 if (sprite != null)
                 {
                     ApplySimple(_bannerImage, sprite);
@@ -881,9 +913,46 @@ namespace TaskbarHero.Client.UI.Gacha
             }
 
             RefreshCostUi(gacha);
+            RefreshPickupUi(gacha);
             RebuildChanceRows(gacha);
             UpdatePeriodUi();
             UpdatePityUi();
+        }
+
+        /// <summary>
+        /// 배너를 <b>움직이는 배경</b>으로 재생한다(프레임 시퀀스). 프레임이 1장 이상이면
+        /// <see cref="SpriteSequenceAnimator"/>를 배너 이미지에 붙여 반복 재생하고 true를 돌려준다.
+        /// 프레임이 없으면 재생을 끄고 false를 돌려준다(호출측이 정적 이미지로 그린다).
+        /// <para>원본은 GIF지만 <b>Unity는 GIF를 첫 프레임짜리 정지 텍스처로만 임포트</b>하므로, GIF에서 뽑아 둔
+        /// 프레임(<c>BannerFrames_&lt;code&gt;</c>)을 돌려 같은 움직임을 만든다. 배너를 갈아탈 때마다 프레임 배열이
+        /// 바뀌므로 <see cref="SpriteSequenceAnimator.Configure"/> 후 <see cref="SpriteSequenceAnimator.Play"/>로
+        /// 처음부터 다시 재생한다.</para>
+        /// </summary>
+        private bool ApplyBannerFrames(Sprite[] frames, float fps)
+        {
+            bool animated = frames != null && frames.Length > 0 && frames[0] != null;
+            if (!animated)
+            {
+                if (_bannerAnimator != null)
+                {
+                    // 컴포넌트를 끄면 Update가 돌지 않아 재생이 멈춘다(정적 배너가 덮어써지지 않게).
+                    _bannerAnimator.enabled = false;
+                }
+                return false;
+            }
+
+            if (_bannerAnimator == null)
+            {
+                _bannerAnimator = _bannerImage.GetComponent<SpriteSequenceAnimator>();
+                if (_bannerAnimator == null)
+                {
+                    _bannerAnimator = _bannerImage.gameObject.AddComponent<SpriteSequenceAnimator>();
+                }
+            }
+            _bannerAnimator.enabled = true;
+            _bannerAnimator.Configure(frames, fps > 0f ? fps : DefaultBannerFps, true);
+            _bannerAnimator.Play();
+            return true;
         }
 
         /// <summary>1연·10연 비용과 10연 보장 안내를 번들 마스터 값으로 표시한다.</summary>
@@ -906,6 +975,56 @@ namespace TaskbarHero.Client.UI.Gacha
                         ? $"{gacha.multiCount}회 · {GradeName(gacha.multiGuaranteedGrade)} 이상 1개 보장"
                         : $"{gacha.multiCount}회 연속 뽑기";
             }
+        }
+
+        /// <summary>
+        /// 천장 픽업 상자를 갱신한다 — 픽업 아이템이 있는 배너에서만 켜고, 슬롯·이름·확정 횟수를 채운다.
+        /// 확정 횟수는 <b>번들 마스터의 하드 천장</b>(<c>pityType 2</c>) 값이고, 이름·등급은 <c>item_master</c>에서 읽는다.
+        /// </summary>
+        private void RefreshPickupUi(TaskbarHero.Common.MasterData.GachaMaster gacha)
+        {
+            int itemCode = gacha != null ? gacha.pickupItemCode : 0;
+            if (_pickupBox != null)
+            {
+                _pickupBox.SetActive(itemCode != 0);
+            }
+            if (itemCode == 0)
+            {
+                return; // 상시 배너 — 전설이 무작위라 '확정 아이템'을 보여 줄 수 없다
+            }
+
+            EnsurePickupSlot();
+            if (_pickupSlot != null)
+            {
+                // 수량 표기는 끄고(1개짜리 확정 보상) hover 상세 팝업은 켠다.
+                _pickupSlot.Setup(itemCode, 1, string.Empty, true);
+            }
+
+            MasterDataManager.EnsureLoaded();
+            var db = MasterDataManager.Db;
+            int threshold = db != null ? db.GachaPityThreshold(gacha.gachaCode, PityGrade, HardPityType) : 0;
+            if (_pickupCaption != null)
+            {
+                _pickupCaption.text = threshold > 0 ? $"천장 {threshold}회 확정" : "천장 확정";
+            }
+            if (_pickupName != null)
+            {
+                _pickupName.text = ItemName(itemCode);
+                int grade = db != null && db.Items.TryGetValue(itemCode, out var def) && def != null ? def.grade : 0;
+                _pickupName.color = grade > 0 ? GradeColors.Name(grade) : new Color(1f, 0.94f, 0.76f);
+            }
+        }
+
+        /// <summary>천장 픽업 칸의 공용 슬롯 인스턴스를 한 번만 만든다(프리팹 미배선 시 칸 없이 텍스트만 남는다).</summary>
+        private void EnsurePickupSlot()
+        {
+            if (_pickupSlot != null || _itemSlotPrefab == null || _pickupSlotRoot == null)
+            {
+                return;
+            }
+            var go = Instantiate(_itemSlotPrefab, _pickupSlotRoot);
+            Stretch((RectTransform)go.transform);
+            _pickupSlot = go.GetComponent<ItemSlotView>();
         }
 
         /// <summary>등급 확률 공시 줄(높은 등급부터)을 다시 만든다. 값은 번들 마스터이므로 서버 조회가 없다.</summary>
@@ -1061,7 +1180,7 @@ namespace TaskbarHero.Client.UI.Gacha
             }
             if (NetworkManager.Instance == null || !Session.IsLoggedIn)
             {
-                SetMessage("로그인이 필요합니다.");
+                ShowNotice("로그인 필요", "로그인이 필요합니다.");
                 return;
             }
 
@@ -1070,7 +1189,7 @@ namespace TaskbarHero.Client.UI.Gacha
             if (cost > 0 && CurrentGold() < cost)
             {
                 SoundManager.Sfx(SoundId.UiError); // 골드 부족(§8)
-                SetMessage($"골드가 부족합니다. (필요 {cost:N0} G)");
+                ShowNotice("골드 부족", $"골드가 부족합니다.\n필요 골드: {GoldFormat.Highlight(cost)}");
                 return;
             }
 
@@ -1088,7 +1207,8 @@ namespace TaskbarHero.Client.UI.Gacha
                         () => SendPull(pullType, cost));
                     return;
                 }
-                SetMessage(warn);
+                // 모달이 없는 개발 씬에서는 막지 않고 진행한다(최종 판정은 서버의 InventoryFull).
+                Debug.LogWarning($"[Gacha] {warn}");
             }
 
             SendPull(pullType, cost);
@@ -1103,7 +1223,6 @@ namespace TaskbarHero.Client.UI.Gacha
             }
             _busy = true;
             SetButtonsInteractable(false);
-            SetMessage(string.Empty);
 
             var req = new GachaPullRequest
             {
@@ -1118,7 +1237,7 @@ namespace TaskbarHero.Client.UI.Gacha
                 var data = resp != null ? resp.data : null;
                 if (data == null)
                 {
-                    SetMessage("뽑기 결과를 받지 못했습니다.");
+                    ShowNotice("뽑기 실패", "뽑기 결과를 받지 못했습니다.");
                     return;
                 }
                 Debug.Log($"[Gacha] 뽑기 완료 gacha={data.gachaCode} type={data.pullType} " +
@@ -1153,14 +1272,14 @@ namespace TaskbarHero.Client.UI.Gacha
             switch (error.ErrorCode)
             {
                 case ErrorCode.GachaNotAvailable:
-                    SetMessage("이 배너는 지금 뽑을 수 없습니다. 목록을 갱신합니다.");
+                    ShowNotice("뽑기 종료", "이 배너는 지금 뽑을 수 없습니다.\n목록을 갱신합니다.");
                     RequestBanners();
                     return;
                 case ErrorCode.GachaNotFound:
-                    SetMessage("서버에 없는 뽑기입니다. 클라이언트를 갱신해 주세요.");
+                    ShowNotice("뽑기 실패", "서버에 없는 뽑기입니다.\n클라이언트를 갱신해 주세요.");
                     return;
                 default:
-                    SetMessage(ErrorMessages.ToKorean(error));
+                    ShowNotice("뽑기 실패", ErrorMessages.ToKorean(error));
                     return;
             }
         }
@@ -1232,7 +1351,6 @@ namespace TaskbarHero.Client.UI.Gacha
             if (_historyRoot != null) _historyRoot.SetActive(true);
             if (_tabRow != null) _tabRow.gameObject.SetActive(false);
             HideChancePopup(); // 확률 팝업이 열려 있었으면 닫고 버튼 라벨도 되돌린다
-            SetMessage(string.Empty);
             SoundManager.Sfx(SoundId.UiPanelOpen); // 기록 화면 표시(§8)
 
             ClearHistoryRows();
@@ -1256,7 +1374,7 @@ namespace TaskbarHero.Client.UI.Gacha
         {
             if (NetworkManager.Instance == null || !Session.IsLoggedIn)
             {
-                SetMessage("로그인이 필요합니다.");
+                ShowNotice("로그인 필요", "로그인이 필요합니다.");
                 return;
             }
             var req = new GachaHistoryRequest
@@ -1275,7 +1393,7 @@ namespace TaskbarHero.Client.UI.Gacha
             }, error =>
             {
                 Debug.LogWarning($"[Gacha] 기록 조회 실패: {error}");
-                SetMessage(ErrorMessages.ToKorean(error));
+                ShowNotice("뽑기 기록", ErrorMessages.ToKorean(error));
             });
         }
 
@@ -1329,7 +1447,7 @@ namespace TaskbarHero.Client.UI.Gacha
 
             var itemsText = NewText("Items", rt, HistoryItemsSummary(pull.items), 22, TextAnchor.MiddleLeft);
             itemsText.color = new Color(0.86f, 0.90f, 1f, 0.95f);
-            PlaceTopLeft(itemsText.rectTransform, 18f, PanelWidth - Inset * 2f - 60f, 34f, 52f);
+            PlaceTopLeft(itemsText.rectTransform, 18f, HistoryRowTextWidth, 34f, 52f);
 
             return rowImg.gameObject;
         }
@@ -1379,6 +1497,8 @@ namespace TaskbarHero.Client.UI.Gacha
             if (_historyButton != null) _historyButton.gameObject.SetActive(visible);
             // '확률 보기'는 창 우측 상단(배너 밖)이라 따로 감춘다 — 배너가 없으면 보여 줄 확률도 없다.
             if (_chanceButton != null) _chanceButton.gameObject.SetActive(visible);
+            // 천장 픽업 상자도 배너 밖이다. 켜는 판단은 RefreshPickupUi가 하므로 여기서는 끄기만 한다.
+            if (!visible && _pickupBox != null) _pickupBox.SetActive(false);
             if (!visible)
             {
                 HideChancePopup();
@@ -1392,12 +1512,18 @@ namespace TaskbarHero.Client.UI.Gacha
             if (_multiButton != null) _multiButton.interactable = interactable;
         }
 
-        private void SetMessage(string message)
+        /// <summary>
+        /// 안내·오류를 <b>공용 모달</b>(<see cref="ModalManager"/>)로 알린다. 패널 안 메시지 줄을 없앴으므로
+        /// 뽑기 관련 모든 알림이 이 경로를 쓴다. 모달 매니저가 없는 개발 씬에서는 로그로만 남기고 흐름을 막지 않는다.
+        /// </summary>
+        private static void ShowNotice(string title, string message)
         {
-            if (_messageText != null)
+            if (ModalManager.Instance != null)
             {
-                _messageText.text = message ?? string.Empty;
+                ModalManager.Instance.ShowConfirm(title, message);
+                return;
             }
+            Debug.LogWarning($"[Gacha] {title}: {message}");
         }
 
         /// <summary>보유 골드량과 골드 아이콘(item_1)을 세션 재화에서 갱신한다.</summary>
