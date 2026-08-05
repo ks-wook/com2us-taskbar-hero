@@ -12,7 +12,8 @@ namespace TaskbarHero.Client.UI.Gacha
     /// 뽑기 결과 연출 오버레이(가챠 기획서 §5.2 응답의 <c>results</c>를 재생만 한다 — 추첨은 전부 서버가 확정하고
     /// 클라이언트는 결과를 받아 보여줄 뿐이다).
     /// <para>순서 — ① 결과 중 <b>최고 등급</b>에 해당하는 연출 영상(<c>Assets/Art/UI/Gacha/{3,4,5}성연출.mp4</c>)을
-    /// 재생하고(3등급 미만이면 생략) ② 별빛 배경(<c>gacha_result_bg</c>) 위에 결과 칸을 왼쪽부터 하나씩 띄운다.
+    /// 재생하고(3등급 미만이면 생략) ② 별빛 배경(<c>gacha_result_bg</c>, 위에 9-slice 액자 테두리
+    /// <c>window_frame_hollow</c>를 얹는다) 위에 결과 칸을 <b>스케일 0에서 원래 크기로</b> 왼쪽부터 하나씩 띄운다.
     /// 아무 곳이나 누르면 영상을 건너뛰고 결과로 넘어간다(연출은 매 뽑기마다 반복되므로 스킵이 필수다).</para>
     /// <para>결과 칸은 공용 아이템 슬롯 프리팹(<c>ItemSlot</c>)을 써서 아이콘·수량·hover 상세를 그대로 재사용하고,
     /// 프레임만 가챠 전용 아트(<c>gacha_result_slot</c>)로 교체한다. 천장(<c>isPity</c>)·10연 보장
@@ -32,10 +33,14 @@ namespace TaskbarHero.Client.UI.Gacha
         private const float BackgroundWidth = 940f;
         private const float BackgroundHeight = 730f;
 
+        // 창 테두리(액자). 배경 아트가 테두리 없는 그림이라 경계가 그냥 잘려 보이므로 9-slice 프레임을 얹는다.
+        private const float FrameThickness = 40f;  // 낮출수록 테두리가 얇아진다(pixelsPerUnitMultiplier로 환산)
+        private const float FrameOutset = 10f;     // 배경 rect보다 이만큼 밖으로 키워 배경을 개구부에 꽉 채운다
+
         // 결과 칸이 하나씩 등장하는 연출.
         private const float RevealStagger = 0.07f;   // 칸 사이 시차
         private const float RevealPopSeconds = 0.16f; // 한 칸이 커지는 시간
-        private const float RevealStartScale = 0.4f;
+        private const float RevealStartScale = 0f;   // 아예 안 보이는 상태에서 원래 크기까지 커진다
         private const float VideoStartTimeout = 1.5f; // 재생이 시작되지 않으면 연출을 건너뛴다
 
         // 4·5등급 칸 뒤에서 도는 글로우(원본 800×800 방사형). 칸보다 크게 깔아 빛이 밖으로 번지게 한다.
@@ -47,6 +52,9 @@ namespace TaskbarHero.Client.UI.Gacha
         [SerializeField] private Sprite _resultBackground;
         [Tooltip("결과 칸 프레임(Assets/Art/UI/Gacha/gacha_result_slot.png).")]
         [SerializeField] private Sprite _slotFrame;
+        [Tooltip("결과 창 테두리(Assets/Art/UI/Trade/01_Frames_Panels/window_frame_hollow.png, 9-slice). " +
+                 "가운데가 비어 있어 별빛 배경 위에 액자처럼 얹힌다. 없으면 테두리 없이 배경만 보인다(기존 동작).")]
+        [SerializeField] private Sprite _windowFrame;
         [Tooltip("확인 버튼 배경(Assets/Art/UI/pixel_rpg_button.png, 9-slice).")]
         [SerializeField] private Sprite _buttonSprite;
         [Tooltip("공용 아이템 슬롯 프리팹(Assets/Prefabs/UI/ItemSlot).")]
@@ -176,6 +184,9 @@ namespace TaskbarHero.Client.UI.Gacha
             brt.sizeDelta = new Vector2(BackgroundWidth, BackgroundHeight);
             bg.raycastTarget = false; // 배경을 눌러도 딤(스킵)이 받는다
 
+            // 테두리(액자) — 배경 다음 형제로 만들어 배경 위, 확인 버튼 아래에 그려진다.
+            BuildWindowFrame(root, brt);
+
             _titleText = NewText("Title", brt, "뽑기 결과", 46, TextAnchor.MiddleCenter);
             _titleText.fontStyle = FontStyle.Bold;
             _titleText.color = new Color(1f, 0.94f, 0.72f);
@@ -205,6 +216,37 @@ namespace TaskbarHero.Client.UI.Gacha
             _confirmButton = confirm.gameObject.AddComponent<Button>();
 
             _resultRoot.SetActive(false);
+        }
+
+        /// <summary>
+        /// 결과 창 테두리(액자)를 배경 위에 얹는다. 별빛 배경 아트에 테두리가 없어 창 경계가 화면에서 그냥
+        /// 잘려 보이므로, <b>가운데가 빈 9-slice 프레임</b>으로 경계를 만든다(<see cref="StagePanelController"/>의
+        /// 지역 창과 같은 아트·같은 방식이라 화면 톤이 일관된다).
+        /// <para>가운데는 그리지 않고(<c>fillCenter = false</c>) 클릭도 받지 않는 순수 장식이며, 배경 rect보다
+        /// <see cref="FrameOutset"/>만큼 크게 잡아 배경이 액자 개구부에 꽉 차 보이게 한다. 두께가
+        /// <see cref="FrameThickness"/>가 되도록 <c>pixelsPerUnitMultiplier</c>를 계산한다(낮출수록 두꺼워진다).</para>
+        /// 아트가 배선되지 않았으면 아무것도 만들지 않는다(테두리 없이 배경만 = 기존 동작).
+        /// </summary>
+        private void BuildWindowFrame(RectTransform parent, RectTransform backgroundRect)
+        {
+            if (_windowFrame == null)
+            {
+                return;
+            }
+
+            var frame = NewImage("WindowFrame", parent, Color.white);
+            frame.sprite = _windowFrame;
+            frame.type = Image.Type.Sliced;
+            frame.fillCenter = false;   // 배경·제목·결과 칸을 덮지 않는다
+            float srcBorder = Mathf.Max(_windowFrame.border.x, 1f); // 원본 9-slice 경계(20px)
+            frame.pixelsPerUnitMultiplier = srcBorder / FrameThickness;
+            frame.raycastTarget = false; // 클릭은 딤(스킵)·확인 버튼이 받는다
+
+            var rt = frame.rectTransform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = backgroundRect.anchoredPosition;
+            rt.sizeDelta = backgroundRect.sizeDelta + new Vector2(FrameOutset * 2f, FrameOutset * 2f);
         }
 
         /// <summary>버튼 리스너를 실행 시점에 다시 연결한다(프리팹에 직렬화되지 않는 비영구 리스너).</summary>
@@ -468,6 +510,9 @@ namespace TaskbarHero.Client.UI.Gacha
             cell.pivot = new Vector2(0.5f, 0.5f);
             cell.anchoredPosition = pos;
             cell.sizeDelta = new Vector2(SlotSize, SlotSize + BadgeHeight);
+            // 만드는 즉시 감춘다 — 등장 연출(RevealSlots)이 스케일 0에서 키우므로, 한 프레임이라도
+            // 원래 크기로 보였다 사라지면 깜빡임이 된다. 연출이 끝나면 전부 원래 크기로 복원된다.
+            cell.localScale = Vector3.zero;
 
             // 글로우를 먼저 만들어(첫 자식 = 가장 뒤) 아이템 칸 뒤에서 빛이 돌게 한다.
             BuildGlow(cell, result.grade);

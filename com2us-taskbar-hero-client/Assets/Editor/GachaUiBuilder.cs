@@ -37,6 +37,8 @@ namespace TaskbarHero.ClientEditor
         private const string BoxBgPath = "Assets/Art/UI/ui_bg.png";
         private const string DetailBgPath = "Assets/Art/UI/item_detail_bg.png";
         private const string ButtonPath = "Assets/Art/UI/pixel_rpg_button.png";
+        // 결과 창 테두리(액자) — 스테이지 지역 창과 같은 아트를 써서 화면 톤을 맞춘다.
+        private const string WindowFramePath = "Assets/Art/UI/Trade/01_Frames_Panels/window_frame_hollow.png";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
 
@@ -71,6 +73,7 @@ namespace TaskbarHero.ClientEditor
             var oso = new SerializedObject(overlay);
             oso.FindProperty("_resultBackground").objectReferenceValue = LoadSprite($"{ArtDir}/gacha_result_bg.png");
             oso.FindProperty("_slotFrame").objectReferenceValue = LoadSprite($"{ArtDir}/gacha_result_slot.png");
+            oso.FindProperty("_windowFrame").objectReferenceValue = LoadSprite(WindowFramePath);
             oso.FindProperty("_buttonSprite").objectReferenceValue = LoadSprite(ButtonPath);
             oso.FindProperty("_itemSlotPrefab").objectReferenceValue =
                 AssetDatabase.LoadAssetAtPath<GameObject>(ItemSlotPrefabPath);

@@ -96,6 +96,42 @@ namespace TaskbarHero.Client.Managers
             ResetClaimedOverlay();
         }
 
+        /// <summary>마스터 데이터에 없는 재화(경험치 등)를 <b>스프라이트를 직접 지정해</b> 아이템과 동일한
+        /// 아이콘 모드로 구성한다(아이템 코드로는 아이콘을 찾을 수 없는 항목용). 등급 배경은 일반 등급 톤,
+        /// 수량/획득량은 아이템과 같은 자리(슬롯 안쪽 우하단)에 표시하며 hover 상세 팝업은 제공하지 않는다.</summary>
+        public void SetupSprite(Sprite icon, string quantityText)
+        {
+            _itemCode = 0;
+            _quantity = 0;
+            _showDetail = false;
+
+            if (_gradeBackground != null)
+            {
+                _gradeBackground.color = GradeColors.RewardSlotBackground(1);
+            }
+            if (_iconImage != null)
+            {
+                _iconImage.enabled = icon != null;
+                _iconImage.sprite = icon;
+                _iconImage.color = Color.white;
+            }
+            if (_iconLabelText != null)
+            {
+                _iconLabelText.gameObject.SetActive(false); // 아이콘 모드에서는 텍스트 라벨 숨김
+            }
+            if (_quantityText != null)
+            {
+                _quantityText.text = quantityText ?? string.Empty;
+                _quantityText.gameObject.SetActive(!string.IsNullOrEmpty(quantityText));
+            }
+            if (_frameImage != null)
+            {
+                _frameImage.raycastTarget = false;
+            }
+
+            ResetClaimedOverlay();
+        }
+
         /// <summary>아이템 아이콘이 없는 보상(경험치 등)을 위한 구성. 아이콘 대신 텍스트 라벨을 슬롯 중앙에
         /// 표시하고, 수량은 일반 아이템과 동일하게 슬롯 안쪽(우하단)에 표시해 외형을 통일한다.
         /// 마스터 데이터가 없는 보상이라 hover 상세 팝업은 제공하지 않는다.</summary>
