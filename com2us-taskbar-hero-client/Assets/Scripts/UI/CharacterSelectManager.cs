@@ -540,6 +540,9 @@ namespace TaskbarHero.Client.UI
             lrt.offsetMax = Vector2.zero;
 
             var button = go.AddComponent<Button>();
+            // 전역 클릭음(sfx_ui_click)에서 제외한다 — 성별 전환은 이 화면 '뒤로' 버튼과 같은
+            // 소리(sfx_ui_click_back)를 SetGender에서 직접 재생한다(두 소리가 겹치지 않게).
+            UiClickSound.Suppress(button);
             button.onClick.AddListener(() => SetGender(gender));
             return button;
         }
@@ -559,13 +562,16 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>선택 성별을 바꾸고(같은 값이면 무시) 캐릭터 외형과 좌측 일러스트를 그 성별로 교체한다.</summary>
+        /// <summary>선택 성별을 바꾸고(같은 값이면 무시) 캐릭터 외형과 좌측 일러스트를 그 성별로 교체한다.
+        /// 소리는 이 화면 <b>'뒤로' 버튼과 같은 소리</b>(<see cref="SoundId.UiClickBack"/>)를 낸다 —
+        /// 같은 성별을 다시 눌러 아무것도 바뀌지 않을 때는 소리도 내지 않는다.</summary>
         private void SetGender(int gender)
         {
             if (_selected == null || _gender == gender)
             {
                 return;
             }
+            SoundManager.Sfx(SoundId.UiClickBack); // 성별 전환 = '뒤로' 버튼과 같은 소리(사운드 정의서 §4.1)
             _gender = gender;
             UpdateGenderButtons();
             UpdateIllustration();

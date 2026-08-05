@@ -51,6 +51,16 @@ namespace TaskbarHero.Client.Managers
         private static readonly Vector2 EnhanceBadgeAnchorMin = new Vector2(0.08f, 0.05f);
         private static readonly Vector2 EnhanceBadgeAnchorMax = new Vector2(0.62f, 0.45f);
 
+        // 수량 표기("xN"·"+N") 글자 크기도 <b>슬롯 높이에 비례</b>해 정한다. 프리팹에 구워진 고정 30은 큰 칸
+        // (인벤토리 118px·큐브 114px) 기준이라, <b>우편함 첨부(52px)처럼 작은 칸에서는 숫자가 칸을 뒤덮었다</b>
+        // (골드 "+50,000"은 글자 수도 많다 — 2026-08-05 축소).
+        // 0.255 = 수량 칸 높이 비율(0.30) × 그 안을 채우는 비율(0.85) → 118px 슬롯에서 30(기존과 동일).
+        // 상한을 프리팹 기본값(30)으로 둬서 <b>큰 칸은 지금 크기를 그대로 유지</b>하고 작은 칸만 줄어들게 한다
+        // (실측 환산: 118px→30 · 114px→29 · 72px→18 · 52px→13).
+        private const float QuantityFontHeightRatio = 0.255f;
+        private const int QuantityMinFontSize = 10;
+        private const int QuantityMaxFontSize = 30;
+
         // 획득 연출: 체크 표시가 슬롯 밖으로 크게 부풀었다가 원래 크기로 잦아든다.
         private const float ClaimedPopExpandScale = 3f;   // 최대 크기(원래 크기 배수)
         private const float ClaimedPopDuration = 0.45f;   // 연출 전체 길이
@@ -114,6 +124,7 @@ namespace TaskbarHero.Client.Managers
             {
                 _quantityText.text = quantityText ?? string.Empty;
                 _quantityText.gameObject.SetActive(!string.IsNullOrEmpty(quantityText));
+                ApplyQuantityFontSize(); // 칸 크기에 맞춘 글자 크기(작은 칸에서 숫자가 칸을 덮지 않게)
             }
 
             if (_frameImage != null)
@@ -153,6 +164,7 @@ namespace TaskbarHero.Client.Managers
             {
                 _quantityText.text = quantityText ?? string.Empty;
                 _quantityText.gameObject.SetActive(!string.IsNullOrEmpty(quantityText));
+                ApplyQuantityFontSize(); // 칸 크기에 맞춘 글자 크기(작은 칸에서 숫자가 칸을 덮지 않게)
             }
             if (_frameImage != null)
             {
@@ -190,6 +202,7 @@ namespace TaskbarHero.Client.Managers
             {
                 _quantityText.text = quantityText ?? string.Empty;
                 _quantityText.gameObject.SetActive(!string.IsNullOrEmpty(quantityText));
+                ApplyQuantityFontSize(); // 칸 크기에 맞춘 글자 크기(작은 칸에서 숫자가 칸을 덮지 않게)
             }
             if (_frameImage != null)
             {
@@ -278,10 +291,33 @@ namespace TaskbarHero.Client.Managers
             _enhanceBadge.gameObject.SetActive(true);
         }
 
-        /// <summary>슬롯 크기가 바뀌면(부모 레이아웃 확정·창 크기 변경) 배지 글자 크기를 다시 맞춘다.</summary>
+        /// <summary>
+        /// 수량 표기 글자 크기를 <b>슬롯 높이에 비례한 값</b>으로 넣는다(상한 = 프리팹 기본값).
+        /// 레이아웃 전(높이가 아직 없을 때)에는 건드리지 않는다 — 배지와 달리 <b>숨기지는 않는다</b>
+        /// (수량은 잠깐 원래 크기로 보이는 게 사라지는 것보다 낫다). 크기가 정해지면
+        /// <see cref="OnRectTransformDimensionsChange"/>가 다시 불러 제 크기로 맞춘다.
+        /// </summary>
+        private void ApplyQuantityFontSize()
+        {
+            if (_quantityText == null)
+            {
+                return;
+            }
+            float slotHeight = ((RectTransform)transform).rect.height;
+            if (slotHeight < EnhanceBadgeMinSlotHeight)
+            {
+                return;
+            }
+            _quantityText.fontSize = Mathf.Clamp(
+                Mathf.RoundToInt(slotHeight * QuantityFontHeightRatio),
+                QuantityMinFontSize, QuantityMaxFontSize);
+        }
+
+        /// <summary>슬롯 크기가 바뀌면(부모 레이아웃 확정·창 크기 변경) 배지·수량 글자 크기를 다시 맞춘다.</summary>
         private void OnRectTransformDimensionsChange()
         {
             ApplyEnhanceBadgeFontSize();
+            ApplyQuantityFontSize();
         }
 
         /// <summary>
