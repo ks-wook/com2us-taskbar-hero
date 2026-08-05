@@ -98,6 +98,8 @@ MonoBehaviour:
     sprite: {fileID: 7435142055103295724, guid: 316c4682edfa12b45b8af5179f10e8e8, type: 3}
   - code: 31332
     sprite: {fileID: 1952418284974489467, guid: 5ce69a8ded6fa3a43b6c5edb568e2228, type: 3}
+  - code: 31333
+    sprite: {fileID: 216389956345209556, guid: 81cb4782e41d7314caa3510444a13502, type: 3}
   - code: 31341
     sprite: {fileID: 6653486171695102003, guid: d0872469f7e46d3409c4c0ddc1050e4c, type: 3}
   - code: 31342
@@ -237,4 +239,5 @@ MonoBehaviour:
   itemSlotFrame: {fileID: 4400792897899385541, guid: af6d81aa4e4a1b9449abaa9ebafa5d1b, type: 3}
   itemSlotPrefab: {fileID: 5356247894179942916, guid: 9fc225956eac96745b3125df87824f94, type: 3}
   buffMarkIcon: {fileID: 552914801244961826, guid: 97ebfe6c47b6c3c46a08901dcc6ee87e, type: 3}
+  expIcon: {fileID: -3018594828616864601, guid: 3139f831907b61e4096c067f685aac1a, type: 3}
   overlayPrefab: {fileID: 5183006189998545633, guid: 2a46d392c3c03b343a3998863daaa4cb, type: 3}

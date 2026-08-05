@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
@@ -13,8 +14,10 @@ namespace TaskbarHero.Client.Battle
     /// - 클리어 팡파레 이펙트(프레임 시퀀스, 슬로우모션과 무관하게 unscaled 시간으로 재생).
     ///   <b>클리어 연출에서만</b> 재생하며, 보상 획득 연출로 재활용할 때는 뒤편에 나오지 않는다.
     /// - 보상(골드·경험치·전리품 아이템 아이콘+수량) 노출. 세 종류 모두 공용 아이템 슬롯
-    ///   프리팹(ItemSlot, <see cref="ItemSlotView"/>)을 사용해 수량/획득량이 슬롯 안쪽에
-    ///   동일하게 노출되도록 통일한다(경험치는 아이콘 대신 "EXP" 라벨을 표시하는 SetupLabel 사용).
+    ///   프리팹(ItemSlot, <see cref="ItemSlotView"/>)을 사용해 <b>아이콘 + 슬롯 안쪽 수량</b>이
+    ///   동일하게 노출되도록 통일한다. 경험치는 마스터 데이터에 없는 재화라 전용 아이콘
+    ///   (<see cref="StageClearAssets.expIcon"/>)을 직접 지정하며, 그 아이콘이 배선돼 있지 않을 때만
+    ///   "EXP" 텍스트 라벨 칸으로 폴백한다.
     ///   보상 칸은 한꺼번에 나타나지 않고 <b>왼쪽 칸부터 하나씩</b> 없던 상태에서 커지며 등장한다
     ///   (<see cref="StartRewardPopIn"/>).
     /// - 화면 클릭 또는 5초 경과 시 자동으로 닫히며, 닫힐 때 게임 속도를 정상으로 복원한다.
@@ -29,33 +32,39 @@ namespace TaskbarHero.Client.Battle
         private const float FanfareFps = 24f;
 
         // 보상 칸 등장 연출: 왼쪽 칸부터 차례로, 없던 상태(스케일 0)에서 원래 크기로 커진다.
-        private const float RewardPopDuration = 0.22f;  // 칸 하나가 다 커지는 데 걸리는 시간
-        private const float RewardPopInterval = 0.11f;  // 다음 칸이 등장하기까지의 간격
+        // 간격이 짧으면 칸들이 거의 동시에 떠서 "차례대로 커진다"가 읽히지 않으므로 넉넉하게 둔다
+        // (칸 최대 7개 = 경험치·골드·전리품 5개일 때 마지막 칸이 약 1.8초에 끝나 자동 닫힘 5초 안에 들어온다).
+        private const float RewardPopDuration = 0.36f;  // 칸 하나가 다 커지는 데 걸리는 시간
+        private const float RewardPopInterval = 0.24f;  // 다음 칸이 등장하기까지의 간격
 
         // 버프 적용 표시 마크: 보상 칸(150×150) 우상단 모서리에 살짝 걸치도록 슬롯 밖으로 내민다.
         // 오프셋은 슬롯 우상단 모서리 기준(피벗이 마크 중앙) — 값을 줄일수록 마크가 왼쪽·아래,
         // 즉 슬롯 안쪽으로 붙어 슬롯과의 거리가 좁아진다.
         private const float BuffMarkSize = 56f;
 
-        // 보상 칸 종류 표시 — 오버레이가 닫힐 때 이 이름으로 "어느 HUD로 날려 보낼지"를 가른다.
+        // 보상 칸 종류 표시(계층에서 어떤 칸인지 알아보기 위한 이름 — 날아갈 아이콘/목표는 _flyRewards가 들고 있다).
         private const string ExpSlotName = "Reward_Exp";
         private const string GoldSlotName = "Reward_Gold";
         private const string ItemSlotName = "Reward_Item";
         private static readonly Color ExpTint = new Color(0.4f, 0.8f, 1f);
-        private static readonly Color GoldTint = new Color(1f, 0.85f, 0.35f);
         private const float FlyStagger = 0.07f;   // 여러 보상이 한꺼번에 날면 뭉쳐 보인다
+
+        // 골드 재화의 아이템 코드(아이콘 item_1.png). 마스터 데이터에는 없는 재화라 코드를 고정으로 쓴다.
+        private const int GoldItemCode = 1;
         private static readonly Vector2 BuffMarkOffset = new Vector2(-4f, -4f);
 
         [Tooltip("전체화면 클릭 시 닫기 처리할 투명 차단막 버튼.")]
         [SerializeField] private Button _dimButton;
         [Tooltip("클리어 팡파레 프레임 시퀀스를 그리는 이미지.")]
         [SerializeField] private Image _fanfareImage;
-        [Tooltip("상단 타이틀 텍스트. 재활용 시 호출측이 문구를 바꾼다(클리어/우편 수령 등).")]
+        [Tooltip("상단 타이틀 텍스트. 보상 획득 재활용(우편 수령 등)에서만 노출되며, 스테이지 클리어에서는 감춘다.")]
         [SerializeField] private Text _titleText;
         [Tooltip("보상 칸(공용 아이템 슬롯)이 채워지는 가로 정렬 컨테이너.")]
         [SerializeField] private RectTransform _rewardsRow;
 
-        private const string StageClearTitle = "STAGE CLEAR!";
+        // 프리팹에 구워지는 타이틀 플레이스홀더. 런타임에는 SetTitle이 항상 문구를 덮어쓰거나(보상 획득 재활용)
+        // 타이틀을 통째로 감추므로(스테이지 클리어), 이 문자열이 화면에 그대로 나오는 경로는 없다.
+        private const string TitlePlaceholder = "STAGE CLEAR!";
 
         private StageClearAssets _assets;
         private Sprite[] _frames;
@@ -67,15 +76,28 @@ namespace TaskbarHero.Client.Battle
         private bool _markBuffedRewards;
         private Action _onClosed;
 
+        /// <summary>보상 칸 하나가 HUD로 날아갈 때 쓸 정보(칸 자체 + 날려 보낼 아이콘).
+        /// 슬롯 계층을 훑어 아이콘을 짐작하면 획득 완료 표시(check)·버프마크처럼 <b>꺼져 있는 자식</b>까지
+        /// 걸리므로, 보상 칸을 만드는 시점에 종류별 아이콘을 확정해 여기 담아 둔다.</summary>
+        private struct FlyReward
+        {
+            public RectTransform slot;
+            public Sprite icon;
+        }
+
+        private readonly List<FlyReward> _flyRewards = new List<FlyReward>();
+
         /// <summary>클리어 응답 데이터로 오버레이를 생성·표시한다. onClosed는 닫힐 때(클릭/자동) 1회 호출된다.
         /// 전투 종료 슬로우모션 상태에서 열리므로 닫을 때 게임 속도를 정상으로 되돌리고, 팡파레를 재생한다.
+        /// <b>상단 타이틀 문구는 띄우지 않는다</b> — 팡파레와 보상 칸만으로 클리어를 알린다.
         /// 획득량 버프가 적용 중이면 해당 보상 칸(골드·경험치)에 버프마크를 붙인다 —
         /// 스테이지 클리어 보상만 버프 대상이므로 이 경로에서만 표시한다.</summary>
         public static void Show(StageClearData data, Action onClosed = null)
         {
             // 전투 연출 띠(기능 패널 아래) — 인벤토리·출석부 등을 열어 둔 동안 가리지 않는다.
             SoundManager.Jingle(SoundId.JingleStageClear);
-            ShowRewards(StageClearTitle, data != null ? data.rewards : null,
+            // title을 비워 넘기면 SetTitle이 타이틀을 감춘다.
+            ShowRewards(null, data != null ? data.rewards : null,
                 restoreTimeScale: true, showFanfare: true, markBuffedRewards: true,
                 UiSortingOrder.BattleResult, onClosed);
         }
@@ -141,10 +163,20 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
-        /// <summary>상단 타이틀 문구를 바꾼다(빈 값이면 프리팹에 구워진 기본 문구를 유지).</summary>
+        /// <summary>
+        /// 상단 타이틀 문구를 정한다. <b>빈 값이면 타이틀을 통째로 감춘다</b>(스테이지 클리어 경로).
+        /// 문자열만 비우는 것으로는 부족하다 — 프리팹에 문구가 구워져 있어 그대로 노출되기 때문이다.
+        /// </summary>
         private void SetTitle(string title)
         {
-            if (_titleText != null && !string.IsNullOrEmpty(title))
+            if (_titleText == null)
+            {
+                return;
+            }
+
+            bool visible = !string.IsNullOrEmpty(title);
+            _titleText.gameObject.SetActive(visible);
+            if (visible)
             {
                 _titleText.text = title;
             }
@@ -217,8 +249,9 @@ namespace TaskbarHero.Client.Battle
             _fanfareImage.raycastTarget = false;
             _fanfareImage.preserveAspect = true; // 전체 프레임을 잘림 없이 표시
 
-            // 타이틀(상단). 기본은 "STAGE CLEAR!"이며, 재활용 시 호출측이 SetTitle로 문구를 바꾼다.
-            var title = CreateText("Title", transform, font, StageClearTitle, 96, TextAnchor.MiddleCenter);
+            // 타이틀(상단). 문구는 런타임에 SetTitle이 정한다 — 보상 획득 재활용은 문구를 바꾸고,
+            // 스테이지 클리어는 타이틀을 감춘다. 여기서 굽는 값은 노출되지 않는 플레이스홀더다.
+            var title = CreateText("Title", transform, font, TitlePlaceholder, 96, TextAnchor.MiddleCenter);
             title.color = new Color(1f, 0.92f, 0.4f);
             title.fontStyle = FontStyle.Bold;
             _titleText = title;
@@ -318,7 +351,9 @@ namespace TaskbarHero.Client.Battle
             slot.localScale = Vector3.one;
         }
 
-        /// <summary>골드·경험치·전리품 아이템을 보상 행에 채운다(모두 공용 아이템 슬롯으로 통일).</summary>
+        /// <summary>골드·경험치·전리품 아이템을 보상 행에 채운다(모두 공용 아이템 슬롯으로 통일).
+        /// 칸을 만들면서 닫힐 때 HUD로 날려 보낼 정보(<see cref="FlyReward"/>)도 함께 기록한다 —
+        /// 종류별 아이콘(경험치 구슬·골드 코인·해당 아이템)을 여기서 확정한다.</summary>
         private void BuildRewards(StageRewardsDto rewards)
         {
             if (_rewardsRow == null)
@@ -327,21 +362,29 @@ namespace TaskbarHero.Client.Battle
             }
 
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            _flyRewards.Clear();
 
-            // 경험치 — 공용 슬롯(ItemSlot 프리팹)에 아이콘 대신 "EXP" 라벨을 표시해 골드·아이템과 동일하게
-            // 슬롯 안쪽(우하단)에 획득량이 노출되도록 통일한다.
+            // 경험치 — 골드·아이템과 완전히 동일한 아이콘 칸으로 통일한다. 마스터 데이터에 없는 재화라
+            // 아이템 코드로는 아이콘을 찾을 수 없어 전용 아이콘(Art/Icon/Etc/경험치.png)을 직접 지정한다.
+            // 아이콘이 배선돼 있지 않으면(에셋 미빌드) 예전처럼 "EXP" 텍스트 라벨 칸으로 폴백한다.
             if (rewards != null && rewards.exp > 0)
             {
-                var slot = CreateLabelRewardEntry(_rewardsRow, font, "EXP", ExpTint, $"+{rewards.exp:N0}");
+                var expIcon = _assets != null ? _assets.expIcon : null;
+                string expText = $"+{rewards.exp:N0}";
+                var slot = expIcon != null
+                    ? CreateSpriteRewardEntry(_rewardsRow, font, expIcon, expText)
+                    : CreateLabelRewardEntry(_rewardsRow, font, "EXP", ExpTint, expText);
                 AttachBuffMarkIfActive(slot, BuffType.ExpGain);
-                slot.name = ExpSlotName;   // 닫힐 때 어디로 날려 보낼지(편성/가방) 가르는 표시
+                slot.name = ExpSlotName;
+                AddFlyReward(slot, expIcon);
             }
             // 골드(item_1 아이콘 재사용). 마스터 데이터에 없는 재화라 hover 상세는 끈다.
             if (rewards != null && rewards.gold > 0)
             {
-                var slot = CreateRewardEntry(_rewardsRow, font, 1, rewards.gold, $"+{rewards.gold:N0}", false);
+                var slot = CreateRewardEntry(_rewardsRow, font, GoldItemCode, rewards.gold, $"+{rewards.gold:N0}", false);
                 AttachBuffMarkIfActive(slot, BuffType.GoldGain);
                 slot.name = GoldSlotName;
+                AddFlyReward(slot, GetIcon(GoldItemCode));
             }
             // 전리품 아이템 — 공용 슬롯(ItemSlot 프리팹)이 등급 배경·아이콘·수량을 표시하고 hover 시 상세 팝업을 띄운다.
             if (rewards != null && rewards.items != null)
@@ -355,8 +398,24 @@ namespace TaskbarHero.Client.Battle
                     string qty = item.quantity > 1 ? $"x{item.quantity}" : string.Empty;
                     var slot = CreateRewardEntry(_rewardsRow, font, item.itemCode, item.quantity, qty, true);
                     slot.name = ItemSlotName;
+                    AddFlyReward(slot, GetIcon(item.itemCode));
                 }
             }
+        }
+
+        /// <summary>보상 칸 하나를 "닫힐 때 HUD로 날려 보낼 대상"으로 기록한다.
+        /// 아이콘이 없으면(에셋 미빌드 등) <see cref="RewardFlyFx"/>가 기본 오브로 대체한다.</summary>
+        private void AddFlyReward(GameObject slot, Sprite icon)
+        {
+            if (slot == null)
+            {
+                return;
+            }
+            _flyRewards.Add(new FlyReward
+            {
+                slot = (RectTransform)slot.transform,
+                icon = icon,
+            });
         }
 
         /// <summary>
@@ -418,6 +477,31 @@ namespace TaskbarHero.Client.Battle
             return CreateRewardEntryFallback(parent, font, GetIcon(itemCode), qtyText,
                 itemCode == 1 ? new Color(1f, 0.85f, 0.3f) : Color.white,
                 GradeColors.RewardSlotBackground(GradeOf(itemCode)));
+        }
+
+        /// <summary>마스터 데이터에 없는 재화(경험치 등) 한 칸을 공용 아이템 슬롯 프리팹(ItemSlot)에
+        /// <b>스프라이트를 직접 지정해</b> 만든다 — 아이템 코드로 아이콘을 찾을 수 없을 뿐 외형·배치는
+        /// 아이템 칸과 완전히 동일하다(등급 배경은 일반 등급 톤, hover 상세는 없음).
+        /// 프리팹 미배선(에셋 미빌드) 시 기존 코드 구성 폴백.
+        /// 만들어진 칸을 반환한다(버프마크 등 부가 표시를 붙일 수 있도록).</summary>
+        private GameObject CreateSpriteRewardEntry(RectTransform parent, Font font, Sprite icon, string valueText)
+        {
+            var prefab = _assets != null ? _assets.itemSlotPrefab : null;
+            if (prefab != null)
+            {
+                var slotGo = Instantiate(prefab, parent);
+                var srt = (RectTransform)slotGo.transform;
+                srt.sizeDelta = new Vector2(150f, 150f);
+                var view = slotGo.GetComponent<ItemSlotView>();
+                if (view != null)
+                {
+                    view.SetupSprite(icon, valueText);
+                    return slotGo;
+                }
+                Destroy(slotGo); // 프리팹에 뷰가 없으면 폴백으로
+            }
+            return CreateRewardEntryFallback(parent, font, icon, valueText, Color.white,
+                GradeColors.RewardSlotBackground(1));
         }
 
         /// <summary>아이콘이 없는 보상(경험치 등) 한 칸을 공용 아이템 슬롯 프리팹(ItemSlot)의 라벨 모드로
@@ -602,58 +686,33 @@ namespace TaskbarHero.Client.Battle
 
         /// <summary>
         /// 보상 칸들이 있던 자리에서 <b>HUD로 날아가 들어가는</b> 연출을 시작한다(오버레이가 닫히는 순간).
-        /// 경험치는 <b>편성</b> 버튼, 골드·전리품은 <b>가방</b> 버튼으로 향한다 — 실제로 그 안에서 확인하는 값들이다.
+        /// 골드·경험치·전리품 <b>모두 가방 버튼</b>으로 향한다 — 획득물이 한곳으로 모이는 것으로 읽히게 통일한다.
         /// <para>지급 자체는 이미 서버 응답(<c>stage/clear</c>)으로 반영돼 있고, 이 연출은 <b>어디에 쌓였는지</b>를
         /// 보여 주는 역할만 한다(처치마다 지급하는 구조가 아니므로 클리어 시점에 한 번 보여 준다).</para>
         /// <para>오버레이는 이 직후 파괴되므로 위치·아이콘을 <b>여기서 값으로 캡처</b>해 넘긴다
         /// (<see cref="RewardFlyFx"/>는 독립 오브젝트라 오버레이와 함께 사라지지 않는다).</para>
         /// <para>목표는 HUD가 <see cref="RewardFlyFx.TargetProvider"/>에 등록해 둔 것을 쓴다 — 어셈블리 참조가
         /// <c>UI → Battle</c> 한 방향이라 이쪽에서 HUD를 직접 찾을 수 없다.</para>
+        /// <para>날아가는 그림은 <b>보상 종류별 아이콘 그대로</b>다 — 골드는 골드 아이콘, 전리품은 그 아이템
+        /// 아이콘, 경험치는 경험치 구슬 아이콘(<see cref="StageClearAssets.expIcon"/>). 어느 아이콘을 쓸지는
+        /// 칸을 만들 때 <see cref="_flyRewards"/>에 기록해 두므로 슬롯 계층을 훑어 짐작하지 않는다(꺼져 있는
+        /// 획득 완료 표시·버프마크가 아이콘으로 잡히던 문제를 없앤다). 색 보정 없이 원색으로 날린다.</para>
         /// </summary>
         private void FlyRewardsToHud()
         {
-            if (_rewardsRow == null || _rewardsRow.childCount == 0)
-            {
-                return;
-            }
             int flown = 0;
-            for (int i = 0; i < _rewardsRow.childCount; i++)
+            foreach (var reward in _flyRewards)
             {
-                var slot = (RectTransform)_rewardsRow.GetChild(i);
+                var slot = reward.slot;
                 if (slot == null || slot.localScale.x <= 0.01f)
                 {
                     continue; // 아직 등장 연출이 시작되지 않은 칸(빠르게 닫은 경우)은 건너뛴다
                 }
-                bool isExp = slot.name == ExpSlotName;
-                var target = RewardFlyFx.ResolveTarget(isExp); // HUD가 등록해 둔 목표(없으면 null → 연출 생략)
+                var target = RewardFlyFx.ResolveTarget(); // HUD가 등록해 둔 목표(없으면 null → 연출 생략)
                 Vector3 sp = RectTransformUtility.WorldToScreenPoint(null, slot.position);
-                RewardFlyFx.Fly(SlotIcon(slot), SlotTint(slot), new Vector2(sp.x, sp.y), target, flown * FlyStagger);
+                RewardFlyFx.Fly(reward.icon, Color.white, new Vector2(sp.x, sp.y), target, flown * FlyStagger);
                 flown++;
             }
-        }
-
-        /// <summary>보상 칸에서 날려 보낼 아이콘을 고른다(없으면 <see cref="RewardFlyFx"/>가 기본 오브를 쓴다).</summary>
-        private static Sprite SlotIcon(RectTransform slot)
-        {
-            // 슬롯 배경이 아니라 <b>안쪽 아이콘</b>을 쓴다 — 자식 중 스프라이트가 있는 마지막 Image가 아이콘이다
-            // (배경 → 등급 프레임 → 아이콘 순으로 겹쳐 있다). 경험치 칸은 아이콘이 없어 null이 된다.
-            Sprite found = null;
-            foreach (var img in slot.GetComponentsInChildren<Image>(true))
-            {
-                if (img != null && img.sprite != null && img.transform != slot)
-                {
-                    found = img.sprite;
-                }
-            }
-            return found;
-        }
-
-        /// <summary>보상 종류별 오브 색(경험치 하늘색 · 골드 금색 · 전리품은 아이콘 원색).</summary>
-        private static Color SlotTint(RectTransform slot)
-        {
-            if (slot.name == ExpSlotName) return ExpTint;
-            if (slot.name == GoldSlotName) return GoldTint;
-            return Color.white;
         }
 
         // ── UI 생성 헬퍼 ──

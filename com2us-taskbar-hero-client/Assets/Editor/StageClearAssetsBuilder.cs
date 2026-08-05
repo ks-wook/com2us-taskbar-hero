@@ -21,6 +21,7 @@ namespace TaskbarHero.ClientEditor
         private const string ItemIconDir = "Assets/Art/Icon/Item";
         private const string ItemSlotFramePath = "Assets/Art/UI/item_slot.png";
         private const string BuffMarkPath = "Assets/Art/Icon/Etc/버프마크.png";
+        private const string ExpIconPath = "Assets/Art/Icon/Etc/경험치.png";
         private const string ItemSlotPrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
         private const string OverlayPrefabPath = "Assets/Prefabs/UI/StageClearOverlay.prefab";
         private const string AssetPath = "Assets/Resources/StageClearAssets.asset";
@@ -74,6 +75,7 @@ namespace TaskbarHero.ClientEditor
             asset.itemIcons = icons.ToArray();
             asset.itemSlotFrame = LoadSprite(ItemSlotFramePath); // 보상 아이템 칸 테두리 프레임
             asset.buffMarkIcon = LoadSprite(BuffMarkPath);       // 버프로 늘어난 보상 칸에 붙는 표시 마크
+            asset.expIcon = LoadSprite(ExpIconPath);             // 경험치 보상이 HUD로 날아갈 때 쓰는 아이콘
             // 공용 아이템 슬롯 프리팹(재빌드 시 배선 유지). 아직 없으면 ItemSlotBuilder 실행 후 다시 배선된다.
             asset.itemSlotPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(ItemSlotPrefabPath);
             // 클리어 연출 오버레이 프리팹(재빌드 시 배선 유지). 아직 없으면 StageClearOverlayBuilder 실행 후 다시 배선된다.
@@ -92,7 +94,8 @@ namespace TaskbarHero.ClientEditor
 
             Debug.Log($"[StageClearAssetsBuilder] 완료: 팡파레 {frames.Count}프레임, 아이템 아이콘 {icons.Count}종, " +
                       $"슬롯 프레임 {(asset.itemSlotFrame != null ? "배선" : "없음")}, " +
-                      $"버프마크 {(asset.buffMarkIcon != null ? "배선" : "없음")} → {AssetPath}");
+                      $"버프마크 {(asset.buffMarkIcon != null ? "배선" : "없음")}, " +
+                      $"경험치 아이콘 {(asset.expIcon != null ? "배선" : "없음")} → {AssetPath}");
         }
 
         /// <summary>Multiple 스프라이트 모드 텍스처에서 첫 Sprite 서브에셋을 로드한다.</summary>

@@ -142,8 +142,7 @@ namespace TaskbarHero.Client.UI
         private RectTransform _menuToggleRect;   // 접혀 있을 때도 남는 손잡이(보상 연출 폴백 목표)
 
         // 보상 획득 연출이 날아갈 칸 번호(위 CreateMenuButton 호출 순서와 같아야 한다).
-        private const int InventorySlot = 1;     // 가방 — 골드·전리품이 들어가는 곳
-        private const int PartySlot = 3;         // 편성 — 경험치를 받는 캐릭터들이 있는 곳
+        private const int InventorySlot = 1;     // 가방 — 모든 획득 보상(골드·경험치·전리품)이 들어가는 곳
         private Text _menuToggleLabel;           // 토글 버튼의 화살표 폴백(아이콘이 없을 때만 생성)
         private Sprite _menuToggleSprite;        // 메뉴 아이콘 텍스처로 런타임에 만든 스프라이트(OnDestroy에서 정리)
         private ButtonPunchScale _menuTogglePunch; // 클릭 시 아이콘이 커졌다 작아지는 연출(아이콘/화살표에 부착)
@@ -841,20 +840,19 @@ namespace TaskbarHero.Client.UI
 
         /// <summary>
         /// 클리어 보상 획득 연출(<see cref="Battle.RewardFlyFx"/>)이 날아갈 HUD 목표를 돌려준다 —
-        /// 경험치는 <b>편성</b>(캐릭터), 골드·전리품은 <b>가방</b>으로 향한다.
+        /// 골드·경험치·전리품 <b>모두 가방</b>으로 향한다(획득물이 한곳으로 모이는 것으로 읽히게 통일).
         /// <para>메뉴 바가 접혀 있으면 버튼이 폭 0으로 눌려 있어 그 자리로 보내면 어디로 갔는지 알 수 없다.
         /// 그때는 항상 보이는 <b>토글 손잡이</b>를 목표로 준다.</para>
         /// </summary>
-        public RectTransform RewardFlyTarget(bool toParty)
+        public RectTransform RewardFlyTarget()
         {
             if (!_menuOpen)
             {
                 return _menuToggleRect;
             }
-            int slot = toParty ? PartySlot : InventorySlot;
-            if (_menuButtons != null && slot < _menuButtons.Length && _menuButtons[slot] != null)
+            if (_menuButtons != null && InventorySlot < _menuButtons.Length && _menuButtons[InventorySlot] != null)
             {
-                return _menuButtons[slot];
+                return _menuButtons[InventorySlot];
             }
             return _menuToggleRect;
         }

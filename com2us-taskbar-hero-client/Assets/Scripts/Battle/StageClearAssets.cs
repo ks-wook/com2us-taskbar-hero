@@ -33,6 +33,9 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("버프 적용 표시 마크(Assets/Art/Icon/Etc/버프마크.png). 활성 버프로 늘어난 보상 칸 모서리에 작게 붙는다. 없으면 마크를 붙이지 않는다.")]
         public Sprite buffMarkIcon;
 
+        [Tooltip("경험치 아이콘(Assets/Art/Icon/Etc/경험치.png). 경험치 보상이 HUD로 날아가는 연출에 쓴다(마스터 데이터에 없는 재화라 아이템 아이콘 매핑으로는 구할 수 없다).")]
+        public Sprite expIcon;
+
         [Tooltip("스테이지 클리어 연출 오버레이 프리팹(Assets/Prefabs/UI/StageClearOverlay.prefab). 없으면 런타임 코드 구성 폴백.")]
         public GameObject overlayPrefab;
 

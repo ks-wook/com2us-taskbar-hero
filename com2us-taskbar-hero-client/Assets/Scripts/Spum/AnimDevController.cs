@@ -155,9 +155,13 @@ public class AnimDevController : MonoBehaviour
     }
 
     /// <summary>
-    /// 캐릭터가 화면 가로 <see cref="characterScreenX"/> 지점에 오도록 카메라 x를 맞춘다.
+    /// 캐릭터가 화면 가로 <see cref="characterScreenX"/> 지점에 오도록 카메라 x를 맞추고,
+    /// <b>세로는 캐릭터 렌더 바운즈 중앙</b>에 맞춘다.
     /// 목록 패널 폭은 픽셀 고정이라 Game View 비율에 따라 세계 좌표로 차지하는 폭이 달라지므로,
     /// 실제 종횡비를 보고 캐릭터를 오른쪽으로 밀어 패널에 가리지 않게 한다.
+    /// <para>세로를 캐릭터 기준으로 잡는 이유: 캐릭터 프리팹 루트가 UI용 <c>RectTransform</c>이라
+    /// 월드 배치 값이 프리팹 수정에 따라 크게 달라질 수 있다(앵커 좌표 y −170로 내려가 화면에서
+    /// 사라진 적이 있다). 카메라를 캐릭터에 맞추면 그런 변화에도 캐릭터가 화면에 남는다.</para>
     /// </summary>
     private void FrameCamera()
     {
@@ -170,10 +174,36 @@ public class AnimDevController : MonoBehaviour
         float offset = (Mathf.Clamp01(characterScreenX) - 0.5f) * 2f * halfWidth;
         var pos = cam.transform.position;
         pos.x = target.transform.position.x - offset;
+        pos.y = CharacterCenterY();
         cam.transform.position = pos;
 
         _baseCamSize = cam.orthographicSize;
         _baseCamPos = pos;
+    }
+
+    /// <summary>캐릭터 스프라이트 전체를 감싸는 렌더 바운즈의 세로 중심을 돌려준다(카메라 세로 프레이밍용).
+    /// 켜져 있는 렌더러가 없으면 캐릭터 트랜스폼의 y를 그대로 쓴다.</summary>
+    private float CharacterCenterY()
+    {
+        bool has = false;
+        Bounds bounds = default;
+        foreach (var r in target.GetComponentsInChildren<Renderer>())
+        {
+            if (r == null || !r.enabled)
+            {
+                continue;
+            }
+            if (!has)
+            {
+                bounds = r.bounds;
+                has = true;
+            }
+            else
+            {
+                bounds.Encapsulate(r.bounds);
+            }
+        }
+        return has ? bounds.center.y : target.transform.position.y;
     }
 
     private void Update()

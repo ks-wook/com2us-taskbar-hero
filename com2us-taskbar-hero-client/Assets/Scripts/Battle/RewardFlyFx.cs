@@ -29,17 +29,17 @@ namespace TaskbarHero.Client.Battle
         private static RewardFlyFx _instance;
 
         /// <summary>
-        /// 보상이 날아갈 HUD 목표를 돌려주는 공급자(<c>true</c>=경험치 → 편성, <c>false</c>=골드·전리품 → 가방).
+        /// 보상이 날아갈 HUD 목표를 돌려주는 공급자(골드·경험치·전리품 모두 같은 목표 = 가방).
         /// <para><b>왜 델리게이트인가</b>: 어셈블리 참조가 <c>UI → Battle</c> 한 방향이라 이 코드(Battle)가
         /// HUD(UI)를 직접 알 수 없다. 그래서 HUD가 자기 목표 제공 함수를 여기 등록하고,
         /// 전투 쪽은 "누가 주는지 모르는 목표"만 받아 쓴다(순환 참조 없음).</para>
         /// </summary>
-        public static System.Func<bool, RectTransform> TargetProvider;
+        public static System.Func<RectTransform> TargetProvider;
 
         /// <summary>등록된 공급자로 목표를 찾는다(공급자가 없으면 연출을 생략하도록 null).</summary>
-        public static RectTransform ResolveTarget(bool toParty)
+        public static RectTransform ResolveTarget()
         {
-            return TargetProvider != null ? TargetProvider(toParty) : null;
+            return TargetProvider != null ? TargetProvider() : null;
         }
 
         private Canvas _canvas;

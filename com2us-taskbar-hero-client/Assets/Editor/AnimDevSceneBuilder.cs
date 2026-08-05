@@ -63,7 +63,7 @@ namespace TaskbarHero.ClientEditor
 
             // 테스트 대상 — 프리팹 인스턴스(연결 유지: 프리팹을 고치면 씬에도 반영된다).
             var character = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
-            character.transform.position = CharacterPosition;
+            PlaceCharacter(character);
 
             // 애니메이션 목록 UI + 캐릭터 클릭 재생을 담당하는 하네스 컨트롤러.
             var ctrlGo = new GameObject("AnimDevController");
@@ -75,7 +75,31 @@ namespace TaskbarHero.ClientEditor
 
             Debug.Log($"[AnimDevSceneBuilder] 완료: {ScenePath} 생성 "
                       + $"(AnimDevCamera / EventSystem / {prefab.name} / AnimDevController). "
+                      + $"캐릭터 위치 {character.transform.position} / 카메라 {camGo.transform.position} size {cam.orthographicSize}. "
                       + "Build Settings에는 등록하지 않음(개발용 하네스 씬).");
+        }
+
+        /// <summary>
+        /// 캐릭터 인스턴스를 <see cref="CharacterPosition"/>에 세운다.
+        /// <para><b>왜 단순 position 대입이 아닌가</b>: 캐릭터 프리팹 루트는 UI 캔버스 안에서도 쓰이도록
+        /// <c>RectTransform</c>(anchoredPosition y = -170, layer UI)이다. 이 하네스 씬처럼 캔버스 밖(월드)에
+        /// 두면 위치를 정하는 값은 <c>position</c>이 아니라 <b>앵커·anchoredPosition</b>이라, position만 넣으면
+        /// 레이아웃 갱신 때 프리팹의 -170으로 되돌아가 캐릭터가 카메라 밖으로 사라진다(실제 발생).
+        /// 그래서 앵커·피벗·크기를 중앙 0으로 중립화한 뒤 anchoredPosition으로 자리를 잡는다.</para>
+        /// </summary>
+        private static void PlaceCharacter(GameObject character)
+        {
+            if (character.transform is RectTransform rt)
+            {
+                rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.sizeDelta = Vector2.zero;
+                rt.anchoredPosition3D = CharacterPosition; // 캔버스 밖이라 이 값이 곧 월드 위치가 된다
+            }
+            else
+            {
+                character.transform.position = CharacterPosition;
+            }
         }
 
         /// <summary>컨트롤러의 대상 캐릭터(SPUM_Prefabs)와 카메라 참조를 배선한다.</summary>
