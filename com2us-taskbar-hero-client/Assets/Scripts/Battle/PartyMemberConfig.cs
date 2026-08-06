@@ -18,9 +18,6 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("발동 이펙트 위치 보정(월드 유닛, x+는 적 방향). 멤버 공통 selfEffectXOffset에 더해진다. "
                  + "예: 지면에서 터지는 내려찍기는 y를 올려 그림의 지면선을 캐릭터 발밑에 맞춘다")]
         public Vector2 effectOffset = Vector2.zero;
-        [Tooltip("버프 스킬 전용. 버프가 켜져 있는 동안 무기 잔상을 붉은색으로 바꾸고 무기 끝에 붉은 발광점을 "
-                 + "추가한다(기사의 분노·광전사의 힘). 멤버의 weaponTrail이 켜져 있어야 효과가 있다")]
-        public bool weaponAfterimage = false;
         [Range(0.05f, 1f)]
         [Tooltip("데미지가 들어가는 시점(이펙트 재생 구간 비율). 1 = 이펙트가 끝나는 순간(기본), "
                  + "0.35 = 재생 35% 지점. 이펙트가 빠르게 터지는 스킬(예: 강한일격)은 값을 낮춰 타격감을 맞춘다. "
@@ -79,9 +76,15 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("true면 근접 기본공격이 단일 대상이 아니라 공격 범위(사거리) 내 모든 적에게 명중한다. 예: 기사")]
         public bool basicAttackAoe = false;
 
-        [Tooltip("무기를 휘두를 때 무기 끝에 잔상을 남긴다(평소 노란색). 근접 무기 캐릭터에 사용. 예: 기사·슬레이어. "
-                 + "무기 강화 버프(아래 skills의 weaponAfterimage) 지속 동안에는 붉은색으로 바뀐다")]
+        [Tooltip("무기를 휘두를 때 무기 끝에 잔상을 남긴다(모든 직업 공용 — 검·도끼·활·지팡이). "
+                 + "색·반짝임은 장착 무기의 강화 단계만 따른다(자버프 스킬은 잔상에 관여하지 않는다)")]
         public bool weaponTrail = false;
+
+        [Tooltip("무기 잔상의 형태. Melee=검·도끼(기사·슬레이어, 굵은 궤적) / Bow=활(궁수, 가는 궤적을 "
+                 + "활 정가운데에서) / Staff=지팡이(마법사, 가는 궤적). "
+                 + "색과 반짝임 입자는 이 값이 아니라 장착 무기의 강화 단계(0~10)가 정한다. "
+                 + "weaponTrail이 켜져 있을 때만 의미가 있다")]
+        public WeaponTrailStyle weaponTrailStyle = WeaponTrailStyle.Melee;
 
         [Tooltip("자기 위치 발생 스킬 이펙트의 X 오프셋(+면 오른쪽=적 방향). 예: 기사 강타를 조금 더 오른쪽에")]
         public float selfEffectXOffset = 0f;
@@ -150,19 +153,6 @@ namespace TaskbarHero.Client.Battle
                 foreach (int c in aoeSkillCodes)
                 {
                     if (c == skillCode) return true;
-                }
-            }
-            return false;
-        }
-
-        /// <summary>이 버프 스킬이 무기 끝 잔상 연출을 쓰는지(없으면 false).</summary>
-        public bool WeaponAfterimageFor(int skillCode)
-        {
-            if (skills != null)
-            {
-                foreach (var s in skills)
-                {
-                    if (s != null && s.skillCode == skillCode) return s.weaponAfterimage;
                 }
             }
             return false;

@@ -148,6 +148,13 @@ namespace TaskbarHero.Client.Battle
         private const int DecalSortingOrder = -50;     // 캐릭터·이펙트보다 뒤(바닥)
         private readonly List<SpriteRenderer> _decals = new List<SpriteRenderer>();
 
+        // ---- 진영별 정렬 순서(캐릭터 루트의 SortingGroup) ----
+        // 아군과 몬스터 프리팹은 둘 다 SortingGroup order 5로 만들어져 있어, 겹쳤을 때 앞뒤가 정해지지 않는다.
+        // 특히 덩치가 큰 보스는 아군을 통째로 덮어 버린다. 그래서 스폰할 때 진영별로 순서를 갈라
+        // **아군이 항상 몬스터 앞**에 오게 한다(파티원끼리·몬스터끼리의 순서는 종전대로 동일 값).
+        private const int AllySortingOrder = 20;
+        private const int EnemySortingOrder = 10;
+
         // 킬 콤보 표시는 넣지 않는다 — 방치형은 처치가 끊이지 않아 카운터가 사실상 상시 표시가 되고,
         // "연속"이라는 정보가 아무 의미를 갖지 못한다(2026-08-04 확인 후 제거).
 
@@ -973,6 +980,7 @@ namespace TaskbarHero.Client.Battle
             var go = _om.Spawn(CatAlly, PrefabFor(cfg), pos, Quaternion.identity);
             if (go == null) return null;
             EnsureSpumAnimator(go);
+            SetUnitSortingOrder(go, AllySortingOrder); // 몬스터(보스 포함)에 가리지 않게 항상 앞
             SetFacingRight(go, true); // 아군은 오른쪽(적)을 바라봄
             var pc = go.GetComponent<PlayerCombatant>();
             if (pc == null) pc = go.AddComponent<PlayerCombatant>();
@@ -1068,6 +1076,7 @@ namespace TaskbarHero.Client.Battle
             var go = _om.Spawn(CatEnemy, prefab, pos, Quaternion.identity);
             if (go == null) return;
             EnsureSpumAnimator(go);
+            SetUnitSortingOrder(go, EnemySortingOrder); // 아군보다 뒤
             SetFacingRight(go, false);
             var mu = go.GetComponent<MonsterUnit>();
             if (mu == null) mu = go.AddComponent<MonsterUnit>();
@@ -1132,6 +1141,7 @@ namespace TaskbarHero.Client.Battle
             var go = _om.Spawn(CatEnemy, monsterPrefab, pos, Quaternion.identity);
             if (go == null) return;
             EnsureSpumAnimator(go);
+            SetUnitSortingOrder(go, EnemySortingOrder); // 아군보다 뒤
             SetFacingRight(go, false); // 파티(왼쪽)를 바라봄
             var mu = go.GetComponent<MonsterUnit>();
             if (mu == null) mu = go.AddComponent<MonsterUnit>();
@@ -1187,6 +1197,21 @@ namespace TaskbarHero.Client.Battle
         {
             var t = System.Type.GetType("SpumCharacterAnimator, Assembly-CSharp");
             if (t != null && go.GetComponent(t) == null) go.AddComponent(t);
+        }
+
+        /// <summary>
+        /// 유닛의 진영별 정렬 순서를 지정한다(<see cref="AllySortingOrder"/> / <see cref="EnemySortingOrder"/>).
+        /// SPUM 캐릭터는 파트(머리·몸·무기…)가 여러 스프라이트로 나뉘고 루트의 <c>SortingGroup</c>이 그 묶음을
+        /// 한 덩어리로 정렬하므로, <b>그룹 하나의 순서만 바꾸면 캐릭터 전체가 함께 앞뒤로 이동</b>한다.
+        /// 프리팹의 구운 값(둘 다 5)을 스폰 시점에 덮어쓰는 방식이라 프리팹 12종을 고칠 필요가 없다.
+        /// </summary>
+        private static void SetUnitSortingOrder(GameObject go, int order)
+        {
+            var sg = go.GetComponentInChildren<UnityEngine.Rendering.SortingGroup>(true);
+            if (sg != null)
+            {
+                sg.sortingOrder = order;
+            }
         }
 
         /// <summary>SPUM 기본 스프라이트가 왼쪽을 보므로 오른쪽=localScale.x 음수.</summary>

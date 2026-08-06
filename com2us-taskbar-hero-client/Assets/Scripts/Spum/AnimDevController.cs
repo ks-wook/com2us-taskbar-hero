@@ -4,6 +4,8 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using TaskbarHero.Client.Battle;
+using TaskbarHero.Client.Managers;
 
 /// <summary>
 /// 캐릭터 프리팹 애니메이션 확인용 개발 하네스(AnimDevScene 전용).
@@ -42,10 +44,16 @@ public class AnimDevController : MonoBehaviour
     [SerializeField] private float groundSlamSeconds = 0.6f;
 
     [Header("카메라 프레이밍")]
-    [Tooltip("캐릭터가 놓일 화면 가로 위치(0=왼쪽,1=오른쪽). 왼쪽 목록 패널에 가리지 않도록 오른쪽에 둔다.")]
-    [SerializeField] private float characterScreenX = 0.68f;
+    [Tooltip("캐릭터가 놓일 화면 가로 위치(0=왼쪽,1=오른쪽). 0.5 = 화면 정중앙(좌우 패널 사이).")]
+    [SerializeField] private float characterScreenX = 0.5f;
     [Tooltip("점프하는 특수 모션(화살비·내려찍기) 동안 적용할 줌아웃 배율 — 공중 동작이 화면 밖으로 나가지 않게 한다.")]
     [SerializeField] private float jumpZoomOutScale = 2.3f;
+
+    [Header("무기 강화 이펙트(오른쪽 패널)")]
+    [Tooltip("잔상 형태. 대상 프리팹의 무기 종류에 맞춘다(검·도끼=Melee / 활=Bow / 지팡이=Staff).")]
+    [SerializeField] private WeaponTrailStyle weaponTrailStyle = WeaponTrailStyle.Melee;
+    [Tooltip("씬 진입 시 적용할 강화 단계(0~10).")]
+    [SerializeField] private int startEnhanceLevel = 0;
 
     /// <summary>
     /// 프리팹 클립 리스트 밖에서 테스트할 애니메이션 한 개.
@@ -116,6 +124,31 @@ public class AnimDevController : MonoBehaviour
     // 추가 클립을 상태 리스트 끝에 붙여 둔 인덱스(클립당 1회만 추가한다).
     private readonly Dictionary<AnimationClip, int> _extraClipIndex = new Dictionary<AnimationClip, int>();
 
+    // 무기 강화 이펙트 확인용(오른쪽 패널).
+    private WeaponAfterimage _weaponFx;
+    private Animator _animator;                 // 공격 모션 판정용(대상 프리팹의 Animator)
+
+    // 캐릭터 선택(상단 중앙 패널).
+    /// <summary>선택할 수 있는 직업과, 그 직업 무기에 맞는 잔상 형태.</summary>
+    private static readonly (int Code, string Label, WeaponTrailStyle Style)[] ClassChoices =
+    {
+        (1, "기사", WeaponTrailStyle.Melee),
+        (2, "궁수", WeaponTrailStyle.Bow),
+        (3, "마법사", WeaponTrailStyle.Staff),
+        (4, "슬레이어", WeaponTrailStyle.Melee),
+    };
+    private const int GenderMale = 1;
+    private const int GenderFemale = 2;
+
+    private int _classCode = 1;
+    private int _gender = GenderMale;
+    private readonly List<Image> _classRows = new List<Image>();
+    private readonly List<Image> _genderRows = new List<Image>();
+    private GameObject _canvasGo;               // 캐릭터를 바꾸면 통째로 다시 만든다
+    private int _enhanceLevel;
+    private Text _enhanceText;
+    private readonly List<Image> _enhanceRows = new List<Image>();
+
     private static readonly Color RowNormal = new Color(0.18f, 0.20f, 0.26f, 0.95f);
     private static readonly Color RowSelected = new Color(0.24f, 0.45f, 0.72f, 1f);
 
@@ -132,6 +165,7 @@ public class AnimDevController : MonoBehaviour
         if (target != null)
         {
             _helper = target.GetComponent<SpumCharacterAnimator>();
+            _animator = target.GetComponentInChildren<Animator>();
         }
     }
 
@@ -143,6 +177,17 @@ public class AnimDevController : MonoBehaviour
             return;
         }
 
+        DetectCurrentCharacter();  // 씬에 놓인 프리팹이 어느 직업·성별인지 이름으로 알아낸다
+        _enhanceLevel = Mathf.Clamp(startEnhanceLevel, 0, WeaponAfterimage.MaxEnhanceLevel);
+        SetupCurrentTarget();
+    }
+
+    /// <summary>
+    /// 현재 <see cref="target"/>을 기준으로 UI·무기 이펙트·카메라를 구성한다.
+    /// 최초 진입과 캐릭터 교체(<see cref="SwapCharacter"/>) 양쪽에서 같은 경로를 탄다.
+    /// </summary>
+    private void SetupCurrentTarget()
+    {
         // 프리팹에 클립 리스트가 비어 있는 경우(구버전 프리팹)만 채운다 — 목록 UI가 클립 이름을 읽어야 한다.
         if (!target.allListsHaveItemsExist())
         {
@@ -150,8 +195,108 @@ public class AnimDevController : MonoBehaviour
         }
 
         BuildUi();
+        AttachWeaponFx();
         FrameCamera();
         SelectClip(0, PlayerState.IDLE, 0, ClipLabel(PlayerState.IDLE, 0));
+        SetEnhanceLevel(_enhanceLevel);
+        StartCoroutine(ReframeWhenPosed());
+    }
+
+    /// <summary>
+    /// 애니메이터가 첫 포즈를 적용한 뒤 카메라를 다시 맞춘다.
+    /// <para>스폰/교체 직후에는 SPUM 파트가 아직 제자리에 놓이지 않아 렌더 바운즈가 원점 근처로 잡힌다
+    /// (실측: 카메라 y가 0으로 잡혀 캐릭터가 화면 위쪽 뷰포트 0.67에 걸렸다). 몇 프레임 뒤 실제 포즈로
+    /// 다시 재면 캐릭터가 화면 정중앙에 온다.</para>
+    /// </summary>
+    private IEnumerator ReframeWhenPosed()
+    {
+        yield return null;
+        yield return null;
+        FrameCamera();
+    }
+
+    /// <summary>
+    /// 씬에 놓여 있는 캐릭터 프리팹의 이름(<c>{직업}_{성별}</c>)에서 현재 직업·성별을 알아낸다.
+    /// 상단 선택 패널의 초기 선택 표시를 실제 캐릭터와 맞추기 위한 것이다.
+    /// </summary>
+    private void DetectCurrentCharacter()
+    {
+        string n = target != null ? target.gameObject.name : string.Empty;
+        if (n.StartsWith("Archer")) _classCode = 2;
+        else if (n.StartsWith("Mage")) _classCode = 3;
+        else if (n.StartsWith("Slayer")) _classCode = 4;
+        else _classCode = 1;
+        _gender = n.Contains("Female") ? GenderFemale : GenderMale;
+        ApplyStyleForClass();
+    }
+
+    /// <summary>현재 직업의 무기에 맞는 잔상 형태를 고른다(검·도끼 Melee / 활 Bow / 지팡이 Staff).</summary>
+    private void ApplyStyleForClass()
+    {
+        foreach (var c in ClassChoices)
+        {
+            if (c.Code == _classCode)
+            {
+                weaponTrailStyle = c.Style;
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 대상 캐릭터를 다른 직업·성별 프리팹으로 교체한다. 같은 자리·같은 부모에 새로 만들고,
+    /// 애니메이션 목록·무기 이펙트·카메라 프레이밍을 새 프리팹 기준으로 다시 구성한다.
+    /// 강화 단계는 유지되므로 직업만 바꿔 가며 같은 단계의 이펙트를 비교할 수 있다.
+    /// </summary>
+    private void SwapCharacter(int classCode, int gender)
+    {
+        if (classCode == _classCode && gender == _gender)
+        {
+            return;
+        }
+
+        var prefab = CharacterPrefabDatabase.PrefabOf(classCode, gender);
+        if (prefab == null)
+        {
+            Debug.LogWarning($"[AnimDev] 직업 {classCode} / 성별 {gender} 프리팹을 찾지 못했습니다.");
+            return;
+        }
+
+        // 진행 중인 특수 모션(점프 줌아웃·돌진 자세)을 끊고 카메라를 원래대로 돌린다.
+        StopAllCoroutines();
+        _zoomRoutine = null;
+        _dashRoutine = null;
+        if (cam != null && _baseCamSize > 0f)
+        {
+            cam.orthographicSize = _baseCamSize;
+        }
+
+        Vector3 pos = target.transform.position;
+        Quaternion rot = target.transform.rotation;
+        Transform parent = target.transform.parent;
+        var old = target.gameObject;
+        old.SetActive(false); // Destroy는 프레임 끝에 처리되므로 즉시 화면에서 치운다
+        Destroy(old);
+
+        var go = Instantiate(prefab, pos, rot, parent);
+        go.name = prefab.name;
+
+        _classCode = classCode;
+        _gender = gender;
+        target = go.GetComponent<SPUM_Prefabs>();
+        _helper = go.GetComponent<SpumCharacterAnimator>();
+        _animator = go.GetComponentInChildren<Animator>();
+        _weaponFx = null;          // 새 무기에 다시 붙인다
+        _deathLatched = false;
+        _extraClipIndex.Clear();   // 추가 클립은 새 프리팹의 리스트에 다시 얹어야 한다
+        ApplyStyleForClass();
+
+        if (target == null)
+        {
+            Debug.LogError($"[AnimDev] {prefab.name}에 SPUM_Prefabs가 없습니다.");
+            return;
+        }
+        SetupCurrentTarget();
     }
 
     /// <summary>
@@ -182,14 +327,17 @@ public class AnimDevController : MonoBehaviour
     }
 
     /// <summary>캐릭터 스프라이트 전체를 감싸는 렌더 바운즈의 세로 중심을 돌려준다(카메라 세로 프레이밍용).
-    /// 켜져 있는 렌더러가 없으면 캐릭터 트랜스폼의 y를 그대로 쓴다.</summary>
+    /// 켜져 있는 렌더러가 없으면 캐릭터 트랜스폼의 y를 그대로 쓴다.
+    /// <para><b>스프라이트 렌더러만</b> 센다 — 무기 잔상(<c>TrailRenderer</c>)·불꽃(<c>ParticleSystemRenderer</c>)·
+    /// <c>SpriteMask</c>도 Renderer라서 함께 세면 바운즈가 이펙트 쪽으로 끌려가 프레이밍이 흔들린다
+    /// (실측: 전체 기준 중심 y 0.396 vs 스프라이트만 0.338).</para></summary>
     private float CharacterCenterY()
     {
         bool has = false;
         Bounds bounds = default;
-        foreach (var r in target.GetComponentsInChildren<Renderer>())
+        foreach (var r in target.GetComponentsInChildren<SpriteRenderer>())
         {
-            if (r == null || !r.enabled)
+            if (r == null || !r.enabled || r.sprite == null)
             {
                 continue;
             }
@@ -511,16 +659,28 @@ public class AnimDevController : MonoBehaviour
     // ────────────────────────────── UI 구성 ──────────────────────────────
 
     /// <summary>
-    /// 왼쪽 애니메이션 목록 패널을 런타임에 만든다.
+    /// 왼쪽 애니메이션 목록 · 상단 캐릭터 선택 · 오른쪽 강화 단계 패널을 런타임에 만든다.
     /// 계층을 씬에 굽지 않고 매번 생성하므로 버튼 리스너 소실(비영구 리스너) 문제가 없고,
     /// 프리팹의 클립 구성이 바뀌면 목록도 자동으로 따라간다.
+    /// <para>캐릭터를 교체하면 클립 목록이 통째로 달라지므로 <b>캔버스를 버리고 다시 만든다</b>.</para>
     /// </summary>
     private void BuildUi()
     {
+        if (_canvasGo != null)
+        {
+            Destroy(_canvasGo);
+        }
+        _rows.Clear();
+        _enhanceRows.Clear();
+        _classRows.Clear();
+        _genderRows.Clear();
+        _selectedRow = -1;
+
         // 개발 하네스라 해상도 스케일링 없이 픽셀 고정(ConstantPixelSize)으로 둔다 — 어떤 Game View 비율에서도 크기가 같다.
         var canvasGo = new GameObject("AnimDevCanvas", typeof(RectTransform), typeof(Canvas),
             typeof(CanvasScaler), typeof(GraphicRaycaster));
         canvasGo.transform.SetParent(transform, false);
+        _canvasGo = canvasGo;
         var canvas = canvasGo.GetComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 100;
@@ -628,6 +788,271 @@ public class AnimDevController : MonoBehaviour
             int row = _rows.Count;
             MakeRowButton(content, label, () => SelectSpecial(row, motion, label));
         }
+
+        BuildCharacterUi(canvasGo.transform); // 상단 중앙: 직업 · 성별 선택
+        BuildEnhanceUi(canvasGo.transform);   // 오른쪽: 무기 강화 단계별 이펙트
+    }
+
+    // ─────────────────────── 캐릭터 선택 (상단 중앙 패널) ───────────────────────
+
+    /// <summary>
+    /// 화면 중앙 상단에 직업(4)·성별(2) 선택 패널을 만든다. 버튼을 누르면 그 자리에서 캐릭터 프리팹이
+    /// 교체되고 애니메이션 목록도 새 프리팹 기준으로 다시 만들어진다.
+    /// 폭은 좌우 패널(왼쪽 336 · 오른쪽 212)과 겹치지 않도록 좁게 잡는다.
+    /// </summary>
+    private void BuildCharacterUi(Transform canvas)
+    {
+        const float panelWidth = 452f;
+        const float panelHeight = 92f;
+
+        var panel = NewUi("CharacterPanel", canvas, out Image panelBg);
+        panelBg.color = new Color(0.07f, 0.08f, 0.11f, 0.92f);
+        panel.anchorMin = new Vector2(0.5f, 1f);
+        panel.anchorMax = new Vector2(0.5f, 1f);
+        panel.pivot = new Vector2(0.5f, 1f);
+        panel.sizeDelta = new Vector2(panelWidth, panelHeight);
+        panel.anchoredPosition = new Vector2(0f, -8f);
+
+        MakeLabel(panel, "Title", "캐릭터", 14, FontStyle.Bold, new Color(1f, 0.87f, 0.45f),
+                  topOffset: -4f, height: 18f);
+
+        // 1행: 직업.
+        var classRow = MakeRowContainer(panel, "Classes", topOffset: -24f, height: 28f);
+        _classRows.Clear();
+        foreach (var choice in ClassChoices)
+        {
+            int code = choice.Code;
+            _classRows.Add(MakeChoiceButton(classRow, choice.Label, () => SwapCharacter(code, _gender)));
+        }
+
+        // 2행: 성별.
+        var genderRow = MakeRowContainer(panel, "Genders", topOffset: -58f, height: 28f);
+        _genderRows.Clear();
+        _genderRows.Add(MakeChoiceButton(genderRow, "남", () => SwapCharacter(_classCode, GenderMale)));
+        _genderRows.Add(MakeChoiceButton(genderRow, "여", () => SwapCharacter(_classCode, GenderFemale)));
+
+        RefreshCharacterSelection();
+    }
+
+    /// <summary>현재 직업·성별에 해당하는 버튼을 선택 색으로 표시한다.</summary>
+    private void RefreshCharacterSelection()
+    {
+        for (int i = 0; i < _classRows.Count && i < ClassChoices.Length; i++)
+        {
+            if (_classRows[i] != null)
+            {
+                _classRows[i].color = ClassChoices[i].Code == _classCode ? RowSelected : RowNormal;
+            }
+        }
+        for (int i = 0; i < _genderRows.Count; i++)
+        {
+            if (_genderRows[i] != null)
+            {
+                int g = i == 0 ? GenderMale : GenderFemale;
+                _genderRows[i].color = g == _gender ? RowSelected : RowNormal;
+            }
+        }
+    }
+
+    /// <summary>패널 상단에서 <paramref name="topOffset"/>만큼 내려온 자리에 가로 배치 컨테이너를 만든다.</summary>
+    private static RectTransform MakeRowContainer(RectTransform parent, string name, float topOffset, float height)
+    {
+        var go = new GameObject(name, typeof(RectTransform), typeof(HorizontalLayoutGroup));
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(parent, false);
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+        rt.offsetMin = new Vector2(6f, -height);
+        rt.offsetMax = new Vector2(-6f, 0f);
+        rt.anchoredPosition = new Vector2(0f, topOffset);
+
+        var layout = go.GetComponent<HorizontalLayoutGroup>();
+        layout.spacing = 4f;
+        layout.childForceExpandWidth = true;
+        layout.childControlWidth = true;
+        layout.childForceExpandHeight = true;
+        layout.childControlHeight = true;
+        return rt;
+    }
+
+    /// <summary>가로 배치용 선택 버튼(가운데 정렬 라벨)을 만들고 배경 Image를 돌려준다.</summary>
+    private static Image MakeChoiceButton(RectTransform parent, string label,
+                                          UnityEngine.Events.UnityAction onClick)
+    {
+        var rt = NewUi("Choice", parent, out Image bg);
+        bg.color = RowNormal;
+
+        var labelGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
+        var lrt = (RectTransform)labelGo.transform;
+        lrt.SetParent(rt, false);
+        lrt.anchorMin = Vector2.zero;
+        lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = Vector2.zero;
+        lrt.offsetMax = Vector2.zero;
+        var text = labelGo.GetComponent<Text>();
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.text = label;
+        text.fontSize = 13;
+        text.color = Color.white;
+        text.alignment = TextAnchor.MiddleCenter;
+        text.raycastTarget = false;
+
+        var button = rt.gameObject.AddComponent<Button>();
+        button.targetGraphic = bg;
+        button.transition = Selectable.Transition.None; // 하이라이트는 선택 상태로만 표시
+        button.onClick.AddListener(onClick);
+        return bg;
+    }
+
+    // ─────────────────────── 무기 강화 이펙트 (오른쪽 패널) ───────────────────────
+
+    /// <summary>
+    /// 대상 캐릭터의 무기에 강화 이펙트(<see cref="WeaponAfterimage"/>)를 붙인다.
+    /// 궤적 방출 조건은 <b>전투와 동일하게</b> 공격 모션 재생 여부로 둔다(<see cref="IsAttackMotionPlaying"/>) —
+    /// 항상 방출로 두면 IDLE에서도 무기 끝에 궤적이 끌려 상시 이펙트와 구분되지 않는다.
+    /// </summary>
+    private void AttachWeaponFx()
+    {
+        if (target == null || _weaponFx != null)
+        {
+            return;
+        }
+        _weaponFx = WeaponAfterimage.Create(target.transform, IsAttackMotionPlaying, weaponTrailStyle);
+        if (_weaponFx == null)
+        {
+            Debug.LogWarning("[AnimDev] 대상에서 무기 렌더러를 찾지 못해 강화 이펙트를 붙이지 못했습니다.");
+        }
+    }
+
+    /// <summary>
+    /// 공격 애니(SPUM "…Attack…" 클립)가 아직 재생 중인지. 전투의
+    /// <c>PlayerCombatant.IsAttackMotionPlaying</c>과 같은 규칙이라, 하네스에서 보이는 궤적이
+    /// 실제 전투에서 보이는 궤적과 일치한다.
+    /// </summary>
+    private bool IsAttackMotionPlaying()
+    {
+        if (_animator == null)
+        {
+            return false;
+        }
+        var ci = _animator.GetCurrentAnimatorClipInfo(0);
+        if (ci == null || ci.Length == 0 || ci[0].clip == null)
+        {
+            return false;
+        }
+        if (ci[0].clip.name.ToLower().IndexOf("attack") < 0)
+        {
+            return false;
+        }
+        return _animator.GetCurrentAnimatorStateInfo(0).normalizedTime < 1f;
+    }
+
+    /// <summary>강화 단계를 바꿔 무기 이펙트에 즉시 반영하고, 오른쪽 패널의 표시를 갱신한다.</summary>
+    private void SetEnhanceLevel(int level)
+    {
+        _enhanceLevel = Mathf.Clamp(level, 0, WeaponAfterimage.MaxEnhanceLevel);
+        if (_weaponFx != null)
+        {
+            _weaponFx.SetEnhanceLevel(_enhanceLevel);
+        }
+        if (_enhanceText != null)
+        {
+            _enhanceText.text = $"현재: +{_enhanceLevel}  ({EnhanceDescription(_enhanceLevel)})";
+        }
+        for (int i = 0; i < _enhanceRows.Count; i++)
+        {
+            if (_enhanceRows[i] != null)
+            {
+                _enhanceRows[i].color = i == _enhanceLevel ? RowSelected : RowNormal;
+            }
+        }
+    }
+
+    /// <summary>단계별로 무엇이 달라지는지 한 줄로 알려 준다(색 구간 + 반짝임 유무).</summary>
+    private static string EnhanceDescription(int level)
+    {
+        if (level >= WeaponAfterimage.MaxEnhanceLevel) return "어두운 보라 · 암흑 · 반짝임 최대";
+        if (level >= 8) return "보랏빛 · 반짝임 강함";
+        if (level >= 6) return "붉은색 · 반짝임 중간";
+        if (level >= 3) return "붉은 기 · 반짝임 약함";
+        if (level >= 1) return "흰빛에서 붉은 기 · 반짝임 없음";
+        return "흰빛~회색 · 서린 빛 없음";
+    }
+
+    /// <summary>
+    /// 오른쪽에 강화 단계(0~10) 선택 패널을 만든다. 버튼을 누르면 그 단계의 잔상 색·서린 빛·반짝임이
+    /// 즉시 적용되므로, 애니메이션을 재생하며 단계별 차이를 바로 비교할 수 있다.
+    /// </summary>
+    private void BuildEnhanceUi(Transform canvas)
+    {
+        var panel = NewUi("EnhancePanel", canvas, out Image panelBg);
+        panelBg.color = new Color(0.07f, 0.08f, 0.11f, 0.92f);
+        panel.anchorMin = new Vector2(1f, 0f);
+        panel.anchorMax = new Vector2(1f, 1f);
+        panel.pivot = new Vector2(1f, 0.5f);
+        panel.offsetMin = new Vector2(-212f, 8f);
+        panel.offsetMax = new Vector2(-8f, -8f);
+
+        MakeLabel(panel, "Title", "무기 강화 이펙트", 18, FontStyle.Bold, new Color(1f, 0.87f, 0.45f),
+                  topOffset: -6f, height: 26f);
+        MakeLabel(panel, "Hint", "단계를 누르면 즉시 반영됩니다.", 12, FontStyle.Normal,
+                  new Color(0.75f, 0.78f, 0.85f), topOffset: -34f, height: 18f);
+        MakeLabel(panel, "Hint2", "IDLE에서 보이는 것이 상시 이펙트.", 12, FontStyle.Normal,
+                  new Color(0.75f, 0.78f, 0.85f), topOffset: -52f, height: 18f);
+        _enhanceText = MakeLabel(panel, "Current", "현재: +0", 13, FontStyle.Bold, Color.white,
+                                 topOffset: -74f, height: 34f);
+
+        // 단계 버튼(0~10)을 세로로 쌓는다 — 11개라 스크롤 없이 들어간다.
+        var listGo = new GameObject("Levels", typeof(RectTransform), typeof(VerticalLayoutGroup));
+        var list = (RectTransform)listGo.transform;
+        list.SetParent(panel, false);
+        list.anchorMin = Vector2.zero;
+        list.anchorMax = Vector2.one;
+        list.offsetMin = new Vector2(6f, 6f);
+        list.offsetMax = new Vector2(-6f, -112f);
+        var layout = listGo.GetComponent<VerticalLayoutGroup>();
+        layout.spacing = 3f;
+        layout.childForceExpandHeight = true;
+        layout.childControlHeight = true;
+
+        _enhanceRows.Clear();
+        for (int lv = 0; lv <= WeaponAfterimage.MaxEnhanceLevel; lv++)
+        {
+            int captured = lv;
+            string label = lv == 0 ? "+0 (미강화)" : $"+{lv}";
+            _enhanceRows.Add(MakeEnhanceButton(list, label, () => SetEnhanceLevel(captured)));
+        }
+    }
+
+    /// <summary>강화 단계 버튼 한 개를 만들고 배경 Image(선택 하이라이트용)를 돌려준다.</summary>
+    private static Image MakeEnhanceButton(RectTransform parent, string label,
+                                           UnityEngine.Events.UnityAction onClick)
+    {
+        var rt = NewUi("Level", parent, out Image bg);
+        bg.color = RowNormal;
+        rt.gameObject.AddComponent<LayoutElement>().minHeight = 26f;
+
+        var labelGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
+        var lrt = (RectTransform)labelGo.transform;
+        lrt.SetParent(rt, false);
+        lrt.anchorMin = Vector2.zero;
+        lrt.anchorMax = Vector2.one;
+        lrt.offsetMin = new Vector2(8f, 0f);
+        lrt.offsetMax = new Vector2(-6f, 0f);
+        var text = labelGo.GetComponent<Text>();
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.text = label;
+        text.fontSize = 13;
+        text.color = Color.white;
+        text.alignment = TextAnchor.MiddleLeft;
+        text.raycastTarget = false;
+
+        var button = rt.gameObject.AddComponent<Button>();
+        button.targetGraphic = bg;
+        button.transition = Selectable.Transition.None; // 하이라이트는 선택 상태로만 표시
+        button.onClick.AddListener(onClick);
+        return bg;
     }
 
     /// <summary>배경 Image를 가진 빈 UI 오브젝트를 만든다.</summary>

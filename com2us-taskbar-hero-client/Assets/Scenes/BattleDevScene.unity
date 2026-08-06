@@ -241,6 +241,7 @@ MonoBehaviour:
     aoeSkillCodes: 67000000
     basicAttackAoe: 1
     weaponTrail: 1
+    weaponTrailStyle: 0
     selfEffectXOffset: 0.4
     basicAttackProjectile: {fileID: 0}
     basicAttackProjectileScale: 1
@@ -251,21 +252,18 @@ MonoBehaviour:
       icon: {fileID: 6246287561331318063, guid: ecffbd237f27a7f4eb3ce69215d6223e, type: 3}
       effectScale: 1
       effectOffset: {x: 0, y: 0}
-      weaponAfterimage: 0
       hitTimeRatio: 1
     - skillCode: 102
       effect: {fileID: 2136430871103748505, guid: 44deb7d5aec2f5d4186b5fbc0b0de708, type: 3}
       icon: {fileID: 7569313869476608826, guid: ba5e1ca001f0e6745964cfcc6249b8ff, type: 3}
       effectScale: 1
       effectOffset: {x: 0, y: 0}
-      weaponAfterimage: 1
       hitTimeRatio: 1
     - skillCode: 103
       effect: {fileID: 7708475180672134952, guid: 4698f6c24ef533d45ab3dd5b2825f105, type: 3}
       icon: {fileID: -5325384824576815437, guid: 39ab53a10dfda104096231bc3deb5997, type: 3}
       effectScale: 1
       effectOffset: {x: 0, y: 0}
-      weaponAfterimage: 0
       hitTimeRatio: 1
   - label: "\uB808\uC778\uC800"
     prefab: {fileID: 7127064250040410633, guid: 0c939ae22cd427141a2f3bc74c582d40, type: 3}
@@ -283,7 +281,8 @@ MonoBehaviour:
     slamAirTime: 0.46
     aoeSkillCodes: 
     basicAttackAoe: 0
-    weaponTrail: 0
+    weaponTrail: 1
+    weaponTrailStyle: 1
     selfEffectXOffset: 0
     basicAttackProjectile: {fileID: 0}
     basicAttackProjectileScale: 1
@@ -294,21 +293,18 @@ MonoBehaviour:
       icon: {fileID: -7933810402199326738, guid: d6ee3082dd79fdd4495c278dc1089b51, type: 3}
       effectScale: 2
       effectOffset: {x: 0, y: 0}
-      weaponAfterimage: 0
       hitTimeRatio: 1
     - skillCode: 202
       effect: {fileID: 354582950993372320, guid: e0230fa0f53fa454f81b5e7609c590ff, type: 3}
       icon: {fileID: -6030272920824193673, guid: 2884ec9eaabe3b3418baddeeac2c3dec, type: 3}
       effectScale: 2
       effectOffset: {x: 0, y: 0}
-      weaponAfterimage: 0
       hitTimeRatio: 1
     - skillCode: 203
       effect: {fileID: 4527952773247247765, guid: 542281f84080df341b5817b906ce40c5, type: 3}
       icon: {fileID: -1079795458671647714, guid: 169d6f9fab7a2964e86069fd12dfed7c, type: 3}
       effectScale: 1
       effectOffset: {x: 0, y: 0}
-      weaponAfterimage: 0
       hitTimeRatio: 1
   - label: "\uB9C8\uBC95\uC0AC"
     prefab: {fileID: 2832778511305924686, guid: 5971c58743c2dc348b4edbd551c61325, type: 3}
@@ -326,7 +322,8 @@ MonoBehaviour:
     slamAirTime: 0.46
     aoeSkillCodes: 
     basicAttackAoe: 0
-    weaponTrail: 0
+    weaponTrail: 1
+    weaponTrailStyle: 2
     selfEffectXOffset: 0
     basicAttackProjectile: {fileID: 5606973288849339333, guid: e515b90dc56a18b4f9e3fd4e728eda08, type: 3}
     basicAttackProjectileScale: 0.6
@@ -337,21 +334,18 @@ MonoBehaviour:
       icon: {fileID: 7689500521774833897, guid: 8c294534f213f64408c15f95f8eea73e, type: 3}
       effectScale: 1
       effectOffset: {x: 0, y: 0}
-      weaponAfterimage: 0
       hitTimeRatio: 1
     - skillCode: 302
       effect: {fileID: 1759322507448169237, guid: bc756ea77e9dde2409126371999d2af9, type: 3}
       icon: {fileID: 2009528195217518076, guid: f5f8ebbda6fd37541b4ee5ded80a0ef9, type: 3}
       effectScale: 1
       effectOffset: {x: 0, y: 0}
-      weaponAfterimage: 0
       hitTimeRatio: 1
     - skillCode: 303
       effect: {fileID: 5033347836641783958, guid: d8b67ccd8fb7b6a41a234059fc4dde61, type: 3}
       icon: {fileID: -6539421542112172884, guid: 7a9eb0101a9edb1409f5e1e9828a885a, type: 3}
       effectScale: 1
       effectOffset: {x: 0, y: 0}
-      weaponAfterimage: 0
       hitTimeRatio: 1
   - label: "\uC2AC\uB808\uC774\uC5B4"
     prefab: {fileID: 8930912608245659456, guid: f833b56096cf861459e4c4f2f08c06af, type: 3}
@@ -370,6 +364,7 @@ MonoBehaviour:
     aoeSkillCodes: 9101000093010000
     basicAttackAoe: 0
     weaponTrail: 1
+    weaponTrailStyle: 0
     selfEffectXOffset: 0
     basicAttackProjectile: {fileID: 0}
     basicAttackProjectileScale: 1
@@ -380,21 +375,18 @@ MonoBehaviour:
       icon: {fileID: 4264714366617519430, guid: 844546fe711c49b4aa65d2943e8543a0, type: 3}
       effectScale: 0.35
       effectOffset: {x: 0.6, y: -0.3}
-      weaponAfterimage: 0
       hitTimeRatio: 1
     - skillCode: 403
       effect: {fileID: 8502967701187360390, guid: ac46c40863e49f9458629bf991d1e314, type: 3}
       icon: {fileID: 8624705271358520548, guid: ddbbef65d28326546bbe9d468b5541fb, type: 3}
       effectScale: 0.85
       effectOffset: {x: 0.25, y: -0.15}
-      weaponAfterimage: 0
       hitTimeRatio: 0.3
     - skillCode: 402
       effect: {fileID: 8090570045680372740, guid: d5567b6084d00634a8ef427cd01e5396, type: 3}
       icon: {fileID: 1458260262148479802, guid: d68aae11708e8834cafd0f2410cecc1a, type: 3}
       effectScale: 1
       effectOffset: {x: 0, y: 0}
-      weaponAfterimage: 1
       hitTimeRatio: 1
   devSoloClassCode: 4
   monsterPrefab: {fileID: 1532218796454169711, guid: ec58634b610c94022b27f39f0cee941e, type: 3}

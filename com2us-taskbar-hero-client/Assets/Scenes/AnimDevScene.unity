@@ -328,7 +328,7 @@ MonoBehaviour:
   castHoldSeconds: 1
   arrowRainSeconds: 1
   groundSlamSeconds: 0.6
-  characterScreenX: 0.68
+  characterScreenX: 0.5
   jumpZoomOutScale: 2.3
 --- !u!4 &1209901991
 Transform:

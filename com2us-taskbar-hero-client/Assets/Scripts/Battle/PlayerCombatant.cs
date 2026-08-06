@@ -34,7 +34,6 @@ namespace TaskbarHero.Client.Battle
             public Sprite icon;
             public float scale;    // 발동 이펙트 크기 배율(1=기본)
             public Vector2 offset; // 발동 이펙트 위치 보정(월드, x+는 적 방향)
-            public bool weaponAfterimage; // 버프 지속 동안 무기 끝 붉은 잔상 추가
             public float hitTimeRatio;    // 데미지 타격 시점(이펙트 재생 구간 비율, 1=이펙트 종료 시점)
         }
 
@@ -159,7 +158,8 @@ namespace TaskbarHero.Client.Battle
         private float _lifestealTimer;          // 흡혈 남은 시간
         private float _buffTimer;
         private GameObject _buffEffect;
-        private WeaponAfterimage _weaponTrail;  // 무기 끝 잔상(상시, 평소 노랑 / 버프 중 붉음)
+        private WeaponAfterimage _weaponTrail;  // 무기 끝 잔상(색·반짝임은 무기 강화 단계 / 버프 중 붉음)
+        private const int WeaponEquipSlot = 1;  // equip_slot_master 1 = 무기
 
         // 개별 이동(대형 목표를 자기 속도로 추격 — 칼같은 정렬이 아닌 동적 이동)
         private Vector2 _formTarget;
@@ -211,10 +211,12 @@ namespace TaskbarHero.Client.Battle
             _allSkillsAoe = cfg.allSkillsAoe;
             _anim = GetComponentInChildren<Animator>();
 
-            // 근접 무기 잔상(기사·슬레이어): 스폰 시 1회 부착. 평소 노랑, 무기 강화 버프 중에는 붉은색.
+            // 무기 잔상: 스폰 시 1회 부착. 형태는 무기 종류별, 색·반짝임은 장착 무기의 강화 단계가 정한다
+            // (단계 반영은 이어지는 LoadStats → ApplyEquipStats → RefreshWeaponTrailEnhance).
             if (cfg.weaponTrail && _weaponTrail == null)
             {
-                _weaponTrail = WeaponAfterimage.Create(transform, () => IsAttackMotionPlaying());
+                _weaponTrail = WeaponAfterimage.Create(
+                    transform, () => IsAttackMotionPlaying(), cfg.weaponTrailStyle);
             }
 
             LoadStats();
@@ -311,6 +313,8 @@ namespace TaskbarHero.Client.Battle
                 }
             }
 
+            RefreshWeaponTrailEnhance(); // 무기 잔상 색·반짝임은 장착 무기의 강화 단계를 따른다
+
             // 패시브 스킬 배율 + 룬(계정 공용) 배율(statType: 1 공격력 · 2 방어력 · 3 체력 · 4 치명확률 ·
             // 5 치명피해 · 6 이동속도 · 7 쿨다운)을 곱한다.
             // 반올림으로 확정한다(버림 시 작은 % 상승분이 사라지는 문제 방지 — 인벤토리 능력치 패널과 동일 규칙).
@@ -323,6 +327,35 @@ namespace TaskbarHero.Client.Battle
             _critDamage = Mathf.Max(1f, critDamage * PassiveMult(5) * RuneMult(5));
             _moveSpeed = _baseMoveSpeed * PassiveMult(6) * RuneMult(6);
             _cooldown = Mathf.Max(0.1f, _baseCooldown * RuneMult(7)); // 룬 재사용 단축(감소 방향)
+        }
+
+        /// <summary>
+        /// 이 캐릭터가 장착한 <b>무기</b>(equip_slot 1)의 강화 단계를 무기 잔상에 반영한다.
+        /// 잔상 색(+0 흰빛 → 붉은색 → +8 보랏빛 → +10 암흑)과 반짝임 입자의 세기가 여기서 정해진다.
+        /// 장착이 없거나 개발 하네스처럼 계정 캐릭터가 연결되지 않은 경우(_characterId = 0)에는 0단계로 둔다.
+        /// 장비 교체·강화 시 <see cref="RefreshStats"/> → <see cref="ApplyEquipStats"/> 경로로 다시 불린다.
+        /// </summary>
+        private void RefreshWeaponTrailEnhance()
+        {
+            if (_weaponTrail == null)
+            {
+                return;
+            }
+
+            int level = 0;
+            var equipped = Session.Equipped;
+            if (_characterId != 0 && equipped != null)
+            {
+                foreach (var it in equipped)
+                {
+                    if (it != null && it.equippedCharacterId == _characterId && it.equippedSlot == WeaponEquipSlot)
+                    {
+                        level = it.enhanceLevel;
+                        break;
+                    }
+                }
+            }
+            _weaponTrail.SetEnhanceLevel(level);
         }
 
         /// <summary>계정 공용 룬(레벨 ≥ 1) 중 대상 statType을 올리는 것들의 배율 곱. 룬 stat_value는 레벨당 누적 비율이며
@@ -484,7 +517,6 @@ namespace TaskbarHero.Client.Battle
                     icon = _cfg != null ? _cfg.IconFor(s.skillCode) : null,
                     scale = _cfg != null ? _cfg.ScaleFor(s.skillCode) : 1f,
                     offset = _cfg != null ? _cfg.OffsetFor(s.skillCode) : Vector2.zero,
-                    weaponAfterimage = _cfg != null && _cfg.WeaponAfterimageFor(s.skillCode),
                     hitTimeRatio = _cfg != null ? _cfg.HitTimeRatioFor(s.skillCode) : 1f,
                 };
                 _skills.Add(sk);
@@ -670,7 +702,6 @@ namespace TaskbarHero.Client.Battle
                     _atkBuffMult = 1f;
                     _cooldownBuffMult = 1f;
                     if (_buffEffect != null) { Destroy(_buffEffect); _buffEffect = null; }
-                    if (_weaponTrail != null) { _weaponTrail.SetBuffed(false); } // 평소의 노란 잔상으로 복귀
                 }
             }
 
@@ -956,15 +987,10 @@ namespace TaskbarHero.Client.Battle
                         new Vector3(sk.offset.x, _ctrl.EffectYOffset + sk.offset.y, 0f);
                 }
 
-                // 무기 강화형 버프(기사의 분노·광전사의 힘): 지속 동안 무기 잔상을 붉은색으로 + 무기 끝 발광점.
-                if (_weaponTrail != null && sk.weaponAfterimage)
-                {
-                    _weaponTrail.SetBuffed(true);
-                }
-
-                // 버프 지속 중 화면 가장자리를 붉게 물들이는 비네트는 넣지 않는다 —
-                // 광전사의 힘은 재사용 대기시간이 짧아 화면이 거의 상시 붉어져 시야를 방해했다(2026-08-04 제거).
-                // 버프 표현은 무기 잔상(붉은색)·버프 이펙트로 충분하다.
+                // 자버프(기사의 분노·광전사의 힘)는 무기 잔상을 건드리지 않는다 — 잔상 색·반짝임은
+                // 오직 장착 무기의 강화 단계만 따른다(2026-08-06). 버프 표현은 위 발동 이펙트가 맡는다.
+                // 화면 가장자리를 붉게 물들이는 비네트도 넣지 않는다 — 광전사의 힘은 재사용 대기시간이
+                // 짧아 화면이 거의 상시 붉어져 시야를 방해했다(2026-08-04 제거).
 
                 _busyTimer = _ctrl.BasicHitDelay;
             }
