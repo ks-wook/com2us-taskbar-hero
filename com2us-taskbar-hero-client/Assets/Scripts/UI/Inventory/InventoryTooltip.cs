@@ -9,6 +9,7 @@ namespace TaskbarHero.Client.UI
     /// 아이템 hover 시 뜨는 상세 툴팁 창. 위젯은 프리팹에 직렬화되고, 계층은 에디터 빌드 시 생성된다.
     /// 커서를 칸→툴팁으로 옮겨도 유지되도록 자체 pointer enter/exit로 닫기를 취소한다(keep-open).
     /// 좌측 버튼은 장비면 '장착', 소모품(item_type=4)이면 '사용'으로 바뀌며, 각각 서버에 요청을 보낸다.
+    /// 재료·재화처럼 장착도 사용도 못 하는 아이템에는 두 버튼을 아예 표시하지 않는다.
     /// </summary>
     public class InventoryTooltip : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     {
@@ -24,6 +25,18 @@ namespace TaskbarHero.Client.UI
 
         private RectTransform _rt;
         private const float HideDelay = 0.04f;
+
+        // ── 내용 높이에 맞춘 레이아웃 상수 ──
+        // 창 폭은 프리팹 값을 그대로 쓰고(가로는 조절하지 않는다), 세로만 표시 내용에 맞춰 줄인다.
+        private const float PadX = 16f;          // 좌우 여백
+        private const float PadTop = 14f;        // 첫 줄 위 여백
+        private const float PadBottom = 16f;     // 마지막 요소 아래 여백
+        private const float TextGap = 4f;        // 텍스트 줄 사이 간격
+        private const float TextSlack = 2f;      // 줄 높이 여유 — 딱 맞추면 Truncate에서 줄이 통째로 사라진다
+        private const float ButtonGapTop = 20f;  // 마지막 텍스트와 버튼 줄 사이 간격(TextGap과 합쳐 24)
+        private const float ButtonWidth = 130f;
+        private const float ButtonHeight = 44f;
+        private const float ButtonGapX = 28f;    // 장착 버튼과 해제 버튼 사이 간격
 
         /// <summary>커서와 툴팁 사이 간격. 이만큼 떨어뜨려 툴팁이 커서를 덮지 않게 한다.</summary>
         private const float CursorGap = 18f;
@@ -54,7 +67,9 @@ namespace TaskbarHero.Client.UI
             HideImmediate();
         }
 
-        /// <summary>에디터 빌드 전용: 툴팁 내부 위젯을 구성한다.</summary>
+        /// <summary>에디터 빌드 전용: 툴팁 내부 위젯을 구성한다.
+        /// 여기서 잡는 y 좌표·높이는 <b>초기값</b>일 뿐이며, 실제 배치와 창 높이는 표시할 때마다
+        /// <see cref="LayoutContent"/>가 내용에 맞춰 다시 계산한다.</summary>
         public void EditorBuild(Font font, RectTransform rootRect)
         {
             _rt = (RectTransform)transform;
@@ -73,8 +88,9 @@ namespace TaskbarHero.Client.UI
             _reqText = MakeText(font, "Req", "", 18, TextAnchor.UpperLeft, 16f, 84f, 288f, 28f);
             _statsText = MakeText(font, "Stats", "", 18, TextAnchor.UpperLeft, 16f, 116f, 288f, 60f);
 
-            _equipButton = MakeButton(font, "EquipButton", "장착", 16f, 200f, 130f, 44f);
-            _unequipButton = MakeButton(font, "UnequipButton", "해제", 174f, 200f, 130f, 44f);
+            _equipButton = MakeButton(font, "EquipButton", "장착", PadX, 200f, ButtonWidth, ButtonHeight);
+            _unequipButton = MakeButton(font, "UnequipButton", "해제",
+                PadX + ButtonWidth + ButtonGapX, 200f, ButtonWidth, ButtonHeight);
         }
 
         /// <summary>배경 스프라이트(item_detail_bg)가 배선돼 있으면 툴팁 배경에 적용해
@@ -113,16 +129,93 @@ namespace TaskbarHero.Client.UI
 
             // 소모품이면 같은 버튼을 '사용'으로 바꿔 쓴다(장착 개념이 없는 아이템이라 별도 버튼을 두지 않는다).
             // 장비는 종전대로 — 장착: 장비이고 미장착(가방)일 때 활성. 해제: 현재 장착 중일 때 활성.
+            // 재료·재화처럼 장착도 사용도 할 수 없는 아이템은 비활성 버튼을 보여 주지 않고 버튼 자체를 감춘다.
             bool isEquipped = data.equippedSlot > 0;
             var label = ActionButtonLabel;
             if (label != null)
             {
                 label.text = data.usable ? "사용" : "장착";
             }
+            bool showAction = data.isEquipment || data.usable;
+            _equipButton.gameObject.SetActive(showAction);
             _equipButton.interactable = data.usable || (data.equippable && !isEquipped);
+            _unequipButton.gameObject.SetActive(data.isEquipment); // 해제는 장비 전용
             _unequipButton.interactable = isEquipped;
 
-            Reposition(screenPos);
+            LayoutContent(showAction);  // 창 높이는 이번에 표시할 내용에 맞춘다
+            Reposition(screenPos);      // 배치는 확정된 크기로 계산해야 한다
+        }
+
+        /// <summary>
+        /// 이번에 표시할 내용(각 줄의 실제 높이 + 버튼 유무)에 맞춰 위젯을 위에서부터 다시 쌓고 창 높이를 줄인다.
+        /// 프리팹에 구워진 좌표는 고정 높이(260) 기준이라, 설명이 짧거나 버튼이 없는 아이템
+        /// (재료·재화)에서는 아래쪽이 빈 채로 남는다. 창 <b>폭은 프리팹 값을 그대로</b> 쓴다.
+        /// </summary>
+        /// <param name="showButtons">이번 표시에서 버튼 줄이 하나라도 보이는지</param>
+        private void LayoutContent(bool showButtons)
+        {
+            if (_rt == null)
+            {
+                return;
+            }
+
+            float width = _rt.sizeDelta.x;
+            float contentWidth = Mathf.Max(1f, width - PadX * 2f);
+
+            float y = PadTop;
+            y = StackText(_nameText, contentWidth, y);
+            y = StackText(_subText, contentWidth, y);
+            y = StackText(_reqText, contentWidth, y);
+            y = StackText(_statsText, contentWidth, y);
+
+            if (showButtons)
+            {
+                y += ButtonGapTop;
+                PlaceButton(_equipButton, PadX, y);
+                PlaceButton(_unequipButton, PadX + ButtonWidth + ButtonGapX, y);
+                y += ButtonHeight + PadBottom;
+            }
+            else
+            {
+                y += PadBottom - TextGap; // 마지막 줄 뒤 간격은 하단 여백과 겹치므로 상쇄한다
+            }
+
+            _rt.sizeDelta = new Vector2(width, Mathf.Ceil(y));
+        }
+
+        /// <summary>텍스트 한 줄을 y 위치에 배치하고 다음 줄의 시작 y를 돌려준다(빈 줄은 감추고 자리도 차지하지 않는다).</summary>
+        private static float StackText(Text t, float contentWidth, float y)
+        {
+            if (t == null)
+            {
+                return y;
+            }
+            if (string.IsNullOrEmpty(t.text))
+            {
+                t.gameObject.SetActive(false);
+                return y;
+            }
+
+            t.gameObject.SetActive(true);
+            var rt = (RectTransform)t.transform;
+            // 줄바꿈 높이는 폭에 따라 달라지므로 폭을 먼저 확정한 뒤 preferredHeight를 읽는다.
+            rt.sizeDelta = new Vector2(contentWidth, 0f);
+            float h = Mathf.Ceil(t.preferredHeight) + TextSlack;
+            rt.anchoredPosition = new Vector2(PadX, -y);
+            rt.sizeDelta = new Vector2(contentWidth, h);
+            return y + h + TextGap;
+        }
+
+        /// <summary>버튼을 지정 위치에 배치한다(크기는 상수 고정).</summary>
+        private static void PlaceButton(Button b, float x, float y)
+        {
+            if (b == null)
+            {
+                return;
+            }
+            var rt = (RectTransform)b.transform;
+            rt.anchoredPosition = new Vector2(x, -y);
+            rt.sizeDelta = new Vector2(ButtonWidth, ButtonHeight);
         }
 
         /// <summary>지연 닫기 예약(칸→툴팁 이동 중 취소될 수 있음).</summary>

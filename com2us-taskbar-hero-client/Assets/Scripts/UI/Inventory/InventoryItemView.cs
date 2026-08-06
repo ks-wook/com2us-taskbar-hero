@@ -7,8 +7,10 @@ namespace TaskbarHero.Client.UI
 {
     /// <summary>
     /// 인벤토리 아이템 아이콘 뷰(드래그 가능). 표시 데이터·아이콘은 프리팹에 직렬화되고,
-    /// 계층은 에디터 빌드 시 생성된다(정적 프리팹). hover 시 상세 툴팁을 띄우고,
-    /// 드래그로 다른 격자 칸으로 이동한다(로컬 처리, 서버 미연동).
+    /// 계층은 에디터 빌드 시 생성된다(정적 프리팹). hover 시 상세 툴팁을 띄운다.
+    /// <para>드래그하면 놓는 곳에 따라 동작이 갈린다 — <b>가방 격자 칸</b>에 놓으면 배치 이동,
+    /// <b>장비 부위 칸</b>에 놓으면 장착 요청이다(<see cref="InventoryPanelController.TryEquipByDrag"/>).
+    /// 드래그하는 동안에는 그 장비가 들어갈 부위 칸이 강조된다.</para>
     /// </summary>
     public class InventoryItemView : MonoBehaviour,
         IBeginDragHandler, IDragHandler, IEndDragHandler,
@@ -31,6 +33,8 @@ namespace TaskbarHero.Client.UI
             public long quantity;     // 보유 수량(2 이상이면 슬롯 우하단에 "xN")
             public long itemId;       // 서버 아이템 id(장착/해제 요청용)
             public int equippedSlot;  // 현재 장착 슬롯(1~6). 0 = 가방(미장착)
+            public int equipSlot;     // 이 장비가 들어갈 부위(item_master.equipSlot 1~6). 비장비는 0 — 드래그 장착의 부위 판정
+            public bool isEquipment;  // 장비(item_type=1) 여부. 툴팁의 장착/해제 버튼 노출 조건(재료·재화는 버튼 자체가 없다)
             public bool equippable;   // 착용 가능 여부(장비 + 현재 캐릭터 클래스·레벨 허용). 장착 버튼 활성 조건
             public bool equipLocked;  // 착용 불가 장비(클래스 불일치 또는 레벨 미달) → 슬롯에 X 표시 + 흐림
             public bool usable;       // 소모품(item_type=4) 여부. true면 툴팁 버튼이 '장착'이 아니라 '사용'이 된다
@@ -212,6 +216,9 @@ namespace TaskbarHero.Client.UI
             _rt.sizeDelta = new Vector2(118f, 118f);
             _icon.raycastTarget = false; // 아래 칸이 레이캐스트에 잡히도록
             _rt.position = eventData.position;
+
+            // 이 장비를 놓을 수 있는 부위 칸을 강조해, 어디에 떨어뜨려야 장착되는지 보이게 한다.
+            Controller.HighlightEquipTarget(_data, true);
         }
 
         public void OnDrag(PointerEventData eventData)
@@ -230,20 +237,32 @@ namespace TaskbarHero.Client.UI
             }
             _dragging = false;
             _icon.raycastTarget = true;
+            Controller.HighlightEquipTarget(_data, false);
 
             var target = FindSlotUnderPointer(eventData);
+            if (target != null && target.IsEquipSlot)
+            {
+                // 장비 부위 칸에 떨어뜨렸다 → 장착 시도(가방 칸 이동이 아니다).
+                Controller.TryEquipByDrag(this, _originSlot, target);
+                return;
+            }
             Controller.MoveItem(this, _originSlot, target);
         }
 
-        /// <summary>포인터 아래의 격자 슬롯(장비 슬롯 제외)을 찾는다.</summary>
+        /// <summary>포인터 아래의 슬롯을 찾는다(가방 격자 칸·장비 부위 칸 모두). 없으면 null.</summary>
         private InventoryItemSlot FindSlotUnderPointer(PointerEventData eventData)
         {
+            var es = EventSystem.current;
+            if (es == null)
+            {
+                return null;
+            }
             var results = new System.Collections.Generic.List<RaycastResult>();
-            EventSystem.current.RaycastAll(eventData, results);
+            es.RaycastAll(eventData, results);
             foreach (var r in results)
             {
                 var slot = r.gameObject.GetComponentInParent<InventoryItemSlot>();
-                if (slot != null && !slot.IsEquipSlot)
+                if (slot != null)
                 {
                     return slot;
                 }

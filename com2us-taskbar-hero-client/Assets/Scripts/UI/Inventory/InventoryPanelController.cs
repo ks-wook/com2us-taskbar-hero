@@ -1605,6 +1605,8 @@ namespace TaskbarHero.Client.UI
                 icon = _iconDb != null ? _iconDb.Get(itemCode) : null,
                 itemId = itemId,
                 equippedSlot = equippedSlot,
+                equipSlot = im != null ? im.equipSlot : 0,  // 드래그로 장비 부위 칸에 놓을 때의 부위 판정
+                isEquipment = isEquip,                     // 툴팁의 장착/해제 버튼 노출 여부(재료·재화는 숨김)
                 equippable = isEquip && classOk && levelOk,
                 equipLocked = equipLocked,
                 usable = isConsumable && equippedSlot == 0, // 가방에 있는 소모품만 사용할 수 있다
@@ -1631,6 +1633,89 @@ namespace TaskbarHero.Client.UI
 
         /// <summary>등급(1~5)별 아이템 이름 텍스트 색. 공용 <see cref="GradeColors"/> 위임.</summary>
         public static Color GradeNameColor(int grade) => GradeColors.Name(grade);
+
+        // ── 드래그로 장착 / 해제 ──
+
+        /// <summary>
+        /// 장비 부위 칸의 장착 아이템을 <b>가방 격자에 떨어뜨렸을 때</b>의 해제 처리.
+        /// 어느 가방 칸에 놓든 결과는 같다 — 서버가 아이템이 들어갈 가방 칸(bagSlot)을 정해 응답하고,
+        /// <c>Session.ApplyUnequipResult</c>가 그 칸으로 캐시를 맞춘다.
+        /// <para>끌던 아이콘은 호출 전에 이미 제자리로 돌아가 있으므로, 여기서는 요청만 보낸다.
+        /// 성공하면 서버 응답 뒤 가방·장비 칸이 함께 다시 그려진다.</para>
+        /// </summary>
+        /// <param name="equipSlot">끌어낸 장비 부위 칸(<see cref="InventoryItemSlot.Index"/> 0~5 = 부위 1~6)</param>
+        public void TryUnequipByDrag(InventoryItemSlot equipSlot)
+        {
+            if (equipSlot == null || !equipSlot.IsEquipSlot)
+            {
+                return;
+            }
+            RequestHideTooltip();
+            RequestUnequip(equipSlot.Index + 1);
+        }
+
+        // ── 드래그로 장착 ──
+
+        /// <summary>
+        /// 가방 아이템을 <b>장비 부위 칸에 떨어뜨렸을 때</b>의 장착 처리.
+        /// 툴팁의 '장착' 버튼과 같은 조건을 통과할 때만 서버에 요청하고, 그 밖에는 조용히 되돌린다
+        /// (착용 불가 장비의 '장착' 버튼이 비활성인 것과 같은 톤 — 실수로 놓아도 방해하지 않는다).
+        /// <para>드래그 시작 시 아이템은 원래 칸에서 떨어져 캔버스로 옮겨져 있으므로, 어떤 결과든
+        /// <b>먼저 원래 칸으로 되돌린다</b>. 장착에 성공하면 서버 응답 뒤 격자가 다시 그려진다.</para>
+        /// </summary>
+        /// <param name="view">드래그한 가방 아이템</param>
+        /// <param name="from">드래그를 시작한 가방 칸(되돌릴 자리)</param>
+        /// <param name="equipSlot">떨어뜨린 장비 부위 칸(<see cref="InventoryItemSlot.Index"/> 0~5 = 부위 1~6)</param>
+        public void TryEquipByDrag(InventoryItemView view, InventoryItemSlot from, InventoryItemSlot equipSlot)
+        {
+            if (from != null)
+            {
+                from.SetItem(view); // 성공/실패 무관하게 일단 제자리로
+            }
+            if (view == null || equipSlot == null)
+            {
+                return;
+            }
+
+            var data = view.Data;
+            int part = equipSlot.Index + 1; // 부위 칸 인덱스(0~5) → equip_slot(1~6)
+
+            if (!data.isEquipment)
+            {
+                Debug.Log($"[Inventory] 드래그 장착 무시 — 장비가 아님(itemCode={data.itemCode}).");
+                return;
+            }
+            if (data.equipSlot != part)
+            {
+                Debug.Log($"[Inventory] 드래그 장착 무시 — 부위 불일치(아이템 {data.equipSlot} ≠ 칸 {part}).");
+                return;
+            }
+            if (!data.equippable)
+            {
+                Debug.Log($"[Inventory] 드래그 장착 무시 — 착용 조건 미달(직업·레벨) itemId={data.itemId}.");
+                return;
+            }
+
+            RequestHideTooltip();
+            RequestEquip(data.itemId);
+        }
+
+        /// <summary>
+        /// 드래그 중인 장비가 들어갈 부위 칸을 강조한다(<paramref name="on"/> false면 전체 해제).
+        /// 착용 조건을 못 갖춘 장비는 강조하지 않는다 — 놓아도 장착되지 않으므로 기대를 주지 않는다.
+        /// </summary>
+        public void HighlightEquipTarget(InventoryItemView.Display data, bool on)
+        {
+            for (int i = 0; i < _equipSlots.Count; i++)
+            {
+                if (_equipSlots[i] == null)
+                {
+                    continue;
+                }
+                bool target = on && data.isEquipment && data.equippable && data.equipSlot == i + 1;
+                _equipSlots[i].SetHighlight(target);
+            }
+        }
 
         // ── 장착 / 해제 (서버 연동) ──
 

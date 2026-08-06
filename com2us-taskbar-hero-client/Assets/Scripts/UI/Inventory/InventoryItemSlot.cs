@@ -8,9 +8,14 @@ namespace TaskbarHero.Client.UI
     /// <summary>
     /// 인벤토리 격자 칸(또는 장비 부위 슬롯). 구조 정보(인덱스·타입·프레임·부위라벨)는
     /// 프리팹에 직렬화되고, 아이템 점유는 런타임 상태다. hover 시 하이라이트 프레임을 켜며
-    /// 드롭 대상으로 동작하고, 장비 슬롯은 캐릭터별 장착 아이템(데모)을 표시·툴팁한다.
+    /// 드롭 대상으로 동작하고, 장비 슬롯은 캐릭터별 장착 아이템을 표시·툴팁한다.
+    /// <para><b>장비 부위 칸은 장착 중인 아이템을 끌어낼 수 있다</b> — 가방 격자에 떨어뜨리면 해제
+    /// 요청이 나간다(<see cref="InventoryPanelController.TryUnequipByDrag"/>). 가방 아이템을 부위 칸에
+    /// 떨어뜨려 장착하는 반대 방향은 <see cref="InventoryItemView"/>가 담당한다.</para>
     /// </summary>
-    public class InventoryItemSlot : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+    public class InventoryItemSlot : MonoBehaviour,
+        IPointerEnterHandler, IPointerExitHandler,
+        IBeginDragHandler, IDragHandler, IEndDragHandler
     {
         [SerializeField] private int _index;
         [SerializeField] private bool _isEquipSlot;
@@ -26,6 +31,15 @@ namespace TaskbarHero.Client.UI
         private ItemSlotView _equippedSlotView; // 장착 아이템을 그리는 공용 슬롯(아이콘·등급·강화 배지)
         private Text _equippedLabel;
         private InventoryItemView.Display? _equipped;
+
+        // 장착 아이템 끌어내기(해제) — 별도 고스트를 만들지 않고 장착 아이콘 자체를 커서에 붙였다가 되돌린다.
+        private bool _dragging;
+        private Canvas _canvas;
+        private Transform _dragOriginParent;
+        private CanvasGroup _dragGroup;
+
+        /// <summary>끌고 다니는 동안의 아이콘 크기(가방 아이템 드래그와 같은 크기로 맞춘다).</summary>
+        private static readonly Vector2 DragIconSize = new Vector2(118f, 118f);
 
         private InventoryPanelController Controller =>
             _controller != null ? _controller : (_controller = GetComponentInParent<InventoryPanelController>());
@@ -139,13 +153,14 @@ namespace TaskbarHero.Client.UI
 
             var go = Instantiate(slotPrefab, transform);
             go.name = "EquippedIcon";
-            var rt = (RectTransform)go.transform;
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.offsetMin = new Vector2(14f, 14f);
-            rt.offsetMax = new Vector2(-14f, -14f);
             _equippedSlotView = go.GetComponent<ItemSlotView>();
             _equippedIcon = go;
+            _dragGroup = go.GetComponent<CanvasGroup>();
+            if (_dragGroup == null)
+            {
+                _dragGroup = go.AddComponent<CanvasGroup>(); // 끌고 다니는 동안 아래 칸이 레이캐스트에 잡히도록
+            }
+            RestoreEquippedIconLayout();
 
             var lgo = new GameObject("Label", typeof(RectTransform), typeof(Text));
             lgo.transform.SetParent(go.transform, false);
@@ -165,10 +180,27 @@ namespace TaskbarHero.Client.UI
             _equippedLabel.verticalOverflow = VerticalWrapMode.Overflow;
         }
 
+        /// <summary>장착 아이콘을 이 칸 안에 꽉 차게(여백 14) 되돌린다 — 생성 직후와 드래그 취소 시 공용.</summary>
+        private void RestoreEquippedIconLayout()
+        {
+            if (_equippedIcon == null)
+            {
+                return;
+            }
+            var rt = (RectTransform)_equippedIcon.transform;
+            rt.SetParent(transform, false);
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = new Vector2(14f, 14f);
+            rt.offsetMax = new Vector2(-14f, -14f);
+            rt.localScale = Vector3.one;
+        }
+
         public void OnPointerEnter(PointerEventData eventData)
         {
             Controller.OnSlotHover(this, true);
-            if (_equipped.HasValue)
+            if (_equipped.HasValue && !_dragging)
             {
                 Controller.ShowTooltip(_equipped.Value, eventData.position);
             }
@@ -181,6 +213,94 @@ namespace TaskbarHero.Client.UI
             {
                 Controller.RequestHideTooltip();
             }
+        }
+
+        // ── 장착 아이템 끌어내기(해제) ──
+
+        /// <summary>
+        /// 장착 중인 아이템을 끌기 시작한다(장비 부위 칸 + 장착 상태일 때만).
+        /// 별도의 고스트를 만들지 않고 <b>장착 아이콘 자체</b>를 캔버스로 옮겨 커서에 붙인다 —
+        /// 놓는 순간 서버 응답으로 UI가 다시 그려지므로, 취소되면 <see cref="RestoreEquippedIconLayout"/>로 되돌린다.
+        /// </summary>
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            if (!_isEquipSlot || !_equipped.HasValue || _equippedIcon == null)
+            {
+                return; // 가방 격자 칸의 아이템 드래그는 InventoryItemView가 처리한다
+            }
+            _canvas = GetComponentInParent<Canvas>();
+            if (_canvas == null)
+            {
+                return;
+            }
+
+            _dragging = true;
+            SoundManager.Sfx(SoundId.UiSlotSelect); // 아이템 칸을 집는 순간(사운드 정의서 §4.1)
+            Controller.RequestHideTooltip();
+
+            var rt = (RectTransform)_equippedIcon.transform;
+            _dragOriginParent = rt.parent;
+            rt.SetParent(_canvas.transform, true);
+            rt.SetAsLastSibling();
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = DragIconSize;
+            rt.position = eventData.position;
+            if (_dragGroup != null)
+            {
+                _dragGroup.blocksRaycasts = false; // 아래 가방 칸이 레이캐스트에 잡히도록
+            }
+        }
+
+        public void OnDrag(PointerEventData eventData)
+        {
+            if (_dragging && _equippedIcon != null)
+            {
+                ((RectTransform)_equippedIcon.transform).position = eventData.position;
+            }
+        }
+
+        /// <summary>가방 격자 칸에 떨어뜨렸으면 해제 요청, 그 밖에는 아이콘을 제자리로 되돌린다.</summary>
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            if (!_dragging)
+            {
+                return;
+            }
+            _dragging = false;
+            if (_dragGroup != null)
+            {
+                _dragGroup.blocksRaycasts = true;
+            }
+            RestoreEquippedIconLayout();
+            _dragOriginParent = null;
+
+            var target = FindSlotUnderPointer(eventData);
+            if (target != null && !target.IsEquipSlot)
+            {
+                Controller.TryUnequipByDrag(this);
+            }
+        }
+
+        /// <summary>포인터 아래의 슬롯을 찾는다(가방 격자 칸·장비 부위 칸 모두). 없으면 null.</summary>
+        private static InventoryItemSlot FindSlotUnderPointer(PointerEventData eventData)
+        {
+            var es = EventSystem.current;
+            if (es == null)
+            {
+                return null;
+            }
+            var results = new System.Collections.Generic.List<RaycastResult>();
+            es.RaycastAll(eventData, results);
+            foreach (var r in results)
+            {
+                var slot = r.gameObject.GetComponentInParent<InventoryItemSlot>();
+                if (slot != null)
+                {
+                    return slot;
+                }
+            }
+            return null;
         }
     }
 }
