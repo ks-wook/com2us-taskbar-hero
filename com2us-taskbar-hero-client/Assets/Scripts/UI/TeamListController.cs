@@ -548,9 +548,12 @@ namespace TaskbarHero.Client.UI
             float cropX = illust.faceCenter.x - cropW * 0.5f;
             // faceCenter.y는 위에서부터라 아래 기준으로 뒤집는다. 얼굴은 크롭 위쪽(FaceInCrop)에 놓는다.
             float cropY = 1f - illust.faceCenter.y - cropH * (1f - FaceInCrop);
-            // 크롭이 이미지를 넘어가면(머리가 그림 맨 위에 붙은 일러스트) 창에 빈 공간이 생기므로 안으로 당긴다.
-            cropX = Mathf.Clamp(cropX, 0f, Mathf.Max(0f, 1f - cropW));
-            cropY = Mathf.Clamp(cropY, 0f, Mathf.Max(0f, 1f - cropH));
+            // 크롭이 그림 밖으로 조금 나가는 것은 <b>허용</b>한다 — 머리가 그림 맨 위에 붙은 일러스트는
+            // 그렇게 해야 얼굴이 창 중앙에 온다(레인저 남처럼). 예전에는 [0, 1-crop]으로 잘라 그림 안으로
+            // 되당겼는데, 그러면 DB에 아무리 값을 넣어도 그 지점 위로는 올라가지 않아 조정이 먹지 않았다.
+            // 여기서는 <b>한 화면 분량</b>까지만 열어 둔다(그 밖은 창이 통째로 비므로 실수로 본다).
+            cropX = Mathf.Clamp(cropX, -cropW, 1f);
+            cropY = Mathf.Clamp(cropY, -cropH, 1f);
 
             // 크롭 영역이 창을 정확히 채우도록 이미지 rect를 창 밖까지 늘린다(앵커만으로 표현).
             var rt = img.rectTransform;

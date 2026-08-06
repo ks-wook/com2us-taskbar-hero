@@ -21,6 +21,7 @@ namespace TaskbarHero.ClientEditor
         private const string BurstFxDir = "Assets/Art/Effect/UI/EnhanceSuccessBurst";
         private const string PrefabPath = "Assets/Prefabs/UI/CubePanel.prefab";
         private const string ItemSlotPrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
+        private const string ExpBarFramePath = "Assets/Art/Icon/Combat/체력바.png";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
 
@@ -61,6 +62,9 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("panelBackground").objectReferenceValue = LoadSprite("cube_bg");
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
+            so.FindProperty("actionButtonSprite").objectReferenceValue = LoadSprite("pixel_rpg_button");
+            // 경험치 바 프레임은 전투 HP바와 같은 아트를 쓴다(다른 폴더라 경로로 직접 집는다).
+            so.FindProperty("expBarFrame").objectReferenceValue = LoadSpriteAt(ExpBarFramePath);
             // 아이템 타일은 공용 슬롯 프리팹으로 그린다(인벤토리·거래소와 같은 외형·같은 강화 배지).
             so.FindProperty("_itemSlotPrefab").objectReferenceValue =
                 AssetDatabase.LoadAssetAtPath<GameObject>(ItemSlotPrefabPath);

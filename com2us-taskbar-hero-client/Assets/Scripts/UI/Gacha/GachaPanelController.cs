@@ -39,6 +39,12 @@ namespace TaskbarHero.Client.UI.Gacha
         private const float PanelHeight = 1090f;
         private const float Inset = 36f;
 
+        // ── 보유 골드 표시 ──
+        // 창 왼쪽 위가 아니라 <b>배너 오른쪽 아래</b>에 작게 붙인다(창 폭 1120 기준 x 820).
+        private const float GoldAreaLeft = 820f;
+        private const float GoldAreaTop = -380f;
+        private const float GoldAreaScale = 0.7f;
+
         private const float TabWidth = 500f;      // gacha_btn_* 원본 512×160 비율
         private const float TabHeight = 156f;
         private const float TabGap = 40f;
@@ -104,6 +110,15 @@ namespace TaskbarHero.Client.UI.Gacha
         private const float HistoryListSideInset = (PanelWidth - HistoryListWidth) * 0.5f;  // 90
         private const float HistoryRowTextWidth = HistoryListWidth - 64f;                   // 행 안쪽 여백(14×2 + 18×2)을 뺀 폭
 
+        // ── 기록 화면 제목 · 페이저('<' [현재 페이지] '>') ──
+        private const int HistoryTitleFontSize = 40;
+        private const float HistoryTitleTop = 40f;      // 창 위쪽에서 제목까지
+        private const int HistoryPagerFontSize = 32;
+        private const float HistoryPagerY = 110f;       // 창 아래쪽에서 페이저 줄까지(옛 '더 보기' 자리)
+        private const float HistoryPagerButtonWidth = 72f;
+        private const float HistoryPagerButtonHeight = 64f;
+        private const float HistoryPagerGap = 96f;      // 가운데(페이지 번호)에서 좌우 버튼 중심까지
+
         private const int GoldCurrencyType = 1;   // 재화 타입 1 = 골드
         private const int GoldItemCode = 1;       // item_master 골드 코드(아이콘 item_1)
         private const int PityGrade = 5;          // 천장 표시 대상 등급(전설) — 규칙이 다른 등급에 붙으면 응답을 따라간다
@@ -162,9 +177,16 @@ namespace TaskbarHero.Client.UI.Gacha
 
         [Header("기록 화면 (에디터 빌더가 배선)")]
         [SerializeField] private GameObject _historyRoot;
+        [Tooltip("기록 목록 상자(스크롤 뷰포트). 이것이 꺼져 있으면 기록 화면이 통째로 비어 보인다.")]
+        [SerializeField] private GameObject _historyListBox;
         [SerializeField] private RectTransform _historyContent;
         [SerializeField] private Button _historyBackButton;
-        [SerializeField] private Button _historyMoreButton;
+        [Tooltip("이전 페이지('<'). 첫 페이지에서는 눌리지 않는다.")]
+        [SerializeField] private Button _historyPrevButton;
+        [Tooltip("다음 페이지('>'). 더 받을 기록이 없으면 눌리지 않는다.")]
+        [SerializeField] private Button _historyNextButton;
+        [Tooltip("현재 페이지 번호(1부터).")]
+        [SerializeField] private Text _historyPageText;
         [SerializeField] private Text _historyEmptyText;
 
         [Header("결과 연출")]
@@ -181,8 +203,15 @@ namespace TaskbarHero.Client.UI.Gacha
         private readonly List<GachaBannerDto> _banners = new List<GachaBannerDto>();
         private readonly List<GameObject> _tabs = new List<GameObject>();
         private readonly List<GameObject> _historyRows = new List<GameObject>();
-        private long _historyCursor;
-        private bool _historyHasMore;
+
+        // ── 기록 페이징 ──
+        // 서버는 <b>커서 페이징</b>(마지막 pull_id보다 작은 것들을 최신순)이라 뒤로 가기를 지원하지 않는다.
+        // 그래서 각 페이지의 <b>시작 커서</b>를 클라이언트가 쌓아 두고, '<'는 그 스택에서 하나 꺼내 다시 조회한다.
+        // [0]은 항상 0(= 최신부터)이고, n번째 페이지를 받으면 그 응답의 nextCursor가 [n+1]이 된다.
+        private readonly List<long> _historyCursors = new List<long> { 0L };
+        private int _historyPage;        // 현재 페이지(0-based)
+        private bool _historyHasMore;    // 다음 페이지가 더 있는가(서버 응답)
+        private bool _historyLoading;    // 조회 중 — 연타로 페이지가 어긋나지 않게 막는다
 
         private bool AlreadyBuilt => _tabRow != null;
 
@@ -300,8 +329,10 @@ namespace TaskbarHero.Client.UI.Gacha
             var art = area.rectTransform;
             art.anchorMin = art.anchorMax = new Vector2(0f, 1f);
             art.pivot = new Vector2(0f, 1f);
-            art.anchoredPosition = new Vector2(Inset, -22f);
+            art.anchoredPosition = new Vector2(GoldAreaLeft, GoldAreaTop);
             art.sizeDelta = new Vector2(300f, 56f);
+            // 제목·배너를 가리지 않도록 통째로 줄인다(아이콘·글자 크기를 각각 다시 잡지 않는다).
+            art.localScale = new Vector3(GoldAreaScale, GoldAreaScale, GoldAreaScale);
             area.raycastTarget = false;
 
             _goldIcon = NewImage("GoldIcon", art, Color.white);
@@ -631,6 +662,8 @@ namespace TaskbarHero.Client.UI.Gacha
             lbrt.offsetMin = new Vector2(HistoryListSideInset, 190f);
             lbrt.offsetMax = new Vector2(-HistoryListSideInset, -ContentTop);
             listBg.gameObject.AddComponent<RectMask2D>();
+            listBg.gameObject.SetActive(true); // 목록 상자는 항상 켜 둔다(꺼진 채 구워지면 기록이 통째로 안 보인다)
+            _historyListBox = listBg.gameObject;
 
             var contentGo = new GameObject("Content", typeof(RectTransform));
             contentGo.transform.SetParent(lbrt, false);
@@ -666,8 +699,30 @@ namespace TaskbarHero.Client.UI.Gacha
             hert.anchoredPosition = Vector2.zero;
             _historyEmptyText.gameObject.SetActive(false);
 
-            _historyMoreButton = BuildTextButton(root, "MoreButton", "더 보기", 28,
-                new Vector2(0.5f, 0f), new Vector2(0f, 110f), new Vector2(280f, 64f));
+            // 제목(창 상단 중앙) — 배너 화면과 달리 탭 줄을 숨기므로 여기가 무슨 화면인지 알려 준다.
+            var title = NewText("HistoryTitle", root, "뽑기 기록", HistoryTitleFontSize, TextAnchor.MiddleCenter);
+            title.fontStyle = FontStyle.Bold;
+            var trt = title.rectTransform;
+            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
+            trt.pivot = new Vector2(0.5f, 1f);
+            trt.anchoredPosition = new Vector2(0f, -HistoryTitleTop);
+            trt.sizeDelta = new Vector2(400f, 60f);
+
+            // 페이저: '<' [현재 페이지] '>' — 목록 아래 가로 중앙.
+            _historyPrevButton = BuildTextButton(root, "PrevPageButton", "<", HistoryPagerFontSize,
+                new Vector2(0.5f, 0f), new Vector2(-HistoryPagerGap, HistoryPagerY),
+                new Vector2(HistoryPagerButtonWidth, HistoryPagerButtonHeight));
+            _historyNextButton = BuildTextButton(root, "NextPageButton", ">", HistoryPagerFontSize,
+                new Vector2(0.5f, 0f), new Vector2(HistoryPagerGap, HistoryPagerY),
+                new Vector2(HistoryPagerButtonWidth, HistoryPagerButtonHeight));
+
+            _historyPageText = NewText("PageNumber", root, "1", HistoryPagerFontSize, TextAnchor.MiddleCenter);
+            _historyPageText.fontStyle = FontStyle.Bold;
+            var prt = _historyPageText.rectTransform;
+            prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0f);
+            prt.pivot = new Vector2(0.5f, 0f); // 버튼과 같은 기준(아래 중앙)이라 세로가 자연히 맞는다
+            prt.anchoredPosition = new Vector2(0f, HistoryPagerY);
+            prt.sizeDelta = new Vector2(HistoryPagerGap * 2f - HistoryPagerButtonWidth, HistoryPagerButtonHeight);
             _historyBackButton = BuildTextButton(root, "BackButton", "뒤로", 28,
                 new Vector2(0f, 0f), new Vector2(Inset, 110f), new Vector2(200f, 64f));
 
@@ -694,14 +749,16 @@ namespace TaskbarHero.Client.UI.Gacha
             Rewire(_multiButton, OnMultiPull);
             Rewire(_historyButton, ShowHistoryView);
             Rewire(_historyBackButton, ShowMainView);
-            Rewire(_historyMoreButton, RequestHistoryMore);
+            Rewire(_historyPrevButton, RequestHistoryPrev);
+            Rewire(_historyNextButton, RequestHistoryNext);
             Rewire(_chanceButton, ToggleChancePopup);
             Rewire(_chanceCloseButton, HideChancePopup);
 
             // 자체 사운드를 재생하는 버튼은 전역 클릭음에서 제외한다(사운드 정의서 §8 매핑을 그대로 유지).
             UiClickSound.Suppress(_chanceButton);        // 열림/닫힘음
             UiClickSound.Suppress(_historyButton);       // 기록 화면 표시음
-            UiClickSound.Suppress(_historyMoreButton);   // 더 보기 클릭음
+            UiClickSound.Suppress(_historyPrevButton);   // 페이지 이동 클릭음
+            UiClickSound.Suppress(_historyNextButton);
         }
 
         private static void Rewire(Button button, UnityEngine.Events.UnityAction action)
@@ -1349,27 +1406,51 @@ namespace TaskbarHero.Client.UI.Gacha
         {
             if (_mainRoot != null) _mainRoot.SetActive(false);
             if (_historyRoot != null) _historyRoot.SetActive(true);
+            // 목록 상자가 꺼진 채 구워진 프리팹이 있어(2026-08-06) 화면이 통째로 비어 보였다.
+            // 표시할 때마다 켜 두면 프리팹 상태에 관계없이 목록이 나온다.
+            if (_historyListBox != null) _historyListBox.SetActive(true);
             if (_tabRow != null) _tabRow.gameObject.SetActive(false);
             HideChancePopup(); // 확률 팝업이 열려 있었으면 닫고 버튼 라벨도 되돌린다
             SoundManager.Sfx(SoundId.UiPanelOpen); // 기록 화면 표시(§8)
 
             ClearHistoryRows();
-            _historyCursor = 0;
+            _historyCursors.Clear();
+            _historyCursors.Add(0L); // 첫 페이지는 항상 최신부터
+            _historyPage = 0;
             _historyHasMore = false;
             RequestHistory();
         }
 
-        /// <summary>다음 페이지를 이어 받는다(커서 페이징이므로 이전 페이지 결과는 그대로 남긴다).</summary>
-        private void RequestHistoryMore()
+        /// <summary>이전 페이지('&lt;'). 첫 페이지이거나 조회 중이면 아무 일도 하지 않는다.</summary>
+        private void RequestHistoryPrev()
         {
-            if (_historyHasMore)
+            if (_historyLoading || _historyPage <= 0)
             {
-                SoundManager.Sfx(SoundId.UiClick); // 페이지 더 보기(§8)
-                RequestHistory();
+                return;
             }
+            SoundManager.Sfx(SoundId.UiClick);
+            _historyPage--;
+            RequestHistory();
         }
 
-        /// <summary>뽑기 기록을 최신순으로 조회한다(<c>POST /api/game/gacha/history</c>, 커서 페이징).</summary>
+        /// <summary>다음 페이지('&gt;'). 더 받을 기록이 없거나 조회 중이면 아무 일도 하지 않는다.</summary>
+        private void RequestHistoryNext()
+        {
+            if (_historyLoading || !_historyHasMore)
+            {
+                return;
+            }
+            SoundManager.Sfx(SoundId.UiClick);
+            _historyPage++;
+            RequestHistory();
+        }
+
+        /// <summary>
+        /// 현재 페이지(<see cref="_historyPage"/>)를 조회해 목록을 <b>통째로 다시 그린다</b>
+        /// (<c>POST /api/game/gacha/history</c>, 커서 페이징).
+        /// <para>페이지의 시작 커서는 <see cref="_historyCursors"/>에서 꺼내고, 응답의 <c>nextCursor</c>를
+        /// 다음 페이지 자리에 채워 둔다 — 그래야 '&gt;'로 넘어간 뒤 '&lt;'로 되돌아올 수 있다.</para>
+        /// </summary>
         private void RequestHistory()
         {
             if (NetworkManager.Instance == null || !Session.IsLoggedIn)
@@ -1377,27 +1458,74 @@ namespace TaskbarHero.Client.UI.Gacha
                 ShowNotice("로그인 필요", "로그인이 필요합니다.");
                 return;
             }
+
+            // 스택에 없는 페이지는 요청하지 않는다(커서를 모르므로 최신부터 다시 그리게 된다).
+            if (_historyPage < 0 || _historyPage >= _historyCursors.Count)
+            {
+                _historyPage = 0;
+            }
+            long cursor = _historyCursors[_historyPage];
+            int requested = _historyPage;
+
+            _historyLoading = true;
+            RefreshHistoryPager(); // 조회 중에는 버튼을 잠근다
+
             var req = new GachaHistoryRequest
             {
                 userId = Session.UserId,
                 token = Session.Token,
                 // gachaCode 0 = 전체 가챠. cursor 0이면 최신부터.
-                data = new GachaHistoryData { gachaCode = 0, cursor = _historyCursor, limit = HistoryPageSize },
+                data = new GachaHistoryData { gachaCode = 0, cursor = cursor, limit = HistoryPageSize },
             };
             NetworkManager.Instance.PostToGame<GachaHistoryResponse>("/api/game/gacha/history", req, resp =>
             {
+                _historyLoading = false;
                 var data = resp != null ? resp.data : null;
                 _historyHasMore = data != null && data.hasMore;
-                _historyCursor = data != null ? data.nextCursor : 0;
+
+                // 다음 페이지의 시작 커서를 스택에 채운다(같은 페이지를 다시 받아도 값이 어긋나지 않게 덮어쓴다).
+                long next = data != null ? data.nextCursor : 0L;
+                if (_historyHasMore && next != 0L)
+                {
+                    if (_historyCursors.Count > requested + 1)
+                    {
+                        _historyCursors[requested + 1] = next;
+                    }
+                    else
+                    {
+                        _historyCursors.Add(next);
+                    }
+                }
+
+                ClearHistoryRows(); // 페이징이므로 이어 붙이지 않고 페이지 단위로 갈아 끼운다
                 AppendHistoryRows(data != null ? data.pulls : null);
             }, error =>
             {
+                _historyLoading = false;
+                RefreshHistoryPager();
                 Debug.LogWarning($"[Gacha] 기록 조회 실패: {error}");
                 ShowNotice("뽑기 기록", ErrorMessages.ToKorean(error));
             });
         }
 
-        /// <summary>조회한 기록을 목록 끝에 덧붙인다(10연 한 묶음이 한 줄).</summary>
+        /// <summary>페이지 번호와 '&lt;'·'&gt;' 버튼의 활성 상태를 현재 상태에 맞춘다.</summary>
+        private void RefreshHistoryPager()
+        {
+            if (_historyPageText != null)
+            {
+                _historyPageText.text = (_historyPage + 1).ToString();
+            }
+            if (_historyPrevButton != null)
+            {
+                _historyPrevButton.interactable = !_historyLoading && _historyPage > 0;
+            }
+            if (_historyNextButton != null)
+            {
+                _historyNextButton.interactable = !_historyLoading && _historyHasMore;
+            }
+        }
+
+        /// <summary>조회한 기록을 목록에 그린다(10연 한 묶음이 한 줄).</summary>
         private void AppendHistoryRows(List<GachaHistoryEntryDto> pulls)
         {
             if (pulls != null)
@@ -1412,12 +1540,10 @@ namespace TaskbarHero.Client.UI.Gacha
             }
             if (_historyEmptyText != null)
             {
-                _historyEmptyText.gameObject.SetActive(_historyRows.Count == 0);
+                // 첫 페이지가 비었을 때만 "기록 없음"이다(뒤 페이지가 비면 페이지 이동 결과일 뿐).
+                _historyEmptyText.gameObject.SetActive(_historyRows.Count == 0 && _historyPage == 0);
             }
-            if (_historyMoreButton != null)
-            {
-                _historyMoreButton.gameObject.SetActive(_historyHasMore);
-            }
+            RefreshHistoryPager();
         }
 
         /// <summary>기록 한 줄(배너 이름 · 1연/10연 · 비용 · 결과 요약 · 최고 등급).</summary>
@@ -1475,16 +1601,20 @@ namespace TaskbarHero.Client.UI.Gacha
             return items.Count > 1 ? $"{head}  (총 {items.Count}회)" : head;
         }
 
-        /// <summary>기록 행을 모두 지운다(화면 진입 시 첫 페이지부터 다시 받기 위해).</summary>
+        /// <summary>기록 행을 모두 지운다(화면 진입·페이지 이동 시 목록을 갈아 끼우기 위해).
+        /// <para>페이저는 지우지 않는다 — 페이지 이동 중에도 '&lt;'·'&gt;'는 자리에 남아 있어야 한다.</para></summary>
         private void ClearHistoryRows()
         {
             foreach (var row in _historyRows)
             {
-                if (row != null) Destroy(row);
+                if (row == null) continue;
+                // Destroy는 프레임 끝에 처리되므로, 곧바로 새 페이지를 그리면 한 프레임 동안 두 페이지가
+                // 겹쳐 보인다. 먼저 꺼서 레이아웃 계산에서 빼 둔다.
+                row.SetActive(false);
+                Destroy(row);
             }
             _historyRows.Clear();
             if (_historyEmptyText != null) _historyEmptyText.gameObject.SetActive(false);
-            if (_historyMoreButton != null) _historyMoreButton.gameObject.SetActive(false);
         }
 
         // ── 표시 갱신 헬퍼 ──

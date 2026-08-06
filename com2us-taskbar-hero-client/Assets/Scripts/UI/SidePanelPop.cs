@@ -35,15 +35,52 @@ namespace TaskbarHero.Client.UI
         [Tooltip("전투 화면을 기준으로 패널이 열리는 쪽(공간이 없으면 실행 중 반대쪽으로 바뀔 수 있다).")]
         [SerializeField] private SidePanel.Side side = SidePanel.Side.Left;
 
+        // 표시할 때마다 옆으로 도킹할 것인가. 큐브처럼 스스로 자리를 정하는 창은 false로 구워 둔다
+        // (직렬화하는 이유: 런타임에 컴포넌트를 붙이면 그 즉시 OnEnable이 돌아 자동 배치가 한 번 새어 나간다).
+        [Tooltip("끄면 표시할 때마다 하던 자동 도킹을 하지 않는다(등장 연출은 그대로).")]
+        [SerializeField] private bool autoPlace = true;
+
         private RectTransform _rect;
         private Vector2 _restPos;
         private bool _restCaptured;
         private Coroutine _anim;
+        private bool _userPlaced;   // 사용자가 창을 끌어 옮겼는가(그 뒤로는 자동 배치를 하지 않는다)
 
         /// <summary>패널이 열리는 쪽을 지정한다(<see cref="SidePanel.Attach"/>가 호출).</summary>
         public void Configure(SidePanel.Side value)
         {
             side = value;
+            autoPlace = true;
+        }
+
+        /// <summary>
+        /// 자동 배치 없이 <b>등장 연출만</b> 쓰게 한다(큐브처럼 제자리를 스스로 정하는 창).
+        /// 창은 자기 위치를 그대로 유지한 채 작게 시작해 제 크기로 커진다.
+        /// </summary>
+        public void ConfigureCentered()
+        {
+            autoPlace = false;
+        }
+
+        /// <summary>
+        /// 사용자가 창을 <b>끌어 옮겼음</b>을 알린다(<see cref="PanelDragMove"/>가 호출).
+        /// 이후에는 표시할 때마다 하던 자동 배치(<see cref="SidePanel.Place"/>)를 건너뛰어
+        /// <b>사용자가 둔 자리를 유지</b>한다 — 등장 연출(작게 시작해 커지기)은 그대로 남는다.
+        /// </summary>
+        public void MarkUserPlaced()
+        {
+            _userPlaced = true;
+        }
+
+        /// <summary>
+        /// 등장 연출의 <b>도착 위치</b>를 현재 위치로 다시 잡는다(<see cref="PanelDragMove"/>가 저장된 자리를
+        /// 복원한 뒤 호출). 이 호출이 없으면 연출이 끝나면서 <see cref="Restore"/>가 옛 위치로 되돌린다.
+        /// </summary>
+        public void SyncRestPosition()
+        {
+            _rect = _rect != null ? _rect : GetComponent<RectTransform>();
+            _restPos = _rect.anchoredPosition;
+            _restCaptured = true;
         }
 
         private void Awake()
@@ -77,7 +114,11 @@ namespace TaskbarHero.Client.UI
             }
             // 표시할 때마다 배치를 다시 잡는다 — 창이 화면 가장자리에 걸쳐 있으면 창을 움직이는 대신
             // 보이는 공간 쪽으로 열린다. 도착 위치도 그 결과로 갱신한다.
-            SidePanel.Place(_rect, side);
+            // 단 사용자가 직접 끌어 옮긴 뒤에는 그 자리를 존중해 다시 잡지 않는다.
+            if (autoPlace && !_userPlaced)
+            {
+                SidePanel.Place(_rect, side);
+            }
             _restPos = _rect.anchoredPosition;
 
             ApplyScale(StartScale); // 첫 프레임부터 작은 상태로 보이도록 즉시 적용

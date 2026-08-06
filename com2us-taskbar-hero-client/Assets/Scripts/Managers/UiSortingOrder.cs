@@ -51,6 +51,13 @@ namespace TaskbarHero.Client.Managers
         /// 연 패널(≤112)보다는 위, 공용 모달(500)보다는 아래.</summary>
         public const int RewardOverPanel = 120;
 
+        /// <summary>
+        /// <b>끌고 있는 아이템 아이콘</b>. 가방(100)에서 집은 아이콘이 큐브(112) 같은 다른 패널 뒤로
+        /// 숨으면 어디에 놓는지 보이지 않으므로, 모든 기능 패널 위에 그린다.
+        /// 드래그 중에만 적용하고 놓으면 되돌린다.
+        /// </summary>
+        public const int DraggedItem = 130;
+
         /// <summary>ESC 메뉴·캐릭터 선택 같은 시스템 메뉴.</summary>
         public const int SystemMenu = 200;
 

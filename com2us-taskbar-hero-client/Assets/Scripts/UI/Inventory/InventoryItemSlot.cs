@@ -14,7 +14,7 @@ namespace TaskbarHero.Client.UI
     /// 떨어뜨려 장착하는 반대 방향은 <see cref="InventoryItemView"/>가 담당한다.</para>
     /// </summary>
     public class InventoryItemSlot : MonoBehaviour,
-        IPointerEnterHandler, IPointerExitHandler,
+        IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler,
         IBeginDragHandler, IDragHandler, IEndDragHandler
     {
         [SerializeField] private int _index;
@@ -250,6 +250,36 @@ namespace TaskbarHero.Client.UI
             {
                 _dragGroup.blocksRaycasts = false; // 아래 가방 칸이 레이캐스트에 잡히도록
             }
+            RaiseDragIconAboveOtherPanels(true); // 큐브 창 뒤로 숨지 않게
+        }
+
+        /// <summary>
+        /// 끌고 있는 장착 아이콘을 <b>모든 기능 패널 위</b>에 그린다.
+        /// 가방 캔버스는 정렬 100이고 큐브는 112라, 그대로 두면 아이콘이 큐브 창 뒤로 숨어
+        /// 어디에 놓는지 보이지 않는다(가방 아이템 드래그와 같은 처리).
+        /// </summary>
+        private void RaiseDragIconAboveOtherPanels(bool raise)
+        {
+            if (_equippedIcon == null)
+            {
+                return;
+            }
+            var overrideCanvas = _equippedIcon.GetComponent<Canvas>();
+            if (raise)
+            {
+                if (overrideCanvas == null)
+                {
+                    overrideCanvas = _equippedIcon.AddComponent<Canvas>();
+                }
+                overrideCanvas.overrideSorting = true;
+                overrideCanvas.sortingOrder = UiSortingOrder.DraggedItem;
+            }
+            else if (overrideCanvas != null)
+            {
+                // Destroy는 프레임 끝에 처리되므로, 그 사이에도 정렬이 남지 않도록 덮어쓰기를 먼저 끈다.
+                overrideCanvas.overrideSorting = false;
+                Destroy(overrideCanvas);
+            }
         }
 
         public void OnDrag(PointerEventData eventData)
@@ -272,14 +302,71 @@ namespace TaskbarHero.Client.UI
             {
                 _dragGroup.blocksRaycasts = true;
             }
+            RaiseDragIconAboveOtherPanels(false);
             RestoreEquippedIconLayout();
             _dragOriginParent = null;
+
+            // 큐브 등록 칸에 떨어뜨렸다 → 해제하지 않고 그대로 강화 대상으로 올린다(기획서 §5.3).
+            if (TryRegisterToCube(eventData))
+            {
+                return;
+            }
 
             var target = FindSlotUnderPointer(eventData);
             if (target != null && !target.IsEquipSlot)
             {
                 Controller.TryUnequipByDrag(this);
             }
+        }
+
+        /// <summary>
+        /// 장착 중인 아이템을 <b>우클릭</b>해도 큐브에 등록한다(가방 아이템과 같은 조작).
+        /// 큐브가 열려 있지 않으면 아무 일도 하지 않는다.
+        /// </summary>
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData.button != PointerEventData.InputButton.Right || _dragging || !_equipped.HasValue)
+            {
+                return;
+            }
+            var cube = Object.FindAnyObjectByType<CubePanelController>(); // 비활성은 제외 = 열려 있을 때만
+            if (cube == null)
+            {
+                return;
+            }
+            Controller.RequestHideTooltip();
+            cube.TryRegisterFromInventory(_equipped.Value.itemId);
+        }
+
+        /// <summary>포인터 아래가 큐브 등록 칸이면 그 칸에 이 장착 아이템을 올린다. 올렸으면 true.</summary>
+        private bool TryRegisterToCube(PointerEventData eventData)
+        {
+            if (!_equipped.HasValue)
+            {
+                return false;
+            }
+            var es = EventSystem.current;
+            if (es == null)
+            {
+                return false;
+            }
+            var results = new System.Collections.Generic.List<RaycastResult>();
+            es.RaycastAll(eventData, results);
+            foreach (var r in results)
+            {
+                var cubeSlot = r.gameObject.GetComponentInParent<CubeDropSlot>();
+                if (cubeSlot == null || !cubeSlot.AcceptsDrop)
+                {
+                    continue;
+                }
+                var cube = cubeSlot.GetComponentInParent<CubePanelController>();
+                if (cube != null)
+                {
+                    cube.TryRegisterFromInventory(_equipped.Value.itemId);
+                }
+                return true;
+            }
+            return false;
         }
 
         /// <summary>포인터 아래의 슬롯을 찾는다(가방 격자 칸·장비 부위 칸 모두). 없으면 null.</summary>

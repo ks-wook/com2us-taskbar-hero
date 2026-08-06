@@ -26,7 +26,7 @@ MonoBehaviour:
   - classCode: 2
     gender: 1
     sprite: {fileID: 21300000, guid: 955095108bd3050438837bd02068be8c, type: 3}
-    faceCenter: {x: 0.439, y: 0.156}
+    faceCenter: {x: 0.439, y: 0.11716}
     cropHeight: 0.46
   - classCode: 2
     gender: 2

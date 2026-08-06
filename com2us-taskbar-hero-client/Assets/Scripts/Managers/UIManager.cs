@@ -301,7 +301,10 @@ namespace TaskbarHero.Client.Managers
             {
                 if (pair.Value != null)
                 {
-                    pair.Value.SetActive(pair.Key == type);
+                    // 큐브는 가방과 <b>함께</b> 보여야 한다 — 가방에서 아이템을 끌어다 큐브 슬롯에 올리기 때문이다.
+                    bool keep = pair.Key == type
+                                || (OpensWithInventory(type) && pair.Key == PanelType.Inventory);
+                    pair.Value.SetActive(keep);
                 }
             }
 
@@ -328,9 +331,18 @@ namespace TaskbarHero.Client.Managers
         /// <summary>패널 프리팹들이 공통으로 쓰는 창 본체 오브젝트 이름(각 패널 컨트롤러의 Construct가 만든다).</summary>
         private const string PanelRootName = "PanelRoot";
 
-        /// <summary>인벤토리 창 자리에 이어서 띄우는 패널들 — 모두 인벤토리 안의 버튼으로 진입한다.</summary>
+        /// <summary>인벤토리 창 자리에 이어서 띄우는 패널들 — 모두 인벤토리 안의 버튼으로 진입한다.
+        /// 큐브는 가방과 나란히 <b>동시에</b> 열려 자리를 물려받지 않으므로 제외한다
+        /// (<see cref="OpensWithInventory"/>).</summary>
         private static bool FollowsInventoryPlacement(PanelType type)
-            => type == PanelType.Cube || type == PanelType.Skill || type == PanelType.Rune;
+            => type == PanelType.Skill || type == PanelType.Rune;
+
+        /// <summary>
+        /// 가방을 <b>켜 둔 채</b> 함께 여는 패널 — 현재는 큐브뿐이다.
+        /// 가방에서 아이템을 끌어다 큐브 슬롯에 올려야 하므로 두 창이 동시에 보여야 하며,
+        /// 겹치면 사용자가 <see cref="UI.PanelDragMove"/>로 창을 옮겨 배치한다.
+        /// </summary>
+        private static bool OpensWithInventory(PanelType type) => type == PanelType.Cube;
 
         /// <summary>
         /// 인벤토리에서 이어 여는 패널(큐브·스킬·룬)을 <b>인벤토리 창이 있던 자리</b>에 맞춘다.
@@ -385,6 +397,14 @@ namespace TaskbarHero.Client.Managers
                 Current = null;
             }
             TaskbarWindow.Instance?.SetExpanded(IsAnyPanelVisible()); // 남은 패널 여부를 창 제어기에 알림
+        }
+
+        /// <summary>지정한 패널이 지금 화면에 떠 있는가.
+        /// <see cref="Current"/>는 <b>마지막으로 연</b> 패널 하나만 가리키므로, 여러 창이 함께 열리는 경우
+        /// (가방 + 큐브)에는 이 조회를 쓴다.</summary>
+        public bool IsVisible(PanelType type)
+        {
+            return _instances.TryGetValue(type, out var panel) && panel != null && panel.activeSelf;
         }
 
         /// <summary>모든 패널을 숨긴다.</summary>

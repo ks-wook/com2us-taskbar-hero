@@ -157,6 +157,25 @@ namespace TaskbarHero.Client.UI
             RefreshFromSession();  // 코어 데이터(골드·장착·능력치) 즉시 표시 + 빈 격자
             ResetGridScroll();     // 첫 페이지부터 보도록 맨 위로
             LoadNextBagPage();     // 첫 페이지 요청(나머지는 스크롤이 요구할 때)
+
+            // 다른 창(큐브 강화·분해, 거래소 판매, 우편함 수령…)이 가방을 바꾸면 그 즉시 다시 그린다.
+            // 이 창은 그 창들과 <b>동시에 열려 있을 수 있어</b> OnEnable만으로는 갱신 시점을 놓친다
+            // (강화한 단계가 그대로 보이거나 판 아이템이 남아 있던 원인).
+            Session.InventoryChanged += OnSessionInventoryChanged;
+        }
+
+        /// <summary>
+        /// 다른 창이 가방·장착을 바꿨을 때 화면만 다시 그린다.
+        /// <b>변경 이벤트를 다시 올리지 않는다</b> — 이 창이 스스로 바꿨을 때 부르는
+        /// <see cref="RefreshAfterInventoryChange"/>와 달리, 여기서 다시 올리면 구독자끼리 서로를 깨워 되돈다.
+        /// </summary>
+        private void OnSessionInventoryChanged()
+        {
+            if (this == null || !gameObject.activeInHierarchy)
+            {
+                return;
+            }
+            RefreshFromSession();
         }
 
         // ── 가방 스크롤 지연 로딩(slot 커서 페이징) ──
@@ -292,6 +311,7 @@ namespace TaskbarHero.Client.UI
         /// 오지 않아 스스로 닫히지도 못한다.</summary>
         private void OnDisable()
         {
+            Session.InventoryChanged -= OnSessionInventoryChanged;
             if (_portraitStage != null)
             {
                 _portraitStage.SetActive(false);
@@ -395,6 +415,10 @@ namespace TaskbarHero.Client.UI
         /// <summary>런타임 배선: 버튼 리스너 등록 + 선택 캐릭터 표시 갱신.</summary>
         private void WireRuntime()
         {
+            // 창을 끌어 옮길 수 있게 한다(배경의 빈 곳을 잡고 드래그 — 아이템 칸·스크롤은 종전대로 동작).
+            // 마지막으로 둔 자리는 기억했다가 다시 열 때 그 자리에 띄운다.
+            PanelDragMove.Attach(transform.Find("PanelRoot") as RectTransform, "Inventory");
+
             if (_prevButton != null)
             {
                 _prevButton.onClick.AddListener(OnPrevCharacter);
@@ -419,7 +443,7 @@ namespace TaskbarHero.Client.UI
             }
             if (_dimButton != null)
             {
-                _dimButton.onClick.AddListener(Close);
+                _dimButton.onClick.AddListener(OnDimClick);
             }
             if (_expandButton != null)
             {
@@ -1940,6 +1964,21 @@ namespace TaskbarHero.Client.UI
         {
             Debug.LogWarning($"[Inventory] 배치 이동 실패: {error}");
             ReloadBagAndRefresh();
+        }
+
+        /// <summary>
+        /// 창 밖(딤) 클릭 처리. 큐브는 가방 위에 <b>함께</b> 열리고 자기 차단막은 꺼 두므로,
+        /// 두 창 바깥의 클릭은 모두 이 딤이 받는다. 그래서 <b>큐브가 함께 열려 있으면 큐브부터</b> 닫고,
+        /// 다시 밖을 클릭하면 그때 가방이 닫힌다(위에 있는 창부터 차례로 닫히는 순서).
+        /// </summary>
+        private void OnDimClick()
+        {
+            if (UIManager.Instance != null && UIManager.Instance.IsVisible(UIManager.PanelType.Cube))
+            {
+                UIManager.Instance.Hide(UIManager.PanelType.Cube);
+                return;
+            }
+            Close();
         }
 
         /// <summary>패널을 닫는다(UIManager 우선, 없으면 자체 비활성).</summary>

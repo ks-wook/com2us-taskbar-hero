@@ -29,6 +29,14 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite slotNormal;
         [SerializeField] private Sprite slotHighlight;
 
+        [Tooltip("실행 버튼 아트(Assets/Art/UI/Cube/pixel_rpg_button). 비우면 슬롯 배경으로 폴백한다.")]
+        [SerializeField] private Sprite actionButtonSprite;
+
+        [Tooltip("큐브 경험치 바의 프레임 아트(Assets/Art/Icon/Combat/체력바.png, 768×144). " +
+                 "9-slice 테두리 값이 없는 이미지라 늘리면 테두리가 왜곡되므로 " +
+                 "원본 비율(16:3)의 정수배 크기로만 그린다. 비우면 단색 트랙으로 폴백한다.")]
+        [SerializeField] private Sprite expBarFrame;
+
         [Header("공용 아이템 슬롯 프리팹 (에디터 빌더가 배선)")]
         [Tooltip("Assets/Prefabs/UI/ItemSlot.prefab — 타일의 아이콘·등급 배경·수량·강화 배지를 그리는 공용 슬롯. " +
                  "인벤토리·거래소·우편함과 같은 프리팹을 써서 아이템 칸 외형을 통일한다.")]
@@ -63,7 +71,28 @@ namespace TaskbarHero.Client.UI
         private const float CanvasRefHeight = 1920f;
         private const int GoldCurrencyType = 1;
         private const int GoldItemCode = 1;
-        private const float ExpTrackWidth = 520f;
+        // ── 큐브 레벨 · 경험치 바 ──
+        // 프레임 아트(체력바.png 768×144)는 9-slice 테두리가 없어 늘리면 왜곡되므로 <b>정수배 축소</b>만 쓴다.
+        // 1/3 축소 = 256×48. 레벨바 전체 폭도 이에 맞춰 740 → 448로 줄였다.
+        private const float ExpTrackWidth = 256f;
+        private const float ExpTrackHeight = 48f;
+        private const float ExpTrackLeft = 156f;   // 레벨 텍스트(16 + 130) 오른쪽
+        private const float LevelBarWidth = ExpTrackLeft + ExpTrackWidth + 36f; // 448
+        private const float LevelBarHeight = 56f;
+
+        /// <summary>레벨바의 왼쪽 x. 바 안의 <b>실제 내용</b>(레벨 글자 16 ~ 경험치 바 끝 412)의 중심이
+        /// 창 가로 중앙(820의 절반)에 오도록 잡은 값이다 — 바 오른쪽 36px는 빈 여백이라
+        /// 바 자체를 중앙에 두면 눈에는 왼쪽으로 치우쳐 보인다.</summary>
+        private const float LevelBarLeft = 200f;
+
+        /// <summary>보유 골드 표시의 배율(제목보다 작게 보이도록 통째로 축소).</summary>
+        private const float GoldAreaScale = 0.7f;
+
+        /// <summary>채움 막대가 프레임 테두리를 덮지 않도록 안쪽으로 들이는 여백(프레임 테두리 두께).</summary>
+        private const float ExpFillInset = 6f;
+
+        /// <summary>채움 막대의 최대 폭(프레임 안쪽).</summary>
+        private const float ExpFillMaxWidth = ExpTrackWidth - ExpFillInset * 2f;
         private const int GridColumns = 5;
         // 탭 4개(합성·연금술·제작·강화)를 내용 영역 폭(x 40 ~ 780) 안에 균등 배치하는 값.
         private const float TabWidth = 170f;
@@ -124,6 +153,7 @@ namespace TaskbarHero.Client.UI
             }
             SetMessage(string.Empty);
             _selEnhance = 0; // 닫았다 다시 열면 선택은 초기화한다(그 사이 장비가 사라졌을 수 있다)
+            ClearEnhanceResult();
             RefreshFromSession();
             InventoryLoader.ReloadBag(RefreshIfOpen, OnBagLoadError);
         }
@@ -208,8 +238,11 @@ namespace TaskbarHero.Client.UI
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(820f, 1400f);
+            rt.sizeDelta = new Vector2(820f, 1000f);
             rt.anchoredPosition = Vector2.zero;
+            // 다른 창과 같은 등장 연출(작게 시작해 제 크기로 커지기)을 쓰되, 자리는 스스로 정한다
+            // (가방처럼 옆으로 도킹하지 않는다 — 마지막으로 끌어다 둔 자리는 PanelDragMove가 복원한다).
+            rt.gameObject.AddComponent<SidePanelPop>().ConfigureCentered();
             _panelRoot = rt;
             return rt;
         }
@@ -222,12 +255,14 @@ namespace TaskbarHero.Client.UI
             var trt = title.rectTransform;
             trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
             trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -28f);
+            trt.anchoredPosition = new Vector2(0f, -45f);
             trt.sizeDelta = new Vector2(400f, 60f);
 
             var goldBg = NewImage("GoldArea", container, null);
             goldBg.color = new Color(0f, 0f, 0f, 0.35f);
-            TopLeft(goldBg.rectTransform, 28f, 26f, 300f, 60f);
+            TopLeft(goldBg.rectTransform, 28f, 52f, 300f, 60f);
+            // 제목보다 작게 보이도록 통째로 줄인다(아이콘·글자 크기를 각각 다시 잡지 않는다).
+            goldBg.rectTransform.localScale = new Vector3(GoldAreaScale, GoldAreaScale, 1f);
             var gi = NewImage("GoldIcon", goldBg.rectTransform, null);
             gi.raycastTarget = false;
             gi.preserveAspect = true;
@@ -236,15 +271,8 @@ namespace TaskbarHero.Client.UI
             _goldText = NewText("GoldText", goldBg.rectTransform, "0", 30, TextAnchor.MiddleLeft);
             TopLeft(_goldText.rectTransform, 64f, 8f, 224f, 44f);
 
-            var closeImg = NewImage("CloseButton", container, slotNormal);
-            var crt = closeImg.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
-            crt.pivot = new Vector2(1f, 1f);
-            crt.anchoredPosition = new Vector2(-28f, -26f);
-            crt.sizeDelta = new Vector2(72f, 72f);
-            var x = NewText("X", crt, "X", 36, TextAnchor.MiddleCenter);
-            Stretch(x.rectTransform);
-            _closeButton = closeImg.gameObject.AddComponent<Button>();
+            // 닫기(X) 버튼은 미관상 두지 않는다 — 창은 가방 하단의 '큐브' 버튼을 다시 눌러 닫는다
+            // (UIManager.ToggleCube). 스테이지·가방 창과 같은 규칙이다.
         }
 
         /// <summary>합성/연금술/제작/강화 탭 버튼 4개(가로 배치). 네 칸이 내용 영역 폭(740) 안에 들어가도록
@@ -276,26 +304,36 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>큐브 레벨·경험치 진행바.</summary>
+        /// <summary>
+        /// 큐브 레벨 + 경험치 바. 바는 프레임 아트(체력바.png)를 쓰고, 그 <b>안쪽</b>에 채움 막대를 둔다.
+        /// <para>프레임 아트는 <b>9-slice 테두리 값이 없어</b>(spriteBorder 0) 늘리면 테두리 두께가 왜곡된다.
+        /// 그래서 원본 768×144의 <b>정수배 축소</b>(1/3 = 256×48)로만 그려 픽셀이 깨지지 않게 한다.
+        /// 프레임이 배선되지 않았으면 종전처럼 단색 트랙으로 폴백한다.</para>
+        /// </summary>
         private void BuildLevelBar(RectTransform container)
         {
             var bg = NewImage("CubeLevelBar", container, null);
             bg.color = new Color(0f, 0f, 0f, 0.35f);
-            TopLeft(bg.rectTransform, 40f, 188f, 740f, 56f);
+            TopLeft(bg.rectTransform, LevelBarLeft, 188f, LevelBarWidth, LevelBarHeight);
 
             _levelText = NewText("CubeLevel", bg.rectTransform, "Lv.1", 28, TextAnchor.MiddleLeft);
             _levelText.fontStyle = FontStyle.Bold;
-            TopLeft(_levelText.rectTransform, 16f, 10f, 150f, 36f);
+            TopLeft(_levelText.rectTransform, 16f, 10f, 130f, 36f);
 
-            var track = NewImage("ExpTrack", bg.rectTransform, null);
-            track.color = new Color(0f, 0f, 0f, 0.55f);
-            TopLeft(track.rectTransform, 176f, 16f, ExpTrackWidth, 24f);
+            var track = NewImage("ExpTrack", bg.rectTransform, expBarFrame);
+            track.type = Image.Type.Simple;
+            track.color = expBarFrame != null ? Color.white : new Color(0.55f, 0.49f, 0.49f, 0.55f);
+            float trackY = (LevelBarHeight - ExpTrackHeight) * 0.5f;
+            TopLeft(track.rectTransform, ExpTrackLeft, trackY, ExpTrackWidth, ExpTrackHeight);
+
+            // 채움 막대는 프레임 테두리 안쪽에만 그린다(테두리를 덮지 않게).
             var fill = NewImage("ExpFill", track.rectTransform, null);
             fill.color = new Color(0.35f, 0.72f, 0.4f, 0.95f);
             fill.rectTransform.anchorMin = new Vector2(0f, 0.5f);
             fill.rectTransform.anchorMax = new Vector2(0f, 0.5f);
             fill.rectTransform.pivot = new Vector2(0f, 0.5f);
-            fill.rectTransform.anchoredPosition = Vector2.zero;
-            fill.rectTransform.sizeDelta = new Vector2(ExpTrackWidth, 24f);
+            fill.rectTransform.anchoredPosition = new Vector2(ExpFillInset, 0f);
+            fill.rectTransform.sizeDelta = new Vector2(ExpFillMaxWidth, ExpTrackHeight - ExpFillInset * 2f);
             _expFill = fill.rectTransform;
         }
 
@@ -317,8 +355,12 @@ namespace TaskbarHero.Client.UI
         /// <summary>실행 버튼(합성/연금술/제작).</summary>
         private void BuildActionBar(RectTransform container)
         {
-            var btn = NewImage("ActionButton", container, slotNormal);
-            btn.color = new Color(0.42f, 0.28f, 0.16f, 0.98f);
+            // 실행 버튼은 전용 버튼 아트(pixel_rpg_button)를 9-slice로 늘려 쓴다.
+            var btn = NewImage("ActionButton", container, actionButtonSprite != null ? actionButtonSprite : slotNormal);
+            btn.type = actionButtonSprite != null ? Image.Type.Sliced : Image.Type.Simple;
+            btn.color = actionButtonSprite != null
+                ? new Color(1f, 1f, 1f, 0.90f)
+                : new Color(0.42f, 0.28f, 0.16f, 0.98f);
             var brt = btn.rectTransform;
             brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0f);
             brt.pivot = new Vector2(0.5f, 0f);
@@ -350,13 +392,60 @@ namespace TaskbarHero.Client.UI
 
         private void WireRuntime()
         {
+            // 등장 연출은 PanelDragMove보다 <b>먼저</b> 붙여야 한다 — PanelDragMove는 Awake에서
+            // SidePanelPop을 찾아 캐시하므로, 뒤에 붙이면 저장된 자리를 복원해도 연출의 도착 위치가 갱신되지 않는다.
+            EnsurePopAnimation();
+
+            // 창을 끌어 옮길 수 있게 한다(배경의 빈 곳을 잡고 드래그).
+            // 마지막으로 둔 자리는 기억했다가 다시 열 때 그 자리에 띄운다.
+            PanelDragMove.Attach(_panelRoot, "Cube");
+
+            // 큐브는 가방과 <b>동시에</b> 열리므로, 화면 전체를 덮는 차단막이 있으면 가방 아이템을 집을 수 없다.
+            // 그래서 큐브 자신의 차단막은 레이캐스트를 끄고, 밖 클릭 닫기는 <b>가방의 차단막</b>이 대신 처리한다
+            // (InventoryPanelController.OnDimClick — 큐브가 함께 열려 있으면 큐브부터 닫는다).
+            if (_dimButton != null)
+            {
+                _dimButton.interactable = false;
+                var dimImage = _dimButton.GetComponent<Image>();
+                if (dimImage != null)
+                {
+                    dimImage.raycastTarget = false;
+                }
+            }
+
             if (_closeButton != null) _closeButton.onClick.AddListener(Close);
-            if (_dimButton != null) _dimButton.onClick.AddListener(Close);
             if (_combineTab != null) _combineTab.onClick.AddListener(() => SwitchMode(Mode.Combine));
             if (_dismantleTab != null) _dismantleTab.onClick.AddListener(() => SwitchMode(Mode.Dismantle));
             if (_craftTab != null) _craftTab.onClick.AddListener(() => SwitchMode(Mode.Craft));
             if (_enhanceTab != null) _enhanceTab.onClick.AddListener(() => SwitchMode(Mode.Enhance));
             if (_actionButton != null) _actionButton.onClick.AddListener(OnAction);
+        }
+
+        /// <summary>
+        /// 등장 연출(<see cref="SidePanelPop"/>)이 붙어 있는지 확인하고, 없으면 붙인다 —
+        /// 이 컴포넌트가 없던 시절에 구워진 프리팹을 위한 폴백이다(빌더를 다시 실행하면 프리팹에 포함된다).
+        /// <para>이미 표시된 상태에서 붙이면 그 즉시 <c>OnEnable</c>이 돌아 자리가 흔들릴 수 있으므로,
+        /// 현재 자리를 잡아 두었다가 그대로 되돌리고 연출의 도착 위치로 다시 알린다.</para>
+        /// </summary>
+        private void EnsurePopAnimation()
+        {
+            if (_panelRoot == null)
+            {
+                return;
+            }
+
+            var pop = _panelRoot.GetComponent<SidePanelPop>();
+            if (pop != null)
+            {
+                pop.ConfigureCentered();
+                return;
+            }
+
+            var keep = _panelRoot.anchoredPosition;
+            pop = _panelRoot.gameObject.AddComponent<SidePanelPop>();
+            pop.ConfigureCentered();
+            _panelRoot.anchoredPosition = keep;
+            pop.SyncRestPosition();
         }
 
         // ── 세션/마스터 연동 ──
@@ -408,7 +497,7 @@ namespace TaskbarHero.Client.UI
             if (_expFill != null)
             {
                 float ratio = req > 0 ? Mathf.Clamp01((float)exp / req) : 1f;
-                _expFill.sizeDelta = new Vector2(ExpTrackWidth * ratio, _expFill.sizeDelta.y);
+                _expFill.sizeDelta = new Vector2(ExpFillMaxWidth * ratio, _expFill.sizeDelta.y);
             }
         }
 
@@ -443,6 +532,7 @@ namespace TaskbarHero.Client.UI
             _selDismantle.Clear();
             _selRecipe = 0;
             _selEnhance = 0;
+            ClearEnhanceResult();
             SetMessage(string.Empty);
             RefreshTabs();
             RebuildContent();
@@ -463,26 +553,14 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>합성: 미장착 장비(등급 1~4) 그리드. 같은 등급·클래스면 combine_count개까지 선택(슬롯 무관).</summary>
+        /// <summary>합성: <b>등록 칸 3개</b>(combine_count). 가방에서 같은 등급·클래스 장비를 끌어다 올린다.</summary>
         private void BuildCombineContent()
         {
-            var content = BuildScrollGrid();
             var db = MasterDataManager.Db;
-            int count = 0;
-            foreach (var it in EligibleCombineItems())
-            {
-                bool selected = _selCombine.Contains(it.itemId);
-                long id = it.itemId;
-                CreateItemTile(content, it.itemCode, it != null ? it.enhanceLevel : 0,
-                    string.Empty, string.Empty, selected, () => ToggleCombine(id));
-                count++;
-            }
-            if (count == 0)
-            {
-                ShowEmptyHint("합성할 수 있는 장비가 없습니다.");
-            }
-
             int combineCount = CombineCount();
+            BuildDropSlots(combineCount, combineCount);
+            FillDropSlots(_selCombine);
+
             if (_selCombine.Count > 0 && db.Items.TryGetValue(FirstSelectedCombineCode(), out var fm))
             {
                 db.Grades.TryGetValue(fm.grade, out var g);
@@ -491,31 +569,21 @@ namespace TaskbarHero.Client.UI
             }
             else
             {
-                SetFooter($"같은 등급·클래스 장비 {combineCount}개를 선택하세요(슬롯 무관).");
+                SetFooter($"가방에서 같은 등급·클래스 장비 {combineCount}개를 끌어다 놓으세요.");
             }
             SetAction("합성", _selCombine.Count == combineCount);
         }
 
-        /// <summary>연금술(분해): 미장착 아이템(장비·재료) 그리드. 선택분을 골드로 전환.</summary>
+        /// <summary>연금술(분해): <b>등록 칸 9개</b>(3×3). 가방에서 끌어다 올린 아이템을 골드로 전환.</summary>
         private void BuildDismantleContent()
         {
-            var content = BuildScrollGrid();
-            int count = 0;
-            foreach (var it in EligibleDismantleItems())
-            {
-                bool selected = _selDismantle.Contains(it.itemId);
-                long id = it.itemId;
-                CreateItemTile(content, it.itemCode, it != null ? it.enhanceLevel : 0,
-                    QuantityBadge(it), string.Empty, selected, () => ToggleDismantle(id));
-                count++;
-            }
-            if (count == 0)
-            {
-                ShowEmptyHint("분해할 수 있는 아이템이 없습니다.");
-            }
+            BuildDropSlots(DismantleSlotCount, DismantleColumns);
+            FillDropSlots(_selDismantle);
 
             long gold = EstimateDismantleGold();
-            SetFooter($"연금술 작동 시 획득 골드: {GoldFormat.Highlight(gold)}");
+            SetFooter(_selDismantle.Count > 0
+                ? $"연금술 작동 시 획득 골드: {GoldFormat.Highlight(gold)}"
+                : "가방에서 분해할 아이템을 끌어다 놓으세요(최대 9개).");
             SetAction("연금술", _selDismantle.Count > 0);
         }
 
@@ -580,25 +648,59 @@ namespace TaskbarHero.Client.UI
             SetAction("제작", hasAll && levelOk && goldOk);
         }
 
-        /// <summary>강화: 장비 그리드(가방 + <b>장착 중</b>). 한 개만 선택하며 하단에 다음 단계·비용·스탯 변화를 안내한다.
-        /// 장착 중인 장비도 해제 없이 강화할 수 있으므로(기획서 §5.3) 후보에 함께 올리고 '장착' 표시를 붙인다.</summary>
+        /// <summary>
+        /// 강화: <b>대상 칸 1개 + 결과 칸 1개</b>. 가방에서 장비를 끌어다 왼쪽 칸에 올리고, 강화에 성공하면
+        /// 왼쪽이 비고 오른쪽에 결과가 나온다(양쪽에 동시에 두지 않는다).
+        /// 장착 중인 장비도 해제 없이 강화할 수 있으므로(기획서 §5.3) 후보에 함께 오른다.
+        /// </summary>
         private void BuildEnhanceContent()
         {
-            var content = BuildScrollGrid();
-            int count = 0;
-            foreach (var cand in EligibleEnhanceItems())
+            _dropSlots.Clear();
+            const float gapX = 120f;
+            _dropSlotSize = DropSlotSizeFor(2, 1);
+            float half = (_dropSlotSize + gapX) * 0.5f;
+
+            var target = CreateDropSlot(0, true, new Vector2(-half, -DropSlotTopMargin));
+            _dropSlots.Add(target);
+
+            var arrow = NewText("Arrow", _contentArea, "▶", 44, TextAnchor.MiddleCenter);
+            arrow.color = new Color(0.98f, 0.82f, 0.35f, 0.95f);
+            var art = arrow.rectTransform;
+            art.anchorMin = art.anchorMax = new Vector2(0.5f, 1f);
+            art.pivot = new Vector2(0.5f, 1f);
+            art.sizeDelta = new Vector2(gapX, _dropSlotSize);
+            art.anchoredPosition = new Vector2(0f, -DropSlotTopMargin);
+            _contentChildren.Add(arrow.gameObject);
+
+            var preview = CreateDropSlot(1, false, new Vector2(half, -DropSlotTopMargin)); // 표시 전용(드롭 안 받음)
+
+            var label = NewText("PreviewLabel", _contentArea, "강화 후", 22, TextAnchor.MiddleCenter);
+            label.color = new Color(0.75f, 0.78f, 0.85f);
+            var lrt = label.rectTransform;
+            lrt.anchorMin = lrt.anchorMax = new Vector2(0.5f, 1f);
+            lrt.pivot = new Vector2(0.5f, 1f);
+            lrt.sizeDelta = new Vector2(_dropSlotSize, 30f);
+            lrt.anchoredPosition = new Vector2(half, -DropSlotTopMargin - _dropSlotSize - 6f);
+            _contentChildren.Add(label.gameObject);
+
+            // 강화 전에는 왼쪽에만, 강화 후에는 오른쪽에만 아이템이 있다(양쪽에 동시에 두지 않는다).
+            var cand = FindEnhanceCandidate(_selEnhance);
+            if (_enhanceResultCode != 0)
             {
-                bool selected = cand.itemId == _selEnhance;
-                long id = cand.itemId;
-                // 강화 단계는 공용 슬롯 배지(좌측 하단 흰 "+N")가 그리고, 우상단 태그에는 '장착'만 남긴다.
-                CreateItemTile(content, cand.itemCode, cand.enhanceLevel, string.Empty,
-                    cand.equipped ? "장착" : string.Empty, selected, () => SelectEnhance(id));
-                count++;
+                target.SetEmpty();
+                preview.SetItem(0, _enhanceResultCode, _enhanceResultLevel, string.Empty);
             }
-            if (count == 0)
+            else if (cand != null)
             {
-                ShowEmptyHint("강화할 장비가 없습니다.");
+                target.SetItem(cand.Value.itemId, cand.Value.itemCode, cand.Value.enhanceLevel, string.Empty);
+                preview.SetEmpty();
             }
+            else
+            {
+                target.SetEmpty();
+                preview.SetEmpty();
+            }
+
             RefreshEnhanceFooter();
         }
 
@@ -611,7 +713,10 @@ namespace TaskbarHero.Client.UI
             var cand = FindEnhanceCandidate(_selEnhance);
             if (cand == null || db == null)
             {
-                SetFooter("강화할 장비를 선택하세요.");
+                // 방금 강화를 마쳤으면 결과 칸을 설명한다(다음 강화는 새로 끌어다 놓으면 된다).
+                SetFooter(_enhanceResultCode != 0
+                    ? $"강화 완료 — 결과 +{_enhanceResultLevel}\n다음 장비를 끌어다 놓으세요."
+                    : "강화할 장비를 끌어다 놓으세요(장착 중인 장비도 가능).");
                 SetAction("강화", false);
                 return;
             }
@@ -667,6 +772,226 @@ namespace TaskbarHero.Client.UI
                           + $" → {ItemInfoText.ApplyMultiplier(im.baseStats.hp, nextMult)}");
             }
             return parts.Count > 0 ? string.Join(" · ", parts) : string.Empty;
+        }
+
+        // ── 등록 슬롯(가방에서 드래그해 올리는 빈 칸) ──
+
+        /// <summary>등록 칸 한 변 크기의 <b>상한</b>과 간격. 실제 크기는 내용 영역에 맞춰 줄어든다
+        /// (<see cref="DropSlotSizeFor"/>) — 연금술 3×3처럼 칸이 많으면 고정 크기로는 영역을 넘친다.</summary>
+        private const float MaxDropSlotSize = 168f;
+        private const float DropSlotGap = 24f;
+
+        /// <summary>등록 칸 격자의 위쪽 여백.</summary>
+        private const float DropSlotTopMargin = 24f;
+
+        /// <summary>격자 아래에 남겨 둘 여백(강화 탭의 '강화 후' 라벨 등이 들어간다).</summary>
+        private const float DropSlotBottomReserve = 40f;
+
+        /// <summary>이번에 그리는 격자의 칸 한 변 크기(<see cref="BuildDropSlots"/>가 정한다).</summary>
+        private float _dropSlotSize = MaxDropSlotSize;
+
+        /// <summary>
+        /// <paramref name="columns"/>열 × <paramref name="rows"/>행 격자가 내용 영역 안에 <b>다 들어가는</b>
+        /// 칸 크기를 구한다. 가로·세로 중 더 빡빡한 쪽에 맞추고 <see cref="MaxDropSlotSize"/>를 넘지 않는다.
+        /// </summary>
+        private float DropSlotSizeFor(int columns, int rows)
+        {
+            if (_contentArea == null || columns <= 0 || rows <= 0)
+            {
+                return MaxDropSlotSize;
+            }
+            float availW = _contentArea.rect.width;
+            float availH = _contentArea.rect.height - DropSlotTopMargin - DropSlotBottomReserve;
+            float byWidth = (availW - (columns - 1) * DropSlotGap) / columns;
+            float byHeight = (availH - (rows - 1) * DropSlotGap) / rows;
+            return Mathf.Max(48f, Mathf.Min(MaxDropSlotSize, byWidth, byHeight));
+        }
+
+        /// <summary>연금술(분해) 등록 칸 수와 열 수 — 3×3.</summary>
+        private const int DismantleSlotCount = 9;
+        private const int DismantleColumns = 3;
+
+        // 강화 결과 표시 상태. 강화에 <b>성공한 뒤에만</b> 오른쪽 칸에 결과가 뜨고 왼쪽 칸은 비워진다
+        // (강화 전에는 왼쪽에만 아이템이 있다). 새 아이템을 올리거나 탭을 바꾸면 지운다.
+        private int _enhanceResultCode;   // 0 = 결과 없음
+        private int _enhanceResultLevel;
+
+        private readonly List<CubeDropSlot> _dropSlots = new List<CubeDropSlot>();
+
+        /// <summary>
+        /// 등록 칸을 격자로 만든다(<paramref name="columns"/>열, 총 <paramref name="count"/>칸).
+        /// 내용 영역 위쪽 가운데에 배치하며, 만든 칸은 <see cref="_dropSlots"/>에 순서대로 담긴다.
+        /// </summary>
+        private void BuildDropSlots(int count, int columns, float topOffset = DropSlotTopMargin)
+        {
+            _dropSlots.Clear();
+            int rows = Mathf.CeilToInt(count / (float)columns);
+            _dropSlotSize = DropSlotSizeFor(columns, rows); // 영역을 넘치지 않도록 칸 크기를 맞춘다
+            float rowWidth = columns * _dropSlotSize + (columns - 1) * DropSlotGap;
+            float startX = -rowWidth * 0.5f + _dropSlotSize * 0.5f;
+
+            for (int i = 0; i < count; i++)
+            {
+                int c = i % columns;
+                int r = i / columns;
+                var pos = new Vector2(
+                    startX + c * (_dropSlotSize + DropSlotGap),
+                    -topOffset - r * (_dropSlotSize + DropSlotGap));
+                _dropSlots.Add(CreateDropSlot(i, true, pos));
+            }
+        }
+
+        /// <summary>등록 칸 한 개를 만든다. <paramref name="acceptsDrop"/>가 false면 표시 전용(강화 결과 미리보기).</summary>
+        private CubeDropSlot CreateDropSlot(int index, bool acceptsDrop, Vector2 anchoredPos)
+        {
+            var frame = NewImage($"DropSlot{index}", _contentArea, slotNormal);
+            frame.color = Color.white;
+            var rt = frame.rectTransform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.sizeDelta = new Vector2(_dropSlotSize, _dropSlotSize);
+            rt.anchoredPosition = anchoredPos;
+            _contentChildren.Add(frame.gameObject);
+
+            int hintSize = Mathf.Max(20, Mathf.RoundToInt(_dropSlotSize * 0.33f)); // 칸이 작아지면 안내 글자도 함께
+            var placeholder = NewText("Placeholder", rt, acceptsDrop ? "+" : "?", hintSize, TextAnchor.MiddleCenter);
+            placeholder.color = new Color(1f, 1f, 1f, 0.35f);
+            Stretch(placeholder.rectTransform);
+
+            // 아이템 그림(공용 슬롯). 이름 줄이 없는 칸이라 여백 없이 꽉 채운다.
+            ItemSlotView view = null;
+            if (_itemSlotPrefab != null)
+            {
+                var go = Instantiate(_itemSlotPrefab, rt);
+                go.name = "ItemSlot";
+                var srt = (RectTransform)go.transform;
+                srt.anchorMin = Vector2.zero;
+                srt.anchorMax = Vector2.one;
+                srt.offsetMin = new Vector2(8f, 8f);
+                srt.offsetMax = new Vector2(-8f, -8f);
+                view = go.GetComponent<ItemSlotView>();
+            }
+
+            var slot = frame.gameObject.AddComponent<CubeDropSlot>();
+            slot.Initialize(this, index, acceptsDrop, frame, placeholder, view);
+            return slot;
+        }
+
+        /// <summary>등록된 아이템들을 앞에서부터 칸에 채운다(남는 칸은 빈 칸으로 둔다).</summary>
+        private void FillDropSlots(List<long> ids)
+        {
+            for (int i = 0; i < _dropSlots.Count; i++)
+            {
+                if (i < ids.Count)
+                {
+                    var it = FindInventoryItem(ids[i]);
+                    if (it != null)
+                    {
+                        _dropSlots[i].SetItem(it.itemId, it.itemCode, it.enhanceLevel, QuantityBadge(it));
+                        continue;
+                    }
+                }
+                _dropSlots[i].SetEmpty();
+            }
+        }
+
+        /// <summary>
+        /// 가방에서 끌어온 아이템을 <b>현재 탭</b>의 등록 칸에 올린다(<see cref="InventoryItemView"/>가 호출).
+        /// 탭별 조건(개수 상한·같은 등급/클래스·분해 가능 여부 등)은 기존 선택 로직을 그대로 쓴다.
+        /// </summary>
+        /// <returns>등록했으면 true. 조건에 맞지 않으면 false(안내 문구는 이 안에서 띄운다).</returns>
+        public bool TryRegisterFromInventory(long itemId)
+        {
+            SetMessage(string.Empty);
+            switch (_mode)
+            {
+                case Mode.Combine:
+                    if (!IsEligible(EligibleCombineItems(), itemId))
+                    {
+                        SetMessage("합성할 수 없는 아이템입니다.");
+                        return false;
+                    }
+                    if (_selCombine.Contains(itemId))
+                    {
+                        return false; // 이미 올려 둔 아이템
+                    }
+                    ToggleCombine(itemId);
+                    return _selCombine.Contains(itemId);
+
+                case Mode.Dismantle:
+                    if (!IsEligible(EligibleDismantleItems(), itemId))
+                    {
+                        SetMessage("분해할 수 없는 아이템입니다.");
+                        return false;
+                    }
+                    if (_selDismantle.Contains(itemId))
+                    {
+                        return false;
+                    }
+                    if (_selDismantle.Count >= DismantleSlotCount)
+                    {
+                        SetMessage($"최대 {DismantleSlotCount}개까지 올릴 수 있습니다.");
+                        return false;
+                    }
+                    ToggleDismantle(itemId);
+                    return true;
+
+                case Mode.Enhance:
+                    if (FindEnhanceCandidate(itemId) == null)
+                    {
+                        SetMessage("강화할 수 없는 아이템입니다.");
+                        return false;
+                    }
+                    _selEnhance = itemId;
+                    ClearEnhanceResult(); // 새 대상을 올리면 지난 결과 표시를 치운다
+                    RebuildContent();
+                    return true;
+
+                default:
+                    return false; // 제작 탭은 등록 칸이 없다(레시피를 고르는 방식)
+            }
+        }
+
+        /// <summary>등록 칸을 클릭했을 때 그 아이템의 등록을 해제한다(<see cref="CubeDropSlot"/>가 호출).</summary>
+        public void UnregisterSlotItem(long itemId)
+        {
+            SetMessage(string.Empty);
+            switch (_mode)
+            {
+                case Mode.Combine: _selCombine.Remove(itemId); break;
+                case Mode.Dismantle: _selDismantle.Remove(itemId); break;
+                case Mode.Enhance: _selEnhance = 0; ClearEnhanceResult(); break;
+                default: return;
+            }
+            RebuildContent();
+        }
+
+        /// <summary>강화 결과 표시(오른쪽 칸)를 지운다.</summary>
+        private void ClearEnhanceResult()
+        {
+            _enhanceResultCode = 0;
+            _enhanceResultLevel = 0;
+        }
+
+        /// <summary>강화 결과 칸을 <b>클릭해서</b> 치운다(<see cref="CubeDropSlot"/>가 호출).</summary>
+        public void ClearEnhanceResultDisplay()
+        {
+            ClearEnhanceResult();
+            SetMessage(string.Empty);
+            RebuildContent();
+        }
+
+        /// <summary>후보 목록에 그 아이템이 있는지.</summary>
+        private static bool IsEligible(IEnumerable<InventoryItemDto> candidates, long itemId)
+        {
+            foreach (var it in candidates)
+            {
+                if (it != null && it.itemId == itemId)
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         // ── 상호작용(선택) ──
@@ -783,12 +1108,17 @@ namespace TaskbarHero.Client.UI
                         Session.ApplyEnhanceResult(data);
                     }
                     int level = data != null ? data.enhanceLevel : 0;
+                    int resultCode = cand.Value.itemCode;
                     EnhanceFxOverlay.PlaySuccess(enhanceBurstFrames, EnhanceFxScreenPos(), () =>
                     {
                         if (this == null || !gameObject.activeInHierarchy)
                         {
                             return; // 연출 도중 패널이 닫혔으면 갱신할 화면이 없다(캐시는 이미 반영됐다)
                         }
+                        // 강화가 끝나면 대상 칸(왼쪽)을 비우고 결과를 오른쪽 칸에 보여 준다.
+                        _selEnhance = 0;
+                        _enhanceResultCode = resultCode;
+                        _enhanceResultLevel = level;
                         RefreshAfterAction();               // 먼저 다시 그리고(단계·비용·잔액 갱신)
                         SetMessage($"강화 성공! +{level}"); // 그 위에 결과 메시지를 남긴다
                     });
@@ -811,6 +1141,27 @@ namespace TaskbarHero.Client.UI
         /// 크기가 큰 망치 이펙트가 창 밖으로 새어 나간다. 대상 장비는 하단 정보(이름·단계·비용)로 이미 알 수 있으므로
         /// 연출은 항상 같은 자리(창 중앙)에서 보여 준다.
         /// </summary>
+        /// <summary>
+        /// 망치 연출을 창 중앙에서 위로 얼마나 올릴지(스크린 픽셀).
+        /// 강화 칸은 내용 영역 <b>위쪽</b>에 있는데 창 중앙은 그보다 한참 아래라, 그대로 두면 연출이
+        /// 칸에서 떨어져 보인다. 창 중앙 → 강화 칸 중심까지의 거리를 캔버스 배율로 환산해 올린다.
+        /// </summary>
+        private float EnhanceFxLiftPx()
+        {
+            var target = _panelRoot != null ? _panelRoot : _rootRect;
+            if (_contentArea == null || target == null)
+            {
+                return 0f;
+            }
+            // 창 중심 기준으로 본 강화 칸 중심의 y(캔버스 단위).
+            float contentTopFromPanelCenter = target.rect.height * 0.5f - ContentTopMargin;
+            float slotCenterY = contentTopFromPanelCenter - DropSlotTopMargin - _dropSlotSize * 0.5f;
+
+            var canvas = GetComponent<Canvas>();
+            float scale = canvas != null && canvas.scaleFactor > 0f ? canvas.scaleFactor : 1f;
+            return slotCenterY * scale;
+        }
+
         private Vector2 EnhanceFxScreenPos()
         {
             var target = _panelRoot != null ? _panelRoot : _rootRect;
@@ -820,8 +1171,10 @@ namespace TaskbarHero.Client.UI
             }
             // 창을 인벤토리 자리에 맞출 때 피벗을 오른쪽 변으로 옮기므로(AlignToInventoryPanel),
             // transform.position이 아니라 rect 중심을 변환해야 실제 창 중앙이 나온다.
-            Vector3 sp = RectTransformUtility.WorldToScreenPoint(null, target.TransformPoint(target.rect.center));
-            return new Vector2(sp.x, sp.y);
+            // 창 중앙은 강화 칸보다 아래라 망치가 칸을 벗어나 보인다 — 칸 높이 쪽으로 끌어올린다.
+            Vector3 center = target.TransformPoint(target.rect.center);
+            Vector3 sp = RectTransformUtility.WorldToScreenPoint(null, center);
+            return new Vector2(sp.x, sp.y + EnhanceFxLiftPx());
         }
 
         /// <summary>큐브 합성 요청(POST /api/game/cube/combine). 성공 시 결과 안내 후 재로드.</summary>

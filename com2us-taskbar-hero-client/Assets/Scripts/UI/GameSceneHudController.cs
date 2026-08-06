@@ -550,6 +550,11 @@ namespace TaskbarHero.Client.UI
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = new Vector2(pos.x - MenuButtonWidth * 0.5f, pos.y + MenuButtonHeight * 0.5f);
 
+            // 클릭 피드백(커졌다 돌아오는 punch). 피벗을 방금 칸 중앙으로 옮겼으므로 버튼 루트에 붙여도
+            // 아이콘·글자가 함께 제자리에서 커진다(토글 버튼은 피벗이 우상단이라 아이콘 자식에 붙인다).
+            var punch = go.AddComponent<ButtonPunchScale>();
+            go.GetComponent<Button>().onClick.AddListener(() => punch.Play()); // 창 열림과 동시에 시작
+
             _menuButtons[slot] = rt;
             return go;
         }

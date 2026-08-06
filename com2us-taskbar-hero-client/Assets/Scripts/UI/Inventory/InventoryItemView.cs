@@ -14,7 +14,7 @@ namespace TaskbarHero.Client.UI
     /// </summary>
     public class InventoryItemView : MonoBehaviour,
         IBeginDragHandler, IDragHandler, IEndDragHandler,
-        IPointerEnterHandler, IPointerExitHandler
+        IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
     {
         /// <summary>툴팁·아이콘에 표시할 아이템 정보.</summary>
         [System.Serializable]
@@ -216,9 +216,35 @@ namespace TaskbarHero.Client.UI
             _rt.sizeDelta = new Vector2(118f, 118f);
             _icon.raycastTarget = false; // 아래 칸이 레이캐스트에 잡히도록
             _rt.position = eventData.position;
+            RaiseAboveOtherPanels(true); // 큐브 등 다른 패널 뒤로 숨지 않게
 
             // 이 장비를 놓을 수 있는 부위 칸을 강조해, 어디에 떨어뜨려야 장착되는지 보이게 한다.
             Controller.HighlightEquipTarget(_data, true);
+        }
+
+        /// <summary>
+        /// 끌고 있는 동안 아이콘을 <b>모든 기능 패널 위</b>에 그린다.
+        /// <para>가방 캔버스는 정렬 순서 100이고 큐브는 112라, 그대로 두면 <b>끌고 있는 아이콘이 큐브 창 뒤로
+        /// 숨어</b> 어디에 놓는지 보이지 않는다. 아이콘 자신에게 캔버스를 붙여 정렬을 덮어쓰고, 놓으면 되돌린다.</para>
+        /// </summary>
+        private void RaiseAboveOtherPanels(bool raise)
+        {
+            var overrideCanvas = GetComponent<Canvas>();
+            if (raise)
+            {
+                if (overrideCanvas == null)
+                {
+                    overrideCanvas = gameObject.AddComponent<Canvas>();
+                }
+                overrideCanvas.overrideSorting = true;
+                overrideCanvas.sortingOrder = UiSortingOrder.DraggedItem;
+            }
+            else if (overrideCanvas != null)
+            {
+                // Destroy는 프레임 끝에 처리되므로, 그 사이에도 정렬이 남지 않도록 덮어쓰기를 먼저 끈다.
+                overrideCanvas.overrideSorting = false;
+                Destroy(overrideCanvas);
+            }
         }
 
         public void OnDrag(PointerEventData eventData)
@@ -237,7 +263,24 @@ namespace TaskbarHero.Client.UI
             }
             _dragging = false;
             _icon.raycastTarget = true;
+            RaiseAboveOtherPanels(false);
             Controller.HighlightEquipTarget(_data, false);
+
+            // 큐브 창의 등록 칸에 떨어뜨렸다 → 그 탭에 아이템을 올린다(가방 칸 이동이 아니다).
+            var cubeSlot = FindCubeSlotUnderPointer(eventData);
+            if (cubeSlot != null && cubeSlot.AcceptsDrop)
+            {
+                if (_originSlot != null)
+                {
+                    _originSlot.SetItem(this); // 등록은 원본을 소비하지 않는다 — 제자리로 되돌린다
+                }
+                var cube = cubeSlot.GetComponentInParent<CubePanelController>();
+                if (cube != null)
+                {
+                    cube.TryRegisterFromInventory(_data.itemId);
+                }
+                return;
+            }
 
             var target = FindSlotUnderPointer(eventData);
             if (target != null && target.IsEquipSlot)
@@ -247,6 +290,27 @@ namespace TaskbarHero.Client.UI
                 return;
             }
             Controller.MoveItem(this, _originSlot, target);
+        }
+
+        /// <summary>포인터 아래의 큐브 등록 칸을 찾는다(큐브 창이 열려 있지 않으면 null).</summary>
+        private static CubeDropSlot FindCubeSlotUnderPointer(PointerEventData eventData)
+        {
+            var es = EventSystem.current;
+            if (es == null)
+            {
+                return null;
+            }
+            var results = new System.Collections.Generic.List<RaycastResult>();
+            es.RaycastAll(eventData, results);
+            foreach (var r in results)
+            {
+                var slot = r.gameObject.GetComponentInParent<CubeDropSlot>();
+                if (slot != null)
+                {
+                    return slot;
+                }
+            }
+            return null;
         }
 
         /// <summary>포인터 아래의 슬롯을 찾는다(가방 격자 칸·장비 부위 칸 모두). 없으면 null.</summary>
@@ -268,6 +332,26 @@ namespace TaskbarHero.Client.UI
                 }
             }
             return null;
+        }
+
+        /// <summary>
+        /// <b>우클릭이면 큐브 창의 현재 탭에 바로 등록</b>한다(끌어다 놓는 것과 같은 결과).
+        /// 큐브 창이 열려 있지 않으면 아무 일도 하지 않는다 — 좌클릭은 종전대로 아무 동작이 없다.
+        /// <para>큐브는 가방과 함께 열리므로 활성 인스턴스를 찾으면 그것이 지금 보이는 창이다.</para>
+        /// </summary>
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            if (eventData.button != PointerEventData.InputButton.Right || _dragging)
+            {
+                return;
+            }
+            var cube = Object.FindAnyObjectByType<CubePanelController>(); // 비활성은 제외 = 열려 있을 때만
+            if (cube == null)
+            {
+                return;
+            }
+            Controller.RequestHideTooltip();
+            cube.TryRegisterFromInventory(_data.itemId);
         }
 
         public void OnPointerEnter(PointerEventData eventData)
