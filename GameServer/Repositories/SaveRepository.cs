@@ -1,3 +1,4 @@
+using System.Data.Common;
 using GameServer.Data;
 using MySqlConnector;
 using SqlKata.Execution;
@@ -7,6 +8,12 @@ namespace GameServer.Repositories;
 
 /// <summary>보유 캐릭터 요약(식별자 배정·직업 중복 검사·파티 자리 배정용). Slot은 파티 자리(0=미편성, 1~3).</summary>
 public sealed record CharacterSlot(int CharacterId, int ClassCode, int Slot);
+
+/// <summary>
+/// 캐릭터 생성 시 함께 지급·장착할 기본 장비 1개(현재는 직업별 기본 무기). ItemCode는 지급 아이템,
+/// EquipSlot은 장착 슬롯(equip_slot_master)이며 둘 다 마스터(item_master)에서 서비스가 확정해 넘긴다.
+/// </summary>
+public sealed record StartingEquipment(int ItemCode, int EquipSlot);
 
 /// <summary>캐릭터 추가 생성 트랜잭션 결과 상태.</summary>
 public enum AddCharacterStatus
@@ -64,13 +71,17 @@ public interface ISaveRepository
     /// <summary>캐릭터 추가 생성 시 식별자·파티 자리 배정과 직업 중복 검사에 쓸 보유 캐릭터 목록(식별자 + 직업 + 파티 자리)을 조회한다.</summary>
     Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId);
 
-    /// <summary>최초 접속: game_player + 첫 캐릭터(직업·성별, 파티 1번 자리) + 큐브 + 신규 가입 지원금 메일을
-    /// 한 트랜잭션으로 초기화한다. welcomeMail이 null이면 메일을 발급하지 않는다.</summary>
+    /// <summary>최초 접속: game_player + 첫 캐릭터(직업·성별, 파티 1번 자리) + 기본 무기(장착 상태) + 큐브 +
+    /// 신규 가입 지원금 메일을 한 트랜잭션으로 초기화한다. welcomeMail·startingEquipment가 null이면 그 항목은 건너뛴다.</summary>
     Task CreatePlayerWithFirstCharacterAsync(
-        long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix, MailDraft? welcomeMail);
+        long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix,
+        MailDraft? welcomeMail, StartingEquipment? startingEquipment);
 
-    /// <summary>기존 계정에 캐릭터 1개 추가. 생성 비용(goldCost)을 골드에서 확인·차감하고 지정 파티 자리(slot, 빈 자리 없으면 0)로 삽입하는 한 트랜잭션.</summary>
-    Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, int slot, int gender, long goldCost);
+    /// <summary>기존 계정에 캐릭터 1개 추가. 생성 비용(goldCost)을 골드에서 확인·차감하고 지정 파티 자리(slot, 빈 자리 없으면 0)로 삽입하며,
+    /// startingEquipment가 있으면 기본 무기를 지급해 장착까지 마치는 한 트랜잭션.</summary>
+    Task<AddCharacterOutcome> AddCharacterAsync(
+        long userId, int characterId, int classCode, int slot, int gender, long goldCost,
+        StartingEquipment? startingEquipment, long nowUnix);
 
     /// <summary>클라이언트가 보낸 파티 편성 스냅샷(자리별 캐릭터)을 그대로 저장한다.
     /// 목록에 없는 보유 캐릭터는 미편성(slot 0)이 되는 한 트랜잭션.</summary>
@@ -360,15 +371,18 @@ public sealed class SaveRepository : ISaveRepository
     /// 한 트랜잭션으로 묶는 작업(캐릭터·큐브·출석 진행도가 없는 반쪽 세이브가 남지 않게 한다):
     /// <para>1) game_player INSERT — 닉네임·시작 좌표(1-1-1)·최고 클리어 0·초기 인벤 용량·활동/생성/갱신 시각</para>
     /// <para>2) player_character INSERT — 첫 캐릭터(식별자 1)를 선택 직업·성별로, 파티 1번 자리에 레벨 1·경험치 0으로 생성</para>
-    /// <para>3) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
-    /// <para>4) player_attendance INSERT — 출석 진행도를 0(누적 0·마지막 획득 일자 0)으로 초기화.
+    /// <para>3) player_item + player_item_equipped INSERT — 직업 기본 무기를 지급해 무기 슬롯에 장착한 상태로 만든다
+    ///     (startingEquipment가 있을 때만). 장착 중인 장비는 가방 칸을 쓰지 않으므로 slot은 NULL이다</para>
+    /// <para>4) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
+    /// <para>5) player_attendance INSERT — 출석 진행도를 0(누적 0·마지막 획득 일자 0)으로 초기화.
     ///     출석 수령은 이 행의 조건부 갱신으로 처리하므로 계정 생성 시 함께 만들어 둔다(attendance 기획서 §4)</para>
-    /// <para>5) player_mail(+player_mail_reward) INSERT — 신규 가입 지원금 메일 발급(welcomeMail이 있을 때만).
+    /// <para>6) player_mail(+player_mail_reward) INSERT — 신규 가입 지원금 메일 발급(welcomeMail이 있을 때만).
     ///     game_player가 계정당 1행이라 이 트랜잭션은 계정 생애에 한 번만 성공하므로, 지급 여부 플래그 없이
     ///     중복 지급이 원천 차단된다(세이브 데이터 기획서 5.3)</para>
     /// </remarks>
     public async Task CreatePlayerWithFirstCharacterAsync(
-        long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix, MailDraft? welcomeMail)
+        long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix,
+        MailDraft? welcomeMail, StartingEquipment? startingEquipment)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -402,6 +416,11 @@ public sealed class SaveRepository : ISaveRepository
                 level = 1,
                 exp = 0,
             }, transaction);
+
+            if (startingEquipment is not null)
+            {
+                await GrantEquippedStartingItemAsync(db, transaction, userId, 1, startingEquipment, nowUnix);
+            }
 
             await db.Query("player_cube").InsertAsync(new
             {
@@ -443,8 +462,12 @@ public sealed class SaveRepository : ISaveRepository
     /// <para>3) player_character INSERT — 지정 식별자·파티 자리(slot, 빈 자리 없으면 0=미편성)로 캐릭터(직업·성별)를
     ///     레벨 1·경험치 0으로 생성. 유니크 제약(식별자 PK·계정 내 직업 중복) 위반(MySQL 1062)은
     ///     동시 생성 경합으로 보고 롤백 → DuplicateConflict</para>
+    /// <para>4) player_item + player_item_equipped INSERT — 직업 기본 무기를 지급해 무기 슬롯에 장착한 상태로 만든다
+    ///     (startingEquipment가 있을 때만). 장착 중이라 가방 칸(slot)은 NULL이므로 용량이 가득 차도 실패하지 않는다</para>
     /// </remarks>
-    public async Task<AddCharacterOutcome> AddCharacterAsync(long userId, int characterId, int classCode, int slot, int gender, long goldCost)
+    public async Task<AddCharacterOutcome> AddCharacterAsync(
+        long userId, int characterId, int classCode, int slot, int gender, long goldCost,
+        StartingEquipment? startingEquipment, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -495,6 +518,12 @@ public sealed class SaveRepository : ISaveRepository
                 return AddCharacterOutcome.Fail(AddCharacterStatus.DuplicateConflict);
             }
 
+            // 4) 기본 무기 지급 + 장착(정의가 있을 때만).
+            if (startingEquipment is not null)
+            {
+                await GrantEquippedStartingItemAsync(db, transaction, userId, characterId, startingEquipment, nowUnix);
+            }
+
             await transaction.CommitAsync();
             return new AddCharacterOutcome(AddCharacterStatus.Ok, goldCost, newBalance);
         }
@@ -503,6 +532,38 @@ public sealed class SaveRepository : ISaveRepository
             await transaction.RollbackAsync();
             throw;
         }
+    }
+
+    /// <summary>
+    /// 캐릭터 생성 트랜잭션 안에서 기본 장비 1개를 지급하고 곧바로 그 캐릭터에 장착시킨다
+    /// (player_item 1행 + player_item_equipped 1행). <b>호출자의 트랜잭션을 그대로 쓰므로</b> 캐릭터와 장비가 함께 확정된다.
+    /// <para>장착 중인 장비는 가방 칸을 쓰지 않는다는 규칙(InventoryRepository.ApplyEquipAsync)에 맞춰
+    /// player_item.slot을 NULL로 넣는다 — 그래서 가방이 가득 차 있어도 지급이 실패하지 않고, 유니크 (user_id, slot)에도 걸리지 않는다.</para>
+    /// <para>새로 만든 캐릭터의 빈 슬롯에 넣으므로 기존 장비와의 스왑·해제 처리가 필요 없다.</para>
+    /// </summary>
+    private static async Task GrantEquippedStartingItemAsync(
+        QueryFactory db, DbTransaction transaction, long userId, int characterId, StartingEquipment equipment, long nowUnix)
+    {
+        long playerItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
+        {
+            user_id = userId,
+            row_type = RowTypeItem,
+            item_code = equipment.ItemCode,
+            quantity = 1,
+            slot = (int?)null, // 장착 중이라 가방 칸을 점유하지 않는다
+            enhance_level = 0,
+            acquired_at = nowUnix,
+        }, transaction);
+
+        await db.Query("player_item_equipped").InsertAsync(new
+        {
+            player_item_id = playerItemId,
+            user_id = userId,
+            item_code = equipment.ItemCode,
+            enhance_level = 0,
+            equipped_character_id = characterId,
+            equipped_slot = equipment.EquipSlot,
+        }, transaction);
     }
 
     /// <summary>

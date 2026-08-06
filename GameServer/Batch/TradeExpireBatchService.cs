@@ -14,16 +14,21 @@ namespace GameServer.Batch;
 /// 전이)이 직렬화한다 — 그 사이 구매·취소로 닫힌 등록은 0행이 반영되어 스킵된다(별도 락 없음, §7.4).
 /// <para><b>이 배치는 만료를 "판정"하지 않는다.</b> 만료 판정은 읽기 경로(목록·단건 조회·구매·등록 한도)가
 /// <c>expires_at &gt; now</c>로 직접 하므로, 만료된 매물은 배치를 기다리지 않고 즉시 목록에서 빠지고 구매도 거부된다.
-/// 배치가 남아서 하는 일은 <b>에스크로 아이템 반송과 status 정리</b>뿐이라 주기를 하루 1회로 길게 잡는다
-/// — 주기가 판매 기간(3일)의 정확도에 영향을 주지 않는다(§7.6).</para>
-/// 설정: appsettings "TradeExpireBatch" 섹션(IntervalSeconds 기본 86400=24시간 · BatchSize 기본 1000).
+/// 배치가 남아서 하는 일은 <b>에스크로 아이템 반송과 status 정리</b>뿐이라 주기가 판매 기간(3일)의 정확도에
+/// 영향을 주지 않는다(§7.6). 다만 <b>주기가 곧 판매자가 아이템을 되돌려받기까지의 지연 상한</b>이므로,
+/// 3일을 기다린 판매자를 더 기다리게 하지 않도록 <b>1시간</b>으로 잡는다 — 대상 조회가
+/// <c>idx_trade_expire</c>를 커버링으로 타고 0건이면 로그도 남기지 않아 빈 주기 비용이 사실상 없다.</para>
+/// 설정: appsettings "TradeExpireBatch" 섹션(IntervalSeconds 기본 3600=1시간 · BatchSize 기본 1000).
 /// </summary>
 public sealed class TradeExpireBatchService : PeriodicBatchService
 {
-    /// <summary>기본 실행 주기 24시간. 만료 효력은 읽기 경로가 즉시 내므로 이 주기는 반송 지연 상한일 뿐이다.</summary>
-    private const int DefaultIntervalSeconds = 24 * 60 * 60;
+    /// <summary>기본 실행 주기 1시간. 만료 효력은 읽기 경로가 즉시 내므로 이 주기는 <b>반송 지연 상한</b>일 뿐이다.</summary>
+    private const int DefaultIntervalSeconds = 60 * 60;
 
-    /// <summary>1주기 처리 상한. 하루치 만료 물량을 한 번에 소화해야 하므로 분 단위 주기(200건) 때보다 크게 잡는다.</summary>
+    /// <summary>
+    /// 1주기 처리 상한. 주기(1시간)보다 넉넉히 잡아, 서버가 한동안 내려가 있다 올라왔을 때 밀린 만료 물량을
+    /// 한 주기에 소화하게 한다. 초과분은 다음 주기로 이월된다.
+    /// </summary>
     private const int DefaultBatchSize = 1000;
 
     /// <summary>만료 반송 메일 템플릿(mail_master 202, {0} = 아이템 표시값).</summary>

@@ -314,6 +314,7 @@ erDiagram
 
 - **역할**: **장착 중인 아이템**만 담는 테이블(`player_item`과 1:0..1). 아이템의 장착 여부·장착 위치를 `player_item` 본체에서 분리해, 행이 존재하면 곧 "장착 중"이다. 장착은 이 행 INSERT, 해제는 DELETE로 처리하므로 `player_item`에 NULL 장착 컬럼을 두지 않는다. 아이템은 계정 공유지만 장착은 특정 캐릭터·슬롯에 귀속된다.
 - **저장 데이터**: `player_item_id`(PK/FK — `player_item.player_item_id`, 아이템당 최대 1행이라 한 아이템은 동시에 한 곳에만 장착), `user_id`(FK), `item_code`(어떤 아이템인지 — `item_master.item_code`), `enhance_level`(장비 강화 단계 — `enhance_master`), `equipped_character_id`(장착 캐릭터 1~3), `equipped_slot`(장착 슬롯, `equip_slot_master`). `(user_id, equipped_character_id, equipped_slot)` 유니크로 **한 캐릭터-슬롯당 아이템 하나**를 보장한다.
+- **행 생성 주체**: 장착 API(`inventory/equip`)와 **캐릭터 생성**(`create-character`)이다. 캐릭터 생성은 그 직업의 최저 등급 무기를 `player_item`(수량 1·`slot` NULL) + 이 테이블(`equipped_slot=1`)로 **캐릭터 삽입과 같은 트랜잭션에서** 적재해, 캐릭터가 무기를 장착한 상태로 시작하게 한다([세이브 데이터 기획서](../세부/save-data-기획서.md) 5.3).
 
 ### player_skill
 

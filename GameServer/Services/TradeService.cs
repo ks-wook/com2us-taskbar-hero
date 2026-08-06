@@ -78,7 +78,7 @@ public sealed class TradeService : ITradeService
     /// 처리하므로(<c>WHERE → ORDER BY → LIMIT</c>) 비용이 전체 등록 수와 무관하게 페이지 크기에 비례하고,
     /// 본인 등록이 섞여도 페이지 건수가 줄지 않는다. 한 건 더 읽어(<c>pageSize + 1</c>) hasMore를 판정한다.</para>
     /// <para><b>만료 시각이 지난 등록은 목록에서 빠진다(§7.6).</b> 요청 시각을 쿼리에 넘겨 걸러내므로,
-    /// 만료 배치(하루 1회)가 아직 돌지 않았어도 만료된 매물이 보이지 않는다.</para>
+    /// 만료 배치(1시간 주기)가 아직 돌지 않았어도 만료된 매물이 보이지 않는다.</para>
     /// </summary>
     public async Task<SaveResult> ListAsync(long userId, int itemCode, bool mine, int page, int pageSize)
     {

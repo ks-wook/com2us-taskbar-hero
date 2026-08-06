@@ -216,13 +216,21 @@ public sealed class InventoryRepository : IInventoryRepository
     /// 그 계정의 가방 아이템을 slot 커서 keyset 페이징으로 조회한다. 계정 세이브가 없으면 NoPlayer.
     /// </summary>
     /// <remarks>
-    /// 읽기 3개(읽기 전용이라 트랜잭션으로 묶지 않는다 — 페이지 간 정합성은 애초에 보장 대상이 아니고,
-    /// 클라이언트가 itemId 기준 병합으로 흡수한다):
-    /// <para>1) game_player SELECT — 계정 세이브 존재 확인(행 없으면 NoPlayer)</para>
-    /// <para>2) player_item SELECT — <c>row_type=1 AND slot &gt; cursor</c>를 slot 오름차순으로 limit개.
+    /// 읽기 2개(+조건부 1개). 읽기 전용이라 트랜잭션으로 묶지 않는다 — 페이지 간 정합성은 애초에 보장 대상이
+    /// 아니고, 클라이언트가 itemId 기준 병합으로 흡수한다:
+    /// <para>1) player_item SELECT — <c>row_type=1 AND slot &gt; cursor</c>를 slot 오름차순으로 limit개.
     ///     <c>(user_id, slot)</c> 유니크 인덱스가 범위 스캔과 정렬을 모두 담당해 filesort가 없다.
     ///     재화 행과 장착 중인 장비는 slot이 NULL이라 자동으로 빠진다</para>
-    /// <para>3) player_item COUNT — 총 점유 칸 수(응답 <c>total</c>). 같은 인덱스를 타며 페이지와 무관하다</para>
+    /// <para>2) player_item COUNT — 총 점유 칸 수(응답 <c>total</c>). 같은 인덱스를 타며 페이지와 무관하다</para>
+    /// <para>3) game_player SELECT — <b>총 칸 수가 0일 때만</b> 계정 세이브 존재를 확인한다(없으면 NoPlayer)</para>
+    /// </remarks>
+    /// <remarks>
+    /// <b>계정 세이브 확인을 조건부로 미루는 근거</b>: <c>player_item</c>은 <c>game_player</c>에 FK
+    /// (<c>fk_item_player … ON DELETE CASCADE</c>)로 매달려 있어 <b>세이브 없이 아이템 행이 존재할 수 없다.</b>
+    /// 따라서 2)의 총 칸 수가 1 이상이면 세이브 존재가 이미 증명되어 확인 쿼리가 불필요하다. 가방이 완전히
+    /// 빈 계정에서만 3)을 쳐서 "세이브 없음(NoPlayer)"과 "세이브는 있고 가방만 빔"을 가른다 — 응답은
+    /// 확인을 먼저 하던 때와 완전히 동일하고, 정상 경로의 DB 왕복만 3회에서 2회로 준다
+    /// (측정 근거: <c>docs/공통/쿼리-분석.md</c> 8.3).
     /// </remarks>
     /// <remarks>
     /// <b>전량을 읽어 메모리에서 자르지 않는다.</b> 필요한 구간만 DB에서 잘라 오므로 페이지 크기에 비례한 비용만
@@ -234,17 +242,7 @@ public sealed class InventoryRepository : IInventoryRepository
         await connection.OpenAsync();
         var db = _dbFactory.Create(connection);
 
-        // 1) 계정 세이브 확인. 없으면 인벤토리도 없다.
-        var playerId = await db.Query("game_player")
-            .Select("user_id")
-            .Where("user_id", userId)
-            .FirstOrDefaultAsync<long?>();
-        if (playerId is null)
-        {
-            return InventoryBagOutcome.Fail(InventoryPageStatus.NoPlayer);
-        }
-
-        // 2) 요청 구간만(커서 다음부터 limit개). 한 건 더 읽어 호출측이 hasMore를 판정한다.
+        // 1) 요청 구간만(커서 다음부터 limit개). 한 건 더 읽어 호출측이 hasMore를 판정한다.
         var rows = await db.Query("player_item")
             .Select("player_item_id", "slot", "item_code", "quantity", "enhance_level")
             .Where("user_id", userId).Where("row_type", RowTypeItem).Where("slot", ">", cursor)
@@ -252,10 +250,24 @@ public sealed class InventoryRepository : IInventoryRepository
             .Limit(limit)
             .GetAsync<BagItemRow>();
 
-        // 3) 총 점유 칸 수(페이지와 무관한 전체 집계).
+        // 2) 총 점유 칸 수(페이지와 무관한 전체 집계).
         var total = await db.Query("player_item")
             .Where("user_id", userId).Where("row_type", RowTypeItem).WhereNotNull("slot")
             .CountAsync<int>();
+
+        // 3) 가방이 완전히 비었을 때만 계정 세이브를 확인한다. FK(ON DELETE CASCADE) 때문에 세이브 없이
+        //    아이템 행이 있을 수 없으므로, total > 0이면 세이브 존재가 이미 증명된 것이라 왕복을 아낀다.
+        if (total == 0)
+        {
+            var playerId = await db.Query("game_player")
+                .Select("user_id")
+                .Where("user_id", userId)
+                .FirstOrDefaultAsync<long?>();
+            if (playerId is null)
+            {
+                return InventoryBagOutcome.Fail(InventoryPageStatus.NoPlayer);
+            }
+        }
 
         var items = rows.Select(r => new InventoryItemDto
         {

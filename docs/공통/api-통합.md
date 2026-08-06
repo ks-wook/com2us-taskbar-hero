@@ -48,7 +48,7 @@
 |---|---|---|---|---|
 | `POST /api/game/load` | 접속 시 코어 세이브 스냅샷 로드(고정 크기 데이터 전량, 가방 아이템 제외) | `{}` | `player`, `characters[]`, `currencies[]`, `equipped[]`, `skills[]`, `runes[]`, `cube`, `activeBuffs[]`, `inventoryTotal`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
 | `POST /api/game/inventory/list` | 가방 아이템 페이지 조회(`slot` 커서 keyset 페이징) | `{ cursor, limit }` | `items[]`, `nextCursor`, `hasMore`, `total` | `SaveNotFound(2001)` |
-| `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정) | `{ nickname, classCode, gender }` | `characterId`, `classCode`, `gender`, `level`, `cost`, `balance` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `InvalidGender(2007)`, `PlayerAlreadyExists(2004)`, `InsufficientCurrency(4005)` |
+| `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정 + 직업 기본 무기 장착) | `{ nickname, classCode, gender }` | `characterId`, `classCode`, `gender`, `level`, `cost`, `balance` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `InvalidGender(2007)`, `PlayerAlreadyExists(2004)`, `InsufficientCurrency(4005)` |
 | `POST /api/game/party/arrange` | 파티 편성 저장(저장 후 파티 **전체 스냅샷**) | `{ members:[{ characterId, slot }] }`(1~3개) | `characters[]`(보유 전체, 자리 순) | `CannotRemoveLastCharacter(2008)`, `CharacterNotFound(2009)`, `PartySlotOccupied(2010)`, `InvalidCharacterId(2006)` |
 | `POST /api/game/update-last-active` | 접속 시각 갱신(heartbeat, 오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
 
@@ -57,6 +57,7 @@
 - 캐릭터는 **한 번에 1개씩** 생성(`create-character`), 계정당 최대 3개·**직업 중복 불가**. `nickname`은 최초 생성 시에만 사용. 캐릭터·성장 상태 조회는 별도 API 없이 `load` 스냅샷 사용.
 - **성별(`gender`)**: `1`(남)·`2`(여) 중 하나를 생성 시 함께 보내며, 그 외 값은 `InvalidGender(2007)`. 외형만 가르는 값이라 직업 중복 제약·스탯·비용에는 영향이 없고, 요청에 필드가 없으면 `1`(남)로 저장된다. **생성 이후 변경 API는 없다.** `load`의 `characters[]`에도 `gender`가 포함된다.
 - **파티 편성은 이동 절차가 아니라 스냅샷**이다(`party/arrange`). `members`가 곧 최종 파티이며 **목록에 없는 보유 캐릭터는 자동으로 미편성(`slot=0`)** 이 되므로, 추가·추방·교체·자리 바꾸기가 이 호출 하나로 표현된다. 멱등이고 골드를 쓰지 않으며 캐릭터를 삭제하지도 않는다. 응답의 `characters[]`로 편성 화면을 다시 그리면 되고 재조회가 필요 없다.
+- **기본 무기 장착 상태로 생성**: 생성되는 캐릭터는 그 직업의 **최저 등급 무기**(마스터 `item_master`에서 `equip_slot=1`·`class_req` 일치 중 가장 낮은 등급)를 1개 지급받아 무기 슬롯에 장착한 상태로 시작한다 — 캐릭터 삽입과 **같은 트랜잭션**이며, 장착 중이라 가방 칸을 쓰지 않는다(`inventoryTotal` 불변). 응답 필드는 늘지 않으므로 클라이언트는 생성 직후의 `load` 응답 `equipped[]`로 확인한다([세이브 데이터 기획서](../세부/save-data-기획서.md) 5.3).
 - **생성 비용**: **1번 슬롯(최초 생성=계정 초기화)은 무료**, **2·3번 슬롯은 골드 소모**(비용은 마스터 `character_create_cost` 명시값, 서버 권위 차감). 골드 부족 시 `InsufficientCurrency(4005)`. 응답 `cost`(소모 골드)·`balance`(차감 후 잔액)를 회신하며, 클라이언트는 생성 전 안내 비용을 마스터 번들(`character_create_cost`의 다음 슬롯 값)로 표시한다.
 
 ### 3.2 오프라인 보상

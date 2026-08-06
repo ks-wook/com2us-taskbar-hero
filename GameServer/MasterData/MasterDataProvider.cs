@@ -333,6 +333,12 @@ public sealed class MasterDataProvider
     private const int ItemTypeMaterial = 2;   // 2:재료
     private const int ItemTypeConsumable = 4; // 4:소모품(효과는 consumable_master)
 
+    /// <summary>equip_slot_master의 무기 슬롯. 캐릭터 생성 시 지급하는 기본 장비가 이 슬롯이다.</summary>
+    private const int EquipSlotWeapon = 1;
+
+    /// <summary>기본 무기가 만족해야 하는 레벨 제한 상한. 갓 생성한 캐릭터는 레벨 1이므로 그 이하만 장착할 수 있다.</summary>
+    private const int StartingCharacterLevel = 1;
+
     private readonly MasterDbFactory _masterDbFactory;
     private readonly ILogger<MasterDataProvider> _logger;
 
@@ -365,6 +371,10 @@ public sealed class MasterDataProvider
     //   소모품(4)은 스테이지 드롭으로 지급하지 않는다(소모품/버프 기획서 §4.3-(3) — 확률 지급은 상자 가챠 전용
     //   마스터 gacha_item_pool로 정의한다). 재화(3)는 양쪽 모두 제외.
     private IReadOnlyDictionary<int, List<int>> _itemsByGrade = new Dictionary<int, List<int>>();
+
+    // 클래스별 기본 무기: class_code → 그 직업 전용 무기(equip_slot=1) 중 가장 등급이 낮은 아이템 정의.
+    //   캐릭터 생성 시 이 무기를 1개 지급하고 무기 슬롯에 장착한 상태로 시작한다(item_master에서 파생).
+    private IReadOnlyDictionary<int, ItemDef> _startingWeaponByClass = new Dictionary<int, ItemDef>();
 
     // 소모품 버프 효과: item_code → 정의(consumable_master).
     private IReadOnlyDictionary<int, ConsumableDef> _consumablesByCode = new Dictionary<int, ConsumableDef>();
@@ -415,6 +425,14 @@ public sealed class MasterDataProvider
     /// 인벤토리에 존재할 수 있는 전 타입(장비 1·재료 2·소모품 4)을 담으며, 재화(type 3)·미로드 코드는 null.</summary>
     public ItemDef? GetItem(int itemCode)
         => _itemsByCode.TryGetValue(itemCode, out var def) ? def : null;
+
+    /// <summary>
+    /// 직업의 <b>기본 무기</b> 정의(캐릭터 생성 시 지급·장착). 그 직업 전용 무기(item_type=1·equip_slot=1·class_req=classCode)
+    /// 가운데 등급이 가장 낮고(동급이면 item_code가 작은) 아이템이며, 레벨 1이 장착할 수 없는 무기(level_req &gt; 1)는 후보에서 제외한다.
+    /// 후보가 없으면(직업 전용 무기 미정의) null — 이때는 맨손으로 생성한다.
+    /// </summary>
+    public ItemDef? StartingWeapon(int classCode)
+        => _startingWeaponByClass.TryGetValue(classCode, out var def) ? def : null;
 
     /// <summary>소모품(item_type=4)의 버프 효과 정의(consumable_master). 소모품이 아니거나 미정의 코드는 null.</summary>
     public ConsumableDef? GetConsumable(int itemCode)
@@ -667,6 +685,7 @@ public sealed class MasterDataProvider
             _rewardsByStageId = await LoadStageRewardsAsync(db);
             (_levelRequiredExp, _maxLevel, _levelSkillPoints) = await LoadLevelsAsync(db);
             (_itemsByGrade, _itemsByCode) = await LoadItemsAsync(db);
+            _startingWeaponByClass = BuildStartingWeapons(_itemsByCode);
             _consumablesByCode = await LoadConsumablesAsync(db);
             _enhanceByLevel = await LoadEnhanceRulesAsync(db);
             _skillsByCode = await LoadSkillsAsync(db);
@@ -1178,6 +1197,23 @@ public sealed class MasterDataProvider
 
         return (byGrade, byCode);
     }
+
+    /// <summary>
+    /// 적재한 아이템 정의에서 <b>직업별 기본 무기</b>(캐릭터 생성 시 지급·장착할 무기)를 파생한다.
+    /// 별도 마스터 테이블을 두지 않고 item_master에서 고르므로, 무기를 추가·수정해도 이 규칙이 그대로 따라간다.
+    /// <para>후보 = 장비(item_type=1) · 무기 슬롯(equip_slot=1) · 그 직업 전용(class_req=class_code, 공용 0은 무기에 없음)
+    /// · 레벨 1이 장착 가능(level_req ≤ 1)인 아이템. 그중 <b>등급이 가장 낮고 동급이면 item_code가 작은</b> 것을 고른다.</para>
+    /// </summary>
+    private static Dictionary<int, ItemDef> BuildStartingWeapons(IReadOnlyDictionary<int, ItemDef> itemsByCode)
+        => itemsByCode.Values
+            .Where(i => i.ItemType == ItemTypeEquip
+                        && i.EquipSlot == EquipSlotWeapon
+                        && i.ClassReq != 0
+                        && i.LevelReq <= StartingCharacterLevel)
+            .GroupBy(i => i.ClassReq)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(i => i.Grade).ThenBy(i => i.ItemCode).First());
 
     /// <summary>consumable_master를 item_code → 버프 효과 정의로 적재한다(소모품 사용 API가 배율·지속시간을 여기서 읽는다).</summary>
     private static async Task<Dictionary<int, ConsumableDef>> LoadConsumablesAsync(QueryFactory db)

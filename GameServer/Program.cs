@@ -124,13 +124,14 @@ builder.Services.AddScoped<ITradeService, TradeService>();
 // 주기·1회 처리 상한은 appsettings에서 조절하며, 값이 없거나 0 이하이면 각 서비스의 기본값을 쓴다.
 
 // 거래소 만료 배치(등록 3일 경과 → status 정리 + 에스크로 아이템 메일 반송, trade 기획서 7.6).
-//   실행 주기: **86400초 = 24시간(하루 1회)** — appsettings "TradeExpireBatch:IntervalSeconds"(기본 86400).
-//   1회 처리 상한 1000건("BatchSize") — 하루치 만료 물량을 한 주기에 소화하기 위한 값이다.
-//   주기를 하루로 길게 잡을 수 있는 이유: **만료 판정을 이 배치가 하지 않는다.** 목록·단건 조회·구매·등록 한도
-//   쿼리가 모두 `expires_at > now`를 직접 검사하므로(TradeRepository), 만료된 매물은 배치를 기다리지 않고
-//   즉시 목록에서 빠지고 구매는 TradeAlreadyClosed로 거부되며 판매자 등록 칸도 곧바로 풀린다.
+//   실행 주기: **3600초 = 1시간** — appsettings "TradeExpireBatch:IntervalSeconds"(기본 3600).
+//   1회 처리 상한 1000건("BatchSize") — 주기보다 넉넉히 잡아 서버가 내려가 있던 동안 밀린 물량을 소화한다.
+//   **만료 판정은 이 배치가 하지 않는다.** 목록·단건 조회·구매·등록 한도 쿼리가 모두 `expires_at > now`를
+//   직접 검사하므로(TradeRepository), 만료된 매물은 배치를 기다리지 않고 즉시 목록에서 빠지고 구매는
+//   TradeAlreadyClosed로 거부되며 판매자 등록 칸도 곧바로 풀린다.
 //   따라서 이 주기는 "판매 기간 3일"의 정확도가 아니라 **에스크로 아이템이 메일로 반송되기까지의 지연 상한**
-//   (최대 24시간)만 결정한다. 반송을 더 빨리 돌려주려면 IntervalSeconds만 줄이면 된다(코드 변경 불필요).
+//   만 결정한다 — 3일을 기다린 판매자를 더 기다리게 하지 않도록 1시간으로 잡았다. 대상 조회가
+//   idx_trade_expire를 커버링으로 타고 0건이면 로그도 남기지 않아 빈 주기 비용은 사실상 없다.
 builder.Services.AddHostedService<TradeExpireBatchService>();
 
 // 메일 보관 GC 배치(발급 7일 경과 메일 삭제, mail 기획서 6.5).
