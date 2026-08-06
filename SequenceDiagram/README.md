@@ -186,6 +186,8 @@ sequenceDiagram
 
 창고/인벤토리 UI를 **열 때마다** 호출한다(자동 전투 전리품이 계속 적재되므로 클라 로컬 캐시를 신뢰하지 않는다). 이 조회는 **캐시 없이 MySQL을 직접 읽는다** — `cursor`·`limit`을 그대로 질의로 넘겨 `(user_id, slot)` 유니크 인덱스로 필요한 구간만 읽는다(조인 없음·filesort 없음, 인벤토리/아이템/큐브 기획서 6.5). 읽기 전용이라 트랜잭션으로 묶지 않는다.
 
+**계정 세이브 확인은 총 칸 수가 0일 때만 한다.** `player_item`이 `game_player`에 FK(`ON DELETE CASCADE`)로 매달려 있어 세이브 없이 아이템 행이 존재할 수 없으므로, 가방에 한 행이라도 있으면 세이브 존재가 이미 증명된다. 응답은 확인을 먼저 하던 때와 동일하고 정상 경로의 DB 왕복만 3회에서 2회로 준다([쿼리 분석](../docs/공통/쿼리-분석.md) 5.4).
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -195,15 +197,16 @@ sequenceDiagram
 
     C->>S: POST /inventory/list { userId, token, data:{ cursor, limit } }
     S->>S: 페이지 크기 클램프(1~500, 미지정 200)
-    S->>DB: 계정 세이브 존재 확인
-    alt 계정 세이브 없음
-        S-->>C: 실패 { errorCode: SaveNotFound(2001) }
-    else 존재
-        S->>DB: 가방 페이지 조회(slot > cursor, slot 오름차순, limit+1건)
-        S->>DB: 총 점유 칸 수 COUNT
-        S->>S: limit 초과분을 잘라 hasMore·nextCursor 산출
-        S-->>C: 성공 { items, nextCursor, hasMore, total }
+    S->>DB: 가방 페이지 조회(slot > cursor, slot 오름차순, limit+1건)
+    S->>DB: 총 점유 칸 수 COUNT
+    alt 총 칸 수 0(가방이 비어 있음)
+        S->>DB: 계정 세이브 존재 확인
+        alt 계정 세이브 없음
+            S-->>C: 실패 { errorCode: SaveNotFound(2001) }
+        end
     end
+    S->>S: limit 초과분을 잘라 hasMore·nextCursor 산출
+    S-->>C: 성공 { items, nextCursor, hasMore, total }
 ```
 
 ### POST /api/game/create-character — 캐릭터 생성
@@ -834,7 +837,7 @@ sequenceDiagram
 - **뷰어 필터를 쿼리에 넣는다.** `mine=false`면 `seller_user_id <> viewer`, `true`면 `= viewer`다. SQL 처리 순서가 `WHERE → ORDER BY → LIMIT`이라 **걸러낸 결과에서 세므로 페이지 건수가 정확하다** — 자른 뒤 메모리에서 거르면 본인 등록이 섞인 페이지만 건수가 줄어든다.
 - **필요한 한 페이지만 읽는다.** `LIMIT pageSize + 1`로 한 건 더 읽어 `hasMore`를 판정하고, 전체 등록 수와 무관하게 비용이 페이지 크기에 비례한다(거래소 기획서 7.3).
 - **깊은 페이지는 clamp한다.** `OFFSET`은 건너뛸 행을 실제로 세므로 상한(10,000)을 두고, 넘는 `page`는 거부하지 않고 빈 페이지로 응답한다.
-- **만료 매물은 목록에 나오지 않는다.** 요청 시각을 쿼리에 넘겨 `expires_at > now`로 거르므로, 만료 배치(하루 1회)가 아직 `status`를 정리하지 않았어도 보이지 않는다 — "목록에 있는데 구매하면 실패"하는 구간이 없다(거래소 기획서 7.6).
+- **만료 매물은 목록에 나오지 않는다.** 요청 시각을 쿼리에 넘겨 `expires_at > now`로 거르므로, 만료 배치(1시간 주기)가 아직 `status`를 정리하지 않았어도 보이지 않는다 — "목록에 있는데 구매하면 실패"하는 구간이 없다(거래소 기획서 7.6).
 
 ### POST /api/game/trade/register — 판매 등록(에스크로)
 
@@ -946,9 +949,9 @@ sequenceDiagram
 
 ### 거래소 만료 배치 — TradeExpireBatchService (엔드포인트 없음)
 
-등록 후 3일이 지난 판매중 등록을 `status=4`(만료)로 닫고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchService`)로, 기동 직후 1회 + **24시간(하루 1회) 주기**(설정 `TradeExpireBatch`)로 실행되고 1회 최대 1000건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:trade-expire`)을 획득한 인스턴스만 실행한다.
+등록 후 3일이 지난 판매중 등록을 `status=4`(만료)로 닫고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchService`)로, 기동 직후 1회 + **1시간 주기**(설정 `TradeExpireBatch`)로 실행되고 1회 최대 1000건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:trade-expire`)을 획득한 인스턴스만 실행한다.
 
-**이 배치는 만료를 판정하지 않는다.** 목록 조회·구매·등록 한도가 `expires_at > now`를 직접 검사해 만료를 즉시 반영하므로, 배치의 역할은 **에스크로 아이템 반송과 `status` 정리**뿐이다. 그래서 주기가 판매 기간(3일)의 정확도에 영향을 주지 않고, 하루 1회로 충분하다 — 주기가 결정하는 것은 판매자가 아이템을 되돌려받기까지의 **지연 상한(최대 24시간)** 이다.
+**이 배치는 만료를 판정하지 않는다.** 목록 조회·구매·등록 한도가 `expires_at > now`를 직접 검사해 만료를 즉시 반영하므로, 배치의 역할은 **에스크로 아이템 반송과 `status` 정리**뿐이고 주기가 판매 기간(3일)의 정확도에 영향을 주지 않는다. 주기가 결정하는 것은 판매자가 아이템을 되돌려받기까지의 **지연 상한**이며, 3일을 기다린 판매자를 더 기다리게 하지 않도록 **1시간**으로 잡았다(대상 조회가 `idx_trade_expire` 커버링이라 빈 주기 비용이 사실상 없다).
 
 ```mermaid
 sequenceDiagram
