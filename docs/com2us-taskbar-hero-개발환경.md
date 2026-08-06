@@ -139,6 +139,7 @@ docs/
 │   ├── api-통합.md · db-erd-통합.md · db-schema.sql
 │   └── error-code-정의.md · 로깅-규칙.md
 └── images/                       # 원작 화면 캡처(기획 근거)
+    └── 개발환경-images/           # 이 문서에 쓰는 개발 환경 캡처(에디터 메뉴·하네스 씬)
 
 SequenceDiagram/README.md         # 기능별 처리 흐름(Mermaid, 단일 문서)
 ```
@@ -305,6 +306,10 @@ com2us-taskbar-hero-client/
 - `Assets/Editor/`에 **35개** 에디터 스크립트, 그중 **13개가 `*UiBuilder`** 다(`InventoryUiBuilder` · `StageUiBuilder` · `GachaUiBuilder` · `MailUiBuilder` · `RuneUiBuilder` · `SkillUiBuilder` · `TradeUiBuilder` · `CubeUiBuilder` · `AttendanceUiBuilder` · `ModalUiBuilder` · `SettingsUiBuilder` · `OfflineRewardUiBuilder` · `CharacterSelectUiBuilder` 등).
 - 실행은 에디터 상단 메뉴 `TaskbarHero/UI/...`. 씬 이동은 `SceneSwitcher.cs`가 `TaskbarHero/씬/<이름>` + `Alt+숫자`로 제공한다.
 
+![에디터 메뉴 TaskbarHero/UI — 화면별 빌더가 메뉴 항목으로 노출된다](images/개발환경-images/에디터-빌더-스크립트.png)
+
+위 화면이 이 방식의 실제 모습이다. 화면 하나하나가 **메뉴 항목 하나**로 노출되고(거래소·인벤토리·뽑기·메일·룬·스킬·스테이지·큐브·출석부·모달·오프라인 보상·캐릭터 선택 패널 등), 옆 카테고리에는 마스터 데이터 갱신·씬 이동·사운드·빌드가 함께 붙어 있다. **"UI를 다시 만들어라"가 클릭 한 번**이 되는 것이 요점이다.
+
 이 방식의 이점은 그대로 **AI 협업의 이점**이다.
 
 | 이점 | 설명 |
@@ -323,6 +328,16 @@ com2us-taskbar-hero-client/
 | 전투는 `BattleDevScene`이 정본, `GameScene`은 **빌더로 복제**한다 | 하네스 씬에서 전투를 개발하고 `DungeonBattleBuilder`(메뉴 `TaskbarHero/UI/던전 전투 배선`)로 GameScene에 옮긴다. GameScene을 직접 손대면 두 씬이 갈라진다 |
 
 **개발용 하네스 씬을 따로 둔 것도 같은 계열의 선택이다.** 전투(`BattleDevScene`)와 애니메이션(`AnimDevScene`)은 게임 흐름 전체를 타지 않고도 그 부분만 켜서 볼 수 있게 격리했다. `AnimDevScene`은 `Assets/Animations/`에 클립을 넣고 씬 생성 메뉴를 다시 실행하면 목록에 자동 배선되므로, 새 모션을 확인하는 비용이 거의 없다.
+
+![BattleDevScene — 파티 4인 스탯·스킬 쿨다운·소환 선택을 IMGUI로 띄운 전투 하네스](images/개발환경-images/BattleDevScene.png)
+
+`BattleDevScene`은 **로그인·스테이지 진입을 거치지 않고 전투만 켠다.** 화면 왼쪽 위 IMGUI 박스에 파티 4인의 사거리·스킬별 쿨다운 잔여 시간·처치 수·파티 전진 좌표가 실시간으로 나오고, 원하는 몬스터를 즉시 소환할 수 있다. 덕분에 "광역 데미지가 몇 대에 들어갔는지", "쿨다운이 실제로 도는지"를 숫자로 확인하며 전투를 다듬을 수 있었다. 이 IMGUI는 **개발 전용**이라 `serverMode=true`인 `GameScene`에서는 `OnGUI`가 자동으로 생략된다(적 HP바처럼 게임에도 필요한 것만 남는다).
+
+![AnimDevScene — 클립 목록·직업/성별 전환·무기 강화 단계별 이펙트를 한 화면에서 확인](images/개발환경-images/AnimDevScene.png)
+
+`AnimDevScene`은 **캐릭터 한 명만 두고 표현을 확인하는 씬**이다. 왼쪽은 SPUM 프리팹에서 런타임에 읽어 만든 클립 목록(IDLE·MOVE·ATTACK·DAMAGED·DEBUFF·DEATH·OTHER + `Assets/Animations/`의 추가 클립 + 분노·돌진·화살비 같은 특수 모션)이고, 위쪽에서 직업·성별을 바꿔 같은 모션을 비교한다. 오른쪽 **무기 강화 단계(+0~+10) 버튼**은 강화 이펙트 검증용으로, 누르면 잔상 색·무기에 서린 빛·반짝임이 즉시 바뀐다 — 이 하네스는 잔상을 항상 방출하므로 `IDLE`에서 보이는 것이 곧 **상시 이펙트**다.
+
+두 하네스의 공통점은 **검증 대상만 남기고 나머지를 잘라낸 것**이다. Unity MCP로 원격 검증할 때(12장) 진입 단계가 짧을수록 실패 지점이 줄고, 측정값도 다른 시스템에 오염되지 않는다.
 
 ## 12. Unity MCP로 에디터를 원격 조작해 검증한다
 

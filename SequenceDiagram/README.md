@@ -223,10 +223,11 @@ sequenceDiagram
     alt 마스터 미로드 or 잘못된 직업 or 잘못된 성별
         S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) / InvalidClassCode(2005) / InvalidGender(2007) }
     else 유효
+        S->>S: 직업 기본 무기 확정(인메모리 마스터 item_master — equip_slot 1·class_req 일치 중 최저 등급, 없으면 지급 생략)
         S->>DB: 플레이어 세이브 데이터 확인
         alt 신규 계정(최초 생성)
             S->>S: 신규 가입 지원금 메일 초안 렌더링(인메모리 마스터 — 문구 템플릿 101 + 첨부 newbie_reward_master)
-            S->>DB: 단일 트랜잭션 — 플레이어·첫 캐릭터(직업·성별, 파티 1번 자리)·큐브·출석 진행도 + 지원금 메일 적재
+            S->>DB: 단일 트랜잭션 — 플레이어·첫 캐릭터(직업·성별, 파티 1번 자리)·기본 무기(장착 상태)·큐브·출석 진행도 + 지원금 메일 적재
             Note over S,DB: 계정당 1행(game_player)이라 이 트랜잭션은 생애 1회만 성공 → 지원금 중복 지급 불가
             S-->>C: 성공 { characterId 1, slot 1, 무료 cost 0 }
         else 기존 계정(추가 생성)
@@ -235,7 +236,7 @@ sequenceDiagram
             alt 이미 보유한 직업
                 S-->>C: 실패 { errorCode: InvalidCharacterId(2006) }
             else 생성 가능
-                S->>DB: 단일 트랜잭션 — 골드 데이터 확인·차감 + 캐릭터(직업·성별·파티 자리) 데이터 적재
+                S->>DB: 단일 트랜잭션 — 골드 데이터 확인·차감 + 캐릭터(직업·성별·파티 자리) + 기본 무기(장착 상태) 데이터 적재
                 alt 골드 부족 / 식별자·직업 경합
                     S-->>C: 실패 { errorCode: InsufficientCurrency(4005) / InvalidCharacterId(2006) }
                 else 성공
