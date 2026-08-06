@@ -619,7 +619,10 @@ INSERT INTO consumable_master (item_code, buff_type, buff_value, duration_sec) V
 --      · cost/currency_type: 그 단계로 올리는 데 드는 재화(현재 골드=1 전용, 누진).
 --      · stat_multiplier: 기획서 5.4의 JSON stat_multiplier는 폐기(JSON 컬럼 금지 규칙).
 --        스탯별로 배율이 갈리지 않으므로 자식 테이블도 두지 않고 **단일 DECIMAL 배율**로 둔다 —
---        장비의 base_stats 전체에 이 값을 곱한다(단계당 +0.05, +10에서 1.5배).
+--        장비의 base_stats 전체에 이 값을 곱한다(단계당 +0.2, **+10에서 3.0배**).
+--        ⚠️ 배율을 크게 잡는 이유: 클라이언트가 배율 적용 결과를 정수로 반올림하므로(Math.Round),
+--        배율이 작으면 옵션 스탯이 작은 장비(예: 방어 2)는 단계를 올려도 표시·전투 수치가 그대로다.
+--        구 곡선(단계당 +0.05, +10에서 1.5배)에서 실제로 "대부분의 장비가 강화해도 안 변한다"는 문제가 있었다.
 --      · 강화는 실패·하락·파괴가 없다(비용을 내면 확정 상승). 확률을 도입하면 이 테이블에 컬럼을 추가한다.
 --    값은 학습용 임시값(스키마 불변, 값만 조정).
 -- =====================================================================
@@ -628,7 +631,7 @@ CREATE TABLE enhance_master (
     enhance_level   INT          NOT NULL COMMENT '강화 단계(1~10). 이 단계로 올릴 비용과 도달 시 배율',
     cost            BIGINT       NOT NULL COMMENT '이 단계로 올리는 데 드는 재화량',
     currency_type   INT          NOT NULL DEFAULT 1 COMMENT '소모 재화(item_master.item_code, item_type=3. 골드=1)',
-    stat_multiplier DECIMAL(5,3) NOT NULL COMMENT '이 단계에서 장비 base_stats에 곱할 배율(1.050=105%)',
+    stat_multiplier DECIMAL(5,3) NOT NULL COMMENT '이 단계에서 장비 base_stats에 곱할 배율(1.200=120%, +10은 3.000=300%)',
     PRIMARY KEY (enhance_level),
     KEY idx_enhance_currency (currency_type),
     CONSTRAINT fk_enhance_currency FOREIGN KEY (currency_type)
@@ -636,16 +639,16 @@ CREATE TABLE enhance_master (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='장비 강화 단계별 비용·스탯 배율';
 
 INSERT INTO enhance_master (enhance_level, cost, currency_type, stat_multiplier) VALUES
-    (1,   1000, 1, 1.050),
-    (2,   2000, 1, 1.100),
-    (3,   4000, 1, 1.150),
-    (4,   7000, 1, 1.200),
-    (5,  11000, 1, 1.250),
-    (6,  16000, 1, 1.300),
-    (7,  23000, 1, 1.350),
-    (8,  32000, 1, 1.400),
-    (9,  45000, 1, 1.450),
-    (10, 65000, 1, 1.500);
+    (1,   1000, 1, 1.200),
+    (2,   2000, 1, 1.400),
+    (3,   4000, 1, 1.600),
+    (4,   7000, 1, 1.800),
+    (5,  11000, 1, 2.000),
+    (6,  16000, 1, 2.200),
+    (7,  23000, 1, 2.400),
+    (8,  32000, 1, 2.600),
+    (9,  45000, 1, 2.800),
+    (10, 65000, 1, 3.000);
 
 
 -- =====================================================================
