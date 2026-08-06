@@ -14,6 +14,7 @@ namespace TaskbarHero.ClientEditor
     public static class OfflineRewardUiBuilder
     {
         private const string PrefabPath = "Assets/Prefabs/UI/OfflineRewardPanel.prefab";
+        private const string ExpBarFramePath = "Assets/Art/Icon/Combat/체력바.png";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
 
@@ -44,6 +45,10 @@ namespace TaskbarHero.ClientEditor
             // 배경 스프라이트(modal_bg)를 EditorConstruct 전에 배선해 Construct가 배경에 적용하도록 한다.
             var bgSo = new SerializedObject(ctrl);
             bgSo.FindProperty("_backgroundSprite").objectReferenceValue = LoadSprite("modal_bg");
+            // 경험치 바 프레임도 Construct 전에 배선해야 계층에 함께 구워진다.
+            bgSo.FindProperty("_expBarFrameSprite").objectReferenceValue = LoadSpriteAt(ExpBarFramePath);
+            // '받기' 버튼 배경(공용 버튼 아트)도 Construct 전에 배선해 버튼에 구워지게 한다.
+            bgSo.FindProperty("_confirmButtonSprite").objectReferenceValue = LoadSprite("pixel_rpg_button");
             bgSo.ApplyModifiedPropertiesWithoutUndo();
 
             ctrl.EditorConstruct(); // 계층을 프리팹에 정적으로 굽는다
@@ -85,9 +90,11 @@ namespace TaskbarHero.ClientEditor
         }
 
         /// <summary>Assets/Art/UI에서 스프라이트를 로드한다(Single/Multiple 모두 대응).</summary>
-        private static Sprite LoadSprite(string fileName)
+        private static Sprite LoadSprite(string fileName) => LoadSpriteAt($"Assets/Art/UI/{fileName}.png");
+
+        /// <summary>경로의 스프라이트 로드(Single/Multiple 모두 대응). 임포트 설정은 건드리지 않는다(공용 아트 규칙).</summary>
+        private static Sprite LoadSpriteAt(string path)
         {
-            string path = $"Assets/Art/UI/{fileName}.png";
             var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
             if (sprite != null) return sprite;
             foreach (var obj in AssetDatabase.LoadAllAssetsAtPath(path))

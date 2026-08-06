@@ -23,13 +23,14 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite panelBackground; // ui_panel_background
         [SerializeField] private Sprite slotNormal;      // ui_slot_normal
         [SerializeField] private Sprite slotHighlight;   // ui_slot_highlight
+        [Tooltip("캐릭터 전환 버튼 아트(Assets/Art/UI/화살표버튼.png). 오른쪽을 가리키는 그림이라 이전 버튼은 좌우 반전해 쓴다. 없으면 슬롯 배경 + '<'/'>' 글자로 폴백.")]
+        [SerializeField] private Sprite charNavArrow;    // 화살표버튼
 
         [Header("구성 참조 (에디터 빌더가 배선 — 직접 수정 불필요)")]
         [SerializeField] private Text _charIndicatorText;   // 직업 Lv.N · 캐릭터 i/N
         [SerializeField] private Text _pointText;           // 스킬 포인트 available / total
         [SerializeField] private Button _prevButton;
         [SerializeField] private Button _nextButton;
-        [SerializeField] private Button _closeButton;
         [SerializeField] private Button _dimButton;
         [SerializeField] private Button _resetButton;
         [SerializeField] private Text _resetLabel;
@@ -210,19 +211,29 @@ namespace TaskbarHero.Client.UI
             _dimButton.transition = Selectable.Transition.None;
         }
 
+        // 패널 본체 배치. 사용자가 에디터/플레이모드에서 맞춘 값이며, 빌더(SkillUiBuilder)가
+        // 프리팹 재생성 시 기존 프리팹의 앵커·pivot·크기·위치를 보존하므로 여기 값은 최초 생성 기본값이다.
+        // 화면 <b>오른쪽에 붙는 배치</b>라 앵커·pivot을 모두 오른쪽(x=1)에 두고 오프셋으로 표현한다
+        // (중앙 앵커 + 큰 x 오프셋으로 두면 캔버스 폭이 바뀔 때 위치가 어긋난다).
+        private static readonly Vector2 PanelAnchor = new Vector2(1f, 0.5f);
+        private static readonly Vector2 PanelPivot = new Vector2(1f, 0.5f);
+        private static readonly Vector2 PanelPosition = new Vector2(14f, 35.05f);
+        private static readonly Vector2 PanelSize = new Vector2(860f, 1020f); // 목록 뷰포트 기준 스킬 2.5개 노출
+
         /// <summary>패널 본체(배경 이미지) 컨테이너.</summary>
         private RectTransform BuildContainer()
         {
             var img = NewImage("PanelRoot", _rootRect, panelBackground);
             var rt = img.rectTransform;
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(860f, 1020f); // 목록 뷰포트를 넓혀 스킬 2.5개가 기본 노출되도록 확장
-            rt.anchoredPosition = Vector2.zero;
+            rt.anchorMin = rt.anchorMax = PanelAnchor;
+            rt.pivot = PanelPivot;
+            rt.sizeDelta = PanelSize;
+            rt.anchoredPosition = PanelPosition;
             return rt;
         }
 
-        /// <summary>제목(가로 중앙) + 닫기 버튼(우측 상단).</summary>
+        /// <summary>제목(가로 중앙). 닫기(X) 버튼은 두지 않는다 — 다른 패널들과 같이 미관상 제거했고
+        /// 패널 밖(Dim) 클릭으로만 닫는다.</summary>
         private void BuildHeader(RectTransform container)
         {
             var title = NewText("Title", container, "스킬 레벨업", 46, TextAnchor.UpperCenter);
@@ -230,18 +241,8 @@ namespace TaskbarHero.Client.UI
             var trt = title.rectTransform;
             trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
             trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -36f);
+            trt.anchoredPosition = new Vector2(0f, -50f);
             trt.sizeDelta = new Vector2(500f, 60f);
-
-            var closeImg = NewImage("CloseButton", container, slotNormal);
-            var crt = closeImg.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
-            crt.pivot = new Vector2(1f, 1f);
-            crt.anchoredPosition = new Vector2(-28f, -28f);
-            crt.sizeDelta = new Vector2(72f, 72f);
-            var x = NewText("X", crt, "X", 36, TextAnchor.MiddleCenter);
-            Stretch(x.rectTransform);
-            _closeButton = closeImg.gameObject.AddComponent<Button>();
         }
 
         /// <summary>캐릭터 전환 네비게이션(◀ 직업 Lv.N · 캐릭터 i/N ▶).</summary>
@@ -252,21 +253,51 @@ namespace TaskbarHero.Client.UI
             area.anchorMin = area.anchorMax = new Vector2(0.5f, 1f);
             area.pivot = new Vector2(0.5f, 1f);
             area.sizeDelta = new Vector2(width, 72f);
-            area.anchoredPosition = new Vector2(0f, -120f);
+            area.anchoredPosition = new Vector2(38f, -120f);
 
-            var prev = NewImage("PrevCharButton", area, slotNormal);
+            var prev = BuildNavArrow("PrevCharButton", area, "<", flip: true);
             TopLeft(prev.rectTransform, 0f, 0f, 72f, 72f);
-            Stretch(NewText("PrevLabel", prev.rectTransform, "<", 40, TextAnchor.MiddleCenter).rectTransform);
             _prevButton = prev.gameObject.AddComponent<Button>();
+            AddPunch(prev);
 
             _charIndicatorText = NewText("CharIndicator", area, "", 32, TextAnchor.MiddleCenter);
             _charIndicatorText.fontStyle = FontStyle.Bold;
             TopLeft(_charIndicatorText.rectTransform, 84f, 0f, width - 168f, 72f);
 
-            var next = NewImage("NextCharButton", area, slotNormal);
+            var next = BuildNavArrow("NextCharButton", area, ">", flip: false);
             TopLeft(next.rectTransform, width - 72f, 0f, 72f, 72f);
-            Stretch(NewText("NextLabel", next.rectTransform, ">", 40, TextAnchor.MiddleCenter).rectTransform);
             _nextButton = next.gameObject.AddComponent<Button>();
+            AddPunch(next);
+        }
+
+        /// <summary>캐릭터 전환 화살표 버튼 이미지를 만든다. 화살표 아트가 배선돼 있으면 그것을 쓰고
+        /// (오른쪽 방향 그림이라 이전 버튼은 <paramref name="flip"/>으로 좌우 반전), 없으면 종전처럼
+        /// 슬롯 배경 + 글자(<paramref name="fallbackLabel"/>)로 폴백한다.</summary>
+        private Image BuildNavArrow(string name, RectTransform parent, string fallbackLabel, bool flip)
+        {
+            if (charNavArrow == null)
+            {
+                var box = NewImage(name, parent, slotNormal);
+                Stretch(NewText(name + "Label", box.rectTransform, fallbackLabel, 40, TextAnchor.MiddleCenter).rectTransform);
+                return box;
+            }
+            var img = NewImage(name, parent, charNavArrow);
+            // 9-slice 테두리가 없는 아트라 Simple로 그리고 비율을 지켜 왜곡을 막는다.
+            img.preserveAspect = true;
+            if (flip)
+            {
+                // 좌우 반전은 스케일로 처리한다(반전용 아트를 따로 두지 않는다).
+                img.rectTransform.localScale = new Vector3(-1f, 1f, 1f);
+            }
+            return img;
+        }
+
+        /// <summary>캐릭터 전환 버튼에 클릭 피드백(잠깐 커졌다 작아짐)을 붙인다.
+        /// <see cref="ButtonPunchScale"/>은 Awake의 현재 스케일을 기준으로 배율을 곱하므로
+        /// 좌우 반전된(scale.x = -1) 이전 버튼도 반전 상태를 유지한 채 커졌다 돌아온다.</summary>
+        private static ButtonPunchScale AddPunch(Image img)
+        {
+            return img.gameObject.AddComponent<ButtonPunchScale>();
         }
 
         /// <summary>사용 가능 스킬 포인트 배너(캐릭터 레벨에서 파생).</summary>
@@ -297,13 +328,21 @@ namespace TaskbarHero.Client.UI
             area.sizeDelta = new Vector2(width, 150f);
             area.anchoredPosition = new Vector2(0f, -296f);
 
-            var label = NewText("EquipTitle", area, "장착 액티브 스킬 (최대 2)", 26, TextAnchor.UpperLeft);
+            // 영역 안의 내용물(제목·슬롯 2칸·이름)은 가로 중앙 정렬한다.
+            var label = NewText("EquipTitle", area, "장착 액티브 스킬 (최대 2)", 26, TextAnchor.UpperCenter);
             label.color = new Color(0.8f, 0.85f, 0.95f);
-            TopLeft(label.rectTransform, 4f, 0f, 500f, 32f);
+            TopLeft(label.rectTransform, (width - 500f) * 0.5f, 0f, 500f, 32f);
 
-            BuildEquipSlot(area, 0, 40f);
-            BuildEquipSlot(area, 1, 40f + 210f);
+            // 슬롯 1칸이 차지하는 폭 = 아이콘 타일(96) + 간격(10) + 이름(104).
+            float slotsWidth = EquipSlotUnitWidth * MaxActiveSkills;
+            float startX = (width - slotsWidth) * 0.5f;
+            for (int i = 0; i < MaxActiveSkills; i++)
+            {
+                BuildEquipSlot(area, i, startX + i * EquipSlotUnitWidth);
+            }
         }
+
+        private const float EquipSlotUnitWidth = 210f; // 아이콘 타일(96) + 간격(10) + 이름(104)
 
         /// <summary>장착 슬롯 1칸(아이콘 타일 + 이름 + 클릭 시 해제).</summary>
         private void BuildEquipSlot(RectTransform area, int index, float x)
@@ -319,7 +358,8 @@ namespace TaskbarHero.Client.UI
             icon.rectTransform.offsetMax = new Vector2(-8f, -8f);
             icon.color = new Color(1f, 1f, 1f, 0f);
 
-            var nameLabel = NewText("Name", area, "비었음", 22, TextAnchor.UpperLeft);
+            // 이름은 아이콘 타일 오른쪽에 붙되 타일 높이의 세로 중앙에 맞춘다.
+            var nameLabel = NewText("Name", area, "비었음", 22, TextAnchor.MiddleLeft);
             nameLabel.color = new Color(0.7f, 0.72f, 0.8f);
             TopLeft(nameLabel.rectTransform, x + 106f, 44f, 104f, 88f);
 
@@ -438,7 +478,6 @@ namespace TaskbarHero.Client.UI
         {
             if (_prevButton != null) _prevButton.onClick.AddListener(OnPrevCharacter);
             if (_nextButton != null) _nextButton.onClick.AddListener(OnNextCharacter);
-            if (_closeButton != null) _closeButton.onClick.AddListener(Close);
             if (_dimButton != null) _dimButton.onClick.AddListener(Close);
             if (_resetButton != null) _resetButton.onClick.AddListener(OnResetSkills);
             if (_equipSlotButton0 != null) _equipSlotButton0.onClick.AddListener(() => OnUnequipSlot(0));
@@ -873,6 +912,7 @@ namespace TaskbarHero.Client.UI
         /// <summary>이전 파티 캐릭터로 전환(순환).</summary>
         private void OnPrevCharacter()
         {
+            PlayNavPunch(_prevButton);
             if (_partyCount <= 1)
             {
                 return;
@@ -885,6 +925,7 @@ namespace TaskbarHero.Client.UI
         /// <summary>다음 파티 캐릭터로 전환(순환).</summary>
         private void OnNextCharacter()
         {
+            PlayNavPunch(_nextButton);
             if (_partyCount <= 1)
             {
                 return;
@@ -892,6 +933,22 @@ namespace TaskbarHero.Client.UI
             _selectedCharacter = (_selectedCharacter + 1) % _partyCount;
             SetMessage(string.Empty);
             RefreshFromSession();
+        }
+
+        /// <summary>캐릭터 전환 버튼의 클릭 피드백(커졌다 작아짐)을 재생한다.
+        /// 화면 갱신은 기다리지 않고 바로 진행하므로(전환 반응이 늦으면 답답하다) 연출만 겹쳐 돌린다.
+        /// 파티가 1명이라 전환이 없을 때도 눌린 느낌은 주도록 이 호출은 조기 반환보다 앞에 둔다.</summary>
+        private static void PlayNavPunch(Button button)
+        {
+            if (button == null)
+            {
+                return;
+            }
+            var punch = button.GetComponent<ButtonPunchScale>();
+            if (punch != null)
+            {
+                punch.Play();
+            }
         }
 
         // ── 서버 연동(레벨업 / 초기화) ──

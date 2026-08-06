@@ -27,6 +27,23 @@ namespace TaskbarHero.Client.UI
         private const float ConfirmAreaHeight = 126f; // 패널 아래에서 받기 버튼 위 끝(30 + 96)
         private const float SlotBandMargin = 24f;    // 슬롯 띠 위아래 여백
 
+        // ── 캐릭터 슬롯 ──
+        private const float SlotWidth = 220f;
+        private const float SlotHeight = 450f;
+        private const float SlotGap = 40f;
+        private const float SlotCenterY = -40f;      // 패널 중심 기준 슬롯 띠의 세로 위치
+        private const float SlotTextWidth = 230f;    // 캡션·경험치 글자 폭(슬롯보다 넓어 이름이 잘리지 않는다)
+        private const float ConfirmButtonY = 125f;   // 패널 아래에서 '받기' 버튼까지
+
+        // ── 경험치 바 ──
+        // 프레임 아트(체력바.png 768×144)는 9-slice 테두리 값이 없어 늘리면 두께가 왜곡된다.
+        // 그래서 <b>정수배 축소</b>(1/4 = 192×36)로만 그린다(큐브 레벨바와 같은 규칙).
+        private const float ExpBarWidth = 192f;
+        private const float ExpBarHeight = 36f;
+        private const float ExpBarY = 64f;           // 슬롯 아래에서 경험치 바까지
+        private const float ExpBarFillInset = 4f;    // 채움 막대가 프레임 테두리를 덮지 않도록 들이는 여백
+        private const float ExpBarFillMaxWidth = ExpBarWidth - ExpBarFillInset * 2f;
+
         [SerializeField] private Button _confirmButton;
         [SerializeField] private Text _subtitleText;   // 경과 시간 안내
         [SerializeField] private Text _goldText;        // 획득 골드
@@ -42,6 +59,10 @@ namespace TaskbarHero.Client.UI
         [Header("배경")]
         [Tooltip("Assets/Art/UI/modal_bg를 배선한다(에디터 빌더). 없으면 단색 배경.")]
         [SerializeField] private Sprite _backgroundSprite;
+        [Tooltip("경험치 바 프레임(Assets/Art/Icon/Combat/체력바.png). 없으면 단색 막대로 폴백한다.")]
+        [SerializeField] private Sprite _expBarFrameSprite;
+        [Tooltip("'받기' 버튼 배경(Assets/Art/UI/pixel_rpg_button.png, 9-slice). 없으면 단색 버튼.")]
+        [SerializeField] private Sprite _confirmButtonSprite;
 
         /// <summary>초상화에 렌더할 직업별 캐릭터 프리팹 매핑(classCode → 프리팹).</summary>
         [System.Serializable]
@@ -181,21 +202,16 @@ namespace TaskbarHero.Client.UI
 
         private void BuildHeader(RectTransform panel)
         {
-            var title = NewText("Title", panel, "오프라인 보상", 52, TextAnchor.MiddleCenter);
-            title.fontStyle = FontStyle.Bold;
-            var trt = title.rectTransform;
-            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
-            trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -32f);
-            trt.sizeDelta = new Vector2(700f, 70f);
+            // 제목 텍스트는 두지 않는다 — 패널 배경 아트(modal_bg)가 이미 제목 자리를 그린다.
 
             _subtitleText = NewText("Subtitle", panel, "", 30, TextAnchor.MiddleCenter);
             _subtitleText.color = new Color(0.8f, 0.85f, 0.95f);
             var srt = _subtitleText.rectTransform;
             srt.anchorMin = srt.anchorMax = new Vector2(0.5f, 1f);
             srt.pivot = new Vector2(0.5f, 1f);
-            srt.anchoredPosition = new Vector2(0f, -108f);
+            srt.anchoredPosition = new Vector2(0f, -130f);
             srt.sizeDelta = new Vector2(760f, 48f);
+            srt.localScale = new Vector3(0.8f, 0.8f, 0.8f); // 배경 아트의 제목보다 작게
         }
 
         /// <summary>획득 골드·경험치 요약 박스(파티 공통 지급분)를 구성한다.</summary>
@@ -206,7 +222,7 @@ namespace TaskbarHero.Client.UI
             brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 1f);
             brt.pivot = new Vector2(0.5f, 1f);
             brt.anchoredPosition = new Vector2(0f, -176f);
-            brt.sizeDelta = new Vector2(760f, 130f);
+            brt.sizeDelta = new Vector2(740f, 130f);
 
             _goldText = NewText("GoldGained", box.rectTransform, "", 34, TextAnchor.MiddleCenter);
             _goldText.fontStyle = FontStyle.Bold;
@@ -226,16 +242,13 @@ namespace TaskbarHero.Client.UI
             _slotExpFills.Clear();
             _slotExpTexts.Clear();
 
-            const float slotW = 250f;
-            const float gap = 16f;
+            const float slotW = SlotWidth;
+            const float gap = SlotGap;
             float totalW = MaxSlots * slotW + (MaxSlots - 1) * gap;
             float startX = -totalW * 0.5f + slotW * 0.5f;
 
-            // 요약 박스 아래 ~ 받기 버튼 위 사이에 여백을 두고 슬롯 띠를 앉힌다(패널 높이가 바뀌어도 겹치지 않음).
-            float bandTop = SummaryBottomY + SlotBandMargin;
-            float bandBottom = PanelHeight - ConfirmAreaHeight - SlotBandMargin;
-            float slotH = bandBottom - bandTop;
-            float slotY = PanelHeight * 0.5f - (bandTop + bandBottom) * 0.5f; // 패널 중심 기준 오프셋
+            float slotH = SlotHeight;
+            float slotY = SlotCenterY;
 
             for (int i = 0; i < MaxSlots; i++)
             {
@@ -261,48 +274,70 @@ namespace TaskbarHero.Client.UI
                 // 직업 · 레벨 캡션
                 var cap = NewText("Caption", rt, "", 28, TextAnchor.MiddleCenter);
                 cap.fontStyle = FontStyle.Bold;
-                PlaceCenter(cap.rectTransform, 0.5f, 0f, slotW - 20f, 40f);
+                PlaceCenter(cap.rectTransform, 0.5f, 0f, SlotTextWidth, 40f);
                 cap.rectTransform.anchoredPosition = new Vector2(0f, 112f);
                 _slotCaptions.Add(cap);
 
-                // 경험치 막대(배경 + 좌측 앵커 fill)
+                // 경험치 막대 — 프레임 아트(체력바) 안쪽에 채움 막대를 둔다.
+                // 프레임이 배선되지 않았으면 종전처럼 어두운 단색 막대로 폴백한다.
                 var barBg = NewImage("ExpBarBg", rt, new Color(0.05f, 0.06f, 0.09f, 1f));
+                if (_expBarFrameSprite != null)
+                {
+                    barBg.sprite = _expBarFrameSprite;
+                    barBg.type = Image.Type.Simple; // 9-slice 테두리가 없어 정수배 축소로만 그린다
+                    barBg.color = Color.white;
+                }
                 var barRt = barBg.rectTransform;
                 barRt.anchorMin = barRt.anchorMax = new Vector2(0.5f, 0f);
                 barRt.pivot = new Vector2(0.5f, 0f);
-                barRt.anchoredPosition = new Vector2(0f, 64f);
-                barRt.sizeDelta = new Vector2(slotW - 30f, 28f);
+                barRt.anchoredPosition = new Vector2(0f, ExpBarY);
+                barRt.sizeDelta = new Vector2(ExpBarWidth, ExpBarHeight);
 
                 var fill = NewImage("ExpBarFill", barBg.rectTransform, new Color(0.35f, 0.7f, 1f, 1f));
                 var fillRt = fill.rectTransform;
-                fillRt.anchorMin = new Vector2(0f, 0f);
-                fillRt.anchorMax = new Vector2(0f, 1f); // 채움 비율은 갱신 시 anchorMax.x로 조정
+                // 왼쪽 가장자리에 고정하고 폭으로 비율을 표현한다(앵커로 늘리면 프레임 여백까지 덮는다).
+                fillRt.anchorMin = fillRt.anchorMax = new Vector2(0f, 0.5f);
                 fillRt.pivot = new Vector2(0f, 0.5f);
-                fillRt.offsetMin = Vector2.zero;
-                fillRt.offsetMax = Vector2.zero;
+                fillRt.anchoredPosition = new Vector2(ExpBarFillInset, 0f);
+                fillRt.sizeDelta = new Vector2(ExpBarFillMaxWidth, ExpBarHeight - ExpBarFillInset * 2f);
                 _slotExpFills.Add(fillRt);
 
                 // 경험치 텍스트(현재/요구)
                 var expT = NewText("ExpText", rt, "", 22, TextAnchor.MiddleCenter);
                 expT.color = new Color(0.8f, 0.88f, 1f);
-                PlaceCenter(expT.rectTransform, 0.5f, 0f, slotW - 20f, 32f);
+                PlaceCenter(expT.rectTransform, 0.5f, 0f, SlotTextWidth, 32f);
                 expT.rectTransform.anchoredPosition = new Vector2(0f, 30f);
                 _slotExpTexts.Add(expT);
             }
         }
 
+        /// <summary>'받기' 버튼을 구성한다(공용 버튼 아트 9-slice, 없으면 단색 폴백).</summary>
         private void BuildConfirm(RectTransform panel)
         {
             var btn = NewImage("ConfirmButton", panel, new Color(0.25f, 0.55f, 0.35f, 1f));
+            ApplyButtonSprite(btn);
             var rt = btn.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0f);
             rt.pivot = new Vector2(0.5f, 0f);
-            rt.anchoredPosition = new Vector2(0f, 30f);
+            rt.anchoredPosition = new Vector2(0f, ConfirmButtonY);
             rt.sizeDelta = new Vector2(400f, 96f);
             var label = NewText("Label", btn.rectTransform, "받기", 40, TextAnchor.MiddleCenter);
             label.fontStyle = FontStyle.Bold;
             Stretch(label.rectTransform);
             _confirmButton = btn.gameObject.AddComponent<Button>();
+        }
+
+        /// <summary>버튼 이미지에 공용 버튼 스프라이트(pixel_rpg_button)를 9-slice로 적용한다.
+        /// 스프라이트가 배선되지 않았으면 단색 폴백을 그대로 둔다.</summary>
+        private void ApplyButtonSprite(Image img)
+        {
+            if (img == null || _confirmButtonSprite == null)
+            {
+                return;
+            }
+            img.sprite = _confirmButtonSprite;
+            img.type = Image.Type.Sliced;
+            img.color = Color.white;
         }
 
         private void WireRuntime()
@@ -420,17 +455,27 @@ namespace TaskbarHero.Client.UI
                 long required = db != null && db.Levels.TryGetValue(state.level, out var lm) ? lm.requiredExp : 0L;
                 if (required <= 0)
                 {
-                    if (fill != null) fill.anchorMax = new Vector2(1f, 1f);
+                    SetExpFill(fill, 1f);
                     if (expT != null) expT.text = "EXP  MAX";
                 }
                 else
                 {
                     long cur = state.exp > 0 ? state.exp : 0;
-                    float frac = Mathf.Clamp01((float)cur / required);
-                    if (fill != null) fill.anchorMax = new Vector2(frac, 1f);
+                    SetExpFill(fill, Mathf.Clamp01((float)cur / required));
                     if (expT != null) expT.text = $"EXP  {cur:N0} / {required:N0}";
                 }
             }
+        }
+
+        /// <summary>경험치 채움 막대를 비율(0~1)에 맞춰 <b>폭으로</b> 조정한다.
+        /// 앵커로 늘리면 프레임 테두리 안쪽 여백까지 덮으므로 폭만 바꾼다.</summary>
+        private static void SetExpFill(RectTransform fill, float ratio)
+        {
+            if (fill == null)
+            {
+                return;
+            }
+            fill.sizeDelta = new Vector2(ExpBarFillMaxWidth * Mathf.Clamp01(ratio), fill.sizeDelta.y);
         }
 
         /// <summary>정산 대상 캐릭터(characterId)의 직업 코드를 세션 세이브에서 조회한다(없으면 -1).</summary>

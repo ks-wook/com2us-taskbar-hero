@@ -16,6 +16,8 @@ namespace TaskbarHero.ClientEditor
     {
         // 인벤토리 패널과 동일한 UI 스프라이트를 공용으로 사용한다.
         private const string ArtDir = "Assets/Art/UI/Inventory";
+        // 캐릭터 전환 화살표는 인벤토리 공용 아트가 아니라 Assets/Art/UI에 있다.
+        private const string CharNavArrowPath = "Assets/Art/UI/화살표버튼.png";
         private const string PrefabPath = "Assets/Prefabs/UI/SkillPanel.prefab";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
@@ -39,9 +41,14 @@ namespace TaskbarHero.ClientEditor
             EnsureFolder("Assets/Prefabs");
             EnsureFolder("Assets/Prefabs/UI");
 
-            // 사용자가 에디터에서 조정한 PanelRoot 크기/위치를 보존한다(재생성 시 초기화 방지).
+            // 사용자가 에디터에서 조정한 PanelRoot 크기/위치/pivot/앵커를 보존한다(재생성 시 초기화 방지).
+            // 주의: 컨트롤러의 기본 배치값을 고쳤을 때도 이 보존이 옛 프리팹 값으로 되돌리므로,
+            // 기본값을 바꿨으면 프리팹의 PanelRoot도 함께 갱신해야 반영된다.
             Vector2? keepSize = null;
             Vector2? keepPos = null;
+            Vector2? keepPivot = null;
+            Vector2? keepAnchorMin = null;
+            Vector2? keepAnchorMax = null;
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
             if (existing != null)
             {
@@ -50,6 +57,9 @@ namespace TaskbarHero.ClientEditor
                 {
                     keepSize = pr.sizeDelta;
                     keepPos = pr.anchoredPosition;
+                    keepPivot = pr.pivot;
+                    keepAnchorMin = pr.anchorMin;
+                    keepAnchorMax = pr.anchorMax;
                 }
             }
 
@@ -60,6 +70,8 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("panelBackground").objectReferenceValue = LoadSprite("ui_panel_background");
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
+            // 캐릭터 전환 화살표도 EditorConstruct 전에 배선해야 계층에 함께 구워진다.
+            so.FindProperty("charNavArrow").objectReferenceValue = LoadSpriteAt(CharNavArrowPath);
             so.ApplyModifiedPropertiesWithoutUndo();
 
             // 전체 정적 계층을 에디터에서 생성해 프리팹에 굽는다(에디터에서 바로 보이도록).
@@ -70,6 +82,10 @@ namespace TaskbarHero.ClientEditor
                 var pr = FindChild(root.transform, "PanelRoot") as RectTransform;
                 if (pr != null)
                 {
+                    // 앵커·pivot을 먼저 되돌린 뒤 위치를 넣는다(둘 다 위치 해석을 바꾼다).
+                    pr.anchorMin = keepAnchorMin.Value;
+                    pr.anchorMax = keepAnchorMax.Value;
+                    pr.pivot = keepPivot.Value;
                     pr.sizeDelta = keepSize.Value;
                     pr.anchoredPosition = keepPos.Value;
                 }
@@ -122,10 +138,12 @@ namespace TaskbarHero.ClientEditor
             return null;
         }
 
-        /// <summary>스프라이트 로드(Single/Multiple 모두 대응).</summary>
-        private static Sprite LoadSprite(string fileName)
+        /// <summary>인벤토리 공용 아트 폴더에서 스프라이트를 로드한다.</summary>
+        private static Sprite LoadSprite(string fileName) => LoadSpriteAt($"{ArtDir}/{fileName}.png");
+
+        /// <summary>경로의 스프라이트 로드(Single/Multiple 모두 대응). 임포트 설정은 건드리지 않는다(공용 아트 규칙).</summary>
+        private static Sprite LoadSpriteAt(string path)
         {
-            string path = $"{ArtDir}/{fileName}.png";
             var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
             if (sprite != null)
             {

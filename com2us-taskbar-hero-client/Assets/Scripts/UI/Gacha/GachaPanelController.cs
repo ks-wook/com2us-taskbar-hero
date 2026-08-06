@@ -99,7 +99,9 @@ namespace TaskbarHero.Client.UI.Gacha
         // "천장으로 무엇이 확정되는지"를 공용 아이템 슬롯 + 이름으로 보여 주고, 상세는 슬롯 hover 팝업이 담당한다.
         private const float PickupBoxWidth = 380f;
         private const float PickupBoxHeight = 80f;
-        private const float PickupBoxTop = 12f;
+        // 창 우상단 기준으로 오른쪽·위에서 얼마나 떨어뜨릴지(배너 아트를 가리지 않는 자리).
+        private const float PickupBoxRight = 96f;
+        private const float PickupBoxTop = 387f;
         private const float PickupSlotSize = 64f;
         private const float PickupSlotLeft = 8f;
         private const float PickupTextLeft = PickupSlotLeft + PickupSlotSize + 10f;
@@ -110,20 +112,36 @@ namespace TaskbarHero.Client.UI.Gacha
         private const float HistoryListSideInset = (PanelWidth - HistoryListWidth) * 0.5f;  // 90
         private const float HistoryRowTextWidth = HistoryListWidth - 64f;                   // 행 안쪽 여백(14×2 + 18×2)을 뺀 폭
 
-        // ── 기록 화면 제목 · 페이저('<' [현재 페이지] '>') ──
-        private const int HistoryTitleFontSize = 40;
-        private const float HistoryTitleTop = 40f;      // 창 위쪽에서 제목까지
+        // ── 기록 목록 상자 ──
+        // 상자 높이는 <b>한 페이지 분량에 딱 맞춘다</b> — 고정 높이로 두면 페이지당 건수를 바꿀 때마다
+        // 테두리 아래에 빈 공간이 남는다(5건으로 줄였을 때 실제로 96px 떴다).
+        private const float HistoryRowHeight = 96f;     // 기록 한 줄 높이(LayoutElement.preferredHeight)
+        private const float HistoryRowSpacing = 8f;     // 줄 사이 간격
+        private const float HistoryListPadding = 12f;   // 목록 위·아래 안쪽 여백
+        private const float HistoryListBottom = 303f;   // 창 아래쪽에서 목록 상자 아래까지(페이저 줄 위)
+
+        /// <summary>한 페이지(<see cref="HistoryPageSize"/>건)를 담는 데 필요한 목록 높이.</summary>
+        private const float HistoryListHeight = HistoryListPadding * 2f
+            + HistoryRowHeight * HistoryPageSize
+            + HistoryRowSpacing * (HistoryPageSize - 1);
+
+        /// <summary>창 위쪽에서 목록 상자 위까지. 아래 여백과 내용 높이에서 역산한다.</summary>
+        private const float HistoryListTop = PanelHeight - HistoryListBottom - HistoryListHeight;
+
+        // ── 기록 페이저('<' [현재 페이지] '>') ──
         private const int HistoryPagerFontSize = 32;
-        private const float HistoryPagerY = 110f;       // 창 아래쪽에서 페이저 줄까지(옛 '더 보기' 자리)
+        private const float HistoryPagerY = 204f;       // 창 아래쪽에서 페이저 줄까지
+        private const float HistoryPagerCenterX = -2f;  // 페이저 줄 전체의 가로 중심
         private const float HistoryPagerButtonWidth = 72f;
         private const float HistoryPagerButtonHeight = 64f;
         private const float HistoryPagerGap = 96f;      // 가운데(페이지 번호)에서 좌우 버튼 중심까지
+        private const float HistoryBackButtonWidth = 200f;
 
         private const int GoldCurrencyType = 1;   // 재화 타입 1 = 골드
         private const int GoldItemCode = 1;       // item_master 골드 코드(아이콘 item_1)
         private const int PityGrade = 5;          // 천장 표시 대상 등급(전설) — 규칙이 다른 등급에 붙으면 응답을 따라간다
         private const int SoftPityType = 1;
-        private const int HistoryPageSize = 10;
+        private const int HistoryPageSize = 5;
         // 10연은 스택 병합으로 칸을 덜 쓰는 경우가 많아 "10칸 필요"로 막지 않는다(기획서 6.7).
         // 아래 여유보다 빈 칸이 적을 때만 사전 경고를 띄우고, 최종 판정은 서버(InventoryFull)가 한다.
         private const int MultiFreeSlotWarnThreshold = 4;
@@ -140,6 +158,9 @@ namespace TaskbarHero.Client.UI.Gacha
         [SerializeField] private Sprite _detailBackground;
         [Tooltip("버튼 배경(Assets/Art/UI/pixel_rpg_button.png, 9-slice).")]
         [SerializeField] private Sprite _buttonSprite;
+        [Tooltip("기록 페이저의 화살표(Assets/Art/UI/화살표버튼.png). 오른쪽을 가리키는 그림 하나로 " +
+                 "'>'는 그대로, '<'는 좌우를 뒤집어 쓴다. 없으면 '<'·'>' 글자 버튼으로 폴백한다.")]
+        [SerializeField] private Sprite _arrowSprite;
         [Tooltip("공용 아이템 슬롯 프리팹(Assets/Prefabs/UI/ItemSlot) — 천장 픽업 아이템 칸에 쓴다.")]
         [SerializeField] private GameObject _itemSlotPrefab;
 
@@ -425,7 +446,7 @@ namespace TaskbarHero.Client.UI.Gacha
             var rt = box.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
             rt.pivot = new Vector2(1f, 1f);
-            rt.anchoredPosition = new Vector2(-Inset, -PickupBoxTop);
+            rt.anchoredPosition = new Vector2(-PickupBoxRight, -PickupBoxTop);
             rt.sizeDelta = new Vector2(PickupBoxWidth, PickupBoxHeight);
             box.raycastTarget = false; // 클릭·hover는 안쪽 슬롯만 받는다
             _pickupBox = box.gameObject;
@@ -659,8 +680,8 @@ namespace TaskbarHero.Client.UI.Gacha
             var lbrt = listBg.rectTransform;
             lbrt.anchorMin = new Vector2(0f, 0f);
             lbrt.anchorMax = new Vector2(1f, 1f);
-            lbrt.offsetMin = new Vector2(HistoryListSideInset, 190f);
-            lbrt.offsetMax = new Vector2(-HistoryListSideInset, -ContentTop);
+            lbrt.offsetMin = new Vector2(HistoryListSideInset, HistoryListBottom);
+            lbrt.offsetMax = new Vector2(-HistoryListSideInset, -HistoryListTop);
             listBg.gameObject.AddComponent<RectMask2D>();
             listBg.gameObject.SetActive(true); // 목록 상자는 항상 켜 둔다(꺼진 채 구워지면 기록이 통째로 안 보인다)
             _historyListBox = listBg.gameObject;
@@ -674,8 +695,8 @@ namespace TaskbarHero.Client.UI.Gacha
             _historyContent.offsetMin = new Vector2(14f, 0f);
             _historyContent.offsetMax = new Vector2(-14f, 0f);
             var layout = contentGo.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 8f;
-            layout.padding = new RectOffset(0, 0, 12, 12);
+            layout.spacing = HistoryRowSpacing;
+            layout.padding = new RectOffset(0, 0, (int)HistoryListPadding, (int)HistoryListPadding);
             layout.childControlWidth = true;
             layout.childControlHeight = true;
             layout.childForceExpandWidth = true;
@@ -699,32 +720,24 @@ namespace TaskbarHero.Client.UI.Gacha
             hert.anchoredPosition = Vector2.zero;
             _historyEmptyText.gameObject.SetActive(false);
 
-            // 제목(창 상단 중앙) — 배너 화면과 달리 탭 줄을 숨기므로 여기가 무슨 화면인지 알려 준다.
-            var title = NewText("HistoryTitle", root, "뽑기 기록", HistoryTitleFontSize, TextAnchor.MiddleCenter);
-            title.fontStyle = FontStyle.Bold;
-            var trt = title.rectTransform;
-            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
-            trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -HistoryTitleTop);
-            trt.sizeDelta = new Vector2(400f, 60f);
-
-            // 페이저: '<' [현재 페이지] '>' — 목록 아래 가로 중앙.
-            _historyPrevButton = BuildTextButton(root, "PrevPageButton", "<", HistoryPagerFontSize,
-                new Vector2(0.5f, 0f), new Vector2(-HistoryPagerGap, HistoryPagerY),
-                new Vector2(HistoryPagerButtonWidth, HistoryPagerButtonHeight));
-            _historyNextButton = BuildTextButton(root, "NextPageButton", ">", HistoryPagerFontSize,
-                new Vector2(0.5f, 0f), new Vector2(HistoryPagerGap, HistoryPagerY),
-                new Vector2(HistoryPagerButtonWidth, HistoryPagerButtonHeight));
+            // 페이저: '<' [현재 페이지] '>' — 목록 아래 한 줄. 세 요소가 같은 y·같은 간격으로 늘어선다.
+            _historyPrevButton = BuildArrowButton(root, "PrevPageButton", false,
+                new Vector2(HistoryPagerCenterX - HistoryPagerGap, HistoryPagerY));
+            _historyNextButton = BuildArrowButton(root, "NextPageButton", true,
+                new Vector2(HistoryPagerCenterX + HistoryPagerGap, HistoryPagerY));
 
             _historyPageText = NewText("PageNumber", root, "1", HistoryPagerFontSize, TextAnchor.MiddleCenter);
             _historyPageText.fontStyle = FontStyle.Bold;
             var prt = _historyPageText.rectTransform;
             prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0f);
             prt.pivot = new Vector2(0.5f, 0f); // 버튼과 같은 기준(아래 중앙)이라 세로가 자연히 맞는다
-            prt.anchoredPosition = new Vector2(0f, HistoryPagerY);
+            prt.anchoredPosition = new Vector2(HistoryPagerCenterX, HistoryPagerY);
             prt.sizeDelta = new Vector2(HistoryPagerGap * 2f - HistoryPagerButtonWidth, HistoryPagerButtonHeight);
+
+            // '뒤로'는 페이저와 같은 줄, 목록 상자의 왼쪽 가장자리에 맞춘다.
             _historyBackButton = BuildTextButton(root, "BackButton", "뒤로", 28,
-                new Vector2(0f, 0f), new Vector2(Inset, 110f), new Vector2(200f, 64f));
+                new Vector2(0f, 0f), new Vector2(HistoryListSideInset, HistoryPagerY),
+                new Vector2(HistoryBackButtonWidth, HistoryPagerButtonHeight));
 
             _historyRoot.SetActive(false);
         }
@@ -761,6 +774,9 @@ namespace TaskbarHero.Client.UI.Gacha
             UiClickSound.Suppress(_historyNextButton);
         }
 
+        /// <summary>버튼의 클릭 핸들러를 다시 연결한다.
+        /// <see cref="ButtonPunchScale"/>이 붙어 있으면 클릭 피드백을 <b>함께</b> 재생한다
+        /// (연출은 동작과 동시에 시작하므로 반응이 느려지지 않는다).</summary>
         private static void Rewire(Button button, UnityEngine.Events.UnityAction action)
         {
             if (button == null)
@@ -768,6 +784,11 @@ namespace TaskbarHero.Client.UI.Gacha
                 return;
             }
             button.onClick.RemoveAllListeners();
+            var punch = button.GetComponent<ButtonPunchScale>();
+            if (punch != null)
+            {
+                button.onClick.AddListener(() => punch.Play());
+            }
             button.onClick.AddListener(action);
         }
 
@@ -1551,7 +1572,7 @@ namespace TaskbarHero.Client.UI.Gacha
         {
             var rowImg = NewImage("HistoryRow", _historyContent, new Color(0.16f, 0.19f, 0.30f, 0.92f));
             var le = rowImg.gameObject.AddComponent<LayoutElement>();
-            le.preferredHeight = 96f;
+            le.preferredHeight = HistoryRowHeight;
             le.flexibleHeight = 0f;
             var rt = rowImg.rectTransform;
             rowImg.raycastTarget = false;
@@ -1866,6 +1887,43 @@ namespace TaskbarHero.Client.UI.Gacha
         // ── UI 헬퍼 ──
 
         /// <summary>라벨만 있는 작은 버튼(기록·뒤로·더 보기).</summary>
+        /// <summary>
+        /// 기록 페이저의 화살표 버튼. 아트는 <b>오른쪽을 가리키는 그림 한 장</b>뿐이라
+        /// 이전('&lt;')은 <c>localScale.x = -1</c>로 좌우를 뒤집어 쓴다(피벗이 가로 중앙이라 자리는 그대로다).
+        /// <para>클릭하면 커졌다 돌아오도록 <see cref="ButtonPunchScale"/>을 함께 붙인다 —
+        /// 반전된 배율(-1)을 기준 크기로 기억하므로 뒤집힌 채로 정상 재생된다.</para>
+        /// <para>아트가 배선되지 않았으면 종전처럼 '&lt;'·'&gt;' 글자 버튼으로 폴백한다.</para>
+        /// </summary>
+        private Button BuildArrowButton(RectTransform parent, string name, bool pointRight, Vector2 pos)
+        {
+            var anchor = new Vector2(0.5f, 0f);
+            var size = new Vector2(HistoryPagerButtonWidth, HistoryPagerButtonHeight);
+
+            if (_arrowSprite == null)
+            {
+                var fallback = BuildTextButton(parent, name, pointRight ? ">" : "<",
+                    HistoryPagerFontSize, anchor, pos, size);
+                fallback.gameObject.AddComponent<ButtonPunchScale>();
+                return fallback;
+            }
+
+            var img = NewImage(name, parent, Color.white);
+            img.sprite = _arrowSprite;
+            img.type = Image.Type.Simple;
+            img.preserveAspect = true;
+            var rt = img.rectTransform;
+            rt.anchorMin = rt.anchorMax = anchor;
+            rt.pivot = anchor;
+            rt.anchoredPosition = pos;
+            rt.sizeDelta = size;
+            rt.localScale = new Vector3(pointRight ? 1f : -1f, 1f, 1f);
+
+            var button = img.gameObject.AddComponent<Button>();
+            // 배율을 먼저 정한 뒤에 붙여야 ButtonPunchScale이 반전된 값을 기준으로 기억한다.
+            img.gameObject.AddComponent<ButtonPunchScale>();
+            return button;
+        }
+
         private Button BuildTextButton(RectTransform parent, string name, string label, int fontSize,
             Vector2 anchor, Vector2 pos, Vector2 size)
         {

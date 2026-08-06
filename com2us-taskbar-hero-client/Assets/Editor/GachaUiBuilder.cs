@@ -37,6 +37,7 @@ namespace TaskbarHero.ClientEditor
         private const string BoxBgPath = "Assets/Art/UI/ui_bg.png";
         private const string DetailBgPath = "Assets/Art/UI/item_detail_bg.png";
         private const string ButtonPath = "Assets/Art/UI/pixel_rpg_button.png";
+        private const string ArrowPath = "Assets/Art/UI/화살표버튼.png";
         // 결과 창 테두리(액자) — 스테이지 지역 창과 같은 아트를 써서 화면 톤을 맞춘다.
         private const string WindowFramePath = "Assets/Art/UI/Trade/01_Frames_Panels/window_frame_hollow.png";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
@@ -92,6 +93,8 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("_boxBackground").objectReferenceValue = LoadSprite(BoxBgPath);
             so.FindProperty("_detailBackground").objectReferenceValue = LoadSprite(DetailBgPath);
             so.FindProperty("_buttonSprite").objectReferenceValue = LoadSprite(ButtonPath);
+            // 기록 페이저 화살표(오른쪽 방향 한 장 — '<'는 컨트롤러가 좌우 반전해 쓴다).
+            so.FindProperty("_arrowSprite").objectReferenceValue = LoadSprite(ArrowPath);
             // 천장 픽업 아이템 칸도 공용 슬롯 프리팹을 쓴다(결과 오버레이와 같은 아트).
             so.FindProperty("_itemSlotPrefab").objectReferenceValue =
                 AssetDatabase.LoadAssetAtPath<GameObject>(ItemSlotPrefabPath);
