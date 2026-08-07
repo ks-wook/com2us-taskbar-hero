@@ -20,9 +20,9 @@ namespace TaskbarHero.Client.Managers
     {
         public static NetworkManager Instance { get; private set; }
 
-        [Header("서버 주소")]
-        [SerializeField] private string accountServerBaseUrl = "http://localhost:5160";
-        [SerializeField] private string gameServerBaseUrl = "http://localhost:5247";
+        [Header("서버 주소 (실행 시 빌드 옵션 = ServerEnvironment 프리셋으로 덮어씀 · 표시용)")]
+        [SerializeField] private string accountServerBaseUrl = ServerEnvironment.DevAccountBaseUrl;
+        [SerializeField] private string gameServerBaseUrl = ServerEnvironment.DevGameBaseUrl;
 
         [Header("요청 설정")]
         [Tooltip("요청 타임아웃(초). 0이면 무제한.")]
@@ -37,10 +37,14 @@ namespace TaskbarHero.Client.Managers
         private const string NetworkErrorModalTitle = "네트워크 오류";
         private float _lastNetworkErrorModalTime = -999f;
 
-        // 최초 직렬화 기본값(포트·스킴). 접속 호스트를 바꿔도 각 서버의 포트는 이 기본값을 유지한다.
+        // 현재 환경(빌드 옵션)의 프리셋 주소(스킴·포트 포함). 접속 호스트를 바꿔도 각 서버의 스킴·포트는 이 값을 유지한다.
         private string _defaultAccountBaseUrl;
         private string _defaultGameBaseUrl;
-        private const string PrefKeyServerHost = "th_server_host";
+        private ServerEnvironmentKind _environment;
+
+        // 접속 호스트 override 저장 키. 환경마다 별개로 저장한다 — Dev에서 저장한 "localhost"가
+        // QA 빌드의 주소를 덮어써 접속이 깨지는 것을 막기 위함이다.
+        private const string PrefKeyServerHostPrefix = "th_server_host_";
 
         /// <summary>로그인 인증 토큰(캐시된 세션에서 조회). 있으면 요청 헤더(Authorization: Bearer)에 자동 첨부된다.</summary>
         public string AuthToken => Session.Token;
@@ -51,10 +55,13 @@ namespace TaskbarHero.Client.Managers
         public string AccountServerBaseUrl => accountServerBaseUrl;
         public string GameServerBaseUrl => gameServerBaseUrl;
 
+        /// <summary>현재 접속 환경(빌드 옵션). 기본값은 빌드에 구워진 환경이고, 서버 선택 화면에서 이 실행 동안만 바꿀 수 있다.</summary>
+        public ServerEnvironmentKind CurrentEnvironment => _environment;
+
         /// <summary>현재 접속 서버 호스트(계정 서버 URL에서 추출). 예: "localhost".</summary>
         public string ServerHost => ExtractHost(accountServerBaseUrl);
 
-        /// <summary>최초 기본(로컬) 접속 호스트. 서버 선택 UI의 기본값·프리셋 판정에 사용.</summary>
+        /// <summary>현재 환경의 프리셋 호스트(호스트 override 없는 상태의 주소). 서버 선택 UI의 기본값·프리셋 판정에 사용.</summary>
         public string DefaultServerHost => ExtractHost(string.IsNullOrEmpty(_defaultAccountBaseUrl) ? accountServerBaseUrl : _defaultAccountBaseUrl);
 
         private void Awake()
@@ -68,25 +75,64 @@ namespace TaskbarHero.Client.Managers
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
-            // 직렬화된 기본 URL(포트 포함)을 보존한 뒤, 저장된 접속 호스트가 있으면 적용한다.
-            _defaultAccountBaseUrl = accountServerBaseUrl;
-            _defaultGameBaseUrl = gameServerBaseUrl;
-            string savedHost = PlayerPrefs.GetString(PrefKeyServerHost, string.Empty);
+            // 인스펙터 값이 아니라 빌드 옵션(환경) 프리셋을 정본으로 삼고, 그 환경에 저장된 접속 호스트가 있으면 적용한다.
+            ApplyEnvironment(ServerEnvironment.BuildDefault);
+            string savedHost = PlayerPrefs.GetString(HostPrefKey(_environment), string.Empty);
             if (!string.IsNullOrEmpty(savedHost))
             {
                 ApplyServerHost(savedHost);
             }
+
+            Debug.Log($"[NET] 접속 환경={ServerEnvironment.DisplayNameOf(_environment)}(빌드 옵션)" +
+                      $" account={accountServerBaseUrl} game={gameServerBaseUrl}");
         }
 
-        /// <summary>접속 서버 호스트를 바꾸고(각 서버의 스킴·포트는 기본값 유지) 다음 실행을 위해 저장한다.</summary>
+        /// <summary>접속 환경을 바꾼다(이 실행에만 적용 — 저장하지 않는다). 계정·게임 서버 주소를 그 환경의 프리셋으로 되돌린다.</summary>
+        public void SetEnvironment(ServerEnvironmentKind kind)
+        {
+            if (_environment == kind)
+            {
+                return;   // 같은 환경이면 호스트 override를 날리지 않는다.
+            }
+            ApplyEnvironment(kind);
+        }
+
+        /// <summary>환경 프리셋 주소를 현재 주소로 적용한다(스킴·호스트·포트 전부). 호스트 override의 기준값도 이 값이 된다.</summary>
+        private void ApplyEnvironment(ServerEnvironmentKind kind)
+        {
+            _environment = kind;
+            _defaultAccountBaseUrl = ServerEnvironment.AccountBaseUrlOf(kind);
+            _defaultGameBaseUrl = ServerEnvironment.GameBaseUrlOf(kind);
+            accountServerBaseUrl = _defaultAccountBaseUrl;
+            gameServerBaseUrl = _defaultGameBaseUrl;
+        }
+
+        /// <summary>접속 서버 호스트를 바꾸고(각 서버의 스킴·포트는 환경 프리셋 유지) 다음 실행을 위해 환경별로 저장한다.
+        /// 환경 프리셋과 같은 호스트면 저장하지 않고 지운다 — 프리셋 주소가 나중에 바뀌었을 때 옛 호스트가 남아
+        /// 새 주소를 덮어쓰는 것을 막기 위함이다.</summary>
         public void SetServerHost(string host)
         {
-            if (ApplyServerHost(host))
+            if (!ApplyServerHost(host))
             {
-                PlayerPrefs.SetString(PrefKeyServerHost, ExtractHost(accountServerBaseUrl));
-                PlayerPrefs.Save();
+                return;
             }
+
+            string key = HostPrefKey(_environment);
+            string applied = ExtractHost(accountServerBaseUrl);
+            if (string.Equals(applied, ExtractHost(_defaultAccountBaseUrl), StringComparison.OrdinalIgnoreCase))
+            {
+                PlayerPrefs.DeleteKey(key);
+            }
+            else
+            {
+                PlayerPrefs.SetString(key, applied);
+            }
+            PlayerPrefs.Save();
         }
+
+        /// <summary>환경별 접속 호스트 override 저장 키.</summary>
+        private static string HostPrefKey(ServerEnvironmentKind kind)
+            => PrefKeyServerHostPrefix + ServerEnvironment.DisplayNameOf(kind).ToLowerInvariant();
 
         /// <summary>입력 호스트로 계정·게임 서버 base URL을 재구성한다(저장 없이). 유효하면 true.</summary>
         private bool ApplyServerHost(string host)
@@ -124,7 +170,8 @@ namespace TaskbarHero.Client.Managers
                 int colon = h.IndexOf(':');
                 if (colon >= 0) h = h.Substring(0, colon); // 커스텀 포트는 무시(각 서버 기본 포트 유지)
                 if (string.IsNullOrEmpty(h)) return baseUrl;
-                return $"{uri.Scheme}://{h}:{uri.Port}";
+                // 스킴 기본 포트(http 80·https 443)는 생략해 프리셋 주소와 같은 형태를 유지한다.
+                return uri.IsDefaultPort ? $"{uri.Scheme}://{h}" : $"{uri.Scheme}://{h}:{uri.Port}";
             }
             catch
             {

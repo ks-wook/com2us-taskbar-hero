@@ -8,15 +8,27 @@ using TaskbarHero.Client.Managers;
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// 로그인 UI보다 먼저 노출되는 '접속 서버 선택' 화면. 접속 서버를 직접 입력하는 칸과 로컬 프리셋 버튼,
-    /// 하단의 '확인' 버튼으로 구성된다. 입력 기본값은 현재 사용 중인 로컬 주소(호스트)다.
-    /// '확인'을 누르면 접속 서버가 확정(NetworkManager에 적용)되고, 이 화면은 파괴되며 로그인 UI가 활성화된다.
+    /// 로그인 UI보다 먼저 노출되는 '접속 서버 선택' 화면. <b>빌드 옵션(접속 환경) 버튼</b>(Dev / QA)과
+    /// 선택된 환경의 계정·게임 서버 주소 표시, 호스트를 직접 입력하는 칸, 하단의 '확인' 버튼으로 구성된다.
+    /// 기본 선택은 빌드에 구워진 환경(<see cref="ServerEnvironment.BuildDefault"/> — QA 빌드는 QA)이며,
+    /// 여기서 바꾼 환경은 <b>그 실행에만</b> 적용된다(저장하지 않는다 — 이유는 <see cref="ServerEnvironment"/> 참조).
+    /// '확인'을 누르면 환경과 접속 호스트가 확정(NetworkManager에 적용)되고, 이 화면은 파괴되며 로그인 UI가 활성화된다.
     /// 런타임에 자체 Canvas·EventSystem을 코드로 구성한다(타이틀 단계에는 EventSystem이 없으므로 필요 시 생성).
     /// </summary>
     public class ServerSelectPanelController : MonoBehaviour
     {
+        // 환경 버튼 색(선택 / 미선택).
+        private static readonly Color EnvSelectedColor = new Color(0.20f, 0.45f, 0.65f, 1f);
+        private static readonly Color EnvUnselectedColor = new Color(0.18f, 0.20f, 0.26f, 1f);
+
         private InputField _input;
         private Action _onConfirmed;
+
+        // 선택 중인 환경(확인 시점에 NetworkManager로 확정한다).
+        private ServerEnvironmentKind _selectedEnv;
+        private Image _devButtonImage;
+        private Image _qaButtonImage;
+        private Text _addressText;
 
         /// <summary>접속 서버 선택 화면을 생성·표시한다. onConfirmed는 '확인' 후(서버 확정·화면 파괴 직후) 1회 호출된다.</summary>
         public static void Show(Action onConfirmed)
@@ -53,7 +65,7 @@ namespace TaskbarHero.Client.UI
             var card = NewRect("Card", transform);
             card.anchorMin = card.anchorMax = new Vector2(0.5f, 0.5f);
             card.pivot = new Vector2(0.5f, 0.5f);
-            card.sizeDelta = new Vector2(680f, 460f);
+            card.sizeDelta = new Vector2(680f, 520f);
             card.anchoredPosition = Vector2.zero;
             var cardImg = card.gameObject.AddComponent<Image>();
             cardImg.color = new Color(0.10f, 0.13f, 0.20f, 0.98f);
@@ -68,14 +80,53 @@ namespace TaskbarHero.Client.UI
             trt.sizeDelta = new Vector2(-40f, 60f);
             trt.anchoredPosition = new Vector2(0f, -28f);
 
+            // '빌드 옵션(접속 환경)' 라벨
+            var envLabel = NewText("EnvLabel", card, font, "빌드 옵션(접속 환경)", 24, TextAnchor.MiddleLeft);
+            envLabel.color = new Color(0.85f, 0.9f, 1f);
+            var elrt = envLabel.rectTransform;
+            elrt.anchorMin = new Vector2(0f, 1f); elrt.anchorMax = new Vector2(1f, 1f);
+            elrt.pivot = new Vector2(0.5f, 1f);
+            elrt.sizeDelta = new Vector2(-80f, 30f);
+            elrt.anchoredPosition = new Vector2(0f, -104f);
+
+            // 환경 선택 버튼(Dev / QA). 기본 선택 = 이 빌드에 구워진 환경.
+            _selectedEnv = NetworkManager.Instance != null ? NetworkManager.Instance.CurrentEnvironment : ServerEnvironment.BuildDefault;
+
+            var devBtn = NewButton("DevButton", card, font, "Dev (로컬)", 26, EnvUnselectedColor);
+            _devButtonImage = devBtn.GetComponent<Image>();
+            var dbrt = (RectTransform)devBtn.transform;
+            dbrt.anchorMin = new Vector2(0f, 1f); dbrt.anchorMax = new Vector2(0f, 1f);
+            dbrt.pivot = new Vector2(0f, 1f);
+            dbrt.sizeDelta = new Vector2(290f, 56f);
+            dbrt.anchoredPosition = new Vector2(40f, -138f);
+            devBtn.onClick.AddListener(() => SelectEnvironment(ServerEnvironmentKind.Dev));
+
+            var qaBtn = NewButton("QaButton", card, font, "QA (원격)", 26, EnvUnselectedColor);
+            _qaButtonImage = qaBtn.GetComponent<Image>();
+            var qbrt = (RectTransform)qaBtn.transform;
+            qbrt.anchorMin = new Vector2(0f, 1f); qbrt.anchorMax = new Vector2(0f, 1f);
+            qbrt.pivot = new Vector2(0f, 1f);
+            qbrt.sizeDelta = new Vector2(290f, 56f);
+            qbrt.anchoredPosition = new Vector2(350f, -138f);
+            qaBtn.onClick.AddListener(() => SelectEnvironment(ServerEnvironmentKind.Qa));
+
+            // 선택된 환경의 계정·게임 서버 주소 표시(두 줄).
+            _addressText = NewText("AddressText", card, font, string.Empty, 20, TextAnchor.UpperLeft);
+            _addressText.color = new Color(0.75f, 0.82f, 0.95f);
+            var art = _addressText.rectTransform;
+            art.anchorMin = new Vector2(0f, 1f); art.anchorMax = new Vector2(1f, 1f);
+            art.pivot = new Vector2(0.5f, 1f);
+            art.sizeDelta = new Vector2(-80f, 64f);
+            art.anchoredPosition = new Vector2(0f, -204f);
+
             // '직접 입력' 라벨
-            var label = NewText("InputLabel", card, font, "직접 입력", 24, TextAnchor.MiddleLeft);
+            var label = NewText("InputLabel", card, font, "직접 입력 (호스트만 · 스킴·포트는 환경 값 유지)", 22, TextAnchor.MiddleLeft);
             label.color = new Color(0.85f, 0.9f, 1f);
             var lrt = label.rectTransform;
             lrt.anchorMin = new Vector2(0f, 1f); lrt.anchorMax = new Vector2(1f, 1f);
             lrt.pivot = new Vector2(0.5f, 1f);
             lrt.sizeDelta = new Vector2(-80f, 30f);
-            lrt.anchoredPosition = new Vector2(0f, -110f);
+            lrt.anchoredPosition = new Vector2(0f, -282f);
 
             // 직접 입력 칸(기본값 = 현재 접속 호스트)
             string current = NetworkManager.Instance != null ? NetworkManager.Instance.ServerHost : "localhost";
@@ -84,20 +135,9 @@ namespace TaskbarHero.Client.UI
             irt.anchorMin = new Vector2(0f, 1f); irt.anchorMax = new Vector2(1f, 1f);
             irt.pivot = new Vector2(0.5f, 1f);
             irt.sizeDelta = new Vector2(-80f, 64f);
-            irt.anchoredPosition = new Vector2(0f, -148f);
+            irt.anchoredPosition = new Vector2(0f, -318f);
 
-            // '로컬' 프리셋 버튼(현재 로컬 주소로 채움)
-            string localHost = NetworkManager.Instance != null ? NetworkManager.Instance.DefaultServerHost : "localhost";
-            var localBtn = NewButton("LocalButton", card, font, "로컬", 24, new Color(0.20f, 0.30f, 0.45f, 1f));
-            var lbrt = (RectTransform)localBtn.transform;
-            lbrt.anchorMin = new Vector2(0f, 1f); lbrt.anchorMax = new Vector2(0f, 1f);
-            lbrt.pivot = new Vector2(0f, 1f);
-            lbrt.sizeDelta = new Vector2(180f, 56f);
-            lbrt.anchoredPosition = new Vector2(40f, -232f);
-            localBtn.onClick.AddListener(() =>
-            {
-                if (_input != null) _input.text = localHost;
-            });
+            RefreshEnvironmentView(fillInput: false);
 
             // '확인' 버튼(하단)
             var confirm = NewButton("ConfirmButton", card, font, "확인", 30, new Color(0.18f, 0.45f, 0.28f, 1f));
@@ -109,13 +149,56 @@ namespace TaskbarHero.Client.UI
             confirm.onClick.AddListener(OnConfirm);
         }
 
-        /// <summary>'확인': 입력한 접속 서버를 확정(NetworkManager에 적용)하고, 이 화면을 파괴한 뒤 로그인 UI를 활성화한다.</summary>
+        /// <summary>환경 버튼을 눌렀을 때: 선택 환경을 바꾸고 표시·입력 칸을 그 환경의 프리셋 값으로 갱신한다(확정은 '확인' 시점).</summary>
+        private void SelectEnvironment(ServerEnvironmentKind kind)
+        {
+            _selectedEnv = kind;
+            RefreshEnvironmentView(fillInput: true);
+        }
+
+        /// <summary>선택된 환경에 맞춰 버튼 강조·주소 표시를 갱신한다. fillInput이면 입력 칸도 그 환경의 프리셋 호스트로 채운다.</summary>
+        private void RefreshEnvironmentView(bool fillInput)
+        {
+            if (_devButtonImage != null)
+            {
+                _devButtonImage.color = _selectedEnv == ServerEnvironmentKind.Dev ? EnvSelectedColor : EnvUnselectedColor;
+            }
+            if (_qaButtonImage != null)
+            {
+                _qaButtonImage.color = _selectedEnv == ServerEnvironmentKind.Qa ? EnvSelectedColor : EnvUnselectedColor;
+            }
+
+            string accountUrl = ServerEnvironment.AccountBaseUrlOf(_selectedEnv);
+            string gameUrl = ServerEnvironment.GameBaseUrlOf(_selectedEnv);
+            if (_addressText != null)
+            {
+                _addressText.text = $"계정: {accountUrl}\n게임: {gameUrl}";
+            }
+            if (fillInput && _input != null)
+            {
+                _input.text = HostOf(accountUrl);
+            }
+        }
+
+        /// <summary>URL에서 호스트명만 뽑아낸다(입력 칸 기본값용. 파싱 실패 시 원본 반환).</summary>
+        private static string HostOf(string url)
+        {
+            try { return new Uri(url).Host; }
+            catch { return url; }
+        }
+
+        /// <summary>'확인': 선택한 환경과 입력한 접속 호스트를 확정(NetworkManager에 적용)하고, 이 화면을 파괴한 뒤 로그인 UI를 활성화한다.</summary>
         private void OnConfirm()
         {
             string host = _input != null ? _input.text : null;
-            if (NetworkManager.Instance != null && !string.IsNullOrWhiteSpace(host))
+            if (NetworkManager.Instance != null)
             {
-                NetworkManager.Instance.SetServerHost(host.Trim());
+                // 환경(스킴·포트 프리셋)을 먼저 확정한 뒤, 호스트 override를 적용한다.
+                NetworkManager.Instance.SetEnvironment(_selectedEnv);
+                if (!string.IsNullOrWhiteSpace(host))
+                {
+                    NetworkManager.Instance.SetServerHost(host.Trim());
+                }
             }
 
             var cb = _onConfirmed;
