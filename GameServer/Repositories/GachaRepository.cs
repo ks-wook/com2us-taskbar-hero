@@ -246,8 +246,8 @@ public sealed class GachaRepository : IGachaRepository
             }
 
             // 5) 지급. 같은 아이템이 여러 회차에 나오면 코드별로 합산해 한 번에 적재한다(스택 병합이 한 번에 이뤄진다).
-            int capacity = await LoadCapacityAsync(db, transaction, userId);
-            var used = await LoadUsedSlotsAsync(db, transaction, userId);
+            int capacity = await InventorySlotAllocator.LoadCapacityAsync(db, transaction, userId);
+            var used = await InventorySlotAllocator.LoadUsedSlotsAsync(db, transaction, userId);
             var delta = new InventoryDeltaDto();
 
             var grouped = entries
@@ -400,33 +400,6 @@ public sealed class GachaRepository : IGachaRepository
 
     // ── 헬퍼 ──
 
-    /// <summary>인벤토리 용량(game_player.inventory_capacity). 계정 세이브가 없으면 0.</summary>
-    private static async Task<int> LoadCapacityAsync(QueryFactory db, DbTransaction tx, long userId)
-        => await db.Query("game_player").Select("inventory_capacity").Where("user_id", userId)
-            .FirstOrDefaultAsync<int?>(tx) ?? 0;
-
-    /// <summary>현재 점유 중인 인벤토리 칸(slot) 집합(slot이 NULL이 아닌 행).</summary>
-    private static async Task<HashSet<int>> LoadUsedSlotsAsync(QueryFactory db, DbTransaction tx, long userId)
-    {
-        var slots = await db.Query("player_item").Select("slot")
-            .Where("user_id", userId).WhereNotNull("slot").GetAsync<int>(tx);
-        return slots.ToHashSet();
-    }
-
-    /// <summary>used 집합에서 [0, capacity) 범위의 가장 작은 빈 칸. 빈 칸이 없으면 -1.</summary>
-    private static int FirstFreeSlot(HashSet<int> used, int capacity)
-    {
-        for (var i = 0; i < capacity; i++)
-        {
-            if (!used.Contains(i))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
     /// <summary>
     /// 지급 아이템을 적재한다. 적재 규칙은 스택 상한(stack_max)만으로 결정되므로 재료·소모품 모두 병합 대상이고,
     /// 장비는 stack_max=1이라 자연히 1개당 1행이 된다. 빈 칸이 부족하면 false(호출측 전체 롤백).
@@ -474,8 +447,7 @@ public sealed class GachaRepository : IGachaRepository
         int perRow = Math.Max(stackMax, 1);
         while (remaining > 0)
         {
-            int slot = FirstFreeSlot(used, capacity);
-            if (slot < 0)
+            if (!InventorySlotAllocator.TryFirstFree(used, capacity, out int slot))
             {
                 return false; // 빈 칸 없음(용량 초과)
             }

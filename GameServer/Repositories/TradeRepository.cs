@@ -590,10 +590,8 @@ public sealed class TradeRepository : ITradeRepository
         var itemType = info?.ItemType ?? 1;
         var stackMax = Math.Max(1, info?.StackMax ?? 1);
 
-        var capacity = await db.Query("game_player").Select("inventory_capacity")
-            .Where("user_id", userId).FirstOrDefaultAsync<int?>(tx) ?? 0;
-        var used = (await db.Query("player_item").Select("slot")
-            .Where("user_id", userId).WhereNotNull("slot").GetAsync<int>(tx)).ToHashSet();
+        var capacity = await InventorySlotAllocator.LoadCapacityAsync(db, tx, userId);
+        var used = await InventorySlotAllocator.LoadUsedSlotsAsync(db, tx, userId);
 
         long remaining = listing.Quantity;
 
@@ -632,8 +630,7 @@ public sealed class TradeRepository : ITradeRepository
         var perRow = itemType == ItemTypeMaterial ? stackMax : 1;
         while (remaining > 0)
         {
-            var slot = FirstFreeSlot(used, capacity);
-            if (slot < 0)
+            if (!InventorySlotAllocator.TryFirstFree(used, capacity, out int slot))
             {
                 return false;
             }
@@ -662,20 +659,6 @@ public sealed class TradeRepository : ITradeRepository
         }
 
         return true;
-    }
-
-    /// <summary>used 집합에서 [0, capacity) 범위의 가장 작은 빈 칸. 없으면 -1.</summary>
-    private static int FirstFreeSlot(HashSet<int> used, int capacity)
-    {
-        for (var i = 0; i < capacity; i++)
-        {
-            if (!used.Contains(i))
-            {
-                return i;
-            }
-        }
-
-        return -1;
     }
 
 }

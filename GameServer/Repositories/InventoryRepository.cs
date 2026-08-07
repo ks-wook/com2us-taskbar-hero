@@ -384,7 +384,7 @@ public sealed class InventoryRepository : IInventoryRepository
             int? prevBagSlot = null;
             if (prevItemId is not null)
             {
-                prevBagSlot = freedSlot ?? await FindFreeSlotAsync(db, transaction, userId);
+                prevBagSlot = freedSlot ?? await InventorySlotAllocator.FindFreeSlotAsync(db, transaction, userId);
                 if (prevBagSlot is null)
                 {
                     await transaction.RollbackAsync();
@@ -471,7 +471,7 @@ public sealed class InventoryRepository : IInventoryRepository
             }
 
             // 가방에 되돌릴 빈 칸 확보. 장착 중에는 칸을 쓰지 않으므로 해제하려면 자리가 있어야 한다.
-            var bagSlot = await FindFreeSlotAsync(db, transaction, userId);
+            var bagSlot = await InventorySlotAllocator.FindFreeSlotAsync(db, transaction, userId);
             if (bagSlot is null)
             {
                 await transaction.RollbackAsync();
@@ -810,37 +810,5 @@ public sealed class InventoryRepository : IInventoryRepository
             quantity = row?.Quantity ?? 1,
             enhanceLevel = row?.EnhanceLevel ?? 0,
         };
-    }
-
-    /// <summary>
-    /// 계정 인벤토리에서 [0, inventory_capacity) 범위의 **가장 작은 빈 칸**을 찾는다. 빈 칸이 없거나
-    /// 계정 세이브가 없으면 null. 장착 중인 장비와 재화 행은 slot이 NULL이라 점유 칸에 잡히지 않는다.
-    /// 호출측 트랜잭션 안에서 읽어, 판정과 배치 사이에 다른 요청이 칸을 채우지 못하게 한다.
-    /// </summary>
-    private static async Task<int?> FindFreeSlotAsync(QueryFactory db, DbTransaction transaction, long userId)
-    {
-        var capacity = await db.Query("game_player")
-            .Select("inventory_capacity")
-            .Where("user_id", userId)
-            .FirstOrDefaultAsync<int?>(transaction);
-        if (capacity is null)
-        {
-            return null;
-        }
-
-        var used = (await db.Query("player_item")
-            .Select("slot")
-            .Where("user_id", userId).WhereNotNull("slot")
-            .GetAsync<int>(transaction)).ToHashSet();
-
-        for (var i = 0; i < capacity.Value; i++)
-        {
-            if (!used.Contains(i))
-            {
-                return i;
-            }
-        }
-
-        return null;
     }
 }

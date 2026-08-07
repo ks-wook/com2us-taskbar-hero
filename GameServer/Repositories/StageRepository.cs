@@ -389,22 +389,10 @@ public sealed class StageRepository : IStageRepository
         }
 
         // 새 칸이 필요: 점유 칸을 조회해 빈 칸을 찾는다.
-        var slotValues = await db.Query("player_item")
-            .Select("slot")
-            .Where("user_id", userId).WhereNotNull("slot")
-            .GetAsync<int>(transaction);
-
-        var used = new HashSet<int>(slotValues);
-
-        if (used.Count >= capacity)
+        var used = await InventorySlotAllocator.LoadUsedSlotsAsync(db, transaction, userId);
+        if (!InventorySlotAllocator.TryFirstFree(used, capacity, out int freeSlot))
         {
             return false; // 용량 초과
-        }
-
-        int freeSlot = 0;
-        while (used.Contains(freeSlot))
-        {
-            freeSlot++;
         }
 
         long newItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
