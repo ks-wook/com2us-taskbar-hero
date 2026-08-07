@@ -19,6 +19,8 @@ namespace TaskbarHero.Client.UI
     {
         [Header("UI 리소스 (Assets/Art/UI/Inventory)")]
         [SerializeField] private Sprite panelBackground; // ui_bg_2(스킬·룬 패널과 공용 프레임)
+        [Tooltip("하단 성장 진입 버튼(스킬·룬·큐브) 배경 아트(Assets/Art/UI/pixel_rpg_input_field.png, 9-slice). 없으면 슬롯 배경 + 단색으로 폴백.")]
+        [SerializeField] private Sprite growthButtonSprite; // pixel_rpg_input_field
         [SerializeField] private Sprite slotNormal;      // ui_slot_normal
         [SerializeField] private Sprite slotHighlight;   // ui_slot_highlight
         [SerializeField] private Sprite slotPortrait;    // ui_slot_portrait
@@ -357,31 +359,45 @@ namespace TaskbarHero.Client.UI
             BuildTooltip();
         }
 
+        // 성장 진입 버튼 줄의 기하. y는 패널 바닥에서 띄우는 높이로, 플레이 모드에서 직접 올려 확정한 값이다.
+        private const float GrowthButtonWidth = 210f;
+        private const float GrowthButtonHeight = 44f;
+        private const float GrowthButtonY = 82.30f;
+        private const float GrowthButtonGapX = 224f;  // 가운데(룬) 기준 좌우 간격
+
         /// <summary>성장 진입 버튼(스킬 레벨업·룬·큐브)을 패널 최하단(인벤토리 아이템 아래)에 가로 중앙으로 배치한다.
-        /// 가방 격자와 패널 바닥 사이 여백에 맞춰 낮은 높이로 두고, 바닥에서 <c>y</c>만큼 띄운다(겹침 방지).</summary>
+        /// 가방 격자와 패널 바닥 사이 여백에 맞춰 낮은 높이로 두고, 바닥에서 <see cref="GrowthButtonY"/>만큼 띄운다.</summary>
         private void BuildGrowthButtons(RectTransform container)
         {
-            const float w = 210f, h = 44f, y = 62f, dx = 224f;
-            var skillImg = NewImage("SkillButton", container, slotNormal);
-            skillImg.color = new Color(0.24f, 0.20f, 0.34f, 0.98f);
-            BottomCenter(skillImg.rectTransform, -dx, y, w, h);
+            var skillImg = NewGrowthButton("SkillButton", container, -GrowthButtonGapX,
+                new Color(0.24f, 0.20f, 0.34f, 0.98f));
             var skillLabel = NewText("SkillButtonLabel", skillImg.rectTransform, "스킬 레벨업", 24, TextAnchor.MiddleCenter);
             Stretch(skillLabel.rectTransform);
             _skillButton = skillImg.gameObject.AddComponent<Button>();
 
-            var runeImg = NewImage("RuneButton", container, slotNormal);
-            runeImg.color = new Color(0.30f, 0.22f, 0.16f, 0.98f);
-            BottomCenter(runeImg.rectTransform, 0f, y, w, h);
+            var runeImg = NewGrowthButton("RuneButton", container, 0f, new Color(0.30f, 0.22f, 0.16f, 0.98f));
             var runeLabel = NewText("RuneButtonLabel", runeImg.rectTransform, "룬", 24, TextAnchor.MiddleCenter);
             Stretch(runeLabel.rectTransform);
             _runeButton = runeImg.gameObject.AddComponent<Button>();
 
-            var cubeImg = NewImage("CubeButton", container, slotNormal);
-            cubeImg.color = new Color(0.42f, 0.28f, 0.16f, 0.98f);
-            BottomCenter(cubeImg.rectTransform, dx, y, w, h);
+            var cubeImg = NewGrowthButton("CubeButton", container, GrowthButtonGapX,
+                new Color(0.42f, 0.28f, 0.16f, 0.98f));
             var cubeLabel = NewText("CubeButtonLabel", cubeImg.rectTransform, "큐브", 24, TextAnchor.MiddleCenter);
             Stretch(cubeLabel.rectTransform);
             _cubeButton = cubeImg.gameObject.AddComponent<Button>();
+        }
+
+        /// <summary>성장 진입 버튼 한 칸의 배경 이미지를 만들고 자리를 잡는다.
+        /// 버튼 아트(<see cref="growthButtonSprite"/>)가 배선돼 있으면 <b>9-slice로 틴트 없이</b> 쓰고,
+        /// 없으면 종전처럼 슬롯 배경 + <paramref name="fallbackTint"/> 단색으로 폴백한다.</summary>
+        private Image NewGrowthButton(string name, RectTransform container, float x, Color fallbackTint)
+        {
+            bool hasArt = growthButtonSprite != null;
+            var img = NewImage(name, container, hasArt ? growthButtonSprite : slotNormal);
+            img.type = hasArt ? Image.Type.Sliced : Image.Type.Simple;
+            img.color = hasArt ? new Color(1f, 1f, 1f, 0.98f) : fallbackTint;
+            BottomCenter(img.rectTransform, x, GrowthButtonY, GrowthButtonWidth, GrowthButtonHeight);
+            return img;
         }
 
         // 보유 골드 블록의 표시 배율(1이면 원래 크기). 자식 좌표를 다시 잡지 않고 블록째로 줄인다.

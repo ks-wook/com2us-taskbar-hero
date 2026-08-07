@@ -25,7 +25,7 @@ namespace TaskbarHero.Client.UI
         private enum Mode { Combine, Dismantle, Craft, Enhance }
 
         [Header("UI 리소스 (Assets/Art/UI/Cube)")]
-        [SerializeField] private Sprite panelBackground; // cube_bg
+        [SerializeField] private Sprite panelBackground; // ui_bg_2(인벤토리·스킬·룬 패널과 공용 프레임)
         [SerializeField] private Sprite slotNormal;
         [SerializeField] private Sprite slotHighlight;
 

@@ -17,6 +17,8 @@ namespace TaskbarHero.ClientEditor
     public static class CubeUiBuilder
     {
         private const string ArtDir = "Assets/Art/UI/Cube";
+        // 패널 본체 배경 프레임(인벤토리·스킬·룬 패널과 같은 공용 프레임 — 전용 cube_bg에서 교체).
+        private const string PanelBgPath = "Assets/Art/UI/ui_bg_2.png";
         private const string HammerFxDir = "Assets/Art/Effect/UI/EquipEnhanceHammer";
         private const string BurstFxDir = "Assets/Art/Effect/UI/EnhanceSuccessBurst";
         private const string PrefabPath = "Assets/Prefabs/UI/CubePanel.prefab";
@@ -59,7 +61,7 @@ namespace TaskbarHero.ClientEditor
             var ctrl = root.AddComponent<CubePanelController>();
 
             var so = new SerializedObject(ctrl);
-            so.FindProperty("panelBackground").objectReferenceValue = LoadSprite("cube_bg");
+            so.FindProperty("panelBackground").objectReferenceValue = LoadSpriteAt(PanelBgPath);
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
             so.FindProperty("actionButtonSprite").objectReferenceValue = LoadSprite("pixel_rpg_button");

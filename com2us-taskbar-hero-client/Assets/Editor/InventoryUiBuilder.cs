@@ -18,6 +18,8 @@ namespace TaskbarHero.ClientEditor
         private const string ArtDir = "Assets/Art/UI/Inventory";
         // 패널 본체 배경 프레임(공용 아트 — 스킬·룬 패널과 같은 프레임을 쓴다).
         private const string PanelBgPath = "Assets/Art/UI/ui_bg_2.png";
+        // 하단 성장 진입 버튼(스킬·룬·큐브) 배경 아트.
+        private const string GrowthButtonPath = "Assets/Art/UI/pixel_rpg_input_field.png";
         // UI 프리팹은 Assets/Prefabs/ 아래 카테고리 폴더로 정리한다.
         private const string PrefabPath = "Assets/Prefabs/UI/InventoryPanel.prefab";
         private const string ItemSlotPrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
@@ -63,6 +65,7 @@ namespace TaskbarHero.ClientEditor
 
             var so = new SerializedObject(ctrl);
             so.FindProperty("panelBackground").objectReferenceValue = LoadSpriteAt(PanelBgPath);
+            so.FindProperty("growthButtonSprite").objectReferenceValue = LoadSpriteAt(GrowthButtonPath);
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
             so.FindProperty("slotPortrait").objectReferenceValue = LoadSprite("ui_slot_portrait");
