@@ -23,6 +23,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite panelBackground;
         [SerializeField] private Sprite slotNormal;
         [SerializeField] private Sprite slotHighlight;
+        [Tooltip("레벨업 버튼 배경 아트(Assets/Art/UI/ui_bg.png, 9-slice). 없으면 슬롯 배경으로 폴백.")]
+        [SerializeField] private Sprite upgradeButtonSprite; // ui_bg
 
         [Header("룬 아이콘(runeCode → 스프라이트, 에디터 빌더가 Assets/Art/Icon/Rune에서 배선)")]
         [SerializeField] private List<RuneIconEntry> _runeIcons = new List<RuneIconEntry>();
@@ -160,21 +162,33 @@ namespace TaskbarHero.Client.UI
             return rt;
         }
 
-        /// <summary>제목(중앙) + 보유 골드(좌상단) + 닫기(우상단).</summary>
+        // 헤더·상세 패널 배치. 배경 프레임(ui_bg_2)의 장식을 피해 플레이 모드에서 직접 옮겨 확정한 값이다
+        // (좌표는 패널/상세 패널 좌상단 기준, 아래로 +).
+        private const float GoldAreaX = 66f;
+        private const float GoldAreaY = 52f;
+        private const float DetailPanelX = 83.33f;
+        private const float DetailPanelY = 155f;
+        private const float DetailPanelWidth = 693.34f;
+        private const float DetailPanelHeight = 159.96f;   // 낮게 줄여 트리 영역을 넓혔다
+        private const float CostX = 402f;                  // 다음 레벨 비용 블록의 x(상세 패널 오른쪽 위)
+        private const float CostLabelY = 12f;
+        private const float CostIconY = 38f;
+        private const float CostTextY = 34f;
+        private const float UpgradeButtonX = -16f;         // 상세 패널 우하단 기준
+        private const float UpgradeButtonY = 81.96f;
+        private const float UpgradeButtonWidth = 150f;
+        private const float UpgradeButtonHeight = 88f;
+
+        /// <summary>보유 골드 표시만 둔다.
+        /// <b>제목("룬")과 닫기(X) 버튼은 만들지 않는다</b> — 제목 자리는 배경 아트(ui_bg_2)의 상단 장식판이
+        /// 그리고 있어 글자가 겹쳐 보이고, 닫기 버튼은 다른 패널과 같이 미관상 두지 않는다(딤 클릭으로 닫는다).
+        /// 위치는 플레이 모드에서 직접 옮겨 확정한 값이다.</summary>
         private void BuildHeader(RectTransform container)
         {
-            var title = NewText("Title", container, "룬", 46, TextAnchor.UpperCenter);
-            title.fontStyle = FontStyle.Bold;
-            var trt = title.rectTransform;
-            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
-            trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -32f);
-            trt.sizeDelta = new Vector2(400f, 60f);
-
-            // 보유 골드(좌상단)
+            // 보유 골드
             var goldBg = NewImage("GoldArea", container, null);
             goldBg.color = new Color(0f, 0f, 0f, 0.35f);
-            TopLeft(goldBg.rectTransform, 28f, 28f, 300f, 60f);
+            TopLeft(goldBg.rectTransform, GoldAreaX, GoldAreaY, 300f, 60f);
             var gi = NewImage("GoldIcon", goldBg.rectTransform, null);
             gi.raycastTarget = false;
             gi.preserveAspect = true;
@@ -182,17 +196,6 @@ namespace TaskbarHero.Client.UI
             _goldIcon = gi;
             _goldText = NewText("GoldText", goldBg.rectTransform, "0", 30, TextAnchor.MiddleLeft);
             TopLeft(_goldText.rectTransform, 64f, 8f, 224f, 44f);
-
-            // 닫기(우상단)
-            var closeImg = NewImage("CloseButton", container, slotNormal);
-            var crt = closeImg.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
-            crt.pivot = new Vector2(1f, 1f);
-            crt.anchoredPosition = new Vector2(-28f, -28f);
-            crt.sizeDelta = new Vector2(72f, 72f);
-            var x = NewText("X", crt, "X", 36, TextAnchor.MiddleCenter);
-            Stretch(x.rectTransform);
-            _closeButton = closeImg.gameObject.AddComponent<Button>();
         }
 
         /// <summary>선택 룬 상세(아이콘·이름·레벨·효과·다음 비용·레벨업 버튼).</summary>
@@ -200,7 +203,7 @@ namespace TaskbarHero.Client.UI
         {
             var bg = NewImage("DetailPanel", container, null);
             bg.color = new Color(0.08f, 0.09f, 0.14f, 0.96f);
-            TopLeft(bg.rectTransform, 40f, 104f, 780f, 216f); // DetailPanel 축소(트리 영역 확보)
+            TopLeft(bg.rectTransform, DetailPanelX, DetailPanelY, DetailPanelWidth, DetailPanelHeight);
 
             // 아이콘 타일(좌)
             var iconBg = NewImage("DetailIconBg", bg.rectTransform, slotNormal);
@@ -224,27 +227,29 @@ namespace TaskbarHero.Client.UI
             _detailEffect.color = new Color(0.82f, 0.86f, 0.95f);
             TopLeft(_detailEffect.rectTransform, 150f, 90f, 600f, 54f);
 
-            // 다음 레벨 비용(골드) — 하단 좌측
+            // 다음 레벨 비용(골드) — 상세 패널을 낮게 줄인 만큼 하단이 아니라 <b>오른쪽 위</b>로 옮겼다.
             var costLabel = NewText("CostLabel", bg.rectTransform, "다음 레벨", 22, TextAnchor.UpperLeft);
             costLabel.color = new Color(0.7f, 0.72f, 0.8f);
-            TopLeft(costLabel.rectTransform, 20f, 150f, 200f, 28f);
+            TopLeft(costLabel.rectTransform, CostX, CostLabelY, 200f, 28f);
             var ci = NewImage("DetailCostIcon", bg.rectTransform, null);
             ci.raycastTarget = false;
             ci.preserveAspect = true;
-            TopLeft(ci.rectTransform, 20f, 176f, 36f, 36f);
+            TopLeft(ci.rectTransform, CostX, CostIconY, 36f, 36f);
             _detailCostIcon = ci;
             _detailCostText = NewText("DetailCostText", bg.rectTransform, string.Empty, 28, TextAnchor.MiddleLeft);
             _detailCostText.fontStyle = FontStyle.Bold;
-            TopLeft(_detailCostText.rectTransform, 62f, 172f, 320f, 44f);
+            TopLeft(_detailCostText.rectTransform, CostX + 42f, CostTextY, 320f, 44f);
 
-            // 레벨업 버튼(우하단)
-            var btn = NewImage("UpgradeButton", bg.rectTransform, slotNormal);
+            // 레벨업 버튼(우하단). 버튼 아트(ui_bg 9-slice)가 배선돼 있으면 그것을 쓰고, 없으면 슬롯 배경으로 폴백한다.
+            bool hasBtnArt = upgradeButtonSprite != null;
+            var btn = NewImage("UpgradeButton", bg.rectTransform, hasBtnArt ? upgradeButtonSprite : slotNormal);
+            btn.type = hasBtnArt ? Image.Type.Sliced : Image.Type.Simple;
             btn.color = new Color(0.22f, 0.40f, 0.28f, 0.98f);
             var brt = btn.rectTransform;
             brt.anchorMin = brt.anchorMax = new Vector2(1f, 0f);
             brt.pivot = new Vector2(1f, 0f);
-            brt.anchoredPosition = new Vector2(-20f, 16f);
-            brt.sizeDelta = new Vector2(230f, 72f);
+            brt.anchoredPosition = new Vector2(UpgradeButtonX, UpgradeButtonY);
+            brt.sizeDelta = new Vector2(UpgradeButtonWidth, UpgradeButtonHeight);
             _upgradeLabel = NewText("UpgradeLabel", btn.rectTransform, "레벨업", 32, TextAnchor.MiddleCenter);
             _upgradeLabel.fontStyle = FontStyle.Bold;
             Stretch(_upgradeLabel.rectTransform);

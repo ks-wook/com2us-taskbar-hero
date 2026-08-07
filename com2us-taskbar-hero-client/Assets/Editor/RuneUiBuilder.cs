@@ -17,6 +17,8 @@ namespace TaskbarHero.ClientEditor
         private const string ArtDir = "Assets/Art/UI/Inventory";
         // 패널 본체 배경 프레임(인벤토리·스킬 패널과 같은 공용 프레임).
         private const string PanelBgPath = "Assets/Art/UI/ui_bg_2.png";
+        // 레벨업 버튼 배경(나무 프레임 9-slice).
+        private const string UpgradeButtonPath = "Assets/Art/UI/ui_bg.png";
         private const string PrefabPath = "Assets/Prefabs/UI/RunePanel.prefab";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
@@ -55,6 +57,7 @@ namespace TaskbarHero.ClientEditor
 
             var so = new SerializedObject(ctrl);
             so.FindProperty("panelBackground").objectReferenceValue = LoadSpriteAt(PanelBgPath);
+            so.FindProperty("upgradeButtonSprite").objectReferenceValue = LoadSpriteAt(UpgradeButtonPath);
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
             WireRuneIcons(so); // runeCode → Assets/Art/Icon/Rune 아이콘

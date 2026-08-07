@@ -23,6 +23,8 @@ namespace TaskbarHero.ClientEditor
         private const string PrefabPath = "Assets/Prefabs/UI/TradePanel.prefab";
         private const string ItemSlotPrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
         private const string ArtDir = "Assets/Art/UI/Trade";
+        // 창 본체 배경은 거래소 전용 프레임(window_frame) 대신 다른 패널과 같은 공용 프레임을 쓴다.
+        private const string PanelBgPath = "Assets/Art/UI/ui_bg_2.png";
         private const string TradeIconPath = ArtDir + "/거래소.png";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
@@ -167,7 +169,7 @@ namespace TaskbarHero.ClientEditor
 
             // EditorConstruct 전에 배선해 정적 계층이 아트를 바로 반영하게 한다.
             var so = new SerializedObject(ctrl);
-            so.FindProperty("_windowFrame").objectReferenceValue = Load("01_Frames_Panels/window_frame");
+            so.FindProperty("_windowFrame").objectReferenceValue = LoadSpriteAt(PanelBgPath);
             so.FindProperty("_panelParchment").objectReferenceValue = Load("01_Frames_Panels/panel_parchment");
             so.FindProperty("_panelWood").objectReferenceValue = Load("01_Frames_Panels/panel_wood");
             so.FindProperty("_tableHeader").objectReferenceValue = Load("01_Frames_Panels/bar_table_header");
@@ -212,13 +214,27 @@ namespace TaskbarHero.ClientEditor
         /// <summary>거래소 아트 폴더 기준 상대 경로로 스프라이트를 로드한다.</summary>
         private static Sprite Load(string relativePath)
         {
-            string path = $"{ArtDir}/{relativePath}.png";
+            return LoadSpriteAt($"{ArtDir}/{relativePath}.png");
+        }
+
+        /// <summary>에셋 경로에서 스프라이트를 로드한다(Single/Multiple 임포트 모두 대응 — Multiple이면
+        /// 메인 에셋이 Sprite가 아니므로 서브 스프라이트를 집는다).</summary>
+        private static Sprite LoadSpriteAt(string path)
+        {
             var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
-            if (sprite == null)
+            if (sprite != null)
             {
-                Debug.LogWarning($"[TradeUiBuilder] 스프라이트를 찾지 못했습니다: {path}");
+                return sprite;
             }
-            return sprite;
+            foreach (var obj in AssetDatabase.LoadAllAssetsAtPath(path))
+            {
+                if (obj is Sprite s)
+                {
+                    return s;
+                }
+            }
+            Debug.LogWarning($"[TradeUiBuilder] 스프라이트를 찾지 못했습니다: {path}");
+            return null;
         }
 
         /// <summary>씬의 UIManager에 거래소 패널을, GameScene이면 HUD에 거래소 아이콘도 함께 배선한다.</summary>

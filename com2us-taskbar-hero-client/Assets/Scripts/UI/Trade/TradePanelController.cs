@@ -31,21 +31,51 @@ namespace TaskbarHero.Client.UI.Trade
     {
         private const float CanvasRefWidth = 1080f;
         private const float CanvasRefHeight = 1920f;
-        // 행 내부 열 좌표(RowActionX + RowActionWidth = 990)가 잘리지 않을 만큼 폭을 잡는다.
-        // 행 폭 = PanelWidth − 목록 배경 여백(40×2) − 콘텐츠 여백(10×2) = PanelWidth − 100.
-        private const float PanelWidth = 1120f;   // → 행 폭 1020, '구매' 버튼 오른쪽 끝 990 (여유 30)
-        private const float PanelHeight = 1180f;
-        private const float ListInset = 40f;      // 창 안쪽 목록 영역 좌우 여백
-        private const float RowActionX = 860f;    // 구매/취소·선택 버튼 열 시작
+        private const float PanelWidth = 1120f;
+        private const float PanelHeight = 1310f;  // 플레이 모드에서 높인 값
+
+        /// <summary>창 안쪽 목록 영역의 좌우 여백. 배경 프레임(<c>ui_bg_2</c>)의 테두리는 원본 765px에서
+        /// 각 변 52px이라 폭 1120으로 늘리면 <b>좌우 각 ≈76 UI 단위</b>를 차지한다. 내용이 테두리에 닿지
+        /// 않도록 그보다 20 더 안쪽으로 들인다(76 + 20).</summary>
+        private const float ListInset = 96f;
+
+        /// <summary>프레임 상단 장식을 피해 창 안의 모든 줄(제목 리본·탭·검색줄·표 머리·목록)을 아래로
+        /// 내리는 양. 플레이 모드에서 내용을 통째로 내려 확정한 값이다.</summary>
+        private const float ContentTopShift = 187f;
+
+        // 행(=표 머리) 내부 열 좌표. 폭이 ListInset에 따라 달라지므로 <b>오른쪽 '거래' 열부터 왼쪽으로</b>
+        // 차례로 계산해 열이 서로 겹치거나 행 밖으로 나가지 않게 한다.
+        private const float RowWidth = PanelWidth - ListInset * 2f - 20f; // 908 (콘텐츠 여백 10×2 제외)
+        private const float RowNameX = 110f;      // 아이템 이름 열(아이콘 칸 20~92 오른쪽)
         private const float RowActionWidth = 130f;
-        private const float SearchRowY = 178f;    // 창 상단에서 검색줄까지
+        private const float RowActionX = RowWidth - 30f - RowActionWidth;  // 748 — 오른쪽 끝에서 여유 30
+        private const float RowPriceWidth = 150f;
+        private const float RowPriceX = RowActionX - 20f - RowPriceWidth;  // 578
+        private const float RowCoinSize = 28f;
+        private const float RowCoinX = RowPriceX - RowCoinSize;            // 550 — 가격 왼쪽에 붙는 코인 아이콘
+        private const float RowQtyWidth = 100f;
+        private const float RowQtyX = RowCoinX - 12f - RowQtyWidth;        // 438
+        private const float RowNameWidth = RowQtyX - 12f - RowNameX;       // 316
+        private const float RowRangeX = RowQtyX;                           // 판매 등록 탭: 시세 범위 열
+        private const float RowRangeWidth = RowActionX - 20f - RowRangeX;  // 290
+
+        private const float SearchRowY = 178f + ContentTopShift; // 창 상단에서 검색줄까지
+        // 보유 골드 블록 자리(창 좌상단 기준, 아래로 +). 플레이 모드에서 오른쪽 위로 옮겨 확정한 값.
+        private const float GoldAreaX = 730f;
+        private const float GoldAreaY = 71f;
+        // 표 머리 / 목록 영역의 y. 표 머리는 위에서, 목록은 위·아래 여백으로 잡는다(내용 하향분 포함).
+        private const float TableHeaderY = 252f + ContentTopShift;   // 439
+        private const float ListTopMargin = 304f + ContentTopShift;  // 491 — 표 머리 아래
+        private const float ListBottomMargin = 200f - ContentTopShift; // 13 — 창 바닥까지
+        private const float SellListTopMargin = 186f + ContentTopShift;   // 373
+        private const float SellListBottomMargin = 320f - ContentTopShift; // 133
         private const float SearchButtonWidth = 160f;
         private const float TabWidth = 230f;      // 상단 탭 버튼 폭
         private const float TabGap = 12f;         // 탭 사이 간격
         private const float RowHeight = 96f;
         // 한 페이지 행 수는 목록 뷰포트 안에 다 들어가는 값으로 잡는다(스크롤 없이 한눈에 보이게).
-        // 뷰포트 676 = 패널 1180 − 아래 200(페이지·메시지) − 위 304(헤더까지).
-        // 6행 = 6×96 + 5×8(간격) + 20(위아래 여백) = 636 ≤ 676.
+        // 뷰포트 806 = 패널 1310 − 아래 13(ListBottom) − 위 491(ListTop, 표 머리까지 + 내용 하향 187).
+        // 6행 = 6×96 + 5×8(간격) + 20(위아래 여백) = 636 ≤ 806.
         private const int PageSize = 6;
         private const int GoldCurrencyType = 1;  // 재화 타입 1 = 골드
         private const int GoldItemCode = 1;      // item_master 골드 코드(아이콘 item_1)
@@ -53,7 +83,7 @@ namespace TaskbarHero.Client.UI.Trade
         private const float PriceMaxRate = 1.2f;
 
         [Header("UI 리소스 (Assets/Art/UI/Trade — 에디터 빌더가 배선)")]
-        [SerializeField] private Sprite _windowFrame;      // window_frame
+        [SerializeField] private Sprite _windowFrame;      // ui_bg_2(인벤토리·스킬·룬·큐브 패널과 공용 프레임)
         [SerializeField] private Sprite _panelParchment;   // panel_parchment (목록 배경)
         [SerializeField] private Sprite _panelWood;        // panel_wood (하단 폼)
         [SerializeField] private Sprite _tableHeader;      // bar_table_header
@@ -210,7 +240,9 @@ namespace TaskbarHero.Client.UI.Trade
             return rt;
         }
 
-        /// <summary>상단 타이틀 리본과 닫기 버튼.</summary>
+        /// <summary>상단 타이틀 리본. <b>닫기(X) 버튼은 두지 않는다</b> — 다른 패널과 같이 미관상 제거했고
+        /// 창 밖(딤) 클릭으로 닫는다. 리본 위치는 배경 프레임의 상단 장식을 피해 아래로 내렸다
+        /// (<see cref="ContentTopShift"/>).</summary>
         private void BuildHeader(RectTransform panel)
         {
             var ribbon = NewImage("TitleBanner", panel, new Color(0.45f, 0.30f, 0.16f, 1f));
@@ -218,39 +250,25 @@ namespace TaskbarHero.Client.UI.Trade
             var brt = ribbon.rectTransform;
             brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 1f);
             brt.pivot = new Vector2(0.5f, 1f);
-            brt.anchoredPosition = new Vector2(0f, -8f);
+            brt.anchoredPosition = new Vector2(0f, -(8f + ContentTopShift));
             brt.sizeDelta = new Vector2(420f, 76f);
 
             var title = NewText("Title", brt, "거래소", 40, TextAnchor.MiddleCenter);
             title.fontStyle = FontStyle.Bold;
             title.color = new Color(1f, 0.92f, 0.72f);
             Stretch(title.rectTransform);
-
-            var close = NewImage("CloseButton", panel, new Color(0.5f, 0.18f, 0.15f, 1f));
-            ApplySimple(close, _btnClose);
-            var crt = close.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
-            crt.pivot = new Vector2(1f, 1f);
-            crt.anchoredPosition = new Vector2(-26f, -26f);
-            crt.sizeDelta = new Vector2(54f, 54f);
-            if (_btnClose == null)
-            {
-                var xt = NewText("X", crt, "X", 30, TextAnchor.MiddleCenter);
-                Stretch(xt.rectTransform);
-            }
-            _closeButton = close.gameObject.AddComponent<Button>();
         }
 
-        /// <summary>좌상단 보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 인벤토리 패널과 같은 규격·표기이며,
+        /// <summary>보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 인벤토리 패널과 같은 규격·표기이며,
         /// 아이콘·수량은 런타임에 세션 재화에서 채운다(<see cref="RefreshGold"/>).
-        /// 탭 줄(y 96~162) 위에 놓이도록 높이를 84까지만 쓴다.</summary>
+        /// 자리는 플레이 모드에서 옮겨 확정한 값으로, 창 <b>오른쪽 위</b>(제목 리본 옆)에 둔다.</summary>
         private void BuildGoldArea(RectTransform panel)
         {
             var area = NewImage("GoldArea", panel, new Color(0f, 0f, 0f, 0.35f));
             var art = area.rectTransform;
             art.anchorMin = art.anchorMax = new Vector2(0f, 1f);
             art.pivot = new Vector2(0f, 1f);
-            art.anchoredPosition = new Vector2(36f, -28f);
+            art.anchoredPosition = new Vector2(GoldAreaX, -GoldAreaY);
             art.sizeDelta = new Vector2(280f, 56f);
             area.raycastTarget = false;
 
@@ -296,7 +314,7 @@ namespace TaskbarHero.Client.UI.Trade
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
             rt.pivot = new Vector2(0.5f, 1f);
-            rt.anchoredPosition = new Vector2(offsetX, -96f);
+            rt.anchoredPosition = new Vector2(offsetX, -(96f + ContentTopShift));
             rt.sizeDelta = new Vector2(TabWidth, 66f);
             var t = NewText("Label", rt, label, 30, TextAnchor.MiddleCenter);
             t.fontStyle = FontStyle.Bold;
@@ -348,20 +366,20 @@ namespace TaskbarHero.Client.UI.Trade
             hrt.offsetMin = new Vector2(ListInset + 10f, 0f);
             hrt.offsetMax = new Vector2(-(ListInset + 10f), 0f);
             hrt.sizeDelta = new Vector2(hrt.sizeDelta.x, 48f);
-            hrt.anchoredPosition = new Vector2(0f, -252f);
-            AddHeaderLabel(hrt, "아이템", 150f, 380f, TextAnchor.MiddleLeft);
-            AddHeaderLabel(hrt, "수량", 540f, 110f, TextAnchor.MiddleCenter);
-            AddHeaderLabel(hrt, "가격", 660f, 160f, TextAnchor.MiddleRight);
+            hrt.anchoredPosition = new Vector2(0f, -TableHeaderY);
+            AddHeaderLabel(hrt, "아이템", RowNameX, RowNameWidth, TextAnchor.MiddleLeft);
+            AddHeaderLabel(hrt, "수량", RowQtyX, RowQtyWidth, TextAnchor.MiddleCenter);
+            AddHeaderLabel(hrt, "가격", RowPriceX, RowPriceWidth, TextAnchor.MiddleRight);
             AddHeaderLabel(hrt, "거래", RowActionX, RowActionWidth, TextAnchor.MiddleCenter);
 
-            // 목록 영역(양피지 배경 + 세로 레이아웃).
-            var listBg = NewImage("ListBackground", root, new Color(0.82f, 0.74f, 0.55f, 1f));
-            ApplySliced(listBg, _panelParchment);
+            // 목록 영역. 배경(양피지)은 깔지 않고 <b>투명</b>하게 둔다 — 창 배경 프레임(ui_bg_2)의 어두운
+            // 내부가 그대로 보이게 하려는 것이며, 마스크·스크롤 기능 때문에 오브젝트 자체는 남긴다.
+            var listBg = NewImage("ListBackground", root, new Color(1f, 1f, 1f, 0f));
             var lbrt = listBg.rectTransform;
             lbrt.anchorMin = new Vector2(0f, 0f);
             lbrt.anchorMax = new Vector2(1f, 1f);
-            lbrt.offsetMin = new Vector2(ListInset, 200f);
-            lbrt.offsetMax = new Vector2(-ListInset, -304f);
+            lbrt.offsetMin = new Vector2(ListInset, ListBottomMargin);
+            lbrt.offsetMax = new Vector2(-ListInset, -ListTopMargin);
             listBg.gameObject.AddComponent<RectMask2D>();
 
             var contentGo = new GameObject("Content", typeof(RectTransform));
@@ -417,8 +435,8 @@ namespace TaskbarHero.Client.UI.Trade
             var lbrt = listBg.rectTransform;
             lbrt.anchorMin = new Vector2(0f, 0f);
             lbrt.anchorMax = new Vector2(1f, 1f);
-            lbrt.offsetMin = new Vector2(ListInset, 320f);
-            lbrt.offsetMax = new Vector2(-ListInset, -186f);
+            lbrt.offsetMin = new Vector2(ListInset, SellListBottomMargin);
+            lbrt.offsetMax = new Vector2(-ListInset, -SellListTopMargin);
             listBg.gameObject.AddComponent<RectMask2D>();
 
             var contentGo = new GameObject("Content", typeof(RectTransform));
@@ -693,22 +711,22 @@ namespace TaskbarHero.Client.UI.Trade
             var nameText = NewText("Name", rt, itemName, 26, TextAnchor.MiddleLeft);
             nameText.color = GradeColors.IconFallback(def != null ? def.grade : 1);
             nameText.fontStyle = FontStyle.Bold;
-            PlaceMiddleLeft(nameText.rectTransform, 150f, 380f, 40f);
+            PlaceMiddleLeft(nameText.rectTransform, RowNameX, RowNameWidth, 40f);
 
             var qtyText = NewText("Quantity", rt, listing.quantity > 1 ? $"x{listing.quantity}" : "-", 26, TextAnchor.MiddleCenter);
             qtyText.color = new Color(0.28f, 0.21f, 0.13f);
-            PlaceMiddleLeft(qtyText.rectTransform, 540f, 110f, 40f);
+            PlaceMiddleLeft(qtyText.rectTransform, RowQtyX, RowQtyWidth, 40f);
 
             var priceText = NewText("Price", rt, $"{listing.price:N0}", 26, TextAnchor.MiddleRight);
             priceText.color = new Color(0.55f, 0.38f, 0.08f);
             priceText.fontStyle = FontStyle.Bold;
-            PlaceMiddleLeft(priceText.rectTransform, 660f, 160f, 40f);
+            PlaceMiddleLeft(priceText.rectTransform, RowPriceX, RowPriceWidth, 40f);
 
             if (_iconCoin != null)
             {
                 var coin = NewImage("Coin", rt, Color.white);
                 ApplySimple(coin, _iconCoin);
-                PlaceMiddleLeft(coin.rectTransform, 632f, 28f, 28f);
+                PlaceMiddleLeft(coin.rectTransform, RowCoinX, RowCoinSize, RowCoinSize);
             }
 
             // 남의 등록 = 구매, 내 등록 = 취소.
@@ -936,11 +954,11 @@ namespace TaskbarHero.Client.UI.Trade
             var nameText = NewText("Name", rt, label, 26, TextAnchor.MiddleLeft);
             nameText.color = GradeColors.IconFallback(def.grade);
             nameText.fontStyle = FontStyle.Bold;
-            PlaceMiddleLeft(nameText.rectTransform, 110f, 420f, 40f);
+            PlaceMiddleLeft(nameText.rectTransform, RowNameX, RowNameWidth, 40f);
 
             var rangeText = NewText("Range", rt, PriceRangeLabel(def.basePrice), 22, TextAnchor.MiddleRight);
             rangeText.color = new Color(0.40f, 0.30f, 0.14f);
-            PlaceMiddleLeft(rangeText.rectTransform, 540f, 280f, 36f);
+            PlaceMiddleLeft(rangeText.rectTransform, RowRangeX, RowRangeWidth, 36f);
 
             var pick = NewImage("PickButton", rt, new Color(0.24f, 0.40f, 0.62f, 1f));
             ApplySliced(pick, _btnBlue);

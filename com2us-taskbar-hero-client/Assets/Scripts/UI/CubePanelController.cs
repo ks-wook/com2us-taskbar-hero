@@ -85,9 +85,6 @@ namespace TaskbarHero.Client.UI
         /// 바 자체를 중앙에 두면 눈에는 왼쪽으로 치우쳐 보인다.</summary>
         private const float LevelBarLeft = 200f;
 
-        /// <summary>보유 골드 표시의 배율(제목보다 작게 보이도록 통째로 축소).</summary>
-        private const float GoldAreaScale = 0.7f;
-
         /// <summary>채움 막대가 프레임 테두리를 덮지 않도록 안쪽으로 들이는 여백(프레임 테두리 두께).</summary>
         private const float ExpFillInset = 6f;
 
@@ -102,8 +99,14 @@ namespace TaskbarHero.Client.UI
         // 실행바·문구를 덮거나(넘침) 반대로 0에 가깝게 눌려 아무것도 안 보이므로, 위·아래·좌우 여백만 정하고
         // **PanelRoot 크기에 맞춰 늘어나도록** 앵커로 잡는다(사용자가 프리팹에서 패널 크기를 조절해도 따라온다).
         private const float ContentSideMargin = 40f;   // 좌우 여백(폭 820 기준 내용 폭 740)
-        private const float ContentTopMargin = 260f;   // 제목·탭·큐브 레벨바가 차지하는 상단
-        private const float ContentBottomMargin = 260f; // 실행 버튼(150~246)·하단 문구가 차지하는 하단
+        private const float ContentTopMargin = 289f;   // 탭·큐브 레벨바가 차지하는 상단
+        private const float ContentBottomMargin = 231f; // 실행 버튼·하단 문구가 차지하는 하단
+
+        // 각 줄의 y 좌표. 배경 프레임(ui_bg_2)의 장식을 피해 플레이 모드에서 직접 옮겨 확정한 값이다.
+        private const float TabRowY = 158.50f;       // 탭 줄(패널 위에서 아래로 +)
+        private const float LevelBarY = 225.30f;     // 큐브 레벨·경험치 바(위에서 아래로 +)
+        private const float ActionButtonY = 116f;    // 실행 버튼(패널 바닥에서 위로 +)
+        private const float FooterY = 45.90f;        // 하단 문구(바닥에서 위로 +)
 
         private Font _font;
         private RectTransform _rootRect;
@@ -189,7 +192,8 @@ namespace TaskbarHero.Client.UI
             BuildCanvas();
             BuildDim();
             var container = BuildContainer();
-            BuildHeader(container);
+            // 제목("큐브")·보유 골드 블록은 두지 않는다 — 배경 아트(ui_bg_2)의 상단 장식판과 겹쳐 보여 제거했다
+            // (골드 갱신 경로는 남겨 두므로 블록을 되살리면 그대로 동작한다 — RefreshGold의 null 가드).
             BuildTabs(container);
             BuildLevelBar(container);
             BuildContentArea(container);
@@ -247,33 +251,9 @@ namespace TaskbarHero.Client.UI
             return rt;
         }
 
-        /// <summary>제목(중앙) + 보유 골드(좌상단) + 닫기(우상단).</summary>
-        private void BuildHeader(RectTransform container)
-        {
-            var title = NewText("Title", container, "큐브", 46, TextAnchor.UpperCenter);
-            title.fontStyle = FontStyle.Bold;
-            var trt = title.rectTransform;
-            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
-            trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -45f);
-            trt.sizeDelta = new Vector2(400f, 60f);
-
-            var goldBg = NewImage("GoldArea", container, null);
-            goldBg.color = new Color(0f, 0f, 0f, 0.35f);
-            TopLeft(goldBg.rectTransform, 28f, 52f, 300f, 60f);
-            // 제목보다 작게 보이도록 통째로 줄인다(아이콘·글자 크기를 각각 다시 잡지 않는다).
-            goldBg.rectTransform.localScale = new Vector3(GoldAreaScale, GoldAreaScale, 1f);
-            var gi = NewImage("GoldIcon", goldBg.rectTransform, null);
-            gi.raycastTarget = false;
-            gi.preserveAspect = true;
-            TopLeft(gi.rectTransform, 8f, 6f, 48f, 48f);
-            _goldIcon = gi;
-            _goldText = NewText("GoldText", goldBg.rectTransform, "0", 30, TextAnchor.MiddleLeft);
-            TopLeft(_goldText.rectTransform, 64f, 8f, 224f, 44f);
-
-            // 닫기(X) 버튼은 미관상 두지 않는다 — 창은 가방 하단의 '큐브' 버튼을 다시 눌러 닫는다
-            // (UIManager.ToggleCube). 스테이지·가방 창과 같은 규칙이다.
-        }
+        // 제목·보유 골드 블록은 만들지 않는다(배경 아트의 상단 장식판과 겹쳐 제거 — Construct 참고).
+        // 닫기(X) 버튼도 미관상 두지 않는다 — 창은 가방 하단의 '큐브' 버튼을 다시 눌러 닫는다
+        // (UIManager.ToggleCube). 스테이지·가방 창과 같은 규칙이다.
 
         /// <summary>합성/연금술/제작/강화 탭 버튼 4개(가로 배치). 네 칸이 내용 영역 폭(740) 안에 들어가도록
         /// 칸 폭을 <see cref="TabWidth"/>로 좁혀 균등 배치한다.</summary>
@@ -295,8 +275,12 @@ namespace TaskbarHero.Client.UI
 
         private Button BuildTab(RectTransform container, string name, string label, float x)
         {
-            var img = NewImage(name, container, slotNormal);
-            TopLeft(img.rectTransform, x, 108f, TabWidth, 64f);
+            // 탭 배경도 실행 버튼과 같은 공용 버튼 아트(9-slice)를 쓴다. 색은 선택 상태에 따라
+            // RefreshTabs/SetTabActive가 런타임에 덮어쓰므로 여기서는 지정하지 않는다.
+            bool hasArt = actionButtonSprite != null;
+            var img = NewImage(name, container, hasArt ? actionButtonSprite : slotNormal);
+            img.type = hasArt ? Image.Type.Sliced : Image.Type.Simple;
+            TopLeft(img.rectTransform, x, TabRowY, TabWidth, 64f);
             var t = NewText("Label", img.rectTransform, label, 30, TextAnchor.MiddleCenter);
             t.fontStyle = FontStyle.Bold;
             Stretch(t.rectTransform);
@@ -314,7 +298,7 @@ namespace TaskbarHero.Client.UI
         {
             var bg = NewImage("CubeLevelBar", container, null);
             bg.color = new Color(0f, 0f, 0f, 0.35f);
-            TopLeft(bg.rectTransform, LevelBarLeft, 188f, LevelBarWidth, LevelBarHeight);
+            TopLeft(bg.rectTransform, LevelBarLeft, LevelBarY, LevelBarWidth, LevelBarHeight);
 
             _levelText = NewText("CubeLevel", bg.rectTransform, "Lv.1", 28, TextAnchor.MiddleLeft);
             _levelText.fontStyle = FontStyle.Bold;
@@ -364,7 +348,7 @@ namespace TaskbarHero.Client.UI
             var brt = btn.rectTransform;
             brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 0f);
             brt.pivot = new Vector2(0.5f, 0f);
-            brt.anchoredPosition = new Vector2(0f, 150f);
+            brt.anchoredPosition = new Vector2(0f, ActionButtonY);
             brt.sizeDelta = new Vector2(320f, 96f);
             _actionLabel = NewText("ActionLabel", brt, "합성", 34, TextAnchor.MiddleCenter);
             _actionLabel.fontStyle = FontStyle.Bold;
@@ -379,7 +363,7 @@ namespace TaskbarHero.Client.UI
             frt.anchorMin = frt.anchorMax = new Vector2(0.5f, 0f);
             frt.pivot = new Vector2(0.5f, 0f);
             frt.sizeDelta = new Vector2(760f, 96f);
-            frt.anchoredPosition = new Vector2(0f, 44f);
+            frt.anchoredPosition = new Vector2(0f, FooterY);
 
             _messageText = NewText("Message", container, string.Empty, 24, TextAnchor.MiddleCenter);
             _messageText.color = new Color(1f, 0.7f, 0.55f);
