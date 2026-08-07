@@ -25,6 +25,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite slotHighlight;   // ui_slot_highlight
         [Tooltip("캐릭터 전환 버튼 아트(Assets/Art/UI/화살표버튼.png). 오른쪽을 가리키는 그림이라 이전 버튼은 좌우 반전해 쓴다. 없으면 슬롯 배경 + '<'/'>' 글자로 폴백.")]
         [SerializeField] private Sprite charNavArrow;    // 화살표버튼
+        [Tooltip("하단 '스킬 초기화' 버튼 아트(Assets/Art/UI/pixel_rpg_button.png, 9-slice). 없으면 슬롯 배경으로 폴백.")]
+        [SerializeField] private Sprite buttonSprite;    // pixel_rpg_button
 
         [Header("구성 참조 (에디터 빌더가 배선 — 직접 수정 불필요)")]
         [SerializeField] private Text _charIndicatorText;   // 직업 Lv.N · 캐릭터 i/N
@@ -127,7 +129,7 @@ namespace TaskbarHero.Client.UI
             BuildCanvas();
             BuildDim();
             var container = BuildContainer();
-            BuildHeader(container);
+            // 제목 텍스트("스킬 레벨업")는 두지 않는다 — 배경 아트(ui_bg_2)의 상단 장식판과 겹쳐 보여 제거했다.
             BuildCharacterNav(container);
             BuildPointBanner(container);
             BuildEquipSlots(container);
@@ -232,20 +234,19 @@ namespace TaskbarHero.Client.UI
             return rt;
         }
 
-        /// <summary>제목(가로 중앙). 닫기(X) 버튼은 두지 않는다 — 다른 패널들과 같이 미관상 제거했고
-        /// 패널 밖(Dim) 클릭으로만 닫는다.</summary>
-        private void BuildHeader(RectTransform container)
-        {
-            var title = NewText("Title", container, "스킬 레벨업", 46, TextAnchor.UpperCenter);
-            title.fontStyle = FontStyle.Bold;
-            var trt = title.rectTransform;
-            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
-            trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -50f);
-            trt.sizeDelta = new Vector2(500f, 60f);
-        }
+        // 각 섹션의 y 위치·폭. 플레이 모드에서 직접 옮겨 확정한 값이다(패널 상단 기준, 아래로 −).
+        private const float CharNavY = -156.70f;      // 캐릭터 전환 줄
+        private const float NavPrevX = 152f;          // 이전(◀) 화살표 x(줄 좌상단 기준)
+        private const float NavNextX = 617f;          // 다음(▶) 화살표 x
+        private const float PointBannerY = -228.70f;  // 스킬 포인트 배너
+        private const float PointBannerWidth = 461.84f; // 배너 폭(글자 길이에 맞춰 좁혔다)
+        private const float EquipSlotsY = -317.20f;   // 장착 액티브 스킬 영역
+        private const float ListAreaY = -460f;        // 스킬 목록 영역
+        private const float ResetButtonY = 90f;       // 하단 초기화 버튼(패널 바닥 기준, 위로 +)
 
-        /// <summary>캐릭터 전환 네비게이션(◀ 직업 Lv.N · 캐릭터 i/N ▶).</summary>
+        /// <summary>캐릭터 전환 네비게이션(◀ 직업 Lv.N · 캐릭터 i/N ▶).
+        /// 좌표는 플레이 모드에서 직접 옮겨 확정한 값 — 줄 전체를 아래로 내리고(<see cref="CharNavY"/>)
+        /// 화살표는 블록 양 끝이 아니라 글자 옆으로 좁혀 붙였다.</summary>
         private void BuildCharacterNav(RectTransform container)
         {
             const float width = 760f;
@@ -253,10 +254,10 @@ namespace TaskbarHero.Client.UI
             area.anchorMin = area.anchorMax = new Vector2(0.5f, 1f);
             area.pivot = new Vector2(0.5f, 1f);
             area.sizeDelta = new Vector2(width, 72f);
-            area.anchoredPosition = new Vector2(38f, -120f);
+            area.anchoredPosition = new Vector2(0f, CharNavY);
 
             var prev = BuildNavArrow("PrevCharButton", area, "<", flip: true);
-            TopLeft(prev.rectTransform, 0f, 0f, 72f, 72f);
+            TopLeft(prev.rectTransform, NavPrevX, 0f, 72f, 72f);
             _prevButton = prev.gameObject.AddComponent<Button>();
             AddPunch(prev);
 
@@ -265,7 +266,7 @@ namespace TaskbarHero.Client.UI
             TopLeft(_charIndicatorText.rectTransform, 84f, 0f, width - 168f, 72f);
 
             var next = BuildNavArrow("NextCharButton", area, ">", flip: false);
-            TopLeft(next.rectTransform, width - 72f, 0f, 72f, 72f);
+            TopLeft(next.rectTransform, NavNextX, 0f, 72f, 72f);
             _nextButton = next.gameObject.AddComponent<Button>();
             AddPunch(next);
         }
@@ -303,14 +304,13 @@ namespace TaskbarHero.Client.UI
         /// <summary>사용 가능 스킬 포인트 배너(캐릭터 레벨에서 파생).</summary>
         private void BuildPointBanner(RectTransform container)
         {
-            const float width = 760f;
             var bg = NewImage("PointBanner", container, null);
             bg.color = new Color(0.12f, 0.10f, 0.06f, 0.95f);
             var rt = bg.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
             rt.pivot = new Vector2(0.5f, 1f);
-            rt.sizeDelta = new Vector2(width, 76f);
-            rt.anchoredPosition = new Vector2(0f, -208f);
+            rt.sizeDelta = new Vector2(PointBannerWidth, 76f);
+            rt.anchoredPosition = new Vector2(0f, PointBannerY);
 
             _pointText = NewText("PointText", bg.rectTransform, "스킬 포인트  0 / 0", 34, TextAnchor.MiddleCenter);
             _pointText.fontStyle = FontStyle.Bold;
@@ -326,7 +326,7 @@ namespace TaskbarHero.Client.UI
             area.anchorMin = area.anchorMax = new Vector2(0.5f, 1f);
             area.pivot = new Vector2(0.5f, 1f);
             area.sizeDelta = new Vector2(width, 150f);
-            area.anchoredPosition = new Vector2(0f, -296f);
+            area.anchoredPosition = new Vector2(0f, EquipSlotsY);
 
             // 영역 안의 내용물(제목·슬롯 2칸·이름)은 가로 중앙 정렬한다.
             var label = NewText("EquipTitle", area, "장착 액티브 스킬 (최대 2)", 26, TextAnchor.UpperCenter);
@@ -382,7 +382,7 @@ namespace TaskbarHero.Client.UI
             area.anchorMin = area.anchorMax = new Vector2(0.5f, 1f);
             area.pivot = new Vector2(0.5f, 1f);
             area.sizeDelta = new Vector2(width, height);
-            area.anchoredPosition = new Vector2(0f, -452f);
+            area.anchoredPosition = new Vector2(0f, ListAreaY);
 
             // 스크롤 뷰(좌측, 스크롤바 폭만큼 좁힘)
             var scrollGo = NewImage("SkillScroll", area, null);
@@ -461,13 +461,19 @@ namespace TaskbarHero.Client.UI
             mrt.sizeDelta = new Vector2(760f, 40f);
             mrt.anchoredPosition = new Vector2(0f, 130f);
 
-            var resetImg = NewImage("ResetButton", container, slotNormal);
-            resetImg.color = new Color(0.35f, 0.20f, 0.22f, 0.98f);
+            // 버튼 아트는 공용 pixel_rpg_button(9-slice) — 다른 패널 버튼과 외형을 맞췄다.
+            // 미배선 시에는 종전처럼 슬롯 배경 + 붉은 톤으로 폴백한다.
+            bool hasButtonArt = buttonSprite != null;
+            var resetImg = NewImage("ResetButton", container, hasButtonArt ? buttonSprite : slotNormal);
+            resetImg.type = hasButtonArt ? Image.Type.Sliced : Image.Type.Simple;
+            resetImg.color = hasButtonArt
+                ? new Color(0.629f, 0.629f, 0.629f, 0.98f)
+                : new Color(0.35f, 0.20f, 0.22f, 0.98f);
             var rrt = resetImg.rectTransform;
             rrt.anchorMin = rrt.anchorMax = new Vector2(0.5f, 0f);
             rrt.pivot = new Vector2(0.5f, 0f);
             rrt.sizeDelta = new Vector2(360f, 80f);
-            rrt.anchoredPosition = new Vector2(0f, 40f);
+            rrt.anchoredPosition = new Vector2(0f, ResetButtonY);
             _resetLabel = NewText("ResetLabel", resetImg.rectTransform, "스킬 초기화 (무료)", 30, TextAnchor.MiddleCenter);
             Stretch(_resetLabel.rectTransform);
             _resetButton = resetImg.gameObject.AddComponent<Button>();
