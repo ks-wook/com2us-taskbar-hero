@@ -1,0 +1,933 @@
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.UI;
+
+/// <summary>
+/// <see cref="CharacterDevController"/>의 하네스 UI(기획서 §5 "하네스 UI 구성").
+/// 화면을 세 갈래로 나눈다 — 좌: 몬스터 목록 / 중앙: 미리보기·애니메이션 검수 / 우: 능력치·외형 패널.
+/// <para>로직부와 같은 클래스의 partial이며, UI를 만드는 코드가 길어 파일만 분리했다.</para>
+/// </summary>
+public partial class CharacterDevController
+{
+    private static readonly Color PanelBg = new Color(0.07f, 0.08f, 0.11f, 0.92f);
+    private static readonly Color RowNormal = new Color(0.18f, 0.20f, 0.26f, 0.95f);
+    private static readonly Color RowSelected = new Color(0.24f, 0.45f, 0.72f, 1f);
+    private static readonly Color ButtonColor = new Color(0.22f, 0.26f, 0.34f, 1f);
+    private static readonly Color ButtonPrimary = new Color(0.20f, 0.42f, 0.30f, 1f);
+    private static readonly Color TitleColor = new Color(1f, 0.87f, 0.45f);
+    private static readonly Color HintColor = new Color(0.75f, 0.78f, 0.85f);
+    private static readonly Color WarnColor = new Color(0.98f, 0.80f, 0.30f);
+
+    /// <summary>계열(race)별 이름 후보 — 자동 생성이 아니라 고르면 입력란을 채우는 목록이다(§4.3).</summary>
+    private static readonly Dictionary<string, string[]> NameCandidates = new Dictionary<string, string[]>
+    {
+        { "undead", new[] { "스켈레톤 병사", "스켈레톤 궁수", "구울", "리치", "본나이트" } },
+        { "devil", new[] { "임프", "데몬", "마계 기사", "서큐버스", "발록" } },
+        { "human", new[] { "타락한 병사", "광신도", "도적", "흑마법사", "배교자" } },
+        { "orc", new[] { "오크 전사", "오크 주술사", "오우거" } },
+        { "elf", new[] { "숲의 파수꾼", "다크엘프 궁수" } },
+        { "highelf", new[] { "타락한 대천사", "빛의 배신자" } },
+    };
+
+    /// <summary>좌측 패널이 지금 무엇을 보여 주는지 — 몬스터 목록 / 파츠 고르기(커스텀 외형).</summary>
+    private enum LeftTab
+    {
+        Monsters,
+        Parts,
+    }
+
+    /// <summary>커스텀 외형에서 고를 수 있는 파트(조합 순서와 같다).</summary>
+    private static readonly string[] SelectableParts =
+    {
+        "Body", "Eye", "Hair", "FaceHair", "Cloth", "Pant", "Armor", "Helmet", "Weapons", "Back",
+    };
+
+    private LeftTab _leftTab = LeftTab.Monsters;
+    private string _selectedPart = "Body";
+    private readonly List<(LeftTab Tab, Image Bg)> _tabRows = new List<(LeftTab, Image)>();
+
+    private GameObject _canvasGo;
+    private Text _statusText;
+    private Text _logText;
+    private RectTransform _listContent;
+    private InputField _nameInput;
+    private InputField _hpInput;
+    private InputField _atkInput;
+    private Text _diffText;
+    private Text _codeText;
+    private Text _recipeText;
+    private Text _appearanceText;
+    private Text _batchTargetText;
+    private RectTransform _nameCandidateRow;
+
+    private readonly List<Button> _gatedButtons = new List<Button>();   // SPUM 준비 전에는 잠그는 버튼들
+    private readonly List<(int Code, Image Bg)> _listRows = new List<(int, Image)>();
+    private readonly List<(int Value, Image Bg)> _actRows = new List<(int, Image)>();
+    private readonly List<(int Value, Image Bg)> _stageRows = new List<(int, Image)>();
+
+    // ══════════════════════════════════════════════════════════════════
+    //  구성
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>하네스 UI를 런타임에 만든다(개발 하네스라 픽셀 고정 스케일로 둔다).</summary>
+    private void BuildUi()
+    {
+        if (_canvasGo != null)
+        {
+            Destroy(_canvasGo);
+        }
+        _gatedButtons.Clear();
+        _listRows.Clear();
+        _actRows.Clear();
+        _stageRows.Clear();
+        _tabRows.Clear();
+
+        _canvasGo = new GameObject("CharacterDevCanvas", typeof(RectTransform), typeof(Canvas),
+            typeof(CanvasScaler), typeof(GraphicRaycaster));
+        _canvasGo.transform.SetParent(transform, false);
+        var canvas = _canvasGo.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = 100; // SPUM 캔버스보다 위(§5)
+        _canvasGo.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
+
+        BuildLeftPanel(_canvasGo.transform);
+        BuildRightPanel(_canvasGo.transform);
+        BuildCenterBar(_canvasGo.transform);
+
+        RefreshList();
+        RefreshRightPanel();
+        RefreshPartPanel();
+        RefreshUi();
+    }
+
+    /// <summary>좌: 몬스터 목록 + 일괄 생성·배선 버튼(§5).</summary>
+    private void BuildLeftPanel(Transform parent)
+    {
+        var panel = NewUi("LeftPanel", parent, out Image bg);
+        bg.color = PanelBg;
+        panel.anchorMin = new Vector2(0f, 0f);
+        panel.anchorMax = new Vector2(0f, 1f);
+        panel.pivot = new Vector2(0f, 0.5f);
+        panel.offsetMin = new Vector2(8f, 8f);
+        panel.offsetMax = new Vector2(408f, -8f);
+
+        MakeTopLabel(panel, "Title", "CharacterDev", 17, FontStyle.Bold, TitleColor, -6f, 24f);
+        _statusText = MakeTopLabel(panel, "Status", "초기화 중…", 12, FontStyle.Normal, HintColor, -30f, 34f);
+
+        // 탭 — 몬스터 목록 / 파츠 고르기(커스텀 외형).
+        var tabRow = NewUi("Tabs", panel, out Image tabBg);
+        tabBg.color = new Color(0f, 0f, 0f, 0f);
+        tabRow.anchorMin = new Vector2(0f, 1f);
+        tabRow.anchorMax = new Vector2(1f, 1f);
+        tabRow.pivot = new Vector2(0.5f, 1f);
+        tabRow.offsetMin = new Vector2(6f, -26f);
+        tabRow.offsetMax = new Vector2(-6f, 0f);
+        tabRow.anchoredPosition = new Vector2(0f, -64f);
+        var tabLayout = tabRow.gameObject.AddComponent<HorizontalLayoutGroup>();
+        tabLayout.spacing = 4f;
+        tabLayout.childControlWidth = true;
+        tabLayout.childControlHeight = true;
+        tabLayout.childForceExpandWidth = true;
+        tabLayout.childForceExpandHeight = true;
+
+        _tabRows.Add((LeftTab.Monsters, MakeChoice(tabRow, "몬스터 목록", () => SelectTab(LeftTab.Monsters))));
+        _tabRows.Add((LeftTab.Parts, MakeChoice(tabRow, "파츠 고르기", () => SelectTab(LeftTab.Parts))));
+
+        // 목록(스크롤) — 탭에 따라 몬스터 목록 또는 파츠 목록을 그린다.
+        var scrollRt = NewUi("Scroll", panel, out Image scrollBg);
+        scrollBg.color = new Color(0f, 0f, 0f, 0.25f);
+        scrollRt.anchorMin = Vector2.zero;
+        scrollRt.anchorMax = Vector2.one;
+        scrollRt.offsetMin = new Vector2(6f, 108f);
+        scrollRt.offsetMax = new Vector2(-6f, -94f);
+        _listContent = MakeScrollContent(scrollRt);
+
+        // 하단 버튼 묶음.
+        var bottom = NewUi("Bottom", panel, out Image bottomBg);
+        bottomBg.color = new Color(0f, 0f, 0f, 0f);
+        bottom.anchorMin = new Vector2(0f, 0f);
+        bottom.anchorMax = new Vector2(1f, 0f);
+        bottom.pivot = new Vector2(0.5f, 0f);
+        bottom.offsetMin = new Vector2(6f, 6f);
+        bottom.offsetMax = new Vector2(-6f, 100f);
+        var layout = bottom.gameObject.AddComponent<VerticalLayoutGroup>();
+        layout.spacing = 4f;
+        layout.childForceExpandHeight = false;
+        layout.childControlHeight = true;
+        layout.childControlWidth = true;
+
+        _batchTargetText = MakeText(bottom, "대상: 프리팹 없는 코드만", 12, FontStyle.Normal, HintColor, 18f);
+        MakeButton(bottom, "대상 전환 (없는 코드만 ↔ 전체)", () =>
+        {
+            _batchOnlyMissing = !_batchOnlyMissing;
+            RefreshUi();
+        }, gated: false);
+        MakeButton(bottom, "일괄 생성 (외형만)", () =>
+        {
+            if (!_busy)
+            {
+                StartCoroutine(BatchGenerate());
+            }
+        });
+        MakeButton(bottom, "던전 전투 배선 실행 (플레이 종료 후)", RequestDungeonWiring, gated: false);
+    }
+
+    /// <summary>우: 능력치(위) · 외형(아래) 패널과 산출 버튼(§5).</summary>
+    private void BuildRightPanel(Transform parent)
+    {
+        var panel = NewUi("RightPanel", parent, out Image bg);
+        bg.color = PanelBg;
+        panel.anchorMin = new Vector2(1f, 0f);
+        panel.anchorMax = new Vector2(1f, 1f);
+        panel.pivot = new Vector2(1f, 0.5f);
+        panel.offsetMin = new Vector2(-420f, 8f);
+        panel.offsetMax = new Vector2(-8f, -8f);
+
+        var scrollRt = NewUi("Scroll", panel, out Image scrollBg);
+        scrollBg.color = new Color(0f, 0f, 0f, 0f);
+        scrollRt.anchorMin = Vector2.zero;
+        scrollRt.anchorMax = Vector2.one;
+        scrollRt.offsetMin = new Vector2(6f, 6f);
+        scrollRt.offsetMax = new Vector2(-6f, -6f);
+        var content = MakeScrollContent(scrollRt);
+
+        // ── 능력치 ──
+        MakeText(content, "▍능력치", 15, FontStyle.Bold, TitleColor, 24f);
+        MakeText(content, "지역(Act)", 12, FontStyle.Normal, HintColor, 18f);
+        var actRow = MakeRow(content, 26f);
+        for (int act = 1; act <= MonsterStatCurve.ActCount; act++)
+        {
+            int captured = act;
+            var image = MakeChoice(actRow, "Act " + act, () =>
+            {
+                _act = captured;
+                RefreshRightPanel();
+            });
+            _actRows.Add((act, image));
+        }
+
+        MakeText(content, "스테이지 (10 = 보스)", 12, FontStyle.Normal, HintColor, 18f);
+        var stageRowA = MakeRow(content, 26f);
+        var stageRowB = MakeRow(content, 26f);
+        for (int stage = 1; stage <= MonsterStatCurve.StagePerAct; stage++)
+        {
+            int captured = stage;
+            var target = stage <= 5 ? stageRowA : stageRowB;
+            var image = MakeChoice(target, stage.ToString(), () =>
+            {
+                _stage = captured;
+                RefreshRightPanel();
+            });
+            _stageRows.Add((stage, image));
+        }
+
+        MakeButton(content, "추천값 채우기", FillRecommended);
+
+        _nameInput = MakeInput(content, "이름", string.Empty, InputField.ContentType.Standard);
+        MakeText(content, "이름 후보(계열 기준 — 고르면 채워집니다)", 11, FontStyle.Normal, HintColor, 16f);
+        _nameCandidateRow = MakeRow(content, 24f);
+
+        _hpInput = MakeInput(content, "hp", string.Empty, InputField.ContentType.IntegerNumber);
+        _atkInput = MakeInput(content, "attack", string.Empty, InputField.ContentType.IntegerNumber);
+        _hpInput.onValueChanged.AddListener(_ => RefreshDiff());
+        _atkInput.onValueChanged.AddListener(_ => RefreshDiff());
+        _diffText = MakeText(content, "추천 대비: -", 12, FontStyle.Normal, HintColor, 18f);
+
+        _codeText = MakeText(content, "제안 코드: -", 12, FontStyle.Bold, Color.white, 18f);
+        MakeButton(content, "제안 코드로 신규 작업", () =>
+        {
+            int suggested = SuggestedCode();
+            if (suggested == 0)
+            {
+                Log("이 대역에 비어 있는 코드가 없습니다.");
+                return;
+            }
+            if (UsedCodes().Contains(suggested))
+            {
+                // 보스 대역처럼 이미 쓰는 코드면 채번을 건너뛰고 경고한다(§4.4 · §6.4).
+                Log($"코드 {suggested}는 이미 사용 중입니다 — 덮어쓰려면 목록에서 그 몬스터를 선택하세요.");
+                return;
+            }
+            _selectedCode = suggested;
+            _nameInput.text = string.Empty;
+            FillRecommended();
+            RefreshList();
+            RefreshRightPanel();
+            Log($"신규 코드 {suggested}로 작업을 시작합니다.");
+        }, gated: false);
+
+        // ── 외형 ──
+        MakeText(content, "▍외형", 15, FontStyle.Bold, TitleColor, 26f);
+        _recipeText = MakeText(content, "레시피: -", 12, FontStyle.Normal, HintColor, 40f);
+        MakeButton(content, "외형 재생성 (레시피로 조합)", () =>
+        {
+            if (_selectedCode == 0)
+            {
+                Log("먼저 몬스터를 고르세요.");
+                return;
+            }
+            if (GeneratePreview(_selectedCode, out string error))
+            {
+                Log($"미리보기 생성 — monster_{_selectedCode}");
+            }
+            else
+            {
+                Log($"생성 실패 — {error}");
+            }
+        });
+
+        MakeButton(content, "저장된 프리팹 불러오기", () =>
+        {
+            if (_selectedCode == 0)
+            {
+                Log("먼저 몬스터를 고르세요.");
+                return;
+            }
+            if (LoadFromPrefab(_selectedCode, out string error))
+            {
+                Log($"불러오기 — monster_{_selectedCode}.prefab의 외형을 프리뷰에 올렸습니다.");
+            }
+            else
+            {
+                Log($"불러오기 실패 — {error}");
+            }
+        });
+
+        _appearanceText = MakeText(content, "현재 외형: -", 11, FontStyle.Normal, HintColor, 52f);
+        MakeText(content, "파트별로 바꾸려면 왼쪽 [파츠 고르기] 탭을 쓰세요.", 11, FontStyle.Normal, HintColor, 18f);
+
+        // ── 산출 ──
+        MakeText(content, "▍산출", 15, FontStyle.Bold, TitleColor, 26f);
+        MakeButton(content, "프리팹 저장", () =>
+        {
+            if (_selectedCode == 0)
+            {
+                Log("먼저 몬스터를 고르세요.");
+                return;
+            }
+            if (SavePrefab(_selectedCode, out string error))
+            {
+                Log($"저장 완료 — monster_{_selectedCode}.prefab (※ '던전 전투 배선' 재실행 필요)");
+                RefreshRows();
+                RefreshList();
+            }
+            else
+            {
+                Log($"저장 실패 — {error}");
+            }
+        }, primary: true);
+
+        MakeButton(content, "monster_master 반영", () =>
+        {
+            if (!ReadStatInputs(out long hp, out long attack))
+            {
+                Log("hp·attack은 1 이상의 정수여야 합니다.");
+                return;
+            }
+            if (ApplyStatsToMaster(_selectedCode, _nameInput.text, hp, attack, out string error))
+            {
+                Log($"monster_master 반영 — {_selectedCode} {_nameInput.text} hp {hp} / atk {attack}");
+                Log("※ 서버 정본 반영은 별도 작업이다(§7.4) — [스니펫 복사]로 넘길 것.");
+                RefreshList();
+                RefreshDiff();
+            }
+            else
+            {
+                Log($"반영 실패 — {error}");
+            }
+        }, primary: true, gated: false);
+
+        MakeButton(content, "스니펫 복사 (서버 정본용)", () =>
+        {
+            if (!ReadStatInputs(out long hp, out long attack))
+            {
+                Log("hp·attack을 확인하세요.");
+                return;
+            }
+            string snippet = BuildSnippet(_selectedCode, _nameInput.text, hp, attack);
+            GUIUtility.systemCopyBuffer = snippet;
+            Log("스니펫을 클립보드에 복사했습니다:");
+            foreach (var line in snippet.Split('\n'))
+            {
+                Log("  " + line);
+            }
+        }, gated: false);
+
+        MakeButton(content, "전투로 검수 (BattleDevScene)", () =>
+        {
+            if (_selectedCode == 0)
+            {
+                Log("먼저 몬스터를 고르세요.");
+                return;
+            }
+            OpenBattleForReview(_selectedCode);
+        }, gated: false);
+    }
+
+    /// <summary>중앙 하단: 애니메이션 검수 버튼(§7.2)과 하네스 로그.</summary>
+    private void BuildCenterBar(Transform parent)
+    {
+        var bar = NewUi("CenterBar", parent, out Image bg);
+        bg.color = new Color(0f, 0f, 0f, 0f);
+        bar.anchorMin = new Vector2(0.5f, 0f);
+        bar.anchorMax = new Vector2(0.5f, 0f);
+        bar.pivot = new Vector2(0.5f, 0f);
+        bar.sizeDelta = new Vector2(520f, 190f);
+        bar.anchoredPosition = new Vector2(0f, 8f);
+
+        var layout = bar.gameObject.AddComponent<VerticalLayoutGroup>();
+        layout.spacing = 4f;
+        layout.childForceExpandHeight = false;
+        layout.childControlHeight = true;
+        layout.childControlWidth = true;
+
+        var logBg = NewUi("Log", bar, out Image logImage);
+        logImage.color = new Color(0f, 0f, 0f, 0.55f);
+        logBg.gameObject.AddComponent<LayoutElement>().minHeight = 150f;
+        _logText = MakeStretchedText(logBg, "", 12, FontStyle.Normal, new Color(0.85f, 0.88f, 0.95f));
+
+        var animRow = MakeRow(bar, 26f);
+        MakeChoice(animRow, "IDLE", () => PlayPreviewAnimation(PlayerState.IDLE));
+        MakeChoice(animRow, "MOVE", () => PlayPreviewAnimation(PlayerState.MOVE));
+        MakeChoice(animRow, "ATTACK", () => PlayPreviewAnimation(PlayerState.ATTACK));
+        MakeChoice(animRow, "DAMAGED", () => PlayPreviewAnimation(PlayerState.DAMAGED));
+        MakeChoice(animRow, "DEATH", () => PlayPreviewAnimation(PlayerState.DEATH));
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  갱신
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>좌측 탭을 바꾼다.</summary>
+    private void SelectTab(LeftTab tab)
+    {
+        _leftTab = tab;
+        foreach (var (value, bg) in _tabRows)
+        {
+            bg.color = value == tab ? RowSelected : ButtonColor;
+        }
+        RefreshList();
+    }
+
+    /// <summary>좌측 목록을 현재 탭에 맞게 다시 그린다.</summary>
+    private void RefreshList()
+    {
+        if (_listContent == null)
+        {
+            return;
+        }
+
+        _listRows.Clear();
+        for (int i = _listContent.childCount - 1; i >= 0; i--)
+        {
+            Destroy(_listContent.GetChild(i).gameObject);
+        }
+
+        foreach (var (value, bg) in _tabRows)
+        {
+            bg.color = value == _leftTab ? RowSelected : ButtonColor;
+        }
+
+        if (_leftTab == LeftTab.Parts)
+        {
+            BuildPartList();
+        }
+        else
+        {
+            BuildMonsterList();
+        }
+    }
+
+    /// <summary>외형이 바뀌면(조합·불러오기·파트 교체) 파츠 목록과 요약 라벨을 다시 칠한다.</summary>
+    private void RefreshPartPanel()
+    {
+        if (_appearanceText != null)
+        {
+            _appearanceText.text = _partSelection.Count == 0
+                ? "현재 외형: (비어 있음 — 조합하거나 프리팹을 불러오세요)"
+                : "현재 외형: " + string.Join(" / ",
+                    SelectableParts.Where(_partSelection.ContainsKey)
+                                   .Select(p => $"{p} {_partSelection[p]}"));
+        }
+
+        if (_leftTab == LeftTab.Parts)
+        {
+            RefreshList();
+        }
+    }
+
+    /// <summary>
+    /// 파츠 고르기 목록 — 위에 파트 버튼, 아래에 그 파트에서 고를 수 있는 파츠(설치된 것만).
+    /// 지금 입고 있는 항목은 파란색으로 표시하고, 클릭하면 그 파트만 바뀐다.
+    /// </summary>
+    private void BuildPartList()
+    {
+        var partRowA = MakeRow(_listContent, 24f);
+        var partRowB = MakeRow(_listContent, 24f);
+        for (int i = 0; i < SelectableParts.Length; i++)
+        {
+            string part = SelectableParts[i];
+            var target = i < 5 ? partRowA : partRowB;
+            var bg = MakeChoice(target, part, () =>
+            {
+                _selectedPart = part;
+                RefreshList();
+            });
+            bg.color = string.Equals(part, _selectedPart, System.StringComparison.OrdinalIgnoreCase)
+                ? RowSelected
+                : ButtonColor;
+        }
+
+        string current = _partSelection.TryGetValue(_selectedPart, out string value) ? value : "(없음)";
+        MakeText(_listContent, $"▍{_selectedPart} — 현재: {current}", 12, FontStyle.Bold, TitleColor, 20f);
+
+        var actionRow = MakeRow(_listContent, 24f);
+        MakeChoice(actionRow, "이 파트 비우기", () => ClearPart(_selectedPart));
+        MakeChoice(actionRow, "목록 새로고침", RefreshList);
+
+        if (_composer == null)
+        {
+            MakeText(_listContent, "조합 엔진이 준비되지 않았습니다.", 12, FontStyle.Normal, WarnColor, 20f);
+            return;
+        }
+
+        var items = _composer.PartsOf(_selectedPart);
+        MakeText(_listContent, $"고를 수 있는 파츠 {items.Count}개", 11, FontStyle.Normal, HintColor, 18f);
+
+        foreach (var item in items)
+        {
+            string fileName = item.FileName;
+            bool worn = current.Split(',').Contains(fileName);
+            string tags = string.Join(" ", new[]
+            {
+                string.IsNullOrEmpty(item.Race) ? null : item.Race,
+                string.IsNullOrEmpty(item.Gender) ? null : item.Gender,
+                item.Class != null && item.Class.Length > 0 ? string.Join("+", item.Class) : null,
+            }.Where(t => !string.IsNullOrEmpty(t)));
+
+            var rt = NewUi("PartRow", _listContent, out Image bg);
+            bg.color = worn ? RowSelected : RowNormal;
+            rt.gameObject.AddComponent<LayoutElement>().minHeight = 24f;
+
+            var text = MakeStretchedText(rt, worn ? $"● {fileName}   {tags}" : $"{fileName}   {tags}",
+                                         12, FontStyle.Normal, Color.white);
+            text.alignment = TextAnchor.MiddleLeft;
+
+            var button = rt.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(() => SetPart(_selectedPart, fileName));
+        }
+    }
+
+    /// <summary>몬스터 목록(코드·이름·능력치·추천 대비 차이·프리팹/레시피 유무).</summary>
+    private void BuildMonsterList()
+    {
+        foreach (var row in _monsterRows)
+        {
+            int code = row.Code;
+            string marks = (row.HasPrefab ? "P" : "·") + (row.HasRecipe ? "R" : "·");
+            string label = row.Orphan
+                ? $"{code}  (고아 프리팹 — 마스터 없음)   [{marks}]"
+                : $"{code}  {row.Name}\n      hp {row.Hp} ({row.HpDiff}) / atk {row.Attack} ({row.AtkDiff})   [{marks}]";
+
+            var rt = NewUi("Row", _listContent, out Image bg);
+            bg.color = code == _selectedCode ? RowSelected : RowNormal;
+            rt.gameObject.AddComponent<LayoutElement>().minHeight = row.Orphan ? 26f : 40f;
+
+            var text = MakeStretchedText(rt, label, 12, FontStyle.Normal, Color.white);
+            text.alignment = TextAnchor.MiddleLeft;
+
+            var button = rt.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(() => SelectMonster(code));
+            _listRows.Add((code, bg));
+        }
+    }
+
+    /// <summary>목록에서 한 종을 고른다 — 우측 패널이 그 몬스터 값으로 채워진다.</summary>
+    private void SelectMonster(int code)
+    {
+        _selectedCode = code;
+
+        var row = _monsterRows.FirstOrDefault(r => r.Code == code);
+        if (row != null && !row.Orphan)
+        {
+            _nameInput.text = row.Name;
+            _hpInput.text = row.Hp.ToString();
+            _atkInput.text = row.Attack.ToString();
+        }
+
+        int act = MonsterStatCurve.ActOfCode(code);
+        if (act > 0)
+        {
+            _act = act;
+            _stage = MonsterStatCurve.IsBossCode(code) ? MonsterStatCurve.BossStage : 1;
+        }
+
+        foreach (var (rowCode, bg) in _listRows)
+        {
+            bg.color = rowCode == _selectedCode ? RowSelected : RowNormal;
+        }
+        RefreshRightPanel();
+    }
+
+    /// <summary>우측 패널(선택 상태·추천·레시피 요약·이름 후보)을 현재 값으로 다시 칠한다.</summary>
+    private void RefreshRightPanel()
+    {
+        foreach (var (value, bg) in _actRows)
+        {
+            bg.color = value == _act ? RowSelected : ButtonColor;
+        }
+        foreach (var (value, bg) in _stageRows)
+        {
+            bg.color = value == _stage ? RowSelected : ButtonColor;
+        }
+
+        if (_codeText != null)
+        {
+            int suggested = SuggestedCode();
+            string used = UsedCodes().Contains(suggested) ? " (이미 사용 중)" : string.Empty;
+            _codeText.text = $"작업 코드: {(_selectedCode == 0 ? "-" : _selectedCode.ToString())}   /   제안 코드: {(suggested == 0 ? "-" : suggested.ToString())}{used}";
+        }
+
+        if (_recipeText != null)
+        {
+            if (_selectedCode == 0)
+            {
+                _recipeText.text = "레시피: -";
+            }
+            else
+            {
+                var recipe = RecipeFor(_selectedCode);
+                bool hasRecipe = _recipes.ContainsKey(_selectedCode);
+                _recipeText.text = (hasRecipe ? "레시피: " : "레시피 없음(코드 시드 랜덤): ") + recipe.Summary()
+                                   + (string.IsNullOrEmpty(recipe.note) ? "" : $"\n{recipe.note}");
+            }
+        }
+
+        RefreshNameCandidates();
+        RefreshDiff();
+    }
+
+    /// <summary>선택된 레시피의 계열에 맞는 이름 후보 버튼을 다시 만든다(§4.3).</summary>
+    private void RefreshNameCandidates()
+    {
+        if (_nameCandidateRow == null)
+        {
+            return;
+        }
+
+        for (int i = _nameCandidateRow.childCount - 1; i >= 0; i--)
+        {
+            Destroy(_nameCandidateRow.GetChild(i).gameObject);
+        }
+
+        string race = _selectedCode != 0 ? RecipeFor(_selectedCode).race : string.Empty;
+        if (string.IsNullOrEmpty(race) || !NameCandidates.TryGetValue(race, out string[] candidates))
+        {
+            return;
+        }
+
+        foreach (var candidate in candidates)
+        {
+            string captured = candidate;
+            MakeChoice(_nameCandidateRow, candidate, () => _nameInput.text = captured);
+        }
+    }
+
+    /// <summary>입력값과 추천값의 차이를 함께 보여 준다(§4.3).</summary>
+    private void RefreshDiff()
+    {
+        if (_diffText == null)
+        {
+            return;
+        }
+
+        MonsterStatCurve.Recommend(_act, _stage, difficultyMultiplier, out long rhp, out long ratk);
+        if (!ReadStatInputs(out long hp, out long attack))
+        {
+            _diffText.text = $"추천(Act{_act} s{_stage}): hp {rhp} / atk {ratk}";
+            return;
+        }
+
+        _diffText.text = $"hp {hp} (추천 {rhp}, {MonsterStatCurve.DiffText(hp, rhp)})   "
+                         + $"atk {attack} (추천 {ratk}, {MonsterStatCurve.DiffText(attack, ratk)})";
+    }
+
+    /// <summary>지역·스테이지 추천값을 입력란에 채운다(그 뒤에도 계속 편집할 수 있다 — F10·F11).</summary>
+    private void FillRecommended()
+    {
+        MonsterStatCurve.Recommend(_act, _stage, difficultyMultiplier, out long hp, out long attack);
+        _hpInput.text = hp.ToString();
+        _atkInput.text = attack.ToString();
+        RefreshDiff();
+        Log($"추천값 채움 — Act{_act} 스테이지{_stage}: hp {hp} / atk {attack}");
+    }
+
+    /// <summary>SPUM 준비 상태·진행 중 여부에 따라 버튼 잠금과 안내 문구를 갱신한다.</summary>
+    private void RefreshUi()
+    {
+        bool usable = IsReady && !_busy;
+        foreach (var button in _gatedButtons)
+        {
+            if (button != null)
+            {
+                button.interactable = usable;
+            }
+        }
+
+        if (_batchTargetText != null)
+        {
+            _batchTargetText.text = "대상: " + (_batchOnlyMissing ? "프리팹 없는 코드만" : "전체(기존 프리팹은 백업 후 교체)");
+        }
+    }
+
+    /// <summary>상단 상태 줄(준비 상태·바인딩 오류·진행 상황).</summary>
+    private void Status(string message)
+    {
+        if (_statusText != null)
+        {
+            _statusText.text = message;
+            _statusText.color = string.IsNullOrEmpty(_initError) ? HintColor : WarnColor;
+        }
+    }
+
+    private void UpdateLogText()
+    {
+        if (_logText != null)
+        {
+            _logText.text = string.Join("\n", _log);
+        }
+    }
+
+    /// <summary>hp·attack 입력을 읽는다. 0 이하·비정수면 false(반영 버튼이 막힌다 — §6.4).</summary>
+    private bool ReadStatInputs(out long hp, out long attack)
+    {
+        hp = 0;
+        attack = 0;
+        if (_hpInput == null || _atkInput == null)
+        {
+            return false;
+        }
+        if (!long.TryParse(_hpInput.text, out hp) || !long.TryParse(_atkInput.text, out attack))
+        {
+            return false;
+        }
+        return hp > 0 && attack > 0;
+    }
+
+    private int SuggestedCode()
+    {
+        return MonsterStatCurve.SuggestCode(_act, _stage == MonsterStatCurve.BossStage, UsedCodes());
+    }
+
+    private HashSet<int> UsedCodes()
+    {
+        var used = new HashSet<int>();
+        foreach (var row in _monsterRows)
+        {
+            used.Add(row.Code);
+        }
+        return used;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  UI 조각 만들기
+    // ══════════════════════════════════════════════════════════════════
+
+    private static RectTransform NewUi(string name, Transform parent, out Image image)
+    {
+        var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(parent, false);
+        image = go.GetComponent<Image>();
+        return rt;
+    }
+
+    /// <summary>세로 스크롤 영역을 만들고 항목을 담을 Content를 돌려준다.</summary>
+    private static RectTransform MakeScrollContent(RectTransform scrollRt)
+    {
+        var scroll = scrollRt.gameObject.AddComponent<ScrollRect>();
+        scroll.horizontal = false;
+        scroll.movementType = ScrollRect.MovementType.Clamped;
+        scroll.scrollSensitivity = 24f;
+
+        var viewportGo = new GameObject("Viewport", typeof(RectTransform), typeof(RectMask2D));
+        var viewport = (RectTransform)viewportGo.transform;
+        viewport.SetParent(scrollRt, false);
+        viewport.anchorMin = Vector2.zero;
+        viewport.anchorMax = Vector2.one;
+        viewport.offsetMin = Vector2.zero;
+        viewport.offsetMax = Vector2.zero;
+        scroll.viewport = viewport;
+
+        var contentGo = new GameObject("Content", typeof(RectTransform), typeof(VerticalLayoutGroup),
+            typeof(ContentSizeFitter));
+        var content = (RectTransform)contentGo.transform;
+        content.SetParent(viewport, false);
+        content.anchorMin = new Vector2(0f, 1f);
+        content.anchorMax = new Vector2(1f, 1f);
+        content.pivot = new Vector2(0.5f, 1f);
+        content.offsetMin = Vector2.zero;
+        content.offsetMax = Vector2.zero;
+
+        var layout = contentGo.GetComponent<VerticalLayoutGroup>();
+        layout.spacing = 3f;
+        layout.padding = new RectOffset(4, 4, 4, 4);
+        layout.childForceExpandHeight = false;
+        layout.childControlHeight = true;
+        layout.childControlWidth = true;
+        contentGo.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+        scroll.content = content;
+        return content;
+    }
+
+    /// <summary>패널 상단에 고정되는 한 줄 라벨.</summary>
+    private static Text MakeTopLabel(RectTransform parent, string name, string content, int fontSize,
+                                     FontStyle style, Color color, float topOffset, float height)
+    {
+        var go = new GameObject(name, typeof(RectTransform), typeof(Text));
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(parent, false);
+        rt.anchorMin = new Vector2(0f, 1f);
+        rt.anchorMax = new Vector2(1f, 1f);
+        rt.pivot = new Vector2(0.5f, 1f);
+        rt.offsetMin = new Vector2(8f, -height);
+        rt.offsetMax = new Vector2(-8f, 0f);
+        rt.anchoredPosition = new Vector2(0f, topOffset);
+
+        var text = go.GetComponent<Text>();
+        ApplyFont(text, content, fontSize, style, color);
+        return text;
+    }
+
+    /// <summary>세로 레이아웃 안에 놓는 라벨(높이 고정).</summary>
+    private static Text MakeText(RectTransform parent, string content, int fontSize, FontStyle style,
+                                 Color color, float height)
+    {
+        var go = new GameObject("Text", typeof(RectTransform), typeof(Text), typeof(LayoutElement));
+        go.transform.SetParent(parent, false);
+        var text = go.GetComponent<Text>();
+        ApplyFont(text, content, fontSize, style, color);
+        go.GetComponent<LayoutElement>().minHeight = height;
+        return text;
+    }
+
+    /// <summary>부모를 꽉 채우는 라벨(행 안쪽 텍스트).</summary>
+    private static Text MakeStretchedText(RectTransform parent, string content, int fontSize, FontStyle style,
+                                          Color color)
+    {
+        var go = new GameObject("Label", typeof(RectTransform), typeof(Text));
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(parent, false);
+        rt.anchorMin = Vector2.zero;
+        rt.anchorMax = Vector2.one;
+        rt.offsetMin = new Vector2(8f, 2f);
+        rt.offsetMax = new Vector2(-6f, -2f);
+
+        var text = go.GetComponent<Text>();
+        ApplyFont(text, content, fontSize, style, color);
+        return text;
+    }
+
+    private static void ApplyFont(Text text, string content, int fontSize, FontStyle style, Color color)
+    {
+        text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        text.text = content;
+        text.fontSize = fontSize;
+        text.fontStyle = style;
+        text.color = color;
+        text.alignment = TextAnchor.MiddleLeft;
+        text.horizontalOverflow = HorizontalWrapMode.Wrap;
+        // 텍스트 rect를 글자 크기에 빡빡하게 잡지 않는다는 규칙과 같은 이유로 세로는 넘치게 둔다.
+        text.verticalOverflow = VerticalWrapMode.Overflow;
+        text.raycastTarget = false;
+    }
+
+    /// <summary>가로로 항목을 늘어놓는 행.</summary>
+    private static RectTransform MakeRow(RectTransform parent, float height)
+    {
+        var go = new GameObject("Row", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
+        var rt = (RectTransform)go.transform;
+        rt.SetParent(parent, false);
+
+        var layout = go.GetComponent<HorizontalLayoutGroup>();
+        layout.spacing = 4f;
+        layout.childForceExpandWidth = true;
+        layout.childForceExpandHeight = true;
+        layout.childControlWidth = true;
+        layout.childControlHeight = true;
+        go.GetComponent<LayoutElement>().minHeight = height;
+        return rt;
+    }
+
+    /// <summary>세로 레이아웃 안의 가로 폭 전체를 쓰는 버튼.</summary>
+    private Button MakeButton(RectTransform parent, string label, UnityAction onClick,
+                              bool primary = false, bool gated = true)
+    {
+        var rt = NewUi("Button", parent, out Image bg);
+        bg.color = primary ? ButtonPrimary : ButtonColor;
+        rt.gameObject.AddComponent<LayoutElement>().minHeight = 28f;
+
+        var text = MakeStretchedText(rt, label, 13, FontStyle.Bold, Color.white);
+        text.alignment = TextAnchor.MiddleCenter;
+
+        var button = rt.gameObject.AddComponent<Button>();
+        button.targetGraphic = bg;
+        button.onClick.AddListener(onClick);
+        if (gated)
+        {
+            _gatedButtons.Add(button);
+        }
+        return button;
+    }
+
+    /// <summary>가로 행 안의 선택 버튼(Act·스테이지·애니메이션·이름 후보). 선택 표시는 배경색으로 한다.</summary>
+    private Image MakeChoice(RectTransform parent, string label, UnityAction onClick)
+    {
+        var rt = NewUi("Choice", parent, out Image bg);
+        bg.color = ButtonColor;
+
+        var text = MakeStretchedText(rt, label, 12, FontStyle.Normal, Color.white);
+        text.alignment = TextAnchor.MiddleCenter;
+
+        var button = rt.gameObject.AddComponent<Button>();
+        button.transition = Selectable.Transition.None;
+        button.onClick.AddListener(onClick);
+        return bg;
+    }
+
+    /// <summary>라벨 + 입력란 한 줄.</summary>
+    private static InputField MakeInput(RectTransform parent, string label, string value,
+                                        InputField.ContentType contentType)
+    {
+        var row = MakeRow(parent, 26f);
+
+        var labelText = MakeStretchedText(row, label, 12, FontStyle.Normal, HintColor);
+        labelText.rectTransform.gameObject.AddComponent<LayoutElement>().preferredWidth = 70f;
+
+        var fieldRt = NewUi("Input", row, out Image fieldBg);
+        fieldBg.color = new Color(0.12f, 0.13f, 0.17f, 1f);
+
+        // rect를 글자 높이에 빡빡하게 잡으면 줄이 통째로 사라지므로 여유를 둔다(CLAUDE.md 규칙).
+        var textGo = new GameObject("Text", typeof(RectTransform), typeof(Text));
+        var textRt = (RectTransform)textGo.transform;
+        textRt.SetParent(fieldRt, false);
+        textRt.anchorMin = Vector2.zero;
+        textRt.anchorMax = Vector2.one;
+        textRt.offsetMin = new Vector2(6f, 2f);
+        textRt.offsetMax = new Vector2(-6f, -2f);
+        var text = textGo.GetComponent<Text>();
+        ApplyFont(text, value, 13, FontStyle.Normal, Color.white);
+        text.supportRichText = false;
+
+        var input = fieldRt.gameObject.AddComponent<InputField>();
+        input.textComponent = text;
+        input.text = value;
+        input.contentType = contentType;
+        input.targetGraphic = fieldBg;
+        return input;
+    }
+}

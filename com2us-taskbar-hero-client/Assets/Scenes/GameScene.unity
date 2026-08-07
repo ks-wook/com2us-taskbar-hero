@@ -221,6 +221,9 @@ MonoBehaviour:
   levelUpHeight: 3
   levelUpYOffset: 0.6
   levelUpSortingOffset: 30
+  levelUpBanner: {fileID: 154752722139873633, guid: 165615ebcbbd2d2458983d304c6b069d, type: 3}
+  levelUpBannerWidth: 2.6
+  levelUpBannerYOffset: 2.4
 --- !u!114 &75614522
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -794,7 +797,7 @@ MonoBehaviour:
   tradeIcon: {fileID: 21300000, guid: a851c259d51f9204fac1993594ca9f4f, type: 3}
   gachaIcon: {fileID: -8783460471149758233, guid: 5a391ccb41c0c564fa7f07937ad6bd0a, type: 3}
   settingsIcon: {fileID: 21300000, guid: e96efdf00edbc62438e3eeaa98707ae3, type: 3}
-  uiBackgroundSprite: {fileID: 21300000, guid: 5a7d925cc2fedcf4383acbe2dc857cba, type: 3}
+  uiBackgroundSprite: {fileID: 21300000, guid: 848ed24b50435714b82c54a24d609005, type: 3}
   menuToggleIconTexture: {fileID: 2800000, guid: ce01d1d1f3221da4cac316a6834af773, type: 3}
   activeBuffIcon: {fileID: -3656246144031661519, guid: 69f1776e65ef4684492a00ae526bed9d, type: 3}
   buffTooltipBackground: {fileID: -5635248910431450665, guid: 94bd4fa3940cf8c409294f431ef55e25, type: 3}
