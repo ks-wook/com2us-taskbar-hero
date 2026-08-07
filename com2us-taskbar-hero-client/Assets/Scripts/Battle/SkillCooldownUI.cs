@@ -51,8 +51,9 @@ namespace TaskbarHero.Client.Battle
         [Header("배경 스트립 도킹")]
         [Tooltip("true면 UI 블록 전체를 배경(길 스트립) 상단선 바로 위로 내려 배치한다(창 크기 변화 추종).")]
         public bool dockAboveBackground = true;
-        [Tooltip("배경 상단선과 UI 블록 하단 사이 간격(캔버스 단위)")]
-        public float dockMargin = 180f;
+        [Tooltip("배경 상단선과 UI 블록 하단 사이 간격(캔버스 단위). 작을수록 UI가 아래(길 쪽)로 내려온다. " +
+                 "아군 캐릭터의 머리가 길 상단선 바로 위까지 올라오므로, 이보다 더 줄이면 초상화·슬롯이 캐릭터와 겹친다.")]
+        public float dockMargin = 40f;
         [Tooltip("true면 UI 블록을 화면 좌측 상단 기준으로 배치한다(false=기존 우측 상단).")]
         public bool alignLeft = true;
         [Tooltip("좌측 정렬 시 기존 우상단 기준 음수 x 좌표에 더할 평행이동량(내부 배치 순서를 유지한 채 좌측으로 옮김)")]
@@ -90,9 +91,10 @@ namespace TaskbarHero.Client.Battle
         private float _blockBottomFromTop;     // 캔버스 상단 기준 UI 블록 하단까지의 거리(캔버스 단위)
         private ScrollingBackground _background;
         private Canvas _canvas;
-        private bool _dockApplied;             // 현재 창 크기 기준으로 도킹 계산을 이미 적용했는지
-        private int _dockScreenW, _dockScreenH; // 도킹 계산 당시의 화면 크기(변하면 재계산)
-        private float _dockScale;               // 도킹 계산 당시의 캔버스 스케일
+        // 도킹 위치를 다시 놓는 기준(캔버스 단위). 카메라 셰이크(세로 최대 0.126월드 ≈ 16단위)와
+        // 스웨이(0.03월드 ≈ 4단위)보다 크게 잡아, 흔들림에는 UI가 따라 떨리지 않으면서
+        // 그보다 큰 오차(창 크기·파티 인원·배경 변경, 첫 프레임의 잘못된 계산)는 스스로 교정하게 한다.
+        private const float DockCorrectionThreshold = 40f;
 
         // hover 툴팁(스킬 정보) — 슬롯 위에 커서를 올리면 표시.
         // EventSystem 이벤트 대신 매 프레임 커서 위치를 슬롯 사각형과 대조(폴링)한다:
@@ -488,8 +490,7 @@ namespace TaskbarHero.Client.Battle
                 float bottomEdge = rt.anchoredPosition.y - rt.pivot.y * rt.sizeDelta.y;
                 lowest = Mathf.Min(lowest, bottomEdge);
             }
-            _blockBottomFromTop = -lowest;
-            _dockApplied = false; // 블록이 바뀌었으니 도킹 위치 재계산
+            _blockBottomFromTop = -lowest; // 도킹 위치는 UpdateDock이 매 프레임 목표와 대조해 교정한다
         }
 
         /// <summary>매 프레임 스트립 도킹 위치와 슬롯 hover 툴팁을 갱신한다.</summary>
@@ -500,9 +501,13 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>
-        /// 배경(길 스트립) 상단선을 화면 좌표로 환산해, UI 블록 하단이 그 선 바로 위(dockMargin 간격)에 오도록
-        /// DockRoot를 아래로 내린다. <b>고정 배치</b>: 창 크기(해상도)·캔버스 스케일이 바뀌거나 UI가 재구성될 때만
-        /// 재계산하고, 그 외에는 위치를 유지한다(카메라 이동·줌 등에 따라 위아래로 흔들리지 않음).
+        /// 배경(길 스트립) 상단선을 화면 좌표로 환산해, UI 블록 하단이 그 선 바로 위(<see cref="dockMargin"/> 간격)에
+        /// 오도록 DockRoot를 아래로 내린다.
+        /// <para><b>매 프레임 목표를 계산하고, 오차가 <see cref="DockCorrectionThreshold"/>를 넘을 때만 다시 놓는다.</b>
+        /// 카메라는 전투 중 셰이크·스웨이로 계속 미세하게 흔들리므로 매 프레임 그대로 반영하면 UI가 함께 떨린다.
+        /// 반대로 종전처럼 "창 크기·캔버스 스케일이 바뀔 때만" 계산하면, <b>첫 계산이 어긋난 순간의 위치가 그대로
+        /// 굳는다</b> — 실제로 GameScene에서 시프트가 0으로 굳어 스킬 UI가 화면 최상단(2~31%)에 남아 길·하단 HUD와
+        /// 크게 떨어져 있었다(측정 확인). 임계값 방식은 흔들림에는 무반응이면서 그런 큰 오차는 스스로 교정한다.</para>
         /// </summary>
         private void UpdateDock()
         {
@@ -510,28 +515,21 @@ namespace TaskbarHero.Client.Battle
             if (_canvas == null) _canvas = GetComponentInParent<Canvas>();
             var cam = Camera.main;
             if (_canvas == null || cam == null) return;
-
-            float scale = _canvas.scaleFactor > 0f ? _canvas.scaleFactor : 1f;
-            if (_dockApplied && Screen.width == _dockScreenW && Screen.height == _dockScreenH &&
-                Mathf.Approximately(scale, _dockScale))
-            {
-                return; // 창 크기 변화 없음 → 현재 위치 고정 유지
-            }
             if (_background == null)
             {
                 _background = Object.FindAnyObjectByType<ScrollingBackground>();
                 if (_background == null) return;
             }
 
+            float scale = _canvas.scaleFactor > 0f ? _canvas.scaleFactor : 1f;
             float stripTopScreenY = cam.WorldToScreenPoint(new Vector3(cam.transform.position.x, _background.VisibleTopY, 0f)).y;
             float stripFromTop = (Screen.height - stripTopScreenY) / scale; // 캔버스 단위, 화면 상단 기준
             float shift = stripFromTop - dockMargin - _blockBottomFromTop;
-            _dockRoot.anchoredPosition = new Vector2(0f, -Mathf.Max(0f, shift));
-
-            _dockApplied = true;
-            _dockScreenW = Screen.width;
-            _dockScreenH = Screen.height;
-            _dockScale = scale;
+            float target = -Mathf.Max(0f, shift);
+            if (Mathf.Abs(_dockRoot.anchoredPosition.y - target) > DockCorrectionThreshold)
+            {
+                _dockRoot.anchoredPosition = new Vector2(0f, target);
+            }
         }
 
         /// <summary>초상화 옆에 세로 체력바(배경+아래→위 채움)를 만들어 멤버에 연결한다. pos는 바 <b>하단 중앙</b> 위치(초상화 하단에 정렬).</summary>

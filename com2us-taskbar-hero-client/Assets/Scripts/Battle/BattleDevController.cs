@@ -1774,15 +1774,23 @@ namespace TaskbarHero.Client.Battle
         // IMGUI는 항상 모든 UI 위에 그려지므로, HP바를 낮은 sortingOrder의 Canvas로 그려
         // HUD(10)·패널(100) 등 UI가 항상 HP바 위에 오도록 한다.
         private const int EnemyHpBarSortingOrder = 1; // HUD(10)/패널(100)보다 아래
-        // 프레임 아트(체력바.png, 768×144)를 정수배(8배)로 축소해 그린다 — 비정수 축소보다 픽셀이 깔끔하다.
-        private const float HpBarWidth = 96f;
-        private const float HpBarHeight = 18f;
-        // 프레임 테두리(원본 12~20px ≈ 화면 2~3px) 안쪽에 채움을 둔다.
-        private const float HpBarFillInset = 3f;
-        private const float HpBarFillWidth = HpBarWidth - HpBarFillInset * 2f;
+
+        // ── 바 크기 ──
+        // 크기는 픽셀 고정이 아니라 <b>월드 기준(카메라 배율에 비례)</b>으로 매 프레임 계산한다.
+        // 고정 픽셀(종전 96×18)로 두면 창 높이에 따라 몬스터 대비 크기가 달라진다 — GameScene은 카메라가
+        // 창 높이와 같은 정사각 밴드만 그리므로(GameViewLayout), 작업표시줄에 도킹된 작은 창에서는
+        // 월드 1유닛당 픽셀이 줄어 같은 96px 바가 몬스터를 뒤덮을 만큼 커 보였다.
+        private const float HpBarWorldWidth = 0.5f;        // 바 폭(월드 단위) — 몬스터 대비 크기를 정하는 값
+        private const float HpBarAspect = 144f / 768f;     // 프레임 아트(체력바.png 768×144) 비율
+        private const float HpBarMinWidthPx = 32f;         // 창이 아주 작아도 이 폭 아래로는 줄이지 않는다
+        private const float HpBarInsetRatio = 1f / 6f;     // 프레임 테두리 몫(높이 대비) — 안쪽에 채움을 둔다
+
+        // 이번 프레임의 바 픽셀 크기(UpdateHpBarMetrics가 카메라 배율로 계산한다).
+        private float _hpBarWidthPx;
+        private float _hpBarHeightPx;
+        private float _hpBarInsetPx;
 
         // HP바 juice: 방금 깎인 구간을 보여주는 고스트 바 + 피격 시 바 흔들림.
-        private const float HpBarShakePx = 3f;         // 흔들림 진폭(픽셀) — 바가 작으므로 크게 흔들면 읽기 어렵다
         private const float HpBarShakeFrequency = 26f; // 초당 진동 수
         private static readonly Color HpGhostColor = new Color(1f, 0.93f, 0.88f, 0.9f); // 방금 잃은 양(흰색)
 
@@ -1804,6 +1812,7 @@ namespace TaskbarHero.Client.Battle
                 return;
             }
             EnsureHpCanvas();
+            UpdateHpBarMetrics();
 
             int used = 0;
             foreach (var go in _om.Active(CatEnemy))
@@ -1841,19 +1850,19 @@ namespace TaskbarHero.Client.Battle
                 }
                 var bar = GetHpBar(used);
                 bar.gameObject.SetActive(true);
+                bar.sizeDelta = new Vector2(_hpBarWidthPx, _hpBarHeightPx); // 창 크기가 바뀌면 함께 갱신된다
                 // 픽셀 격자에 맞춰(정수 좌표) 배치한다 — 소수 좌표면 프레임 아트가 프레임마다 미세하게 번진다.
                 // 좌표는 캔버스가 아니라 밴드 컨테이너(_hpArea)의 좌하단 기준이므로 그 원점만큼 빼 준다.
                 Vector2 origin = HpAreaOrigin();
                 Vector2 jitter = HpBarJitter(m.HpBarShake01); // 피격 직후 바를 미세하게 흔든다
                 bar.anchoredPosition = new Vector2(Mathf.Round(sp.x - origin.x + jitter.x),
                                                    Mathf.Round(sp.y - origin.y + jitter.y));
+                float fillWidth = _hpBarWidthPx - _hpBarInsetPx * 2f;
                 float ratio = Mathf.Clamp01((float)m.Hp / m.MaxHp);
-                _hpBarFills[used].rectTransform.sizeDelta =
-                    new Vector2(HpBarFillWidth * ratio, -HpBarFillInset * 2f); // 너비로 체력 표현
+                ApplyHpBarFill(_hpBarFills[used], fillWidth * ratio); // 너비로 체력 표현
                 // 고스트 바는 붉은 채움 뒤에서 조금 늦게 따라 내려와, 방금 깎인 구간을 흰색으로 남긴다.
                 float ghost = Mathf.Max(ratio, m.HpGhostRatio);
-                _hpBarGhosts[used].rectTransform.sizeDelta =
-                    new Vector2(HpBarFillWidth * ghost, -HpBarFillInset * 2f);
+                ApplyHpBarFill(_hpBarGhosts[used], fillWidth * ghost);
                 used++;
             }
 
@@ -1940,18 +1949,45 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>
+        /// 이번 프레임의 HP바 픽셀 크기를 카메라 배율(월드 1유닛당 픽셀)로 계산한다.
+        /// <para>바 폭을 <see cref="HpBarWorldWidth"/> 월드 단위로 고정하므로 <b>몬스터 대비 크기가 창 크기와
+        /// 무관하게 일정</b>하다 — 카메라 세로 시야는 <c>orthographicSize×2</c> 월드이고 그것이
+        /// <c>pixelHeight</c> 픽셀로 그려지므로, 배율은 <c>pixelHeight / (2·orthographicSize)</c>다.
+        /// <c>pixelHeight</c>는 카메라 뷰포트(GameScene의 전투 밴드) 기준이라 밴드 제한도 그대로 반영된다.</para>
+        /// 픽셀 격자에 맞추려고 정수로 반올림한다(소수 크기는 프레임 아트가 번진다).
+        /// </summary>
+        private void UpdateHpBarMetrics()
+        {
+            float pxPerWorld = _cam != null && _cam.orthographicSize > 0f
+                ? _cam.pixelHeight / (2f * _cam.orthographicSize)
+                : 100f;
+            _hpBarWidthPx = Mathf.Max(HpBarMinWidthPx, Mathf.Round(HpBarWorldWidth * pxPerWorld));
+            _hpBarHeightPx = Mathf.Max(4f, Mathf.Round(_hpBarWidthPx * HpBarAspect));
+            _hpBarInsetPx = Mathf.Max(1f, Mathf.Round(_hpBarHeightPx * HpBarInsetRatio));
+        }
+
+        /// <summary>채움(현재 체력 또는 고스트) 사각형을 프레임 테두리 안쪽에 지정 너비로 놓는다.</summary>
+        private void ApplyHpBarFill(Image fill, float width)
+        {
+            var rt = fill.rectTransform;
+            rt.anchoredPosition = new Vector2(_hpBarInsetPx, 0f);
+            rt.sizeDelta = new Vector2(Mathf.Max(0f, width), -_hpBarInsetPx * 2f);
+        }
+
+        /// <summary>
         /// 피격 직후 HP바를 흔들 픽셀 오프셋. 강도(<paramref name="shake01"/>)는 몬스터가 감쇠시켜 넘겨준다.
         /// 서로 다른 주파수의 사인을 써서 x·y가 같은 방향으로만 왕복하지 않게 한다(원운동처럼 보이지 않도록).
         /// 시간은 <b>unscaled</b> — 히트스톱으로 시간이 멈춘 동안에도 바가 흔들려야 카메라 셰이크와 결이 맞는다.
+        /// 진폭은 바 크기(테두리 몫 = 높이의 1/6)에 비례한다 — 바가 작을 때 크게 흔들면 읽기 어렵다.
         /// </summary>
-        private static Vector2 HpBarJitter(float shake01)
+        private Vector2 HpBarJitter(float shake01)
         {
             if (shake01 <= 0f)
             {
                 return Vector2.zero;
             }
             float phase = Time.unscaledTime * HpBarShakeFrequency;
-            float amp = HpBarShakePx * shake01;
+            float amp = _hpBarInsetPx * shake01;
             return new Vector2(Mathf.Sin(phase) * amp, Mathf.Sin(phase * 1.7f) * amp * 0.6f);
         }
 
@@ -1965,11 +2001,11 @@ namespace TaskbarHero.Client.Battle
                 var bgRt = (RectTransform)bgGo.transform;
                 bgRt.anchorMin = bgRt.anchorMax = new Vector2(0f, 0f); // 좌하단 기준
                 bgRt.pivot = new Vector2(0.5f, 0.5f);
-                bgRt.sizeDelta = new Vector2(HpBarWidth, HpBarHeight);
+                bgRt.sizeDelta = new Vector2(_hpBarWidthPx, _hpBarHeightPx); // 실제 크기는 매 프레임 갱신된다
                 var bgImg = bgGo.GetComponent<Image>();
                 if (enemyHpBarFrame != null)
                 {
-                    bgImg.sprite = enemyHpBarFrame; // 체력바 프레임 아트(원본 비율 그대로 8배 축소)
+                    bgImg.sprite = enemyHpBarFrame; // 체력바 프레임 아트(원본 비율 그대로 축소)
                     bgImg.color = Color.white;
                 }
                 else
@@ -1981,9 +2017,11 @@ namespace TaskbarHero.Client.Battle
                 // 고스트(방금 깎인 양): 붉은 채움보다 <b>먼저</b> 만들어 그 아래에 깔린다(자식 순서 = 그리기 순서).
                 // 붉은 채움이 덮지 못하고 남는 오른쪽 구간이 곧 "직전 체력 → 현재 체력" 차이다.
                 var ghostImg = NewHpBarFill(bgGo.transform, "Ghost", HpGhostColor);
+                ApplyHpBarFill(ghostImg, 0f);
 
                 // 채움: 좌측 정렬 솔리드 사각형(너비로 체력 비율 표현). 프레임 테두리를 피해 안쪽으로 넣는다.
                 var fillImg = NewHpBarFill(bgGo.transform, "Fill", new Color(0.85f, 0.16f, 0.16f, 1f));
+                ApplyHpBarFill(fillImg, 0f);
 
                 _hpBarRoots.Add(bgRt);
                 _hpBarFills.Add(fillImg);
@@ -1992,7 +2030,8 @@ namespace TaskbarHero.Client.Battle
             return _hpBarRoots[index];
         }
 
-        /// <summary>HP바 안쪽 채움용 Image(좌측 정렬·프레임 테두리 안쪽)를 만든다 — 고스트와 현재 체력이 공유한다.</summary>
+        /// <summary>HP바 안쪽 채움용 Image(좌측 정렬·프레임 테두리 안쪽)를 만든다 — 고스트와 현재 체력이 공유한다.
+        /// 자리·크기는 <see cref="ApplyHpBarFill"/>이 현재 바 크기에 맞춰 넣는다.</summary>
         private static Image NewHpBarFill(Transform parent, string name, Color color)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(Image));
@@ -2001,8 +2040,6 @@ namespace TaskbarHero.Client.Battle
             rt.anchorMin = new Vector2(0f, 0f);
             rt.anchorMax = new Vector2(0f, 1f);
             rt.pivot = new Vector2(0f, 0.5f);
-            rt.anchoredPosition = new Vector2(HpBarFillInset, 0f);
-            rt.sizeDelta = new Vector2(HpBarFillWidth, -HpBarFillInset * 2f);
             var img = go.GetComponent<Image>();
             img.color = color;
             img.raycastTarget = false;

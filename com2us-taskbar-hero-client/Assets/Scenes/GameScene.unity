@@ -1581,7 +1581,7 @@ MonoBehaviour:
   portraitAim: {x: 0, y: 0.48}
   updateInterval: 0.05
   dockAboveBackground: 1
-  dockMargin: 180
+  dockMargin: 40
   alignLeft: 1
   alignLeftShift: 440
   hpBarGap: 8
