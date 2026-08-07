@@ -52,6 +52,12 @@ namespace TaskbarHero.Client.Battle
         [SerializeField] private float levelUpYOffset = 0.6f;
         [Tooltip("레벨업 글로우 정렬 순서(캐릭터 스프라이트 대비 가산 — 앞에 표시).")]
         [SerializeField] private int levelUpSortingOffset = 30;
+        [Tooltip("레벨업 시 캐릭터 위에 띄우는 'LEVEL UP!' 배너 이미지(Assets/Art/UI/System/레벨업.png, 에디터 빌더가 배선).")]
+        [SerializeField] private Sprite levelUpBanner;
+        [Tooltip("레벨업 배너 월드 너비(유닛). 이미지를 이 너비에 맞춰 스케일한다.")]
+        [SerializeField] private float levelUpBannerWidth = 2.6f;
+        [Tooltip("레벨업 배너를 캐릭터 기준 위로 올리는 y 오프셋(이미지 중심 기준).")]
+        [SerializeField] private float levelUpBannerYOffset = 2.4f;
 
         private readonly Dictionary<int, GameObject> _prefabByCode = new Dictionary<int, GameObject>();
         private int _act = 1;
@@ -422,14 +428,15 @@ namespace TaskbarHero.Client.Battle
             _pendingLevelUps.Clear();
         }
 
-        /// <summary>지정 캐릭터(characterId)에 해당하는 전투 유닛 위치에 레벨업 글로우(스프라이트 시퀀스)를 1회 재생한다.
-        /// 좌하단 피벗·큰 스프라이트를 몸통 중심에 맞춰 스케일·정렬하고, 재생이 끝나면 자동 파괴된다.</summary>
+        /// <summary>지정 캐릭터(characterId)에 해당하는 전투 유닛 위치에 레벨업 글로우(스프라이트 시퀀스)와
+        /// "LEVEL UP!" 배너 이미지를 1회 재생한다. 좌하단 피벗·큰 스프라이트를 몸통 중심에 맞춰 스케일·정렬하고,
+        /// 재생이 끝나면 각각 자동 파괴된다.</summary>
         private void PlayLevelUpEffect(int characterId)
         {
-            // 레벨업음은 글로우 프레임 배선과 무관하게 울린다(사운드 정의서 §5.1).
+            // 레벨업음은 글로우/배너 배선과 무관하게 울린다(사운드 정의서 §5.1).
             SoundManager.Sfx(SoundId.LevelUp);
 
-            if (levelUpFrames == null || levelUpFrames.Length == 0 || battle == null)
+            if (battle == null)
             {
                 return;
             }
@@ -448,11 +455,40 @@ namespace TaskbarHero.Client.Battle
                 return; // 파티에 없는 직업(예: 미구현)일 수 있음
             }
 
-            var sp0 = levelUpFrames[0];
-            if (sp0 == null)
+            // 캐릭터는 SortingGroup + 다수 파트(정렬 범위 큼)이므로, 파트 최대 order보다 위에 두어 항상 앞에 표시.
+            int baseOrder = levelUpSortingOffset;
+            int sortingLayerId = 0;
+            var charRenderers = target.GetComponentsInChildren<SpriteRenderer>(true);
+            if (charRenderers != null && charRenderers.Length > 0)
             {
-                return;
+                int maxOrder = int.MinValue;
+                foreach (var s in charRenderers)
+                {
+                    if (s.sortingOrder > maxOrder) { maxOrder = s.sortingOrder; }
+                }
+                sortingLayerId = charRenderers[0].sortingLayerID;
+                baseOrder = (maxOrder == int.MinValue ? 0 : maxOrder) + levelUpSortingOffset;
             }
+
+            bool glowPlayed = PlayLevelUpGlow(target, sortingLayerId, baseOrder);
+
+            // 글로우와 함께 캐릭터 위에 "LEVEL UP!" 배너 이미지를 띄운다(글로우보다 위·앞에 표시).
+            LevelUpBanner.Spawn(target.transform, levelUpBanner, levelUpBannerYOffset, levelUpBannerWidth,
+                                sortingLayerId, baseOrder + 1);
+
+            Debug.Log($"[Dungeon] 레벨업 연출 재생 char={characterId} 글로우={glowPlayed} 배너={levelUpBanner != null}");
+        }
+
+        /// <summary>레벨업 글로우(스프라이트 시퀀스)를 캐릭터 몸통 중심에 정렬해 1회 재생한다(재생 후 자동 파괴).
+        /// 프레임이 배선되지 않았으면 아무것도 하지 않고 false를 반환한다.</summary>
+        private bool PlayLevelUpGlow(PlayerCombatant target, int sortingLayerId, int sortingOrder)
+        {
+            if (levelUpFrames == null || levelUpFrames.Length == 0 || levelUpFrames[0] == null)
+            {
+                return false;
+            }
+
+            var sp0 = levelUpFrames[0];
             float spriteH = sp0.bounds.size.y;
             float scale = spriteH > 0.001f ? levelUpHeight / spriteH : 1f;
 
@@ -465,19 +501,8 @@ namespace TaskbarHero.Client.Battle
             go.transform.localPosition = new Vector3(-c.x * scale, levelUpYOffset - c.y * scale, 0f);
 
             var sr = go.AddComponent<SpriteRenderer>();
-            // 캐릭터는 SortingGroup + 다수 파트(정렬 범위 큼)이므로, 파트 최대 order보다 위에 두어 항상 앞에 표시.
-            var charRenderers = target.GetComponentsInChildren<SpriteRenderer>(true);
-            if (charRenderers != null && charRenderers.Length > 0)
-            {
-                int maxOrder = int.MinValue;
-                foreach (var s in charRenderers)
-                {
-                    if (s == sr) { continue; }
-                    if (s.sortingOrder > maxOrder) { maxOrder = s.sortingOrder; }
-                }
-                sr.sortingLayerID = charRenderers[0].sortingLayerID;
-                sr.sortingOrder = (maxOrder == int.MinValue ? 0 : maxOrder) + levelUpSortingOffset;
-            }
+            sr.sortingLayerID = sortingLayerId;
+            sr.sortingOrder = sortingOrder;
 
             var eff = go.AddComponent<SpriteSequenceEffect>();
             eff.frames = levelUpFrames;
@@ -485,12 +510,7 @@ namespace TaskbarHero.Client.Battle
             eff.loop = false;
             eff.destroyOnFinish = true;
             go.SetActive(true);
-
-            // 글로우와 함께 캐릭터 위에 노란색 "Level Up!" 문구를 띄운다(글로우보다 위·앞에 표시).
-            int glowOrder = sr.sortingOrder;
-            LevelUpText.Spawn(target.transform, levelUpYOffset + levelUpHeight * 0.6f, glowOrder + 1);
-
-            Debug.Log($"[Dungeon] 레벨업 글로우 재생 char={characterId}");
+            return true;
         }
 
         private void OnClearError(NetworkError error)

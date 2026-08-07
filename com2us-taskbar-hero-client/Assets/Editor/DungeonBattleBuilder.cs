@@ -222,6 +222,11 @@ namespace TaskbarHero.ClientEditor
             }
             Debug.Log($"[DungeonBattleBuilder] 레벨업 글로우 프레임 {lvlCount}장 배선.");
 
+            // 레벨업 배너 이미지("LEVEL UP!") 배선 — 글로우와 함께 캐릭터 위에 떠올랐다 사라진다.
+            var lvlBanner = LoadSprite("Assets/Art/UI/System/레벨업.png");
+            fso.FindProperty("levelUpBanner").objectReferenceValue = lvlBanner;
+            Debug.Log($"[DungeonBattleBuilder] 레벨업 배너 이미지 {(lvlBanner != null ? "배선" : "없음")}.");
+
             // 스테이지 입장 배너 프리팹(있으면 배선 — 없으면 런타임 코드 생성 폴백). 배너 프리팹은
             // 'TaskbarHero/UI/스테이지 입장 배너 프리팹 생성'(StageEnterBannerBuilder)으로 만든다.
             var bannerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/UI/StageEnterBanner.prefab");

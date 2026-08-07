@@ -17,7 +17,7 @@ namespace TaskbarHero.ClientEditor
         private const string IconDir = "Assets/Art/Icon";
         private const string MailIconPath = "Assets/Art/UI/Mail/메일.png";
         private const string AttendanceIconPath = IconDir + "/출석부.png";
-        private const string UiBackgroundPath = "Assets/Art/UI/ui_bg.png";
+        private const string UiBackgroundPath = "Assets/Art/UI/ui_bg_3.png";
         // 우측 상단 '적용 중인 버프' 아이콘과 그 상세 툴팁 배경(둘 다 임포트 설정은 건드리지 않고 읽어서 배선만 한다).
         private const string ActiveBuffIconPath = IconDir + "/적용중인버프.png";
         private const string ItemDetailBgPath = "Assets/Art/UI/item_detail_bg.png";
@@ -25,8 +25,10 @@ namespace TaskbarHero.ClientEditor
         // 햄버거 3줄이 서브 스프라이트로 쪼개져 있어(메뉴_0/1/2) 스프라이트를 쓰면 줄 한 개만 나온다.
         // 임포트 설정은 바꾸지 않고(공용 아트 규칙) HUD가 런타임에 텍스처 전체로 스프라이트를 만들어 쓴다.
         private const string MenuToggleIconPath = IconDir + "/메뉴.png";
-        // ui_bg(2048×731) 9-slice 경계: 나무 테두리 + 모서리 금장식이 온전히 남는 크기(L,B,R,T).
-        private static readonly Vector4 UiBackgroundBorder = new Vector4(230f, 250f, 230f, 250f);
+        // ui_bg_3(1024×434) 9-slice 경계(L,B,R,T). 가운데 빈 구멍(투명 영역)의 bbox를 실측해 잡았다 —
+        // 구멍이 x 60~963 · y(위에서) 82~380이므로 L·R=60, B=53이며, T는 상단 중앙 보석이 아래로
+        // 뻗은 끝(y 91)까지 덮도록 92로 잡아 보석이 늘어나는 가운데 영역에 걸리지 않게 한다.
+        private static readonly Vector4 UiBackgroundBorder = new Vector4(60f, 53f, 60f, 92f);
 
         // ESC 메뉴 아트(Assets/Art/UI/System).
         private const string SystemBackgroundPath = "Assets/Art/UI/System/system_bg.png";

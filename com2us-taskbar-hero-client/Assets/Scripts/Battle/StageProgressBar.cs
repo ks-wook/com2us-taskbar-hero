@@ -17,7 +17,8 @@ namespace TaskbarHero.Client.Battle
     public class StageProgressBar : MonoBehaviour
     {
         // 던전 배경 띠(캔버스 y 216~576) 안쪽 우측 하단에 놓는다. 화면 최하단은 하단 UI(아이콘 줄 +
-        // ui_bg 배경, y 10~196)가 쓰므로 그 위로 올려 겹치지 않게 하고, 눈에 들어오도록 크게 잡는다.
+        // ui_bg_3 배경, y 30~216 — 던전 띠 아래에 여백 없이 맞붙는다)가 쓰므로 그 위로 올려 겹치지 않게
+        // 하고, 눈에 들어오도록 크게 잡는다.
         // 하단 UI 토글 버튼은 우측 상단(버프 아이콘 아래)에 있어 이 자리와 겹치지 않는다.
         private const float BarWidth = 420f;
         private const float BarHeight = 34f;

@@ -59,7 +59,6 @@ MonoBehaviour:
   _readSprite: {fileID: 21300000, guid: 4f883f33cc66e4c40afbfd2b87b53cdf, type: 3}
   _buttonSprite: {fileID: -4938201203985708848, guid: 213effa653e24b641b29b2dbce05066a, type: 3}
   _itemSlotPrefab: {fileID: 5356247894179942916, guid: 9fc225956eac96745b3125df87824f94, type: 3}
-  _closeButton: {fileID: 0}
   _dimButton: {fileID: 472089758040671547}
   _claimAllButton: {fileID: 3152782547718263300}
   _listContent: {fileID: 5933350099825920684}
@@ -899,3 +898,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: TaskbarHero.Client.UI::TaskbarHero.Client.UI.SidePanelPop
   side: 0
+  autoPlace: 1

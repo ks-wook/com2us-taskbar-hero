@@ -741,10 +741,31 @@ namespace TaskbarHero.Client.Battle
 
         // ---- 마스터 데이터 로드 ----
 
+        /// <summary>
+        /// 웨이브에 쓸 몬스터 코드를 정한다.
+        /// <para>CharacterDevScene이 검수용으로 넘긴 코드가 있으면 그것을 먼저 쓴다 —
+        /// 그 씬은 EditorPrefs(<c>TaskbarHero.Dev.SpawnMonsterCode</c>)에 코드를 써 두고 이 씬으로 넘어온다
+        /// (캐릭터 개발씬 기획서 §7.3). 한 번만 적용되도록 읽은 즉시 키를 지우며, 인스펙터 필드는
+        /// 키가 없을 때 손으로 지정하는 경로로 남는다.</para>
+        /// </summary>
         private void ResolveMonsterCode()
         {
             var db = MasterDataManager.Db;
             if (db == null) return;
+#if UNITY_EDITOR
+            const string DevSpawnCodeKey = "TaskbarHero.Dev.SpawnMonsterCode";
+            if (UnityEditor.EditorPrefs.HasKey(DevSpawnCodeKey))
+            {
+                int devCode = UnityEditor.EditorPrefs.GetInt(DevSpawnCodeKey, 0);
+                UnityEditor.EditorPrefs.DeleteKey(DevSpawnCodeKey);
+                if (devCode != 0 && db.Monsters.ContainsKey(devCode))
+                {
+                    monsterCode = devCode;
+                    Debug.Log($"[BattleDev] 검수 요청 몬스터로 고정: {devCode}");
+                    return;
+                }
+            }
+#endif
             if (monsterCode != 0 && db.Monsters.ContainsKey(monsterCode)) return;
             foreach (var code in db.Monsters.Keys) { monsterCode = code; return; }
         }

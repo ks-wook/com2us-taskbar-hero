@@ -203,7 +203,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8c3a57643af33f84ca80dadd72e1033b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: TaskbarHero.Client.UI::TaskbarHero.Client.UI.RunePanelController
-  panelBackground: {fileID: 6087259527093396297, guid: 14c4ce3894e064846992c9214cad0bce, type: 3}
+  panelBackground: {fileID: -6919774509020925252, guid: bc1135afb46c4864d9be5d855a2bbe3e, type: 3}
   slotNormal: {fileID: 4400792897899385541, guid: cb28c7fa533a14947b14614134767b11, type: 3}
   slotHighlight: {fileID: 3474996413312397351, guid: 48cadfe87fef0424ab552ecfa9dc1229, type: 3}
   _runeIcons:
@@ -1837,7 +1837,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 6087259527093396297, guid: 14c4ce3894e064846992c9214cad0bce, type: 3}
+  m_Sprite: {fileID: -6919774509020925252, guid: bc1135afb46c4864d9be5d855a2bbe3e, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1

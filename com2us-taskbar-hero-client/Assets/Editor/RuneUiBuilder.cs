@@ -15,6 +15,8 @@ namespace TaskbarHero.ClientEditor
     public static class RuneUiBuilder
     {
         private const string ArtDir = "Assets/Art/UI/Inventory";
+        // 패널 본체 배경 프레임(인벤토리·스킬 패널과 같은 공용 프레임).
+        private const string PanelBgPath = "Assets/Art/UI/ui_bg_2.png";
         private const string PrefabPath = "Assets/Prefabs/UI/RunePanel.prefab";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string TitleScenePath = "Assets/Scenes/TitleScene.unity";
@@ -52,7 +54,7 @@ namespace TaskbarHero.ClientEditor
             var ctrl = root.AddComponent<RunePanelController>();
 
             var so = new SerializedObject(ctrl);
-            so.FindProperty("panelBackground").objectReferenceValue = LoadSprite("ui_panel_background");
+            so.FindProperty("panelBackground").objectReferenceValue = LoadSpriteAt(PanelBgPath);
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
             WireRuneIcons(so); // runeCode → Assets/Art/Icon/Rune 아이콘
@@ -177,7 +179,12 @@ namespace TaskbarHero.ClientEditor
 
         private static Sprite LoadSprite(string fileName)
         {
-            string path = $"{ArtDir}/{fileName}.png";
+            return LoadSpriteAt($"{ArtDir}/{fileName}.png");
+        }
+
+        /// <summary>에셋 경로에서 스프라이트를 로드한다(Single/Multiple 모두 대응).</summary>
+        private static Sprite LoadSpriteAt(string path)
+        {
             var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
             if (sprite != null)
             {

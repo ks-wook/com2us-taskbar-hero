@@ -18,7 +18,7 @@ namespace TaskbarHero.Client.UI
     public class InventoryPanelController : MonoBehaviour
     {
         [Header("UI 리소스 (Assets/Art/UI/Inventory)")]
-        [SerializeField] private Sprite panelBackground; // ui_panel_background
+        [SerializeField] private Sprite panelBackground; // ui_bg_2(스킬·룬 패널과 공용 프레임)
         [SerializeField] private Sprite slotNormal;      // ui_slot_normal
         [SerializeField] private Sprite slotHighlight;   // ui_slot_highlight
         [SerializeField] private Sprite slotPortrait;    // ui_slot_portrait
@@ -349,8 +349,8 @@ namespace TaskbarHero.Client.UI
             BuildCanvas();
             BuildDim();
             var container = BuildContainer();
-            BuildHeader(container);
-            BuildGoldArea(container);  // 보유 골드 표시(좌상단)
+            // 제목 텍스트는 두지 않는다 — 배경 아트(ui_bg_2)의 상단 장식판이 제목 자리를 그린다.
+            BuildGoldArea(container);  // 보유 골드 표시
             BuildEquipArea(container); // 캐릭터 네비게이션 포함, 가로 중앙 정렬
             BuildGrid(container);
             BuildGrowthButtons(container); // 스킬·룬 진입 버튼(인벤토리 아이템 아래, 패널 최하단)
@@ -386,15 +386,17 @@ namespace TaskbarHero.Client.UI
 
         // 보유 골드 블록의 표시 배율(1이면 원래 크기). 자식 좌표를 다시 잡지 않고 블록째로 줄인다.
         private const float GoldAreaScale = 0.7f;
+        // 패널 좌상단 기준 골드 블록 위치. 플레이 모드에서 직접 옮겨 확정한 값(장비 영역 오른쪽 아래).
+        private static readonly Vector2 GoldAreaPos = new Vector2(485f, -596f);
 
-        /// <summary>좌상단 보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 아이콘/수량은 런타임에 세션에서 채운다.
-        /// 제목 옆에서 과하게 커 보이지 않도록 블록 전체를 0.7배로 축소해 얹는다(자식 크기는 그대로 둔다).</summary>
+        /// <summary>보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 아이콘/수량은 런타임에 세션에서 채운다.
+        /// 과하게 커 보이지 않도록 블록 전체를 0.7배로 축소해 얹는다(자식 크기는 그대로 둔다).</summary>
         private void BuildGoldArea(RectTransform container)
         {
             var area = NewRect("GoldArea", container);
             area.anchorMin = area.anchorMax = new Vector2(0f, 1f);
             area.pivot = new Vector2(0f, 1f);
-            area.anchoredPosition = new Vector2(40f, -40f);
+            area.anchoredPosition = GoldAreaPos;
             area.sizeDelta = new Vector2(280f, 60f);
             area.localScale = new Vector3(GoldAreaScale, GoldAreaScale, GoldAreaScale);
 
@@ -700,19 +702,6 @@ namespace TaskbarHero.Client.UI
             return rt;
         }
 
-        /// <summary>제목(가로 중앙). 닫기(X) 버튼은 미관상 두지 않고 창 밖(딤) 클릭으로 닫는다
-        /// (스테이지 지도·지역 창, 뽑기 창과 같은 규칙).</summary>
-        private void BuildHeader(RectTransform container)
-        {
-            // 제목: 패널 가로 중앙 정렬
-            var title = NewText("Title", container, "인벤토리", 44, TextAnchor.UpperCenter);
-            var trt = title.rectTransform;
-            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
-            trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -40f);
-            trt.sizeDelta = new Vector2(500f, 56f);
-        }
-
         // 장비 영역 블록의 내부 폭(능력치 패널 + 초상 + 6부위 슬롯을 포함). 이 블록을 패널 가로 중앙에 둔다.
         private const float StatPanelWidth = 220f;
         private const float PortraitWidth = 220f;
@@ -730,18 +719,16 @@ namespace TaskbarHero.Client.UI
             area.sizeDelta = new Vector2(EquipBlockWidth, 476f);
             area.anchoredPosition = new Vector2(0f, -104f);
 
-            // 캐릭터 전환 네비게이션 (◀ 인디케이터 ▶)
-            _prevButton = BuildNavButton(area, "PrevCharButton", "<", 0f, true, out _prevPunch);
+            // 캐릭터 전환 네비게이션 (◀ 인디케이터 ▶). 좌표는 플레이 모드에서 직접 옮겨 확정한 값 —
+            // 화살표를 블록 양 끝이 아니라 인디케이터 글자 바로 옆으로 좁혀 붙이고, 줄 전체를 아래로 내렸다.
+            _prevButton = BuildNavButton(area, "PrevCharButton", "<", NavPrevX, NavRowY, true, out _prevPunch);
 
             _charIndicatorText = NewText("CharIndicator", area, "", 28, TextAnchor.MiddleCenter);
-            TopLeft(_charIndicatorText.rectTransform, 70f, 0f, EquipBlockWidth - 140f, 64f);
+            TopLeft(_charIndicatorText.rectTransform, 70f, NavIndicatorY, EquipBlockWidth - 140f, 64f);
 
-            _nextButton = BuildNavButton(area, "NextCharButton", ">", EquipBlockWidth - NavButtonSize, false,
-                out _nextPunch);
+            _nextButton = BuildNavButton(area, "NextCharButton", ">", NavNextX, NavRowY, false, out _nextPunch);
 
-            // '장비' 라벨
-            var label = NewText("EquipLabel", area, "장비", 32, TextAnchor.UpperLeft);
-            TopLeft(label.rectTransform, 0f, 90f, 200f, 44f);
+            // '장비' 라벨은 두지 않는다 — 배경 아트(ui_bg_2)의 장식과 겹쳐 보여 제거했다(플레이 모드에서 확인).
 
             // 능력치 패널(초상화 좌측): 장비 포함 현재 캐릭터 능력치.
             BuildStatPanel(area);
@@ -858,6 +845,11 @@ namespace TaskbarHero.Client.UI
 
         private const float NavButtonSize = 64f;      // 캐릭터 전환 화살표 버튼 한 변
         private const float NavArrowPadding = 6f;     // 버튼 안쪽에서 화살표를 줄이는 여백(클릭 영역은 그대로)
+        // 캐릭터 전환 줄의 좌표(장비 블록 좌상단 기준, 아래로 +). 플레이 모드에서 확정한 값이다.
+        private const float NavRowY = 80f;            // 화살표 버튼 줄의 y
+        private const float NavIndicatorY = 83f;      // 인디케이터 글자의 y(버튼보다 3 아래 — 시각 정렬)
+        private const float NavPrevX = 168f;          // 이전(◀) 버튼 x
+        private const float NavNextX = 452f;          // 다음(▶) 버튼 x
 
         /// <summary>
         /// 캐릭터 전환 화살표 버튼 하나(이전/다음). 구조는 <b>투명한 루트(클릭 영역) + 화살표 자식</b>이다.
@@ -871,7 +863,7 @@ namespace TaskbarHero.Client.UI
         /// <item>아트가 없으면 기존처럼 슬롯 배경 + 꺽쇠 텍스트로 폴백해 버튼이 사라지지 않게 한다.</item>
         /// </list>
         /// </summary>
-        private Button BuildNavButton(RectTransform area, string name, string fallbackLabel, float x,
+        private Button BuildNavButton(RectTransform area, string name, string fallbackLabel, float x, float y,
             bool mirrored, out ButtonPunchScale punch)
         {
             bool hasArt = navArrow != null;
@@ -882,7 +874,7 @@ namespace TaskbarHero.Client.UI
             {
                 root.color = new Color(1f, 1f, 1f, 0f);
             }
-            TopLeft(root.rectTransform, x, 0f, NavButtonSize, NavButtonSize);
+            TopLeft(root.rectTransform, x, y, NavButtonSize, NavButtonSize);
             var button = root.gameObject.AddComponent<Button>();
 
             if (!hasArt)

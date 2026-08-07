@@ -11,8 +11,10 @@ namespace TaskbarHero.Client.UI
     /// <summary>
     /// GameScene 상시 HUD. <b>화면 하단 가로 중앙</b>에 기능 버튼(뽑기·거래소·출석부·메일·편성·스테이지·가방·환경설정)을
     /// 한 줄로 노출하고, ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
-    /// 버튼 줄은 던전 배경 띠보다 아래(화면 최하단)에 놓여 배경 아트에 묻히지 않는다 —
+    /// 아이콘 줄은 던전 배경 띠보다 아래(화면 최하단)에 놓여 배경 아트에 묻히지 않는다 —
     /// 배경 띠를 위로 띄우는 쪽은 <c>DungeonBattleBuilder</c>가 GameScene을 구울 때 처리한다.
+    /// 다만 <b>뒷배경 프레임은 아이콘 줄보다 위로 더 커서 던전 띠에 얹힌다</b>(<see cref="UiBackTopExtend"/>) —
+    /// 그래서 HUD 캔버스를 전투 오버레이보다 위(<see cref="UiSortingOrder.Hud"/>)에 둔다.
     /// <para>
     /// 하단 바는 <b>토글 버튼으로 열고 닫는다</b>(<b>기본 접힘</b> — 손잡이만 보이고 눌러야 펼쳐진다).
     /// 열면 접히는 영역이 오른쪽에서 왼쪽으로 펼쳐지고
@@ -42,7 +44,7 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite gachaIcon;      // 뽑기(가챠)
         [Tooltip("환경설정 아이콘(Assets/Art/Icon/환경설정.png).")]
         [SerializeField] private Sprite settingsIcon;   // 환경설정
-        [Tooltip("하단 아이콘 줄 뒷배경 프레임(Assets/Art/UI/ui_bg.png, 9-slice). 없으면 배경 없이 아이콘만 표시.")]
+        [Tooltip("하단 아이콘 줄 뒷배경 프레임(Assets/Art/UI/ui_bg_3.png, 9-slice). 없으면 배경 없이 아이콘만 표시.")]
         [SerializeField] private Sprite uiBackgroundSprite;
         [Tooltip("하단 메뉴바 토글 버튼 아이콘(Assets/Art/Icon/메뉴.png). " +
                  "Sprite가 아니라 Texture2D인 이유 — 이 파일은 Multiple로 임포트돼 햄버거 3줄이 서브 스프라이트로 " +
@@ -83,16 +85,34 @@ namespace TaskbarHero.Client.UI
         private const float MenuSlotStep = 164f;
         private const float MenuButtonWidth = 152f;
         private const float MenuButtonHeight = 150f;
-        private const float MenuRowY = 28f;       // 화면 하단에서 띄우는 높이(던전 배경 띠 아래)
+        private const float MenuRowY = 48f;       // 화면 하단에서 띄우는 높이(바 위쪽이 던전 배경 띠에 딱 붙는 값)
 
-        // 하단 UI 뒷배경(ui_bg) 크기 계산용.
+        // 하단 UI 뒷배경(ui_bg_3) 크기 계산용.
         private const float UiBackPadding = 18f;          // 아이콘 줄과 배경 프레임 안쪽 여백
         private const float UiBackSidePadding = 24f;      // 좌우 여백
-        private const float DungeonBandBottomY = 216f;    // 던전 배경 띠의 아래 끝(DungeonBattleBuilder.GameSceneBattleLiftY와 짝)
-        private const float UiBackGapFromDungeon = 20f;   // 던전 배경과 띄울 간격(패딩)
-        // 9-slice 원본(2048×731)의 테두리(상하 250px)가 두꺼워 그대로 쓰면 바 높이(186)를 넘는다
-        // → 배율로 줄여 쓴다(250/4 = 62.5씩, 상하 합 125 < 186).
-        private const float UiBackPixelsPerUnitMultiplier = 4f;
+        // 프레임을 아이콘 줄 위로 더 키우는 높이. 플레이 모드에서 배경 rect를 직접 조정해 확정한 값이라
+        // 그대로 옮겨 놓았다(바 위쪽 끝 = 캔버스 y 282.26 → 던전 배경 띠 아래 끝 216보다 위로 올라와 겹친다.
+        // 하단 UI가 던전 위에 얹히는 것이 의도이며, 이 겹침이 보이려면 아래 두 가지가 함께 필요하다 —
+        // ① 바/영역 높이가 프레임 높이와 같아야 한다(MenuArea의 RectMask2D가 넘치는 부분을 잘라낸다),
+        // ② HUD 캔버스가 전투 오버레이보다 위여야 한다(UiSortingOrder.Hud).
+        private const float UiBackTopExtend = 66.26f;
+        // ui_bg_3(1024×434)의 9-slice 테두리는 상 92 / 하 53px(GameSceneHudBuilder.UiBackgroundBorder)로
+        // 합 145 < 바 높이(252.26)라 원본 픽셀 크기(배율 1)로 그려도 들어간다 — 픽셀아트를 축소하지 않는다.
+        private const float UiBackPixelsPerUnitMultiplier = 1f;
+        // 프레임 안쪽(비어 있는 구멍)에 깔 짙은 파랑 바닥. 색은 패널 프레임(ui_bg_2) 내부색과 같은 톤이라
+        // 하단 바와 인벤토리·스킬 패널의 배경이 같은 계열로 읽힌다.
+        private static readonly Color UiBackFillColor = new Color32(23, 36, 50, 255);
+        // 좌우는 9-slice 테두리(L 60 · R 60, 배율 1이므로 픽셀 = UI 단위)에서 Bleed만큼 물려 이음선을 없앤다.
+        private static readonly Vector4 UiBackFrameBorder = new Vector4(60f, 53f, 60f, 92f); // L,B,R,T
+        private const float UiBackFillBleed = 2f;
+        // 위아래는 테두리 두께로 계산하지 않고 플레이 모드에서 직접 늘려 확정한 값을 쓴다 —
+        // 바닥이 비어 보였으므로 아래는 바 밑단까지(0) 내리고 위는 프레임 상단 장식 아래에 맞췄다.
+        private const float UiBackFillBottomInset = 0f;
+        private const float UiBackFillTopInset = 68.86f;
+        // 프레임을 바(=마스크 영역) 밑단보다 더 내려 그리는 높이. 아래 테두리가 화면 최하단에 닿도록
+        // 플레이 모드에서 조정한 값이며, 이만큼 RectMask2D 아래쪽을 열어 줘야 잘리지 않는다
+        // (<see cref="CreateMenuArea"/>의 padding).
+        private const float UiBackFrameBottomOverhang = 15.10f;
 
         // 토글 버튼(접혀도 남아 있는 손잡이). 하단 바에 붙이지 않고 <b>우측 상단 버프 아이콘 바로 아래</b>에 둔다
         // (우상단 앵커 기준). 버프 아이콘이 y -28에서 아래로 BuffIconSize(96)만큼 차지하므로 그 아래로 12 띄운다.
@@ -117,10 +137,11 @@ namespace TaskbarHero.Client.UI
         // 바 기하. 바 = 접히는 영역(배경 프레임 + 아이콘 줄)이며, 이 폭 그대로 화면 하단 중앙에 놓인다.
         private const float MenuAreaWidth = (MenuSlotCount - 1) * MenuSlotStep + MenuButtonWidth + UiBackSidePadding * 2f;
         private const float MenuBarBottom = MenuRowY - UiBackPadding;
-        // 바 위쪽 끝: 아이콘 줄 위 여백과 던전 배경과의 간격 중 더 낮은 쪽을 택해 던전 띠를 침범하지 않게 한다.
-        private static readonly float MenuBarTop = Mathf.Min(MenuRowY + MenuButtonHeight + UiBackPadding,
-                                                            DungeonBandBottomY - UiBackGapFromDungeon);
-        private static readonly float MenuBarHeight = MenuBarTop - MenuBarBottom;
+        // 바 위쪽 끝 = 아이콘 줄 위 여백 + 프레임 추가 높이. 바(=마스크 영역) 높이를 프레임 높이와 같게
+        // 맞춰야 프레임 윗부분이 RectMask2D에 잘리지 않는다 — 아이콘 줄은 바 아래를 기준으로 배치되므로
+        // 바가 위로 커져도 아이콘 위치는 그대로다.
+        private const float MenuBarTop = MenuRowY + MenuButtonHeight + UiBackPadding + UiBackTopExtend;
+        private const float MenuBarHeight = MenuBarTop - MenuBarBottom;
 
         // 우측 상단 버프 아이콘: 화면 모서리에서 살짝 띄운 위치·크기(우상단 앵커 기준).
         // 좌표를 상수로 둬 메뉴 토글 버튼 위치(MenuTogglePos)가 이 아래에 붙도록 계산할 수 있게 한다.
@@ -288,7 +309,7 @@ namespace TaskbarHero.Client.UI
             canvasGo.transform.SetParent(transform, false);
             var canvas = canvasGo.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 10; // 패널(100)보다 아래
+            canvas.sortingOrder = UiSortingOrder.Hud; // 전투 오버레이(≤10)보다 위, 패널(100)보다 아래
             var scaler = canvasGo.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1080f, 1920f);
@@ -380,11 +401,15 @@ namespace TaskbarHero.Client.UI
         /// 접히는 영역(배경 프레임 + 아이콘 줄)을 만든다. 오른쪽 끝을 기준으로 폭이 0 ↔ <see cref="MenuAreaWidth"/>로
         /// 변하며 <b>오른쪽에서 왼쪽으로 펼쳐진다</b>. <see cref="RectMask2D"/>로 클리핑해 아직 펼쳐지지 않은
         /// 아이콘이 밖으로 새지 않게 한다(클리핑된 영역은 클릭도 받지 않는다).
+        /// 단 마스크 <b>아래쪽만</b> <see cref="UiBackFrameBottomOverhang"/>만큼 음수 padding으로 열어 둔다 —
+        /// 배경 프레임의 아래 테두리는 바 밑단보다 더 내려 그리므로 열어 두지 않으면 그 부분이 잘려 나간다
+        /// (좌우 클리핑은 그대로라 접힘 연출은 영향받지 않는다).
         /// </summary>
         private static RectTransform CreateMenuArea(RectTransform bar)
         {
             var go = new GameObject("MenuArea", typeof(RectTransform), typeof(RectMask2D));
             go.transform.SetParent(bar, false);
+            go.GetComponent<RectMask2D>().padding = new Vector4(0f, -UiBackFrameBottomOverhang, 0f, 0f);
             var rt = (RectTransform)go.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(1f, 0f); // 바의 오른쪽 아래 기준
             rt.pivot = new Vector2(1f, 0f);
@@ -394,9 +419,10 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>
-        /// 아이콘 줄 뒤에 깔리는 배경 프레임(ui_bg)을 만든다. 접히는 영역을 꽉 채우도록 늘려 두어
-        /// <b>영역이 접힐 때 프레임도 함께 말려</b>(9-slice라 테두리는 유지된 채) 보인다.
-        /// 스프라이트가 없으면 배경을 만들지 않는다(아이콘만 표시).
+        /// 아이콘 줄 뒤에 깔리는 배경 프레임(ui_bg_3)과 그 안쪽 짙은 파랑 바닥을 만든다. 접히는 영역을
+        /// 꽉 채우도록 늘려 두어 <b>영역이 접힐 때 프레임도 함께 말려</b>(9-slice라 테두리는 유지된 채) 보인다.
+        /// 프레임 가운데는 뚫려 있으므로 <b>바닥(<see cref="UiBackFillColor"/>)을 프레임보다 먼저 깔아</b>
+        /// 던전 화면이 그대로 비치지 않게 한다. 스프라이트가 없으면 배경을 만들지 않는다(아이콘만 표시).
         /// </summary>
         private void BuildMenuBackground(RectTransform area)
         {
@@ -404,6 +430,8 @@ namespace TaskbarHero.Client.UI
             {
                 return;
             }
+
+            BuildMenuBackgroundFill(area);
 
             var go = new GameObject("MenuBackground", typeof(RectTransform), typeof(Image));
             go.transform.SetParent(area, false);
@@ -417,8 +445,31 @@ namespace TaskbarHero.Client.UI
             var rt = (RectTransform)go.transform;
             rt.anchorMin = Vector2.zero; // 영역 전체를 채운다(폭 애니메이션에 따라 함께 줄었다 늘어난다)
             rt.anchorMax = Vector2.one;
-            rt.offsetMin = Vector2.zero;
+            rt.offsetMin = new Vector2(0f, -UiBackFrameBottomOverhang); // 아래 테두리는 바 밑단보다 더 내려 그린다
             rt.offsetMax = Vector2.zero;
+        }
+
+        /// <summary>
+        /// 프레임 안쪽 빈 구멍을 채우는 짙은 파랑 바닥을 만든다(프레임보다 먼저 생성해 <b>아래</b>에 깔린다).
+        /// 영역 전체에 늘어붙되 <b>좌우</b>는 9-slice 테두리(<see cref="UiBackFrameBorder"/>)에서
+        /// <see cref="UiBackFillBleed"/>만큼 물려 들여 색이 프레임 밖으로 삐져나오지 않게 하고,
+        /// <b>위아래</b>는 플레이 모드에서 확정한 <see cref="UiBackFillBottomInset"/>·
+        /// <see cref="UiBackFillTopInset"/>을 쓴다(아래는 바 밑단까지 꽉 채운다).
+        /// </summary>
+        private static void BuildMenuBackgroundFill(RectTransform area)
+        {
+            var go = new GameObject("MenuBackgroundFill", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(area, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = null;
+            img.color = UiBackFillColor;
+            img.raycastTarget = false; // 배경은 클릭을 먹지 않는다(창 드래그·아이콘 클릭 방해 금지)
+
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = Vector2.zero;
+            rt.anchorMax = Vector2.one;
+            rt.offsetMin = new Vector2(UiBackFrameBorder.x - UiBackFillBleed, UiBackFillBottomInset);
+            rt.offsetMax = new Vector2(-(UiBackFrameBorder.z - UiBackFillBleed), -UiBackFillTopInset);
         }
 
         /// <summary>

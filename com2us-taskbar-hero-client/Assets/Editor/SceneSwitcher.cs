@@ -25,6 +25,7 @@ namespace TaskbarHero.ClientEditor
         private const string TeamListItem = MenuRoot + "TeamListScene (파티 편성)";
         private const string BattleDevItem = MenuRoot + "BattleDevScene (전투 개발용)";
         private const string AnimDevItem = MenuRoot + "AnimDevScene (애니메이션 개발용)";
+        private const string CharacterDevItem = MenuRoot + "CharacterDevScene (몬스터 자동생성)";
 
         private const string TitlePath = SceneFolder + "TitleScene.unity";
         private const string CreateCharacterPath = SceneFolder + "CreateCharacterScene.unity";
@@ -32,6 +33,7 @@ namespace TaskbarHero.ClientEditor
         private const string TeamListPath = SceneFolder + "TeamListScene.unity";
         private const string BattleDevPath = SceneFolder + "BattleDevScene.unity";
         private const string AnimDevPath = SceneFolder + "AnimDevScene.unity";
+        private const string CharacterDevPath = SceneFolder + "CharacterDevScene.unity";
 
         // ── TitleScene ──
 
@@ -80,6 +82,14 @@ namespace TaskbarHero.ClientEditor
 
         [MenuItem(AnimDevItem + " &6", true)]
         private static bool OpenAnimDevValidate() => Validate(AnimDevItem, AnimDevPath);
+
+        // ── CharacterDevScene (몬스터 유닛 자동생성 하네스 — 빌드에 포함되지 않음) ──
+
+        [MenuItem(CharacterDevItem + " &7", false, 22)]
+        private static void OpenCharacterDev() => Open(CharacterDevPath);
+
+        [MenuItem(CharacterDevItem + " &7", true)]
+        private static bool OpenCharacterDevValidate() => Validate(CharacterDevItem, CharacterDevPath);
 
         /// <summary>저장 프롬프트를 거친 뒤 해당 씬을 단독(Single)으로 연다. 사용자가 저장을 취소하면 아무것도 하지 않는다.</summary>
         private static void Open(string scenePath)

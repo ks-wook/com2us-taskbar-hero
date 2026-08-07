@@ -20,7 +20,7 @@ namespace TaskbarHero.Client.UI
     public class SkillPanelController : MonoBehaviour
     {
         [Header("UI 리소스 (Assets/Art/UI/Inventory 공용)")]
-        [SerializeField] private Sprite panelBackground; // ui_panel_background
+        [SerializeField] private Sprite panelBackground; // ui_bg_2(인벤토리·룬 패널과 공용 프레임)
         [SerializeField] private Sprite slotNormal;      // ui_slot_normal
         [SerializeField] private Sprite slotHighlight;   // ui_slot_highlight
         [Tooltip("캐릭터 전환 버튼 아트(Assets/Art/UI/화살표버튼.png). 오른쪽을 가리키는 그림이라 이전 버튼은 좌우 반전해 쓴다. 없으면 슬롯 배경 + '<'/'>' 글자로 폴백.")]

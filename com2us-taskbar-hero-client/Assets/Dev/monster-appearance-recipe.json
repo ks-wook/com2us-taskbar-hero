@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "recipes": [
+    {
+      "monsterCode": 9001,
+      "note": "빙의된 병사",
+      "race": "human",
+      "theme": "fantasy",
+      "classes": ["melee", "physical"],
+      "seed": 9001
+    },
+    {
+      "monsterCode": 9002,
+      "note": "빙의된 암살자",
+      "race": "human",
+      "theme": "fantasy",
+      "classes": ["melee", "damage"],
+      "seed": 9002
+    },
+    {
+      "monsterCode": 9099,
+      "note": "암흑 마법사 (Act1 보스)",
+      "race": "human",
+      "theme": "fantasy",
+      "classes": ["magical", "damage"],
+      "seed": 9099
+    },
+    {
+      "monsterCode": 9101,
+      "note": "스켈레톤 병사",
+      "race": "undead",
+      "theme": "fantasy",
+      "classes": ["melee", "physical"],
+      "seed": 9101
+    },
+    {
+      "monsterCode": 9102,
+      "note": "스켈레톤 기사",
+      "race": "undead",
+      "theme": "fantasy",
+      "classes": ["melee", "tank"],
+      "seed": 9102
+    },
+    {
+      "monsterCode": 9199,
+      "note": "스켈레톤 군주 (Act2 보스)",
+      "race": "undead",
+      "theme": "fantasy",
+      "classes": ["tank", "magical"],
+      "seed": 9199
+    },
+    {
+      "monsterCode": 9201,
+      "note": "데몬",
+      "race": "devil",
+      "theme": "fantasy",
+      "classes": ["melee", "damage"],
+      "seed": 9201
+    },
+    {
+      "monsterCode": 9299,
+      "note": "마왕 (Act3 보스)",
+      "race": "devil",
+      "theme": "fantasy",
+      "classes": ["magical", "damage"],
+      "seed": 9299
+    },
+    {
+      "monsterCode": 9301,
+      "note": "타락한 성기사",
+      "race": "human",
+      "theme": "fantasy",
+      "classes": ["tank", "melee"],
+      "seed": 9301
+    },
+    {
+      "monsterCode": 9399,
+      "note": "몰락한 대천사 (Act4 보스) — highelf 파츠는 설치된 패키지에 없어 elf로 잡음",
+      "race": "elf",
+      "theme": "fantasy",
+      "classes": ["magical", "support"],
+      "seed": 9399
+    },
+    {
+      "monsterCode": 9401,
+      "note": "공허의 추적자",
+      "race": "devil",
+      "theme": "fantasy",
+      "classes": ["ranged", "damage"],
+      "seed": 9401
+    },
+    {
+      "monsterCode": 9499,
+      "note": "(Act5 보스)",
+      "race": "devil",
+      "theme": "fantasy",
+      "classes": ["magical", "tank"],
+      "seed": 9499
+    }
+  ]
+}

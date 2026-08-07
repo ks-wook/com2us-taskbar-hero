@@ -6,7 +6,7 @@ namespace TaskbarHero.Client.Managers
     /// 새 오버레이를 만들 때는 아래 띠 중 하나를 골라 쓴다.
     ///
     /// <list type="table">
-    /// <item><term>0~29 게임 화면</term><description>하단 HUD를 가리지 않는 패널(5)·HUD(10)·스테이지 진행 바(20) — 항상 맨 아래</description></item>
+    /// <item><term>0~29 게임 화면</term><description>하단 HUD를 가리지 않는 패널(5)·전투 오버레이(1~10)·HUD(15)·스테이지 진행 바(20) — 항상 맨 아래</description></item>
     /// <item><term>30~99 전투 연출</term><description>입장 배너·보스 경고·클리어/패배 연출.
     ///   <b>기능 패널보다 아래</b>라 인벤토리·출석부 등을 열어 둔 동안 가리지 않는다.</description></item>
     /// <item><term>100~119 기능 패널</term><description>인벤토리·메일·거래소·출석부·스테이지·편성(100),
@@ -22,8 +22,10 @@ namespace TaskbarHero.Client.Managers
         /// 패널을 열어 둔 채로도 하단 아이콘 줄이 보이고 클릭도 HUD가 먼저 받는다.</summary>
         public const int PanelBelowHud = 5;
 
-        /// <summary>상시 HUD(하단 아이콘 줄).</summary>
-        public const int Hud = 10;
+        /// <summary>상시 HUD(하단 아이콘 줄). 씬에 구워진 전투 오버레이 캔버스들(적 HP바 1 · 전투 이펙트 2 ·
+        /// 전투 UI <c>SkillUICanvas</c> 10)보다 <b>위</b>여야 한다 — 같은 10이면 draw 순서가 계층 순서에
+        /// 좌우돼 하단 바 프레임이 전투 쪽 그림에 가려질 수 있다. 스테이지 진행 바(20)보다는 아래로 둔다.</summary>
+        public const int Hud = 15;
 
         /// <summary>스테이지 진행 바(HUD 위, 전투 연출 아래).</summary>
         public const int StageProgress = 20;

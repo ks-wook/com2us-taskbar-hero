@@ -16,6 +16,8 @@ namespace TaskbarHero.ClientEditor
     public static class InventoryUiBuilder
     {
         private const string ArtDir = "Assets/Art/UI/Inventory";
+        // 패널 본체 배경 프레임(공용 아트 — 스킬·룬 패널과 같은 프레임을 쓴다).
+        private const string PanelBgPath = "Assets/Art/UI/ui_bg_2.png";
         // UI 프리팹은 Assets/Prefabs/ 아래 카테고리 폴더로 정리한다.
         private const string PrefabPath = "Assets/Prefabs/UI/InventoryPanel.prefab";
         private const string ItemSlotPrefabPath = "Assets/Prefabs/UI/ItemSlot.prefab";
@@ -60,7 +62,7 @@ namespace TaskbarHero.ClientEditor
             var ctrl = root.AddComponent<InventoryPanelController>();
 
             var so = new SerializedObject(ctrl);
-            so.FindProperty("panelBackground").objectReferenceValue = LoadSprite("ui_panel_background");
+            so.FindProperty("panelBackground").objectReferenceValue = LoadSpriteAt(PanelBgPath);
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
             so.FindProperty("slotPortrait").objectReferenceValue = LoadSprite("ui_slot_portrait");
