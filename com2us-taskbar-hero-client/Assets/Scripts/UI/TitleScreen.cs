@@ -37,6 +37,7 @@ namespace TaskbarHero.Client.UI
         private bool _draggedDuringPress; // 누르고 있는 동안 창 드래그(오버레이 이동)가 발생했는지
         private bool _autoLoginReady;     // 자동 로그인 검증 성공 — 화면을 누르면 바로 게임 진입
         private bool _autoLoginPending;   // 검증 응답 대기 중(그 사이 누르면 종전 로그인 흐름으로 가지 않도록 막는다)
+        private bool _startQueued;        // 대기 중에 눌린 시작 입력 — 응답이 오면 그 결과대로 이어서 시작한다
 
         /// <summary>타이틀 씬 BGM을 시작한다(같은 곡이면 SoundManager가 무시하므로 재진입에도 끊기지 않는다).</summary>
         private void Awake()
@@ -75,6 +76,7 @@ namespace TaskbarHero.Client.UI
                     Session.SetAuth(userId, token);
                     Debug.Log($"[TitleScreen] 자동 로그인 성공. userId={userId}");
                     WelcomeBanner.Show(email);
+                    ResumeQueuedStart();
                 },
                 error =>
                 {
@@ -83,7 +85,23 @@ namespace TaskbarHero.Client.UI
                     _autoLoginReady = false;
                     SavedSession.Clear();
                     Debug.Log($"[TitleScreen] 자동 로그인 실패(code={error.ErrorCode}) → 저장 세션 폐기, 로그인 화면 사용");
+                    ResumeQueuedStart();
                 });
+        }
+
+        /// <summary>
+        /// 검증 응답을 기다리는 동안 눌린 시작 입력을 이어서 처리한다.
+        /// 그 클릭을 그냥 버리면 <b>아무 반응 없이 무시된 것처럼 보이고</b>(효과음도 나지 않는다)
+        /// 사용자가 다시 눌러야 하므로, 응답이 확정된 지금 그 결과대로 시작한다.
+        /// </summary>
+        private void ResumeQueuedStart()
+        {
+            if (!_startQueued)
+            {
+                return;
+            }
+            _startQueued = false;
+            StartGame();
         }
 
         private void Update()
@@ -181,9 +199,16 @@ namespace TaskbarHero.Client.UI
         /// </summary>
         public void StartGame()
         {
-            if (_started || _autoLoginPending)
+            if (_started)
             {
-                return; // 검증 응답을 기다리는 사이의 클릭은 무시한다(흐름이 갈리는 지점이라)
+                return;
+            }
+            if (_autoLoginPending)
+            {
+                // 검증 응답을 기다리는 사이의 클릭은 흐름이 갈리는 지점이라 지금 처리할 수 없다.
+                // 버리지 말고 적어 뒀다가 응답이 오면 이어서 시작한다(ResumeQueuedStart).
+                _startQueued = true;
+                return;
             }
             SoundManager.Sfx(SoundId.TitleStart);
 
@@ -214,10 +239,14 @@ namespace TaskbarHero.Client.UI
             GameEntryFlow.Begin(onFailed: error =>
             {
                 // 진입에 실패하면(세이브 로드 오류 등) 자동 로그인을 포기하고 종전 흐름으로 되돌린다.
+                //
+                // 저장 세션은 <b>지우지 않는다</b> — 여기까지 왔다는 것은 /api/auth/validate가 이미 성공해
+                // 토큰이 유효함이 확인된 상태이고, 실패한 것은 그 뒤의 GameServer 호출이다.
+                // 일시적인 GameServer 장애로 <b>아직 유효한 토큰</b>을 버리면 다음 실행에서도 자동 로그인이
+                // 사라져 재로그인을 강요하게 된다. 이번 실행만 로그인 UI로 되돌리고 저장값은 남긴다.
                 LoadingOverlay.Instance?.Hide();
                 _autoLoginReady = false;
                 _started = false;
-                SavedSession.Clear();
                 Session.Clear();
                 if (titleRoot != null)
                 {

@@ -347,8 +347,10 @@ namespace TaskbarHero.Client.Managers
         /// <summary>
         /// 인벤토리에서 이어 여는 패널(큐브·스킬·룬)을 <b>인벤토리 창이 있던 자리</b>에 맞춘다.
         /// 화면 중앙에 뜨면 방금 보고 있던 창에서 시선이 크게 튄다.
-        /// <para>기준 창의 <b>오른쪽 변·세로 중심</b>에 맞춘다 — 인벤토리 창은 화면 오른쪽에 붙어 있고 이 패널들이
-        /// 더 넓으므로(820~860 vs 765), 중심을 맞추면 오른쪽이 화면 밖으로 밀린다.</para>
+        /// <para>기준 창의 <b>왼쪽 변(= 전투 화면 쪽 변)·세로 중심</b>에 맞춘다 — 인벤토리는 전투 화면 밴드
+        /// 오른쪽에 <see cref="GameViewLayout.PanelGap"/>만큼 띄워 도킹돼 있으므로, 그 변에 맞추면 이 패널들이
+        /// 더 넓어도(스킬 1040 · 룬 860 vs 765) <b>전투 화면을 침범하지 않고</b> 남는 폭이 바깥(창 가장자리)
+        /// 쪽으로만 흘러간다. 오른쪽 변에 맞추면 넓은 패널일수록 왼쪽이 전투 화면을 덮는다.</para>
         /// <para>인벤토리 인스턴스가 아직 없으면(다른 경로로 먼저 열린 경우) 프리팹에 구워진 배치를 그대로 둔다.
         /// 패널들은 모두 ScreenSpaceOverlay 캔버스라 월드 좌표가 곧 화면 픽셀이며, 그 화면 좌표를 대상 패널
         /// 캔버스의 로컬 좌표로 되돌려 배치한다(캔버스 배율을 직접 가정하지 않는다).</para>
@@ -369,14 +371,14 @@ namespace TaskbarHero.Client.Managers
 
             var corners = new Vector3[4]; // 0=좌하 1=좌상 2=우상 3=우하
             reference.GetWorldCorners(corners);
-            var rightCenter = new Vector2(corners[2].x, (corners[0].y + corners[2].y) * 0.5f);
-            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, rightCenter, null, out var local))
+            var leftCenter = new Vector2(corners[0].x, (corners[0].y + corners[2].y) * 0.5f);
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, leftCenter, null, out var local))
             {
                 return;
             }
 
             target.anchorMin = target.anchorMax = new Vector2(0.5f, 0.5f);
-            target.pivot = new Vector2(1f, 0.5f); // 오른쪽 변 기준
+            target.pivot = new Vector2(0f, 0.5f); // 왼쪽 변(전투 화면 쪽) 기준
             target.anchoredPosition = local;
         }
 
@@ -442,6 +444,11 @@ namespace TaskbarHero.Client.Managers
             // 스윕을 기다리면 첫 표시 때 최대 0.4초 동안 잘못된 배율(폭 넓은 GameScene 창에서 약 1.6배)로
             // 렌더돼 패널이 크게 나왔다가 줄어들므로, 만든 즉시 현재 씬 규격으로 맞춘다.
             GameViewLayout.ApplyCurrentScalers(instance);
+            // 방금 만든 인스턴스는 <b>끈 상태로 넘긴다</b> — 프리팹 루트가 활성이라 그냥 두면 <see cref="Show"/>의
+            // <c>SetActive(true)</c>가 아무 일도 하지 않아 <c>OnEnable</c>이 돌지 않는다. 그러면 표시마다 걸리는
+            // 처리(등장 연출 <see cref="UI.SidePanelPop"/>, 끌어다 둔 자리 복원 <see cref="UI.PanelDragMove"/>)가
+            // <b>첫 표시에만</b> 통째로 건너뛰어진다(두 번째 열기부터 정상 동작해 더 눈에 띈다).
+            instance.SetActive(false);
             _instances[type] = instance;
             return instance;
         }

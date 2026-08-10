@@ -68,6 +68,15 @@ namespace TaskbarHero.Client.Battle
         public Vector2 hpBarOffset = new Vector2(-45f, -40f);
         public Color hpBarBgColor = new Color(0f, 0f, 0f, 0.6f);
         public Color hpBarFillColor = new Color(0.25f, 0.9f, 0.35f, 1f);
+        [Tooltip("체력바 프레임 아트(Assets/Art/Icon/Combat/체력바.png, 768×144 — 적 HP바·경험치 바와 같은 아트). "
+                 + "가로로 그려진 아트라 세로 바에 쓰려면 90도 돌려야 하며, 이 컴포넌트가 그렇게 얹는다. "
+                 + "미배선이면 종전처럼 단색(hpBarBgColor) 배경으로 폴백한다.")]
+        public Sprite hpBarFrame;
+
+        // 프레임 아트의 테두리는 원본 768×144에서 사방 24px이다. 세로 바(14×84)로 줄이면 화면상 2~3px이 되므로,
+        // 채움 막대를 그만큼 안쪽으로 들여 테두리를 덮지 않게 한다(프레임이 없을 때는 종전대로 1px).
+        private const float HpBarFillInsetFramed = 3f;
+        private const float HpBarFillInsetPlain = 1f;
 
         private class SlotRT
         {
@@ -532,7 +541,8 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
-        /// <summary>초상화 옆에 세로 체력바(배경+아래→위 채움)를 만들어 멤버에 연결한다. pos는 바 <b>하단 중앙</b> 위치(초상화 하단에 정렬).</summary>
+        /// <summary>초상화 옆에 세로 체력바(프레임 아트 + 아래→위 채움)를 만들어 멤버에 연결한다.
+        /// pos는 바 <b>하단 중앙</b> 위치(초상화 하단에 정렬).</summary>
         private void CreateHpBar(PlayerCombatant member, int i, Vector2 pos)
         {
             // 배경(상단 코너 앵커 기준, 피벗을 하단 중앙으로 두어 pos가 바닥 시작점이 되게)
@@ -547,14 +557,36 @@ namespace TaskbarHero.Client.Battle
             bgImg.color = hpBarBgColor;
             _spawned.Add(bg);
 
-            // 채움(부모에 꽉 차게, 1px 인셋) — 세로 채움(아래에서 위로)
+            // 프레임 아트(체력바.png). 세로 바에 쓰기 위해 <b>90도 돌려</b> 얹는다 —
+            // 아트가 가로(768×144)로 그려져 있어서, 눕힌 크기(높이×너비)로 만든 뒤 회전하면 화면에서 세로가 된다.
+            // 회전은 이 자식에만 걸어 바 컨테이너(bg)의 하단 중앙 피벗·배치 계산은 그대로 둔다.
+            bool framed = hpBarFrame != null;
+            if (framed)
+            {
+                var frame = new GameObject("HpBarFrame_" + i, typeof(RectTransform), typeof(Image));
+                frame.transform.SetParent(bg.transform, false);
+                var frameRt = frame.GetComponent<RectTransform>();
+                frameRt.anchorMin = frameRt.anchorMax = new Vector2(0.5f, 0.5f);
+                frameRt.pivot = new Vector2(0.5f, 0.5f);   // 자기 중심에서 회전 → 바 가운데에 그대로 맞는다
+                frameRt.anchoredPosition = Vector2.zero;
+                frameRt.sizeDelta = new Vector2(hpBarHeight, hpBarWidth); // 눕힌 상태의 크기
+                frameRt.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                var frameImg = frame.GetComponent<Image>();
+                frameImg.sprite = hpBarFrame;
+                frameImg.type = Image.Type.Simple;
+                frameImg.raycastTarget = false;
+            }
+
+            // 채움(부모에 꽉 차게 인셋) — 세로 채움(아래에서 위로).
+            // 프레임 위에 그려지도록 프레임보다 <b>나중에</b> 만든다(형제 순서 = 그리는 순서).
+            float inset = framed ? HpBarFillInsetFramed : HpBarFillInsetPlain;
             var fg = new GameObject("HpBarFill_" + i, typeof(RectTransform), typeof(Image));
             fg.transform.SetParent(bg.transform, false);
             var fgRt = fg.GetComponent<RectTransform>();
             fgRt.anchorMin = new Vector2(0f, 0f);
             fgRt.anchorMax = new Vector2(1f, 1f);
-            fgRt.offsetMin = new Vector2(1f, 1f);
-            fgRt.offsetMax = new Vector2(-1f, -1f);
+            fgRt.offsetMin = new Vector2(inset, inset);
+            fgRt.offsetMax = new Vector2(-inset, -inset);
             var fgImg = fg.GetComponent<Image>();
             fgImg.sprite = WhiteSprite;
             fgImg.type = Image.Type.Filled;
