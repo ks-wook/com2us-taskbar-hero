@@ -1578,6 +1578,7 @@ GameObject:
   - component: {fileID: 9123871870619613647}
   - component: {fileID: 7646603764693977910}
   - component: {fileID: 5089863626051221146}
+  - component: {fileID: 2530861941040052820}
   m_Layer: 0
   m_Name: PanelRoot
   m_TagString: Untagged
@@ -1646,3 +1647,17 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &2530861941040052820
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8488125710568237065}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a1dd93930cf5f7241b2327ef807a75e7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: TaskbarHero.Client.UI::TaskbarHero.Client.UI.SidePanelPop
+  side: 0
+  autoPlace: 0
