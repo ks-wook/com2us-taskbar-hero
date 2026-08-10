@@ -350,23 +350,25 @@ namespace TaskbarHero.Client.UI
 
             BuildCanvas();
             BuildDim();
-            var container = BuildContainer();
+            var panel = BuildContainer();
+            // 내용물은 모두 프레임 테두리 안쪽 빈 칸에만 놓는다(테두리·상단 장식판을 침범하지 않도록).
             // 제목 텍스트는 두지 않는다 — 배경 아트(ui_bg_2)의 상단 장식판이 제목 자리를 그린다.
-            BuildGoldArea(container);  // 보유 골드 표시
-            BuildEquipArea(container); // 캐릭터 네비게이션 포함, 가로 중앙 정렬
-            BuildGrid(container);
-            BuildGrowthButtons(container); // 스킬·룬 진입 버튼(인벤토리 아이템 아래, 패널 최하단)
+            var content = PanelFrame.CreateContentArea(panel);
+            BuildGoldArea(content);  // 보유 골드 표시
+            BuildEquipArea(content); // 캐릭터 네비게이션 포함, 가로 중앙 정렬
+            BuildGrid(content);
+            BuildGrowthButtons(content); // 스킬·룬 진입 버튼(인벤토리 아이템 아래, 내용 영역 최하단)
             BuildTooltip();
         }
 
-        // 성장 진입 버튼 줄의 기하. y는 패널 바닥에서 띄우는 높이로, 플레이 모드에서 직접 올려 확정한 값이다.
+        // 성장 진입 버튼 줄의 기하. y는 <b>내용 영역 바닥</b>에서 띄우는 높이다.
         private const float GrowthButtonWidth = 210f;
         private const float GrowthButtonHeight = 44f;
-        private const float GrowthButtonY = 82.30f;
+        private const float GrowthButtonY = 14f;
         private const float GrowthButtonGapX = 224f;  // 가운데(룬) 기준 좌우 간격
 
-        /// <summary>성장 진입 버튼(스킬 레벨업·룬·큐브)을 패널 최하단(인벤토리 아이템 아래)에 가로 중앙으로 배치한다.
-        /// 가방 격자와 패널 바닥 사이 여백에 맞춰 낮은 높이로 두고, 바닥에서 <see cref="GrowthButtonY"/>만큼 띄운다.</summary>
+        /// <summary>성장 진입 버튼(스킬 레벨업·룬·큐브)을 내용 영역 최하단(가방 격자 아래)에 가로 중앙으로 배치한다.
+        /// 바닥에서 <see cref="GrowthButtonY"/>만큼 띄워 프레임 아래 테두리에 닿지 않게 한다.</summary>
         private void BuildGrowthButtons(RectTransform container)
         {
             var skillImg = NewGrowthButton("SkillButton", container, -GrowthButtonGapX,
@@ -402,16 +404,18 @@ namespace TaskbarHero.Client.UI
 
         // 보유 골드 블록의 표시 배율(1이면 원래 크기). 자식 좌표를 다시 잡지 않고 블록째로 줄인다.
         private const float GoldAreaScale = 0.7f;
-        // 패널 좌상단 기준 골드 블록 위치. 플레이 모드에서 직접 옮겨 확정한 값(장비 영역 오른쪽 아래).
-        private static readonly Vector2 GoldAreaPos = new Vector2(485f, -596f);
+        // 내용 영역 <b>우상단 기준</b> 골드 블록 위치(장비 영역과 가방 영역 사이 줄의 오른쪽).
+        // 피벗이 우상단이라 축소(0.7배)도 그 모서리를 기준으로 일어나므로, 오른쪽 끝이 이 위치에 고정된다.
+        private const float GoldAreaY = 492f;
+        private static readonly Vector2 GoldAreaPos = new Vector2(-8f, -GoldAreaY);
 
         /// <summary>보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 아이콘/수량은 런타임에 세션에서 채운다.
         /// 과하게 커 보이지 않도록 블록 전체를 0.7배로 축소해 얹는다(자식 크기는 그대로 둔다).</summary>
         private void BuildGoldArea(RectTransform container)
         {
             var area = NewRect("GoldArea", container);
-            area.anchorMin = area.anchorMax = new Vector2(0f, 1f);
-            area.pivot = new Vector2(0f, 1f);
+            area.anchorMin = area.anchorMax = new Vector2(1f, 1f);
+            area.pivot = new Vector2(1f, 1f);
             area.anchoredPosition = GoldAreaPos;
             area.sizeDelta = new Vector2(280f, 60f);
             area.localScale = new Vector3(GoldAreaScale, GoldAreaScale, GoldAreaScale);
@@ -707,12 +711,26 @@ namespace TaskbarHero.Client.UI
             _dimButton.transition = Selectable.Transition.None;
         }
 
+        // 창 크기. 배경 프레임(ui_bg_2)은 9-slice가 아니라 Simple로 <b>늘려</b> 그리므로 테두리 두께가 창 크기에
+        // 비례한다. 그래서 내용을 그대로 두고 창만 이만큼 키워야 장비·가방 블록이 테두리 안에 들어간다
+        // (내용 폭 698 ≤ 안쪽 칸 714.7 · 내용 높이 950 ≤ 안쪽 칸 964.3). 가로는 GameScene 설계가 우측 패널에
+        // 허용한 폭(GameViewLayout.WidestRightPanel = 1040) 안이고, 세로는 논리 캔버스 높이 1440 안이다.
+        // 비율(1000/1320 ≒ 0.758)은 프레임 아트 비율(PanelFrame.Aspect ≒ 0.715)에 가깝게 잡아 장식이 찌그러지지 않는다.
+        private const float PanelWidth = 1000f;
+        private const float PanelHeight = 1320f;
+
+        // 내용 영역(프레임 테두리 안쪽 빈 칸) 크기 — 창 크기에서 파생되는 상수식이다(714.7 × 964.3).
+        private const float ContentWidth = PanelWidth * (1f - PanelFrame.InsetLeft - PanelFrame.InsetRight)
+            - PanelFrame.Pad * 2f;
+        private const float ContentHeight = PanelHeight * (1f - PanelFrame.InsetTop - PanelFrame.InsetBottom)
+            - PanelFrame.Pad * 2f;
+
         /// <summary>패널 본체(배경 이미지) 컨테이너.</summary>
         private RectTransform BuildContainer()
         {
             var img = NewImage("PanelRoot", _rootRect, panelBackground);
             var rt = img.rectTransform;
-            rt.sizeDelta = new Vector2(920f, 1640f);
+            rt.sizeDelta = new Vector2(PanelWidth, PanelHeight);
             // 화면 중앙이 아니라 전투 화면 오른쪽 옆에 일정 간격(GameViewLayout.PanelGap)을 두고 붙인다 — 전투를 가리지 않는다.
             SidePanel.Attach(rt, SidePanel.Side.Right);
             return rt;
@@ -724,16 +742,18 @@ namespace TaskbarHero.Client.UI
         private const float PortraitX = 232f;   // 능력치 패널(220) + 간격(12)
         private const float EquipSlotsX = 466f; // 초상(PortraitX+220=452) + 간격(14)
         private const float EquipBlockWidth = 682f; // EquipSlotsX + (2*100 + 16)
+        private const float EquipBlockHeight = 476f;
+        private const float EquipAreaY = 0f;        // 내용 영역 맨 위부터 시작
 
-        /// <summary>장비 영역(캐릭터 네비 + 능력치 패널 + 초상 + 6부위 슬롯)을 패널 가로 중앙 컨테이너에 구성한다.</summary>
+        /// <summary>장비 영역(캐릭터 네비 + 능력치 패널 + 초상 + 6부위 슬롯)을 내용 영역 가로 중앙에 구성한다.</summary>
         private void BuildEquipArea(RectTransform container)
         {
-            // 가로 중앙 정렬 컨테이너(패널 폭과 무관하게 중앙 고정). 자식은 이 블록의 좌상단 기준으로 배치.
+            // 가로 중앙 정렬 컨테이너(내용 영역 폭과 무관하게 중앙 고정). 자식은 이 블록의 좌상단 기준으로 배치.
             var area = NewRect("EquipArea", container);
             area.anchorMin = area.anchorMax = new Vector2(0.5f, 1f);
             area.pivot = new Vector2(0.5f, 1f);
-            area.sizeDelta = new Vector2(EquipBlockWidth, 476f);
-            area.anchoredPosition = new Vector2(0f, -104f);
+            area.sizeDelta = new Vector2(EquipBlockWidth, EquipBlockHeight);
+            area.anchoredPosition = new Vector2(0f, -EquipAreaY);
 
             // 캐릭터 전환 네비게이션 (◀ 인디케이터 ▶). 좌표는 플레이 모드에서 직접 옮겨 확정한 값 —
             // 화살표를 블록 양 끝이 아니라 인디케이터 글자 바로 옆으로 좁혀 붙이고, 줄 전체를 아래로 내렸다.
@@ -957,6 +977,8 @@ namespace TaskbarHero.Client.UI
         private const float GridCell = 120f;
         private const float GridSpacing = 12f;
         private const float ScrollbarWidth = 18f;
+        // 가방 블록 y(내용 영역 상단 기준) — 장비 영역(0~476)과 골드 줄(492~534) 아래.
+        private const float BagAreaY = 546f;
 
         // 가방 블록 전체 폭(격자 + 스크롤바 + 좌우 여백). 제목의 닫기 버튼 위치와 가방 컨테이너에 공유.
         private float BagBlockWidth => columns * GridCell + (columns - 1) * GridSpacing + ScrollbarWidth + 32f;
@@ -967,12 +989,12 @@ namespace TaskbarHero.Client.UI
             float viewW = columns * GridCell + (columns - 1) * GridSpacing;
             float viewH = visibleRows * GridCell + (visibleRows - 1) * GridSpacing;
 
-            // 가방 영역도 패널 가로 중앙 컨테이너로 묶는다(장비 영역과 동일 정렬).
+            // 가방 영역도 내용 영역 가로 중앙 컨테이너로 묶는다(장비 영역과 동일 정렬).
             var area = NewRect("BagArea", container);
             area.anchorMin = area.anchorMax = new Vector2(0.5f, 1f);
             area.pivot = new Vector2(0.5f, 1f);
             area.sizeDelta = new Vector2(BagBlockWidth, viewH + 74f);
-            area.anchoredPosition = new Vector2(0f, -596f);
+            area.anchoredPosition = new Vector2(0f, -BagAreaY);
 
             var label = NewText("InventoryLabel", area, "가방", 32, TextAnchor.UpperLeft);
             TopLeft(label.rectTransform, 8f, 0f, 300f, 44f);

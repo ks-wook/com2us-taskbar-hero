@@ -11,10 +11,12 @@ namespace TaskbarHero.Client.UI
 {
     /// <summary>
     /// 캐릭터 스킬 레벨업 오버레이 패널(growth 기획서 §5.1·5.2). 인벤토리의 '스킬 레벨업' 버튼으로 진입한다.
-    /// 계층은 에디터 빌드 시 정적 부분(제목·닫기·캐릭터 네비·스킬포인트 배너·스크롤·초기화 버튼)이 생성돼
-    /// 프리팹에 저장되고, 표시될 때마다 세션 세이브(<see cref="Session.GameData"/>)의 실데이터로
+    /// 계층은 에디터 빌드 시 정적 부분(캐릭터 네비·스킬포인트 배너·장착 슬롯·액티브/패시브 두 목록·초기화 버튼)이
+    /// 생성돼 프리팹에 저장되고, 표시될 때마다 세션 세이브(<see cref="Session.GameData"/>)의 실데이터로
     /// 스킬 목록·레벨·사용 가능 스킬 포인트를 채운다. 스킬 포인트는 저장값이 아니라 캐릭터 레벨에서 파생한다
     /// (사용 가능 = 레벨 비례 총량 − 그 캐릭터가 이미 투자한 스킬 레벨 합). 서버가 최종 확정한다(서버 권위).
+    /// <para>창은 <see cref="PanelDragMove"/>로 <b>끌어 옮길 수 있고</b>(가방·큐브와 동일), 스킬 목록은
+    /// <b>액티브(위) · 패시브(아래)</b> 두 영역으로 나뉘어 각각 자기 머리글·색·스크롤을 가진다.</para>
     /// 기획서: docs/세부/growth-기획서.md §2·§5.1·§5.2
     /// </summary>
     public class SkillPanelController : MonoBehaviour
@@ -37,7 +39,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Button _resetButton;
         [SerializeField] private Text _resetLabel;
         [SerializeField] private Text _messageText;         // 결과/오류 안내(하단)
-        [SerializeField] private RectTransform _listContent; // 스킬 행 부모(스크롤 콘텐츠)
+        [SerializeField] private RectTransform _listContent;        // 액티브 스킬 행 부모(위쪽 스크롤 콘텐츠)
+        [SerializeField] private RectTransform _passiveListContent; // 패시브 스킬 행 부모(아래쪽 스크롤 콘텐츠)
         // 액티브 스킬 장착 슬롯(최대 2). 아이콘/라벨/버튼 참조(에디터 빌더가 배선).
         [SerializeField] private Image _equipSlotIcon0;
         [SerializeField] private Image _equipSlotIcon1;
@@ -128,13 +131,14 @@ namespace TaskbarHero.Client.UI
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildCanvas();
             BuildDim();
-            var container = BuildContainer();
-            // 제목 텍스트("스킬 레벨업")는 두지 않는다 — 배경 아트(ui_bg_2)의 상단 장식판과 겹쳐 보여 제거했다.
-            BuildCharacterNav(container);
-            BuildPointBanner(container);
-            BuildEquipSlots(container);
-            BuildList(container);
-            BuildFooter(container);
+            var panel = BuildContainer();
+            // 내용물은 모두 프레임 안쪽 빈 칸(ContentArea)에만 놓는다 — 테두리·상단 장식판을 침범하지 않게 한다.
+            // 제목 텍스트("스킬 레벨업")는 두지 않는다 — 배경 아트(ui_bg_2)의 상단 장식판이 제목 자리를 그린다.
+            var content = PanelFrame.CreateContentArea(panel);
+            BuildCharacterNav(content);
+            BuildTopRow(content);
+            BuildSkillSections(content);
+            BuildFooter(content);
             BuildTooltip();
         }
 
@@ -219,8 +223,22 @@ namespace TaskbarHero.Client.UI
         // (중앙 앵커 + 큰 x 오프셋으로 두면 캔버스 폭이 바뀔 때 위치가 어긋난다).
         private static readonly Vector2 PanelAnchor = new Vector2(1f, 0.5f);
         private static readonly Vector2 PanelPivot = new Vector2(1f, 0.5f);
-        private static readonly Vector2 PanelPosition = new Vector2(14f, 35.05f);
-        private static readonly Vector2 PanelSize = new Vector2(860f, 1020f); // 목록 뷰포트 기준 스킬 2.5개 노출
+        private static readonly Vector2 PanelPosition = new Vector2(14f, 0f);
+        // 창 크기 — 가로는 GameScene 설계가 우측 패널에 허용한 최대 폭(GameViewLayout.WidestRightPanel = 1040),
+        // 세로는 논리 캔버스 높이 1440(GameViewLayout.DesignHeight)에서 위아래 20씩만 남긴 값이다.
+        // 프레임(ui_bg_2) 테두리가 창 크기에 비례해 두꺼워지므로, 실제 내용이 놓이는 안쪽 칸을 넉넉히 얻으려면
+        // 창 자체를 이만큼 키워야 한다(가로 860 → 1040, 세로 1360 → 1400).
+        private const float PanelWidth = 1040f;
+        private const float PanelHeight = 1400f;
+        private static readonly Vector2 PanelSize = new Vector2(PanelWidth, PanelHeight);
+
+        // 내용 영역(ContentArea)의 실제 크기 — 배경 프레임 테두리 안쪽 빈 칸(<see cref="PanelFrame"/>)이다.
+        // 창 크기에서 파생되는 상수식이라 PanelWidth·PanelHeight만 고치면 아래 배치가 함께 따라온다
+        // (1040×1400 → 744.09 × 1023.98).
+        private const float ContentWidth = PanelWidth * (1f - PanelFrame.InsetLeft - PanelFrame.InsetRight)
+            - PanelFrame.Pad * 2f;
+        private const float ContentHeight = PanelHeight * (1f - PanelFrame.InsetTop - PanelFrame.InsetBottom)
+            - PanelFrame.Pad * 2f;
 
         /// <summary>패널 본체(배경 이미지) 컨테이너.</summary>
         private RectTransform BuildContainer()
@@ -231,42 +249,84 @@ namespace TaskbarHero.Client.UI
             rt.pivot = PanelPivot;
             rt.sizeDelta = PanelSize;
             rt.anchoredPosition = PanelPosition;
+            // 다른 창과 같은 등장 연출(작게 시작해 제 크기로 커지기). 자리는 UIManager가 가방 창에 맞춰 잡으므로
+            // 자동 도킹은 끄고(ConfigureCentered) 연출만 쓴다. 프리팹에 구워 두면 실행 시 PanelDragMove보다
+            // 먼저 존재하게 되어(컴포넌트 순서) 저장된 자리 복원과 도착 위치 동기화 순서도 맞는다.
+            rt.gameObject.AddComponent<SidePanelPop>().ConfigureCentered();
             return rt;
         }
 
-        // 각 섹션의 y 위치·폭. 플레이 모드에서 직접 옮겨 확정한 값이다(패널 상단 기준, 아래로 −).
-        private const float CharNavY = -156.70f;      // 캐릭터 전환 줄
-        private const float NavPrevX = 152f;          // 이전(◀) 화살표 x(줄 좌상단 기준)
-        private const float NavNextX = 617f;          // 다음(▶) 화살표 x
-        private const float PointBannerY = -228.70f;  // 스킬 포인트 배너
-        private const float PointBannerWidth = 461.84f; // 배너 폭(글자 길이에 맞춰 좁혔다)
-        private const float EquipSlotsY = -317.20f;   // 장착 액티브 스킬 영역
-        private const float ListAreaY = -460f;        // 스킬 목록 영역
-        private const float ResetButtonY = 90f;       // 하단 초기화 버튼(패널 바닥 기준, 위로 +)
+        // ── 내용 영역(ContentArea) 안의 배치 ──
+        // 모든 y는 ContentArea <b>좌상단 기준, 아래로 +</b>다(TopLeft 규약). 세로 합이 ContentHeight(1024)에
+        // 정확히 맞도록 잡아, 어느 줄도 프레임 테두리를 넘지 않는다.
+        private const float CharNavY = 0f;            // 캐릭터 전환 줄
+        private const float CharNavHeight = 72f;
+        private const float NavArrowSize = 72f;
+        private const float NavPrevX = 61f;           // 이전(◀) 화살표 x — 글자 옆에 좁혀 붙인다
+        private const float NavNextX = ContentWidth - NavPrevX - NavArrowSize; // 다음(▶) 화살표 x(좌우 대칭)
 
-        /// <summary>캐릭터 전환 네비게이션(◀ 직업 Lv.N · 캐릭터 i/N ▶).
-        /// 좌표는 플레이 모드에서 직접 옮겨 확정한 값 — 줄 전체를 아래로 내리고(<see cref="CharNavY"/>)
-        /// 화살표는 블록 양 끝이 아니라 글자 옆으로 좁혀 붙였다.</summary>
-        private void BuildCharacterNav(RectTransform container)
+        // 스킬 포인트 배너 + 장착 액티브 슬롯을 <b>한 줄에</b> 둔다. 목록을 둘로 나눈 만큼 위쪽에서 세로를
+        // 아껴야 각 목록에 스킬 3개가 스크롤 없이 들어간다(따로 두면 한 줄당 약 90이 더 든다).
+        private const float TopRowY = 88f;
+        private const float TopRowHeight = 150f;
+        private const float PointBannerWidth = 330f;  // 배너 폭(글자 길이에 맞춰 좁혔다)
+        private const float PointBannerHeight = 76f;
+        private const float EquipAreaX = 352f;        // 배너 오른쪽에 붙는 장착 슬롯 블록
+        private const float EquipSlotUnitWidth = 196f; // 아이콘 타일(88) + 간격(8) + 이름(96) + 여백(4)
+
+        // ── 액티브/패시브 2분할 목록 영역 ──
+        // 같은 목록에 섞여 있던 스킬을 <b>가로 구분선으로 위아래 두 영역</b>으로 나눈다(위=액티브, 아래=패시브).
+        // 각 영역은 머리글 + 자체 스크롤 목록이며, 높이는 행 3개(=직업당 스킬 수)가 스크롤 없이 들어가는 값이다.
+        private const float SectionWidth = ContentWidth;
+        private const float SectionHeaderHeight = 40f;
+        private const float SectionListHeight = 253f;  // 행 75 × 3 + 간격 8 × 2 + 패딩 6 × 2
+        private const float ActiveHeaderY = 256f;
+        private const float ActiveListY = 304f;        // 액티브 목록: 304 ~ 557
+        private const float DividerY = 571f;           // 두 영역을 가르는 가로 구분선
+        private const float DividerHeight = 3f;
+        private const float PassiveHeaderY = 588f;
+        private const float PassiveListY = 636f;       // 패시브 목록: 636 ~ 889
+        private const float MessageY = 904f;           // 하단 안내 문구
+        private const float MessageHeight = 34f;
+        private const float ResetButtonY = 948f;       // 하단 초기화 버튼(948 + 76 = 1024 = 내용 영역 바닥)
+        private const float ResetButtonWidth = 360f;
+        private const float ResetButtonHeight = 76f;
+
+        /// <summary>액티브 장착 한도(2개)를 이미 채웠을 때 안내하는 문구. 미습득 액티브 스킬의 레벨업을 막고
+        /// 그 이유를 알릴 때 쓴다(버튼은 흑백으로 보이지만 눌리면 이 문구가 뜬다).</summary>
+        private const string EquipLimitMessage = "액티브 스킬은 2개까지만 활성화 할 수 있습니다.";
+
+        // 눌릴 수 없는 버튼의 흑백(무채색) 톤 — 다른 비활성 버튼과 달리 "규칙에 막혔음"을 색으로 구분한다.
+        private static readonly Color DisabledButtonColor = new Color(0.32f, 0.32f, 0.32f, 0.95f);
+        private static readonly Color DisabledLabelColor = new Color(0.62f, 0.62f, 0.62f);
+
+        // 영역 구분 색 — 액티브는 따뜻한 금색, 패시브는 차가운 하늘색 계열로 확실히 구분한다.
+        private static readonly Color ActiveAccent = new Color(1f, 0.82f, 0.42f);
+        private static readonly Color ActiveHeaderBg = new Color(0.24f, 0.17f, 0.07f, 0.95f);
+        private static readonly Color ActiveListBg = new Color(0.12f, 0.09f, 0.05f, 0.6f);
+        private static readonly Color PassiveAccent = new Color(0.55f, 0.82f, 1f);
+        private static readonly Color PassiveHeaderBg = new Color(0.09f, 0.15f, 0.26f, 0.95f);
+        private static readonly Color PassiveListBg = new Color(0.05f, 0.08f, 0.14f, 0.6f);
+
+        /// <summary>캐릭터 전환 네비게이션(◀ 직업 Lv.N · 캐릭터 i/N ▶). 내용 영역 맨 윗줄이며
+        /// 화살표는 블록 양 끝이 아니라 글자 옆으로 좁혀 붙인다(좌우 대칭).</summary>
+        private void BuildCharacterNav(RectTransform content)
         {
-            const float width = 760f;
-            var area = NewRect("CharNav", container);
-            area.anchorMin = area.anchorMax = new Vector2(0.5f, 1f);
-            area.pivot = new Vector2(0.5f, 1f);
-            area.sizeDelta = new Vector2(width, 72f);
-            area.anchoredPosition = new Vector2(0f, CharNavY);
+            var area = NewRect("CharNav", content);
+            TopLeft(area, 0f, CharNavY, ContentWidth, CharNavHeight);
 
             var prev = BuildNavArrow("PrevCharButton", area, "<", flip: true);
-            TopLeft(prev.rectTransform, NavPrevX, 0f, 72f, 72f);
+            TopLeft(prev.rectTransform, NavPrevX, 0f, NavArrowSize, CharNavHeight);
             _prevButton = prev.gameObject.AddComponent<Button>();
             AddPunch(prev);
 
             _charIndicatorText = NewText("CharIndicator", area, "", 32, TextAnchor.MiddleCenter);
             _charIndicatorText.fontStyle = FontStyle.Bold;
-            TopLeft(_charIndicatorText.rectTransform, 84f, 0f, width - 168f, 72f);
+            float textX = NavPrevX + NavArrowSize + 8f;
+            TopLeft(_charIndicatorText.rectTransform, textX, 0f, NavNextX - 8f - textX, CharNavHeight);
 
             var next = BuildNavArrow("NextCharButton", area, ">", flip: false);
-            TopLeft(next.rectTransform, NavNextX, 0f, 72f, 72f);
+            TopLeft(next.rectTransform, NavNextX, 0f, NavArrowSize, CharNavHeight);
             _nextButton = next.gameObject.AddComponent<Button>();
             AddPunch(next);
         }
@@ -301,55 +361,51 @@ namespace TaskbarHero.Client.UI
             return img.gameObject.AddComponent<ButtonPunchScale>();
         }
 
-        /// <summary>사용 가능 스킬 포인트 배너(캐릭터 레벨에서 파생).</summary>
-        private void BuildPointBanner(RectTransform container)
+        /// <summary>스킬 포인트 배너(왼쪽)와 장착 액티브 슬롯 블록(오른쪽)을 한 줄에 배치한다.</summary>
+        private void BuildTopRow(RectTransform content)
         {
-            var bg = NewImage("PointBanner", container, null);
-            bg.color = new Color(0.12f, 0.10f, 0.06f, 0.95f);
-            var rt = bg.rectTransform;
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
-            rt.pivot = new Vector2(0.5f, 1f);
-            rt.sizeDelta = new Vector2(PointBannerWidth, 76f);
-            rt.anchoredPosition = new Vector2(0f, PointBannerY);
+            var area = NewRect("TopRow", content);
+            TopLeft(area, 0f, TopRowY, ContentWidth, TopRowHeight);
+            BuildPointBanner(area);
+            BuildEquipSlots(area);
+        }
 
-            _pointText = NewText("PointText", bg.rectTransform, "스킬 포인트  0 / 0", 34, TextAnchor.MiddleCenter);
+        /// <summary>사용 가능 스킬 포인트 배너(캐릭터 레벨에서 파생). 윗줄 왼쪽에 세로 중앙으로 놓는다.</summary>
+        private void BuildPointBanner(RectTransform row)
+        {
+            var bg = NewImage("PointBanner", row, null);
+            bg.color = new Color(0.12f, 0.10f, 0.06f, 0.95f);
+            TopLeft(bg.rectTransform, 0f, (TopRowHeight - PointBannerHeight) * 0.5f,
+                PointBannerWidth, PointBannerHeight);
+
+            _pointText = NewText("PointText", bg.rectTransform, "스킬 포인트  0 / 0", 30, TextAnchor.MiddleCenter);
             _pointText.fontStyle = FontStyle.Bold;
             _pointText.color = new Color(1f, 0.86f, 0.35f);
             Stretch(_pointText.rectTransform);
         }
 
-        /// <summary>액티브 스킬 장착 슬롯 영역(최대 2). 라벨 + 슬롯 2개(아이콘·이름·클릭 해제).</summary>
-        private void BuildEquipSlots(RectTransform container)
+        /// <summary>액티브 스킬 장착 슬롯 블록(최대 2). 라벨 + 슬롯 2개(아이콘·이름·클릭 해제). 윗줄 오른쪽.</summary>
+        private void BuildEquipSlots(RectTransform row)
         {
-            const float width = 760f;
-            var area = NewRect("EquipSlots", container);
-            area.anchorMin = area.anchorMax = new Vector2(0.5f, 1f);
-            area.pivot = new Vector2(0.5f, 1f);
-            area.sizeDelta = new Vector2(width, 150f);
-            area.anchoredPosition = new Vector2(0f, EquipSlotsY);
-
-            // 영역 안의 내용물(제목·슬롯 2칸·이름)은 가로 중앙 정렬한다.
-            var label = NewText("EquipTitle", area, "장착 액티브 스킬 (최대 2)", 26, TextAnchor.UpperCenter);
+            var label = NewText("EquipTitle", row, "장착 액티브 스킬 (최대 2)", 24, TextAnchor.MiddleLeft);
             label.color = new Color(0.8f, 0.85f, 0.95f);
-            TopLeft(label.rectTransform, (width - 500f) * 0.5f, 0f, 500f, 32f);
+            TopLeft(label.rectTransform, EquipAreaX, 4f, ContentWidth - EquipAreaX, 30f);
 
-            // 슬롯 1칸이 차지하는 폭 = 아이콘 타일(96) + 간격(10) + 이름(104).
-            float slotsWidth = EquipSlotUnitWidth * MaxActiveSkills;
-            float startX = (width - slotsWidth) * 0.5f;
             for (int i = 0; i < MaxActiveSkills; i++)
             {
-                BuildEquipSlot(area, i, startX + i * EquipSlotUnitWidth);
+                BuildEquipSlot(row, i, EquipAreaX + i * EquipSlotUnitWidth);
             }
         }
 
-        private const float EquipSlotUnitWidth = 210f; // 아이콘 타일(96) + 간격(10) + 이름(104)
+        private const float EquipSlotTileSize = 88f;
+        private const float EquipSlotTileY = 42f;   // 윗줄 안에서 타일 상단 y(제목 아래)
 
         /// <summary>장착 슬롯 1칸(아이콘 타일 + 이름 + 클릭 시 해제).</summary>
         private void BuildEquipSlot(RectTransform area, int index, float x)
         {
             var slotBg = NewImage($"EquipSlot{index}", area, slotNormal);
             slotBg.color = new Color(0.16f, 0.17f, 0.24f, 0.98f);
-            TopLeft(slotBg.rectTransform, x, 40f, 96f, 96f);
+            TopLeft(slotBg.rectTransform, x, EquipSlotTileY, EquipSlotTileSize, EquipSlotTileSize);
             var icon = NewImage("Icon", slotBg.rectTransform, null);
             icon.raycastTarget = false;
             icon.preserveAspect = true;
@@ -361,7 +417,7 @@ namespace TaskbarHero.Client.UI
             // 이름은 아이콘 타일 오른쪽에 붙되 타일 높이의 세로 중앙에 맞춘다.
             var nameLabel = NewText("Name", area, "비었음", 22, TextAnchor.MiddleLeft);
             nameLabel.color = new Color(0.7f, 0.72f, 0.8f);
-            TopLeft(nameLabel.rectTransform, x + 106f, 44f, 104f, 88f);
+            TopLeft(nameLabel.rectTransform, x + EquipSlotTileSize + 8f, EquipSlotTileY, 96f, EquipSlotTileSize);
 
             var btn = slotBg.gameObject.AddComponent<Button>();
             if (index == 0) { _equipSlotIcon0 = icon; _equipSlotLabel0 = nameLabel; _equipSlotButton0 = btn; }
@@ -370,24 +426,84 @@ namespace TaskbarHero.Client.UI
 
         private const float ScrollbarWidth = 18f;
 
-        /// <summary>스킬 목록 스크롤 뷰(런타임에 행이 채워짐) + 우측 세로 스크롤바(항상 표시).
-        /// 패널 축소로 목록 영역이 짧아졌으므로 넘치는 스킬은 스크롤해서 본다.</summary>
-        private void BuildList(RectTransform container)
-        {
-            const float width = 760f;
-            const float height = 372f; // 행 높이(132)+간격(12) 기준 약 2.5개가 보이는 뷰포트(넘치면 스크롤)
-            const float viewW = width - ScrollbarWidth - 8f; // 스크롤바 폭·간격 제외
+        // 스킬 행 규격. 목록을 두 영역으로 나눈 만큼 행을 낮춰(132 → 75) 각 영역에 3개가 모두 들어가게 했다
+        // (75 × 3 + 간격 8 × 2 + 패딩 6 × 2 = 253 = SectionListHeight).
+        private const float RowHeight = 75f;
+        private const int RowSpacing = 8;
+        private const int RowPadding = 6;
 
-            var area = NewRect("ListArea", container);
-            area.anchorMin = area.anchorMax = new Vector2(0.5f, 1f);
-            area.pivot = new Vector2(0.5f, 1f);
-            area.sizeDelta = new Vector2(width, height);
-            area.anchoredPosition = new Vector2(0f, ListAreaY);
+        /// <summary>
+        /// 스킬 목록을 <b>액티브(위) · 패시브(아래) 두 영역으로 나눠</b> 구성한다.
+        /// 두 영역은 각각 머리글(색 띠 + 제목 + 설명)과 자체 스크롤 목록을 가지며, 사이에 가로 구분선을 둬
+        /// 액티브와 패시브가 서로 다른 성격의 스킬임을 한눈에 보이게 한다.
+        /// </summary>
+        private void BuildSkillSections(RectTransform content)
+        {
+            _listContent = BuildSkillSection(
+                content, "Active", "액티브 스킬", "장착한 2개만 전투에서 발동",
+                ActiveHeaderY, ActiveListY, ActiveHeaderBg, ActiveAccent, ActiveListBg);
+
+            BuildSectionDivider(content);
+
+            _passiveListContent = BuildSkillSection(
+                content, "Passive", "패시브 스킬", "배우면 항상 적용",
+                PassiveHeaderY, PassiveListY, PassiveHeaderBg, PassiveAccent, PassiveListBg);
+        }
+
+        /// <summary>영역 1개(머리글 + 스크롤 목록)를 만들고 행을 담을 콘텐츠 RectTransform을 돌려준다.</summary>
+        private RectTransform BuildSkillSection(
+            RectTransform content, string id, string title, string hint,
+            float headerY, float listY, Color headerBg, Color accent, Color listBg)
+        {
+            BuildSectionHeader(content, id, title, hint, headerY, headerBg, accent);
+            return BuildSectionList(content, id, listY, listBg);
+        }
+
+        /// <summary>영역 머리글 — 좌측 색 띠 + 제목(영역 색) + 우측 짧은 설명.</summary>
+        private void BuildSectionHeader(
+            RectTransform content, string id, string title, string hint, float y, Color headerBg, Color accent)
+        {
+            var bg = NewImage($"{id}SectionHeader", content, null);
+            bg.color = headerBg;
+            var rt = bg.rectTransform;
+            TopLeft(rt, 0f, y, SectionWidth, SectionHeaderHeight);
+
+            // 좌측 세로 띠 — 영역 색을 가장 눈에 띄게 드러내는 표식.
+            var stripe = NewImage("Accent", rt, null);
+            stripe.color = accent;
+            TopLeft(stripe.rectTransform, 0f, 0f, 8f, SectionHeaderHeight);
+
+            var titleText = NewText("Title", rt, title, 26, TextAnchor.MiddleLeft);
+            titleText.fontStyle = FontStyle.Bold;
+            titleText.color = accent;
+            TopLeft(titleText.rectTransform, 22f, 0f, 300f, SectionHeaderHeight);
+
+            var hintText = NewText("Hint", rt, hint, 21, TextAnchor.MiddleRight);
+            hintText.color = new Color(0.72f, 0.75f, 0.84f);
+            TopLeft(hintText.rectTransform, SectionWidth - 414f, 0f, 400f, SectionHeaderHeight);
+        }
+
+        /// <summary>두 영역을 가르는 가로 구분선(내용 영역 폭 전체에 걸치는 얇은 띠).</summary>
+        private void BuildSectionDivider(RectTransform content)
+        {
+            var line = NewImage("SectionDivider", content, null);
+            line.color = new Color(0.45f, 0.48f, 0.58f, 0.55f);
+            line.raycastTarget = false;
+            TopLeft(line.rectTransform, 0f, DividerY, SectionWidth, DividerHeight);
+        }
+
+        /// <summary>영역 1개의 스킬 목록 스크롤 뷰(런타임에 행이 채워짐) + 우측 세로 스크롤바(항상 표시).</summary>
+        private RectTransform BuildSectionList(RectTransform content, string id, float y, Color listBg)
+        {
+            const float viewW = SectionWidth - ScrollbarWidth - 8f; // 스크롤바 폭·간격 제외
+
+            var area = NewRect($"{id}ListArea", content);
+            TopLeft(area, 0f, y, SectionWidth, SectionListHeight);
 
             // 스크롤 뷰(좌측, 스크롤바 폭만큼 좁힘)
-            var scrollGo = NewImage("SkillScroll", area, null);
-            scrollGo.color = new Color(0.06f, 0.07f, 0.12f, 0.6f);
-            TopLeft(scrollGo.rectTransform, 0f, 0f, viewW, height);
+            var scrollGo = NewImage($"{id}SkillScroll", area, null);
+            scrollGo.color = listBg;
+            TopLeft(scrollGo.rectTransform, 0f, 0f, viewW, SectionListHeight);
             var scroll = scrollGo.gameObject.AddComponent<ScrollRect>();
             scroll.horizontal = false;
             scroll.vertical = true;
@@ -400,29 +516,30 @@ namespace TaskbarHero.Client.UI
             viewport.gameObject.AddComponent<RectMask2D>();
             scroll.viewport = viewport.rectTransform;
 
-            _listContent = NewRect("Content", viewport.rectTransform);
-            _listContent.anchorMin = new Vector2(0f, 1f);
-            _listContent.anchorMax = new Vector2(1f, 1f);
-            _listContent.pivot = new Vector2(0.5f, 1f);
-            _listContent.anchoredPosition = Vector2.zero;
-            _listContent.sizeDelta = Vector2.zero;
+            var rows = NewRect("Content", viewport.rectTransform);
+            rows.anchorMin = new Vector2(0f, 1f);
+            rows.anchorMax = new Vector2(1f, 1f);
+            rows.pivot = new Vector2(0.5f, 1f);
+            rows.anchoredPosition = Vector2.zero;
+            rows.sizeDelta = Vector2.zero;
 
-            var layout = _listContent.gameObject.AddComponent<VerticalLayoutGroup>();
-            layout.spacing = 12f;
-            layout.padding = new RectOffset(12, 12, 12, 12);
+            var layout = rows.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = RowSpacing;
+            layout.padding = new RectOffset(RowPadding, RowPadding, RowPadding, RowPadding);
             layout.childControlWidth = true;
             layout.childControlHeight = true;
             layout.childForceExpandWidth = true;
             layout.childForceExpandHeight = false;
 
-            var fitter = _listContent.gameObject.AddComponent<ContentSizeFitter>();
+            var fitter = rows.gameObject.AddComponent<ContentSizeFitter>();
             fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-            scroll.content = _listContent;
+            scroll.content = rows;
 
             // 우측 세로 스크롤바(항상 표시)
-            var bar = BuildScrollbar(area, viewW + 8f, 0f, ScrollbarWidth, height);
+            var bar = BuildScrollbar(area, viewW + 8f, 0f, ScrollbarWidth, SectionListHeight);
             scroll.verticalScrollbar = bar;
             scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            return rows;
         }
 
         /// <summary>세로 스크롤바(배경+핸들)를 생성해 ScrollRect에 연결할 컴포넌트를 반환한다.</summary>
@@ -452,36 +569,40 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>하단: 결과 안내 텍스트 + 스킬 초기화(무료) 버튼.</summary>
-        private void BuildFooter(RectTransform container)
+        private void BuildFooter(RectTransform content)
         {
-            _messageText = NewText("Message", container, "", 26, TextAnchor.MiddleCenter);
-            var mrt = _messageText.rectTransform;
-            mrt.anchorMin = mrt.anchorMax = new Vector2(0.5f, 0f);
-            mrt.pivot = new Vector2(0.5f, 0f);
-            mrt.sizeDelta = new Vector2(760f, 40f);
-            mrt.anchoredPosition = new Vector2(0f, 130f);
+            _messageText = NewText("Message", content, "", 26, TextAnchor.MiddleCenter);
+            TopLeft(_messageText.rectTransform, 0f, MessageY, ContentWidth, MessageHeight);
 
             // 버튼 아트는 공용 pixel_rpg_button(9-slice) — 다른 패널 버튼과 외형을 맞췄다.
             // 미배선 시에는 종전처럼 슬롯 배경 + 붉은 톤으로 폴백한다.
             bool hasButtonArt = buttonSprite != null;
-            var resetImg = NewImage("ResetButton", container, hasButtonArt ? buttonSprite : slotNormal);
+            var resetImg = NewImage("ResetButton", content, hasButtonArt ? buttonSprite : slotNormal);
             resetImg.type = hasButtonArt ? Image.Type.Sliced : Image.Type.Simple;
             resetImg.color = hasButtonArt
                 ? new Color(0.629f, 0.629f, 0.629f, 0.98f)
                 : new Color(0.35f, 0.20f, 0.22f, 0.98f);
-            var rrt = resetImg.rectTransform;
-            rrt.anchorMin = rrt.anchorMax = new Vector2(0.5f, 0f);
-            rrt.pivot = new Vector2(0.5f, 0f);
-            rrt.sizeDelta = new Vector2(360f, 80f);
-            rrt.anchoredPosition = new Vector2(0f, ResetButtonY);
+            TopLeft(resetImg.rectTransform, (ContentWidth - ResetButtonWidth) * 0.5f, ResetButtonY,
+                ResetButtonWidth, ResetButtonHeight);
             _resetLabel = NewText("ResetLabel", resetImg.rectTransform, "스킬 초기화 (무료)", 30, TextAnchor.MiddleCenter);
             Stretch(_resetLabel.rectTransform);
             _resetButton = resetImg.gameObject.AddComponent<Button>();
         }
 
-        /// <summary>런타임 배선: 버튼 리스너 등록.</summary>
+        /// <summary>런타임 배선: 창 드래그 이동 부착 + 버튼 리스너 등록.</summary>
         private void WireRuntime()
         {
+            var panelRoot = transform.Find("PanelRoot") as RectTransform;
+
+            // 등장 연출은 PanelDragMove보다 <b>먼저</b> 있어야 한다 — PanelDragMove는 Awake에서 SidePanelPop을
+            // 찾아 캐시하므로, 뒤에 붙으면 저장된 자리를 복원해도 연출의 도착 위치가 갱신되지 않는다.
+            // 보통은 프리팹에 구워져 있고(BuildContainer), 옛 프리팹을 위한 보정으로만 여기서 붙인다.
+            SidePanel.AttachCentered(panelRoot);
+
+            // 가방·큐브 창처럼 배경의 빈 곳을 잡아 창을 끌어 옮길 수 있게 한다.
+            // 마지막으로 둔 자리는 기억했다가 다시 열 때 그 자리에 띄운다(스킬 행·스크롤 동작은 그대로).
+            PanelDragMove.Attach(panelRoot, "Skill");
+
             if (_prevButton != null) _prevButton.onClick.AddListener(OnPrevCharacter);
             if (_nextButton != null) _nextButton.onClick.AddListener(OnNextCharacter);
             if (_dimButton != null) _dimButton.onClick.AddListener(Close);
@@ -615,24 +736,36 @@ namespace TaskbarHero.Client.UI
             {
                 int level = levels.TryGetValue(s.skillCode, out var lv) ? lv : 0;
                 bool canLevelUp = level < s.maxLevel && available >= 1;
-                CreateSkillRow(cur.characterId, s, level, canLevelUp, equippedSet.Contains(s.skillCode), equippedSet.Count);
+                CreateSkillRow(ListOf(s), cur.characterId, s, level, canLevelUp,
+                    equippedSet.Contains(s.skillCode), equippedSet.Count);
             }
         }
 
-        /// <summary>스킬 1개의 행(아이콘+이름/타입/효과+레벨업 버튼, 액티브는 장착/해제 버튼)을 목록에 생성한다.</summary>
-        private void CreateSkillRow(int characterId, SkillMaster skill, int level, bool canLevelUp, bool isEquipped, int equippedCount)
+        /// <summary>스킬이 들어갈 목록(액티브는 위 영역, 패시브는 아래 영역)을 고른다.
+        /// 패시브 영역이 없는 옛 프리팹에서는 종전처럼 한 목록에 모두 담아 표시가 비지 않게 한다.</summary>
+        private RectTransform ListOf(SkillMaster skill)
         {
-            var rowImg = NewImage($"Skill_{skill.skillCode}", _listContent, slotNormal);
+            if (skill.skillType == ActiveSkillType || _passiveListContent == null)
+            {
+                return _listContent;
+            }
+            return _passiveListContent;
+        }
+
+        /// <summary>스킬 1개의 행(아이콘+이름/타입/효과+레벨업 버튼, 액티브는 장착/해제 버튼)을 지정 목록에 생성한다.</summary>
+        private void CreateSkillRow(RectTransform parent, int characterId, SkillMaster skill, int level, bool canLevelUp, bool isEquipped, int equippedCount)
+        {
+            var rowImg = NewImage($"Skill_{skill.skillCode}", parent, slotNormal);
             rowImg.color = new Color(0.10f, 0.12f, 0.18f, 0.95f);
             var le = rowImg.gameObject.AddComponent<LayoutElement>();
-            le.preferredHeight = 132f;
-            le.minHeight = 132f;
+            le.preferredHeight = RowHeight;
+            le.minHeight = RowHeight;
             var row = rowImg.rectTransform;
             _rows.Add(rowImg.gameObject);
 
             // 아이콘(좌측). 상세 정보는 hover 툴팁으로 노출하므로 행에는 아이콘+이름만 둔다.
             var iconBg = NewImage("IconBg", row, slotNormal);
-            TopLeft(iconBg.rectTransform, 12f, 12f, 108f, 108f);
+            TopLeft(iconBg.rectTransform, 6f, 5f, 64f, 64f);
             var icon = NewImage("Icon", iconBg.rectTransform, _iconDb != null ? _iconDb.Get(skill.skillCode) : null);
             icon.preserveAspect = true;
             icon.raycastTarget = false;
@@ -648,9 +781,10 @@ namespace TaskbarHero.Client.UI
 
             // 이름만 노출(세로 중앙). 타입·레벨·효과·재사용은 hover 툴팁에서.
             bool isActive = skill.skillType == ActiveSkillType;
-            var name = NewText("Name", row, skill.name, 32, TextAnchor.MiddleLeft);
+            var name = NewText("Name", row, skill.name, 28, TextAnchor.MiddleLeft);
             name.fontStyle = FontStyle.Bold;
-            TopLeft(name.rectTransform, 138f, 46f, 260f, 40f);
+            name.color = isActive ? ActiveAccent : PassiveAccent; // 행 하나만 봐도 성격을 알 수 있게 영역 색과 맞춘다
+            TopLeft(name.rectTransform, 78f, 18f, 260f, 40f);
 
             // hover 상세 툴팁 데이터.
             string typeName = isActive ? (isEquipped ? "액티브 · 장착됨" : "액티브") : "패시브";
@@ -671,19 +805,32 @@ namespace TaskbarHero.Client.UI
                 CreateEquipButton(row, characterId, skill.skillCode, level >= 1, isEquipped, equippedCount);
             }
 
+            // 장착 한도(2개)를 이미 채웠으면 <b>아직 배우지 않은</b> 다른 액티브 스킬은 레벨업을 막는다 —
+            // 배워도 장착할 자리가 없어 전투에서 쓸 수 없으므로 포인트를 헛되게 쓰지 않도록 한다.
+            bool blockedByEquipLimit = isActive && level <= 0 && equippedCount >= MaxActiveSkills;
+
             // 레벨업 버튼(우측)
             var btnImg = NewImage("LevelUpButton", row, slotNormal);
             var btnRt = btnImg.rectTransform;
             btnRt.anchorMin = btnRt.anchorMax = new Vector2(1f, 0.5f);
             btnRt.pivot = new Vector2(1f, 0.5f);
-            btnRt.anchoredPosition = new Vector2(-16f, 0f);
-            btnRt.sizeDelta = new Vector2(150f, 96f);
+            btnRt.anchoredPosition = new Vector2(-8f, 0f);
+            btnRt.sizeDelta = new Vector2(122f, 60f);
 
             string btnLabel;
+            Color labelColor = Color.white;
             if (level >= skill.maxLevel)
             {
                 btnLabel = "MAX";
                 btnImg.color = new Color(0.28f, 0.26f, 0.18f, 0.9f);
+            }
+            else if (blockedByEquipLimit)
+            {
+                // 흑백(무채색)으로 눌릴 수 없는 상태임을 드러낸다. 다만 버튼 자체는 살려 둬야
+                // 눌렀을 때 이유를 알려 줄 수 있다(interactable=false면 클릭이 오지 않는다).
+                btnLabel = "레벨업\nSP 1";
+                btnImg.color = DisabledButtonColor;
+                labelColor = DisabledLabelColor;
             }
             else if (canLevelUp)
             {
@@ -695,14 +842,30 @@ namespace TaskbarHero.Client.UI
                 btnLabel = "레벨업\nSP 1";
                 btnImg.color = new Color(0.20f, 0.22f, 0.30f, 0.9f); // 포인트 부족(비활성 느낌)
             }
-            var btnText = NewText("Label", btnImg.rectTransform, btnLabel, 26, TextAnchor.MiddleCenter);
+            var btnText = NewText("Label", btnImg.rectTransform, btnLabel, 23, TextAnchor.MiddleCenter);
             btnText.fontStyle = FontStyle.Bold;
+            btnText.color = labelColor;
             Stretch(btnText.rectTransform);
 
             var button = btnImg.gameObject.AddComponent<Button>();
-            button.interactable = canLevelUp;
             int code = skill.skillCode;
-            button.onClick.AddListener(() => OnLevelUp(characterId, code));
+            if (blockedByEquipLimit)
+            {
+                // 눌러도 레벨업은 하지 않고 이유만 안내한다(색 변화 연출도 끈다 — 흑백을 유지).
+                button.transition = Selectable.Transition.None;
+                button.onClick.AddListener(OnLevelUpBlockedByEquipLimit);
+            }
+            else
+            {
+                button.interactable = canLevelUp;
+                button.onClick.AddListener(() => OnLevelUp(characterId, code));
+            }
+        }
+
+        /// <summary>장착 한도 때문에 막힌 레벨업 버튼을 눌렀을 때의 안내(레벨업은 하지 않는다).</summary>
+        private void OnLevelUpBlockedByEquipLimit()
+        {
+            SetMessage(EquipLimitMessage);
         }
 
         /// <summary>액티브 스킬 행의 장착/해제 토글 버튼을 만든다(레벨업 버튼 왼쪽). 미습득은 비활성.</summary>
@@ -712,8 +875,8 @@ namespace TaskbarHero.Client.UI
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(1f, 0.5f);
             rt.pivot = new Vector2(1f, 0.5f);
-            rt.anchoredPosition = new Vector2(-176f, 0f);
-            rt.sizeDelta = new Vector2(150f, 96f);
+            rt.anchoredPosition = new Vector2(-136f, 0f);
+            rt.sizeDelta = new Vector2(122f, 60f);
 
             string label;
             bool interactable;
@@ -735,7 +898,7 @@ namespace TaskbarHero.Client.UI
                 img.color = new Color(0.22f, 0.32f, 0.48f, 0.98f);
                 interactable = true;
             }
-            var text = NewText("Label", img.rectTransform, label, 28, TextAnchor.MiddleCenter);
+            var text = NewText("Label", img.rectTransform, label, 25, TextAnchor.MiddleCenter);
             text.fontStyle = FontStyle.Bold;
             Stretch(text.rectTransform);
 

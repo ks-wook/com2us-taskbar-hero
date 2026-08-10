@@ -554,6 +554,15 @@ namespace TaskbarHero.Client.UI
 
         private void WireRuntime()
         {
+            // 가방·스킬 창처럼 배경의 빈 곳을 잡아 창을 끌어 옮길 수 있게 한다(지역 핫스팟·스테이지 노드 클릭은 그대로).
+            // 한 번 옮기면 그 자리를 기억하고, 열 때마다 하던 자동 도킹도 멈춘다(PanelDragMove 참고).
+            // 지도(1단계)와 지역 창(2단계)은 서로 다른 창이므로 저장 키도 따로 둔다.
+            PanelDragMove.Attach(transform.Find("PanelRoot") as RectTransform, "Stage");
+            if (_windowPanel != null)
+            {
+                PanelDragMove.Attach(_windowPanel.rectTransform, "StageRegion");
+            }
+
             if (_dimButton != null)
             {
                 _dimButton.onClick.AddListener(Close);

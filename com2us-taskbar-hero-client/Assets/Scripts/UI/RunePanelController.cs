@@ -159,6 +159,10 @@ namespace TaskbarHero.Client.UI
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(860f, 1020f); // 화면(가로 16:9 포함) 안에 전체 UI가 보이도록 높이 축소
             rt.anchoredPosition = Vector2.zero;
+            // 다른 창과 같은 등장 연출(작게 시작해 제 크기로 커지기). 자리는 UIManager가 가방 창에 맞춰 잡으므로
+            // 자동 도킹은 끄고(ConfigureCentered) 연출만 쓴다. 프리팹에 구워 두면 실행 시 PanelDragMove보다
+            // 먼저 존재하게 되어(컴포넌트 순서) 저장된 자리 복원과 도착 위치 동기화 순서도 맞는다.
+            rt.gameObject.AddComponent<SidePanelPop>().ConfigureCentered();
             return rt;
         }
 
@@ -275,8 +279,20 @@ namespace TaskbarHero.Client.UI
             mrt.anchoredPosition = new Vector2(0f, 20f);
         }
 
+        /// <summary>런타임 배선: 등장 연출·창 드래그 이동 부착 + 버튼 리스너 등록.</summary>
         private void WireRuntime()
         {
+            var panelRoot = transform.Find("PanelRoot") as RectTransform;
+
+            // 등장 연출은 PanelDragMove보다 <b>먼저</b> 있어야 한다 — PanelDragMove는 Awake에서 SidePanelPop을
+            // 찾아 캐시하므로, 뒤에 붙으면 저장된 자리를 복원해도 연출의 도착 위치가 갱신되지 않는다.
+            // 보통은 프리팹에 구워져 있고(BuildContainer), 옛 프리팹을 위한 보정으로만 여기서 붙인다.
+            SidePanel.AttachCentered(panelRoot);
+
+            // 가방·큐브·스킬 창처럼 배경의 빈 곳을 잡아 창을 끌어 옮길 수 있게 한다.
+            // 마지막으로 둔 자리는 기억했다가 다시 열 때 그 자리에 띄운다(룬 타일 클릭·스크롤은 그대로).
+            PanelDragMove.Attach(panelRoot, "Rune");
+
             if (_closeButton != null) _closeButton.onClick.AddListener(Close);
             if (_dimButton != null) _dimButton.onClick.AddListener(Close);
             if (_upgradeButton != null) _upgradeButton.onClick.AddListener(OnUpgrade);

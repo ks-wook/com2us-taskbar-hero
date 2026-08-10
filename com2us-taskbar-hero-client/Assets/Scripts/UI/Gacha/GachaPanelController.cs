@@ -757,6 +757,10 @@ namespace TaskbarHero.Client.UI.Gacha
         /// <summary>구워진 고정 버튼의 리스너를 실행 시점에 다시 연결한다(비영구 리스너는 프리팹에 저장되지 않는다).</summary>
         private void WireRuntime()
         {
+            // 가방·스킬 창처럼 배경의 빈 곳을 잡아 창을 끌어 옮길 수 있게 한다(뽑기 버튼·기록 목록은 그대로).
+            // 한 번 옮기면 그 자리를 기억하고, 열 때마다 하던 자동 도킹도 멈춘다(PanelDragMove 참고).
+            PanelDragMove.Attach(transform.Find("PanelRoot") as RectTransform, "Gacha");
+
             Rewire(_dimButton, Close);
             Rewire(_singleButton, OnSinglePull);
             Rewire(_multiButton, OnMultiPull);

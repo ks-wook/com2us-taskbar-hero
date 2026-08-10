@@ -15,7 +15,9 @@ namespace TaskbarHero.ClientEditor
     public static class SettingsUiBuilder
     {
         private const string PrefabPath = "Assets/Prefabs/UI/SettingsPanel.prefab";
-        private const string PanelSpritePath = "Assets/Art/UI/System/system_bg.png";
+        // 창 배경은 가방·스킬·룬 창과 같은 공용 프레임을 쓴다. **Multiple로 임포트된 아트라 임포트 설정을
+        // 건드리지 않고**(공용 아트 규칙) LoadSpriteAt의 서브 스프라이트 폴백으로 읽어 배선만 한다.
+        private const string PanelSpritePath = "Assets/Art/UI/ui_bg_2.png";
         private const string TrackSpritePath = "Assets/Art/UI/System/system_slot.png";
         private const string SettingsIconPath = "Assets/Art/Icon/환경설정.png";
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";

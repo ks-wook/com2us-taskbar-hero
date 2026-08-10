@@ -325,6 +325,10 @@ namespace TaskbarHero.Client.UI
 
         private void WireRuntime()
         {
+            // 가방·스킬 창처럼 배경의 빈 곳을 잡아 창을 끌어 옮길 수 있게 한다(출석 칸 클릭은 그대로).
+            // 한 번 옮기면 그 자리를 기억하고, 열 때마다 하던 자동 도킹도 멈춘다(PanelDragMove 참고).
+            PanelDragMove.Attach(transform.Find("PanelRoot") as RectTransform, "Attendance");
+
             if (_dimButton != null) _dimButton.onClick.AddListener(Close);
             if (_claimButton != null) _claimButton.onClick.AddListener(OnClaim);
         }

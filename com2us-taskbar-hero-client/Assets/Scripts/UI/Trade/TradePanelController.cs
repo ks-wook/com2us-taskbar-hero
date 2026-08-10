@@ -34,49 +34,113 @@ namespace TaskbarHero.Client.UI.Trade
         private const float PanelWidth = 1120f;
         private const float PanelHeight = 1310f;  // 플레이 모드에서 높인 값
 
-        /// <summary>창 안쪽 목록 영역의 좌우 여백. 배경 프레임(<c>ui_bg_2</c>)의 테두리는 원본 765px에서
-        /// 각 변 52px이라 폭 1120으로 늘리면 <b>좌우 각 ≈76 UI 단위</b>를 차지한다. 내용이 테두리에 닿지
-        /// 않도록 그보다 20 더 안쪽으로 들인다(76 + 20).</summary>
-        private const float ListInset = 96f;
+        // ── 내용 영역(배경 프레임 ui_bg_2 테두리 안쪽 빈 칸) ──
+        // 프레임은 9-slice가 아니라 Simple로 늘려 그리므로 테두리 두께가 창 크기에 비례한다. 그래서 창 크기
+        // 기준의 고정 여백(옛 ListInset 96 · ContentTopShift 187)으로는 폭 1120에서 좌우 약 154·144인
+        // 테두리를 넘어 내용이 테두리 위에 얹혔다. 이제 <see cref="PanelFrame"/> 비율로 잡은 ContentArea
+        // 안에만 내용을 놓고, 그 안의 모든 좌표는 <b>내용 영역 기준</b>이다(802.9 × 956.9).
+        private const float ContentWidth = PanelWidth * (1f - PanelFrame.InsetLeft - PanelFrame.InsetRight)
+            - PanelFrame.Pad * 2f;
+        private const float ContentHeight = PanelHeight * (1f - PanelFrame.InsetTop - PanelFrame.InsetBottom)
+            - PanelFrame.Pad * 2f;
 
-        /// <summary>프레임 상단 장식을 피해 창 안의 모든 줄(제목 리본·탭·검색줄·표 머리·목록)을 아래로
-        /// 내리는 양. 플레이 모드에서 내용을 통째로 내려 확정한 값이다.</summary>
-        private const float ContentTopShift = 187f;
+        /// <summary>내용 영역 안에서 목록·검색줄이 좌우로 더 들이는 여백(프레임 여백은 ContentArea가 처리).</summary>
+        private const float ListInset = 6f;
 
-        // 행(=표 머리) 내부 열 좌표. 폭이 ListInset에 따라 달라지므로 <b>오른쪽 '거래' 열부터 왼쪽으로</b>
+        // 행(=표 머리) 내부 열 좌표. 폭이 내용 영역에 따라 달라지므로 <b>오른쪽 '거래' 열부터 왼쪽으로</b>
         // 차례로 계산해 열이 서로 겹치거나 행 밖으로 나가지 않게 한다.
-        private const float RowWidth = PanelWidth - ListInset * 2f - 20f; // 908 (콘텐츠 여백 10×2 제외)
-        private const float RowNameX = 110f;      // 아이템 이름 열(아이콘 칸 20~92 오른쪽)
-        private const float RowActionWidth = 130f;
-        private const float RowActionX = RowWidth - 30f - RowActionWidth;  // 748 — 오른쪽 끝에서 여유 30
-        private const float RowPriceWidth = 150f;
-        private const float RowPriceX = RowActionX - 20f - RowPriceWidth;  // 578
-        private const float RowCoinSize = 28f;
-        private const float RowCoinX = RowPriceX - RowCoinSize;            // 550 — 가격 왼쪽에 붙는 코인 아이콘
-        private const float RowQtyWidth = 100f;
-        private const float RowQtyX = RowCoinX - 12f - RowQtyWidth;        // 438
-        private const float RowNameWidth = RowQtyX - 12f - RowNameX;       // 316
-        private const float RowRangeX = RowQtyX;                           // 판매 등록 탭: 시세 범위 열
-        private const float RowRangeWidth = RowActionX - 20f - RowRangeX;  // 290
+        private const float RowWidth = ContentWidth - ListInset * 2f - 20f; // 770.9 (콘텐츠 여백 10×2 제외)
+        private const float RowNameX = 100f;      // 아이템 이름 열(아이콘 칸 20~92 오른쪽)
+        private const float RowActionWidth = 120f;
+        private const float RowActionX = RowWidth - 16f - RowActionWidth;   // 634.9 — 오른쪽 끝에서 여유 16
+        private const float RowPriceWidth = 140f;
+        private const float RowPriceX = RowActionX - 14f - RowPriceWidth;   // 480.9
+        private const float RowCoinSize = 26f;
+        private const float RowCoinX = RowPriceX - RowCoinSize;             // 454.9 — 가격 왼쪽에 붙는 코인 아이콘
+        private const float RowQtyWidth = 80f;
+        private const float RowQtyX = RowCoinX - 10f - RowQtyWidth;         // 364.9
+        private const float RowNameWidth = RowQtyX - 10f - RowNameX;        // 254.9
+        private const float RowRangeX = RowQtyX;                            // 판매 등록 탭: 시세 범위 열
+        private const float RowRangeWidth = RowActionX - 14f - RowRangeX;   // 256
 
-        private const float SearchRowY = 178f + ContentTopShift; // 창 상단에서 검색줄까지
-        // 보유 골드 블록 자리(창 좌상단 기준, 아래로 +). 플레이 모드에서 오른쪽 위로 옮겨 확정한 값.
-        private const float GoldAreaX = 730f;
-        private const float GoldAreaY = 71f;
-        // 표 머리 / 목록 영역의 y. 표 머리는 위에서, 목록은 위·아래 여백으로 잡는다(내용 하향분 포함).
-        private const float TableHeaderY = 252f + ContentTopShift;   // 439
-        private const float ListTopMargin = 304f + ContentTopShift;  // 491 — 표 머리 아래
-        private const float ListBottomMargin = 200f - ContentTopShift; // 13 — 창 바닥까지
-        private const float SellListTopMargin = 186f + ContentTopShift;   // 373
-        private const float SellListBottomMargin = 320f - ContentTopShift; // 133
+        // 내용 영역 <b>좌상단 기준</b> y(아래로 +). 위에서부터 제목 리본 → 탭 → 검색줄 → 표 머리 → 목록.
+        private const float TitleBannerY = 0f;
+        private const float TitleBannerWidth = 320f;
+        private const float TitleBannerHeight = 72f;
+        private const float GoldAreaY = 8f;       // 보유 골드 블록(제목 리본 오른쪽)
+        private const float GoldAreaWidth = 230f;
+        private const float GoldAreaHeight = 56f;
+        private const float TabRowY = 80f;
+        private const float TabHeight = 66f;
+        private const float SearchRowY = 158f;
+        private const float SearchRowHeight = 62f;
+        private const float TableHeaderY = 232f;
+        private const float TableHeaderHeight = 48f;
+        private const float ListTopMargin = 286f;   // 표 머리 아래
+        private const float ListBottomMargin = 108f; // 페이지 이동 줄 위까지
+        private const float SellListTopMargin = 158f;    // 판매 등록 탭은 검색줄·표 머리가 없다
+        private const float SellListBottomMargin = 306f; // 하단 등록 폼 위까지
+        // 내용 영역 <b>바닥 기준</b> y(위로 +).
+        private const float MessageHeight = 34f;
+        private const float PageRowY = 44f;
+        private const float PageRowHeight = 52f;
+        private const float SellFormBottom = 44f;
+        private const float SellFormHeight = 250f;
+
         private const float SearchButtonWidth = 160f;
-        private const float TabWidth = 230f;      // 상단 탭 버튼 폭
+        private const float TabWidth = 230f;      // 상단 탭 버튼 폭(3개 + 간격 = 714 ≤ 802.9)
         private const float TabGap = 12f;         // 탭 사이 간격
-        private const float RowHeight = 96f;
+        private const float RowHeight = 82f;
         // 한 페이지 행 수는 목록 뷰포트 안에 다 들어가는 값으로 잡는다(스크롤 없이 한눈에 보이게).
-        // 뷰포트 806 = 패널 1310 − 아래 13(ListBottom) − 위 491(ListTop, 표 머리까지 + 내용 하향 187).
-        // 6행 = 6×96 + 5×8(간격) + 20(위아래 여백) = 636 ≤ 806.
+        // 뷰포트 562.9 = 내용 높이 956.9 − 위 286(ListTop) − 아래 108(ListBottom).
+        // 6행 = 6×82 + 5×8(간격) + 20(위아래 여백) = 552 ≤ 562.9.
         private const int PageSize = 6;
+        // ── 색 팔레트 ──
+        // 창 배경이 공용 프레임(ui_bg_2)으로 바뀌면서 안쪽 바닥이 <b>짙은 남색</b>(RGB 23,35,47)이 되었다.
+        // 거래소 아트 키트는 <b>따뜻한 갈색·양피지</b> 계열이라 이 바닥 위에서 겉돌았고, 행 위의 짙은 갈색
+        // 글자(수량·가격·시세)와 빈 목록 안내는 어두운 면 위에 어두운 글자라 거의 읽히지 않았다.
+        //
+        // <para><b>어떻게 맞췄나</b> — ① 목록 행은 아트(row_normal/row_alt)가 <b>붉은 갈색</b>이라 곱셈 틴트로는
+        // 남색이 될 수 없으므로 스프라이트를 빼고 프레임 안쪽과 같은 남색 평면으로 깐다(가장 넓은 면).
+        // ② 그 밖의 아트(표 머리·리본·탭·폼·버튼·입력창)는 아래 <c>ArtTint*</c> 틴트로 <b>짙고 푸른 쪽</b>으로
+        // 눌러 프레임의 색조에 맞춘다(픽셀 디테일과 기능별 색 구분은 유지). ③ 글자는 놓이는 면에 맞춰 다시 고른다.</para>
+        private static readonly Color SurfaceRow = new Color(0.13f, 0.16f, 0.23f, 0.96f);      // 목록 행(홀수)
+        private static readonly Color SurfaceRowAlt = new Color(0.17f, 0.20f, 0.28f, 0.96f);   // 목록 행(짝수)
+        private static readonly Color SurfaceSuggest = new Color(0.10f, 0.12f, 0.18f, 0.98f);  // 자동 완성 후보 목록
+        private static readonly Color TextPrimary = new Color(0.91f, 0.93f, 0.97f);            // 어두운 면 위 본문
+        private static readonly Color TextMuted = new Color(0.66f, 0.70f, 0.78f, 0.9f);        // 어두운 면 위 보조
+        private static readonly Color TextGold = new Color(1f, 0.86f, 0.38f);                  // 금액(프레임 금색 장식과 같은 톤)
+        private static readonly Color TextTitle = new Color(1f, 0.92f, 0.72f);                 // 제목·표 머리 글자
+
+        // 거래소 아트 키트에 얹는 톤. 키트 원색이 <b>밝은 양피지·금색·주황</b> 계열이라 프레임 안쪽의 짙은
+        // 남색 위에서 지나치게 튄다. 그래서 <b>파랑 채널을 빨강보다 크게</b> 잡은 어두운 틴트를 곱해
+        // 전체를 짙고 푸른 쪽으로 눌러 준다(아트의 픽셀 디테일·색 구분은 그대로 남는다).
+        // 각 값은 그 스프라이트의 실제 원색을 재서, 결과가 짙은 대역(대략 0.1~0.4)에 오도록 고른 것이다.
+        //
+        // 입력창 field_search(0.83,0.68,0.47) → (0.16,0.19,0.26) 짙은 남색
+        private static readonly Color ArtTintField = new Color(0.19f, 0.28f, 0.55f, 1f);
+        // 표 머리 bar_table_header(0.45,0.25,0.16) → (0.16,0.12,0.11)
+        private static readonly Color ArtTintSurface = new Color(0.36f, 0.46f, 0.70f, 1f);
+        // 제목 리본·탭(0.45,0.26,0.16 / 0.36,0.20,0.13 / 선택 0.52,0.30,0.18) → 0.18~0.26 대역(선택 탭은 더 밝게 남는다)
+        private static readonly Color ArtTintPanel = new Color(0.50f, 0.58f, 0.80f, 1f);
+        // 버튼 — 금색(0.86,0.62,0.17)→(0.39,0.30,0.10) · 파랑(0.17,0.47,0.76)→(0.08,0.23,0.46)
+        //        · 빨강(0.65,0.18,0.18)→(0.29,0.09,0.11) · 나무(0.35,0.20,0.12)→(0.16,0.10,0.07).
+        // 기능별 색 구분(구매·등록=금색, 검색·선택=파랑, 취소=빨강)은 유지하면서 밝기만 낮춘다.
+        private static readonly Color ArtTintButton = new Color(0.45f, 0.48f, 0.60f, 1f);
+        // 이미 어두운 아트(panel_wood 0.14,0.08,0.10)는 더 누르면 검게 죽으므로 살짝만 푸르게 기울인다.
+        private static readonly Color ArtTintDarkArt = new Color(0.72f, 0.84f, 1f, 1f);
+
+        // 아트가 배선되지 않았을 때만 쓰는 대체 색(각 스프라이트의 원래 색에 가깝게 둔다).
+        private static readonly Color FallbackBanner = new Color(0.23f, 0.15f, 0.13f, 1f);
+        private static readonly Color FallbackTab = new Color(0.18f, 0.12f, 0.11f, 1f);
+        private static readonly Color FallbackHeader = new Color(0.16f, 0.12f, 0.11f, 1f);
+        private static readonly Color FallbackField = new Color(0.16f, 0.19f, 0.26f, 1f);
+        private static readonly Color FallbackForm = new Color(0.10f, 0.07f, 0.10f, 1f);
+        private static readonly Color FallbackButtonGold = new Color(0.39f, 0.30f, 0.10f, 1f);
+        private static readonly Color FallbackButtonBlue = new Color(0.08f, 0.23f, 0.46f, 1f);
+        private static readonly Color FallbackButtonRed = new Color(0.29f, 0.09f, 0.11f, 1f);
+        private static readonly Color FallbackButtonWood = new Color(0.16f, 0.10f, 0.07f, 1f);
+
         private const int GoldCurrencyType = 1;  // 재화 타입 1 = 골드
         private const int GoldItemCode = 1;      // item_master 골드 코드(아이콘 item_1)
         private const float PriceMinRate = 0.8f; // 기준가 ±20%(기획서 §3) — 안내용, 최종 판정은 서버
@@ -84,9 +148,11 @@ namespace TaskbarHero.Client.UI.Trade
 
         [Header("UI 리소스 (Assets/Art/UI/Trade — 에디터 빌더가 배선)")]
         [SerializeField] private Sprite _windowFrame;      // ui_bg_2(인벤토리·스킬·룬·큐브 패널과 공용 프레임)
-        [SerializeField] private Sprite _panelParchment;   // panel_parchment (목록 배경)
+        [Tooltip("panel_parchment — 현재 화면에 쓰지 않는다(목록 배경은 창 프레임 내부가 보이도록 투명). 배선만 유지.")]
+        [SerializeField] private Sprite _panelParchment;   // panel_parchment
         [SerializeField] private Sprite _panelWood;        // panel_wood (하단 폼)
         [SerializeField] private Sprite _tableHeader;      // bar_table_header
+        [Tooltip("row_normal/row_alt — 현재 화면에 쓰지 않는다(목록 행은 프레임 안쪽과 같은 남색 평면). 배선만 유지.")]
         [SerializeField] private Sprite _rowNormal;        // row_normal
         [SerializeField] private Sprite _rowAlt;           // row_alt
         [SerializeField] private Sprite _fieldSearch;      // field_search (입력창)
@@ -116,6 +182,9 @@ namespace TaskbarHero.Client.UI.Trade
         [SerializeField] private RectTransform _listContent;
         [SerializeField] private InputField _searchInput;
         [SerializeField] private Button _searchButton;
+        [Tooltip("검색어 자동 완성 후보 목록(검색창 바로 아래). 기본 비활성.")]
+        [SerializeField] private RectTransform _suggestBox;
+        [SerializeField] private RectTransform _suggestContent;
         [SerializeField] private Button _mineTabButton;
         [SerializeField] private Image _mineTabImage;
         [SerializeField] private Button _prevPageButton;
@@ -151,6 +220,8 @@ namespace TaskbarHero.Client.UI.Trade
         private int _selectedItemCode;
         private readonly List<GameObject> _rows = new List<GameObject>();
         private readonly List<GameObject> _sellRows = new List<GameObject>();
+        private readonly List<GameObject> _suggestRows = new List<GameObject>();
+        private bool _suppressSuggest;    // 후보를 골라 검색창 값을 넣는 중(다시 후보를 띄우지 않도록)
 
         private bool AlreadyBuilt => _listContent != null;
 
@@ -187,12 +258,14 @@ namespace TaskbarHero.Client.UI.Trade
             BuildCanvas();
             BuildDim();
             var panel = BuildPanel();
-            BuildHeader(panel);
-            BuildGoldArea(panel); // 보유 골드 표시(좌상단, 인벤토리와 동일 규격)
-            BuildTabs(panel);
-            BuildListTab(panel);
-            BuildSellTab(panel);
-            BuildMessage(panel);
+            // 내용물은 모두 프레임 테두리 안쪽 빈 칸에만 놓는다(테두리·상단 장식을 침범하지 않도록).
+            var content = PanelFrame.CreateContentArea(panel);
+            BuildHeader(content);
+            BuildGoldArea(content); // 보유 골드 표시(제목 리본 오른쪽, 인벤토리와 동일 표기)
+            BuildTabs(content);
+            BuildListTab(content);
+            BuildSellTab(content);
+            BuildMessage(content);
         }
 
         /// <summary>패널 전용 오버레이 캔버스를 구성한다(다른 패널과 동일 규격, sortingOrder 100).</summary>
@@ -232,7 +305,9 @@ namespace TaskbarHero.Client.UI.Trade
         private RectTransform BuildPanel()
         {
             var img = NewImage("PanelRoot", (RectTransform)transform, new Color(0.12f, 0.10f, 0.08f, 0.98f));
-            ApplySliced(img, _windowFrame);
+            // 창 배경 프레임은 <b>원색 그대로</b> 둔다 — 이 프레임의 짙은 남색이 안쪽 색조의 기준이므로
+            // 여기에 틴트를 곱하면 배경이 통째로 어두워진다(키트 아트에만 틴트를 건다).
+            ApplySliced(img, _windowFrame, Color.white);
             var rt = img.rectTransform;
             rt.sizeDelta = new Vector2(PanelWidth, PanelHeight);
             // 화면 중앙이 아니라 전투 화면 왼쪽 옆에 일정 간격(GameViewLayout.PanelGap)을 두고 붙인다 — 전투를 가리지 않는다.
@@ -241,35 +316,34 @@ namespace TaskbarHero.Client.UI.Trade
         }
 
         /// <summary>상단 타이틀 리본. <b>닫기(X) 버튼은 두지 않는다</b> — 다른 패널과 같이 미관상 제거했고
-        /// 창 밖(딤) 클릭으로 닫는다. 리본 위치는 배경 프레임의 상단 장식을 피해 아래로 내렸다
-        /// (<see cref="ContentTopShift"/>).</summary>
-        private void BuildHeader(RectTransform panel)
+        /// 창 밖(딤) 클릭으로 닫는다. 내용 영역 맨 윗줄 가운데에 놓으며, 오른쪽에 보유 골드 블록이 온다.</summary>
+        private void BuildHeader(RectTransform content)
         {
-            var ribbon = NewImage("TitleBanner", panel, new Color(0.45f, 0.30f, 0.16f, 1f));
-            ApplySliced(ribbon, _bannerRibbon);
+            var ribbon = NewImage("TitleBanner", content, FallbackBanner);
+            ApplySliced(ribbon, _bannerRibbon, ArtTintPanel);
             var brt = ribbon.rectTransform;
             brt.anchorMin = brt.anchorMax = new Vector2(0.5f, 1f);
             brt.pivot = new Vector2(0.5f, 1f);
-            brt.anchoredPosition = new Vector2(0f, -(8f + ContentTopShift));
-            brt.sizeDelta = new Vector2(420f, 76f);
+            brt.anchoredPosition = new Vector2(0f, -TitleBannerY);
+            brt.sizeDelta = new Vector2(TitleBannerWidth, TitleBannerHeight);
 
             var title = NewText("Title", brt, "거래소", 40, TextAnchor.MiddleCenter);
             title.fontStyle = FontStyle.Bold;
-            title.color = new Color(1f, 0.92f, 0.72f);
+            title.color = TextTitle;
             Stretch(title.rectTransform);
         }
 
         /// <summary>보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 인벤토리 패널과 같은 규격·표기이며,
         /// 아이콘·수량은 런타임에 세션 재화에서 채운다(<see cref="RefreshGold"/>).
-        /// 자리는 플레이 모드에서 옮겨 확정한 값으로, 창 <b>오른쪽 위</b>(제목 리본 옆)에 둔다.</summary>
-        private void BuildGoldArea(RectTransform panel)
+        /// 내용 영역 <b>오른쪽 위</b>(제목 리본 옆)에 둔다.</summary>
+        private void BuildGoldArea(RectTransform content)
         {
-            var area = NewImage("GoldArea", panel, new Color(0f, 0f, 0f, 0.35f));
+            var area = NewImage("GoldArea", content, new Color(0f, 0f, 0f, 0.35f));
             var art = area.rectTransform;
-            art.anchorMin = art.anchorMax = new Vector2(0f, 1f);
-            art.pivot = new Vector2(0f, 1f);
-            art.anchoredPosition = new Vector2(GoldAreaX, -GoldAreaY);
-            art.sizeDelta = new Vector2(280f, 56f);
+            art.anchorMin = art.anchorMax = new Vector2(1f, 1f);
+            art.pivot = new Vector2(1f, 1f);
+            art.anchoredPosition = new Vector2(0f, -GoldAreaY);
+            art.sizeDelta = new Vector2(GoldAreaWidth, GoldAreaHeight);
             area.raycastTarget = false;
 
             _goldIcon = NewImage("GoldIcon", art, Color.white); // 스프라이트는 RefreshGold에서 item_1로 배정
@@ -282,40 +356,40 @@ namespace TaskbarHero.Client.UI.Trade
             irt.anchoredPosition = new Vector2(8f, 0f);
             irt.sizeDelta = new Vector2(44f, 44f);
 
-            _goldText = NewText("GoldText", art, "0", 32, TextAnchor.MiddleLeft);
+            _goldText = NewText("GoldText", art, "0", 30, TextAnchor.MiddleLeft);
             _goldText.fontStyle = FontStyle.Bold;
             _goldText.color = new Color(1f, 0.90f, 0.55f);
             var grt = _goldText.rectTransform;
             grt.anchorMin = grt.anchorMax = new Vector2(0f, 0.5f);
             grt.pivot = new Vector2(0f, 0.5f);
-            grt.anchoredPosition = new Vector2(62f, 0f);
-            grt.sizeDelta = new Vector2(206f, 44f);
+            grt.anchoredPosition = new Vector2(58f, 0f);
+            grt.sizeDelta = new Vector2(GoldAreaWidth - 66f, 44f);
         }
 
         /// <summary>상단 탭 3개: [판매 목록] [판매 등록] [판매 현황]. 가운데 정렬로 나란히 놓는다.</summary>
-        private void BuildTabs(RectTransform panel)
+        private void BuildTabs(RectTransform content)
         {
-            _listTabImage = BuildTab(panel, "ListTab", "판매 목록", -(TabWidth + TabGap));
+            _listTabImage = BuildTab(content, "ListTab", "판매 목록", -(TabWidth + TabGap));
             _listTabButton = _listTabImage.gameObject.AddComponent<Button>();
 
-            _sellTabImage = BuildTab(panel, "SellTab", "판매 등록", 0f);
+            _sellTabImage = BuildTab(content, "SellTab", "판매 등록", 0f);
             _sellTabButton = _sellTabImage.gameObject.AddComponent<Button>();
 
             // '판매 등록' 오른쪽 — 내가 등록한 매물(취소 대상)을 보는 탭.
-            _mineTabImage = BuildTab(panel, "MineTab", "판매 현황", TabWidth + TabGap);
+            _mineTabImage = BuildTab(content, "MineTab", "판매 현황", TabWidth + TabGap);
             _mineTabButton = _mineTabImage.gameObject.AddComponent<Button>();
         }
 
-        /// <summary>탭 버튼 하나(가운데 기준 x 오프셋).</summary>
-        private Image BuildTab(RectTransform panel, string name, string label, float offsetX)
+        /// <summary>탭 버튼 하나(내용 영역 가운데 기준 x 오프셋).</summary>
+        private Image BuildTab(RectTransform content, string name, string label, float offsetX)
         {
-            var img = NewImage(name, panel, new Color(0.28f, 0.22f, 0.14f, 1f));
-            ApplySliced(img, _btnCategory);
+            var img = NewImage(name, content, FallbackTab);
+            ApplySliced(img, _btnCategory, ArtTintPanel);
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 1f);
             rt.pivot = new Vector2(0.5f, 1f);
-            rt.anchoredPosition = new Vector2(offsetX, -(96f + ContentTopShift));
-            rt.sizeDelta = new Vector2(TabWidth, 66f);
+            rt.anchoredPosition = new Vector2(offsetX, -TabRowY);
+            rt.sizeDelta = new Vector2(TabWidth, TabHeight);
             var t = NewText("Label", rt, label, 30, TextAnchor.MiddleCenter);
             t.fontStyle = FontStyle.Bold;
             Stretch(t.rectTransform);
@@ -323,15 +397,15 @@ namespace TaskbarHero.Client.UI.Trade
         }
 
         /// <summary>판매 목록 탭: 검색줄 · 표 머리 · 목록 · 페이지 이동.</summary>
-        private void BuildListTab(RectTransform panel)
+        private void BuildListTab(RectTransform content)
         {
-            var root = NewChild("ListTabRoot", panel);
+            var root = NewChild("ListTabRoot", content);
             Stretch(root);
             _listTabRoot = root.gameObject;
 
             // 검색줄(아이템 이름 → itemCode 변환).
-            var field = NewImage("SearchField", root, new Color(0.86f, 0.78f, 0.58f, 1f));
-            ApplySliced(field, _fieldSearch);
+            var field = NewImage("SearchField", root, FallbackField);
+            ApplySliced(field, _fieldSearch, ArtTintField);
             var frt = field.rectTransform;
             frt.anchorMin = new Vector2(0f, 1f);
             frt.anchorMax = new Vector2(1f, 1f);
@@ -339,25 +413,25 @@ namespace TaskbarHero.Client.UI.Trade
             // 검색창 오른쪽에 [검색] 버튼 자리를 비운다.
             frt.offsetMin = new Vector2(ListInset, 0f);
             frt.offsetMax = new Vector2(-(ListInset + SearchButtonWidth + 12f), 0f);
-            frt.sizeDelta = new Vector2(frt.sizeDelta.x, 62f);
+            frt.sizeDelta = new Vector2(frt.sizeDelta.x, SearchRowHeight);
             frt.anchoredPosition = new Vector2(frt.anchoredPosition.x, -SearchRowY);
             _searchInput = BuildInput(field.rectTransform, "아이템 이름으로 검색(비우면 전체)");
 
-            var searchBtn = NewImage("SearchButton", root, new Color(0.24f, 0.40f, 0.62f, 1f));
-            ApplySliced(searchBtn, _btnBlue);
+            var searchBtn = NewImage("SearchButton", root, FallbackButtonBlue);
+            ApplySliced(searchBtn, _btnBlue, ArtTintButton);
             var sbrt = searchBtn.rectTransform;
             sbrt.anchorMin = sbrt.anchorMax = new Vector2(1f, 1f);
             sbrt.pivot = new Vector2(1f, 1f);
             sbrt.anchoredPosition = new Vector2(-ListInset, -SearchRowY);
-            sbrt.sizeDelta = new Vector2(SearchButtonWidth, 62f);
+            sbrt.sizeDelta = new Vector2(SearchButtonWidth, SearchRowHeight);
             var sbt = NewText("Label", sbrt, "검색", 28, TextAnchor.MiddleCenter);
             sbt.fontStyle = FontStyle.Bold;
             Stretch(sbt.rectTransform);
             _searchButton = searchBtn.gameObject.AddComponent<Button>();
 
             // 표 머리.
-            var header = NewImage("TableHeader", root, new Color(0.30f, 0.23f, 0.14f, 1f));
-            ApplySliced(header, _tableHeader);
+            var header = NewImage("TableHeader", root, FallbackHeader);
+            ApplySliced(header, _tableHeader, ArtTintSurface);
             var hrt = header.rectTransform;
             hrt.anchorMin = new Vector2(0f, 1f);
             hrt.anchorMax = new Vector2(1f, 1f);
@@ -365,7 +439,7 @@ namespace TaskbarHero.Client.UI.Trade
             // 표 머리를 행과 같은 폭(콘텐츠 여백 10 포함)으로 잡아야 열 좌표가 정확히 맞는다.
             hrt.offsetMin = new Vector2(ListInset + 10f, 0f);
             hrt.offsetMax = new Vector2(-(ListInset + 10f), 0f);
-            hrt.sizeDelta = new Vector2(hrt.sizeDelta.x, 48f);
+            hrt.sizeDelta = new Vector2(hrt.sizeDelta.x, TableHeaderHeight);
             hrt.anchoredPosition = new Vector2(0f, -TableHeaderY);
             AddHeaderLabel(hrt, "아이템", RowNameX, RowNameWidth, TextAnchor.MiddleLeft);
             AddHeaderLabel(hrt, "수량", RowQtyX, RowQtyWidth, TextAnchor.MiddleCenter);
@@ -404,34 +478,80 @@ namespace TaskbarHero.Client.UI.Trade
             AddVerticalScroll(listBg.gameObject, lbrt, _listContent);
 
             _emptyText = NewText("EmptyText", lbrt, "판매 중인 등록이 없습니다", 28, TextAnchor.MiddleCenter);
-            _emptyText.color = new Color(0.35f, 0.26f, 0.16f, 0.85f);
+            _emptyText.color = TextMuted;
             var ert = _emptyText.rectTransform;
             ert.anchorMin = ert.anchorMax = new Vector2(0.5f, 0.5f);
             ert.sizeDelta = new Vector2(600f, 60f);
             ert.anchoredPosition = Vector2.zero;
             _emptyText.gameObject.SetActive(false);
 
-            // 페이지 이동.
-            _prevPageButton = BuildPageButton(root, "PrevPage", "◀", -120f);
-            _nextPageButton = BuildPageButton(root, "NextPage", "▶", 120f);
+            // 페이지 이동(내용 영역 바닥 기준 — 그 아래는 메시지 한 줄뿐이다).
+            _prevPageButton = BuildPageButton(root, "PrevPage", "◀", -110f);
+            _nextPageButton = BuildPageButton(root, "NextPage", "▶", 110f);
             _pageText = NewText("PageText", root, "1", 28, TextAnchor.MiddleCenter);
-            _pageText.color = new Color(1f, 0.92f, 0.72f);
+            _pageText.color = TextTitle;
             var prt = _pageText.rectTransform;
             prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0f);
             prt.pivot = new Vector2(0.5f, 0f);
-            prt.anchoredPosition = new Vector2(0f, 132f);
-            prt.sizeDelta = new Vector2(160f, 48f);
+            prt.anchoredPosition = new Vector2(0f, PageRowY);
+            prt.sizeDelta = new Vector2(160f, PageRowHeight);
+
+            // 검색어 자동 완성 후보. **맨 마지막에 만든다** — 형제 중 가장 나중에 그려져야 표 머리·목록 위에 뜬다.
+            BuildSuggestBox(root);
+        }
+
+        // ── 검색어 자동 완성(item_master) ──
+
+        private const float SuggestRowHeight = 52f;   // 후보 한 줄 높이
+        private const int SuggestMaxCount = 6;        // 한 번에 보여 주는 후보 수(스크롤 없이 다 보이는 개수)
+        private const float SuggestPadding = 6f;      // 후보 목록 위·아래 여백
+
+        /// <summary>검색창 바로 아래에 뜨는 자동 완성 후보 목록(기본 비활성). 후보 줄은 런타임에 채운다.</summary>
+        private void BuildSuggestBox(RectTransform root)
+        {
+            var bg = NewImage("SuggestBox", root, SurfaceSuggest);
+            var rt = bg.rectTransform;
+            // 검색창과 같은 폭·왼쪽 정렬로 창 위쪽에 매단다(검색창 아래 = SearchRowY + 검색창 높이 62).
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.offsetMin = new Vector2(ListInset, 0f);
+            rt.offsetMax = new Vector2(-(ListInset + SearchButtonWidth + 12f), 0f);
+            rt.sizeDelta = new Vector2(rt.sizeDelta.x, SuggestRowHeight * SuggestMaxCount + SuggestPadding * 2f);
+            rt.anchoredPosition = new Vector2(rt.anchoredPosition.x, -(SearchRowY + SearchRowHeight + 4f));
+            _suggestBox = rt;
+
+            var content = NewChild("Content", rt);
+            content.anchorMin = new Vector2(0f, 1f);
+            content.anchorMax = new Vector2(1f, 1f);
+            content.pivot = new Vector2(0.5f, 1f);
+            content.offsetMin = new Vector2(SuggestPadding, 0f);
+            content.offsetMax = new Vector2(-SuggestPadding, 0f);
+            content.anchoredPosition = new Vector2(content.anchoredPosition.x, -SuggestPadding);
+            var layout = content.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.spacing = 0f;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = false;
+            var fitter = content.gameObject.AddComponent<ContentSizeFitter>();
+            fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+            _suggestContent = content;
+
+            bg.gameObject.SetActive(false);
         }
 
         /// <summary>판매 등록 탭: 판매 가능 아이템 목록 · 가격 입력 · 등록 버튼.</summary>
-        private void BuildSellTab(RectTransform panel)
+        private void BuildSellTab(RectTransform content)
         {
-            var root = NewChild("SellTabRoot", panel);
+            var root = NewChild("SellTabRoot", content);
             Stretch(root);
             _sellTabRoot = root.gameObject;
 
-            var listBg = NewImage("SellListBackground", root, new Color(0.82f, 0.74f, 0.55f, 1f));
-            ApplySliced(listBg, _panelParchment);
+            // 목록 영역. '판매 목록' 탭과 같이 배경(양피지)을 깔지 않고 <b>투명</b>하게 둔다 — 창 배경
+            // 프레임(ui_bg_2)의 어두운 내부가 그대로 보이게 하려는 것이며, 마스크·스크롤 기능 때문에
+            // 오브젝트 자체는 남긴다.
+            var listBg = NewImage("SellListBackground", root, new Color(1f, 1f, 1f, 0f));
             var lbrt = listBg.rectTransform;
             lbrt.anchorMin = new Vector2(0f, 0f);
             lbrt.anchorMax = new Vector2(1f, 1f);
@@ -461,16 +581,16 @@ namespace TaskbarHero.Client.UI.Trade
             AddVerticalScroll(listBg.gameObject, lbrt, _sellContent);
 
             // 하단 등록 폼(나무 패널).
-            var form = NewImage("SellForm", root, new Color(0.32f, 0.24f, 0.15f, 1f));
-            ApplySliced(form, _panelWood);
+            var form = NewImage("SellForm", root, FallbackForm);
+            ApplySliced(form, _panelWood, ArtTintDarkArt);
             var frt = form.rectTransform;
             frt.anchorMin = new Vector2(0f, 0f);
             frt.anchorMax = new Vector2(1f, 0f);
             frt.pivot = new Vector2(0.5f, 0f);
             frt.offsetMin = new Vector2(ListInset, 0f);
             frt.offsetMax = new Vector2(-ListInset, 0f);
-            frt.sizeDelta = new Vector2(frt.sizeDelta.x, 250f);
-            frt.anchoredPosition = new Vector2(0f, 44f);
+            frt.sizeDelta = new Vector2(frt.sizeDelta.x, SellFormHeight);
+            frt.anchoredPosition = new Vector2(0f, SellFormBottom);
 
             _sellHintText = NewText("SellHint", frt, "판매할 아이템을 선택하세요", 26, TextAnchor.UpperLeft);
             _sellHintText.color = new Color(1f, 0.92f, 0.72f, 0.9f);
@@ -479,53 +599,66 @@ namespace TaskbarHero.Client.UI.Trade
             shrt.anchorMin = new Vector2(0f, 1f);
             shrt.anchorMax = new Vector2(1f, 1f);
             shrt.pivot = new Vector2(0.5f, 1f);
-            shrt.offsetMin = new Vector2(28f, 0f);
-            shrt.offsetMax = new Vector2(-28f, 0f);
+            shrt.offsetMin = new Vector2(24f, 0f);
+            shrt.offsetMax = new Vector2(-24f, 0f);
             shrt.sizeDelta = new Vector2(shrt.sizeDelta.x, 96f);
-            shrt.anchoredPosition = new Vector2(0f, -22f);
+            shrt.anchoredPosition = new Vector2(0f, -20f);
 
-            var priceField = NewImage("PriceField", frt, new Color(0.86f, 0.78f, 0.58f, 1f));
-            ApplySliced(priceField, _fieldSearch);
+            var priceField = NewImage("PriceField", frt, FallbackField);
+            ApplySliced(priceField, _fieldSearch, ArtTintField);
             var pfrt = priceField.rectTransform;
             pfrt.anchorMin = pfrt.anchorMax = new Vector2(0f, 0f);
             pfrt.pivot = new Vector2(0f, 0f);
-            pfrt.anchoredPosition = new Vector2(28f, 34f);
-            pfrt.sizeDelta = new Vector2(520f, 62f);
+            pfrt.anchoredPosition = new Vector2(24f, 34f);
+            pfrt.sizeDelta = new Vector2(440f, 62f);
             _priceInput = BuildInput(pfrt, "판매 가격(골드)");
             _priceInput.contentType = InputField.ContentType.IntegerNumber;
 
-            var regBtn = NewImage("RegisterButton", frt, new Color(0.62f, 0.46f, 0.16f, 1f));
-            ApplySliced(regBtn, _btnGold);
+            var regBtn = NewImage("RegisterButton", frt, FallbackButtonGold);
+            ApplySliced(regBtn, _btnGold, ArtTintButton);
             var rbrt = regBtn.rectTransform;
             rbrt.anchorMin = rbrt.anchorMax = new Vector2(1f, 0f);
             rbrt.pivot = new Vector2(1f, 0f);
-            rbrt.anchoredPosition = new Vector2(-28f, 34f);
-            rbrt.sizeDelta = new Vector2(220f, 62f);
+            rbrt.anchoredPosition = new Vector2(-24f, 34f);
+            rbrt.sizeDelta = new Vector2(200f, 62f);
             var rbt = NewText("Label", rbrt, "등록", 30, TextAnchor.MiddleCenter);
             rbt.fontStyle = FontStyle.Bold;
             Stretch(rbt.rectTransform);
             _registerButton = regBtn.gameObject.AddComponent<Button>();
         }
 
-        /// <summary>하단 공용 안내/오류 메시지.</summary>
-        private void BuildMessage(RectTransform panel)
+        /// <summary>하단 공용 안내/오류 메시지(내용 영역 맨 아랫줄).</summary>
+        private void BuildMessage(RectTransform content)
         {
-            _messageText = NewText("Message", panel, string.Empty, 26, TextAnchor.MiddleCenter);
+            _messageText = NewText("Message", content, string.Empty, 26, TextAnchor.MiddleCenter);
             _messageText.color = new Color(1f, 0.72f, 0.42f);
             var mrt = _messageText.rectTransform;
             mrt.anchorMin = mrt.anchorMax = new Vector2(0.5f, 0f);
             mrt.pivot = new Vector2(0.5f, 0f);
-            mrt.anchoredPosition = new Vector2(0f, 22f);
-            mrt.sizeDelta = new Vector2(900f, 36f);
+            mrt.anchoredPosition = new Vector2(0f, 0f);
+            mrt.sizeDelta = new Vector2(ContentWidth, MessageHeight);
         }
 
         private void WireRuntime()
         {
+            // 가방·스킬 창처럼 배경의 빈 곳을 잡아 창을 끌어 옮길 수 있게 한다(목록 스크롤·버튼은 그대로).
+            // 한 번 옮기면 그 자리를 기억하고, 열 때마다 하던 자동 도킹도 멈춘다(PanelDragMove 참고).
+            PanelDragMove.Attach(transform.Find("PanelRoot") as RectTransform, "Trade");
+
             if (_closeButton != null) _closeButton.onClick.AddListener(Close);
             if (_dimButton != null) _dimButton.onClick.AddListener(Close);
             if (_listTabButton != null) _listTabButton.onClick.AddListener(ShowListTab);
             if (_sellTabButton != null) _sellTabButton.onClick.AddListener(ShowSellTab);
             if (_searchButton != null) _searchButton.onClick.AddListener(OnSearch);
+            if (_searchInput != null)
+            {
+                // 자동 완성 — 입력이 바뀔 때마다 item_master에서 후보를 찾아 검색창 아래에 띄운다.
+                _searchInput.onValueChanged.RemoveAllListeners();
+                _searchInput.onValueChanged.AddListener(OnSearchTextChanged);
+                // onEndEdit(엔터·포커스 해제)에는 검색을 걸지 않는다 — 후보를 클릭하면 <b>먼저</b> 검색창이
+                // 포커스를 잃어 그 검색이 돌고, 그 과정에서 후보 줄이 지워져 클릭 자체가 사라진다.
+            }
+            HideSuggestions();
             if (_mineTabButton != null) _mineTabButton.onClick.AddListener(ShowMineTab);
             if (_prevPageButton != null) _prevPageButton.onClick.AddListener(OnPrevPage);
             if (_nextPageButton != null) _nextPageButton.onClick.AddListener(OnNextPage);
@@ -551,10 +684,11 @@ namespace TaskbarHero.Client.UI.Trade
             bool showList = tab != TradeTab.Sell;
             if (_listTabRoot != null) _listTabRoot.SetActive(showList);
             if (_sellTabRoot != null) _sellTabRoot.SetActive(!showList);
-            ApplySliced(_listTabImage, tab == TradeTab.List ? _btnCategorySel : _btnCategory);
-            ApplySliced(_sellTabImage, tab == TradeTab.Sell ? _btnCategorySel : _btnCategory);
-            ApplySliced(_mineTabImage, tab == TradeTab.Mine ? _btnCategorySel : _btnCategory);
+            ApplySliced(_listTabImage, tab == TradeTab.List ? _btnCategorySel : _btnCategory, ArtTintPanel);
+            ApplySliced(_sellTabImage, tab == TradeTab.Sell ? _btnCategorySel : _btnCategory, ArtTintPanel);
+            ApplySliced(_mineTabImage, tab == TradeTab.Mine ? _btnCategorySel : _btnCategory, ArtTintPanel);
             SetMessage(string.Empty);
+            HideSuggestions(); // 탭을 옮기면 떠 있던 자동 완성 후보를 접는다
 
             if (tab == TradeTab.Sell)
             {
@@ -575,6 +709,7 @@ namespace TaskbarHero.Client.UI.Trade
         /// <summary>검색어를 아이템 코드로 바꾸고 첫 페이지부터 다시 조회한다.</summary>
         private void OnSearch()
         {
+            HideSuggestions();
             _searchItemCode = ResolveItemCode(_searchInput != null ? _searchInput.text : string.Empty, out string notFound);
             if (notFound != null)
             {
@@ -585,7 +720,9 @@ namespace TaskbarHero.Client.UI.Trade
             RequestList();
         }
 
-        /// <summary>이름으로 아이템 코드를 찾는다(대소문자·공백 무시, 부분 일치 허용).
+        /// <summary>이름으로 아이템 코드를 찾는다(대소문자·공백 무시). <b>정확히 일치 → 앞부분 일치 → 부분 일치</b>
+        /// 순으로 고르므로, 자동 완성으로 고른 이름을 그대로 넣었을 때 다른 아이템이 잡히지 않는다
+        /// (예: '검'을 이름에 포함하는 아이템이 여럿일 때).
         /// 빈 검색어면 0(전체). 찾지 못하면 <paramref name="notFound"/>에 입력값을 담아 돌려준다.</summary>
         private static int ResolveItemCode(string query, out string notFound)
         {
@@ -602,17 +739,192 @@ namespace TaskbarHero.Client.UI.Trade
                 notFound = q;
                 return 0;
             }
+
+            int prefix = 0;
+            int contains = 0;
             foreach (var pair in db.Items)
             {
                 string name = pair.Value != null ? pair.Value.name : null;
-                if (!string.IsNullOrEmpty(name) &&
-                    name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
+                if (string.IsNullOrEmpty(name))
+                {
+                    continue;
+                }
+                if (string.Equals(name, q, StringComparison.OrdinalIgnoreCase))
                 {
                     return pair.Key;
                 }
+                if (prefix == 0 && name.StartsWith(q, StringComparison.OrdinalIgnoreCase))
+                {
+                    prefix = pair.Key;
+                }
+                else if (contains == 0 && name.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    contains = pair.Key;
+                }
             }
+            if (prefix != 0) return prefix;
+            if (contains != 0) return contains;
             notFound = q;
             return 0;
+        }
+
+        // ── 검색어 자동 완성 ──
+
+        /// <summary>검색창 입력이 바뀔 때마다 <c>item_master</c>에서 이름이 맞는 아이템을 찾아 후보로 띄운다.
+        /// 후보를 골라 값을 채우는 중(<see cref="_suppressSuggest"/>)에는 다시 열지 않는다.</summary>
+        private void OnSearchTextChanged(string text)
+        {
+            if (_suppressSuggest)
+            {
+                return;
+            }
+            RefreshSuggestions(text);
+        }
+
+        /// <summary>후보 목록을 다시 만든다. 검색어가 비었거나 맞는 아이템이 없으면 목록을 숨긴다.</summary>
+        private void RefreshSuggestions(string query)
+        {
+            ClearSuggestRows();
+            string q = (query ?? string.Empty).Trim();
+            if (_suggestBox == null || _suggestContent == null || q.Length == 0)
+            {
+                HideSuggestions();
+                return;
+            }
+
+            var matches = FindItemsByName(q, SuggestMaxCount);
+            if (matches.Count == 0)
+            {
+                HideSuggestions();
+                return;
+            }
+
+            foreach (var def in matches)
+            {
+                _suggestRows.Add(BuildSuggestRow(def));
+            }
+            // 후보 수에 맞춰 높이를 줄여 빈 칸이 남지 않게 한다.
+            _suggestBox.sizeDelta = new Vector2(
+                _suggestBox.sizeDelta.x, SuggestRowHeight * matches.Count + SuggestPadding * 2f);
+            _suggestBox.gameObject.SetActive(true);
+            _suggestBox.SetAsLastSibling(); // 목록 갱신으로 형제 순서가 바뀌어도 항상 위에 그린다
+        }
+
+        /// <summary>
+        /// <c>item_master</c>에서 이름이 검색어와 맞는 아이템을 최대 <paramref name="limit"/>개 찾는다.
+        /// <para><b>거래소에 올라올 수 있는 아이템만</b> 후보로 둔다(<c>sellable=1</c> · 기준가 있음) —
+        /// 그 밖의 아이템은 이름을 넣어도 매물이 나올 수 없어 후보로 띄우면 헛걸음이 된다.</para>
+        /// <para>정렬은 <b>앞부분 일치 우선 → 이름이 짧은 것 → 코드</b> 순이다(같은 검색어에 항상 같은 순서).</para>
+        /// </summary>
+        private static List<TaskbarHero.Common.MasterData.ItemMaster> FindItemsByName(string query, int limit)
+        {
+            var found = new List<TaskbarHero.Common.MasterData.ItemMaster>();
+            MasterDataManager.EnsureLoaded();
+            var db = MasterDataManager.Db;
+            if (db == null)
+            {
+                return found;
+            }
+
+            foreach (var pair in db.Items)
+            {
+                var def = pair.Value;
+                if (def == null || string.IsNullOrEmpty(def.name) || def.sellable != 1 || def.basePrice <= 0)
+                {
+                    continue;
+                }
+                if (def.name.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    found.Add(def);
+                }
+            }
+
+            found.Sort((a, b) =>
+            {
+                bool pa = a.name.StartsWith(query, StringComparison.OrdinalIgnoreCase);
+                bool pb = b.name.StartsWith(query, StringComparison.OrdinalIgnoreCase);
+                if (pa != pb) return pa ? -1 : 1;
+                int len = a.name.Length.CompareTo(b.name.Length);
+                return len != 0 ? len : a.itemCode.CompareTo(b.itemCode);
+            });
+
+            if (found.Count > limit)
+            {
+                found.RemoveRange(limit, found.Count - limit);
+            }
+            return found;
+        }
+
+        /// <summary>후보 한 줄(등급색 이름 + 기준가). 누르면 그 아이템으로 바로 검색한다.</summary>
+        private GameObject BuildSuggestRow(TaskbarHero.Common.MasterData.ItemMaster def)
+        {
+            var img = NewImage($"Suggest_{def.itemCode}", _suggestContent, new Color(1f, 1f, 1f, 0f));
+            var le = img.gameObject.AddComponent<LayoutElement>();
+            le.preferredHeight = SuggestRowHeight;
+            le.minHeight = SuggestRowHeight;
+
+            var name = NewText("Name", img.rectTransform, def.name, 26, TextAnchor.MiddleLeft);
+            name.color = GradeColors.Name(def.grade);
+            var nrt = name.rectTransform;
+            nrt.anchorMin = new Vector2(0f, 0f);
+            nrt.anchorMax = new Vector2(1f, 1f);
+            nrt.offsetMin = new Vector2(14f, 0f);
+            nrt.offsetMax = new Vector2(-150f, 0f);
+
+            var price = NewText("Price", img.rectTransform, $"{def.basePrice:N0}", 22, TextAnchor.MiddleRight);
+            price.color = TextGold;
+            var prt = price.rectTransform;
+            prt.anchorMin = new Vector2(1f, 0f);
+            prt.anchorMax = new Vector2(1f, 1f);
+            prt.pivot = new Vector2(1f, 0.5f);
+            prt.sizeDelta = new Vector2(140f, 0f);
+            prt.anchoredPosition = new Vector2(-14f, 0f);
+
+            int code = def.itemCode;
+            string itemName = def.name;
+            var btn = img.gameObject.AddComponent<Button>();
+            btn.onClick.AddListener(() => OnSuggestionChosen(code, itemName));
+            return img.gameObject;
+        }
+
+        /// <summary>후보를 골랐을 때 — 검색창을 그 이름으로 채우고 <b>바로 그 아이템 코드로</b> 조회한다
+        /// (이름을 다시 코드로 되짚지 않으므로 이름이 겹쳐도 정확하다).</summary>
+        private void OnSuggestionChosen(int itemCode, string itemName)
+        {
+            if (_searchInput != null)
+            {
+                _suppressSuggest = true;   // 값 대입이 다시 후보를 띄우지 않게 한다
+                _searchInput.text = itemName;
+                _suppressSuggest = false;
+            }
+            HideSuggestions();
+            SetMessage(string.Empty);
+            _searchItemCode = itemCode;
+            _page = 0;
+            RequestList();
+        }
+
+        /// <summary>후보 목록을 숨긴다(줄도 함께 비운다).</summary>
+        private void HideSuggestions()
+        {
+            ClearSuggestRows();
+            if (_suggestBox != null)
+            {
+                _suggestBox.gameObject.SetActive(false);
+            }
+        }
+
+        /// <summary>런타임에 만든 후보 줄을 모두 제거한다.</summary>
+        private void ClearSuggestRows()
+        {
+            foreach (var go in _suggestRows)
+            {
+                if (go != null)
+                {
+                    Destroy(go);
+                }
+            }
+            _suggestRows.Clear();
         }
 
         private void OnPrevPage()
@@ -693,8 +1005,9 @@ namespace TaskbarHero.Client.UI.Trade
             // 혹시 섞여 오더라도 자기 등록을 구매 버튼으로 노출하지 않도록 판매자도 함께 본다.
             bool mine = MineOnly || listing.sellerUserId == Session.UserId;
 
-            var rowImg = NewImage("ListingRow", _listContent, new Color(0.74f, 0.66f, 0.48f, 1f));
-            ApplySliced(rowImg, index % 2 == 0 ? _rowNormal : _rowAlt);
+            // 행 배경은 아트(row_normal/row_alt)를 쓰지 않는다 — 붉은 갈색이라 프레임 안쪽 남색과 겉돈다.
+            // 홀짝을 색으로 갈라 줄 구분은 유지한다.
+            var rowImg = NewImage("ListingRow", _listContent, index % 2 == 0 ? SurfaceRow : SurfaceRowAlt);
             var le = rowImg.gameObject.AddComponent<LayoutElement>();
             le.preferredHeight = RowHeight;
             le.flexibleHeight = 0f;
@@ -709,16 +1022,16 @@ namespace TaskbarHero.Client.UI.Trade
                 itemName += $" +{listing.enhanceLevel}";
             }
             var nameText = NewText("Name", rt, itemName, 26, TextAnchor.MiddleLeft);
-            nameText.color = GradeColors.IconFallback(def != null ? def.grade : 1);
+            nameText.color = GradeColors.Name(def != null ? def.grade : 1);
             nameText.fontStyle = FontStyle.Bold;
             PlaceMiddleLeft(nameText.rectTransform, RowNameX, RowNameWidth, 40f);
 
             var qtyText = NewText("Quantity", rt, listing.quantity > 1 ? $"x{listing.quantity}" : "-", 26, TextAnchor.MiddleCenter);
-            qtyText.color = new Color(0.28f, 0.21f, 0.13f);
+            qtyText.color = TextPrimary;
             PlaceMiddleLeft(qtyText.rectTransform, RowQtyX, RowQtyWidth, 40f);
 
             var priceText = NewText("Price", rt, $"{listing.price:N0}", 26, TextAnchor.MiddleRight);
-            priceText.color = new Color(0.55f, 0.38f, 0.08f);
+            priceText.color = TextGold;
             priceText.fontStyle = FontStyle.Bold;
             PlaceMiddleLeft(priceText.rectTransform, RowPriceX, RowPriceWidth, 40f);
 
@@ -731,8 +1044,8 @@ namespace TaskbarHero.Client.UI.Trade
 
             // 남의 등록 = 구매, 내 등록 = 취소.
             var actionImg = NewImage(mine ? "CancelButton" : "BuyButton", rt,
-                mine ? new Color(0.60f, 0.22f, 0.18f, 1f) : new Color(0.62f, 0.46f, 0.16f, 1f));
-            ApplySliced(actionImg, mine ? _btnRed : _btnGold);
+                mine ? FallbackButtonRed : FallbackButtonGold);
+            ApplySliced(actionImg, mine ? _btnRed : _btnGold, ArtTintButton);
             PlaceMiddleLeft(actionImg.rectTransform, RowActionX, RowActionWidth, 56f);
             var at = NewText("Label", actionImg.rectTransform, mine ? "취소" : "구매", 26, TextAnchor.MiddleCenter);
             at.fontStyle = FontStyle.Bold;
@@ -925,8 +1238,7 @@ namespace TaskbarHero.Client.UI.Trade
         /// <summary>판매 등록 후보 행(아이템 슬롯 · 이름 · 기준가 범위 · 선택 버튼).</summary>
         private GameObject BuildSellRow(InventoryItemDto item, TaskbarHero.Common.MasterData.ItemMaster def, int index)
         {
-            var rowImg = NewImage("SellRow", _sellContent, new Color(0.74f, 0.66f, 0.48f, 1f));
-            ApplySliced(rowImg, index % 2 == 0 ? _rowNormal : _rowAlt);
+            var rowImg = NewImage("SellRow", _sellContent, index % 2 == 0 ? SurfaceRow : SurfaceRowAlt);
             var le = rowImg.gameObject.AddComponent<LayoutElement>();
             le.preferredHeight = RowHeight;
             le.flexibleHeight = 0f;
@@ -952,16 +1264,16 @@ namespace TaskbarHero.Client.UI.Trade
             string label = def.name + (item.enhanceLevel > 0 ? $" +{item.enhanceLevel}" : string.Empty) +
                            (item.quantity > 1 ? $" x{item.quantity}" : string.Empty);
             var nameText = NewText("Name", rt, label, 26, TextAnchor.MiddleLeft);
-            nameText.color = GradeColors.IconFallback(def.grade);
+            nameText.color = GradeColors.Name(def.grade);
             nameText.fontStyle = FontStyle.Bold;
             PlaceMiddleLeft(nameText.rectTransform, RowNameX, RowNameWidth, 40f);
 
             var rangeText = NewText("Range", rt, PriceRangeLabel(def.basePrice), 22, TextAnchor.MiddleRight);
-            rangeText.color = new Color(0.40f, 0.30f, 0.14f);
+            rangeText.color = TextMuted;
             PlaceMiddleLeft(rangeText.rectTransform, RowRangeX, RowRangeWidth, 36f);
 
-            var pick = NewImage("PickButton", rt, new Color(0.24f, 0.40f, 0.62f, 1f));
-            ApplySliced(pick, _btnBlue);
+            var pick = NewImage("PickButton", rt, FallbackButtonBlue);
+            ApplySliced(pick, _btnBlue, ArtTintButton);
             PlaceMiddleLeft(pick.rectTransform, RowActionX, RowActionWidth, 56f);
             var pt = NewText("Label", pick.rectTransform, "선택", 26, TextAnchor.MiddleCenter);
             pt.fontStyle = FontStyle.Bold;
@@ -1190,28 +1502,33 @@ namespace TaskbarHero.Client.UI.Trade
         }
 
         /// <summary>9-slice 프레임/버튼 스프라이트를 적용한다(미배선이면 단색 폴백 유지).</summary>
-        private static void ApplySliced(Image img, Sprite sprite)
+        /// <summary>9-slice 스프라이트를 얹고 <paramref name="tint"/>를 곱한다(밝은 키트 아트를 짙고 푸르게 누를 때).
+        /// <para><b>기본은 원색(흰색)이다</b> — 틴트는 <b>거래소 키트 아트에만</b> 걸어야 한다. 기본값을 틴트로
+        /// 두었더니 창 배경 프레임(<c>ui_bg_2</c>)까지 눌려 배경이 통째로 어두워졌다(플레이 모드에서 되돌린 값을
+        /// 그대로 반영). 등급 슬롯처럼 <b>색 자체가 정보</b>인 아트도 원색으로 둬야 한다.</para></summary>
+        private static void ApplySliced(Image img, Sprite sprite, Color? tint = null)
         {
             if (img == null || sprite == null) return;
             img.sprite = sprite;
             img.type = Image.Type.Sliced;
-            img.color = Color.white;
+            img.color = tint ?? Color.white;
         }
 
         /// <summary>고정 크기 스프라이트(아이콘·닫기 버튼)를 적용한다.</summary>
-        private static void ApplySimple(Image img, Sprite sprite)
+        /// <summary>스프라이트를 늘려 얹는다. 아이콘은 원색이 곧 정보(코인=금색)라 기본은 원색 그대로 둔다.</summary>
+        private static void ApplySimple(Image img, Sprite sprite, Color? tint = null)
         {
             if (img == null || sprite == null) return;
             img.sprite = sprite;
             img.type = Image.Type.Simple;
-            img.color = Color.white;
+            img.color = tint ?? Color.white;
         }
 
         /// <summary>양피지 입력창 위에 올릴 InputField(텍스트 + 플레이스홀더)를 만든다.</summary>
         private InputField BuildInput(RectTransform parent, string placeholder)
         {
             var text = NewText("Text", parent, string.Empty, 26, TextAnchor.MiddleLeft);
-            text.color = new Color(0.22f, 0.16f, 0.09f);
+            text.color = TextPrimary;
             text.supportRichText = false;
             var trt = text.rectTransform;
             trt.anchorMin = Vector2.zero;
@@ -1220,7 +1537,7 @@ namespace TaskbarHero.Client.UI.Trade
             trt.offsetMax = new Vector2(-18f, -6f);
 
             var ph = NewText("Placeholder", parent, placeholder, 24, TextAnchor.MiddleLeft);
-            ph.color = new Color(0.42f, 0.34f, 0.22f, 0.7f);
+            ph.color = TextMuted;
             ph.fontStyle = FontStyle.Italic;
             var phrt = ph.rectTransform;
             phrt.anchorMin = Vector2.zero;
@@ -1239,7 +1556,7 @@ namespace TaskbarHero.Client.UI.Trade
         private void AddHeaderLabel(RectTransform header, string label, float x, float width, TextAnchor anchor)
         {
             var t = NewText(label, header, label, 24, anchor);
-            t.color = new Color(1f, 0.90f, 0.70f, 0.9f);
+            t.color = TextTitle;
             t.fontStyle = FontStyle.Bold;
             PlaceMiddleLeft(t.rectTransform, x, width, 32f);
         }
@@ -1247,13 +1564,13 @@ namespace TaskbarHero.Client.UI.Trade
         /// <summary>페이지 이동 버튼(좌/우).</summary>
         private Button BuildPageButton(RectTransform parent, string name, string label, float offsetX)
         {
-            var img = NewImage(name, parent, new Color(0.40f, 0.30f, 0.18f, 1f));
-            ApplySliced(img, _btnWood);
+            var img = NewImage(name, parent, FallbackButtonWood);
+            ApplySliced(img, _btnWood, ArtTintButton);
             var rt = img.rectTransform;
             rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0f);
             rt.pivot = new Vector2(0.5f, 0f);
-            rt.anchoredPosition = new Vector2(offsetX, 128f);
-            rt.sizeDelta = new Vector2(72f, 56f);
+            rt.anchoredPosition = new Vector2(offsetX, PageRowY);
+            rt.sizeDelta = new Vector2(68f, PageRowHeight);
             var t = NewText("Label", rt, label, 26, TextAnchor.MiddleCenter);
             t.fontStyle = FontStyle.Bold;
             Stretch(t.rectTransform);

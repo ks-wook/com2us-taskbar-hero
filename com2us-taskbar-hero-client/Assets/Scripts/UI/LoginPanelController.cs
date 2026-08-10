@@ -20,6 +20,7 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Text errorText;
 
         private CanvasGroup _panelGroup; // 로딩 중 로그인 UI 전체를 숨기고 입력을 차단하기 위한 그룹
+        private string _lastEmail = string.Empty; // 로그인 요청에 쓴 이메일(성공 시 자동 로그인용으로 저장)
 
         private void Awake()
         {
@@ -127,6 +128,7 @@ namespace TaskbarHero.Client.UI
             SetLoginUiShown(false);           // 로그인 UI 숨김 → 로딩 스피너만 노출
             LoadingOverlay.Instance?.Show();   // 완료(씬 전환/오류)까지 스피너 표시 + 입력 차단
 
+            _lastEmail = email;   // 로그인 성공 시 자동 로그인용으로 저장할 계정 이메일
             var request = new LoginRequest { email = email, password = password };
             NetworkManager.Instance.PostToAccount<LoginResponse>("/api/auth/login", request, OnLoginSuccess, OnLoginError);
         }
@@ -136,90 +138,32 @@ namespace TaskbarHero.Client.UI
             SoundManager.Sfx(SoundId.LoginSuccess);
             // 로그인 계정 정보를 세션에 캐싱(이후 인증 API 요청에서 재사용).
             Session.SetAuth(response.userId, response.token);
+            // 다음 실행의 자동 로그인용으로 마지막 세션을 로컬에 저장한다(타이틀 화면이 /api/auth/validate로 확인).
+            SavedSession.Save(response.userId, response.token, _lastEmail);
 
             Debug.Log($"[LoginPanel] 로그인 성공. userId={response.userId} → 게임 데이터 로드");
-            SetError("데이터 로드 중...");
 
-            // 로그인 성공 → 세이브 스냅샷 로드(/api/game/load, 인증 필요).
-            var request = new AuthRequest { userId = Session.UserId, token = Session.Token };
-            NetworkManager.Instance.PostToGame<LoadResponse>("/api/game/load", request, OnLoadSuccess, OnLoadError);
+            // 이후 진입 연쇄(세이브 로드 → 캐릭터 유무 → 오프라인 정산 → 씬 전환)는 자동 로그인과 공유한다.
+            GameEntryFlow.Begin(
+                onProgress: SetError,
+                onFailed: OnEntryFailed,
+                onEnteringScene: () =>
+                {
+                    SetInteractable(true);
+                    SetError(string.Empty);
+                });
         }
 
-        private void OnLoadSuccess(LoadResponse response)
-        {
-            bool hasCharacter = !response.data.isNew && response.data.characters != null && response.data.characters.Count > 0;
-            Debug.Log($"[LoginPanel] 게임 데이터 로드 완료. isNew={response.data.isNew}, 캐릭터수={(response.data.characters != null ? response.data.characters.Count : 0)}");
-
-            // 로그인 시점의 세이브 스냅샷을 세션에 캐싱(닉네임도 함께 갱신).
-            Session.SetGameData(response.data);
-
-            if (SceneManager.Instance == null)
-            {
-                LoadingOverlay.Instance?.Hide();
-                SetLoginUiShown(true);
-                SetInteractable(true);
-                SetError(string.Empty);
-                ShowModal("오류", "씬 매니저를 찾을 수 없습니다.");
-                return;
-            }
-
-            // 회원가입 직후 최초 캐릭터 생성 진입은 '뒤로가기' 미노출(게임 안 진입 아님).
-            Session.CreateCharacterFromGame = false;
-            Session.CreateCharacterReturnScene = "GameScene"; // 생성 후 복귀 지점(편성 씬 진입 흔적 정리)
-
-            // 캐릭터가 없으면(신규 계정) 오프라인 정산 대상이 아니므로 캐릭터 생성 씬으로 전환.
-            if (!hasCharacter)
-            {
-                SetInteractable(true);
-                SetError(string.Empty);
-                SceneManager.Instance.LoadScene("CreateCharacterScene");
-                return;
-            }
-
-            // Login → GameScene: 진입 직전에 오프라인 보상을 정산(/api/game/offline/claim).
-            // heartbeat 시작 전에 정산해야 경과가 소실되지 않는다(기획서 §6.2). 성공 시 결과를 세션에 대기시켜
-            // GameScene 진입 팝업이 표시하고, 정산할 오프라인이 없거나(3001) 실패해도 게임 진입은 계속한다.
-            SetError("오프라인 보상 정산 중...");
-            var claimRequest = new AuthRequest { userId = Session.UserId, token = Session.Token };
-            NetworkManager.Instance.PostToGame<OfflineClaimResponse>(
-                "/api/game/offline/claim", claimRequest, OnOfflineClaimed, OnOfflineClaimError);
-        }
-
-        /// <summary>오프라인 보상 정산 성공: 결과를 세션에 반영·대기시키고 GameScene으로 진입한다.</summary>
-        private void OnOfflineClaimed(OfflineClaimResponse response)
-        {
-            if (response != null && response.data != null)
-            {
-                Session.ApplyOfflineReward(response.data);
-                Debug.Log($"[LoginPanel] 오프라인 보상 정산 완료: gold=+{response.data.rewards.gold}, " +
-                          $"exp=+{response.data.rewards.exp}, effectiveSec={response.data.effectiveSec}, capped={response.data.capped}");
-            }
-            EnterGameScene();
-        }
-
-        /// <summary>오프라인 보상 정산 실패/생략(정산할 오프라인 없음 3001·이미 정산 3002 등): 팝업 없이 GameScene으로 진입한다.</summary>
-        private void OnOfflineClaimError(NetworkError error)
-        {
-            Debug.Log($"[LoginPanel] 오프라인 보상 없음/생략(code={error.ErrorCode}) → 팝업 없이 GameScene 진입");
-            EnterGameScene();
-        }
-
-        /// <summary>입력 상태를 복구하고 GameScene으로 전환한다(정산 성공/실패 공통).</summary>
-        private void EnterGameScene()
-        {
-            SetInteractable(true);
-            SetError(string.Empty);
-            SceneManager.Instance.LoadScene("GameScene");
-        }
-
-        private void OnLoadError(NetworkError error)
+        /// <summary>게임 진입 실패(세이브 로드 오류·씬 매니저 없음): 로그인 UI를 되살리고 안내한다.</summary>
+        private void OnEntryFailed(NetworkError error)
         {
             LoadingOverlay.Instance?.Hide();
             SetLoginUiShown(true);
             SetInteractable(true);
             SetError(string.Empty);
-            ShowModal("데이터 로드 실패", ErrorMessages.ToKorean(error));
-            Debug.LogWarning($"[LoginPanel] 게임 데이터 로드 실패: {error}");
+            ShowModal("데이터 로드 실패",
+                error != null ? ErrorMessages.ToKorean(error) : "게임 진입에 실패했습니다.");
+            Debug.LogWarning($"[LoginPanel] 게임 진입 실패: {error}");
         }
 
         private void OnLoginError(NetworkError error)

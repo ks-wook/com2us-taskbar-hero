@@ -61,6 +61,35 @@ namespace TaskbarHero.Client.UI
         }
 
         /// <summary>
+        /// 자동 도킹 없이 <b>등장 연출만</b> 붙인다 — 자리를 스스로 정하거나 다른 창에 맞춰 잡는 창
+        /// (큐브·스킬·룬)이 쓴다. 이미 붙어 있으면 설정만 맞춘다.
+        /// <para>계층은 에디터 빌더가 프리팹에 구우므로 보통은 이미 붙어 있다. 런타임에 새로 붙는 경우
+        /// (옛 프리팹) <see cref="SidePanelPop"/>의 <c>OnEnable</c>이 컴포넌트 추가 즉시 돌아 자리를 흔들 수
+        /// 있으므로, 위치를 보존한 뒤 연출의 도착 위치를 다시 잡아 준다.</para>
+        /// </summary>
+        /// <param name="root">패널 루트 RectTransform(PanelRoot).</param>
+        public static void AttachCentered(RectTransform root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            var pop = root.GetComponent<SidePanelPop>();
+            if (pop != null)
+            {
+                pop.ConfigureCentered();
+                return;
+            }
+
+            var keep = root.anchoredPosition;
+            pop = root.gameObject.AddComponent<SidePanelPop>();
+            pop.ConfigureCentered();
+            root.anchoredPosition = keep;
+            pop.SyncRestPosition();
+        }
+
+        /// <summary>
         /// 패널을 <b>창을 움직이지 않고</b> 화면에 보이는 공간에 배치한다(표시할 때마다 호출).
         /// <list type="number">
         /// <item>기본은 지정한 <paramref name="side"/> 도킹(전투 화면 옆, 간격 <see cref="DefaultGap"/>).</item>

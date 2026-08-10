@@ -46,20 +46,11 @@ namespace TaskbarHero.ClientEditor
             EnsureFolder("Assets/Prefabs");
             EnsureFolder("Assets/Prefabs/UI");
 
-            // 사용자가 에디터에서 조정한 PanelRoot 크기를 보존한다(재생성 시 초기화 방지).
-            // 위치는 보존하지 않는다 — 패널은 SidePanel.Dock이 전투 화면 오른쪽 옆(일정 간격)에 붙이므로,
-            // 옛 좌표를 되살리면 도킹이 어긋난다.
-            Vector2? keepSize = null;
-            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
-            if (existing != null)
-            {
-                var pr = FindChild(existing.transform, "PanelRoot") as RectTransform;
-                if (pr != null)
-                {
-                    keepSize = pr.sizeDelta;
-                }
-            }
-
+            // PanelRoot의 크기는 <b>코드(InventoryPanelController)가 정본</b>이라 프리팹 값을 보존하지 않는다.
+            // 창 안쪽 내용 영역(ContentArea)의 여백과 그 안의 모든 좌표가 PanelWidth·PanelHeight에서
+            // 파생되므로, 프리팹에 남은 옛 크기를 되살리면 내용이 배경 프레임 테두리를 침범한다.
+            // 위치도 보존하지 않는다 — SidePanel.Dock이 전투 화면 오른쪽 옆에 붙이고, 사용자가 옮긴 자리는
+            // 실행 중 드래그(PanelDragMove)가 PlayerPrefs에서 복원한다.
             var root = new GameObject("InventoryPanel");
             var ctrl = root.AddComponent<InventoryPanelController>();
 
@@ -90,17 +81,6 @@ namespace TaskbarHero.ClientEditor
                 tso.FindProperty("_backgroundSprite").objectReferenceValue =
                     LoadSpriteAt("Assets/Art/UI/item_detail_bg.png");
                 tso.ApplyModifiedPropertiesWithoutUndo();
-            }
-
-            // 보존한 사용자 조정 크기 재적용(장비 영역은 중앙 앵커라 폭이 바뀌어도 중앙 유지).
-            if (keepSize.HasValue)
-            {
-                var pr = FindChild(root.transform, "PanelRoot") as RectTransform;
-                if (pr != null)
-                {
-                    pr.sizeDelta = keepSize.Value;
-                    SidePanel.Dock(pr, SidePanel.Side.Right); // 크기 복원 후 도킹 좌표를 다시 잡는다
-                }
             }
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
@@ -191,24 +171,6 @@ namespace TaskbarHero.ClientEditor
                 Debug.LogWarning($"[InventoryUiBuilder] 캐릭터 프리팹을 찾지 못했습니다: {prefabPath}");
             }
             element.FindPropertyRelative("prefab").objectReferenceValue = prefab;
-        }
-
-        /// <summary>이름으로 자식 Transform을 재귀 검색한다.</summary>
-        private static Transform FindChild(Transform root, string name)
-        {
-            if (root.name == name)
-            {
-                return root;
-            }
-            foreach (Transform c in root)
-            {
-                var r = FindChild(c, name);
-                if (r != null)
-                {
-                    return r;
-                }
-            }
-            return null;
         }
 
         /// <summary>스프라이트 로드(Single/Multiple 모두 대응).</summary>

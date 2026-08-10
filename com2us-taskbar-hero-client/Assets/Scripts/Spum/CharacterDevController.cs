@@ -201,38 +201,8 @@ public partial class CharacterDevController : MonoBehaviour
             DestroyImmediate(existing.gameObject);
         }
 
-        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(SpumUnitComposer.PreviewUnitPrefabPath);
-        if (prefab == null)
-        {
-            error = $"프리뷰 유닛 프리팹을 찾지 못했습니다: {SpumUnitComposer.PreviewUnitPrefabPath}";
-            return false;
-        }
-
-        var go = Instantiate(prefab, previewAnchor != null ? previewAnchor : transform);
-        go.name = "PreviewUnit";
-
-        // SPUM 유닛 루트는 RectTransform이라 캔버스 밖에 둘 때 앵커를 중립화해야 자리가 잡힌다(§2.6).
-        if (go.transform is RectTransform rt)
-        {
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = Vector2.zero;
-            rt.anchoredPosition3D = Vector3.zero;
-        }
-        else
-        {
-            go.transform.localPosition = Vector3.zero;
-        }
-
-        _previewUnit = go.GetComponent<SPUM_Prefabs>();
-        if (_previewUnit == null)
-        {
-            error = "프리뷰 유닛 프리팹에 SPUM_Prefabs가 없습니다.";
-            return false;
-        }
-
-        _composer.InitUnit(_previewUnit);
-        return true;
+        _previewUnit = MonsterUnitFactory.InstantiateUnit(_composer, anchor, "PreviewUnit", out error);
+        return _previewUnit != null;
 #else
         error = "이 하네스는 에디터에서만 동작한다(N1).";
         return false;
@@ -360,38 +330,14 @@ public partial class CharacterDevController : MonoBehaviour
             return false;
         }
 
-        var recipe = RecipeFor(code);
-        if (!ValidateRecipe(recipe, out string validationError))
+        // 조합 규칙의 정본은 MonsterUnitFactory 하나다 — 에디터 자동 빌더와 같은 코드를 써야
+        // "씬에서 만든 외형"과 "자동 생성한 외형"이 갈라지지 않는다.
+        var elements = MonsterUnitFactory.BuildAppearance(_composer, RecipeFor(code), out error);
+        if (elements == null)
         {
-            error = validationError;
             return false;
         }
 
-        // 시드를 고정해 같은 레시피가 항상 같은 결과를 내게 한다(F6).
-        // 이 호출과 Compose 사이에 다른 난수 소비를 끼우지 않는다.
-        UnityEngine.Random.InitState(recipe.EffectiveSeed);
-        var composed = _composer.Compose(recipe);
-
-        if (composed.Count == 0)
-        {
-            error = "태그 조합 결과가 0개입니다(필터가 너무 좁습니다).";
-            return false;
-        }
-        if (!composed.ContainsKey("Body"))
-        {
-            error = "필수 파츠(Body)를 찾지 못했습니다 — 레시피 태그를 넓히세요.";
-            return false;
-        }
-
-        var elements = _composer.BuildElements(composed);
-        if (elements.Count == 0)
-        {
-            error = "조합 결과에 해당하는 텍스처를 패키지에서 찾지 못했습니다.";
-            return false;
-        }
-
-        ApplyFixedParts(elements, recipe);
-        ApplyColors(elements, recipe);
         SetElements(elements);
         return true;
     }
@@ -513,139 +459,6 @@ public partial class CharacterDevController : MonoBehaviour
 #endif
     }
 
-    /// <summary>레시피의 태그 값과 고정 파츠 파일명이 태그 DB에 실재하는지 검사한다(§6.4).</summary>
-    private bool ValidateRecipe(MonsterAppearanceRecipe recipe, out string error)
-    {
-        error = null;
-        var problems = new List<string>();
-
-        if (!string.IsNullOrEmpty(recipe.race) && !KnownValues(i => new[] { i.Race }).Contains(recipe.race))
-        {
-            problems.Add($"race '{recipe.race}'");
-        }
-        if (!string.IsNullOrEmpty(recipe.gender) && !KnownValues(i => new[] { i.Gender }).Contains(recipe.gender))
-        {
-            problems.Add($"gender '{recipe.gender}'");
-        }
-        if (!string.IsNullOrEmpty(recipe.theme) && !KnownValues(i => i.Theme).Contains(recipe.theme))
-        {
-            problems.Add($"theme '{recipe.theme}'");
-        }
-
-        var knownClasses = KnownValues(i => i.Class);
-        foreach (var c in recipe.classes)
-        {
-            if (!knownClasses.Contains(c))
-            {
-                problems.Add($"class '{c}'");
-            }
-        }
-
-        foreach (var kv in recipe.fixedParts)
-        {
-            foreach (var fileName in SpumUnitComposer.SplitNames(kv.Value))
-            {
-                if (FindPartItem(fileName, kv.Key) == null)
-                {
-                    problems.Add($"fixedParts {kv.Key} = '{fileName}'");
-                }
-            }
-        }
-
-        if (!string.IsNullOrEmpty(recipe.shareCode))
-        {
-            problems.Add("shareCode는 예약 필드이며 아직 구현되지 않았습니다(§4.1)");
-        }
-
-        if (problems.Count > 0)
-        {
-            error = "레시피 값이 태그 DB에 없습니다 — " + string.Join(", ", problems);
-            return false;
-        }
-        return true;
-    }
-
-    /// <summary>태그 DB에서 그 축의 실제 값 집합을 모은다(레시피 검증용).</summary>
-    private HashSet<string> KnownValues(Func<SPUM_ImprovedTagManager.ImprovedCharacterDataItem, string[]> selector)
-    {
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (_composer == null)
-        {
-            return set;
-        }
-        foreach (var item in _composer.Parts)
-        {
-            var values = selector(item);
-            if (values == null)
-            {
-                continue;
-            }
-            foreach (var v in values)
-            {
-                if (!string.IsNullOrEmpty(v))
-                {
-                    set.Add(v);
-                }
-            }
-        }
-        return set;
-    }
-
-    /// <summary>
-    /// 레시피의 고정 파츠로 그 Part의 요소를 통째로 갈아 끼운다(§4.2).
-    /// 값은 SPUM 파일명이며 무기 2개는 콤마로 나열한다.
-    /// </summary>
-    private void ApplyFixedParts(List<PreviewMatchingElement> elements, MonsterAppearanceRecipe recipe)
-    {
-        foreach (var kv in recipe.fixedParts)
-        {
-            string part = kv.Key;
-            var replacements = new List<PreviewMatchingElement>();
-            foreach (var fileName in SpumUnitComposer.SplitNames(kv.Value))
-            {
-                replacements.AddRange(_composer.BuildElements(fileName, part));
-            }
-
-            if (replacements.Count == 0)
-            {
-                continue; // 검증에서 이미 걸러지지만, 일괄 실행 중이면 조용히 건너뛴다
-            }
-
-            elements.RemoveAll(e => string.Equals(e.PartType, part, StringComparison.OrdinalIgnoreCase));
-            elements.AddRange(replacements);
-        }
-    }
-
-    /// <summary>레시피의 계열 팔레트를 해당 Part 요소의 색에 얹는다(§4.2 — Body·Hair·Cloth 3키).</summary>
-    private static void ApplyColors(List<PreviewMatchingElement> elements, MonsterAppearanceRecipe recipe)
-    {
-        foreach (var kv in recipe.colors)
-        {
-            if (!ColorUtility.TryParseHtmlString(kv.Value, out Color color))
-            {
-                continue;
-            }
-            foreach (var element in elements)
-            {
-                if (string.Equals(element.PartType, kv.Key, StringComparison.OrdinalIgnoreCase))
-                {
-                    element.Color = color;
-                }
-            }
-        }
-    }
-
-    private SPUM_ImprovedTagManager.ImprovedCharacterDataItem FindPartItem(string fileName, string part)
-    {
-        if (_composer == null)
-        {
-            return null;
-        }
-        return _composer.Parts.FirstOrDefault(i =>
-            string.Equals(i.FileName, fileName, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(i.Part, part, StringComparison.OrdinalIgnoreCase));
-    }
-
     // ══════════════════════════════════════════════════════════════════
     //  프리팹 저장(§6.2 5~9 · §7.1)
     // ══════════════════════════════════════════════════════════════════
@@ -668,62 +481,22 @@ public partial class CharacterDevController : MonoBehaviour
             return false;
         }
 
-        string prefabName = "monster_" + code;
-        string assetPath = EnsureTrailingSlash(monsterPrefabFolder) + prefabName + ".prefab";
-        string backupPath = BackupAsset(assetPath, prefabName);
-
-        var saved = _composer.SaveAsPrefab(_previewUnit, assetPath, prefabName, out error);
-        if (saved == null)
+        // 백업·저장·검증·되돌리기는 자동 빌더와 같은 경로를 쓴다(MonsterUnitFactory가 정본).
+        if (!MonsterUnitFactory.SaveUnitAsPrefab(
+                _composer, _previewUnit, code, monsterPrefabFolder, backupFolder, out error))
         {
-            error ??= "프리팹 저장에 실패했습니다.";
-            return false;
-        }
-
-        AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
-        saved = AssetDatabase.LoadAssetAtPath<GameObject>(assetPath);
-        if (saved == null)
-        {
-            error = $"저장된 프리팹을 찾지 못했습니다: {assetPath}";
-            return false;
-        }
-
-        if (!ValidateSavedPrefab(saved, out string validationError))
-        {
-            error = validationError;
-            RestoreBackup(backupPath, assetPath);
             return false;
         }
 
         // 저장 후 후처리 훅(N2) — 몬스터는 붙일 것이 없고, 아군 확장 시 여기에 얹는다.
+        var saved = AssetDatabase.LoadAssetAtPath<GameObject>(
+            MonsterUnitFactory.PrefabPath(code, monsterPrefabFolder));
         PostProcess(saved, UnitKind.Monster, code);
         return true;
 #else
         error = "에디터에서만 저장할 수 있습니다(N1).";
         return false;
 #endif
-    }
-
-    /// <summary>저장물이 전투에서 동작할 수 있는 형태인지 3항목을 확인한다(§2.3 · §7.1).</summary>
-    private static bool ValidateSavedPrefab(GameObject prefabRoot, out string error)
-    {
-        error = null;
-        var spum = prefabRoot.GetComponent<SPUM_Prefabs>();
-        if (spum == null)
-        {
-            error = "검증 실패 — 루트에 SPUM_Prefabs가 없습니다.";
-            return false;
-        }
-        if (spum._anim == null)
-        {
-            error = "검증 실패 — _anim(자식 Animator)이 배선되지 않았습니다.";
-            return false;
-        }
-        if (!spum.allListsHaveItemsExist())
-        {
-            error = "검증 실패 — 상태별 애니메이션 클립 리스트가 비어 있습니다.";
-            return false;
-        }
-        return true;
     }
 
     /// <summary>
@@ -736,39 +509,10 @@ public partial class CharacterDevController : MonoBehaviour
         hook?.Apply(prefabRoot, kind, code);
     }
 
-    /// <summary>기존 에셋을 백업 폴더로 복사한다(원본 GUID를 유지하려 이동이 아니라 복사다). 없으면 빈 문자열.</summary>
+    /// <summary>기존 에셋을 백업 폴더로 복사한다(마스터 JSON 백업용 — 프리팹 백업은 팩토리가 한다).</summary>
     private string BackupAsset(string assetPath, string baseName)
     {
-#if UNITY_EDITOR
-        if (!File.Exists(assetPath))
-        {
-            return string.Empty;
-        }
-
-        string folder = EnsureTrailingSlash(backupFolder);
-        SpumUnitComposer.EnsureAssetFolder(folder.TrimEnd('/'));
-        string ext = Path.GetExtension(assetPath);
-        string backupPath = $"{folder}{baseName}_{DateTime.Now:yyyyMMdd_HHmmss}{ext}";
-        AssetDatabase.CopyAsset(assetPath, backupPath);
-        return backupPath;
-#else
-        return string.Empty;
-#endif
-    }
-
-    /// <summary>검증 실패 시 백업본을 원래 자리로 되돌린다(백업이 없으면 깨진 저장물을 지운다).</summary>
-    private static void RestoreBackup(string backupPath, string assetPath)
-    {
-#if UNITY_EDITOR
-        if (string.IsNullOrEmpty(backupPath) || !File.Exists(backupPath))
-        {
-            AssetDatabase.DeleteAsset(assetPath);
-            return;
-        }
-        AssetDatabase.DeleteAsset(assetPath);
-        AssetDatabase.CopyAsset(backupPath, assetPath);
-        AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
-#endif
+        return MonsterUnitFactory.BackupAsset(assetPath, baseName, backupFolder);
     }
 
     // ══════════════════════════════════════════════════════════════════

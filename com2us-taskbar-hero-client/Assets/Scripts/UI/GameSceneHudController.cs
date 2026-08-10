@@ -58,10 +58,10 @@ namespace TaskbarHero.Client.UI
         [Tooltip("버프 상세 툴팁 배경(Assets/Art/UI/item_detail_bg.png). 없으면 단색 배경으로 표시.")]
         [SerializeField] private Sprite buffTooltipBackground;
 
-        [Header("ESC 메뉴 리소스 (Assets/Art/UI/System — 에디터 빌더가 배선)")]
-        [Tooltip("ESC 메뉴 패널 배경(system_bg.png, 9-slice). 없으면 단색 패널.")]
-        [SerializeField] private Sprite systemBackgroundSprite;
-        [Tooltip("ESC 메뉴 버튼 배경(system_slot.png, 9-slice). 없으면 단색 버튼.")]
+        [Header("ESC 메뉴 리소스 (에디터 빌더가 배선)")]
+        [Tooltip("ESC 메뉴 창 배경 프레임(Assets/Art/UI/ui_bg_2.png — 가방·스킬·룬 창과 같은 공용 프레임). 없으면 단색 패널.")]
+        [SerializeField] private Sprite escMenuFrameSprite;
+        [Tooltip("ESC 메뉴 버튼 배경(Assets/Art/UI/System/system_slot.png, 9-slice). 없으면 단색 버튼.")]
         [SerializeField] private Sprite systemSlotSprite;
 
         [Header("알림(레드닷)")]
@@ -154,6 +154,21 @@ namespace TaskbarHero.Client.UI
         private const float EscButtonWidth = 440f;
         private const float EscButtonHeight = 100f;
         private const float SystemSlotPixelsPerUnitMultiplier = 4f;
+
+        // ESC 메뉴 창 크기. 배경은 공용 프레임(ui_bg_2)이며 Simple로 늘려 그리므로 장식이 찌그러지지 않게
+        // 아트 비율(<see cref="PanelFrame.Aspect"/> ≒ 0.715)에 가깝게 잡는다(680/940 ≒ 0.723).
+        private const float EscPanelWidth = 680f;
+        private const float EscPanelHeight = 940f;
+        // 내용 영역(프레임 테두리 안쪽 빈 칸) 크기 — 창 크기에서 파생되는 상수식이다(479.6 × 681.0).
+        private const float EscContentWidth = EscPanelWidth * (1f - PanelFrame.InsetLeft - PanelFrame.InsetRight)
+            - PanelFrame.Pad * 2f;
+        private const float EscContentHeight = EscPanelHeight * (1f - PanelFrame.InsetTop - PanelFrame.InsetBottom)
+            - PanelFrame.Pad * 2f;
+        // 내용 영역 <b>중앙 기준</b> y 좌표(위로 +). 제목 + 버튼 3개를 세로 중앙에 고르게 둔다.
+        private const float EscTitleY = 225f;
+        private const float EscButton1Y = 75f;
+        private const float EscButton2Y = -65f;
+        private const float EscButton3Y = -205f;
 
         private GameObject _escMenuRoot; // ESC로 토글하는 메뉴(타이틀 복귀)
 
@@ -992,24 +1007,28 @@ namespace TaskbarHero.Client.UI
             var prt = (RectTransform)panel.transform;
             prt.anchorMin = prt.anchorMax = new Vector2(0.5f, 0.5f);
             prt.pivot = new Vector2(0.5f, 0.5f);
-            prt.sizeDelta = new Vector2(560f, 540f);
+            prt.sizeDelta = new Vector2(EscPanelWidth, EscPanelHeight);
             prt.anchoredPosition = Vector2.zero;
             var panelImg = panel.GetComponent<Image>();
             panelImg.color = new Color(0.10f, 0.12f, 0.18f, 0.98f); // 아트 미배선 시 단색 폴백
-            if (systemBackgroundSprite != null)
+            if (escMenuFrameSprite != null)
             {
-                panelImg.sprite = systemBackgroundSprite;
-                panelImg.type = Image.Type.Sliced;
+                // 9-slice 테두리가 없는 아트라 Simple로 늘려 그린다(가방·스킬·룬 창과 동일).
+                panelImg.sprite = escMenuFrameSprite;
+                panelImg.type = Image.Type.Simple;
                 panelImg.color = Color.white;
             }
 
-            var title = MakeMenuText(font, panel.transform, "메뉴", 48, new Vector2(0f, 200f), 480f);
+            // 내용물은 모두 프레임 테두리 안쪽 빈 칸에만 놓는다(테두리·상단 장식판을 침범하지 않도록).
+            var content = PanelFrame.CreateContentArea(prt);
+
+            var title = MakeMenuText(font, content, "메뉴", 48, new Vector2(0f, EscTitleY), EscContentWidth);
             title.fontStyle = FontStyle.Bold;
             title.color = new Color(1f, 0.92f, 0.72f); // 나무 배경 위 금색 톤
 
-            MakeMenuButton(font, panel.transform, "타이틀로 돌아가기", new Vector2(0f, 70f), OnReturnToTitle);
-            MakeMenuButton(font, panel.transform, "계속하기", new Vector2(0f, -50f), HideEscMenu);
-            MakeMenuButton(font, panel.transform, "게임종료", new Vector2(0f, -170f), OnQuitGame);
+            MakeMenuButton(font, content, "타이틀로 돌아가기", new Vector2(0f, EscButton1Y), OnReturnToTitle);
+            MakeMenuButton(font, content, "계속하기", new Vector2(0f, EscButton2Y), HideEscMenu);
+            MakeMenuButton(font, content, "게임종료", new Vector2(0f, EscButton3Y), OnQuitGame);
 
             canvasGo.SetActive(false); // 처음엔 숨김
         }
@@ -1049,6 +1068,9 @@ namespace TaskbarHero.Client.UI
             Time.timeScale = 1f;                 // 전투 슬로우모션 등 배율 복원
             UIManager.Instance?.HideAll();        // 열려 있던 패널 정리
             Session.Clear();                      // 로그아웃(타이틀/로그인 새로 시작)
+            // 저장된 자동 로그인 세션도 함께 버린다 — 남겨 두면 타이틀에서 곧바로 같은 계정으로
+            // 자동 로그인돼 다른 계정으로 바꿀 방법이 없어진다(자동 로그인은 '앱 재실행' 편의 기능).
+            SavedSession.Clear();
             MailNotifier.Clear();                 // 우편함 알림 캐시 폐기(다음 계정에 이전 알림이 새지 않도록)
             Debug.Log("[HUD] ESC 메뉴 → 타이틀로 돌아가기");
             if (SceneManager.Instance != null)

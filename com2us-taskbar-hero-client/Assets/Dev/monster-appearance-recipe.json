@@ -91,11 +91,13 @@
     },
     {
       "monsterCode": 9499,
-      "note": "(Act5 보스)",
+      "note": "공허의 지배자 (Act5 보스)",
       "race": "devil",
       "theme": "fantasy",
       "classes": ["magical", "tank"],
-      "seed": 9499
+      "seed": 94991,
+      "fixedParts": { "Helmet": "New_Helmet_04" },
+      "colors": { "Helmet": "#2A2733", "Eye": "#E02A34" }
     }
   ]
 }

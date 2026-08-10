@@ -45,28 +45,10 @@ namespace TaskbarHero.ClientEditor
             EnsureFolder("Assets/Prefabs");
             EnsureFolder("Assets/Prefabs/UI");
 
-            // 사용자가 에디터에서 조정한 PanelRoot 크기/위치/pivot/앵커를 보존한다(재생성 시 초기화 방지).
-            // 주의: 컨트롤러의 기본 배치값을 고쳤을 때도 이 보존이 옛 프리팹 값으로 되돌리므로,
-            // 기본값을 바꿨으면 프리팹의 PanelRoot도 함께 갱신해야 반영된다.
-            Vector2? keepSize = null;
-            Vector2? keepPos = null;
-            Vector2? keepPivot = null;
-            Vector2? keepAnchorMin = null;
-            Vector2? keepAnchorMax = null;
-            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
-            if (existing != null)
-            {
-                var pr = FindChild(existing.transform, "PanelRoot") as RectTransform;
-                if (pr != null)
-                {
-                    keepSize = pr.sizeDelta;
-                    keepPos = pr.anchoredPosition;
-                    keepPivot = pr.pivot;
-                    keepAnchorMin = pr.anchorMin;
-                    keepAnchorMax = pr.anchorMax;
-                }
-            }
-
+            // PanelRoot의 크기·위치는 <b>코드(SkillPanelController)가 정본</b>이라 프리팹 값을 보존하지 않는다.
+            // 창 안쪽 내용 영역(ContentArea)의 여백과 그 안의 모든 좌표가 PanelSize에서 파생되므로,
+            // 프리팹에 남은 옛 크기를 되살리면 내용이 배경 프레임 테두리를 침범한다.
+            // 창을 옮기는 것은 실행 중 드래그(PanelDragMove, 위치는 PlayerPrefs에 저장)로 처리한다.
             var root = new GameObject("SkillPanel");
             var ctrl = root.AddComponent<SkillPanelController>();
 
@@ -82,20 +64,6 @@ namespace TaskbarHero.ClientEditor
 
             // 전체 정적 계층을 에디터에서 생성해 프리팹에 굽는다(에디터에서 바로 보이도록).
             ctrl.EditorConstruct();
-
-            if (keepSize.HasValue)
-            {
-                var pr = FindChild(root.transform, "PanelRoot") as RectTransform;
-                if (pr != null)
-                {
-                    // 앵커·pivot을 먼저 되돌린 뒤 위치를 넣는다(둘 다 위치 해석을 바꾼다).
-                    pr.anchorMin = keepAnchorMin.Value;
-                    pr.anchorMax = keepAnchorMax.Value;
-                    pr.pivot = keepPivot.Value;
-                    pr.sizeDelta = keepSize.Value;
-                    pr.anchoredPosition = keepPos.Value;
-                }
-            }
 
             var prefab = PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
             Object.DestroyImmediate(root);
@@ -124,24 +92,6 @@ namespace TaskbarHero.ClientEditor
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             Debug.Log($"[SkillUiBuilder] {scenePath} UIManager에 스킬 프리팹 배선 완료.");
-        }
-
-        /// <summary>이름으로 자식 Transform을 재귀 검색한다.</summary>
-        private static Transform FindChild(Transform root, string name)
-        {
-            if (root.name == name)
-            {
-                return root;
-            }
-            foreach (Transform c in root)
-            {
-                var r = FindChild(c, name);
-                if (r != null)
-                {
-                    return r;
-                }
-            }
-            return null;
         }
 
         /// <summary>인벤토리 공용 아트 폴더에서 스프라이트를 로드한다.</summary>

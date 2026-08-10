@@ -8,28 +8,59 @@ namespace TaskbarHero.Client.UI
     /// 환경설정 패널. <see cref="SoundManager"/>의 볼륨 3채널(전체·BGM·효과음)과 음소거를 슬라이더·토글로 조절한다.
     /// 값은 SoundManager가 PlayerPrefs에 저장하므로 다음 실행에도 유지되고, 조절 즉시 재생 중인 BGM에 반영된다.
     /// 효과음 슬라이더를 놓을 때는 <c>sfx_ui_slot_select</c>를 한 번 울려 바뀐 크기를 귀로 확인할 수 있게 한다.
-    /// 외형은 ESC 메뉴와 같은 <c>Assets/Art/UI/System</c> 아트를 쓴다(패널 system_bg · 슬라이더 트랙 system_slot).
+    /// 창 배경은 가방·스킬·룬 창과 같은 공용 프레임(<c>Assets/Art/UI/ui_bg_2.png</c>)이고, 슬라이더 트랙과
+    /// 하단 버튼은 ESC 메뉴와 같은 <c>Assets/Art/UI/System/system_slot.png</c>(9-slice)를 쓴다.
+    /// 내용물은 모두 프레임 테두리 안쪽 빈 칸(<see cref="PanelFrame"/>)에만 놓는다.
+    /// <para>닫기(X) 버튼은 두지 않고 <b>창 밖 클릭</b>으로 닫으며, 하단에 <b>게임종료</b> 버튼을 둔다
+    /// (ESC 메뉴의 같은 항목과 동작이 같다).</para>
     /// 정적 계층은 에디터 빌더(SettingsUiBuilder)가 프리팹에 굽는다.
     /// </summary>
     public class SettingsPanelController : MonoBehaviour
     {
         private const float CanvasRefWidth = 1080f;
         private const float CanvasRefHeight = 1920f;
-        private const float PanelWidth = 720f;
-        private const float PanelHeight = 620f;
+        // 창 크기. 배경은 공용 프레임(ui_bg_2)이며 Simple로 늘려 그리므로 장식이 찌그러지지 않게
+        // 아트 비율(<see cref="PanelFrame.Aspect"/> ≒ 0.715)에 가깝게 잡는다(760/1040 ≒ 0.731).
+        // 세로 1040은 <b>가장 낮은 논리 캔버스 높이</b>에 맞춘 값이다 — 16:9 고정 창인 타이틀 계열 씬에서는
+        // 기본 규격(1080×1920 · match 0.5)의 논리 높이가 창 크기와 무관하게 1080이 된다(GameScene은 1440).
+        private const float PanelWidth = 760f;
+        private const float PanelHeight = 1040f;
+        // 내용 영역(프레임 테두리 안쪽 빈 칸) 크기 — 창 크기에서 파생되는 상수식이다(538.4 × 755.5).
+        private const float ContentWidth = PanelWidth * (1f - PanelFrame.InsetLeft - PanelFrame.InsetRight)
+            - PanelFrame.Pad * 2f;
+        private const float ContentHeight = PanelHeight * (1f - PanelFrame.InsetTop - PanelFrame.InsetBottom)
+            - PanelFrame.Pad * 2f;
+
+        // 내용 영역 <b>좌상단 기준</b> y(아래로 +). 세로 합이 ContentHeight를 넘지 않아 테두리에 닿지 않는다.
+        private const float TitleY = 10f;
+        private const float TitleHeight = 60f;
+        private const float FirstRowY = 110f;   // 첫 볼륨 줄
         private const float RowHeight = 96f;
-        private const float SliderWidth = 420f;
+        private const float RowGap = 10f;
+        private const float MuteRowY = 438f;    // 볼륨 3줄 아래
+        private const float MuteRowHeight = 80f;
+        private const float QuitButtonY = 600f;
+        private const float QuitButtonWidth = 360f;
+        private const float QuitButtonHeight = 100f;
+
+        private const float SliderWidth = 300f;
         private const float SliderHeight = 28f;
+        private const float RowLabelWidth = 120f;
+        private const float RowValueWidth = 90f;
         // system_slot(2048×731) 테두리 상하 128px → 트랙 높이(28)에 맞추려면 크게 줄여야 한다.
         private const float TrackPixelsPerUnitMultiplier = 14f;
+        // 같은 아트를 버튼(높이 100)에 쓸 때의 배율 — 128px 테두리가 32씩 되어 높이 안에 들어간다(ESC 메뉴와 동일).
+        private const float ButtonPixelsPerUnitMultiplier = 4f;
 
-        [Header("UI 리소스 (Assets/Art/UI/System — 에디터 빌더가 배선)")]
-        [SerializeField] private Sprite _panelSprite;   // system_bg
-        [SerializeField] private Sprite _trackSprite;   // system_slot(슬라이더 트랙)
+        [Header("UI 리소스 (에디터 빌더가 배선)")]
+        [Tooltip("창 배경 프레임(Assets/Art/UI/ui_bg_2.png — 가방·스킬·룬 창과 같은 공용 프레임).")]
+        [SerializeField] private Sprite _panelSprite;   // ui_bg_2
+        [Tooltip("Assets/Art/UI/System/system_slot.png(9-slice) — 슬라이더 트랙과 하단 버튼에 함께 쓴다.")]
+        [SerializeField] private Sprite _trackSprite;   // system_slot
 
         [Header("구성 참조 (에디터 빌더가 배선)")]
-        [SerializeField] private Button _closeButton;
         [SerializeField] private Button _dimButton;
+        [SerializeField] private Button _quitButton;
         [SerializeField] private Slider _masterSlider;
         [SerializeField] private Slider _bgmSlider;
         [SerializeField] private Slider _sfxSlider;
@@ -68,20 +99,23 @@ namespace TaskbarHero.Client.UI
 
         // ── 정적 계층 구성 ──
 
-        /// <summary>캔버스·딤·패널·제목·볼륨 슬라이더 3개·음소거 토글·닫기 버튼을 생성한다.</summary>
+        /// <summary>캔버스·딤·패널·제목·볼륨 슬라이더 3개·음소거 토글·게임종료 버튼을 생성한다.
+        /// 내용물은 모두 배경 프레임 테두리 안쪽 빈 칸(<see cref="PanelFrame"/>)에만 놓는다.</summary>
         private void Construct()
         {
             _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildCanvas();
             BuildDim();
             var panel = BuildPanel();
-            BuildHeader(panel);
+            var content = PanelFrame.CreateContentArea(panel);
+            BuildHeader(content);
 
-            _masterSlider = BuildVolumeRow(panel, "Master", "전체", -40f, out _masterValueText);
-            _bgmSlider = BuildVolumeRow(panel, "Bgm", "배경음", -40f - RowHeight, out _bgmValueText);
-            _sfxSlider = BuildVolumeRow(panel, "Sfx", "효과음", -40f - RowHeight * 2f, out _sfxValueText);
+            _masterSlider = BuildVolumeRow(content, "Master", "전체", FirstRowY, out _masterValueText);
+            _bgmSlider = BuildVolumeRow(content, "Bgm", "배경음", FirstRowY + (RowHeight + RowGap), out _bgmValueText);
+            _sfxSlider = BuildVolumeRow(content, "Sfx", "효과음", FirstRowY + (RowHeight + RowGap) * 2f, out _sfxValueText);
 
-            BuildMuteToggle(panel, -40f - RowHeight * 3f - 12f);
+            BuildMuteToggle(content, MuteRowY);
+            BuildQuitButton(content);
         }
 
         /// <summary>패널 전용 오버레이 캔버스(다른 패널과 동일 규격, sortingOrder 100).</summary>
@@ -117,14 +151,15 @@ namespace TaskbarHero.Client.UI
             _dimButton.transition = Selectable.Transition.None;
         }
 
-        /// <summary>패널 본체(system_bg 9-slice, 아트 없으면 단색).</summary>
+        /// <summary>패널 본체(공용 프레임 ui_bg_2, 아트 없으면 단색).
+        /// 9-slice 테두리가 없는 아트라 Simple로 늘려 그린다(가방·스킬·룬 창과 동일).</summary>
         private RectTransform BuildPanel()
         {
             var img = NewImage("PanelRoot", (RectTransform)transform, new Color(0.10f, 0.12f, 0.18f, 0.98f));
             if (_panelSprite != null)
             {
                 img.sprite = _panelSprite;
-                img.type = Image.Type.Sliced;
+                img.type = Image.Type.Simple;
                 img.color = Color.white;
             }
             var rt = img.rectTransform;
@@ -135,38 +170,21 @@ namespace TaskbarHero.Client.UI
             return rt;
         }
 
-        /// <summary>제목과 닫기 버튼.</summary>
-        private void BuildHeader(RectTransform panel)
+        /// <summary>제목. 닫기(X) 버튼은 두지 않는다 — 다른 패널과 같이 <b>창 밖을 클릭</b>해 닫는다
+        /// (미관상 X를 없앤 프로젝트 규칙: 스테이지·가방·뽑기와 동일).</summary>
+        private void BuildHeader(RectTransform content)
         {
-            var title = NewText("Title", panel, "환경설정", 44, TextAnchor.MiddleCenter);
+            var title = NewText("Title", content, "환경설정", 44, TextAnchor.MiddleCenter);
             title.fontStyle = FontStyle.Bold;
             title.color = new Color(1f, 0.92f, 0.72f);
-            var trt = title.rectTransform;
-            trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 1f);
-            trt.pivot = new Vector2(0.5f, 1f);
-            trt.anchoredPosition = new Vector2(0f, -28f);
-            trt.sizeDelta = new Vector2(400f, 60f);
-
-            var close = NewImage("CloseButton", panel, new Color(0.32f, 0.20f, 0.13f, 0.95f));
-            var crt = close.rectTransform;
-            crt.anchorMin = crt.anchorMax = new Vector2(1f, 1f);
-            crt.pivot = new Vector2(1f, 1f);
-            crt.anchoredPosition = new Vector2(-30f, -30f);
-            crt.sizeDelta = new Vector2(52f, 52f);
-            var xt = NewText("X", crt, "X", 30, TextAnchor.MiddleCenter);
-            xt.color = new Color(1f, 0.92f, 0.72f);
-            Stretch(xt.rectTransform);
-            _closeButton = close.gameObject.AddComponent<Button>();
+            TopLeft(title.rectTransform, 0f, TitleY, ContentWidth, TitleHeight);
         }
 
-        /// <summary>볼륨 한 줄(라벨 + 슬라이더 + 퍼센트 값)을 만든다. y는 패널 상단 기준 오프셋(음수).</summary>
-        private Slider BuildVolumeRow(RectTransform panel, string name, string label, float y, out Text valueText)
+        /// <summary>볼륨 한 줄(라벨 + 슬라이더 + 퍼센트 값)을 만든다. y는 내용 영역 좌상단 기준(아래로 +).</summary>
+        private Slider BuildVolumeRow(RectTransform content, string name, string label, float y, out Text valueText)
         {
-            var row = NewChild(name + "Row", panel);
-            row.anchorMin = row.anchorMax = new Vector2(0.5f, 1f);
-            row.pivot = new Vector2(0.5f, 1f);
-            row.anchoredPosition = new Vector2(0f, y - 76f); // 제목 아래부터 시작
-            row.sizeDelta = new Vector2(PanelWidth - 80f, RowHeight);
+            var row = NewChild(name + "Row", content);
+            TopLeft(row, 0f, y, ContentWidth, RowHeight);
 
             var lbl = NewText("Label", row, label, 30, TextAnchor.MiddleLeft);
             lbl.fontStyle = FontStyle.Bold;
@@ -174,16 +192,16 @@ namespace TaskbarHero.Client.UI
             var lrt = lbl.rectTransform;
             lrt.anchorMin = lrt.anchorMax = new Vector2(0f, 0.5f);
             lrt.pivot = new Vector2(0f, 0.5f);
-            lrt.anchoredPosition = new Vector2(10f, 0f);
-            lrt.sizeDelta = new Vector2(140f, 40f);
+            lrt.anchoredPosition = Vector2.zero;
+            lrt.sizeDelta = new Vector2(RowLabelWidth, 40f);
 
             valueText = NewText("Value", row, "100%", 26, TextAnchor.MiddleRight);
             valueText.color = new Color(0.92f, 0.86f, 0.70f);
             var vrt = valueText.rectTransform;
             vrt.anchorMin = vrt.anchorMax = new Vector2(1f, 0.5f);
             vrt.pivot = new Vector2(1f, 0.5f);
-            vrt.anchoredPosition = new Vector2(-10f, 0f);
-            vrt.sizeDelta = new Vector2(90f, 40f);
+            vrt.anchoredPosition = Vector2.zero;
+            vrt.sizeDelta = new Vector2(RowValueWidth, 40f);
 
             return BuildSlider(row);
         }
@@ -202,7 +220,8 @@ namespace TaskbarHero.Client.UI
             var trt = trackImg.rectTransform;
             trt.anchorMin = trt.anchorMax = new Vector2(0.5f, 0.5f);
             trt.pivot = new Vector2(0.5f, 0.5f);
-            trt.anchoredPosition = new Vector2(10f, 0f);
+            // 라벨(왼쪽)과 퍼센트 값(오른쪽) 사이에 놓는다 — 두 폭 차이만큼 오른쪽으로 밀어 간격을 맞춘다.
+            trt.anchoredPosition = new Vector2((RowLabelWidth - RowValueWidth) * 0.5f, 0f);
             trt.sizeDelta = new Vector2(SliderWidth, SliderHeight);
 
             // 채움 영역(좌 → 우). Slider가 fillRect의 anchorMax.x를 값에 맞춰 조정한다.
@@ -242,20 +261,17 @@ namespace TaskbarHero.Client.UI
             return slider;
         }
 
-        /// <summary>음소거 토글(간단한 체크 박스 + 라벨).</summary>
-        private void BuildMuteToggle(RectTransform panel, float y)
+        /// <summary>음소거 토글(간단한 체크 박스 + 라벨). y는 내용 영역 좌상단 기준(아래로 +).</summary>
+        private void BuildMuteToggle(RectTransform content, float y)
         {
-            var row = NewChild("MuteRow", panel);
-            row.anchorMin = row.anchorMax = new Vector2(0.5f, 1f);
-            row.pivot = new Vector2(0.5f, 1f);
-            row.anchoredPosition = new Vector2(0f, y - 76f);
-            row.sizeDelta = new Vector2(PanelWidth - 80f, RowHeight);
+            var row = NewChild("MuteRow", content);
+            TopLeft(row, 0f, y, ContentWidth, MuteRowHeight);
 
             var box = NewImage("Box", row, new Color(0.08f, 0.09f, 0.13f, 1f));
             var brt = box.rectTransform;
             brt.anchorMin = brt.anchorMax = new Vector2(0f, 0.5f);
             brt.pivot = new Vector2(0f, 0.5f);
-            brt.anchoredPosition = new Vector2(10f, 0f);
+            brt.anchoredPosition = Vector2.zero;
             brt.sizeDelta = new Vector2(40f, 40f);
 
             var check = NewImage("Check", brt, new Color(1f, 0.82f, 0.35f, 1f));
@@ -270,7 +286,7 @@ namespace TaskbarHero.Client.UI
             var lrt = _muteLabel.rectTransform;
             lrt.anchorMin = lrt.anchorMax = new Vector2(0f, 0.5f);
             lrt.pivot = new Vector2(0f, 0.5f);
-            lrt.anchoredPosition = new Vector2(62f, 0f);
+            lrt.anchoredPosition = new Vector2(52f, 0f);
             lrt.sizeDelta = new Vector2(260f, 40f);
 
             _muteToggle = box.gameObject.AddComponent<Toggle>();
@@ -280,10 +296,32 @@ namespace TaskbarHero.Client.UI
             _muteToggle.isOn = false;
         }
 
+        /// <summary>하단 '게임종료' 버튼. ESC 메뉴의 같은 항목과 동작·외형(system_slot 9-slice)을 맞춘다.</summary>
+        private void BuildQuitButton(RectTransform content)
+        {
+            var img = NewImage("QuitButton", content, new Color(0.35f, 0.20f, 0.22f, 0.98f)); // 아트 미배선 시 폴백
+            if (_trackSprite != null)
+            {
+                img.sprite = _trackSprite;
+                img.type = Image.Type.Sliced;
+                img.pixelsPerUnitMultiplier = ButtonPixelsPerUnitMultiplier;
+                img.color = Color.white;
+            }
+            TopLeft(img.rectTransform, (ContentWidth - QuitButtonWidth) * 0.5f, QuitButtonY,
+                QuitButtonWidth, QuitButtonHeight);
+
+            var label = NewText("Label", img.rectTransform, "게임종료", 34, TextAnchor.MiddleCenter);
+            label.fontStyle = FontStyle.Bold;
+            label.color = new Color(1f, 0.94f, 0.80f);
+            Stretch(label.rectTransform);
+
+            _quitButton = img.gameObject.AddComponent<Button>();
+        }
+
         private void WireRuntime()
         {
-            if (_closeButton != null) _closeButton.onClick.AddListener(Close);
             if (_dimButton != null) _dimButton.onClick.AddListener(Close);
+            if (_quitButton != null) _quitButton.onClick.AddListener(OnQuitGame);
             if (_masterSlider != null) _masterSlider.onValueChanged.AddListener(OnMasterChanged);
             if (_bgmSlider != null) _bgmSlider.onValueChanged.AddListener(OnBgmChanged);
             if (_sfxSlider != null) _sfxSlider.onValueChanged.AddListener(OnSfxChanged);
@@ -360,6 +398,17 @@ namespace TaskbarHero.Client.UI
             SoundManager.Instance?.SetMuted(muted);
         }
 
+        /// <summary>게임을 종료한다(에디터에서는 플레이 정지). ESC 메뉴의 '게임종료'와 같은 동작이다.</summary>
+        private static void OnQuitGame()
+        {
+            Debug.Log("[Settings] 게임종료");
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+
         /// <summary>패널을 닫는다(UIManager 우선).</summary>
         public void Close()
         {
@@ -406,6 +455,15 @@ namespace TaskbarHero.Client.UI
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Overflow;
             return t;
+        }
+
+        /// <summary>부모(내용 영역)의 좌상단 기준으로 배치한다(y는 아래로 +).</summary>
+        private static void TopLeft(RectTransform rt, float x, float y, float w, float h)
+        {
+            rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = new Vector2(x, -y);
+            rt.sizeDelta = new Vector2(w, h);
         }
 
         private static void Stretch(RectTransform rt)
