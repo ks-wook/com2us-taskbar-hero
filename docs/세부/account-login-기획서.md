@@ -14,7 +14,8 @@
   - [5.1 회원가입 — `POST /api/auth/signup`](#51-회원가입--post-apiauthsignup)
   - [5.2 로그인 — `POST /api/auth/login`](#52-로그인--post-apiauthlogin)
   - [5.3 로그아웃 — `POST /api/auth/logout`](#53-로그아웃--post-apiauthlogout)
-  - [5.4 토큰 검증 (인증 미들웨어)](#54-토큰-검증-인증-미들웨어)
+  - [5.4 자동 로그인 검증 — `POST /api/auth/validate`](#54-자동-로그인-검증--post-apiauthvalidate)
+  - [5.5 토큰 검증 (인증 미들웨어)](#55-토큰-검증-인증-미들웨어)
 - [6. 에러 코드 (신규 제안)](#6-에러-코드-신규-제안)
 - [7. 미결 사항 / TODO](#7-미결-사항--todo)
 - [8. 참고](#8-참고)
@@ -164,7 +165,8 @@ Base64 디코딩 → 필드 분리(userId:timestamp:salt:hash)
 - [5.1 회원가입 — `POST /api/auth/signup`](#51-회원가입--post-apiauthsignup)
 - [5.2 로그인 — `POST /api/auth/login`](#52-로그인--post-apiauthlogin)
 - [5.3 로그아웃 — `POST /api/auth/logout`](#53-로그아웃--post-apiauthlogout)
-- [5.4 토큰 검증 (인증 미들웨어)](#54-토큰-검증-인증-미들웨어)
+- [5.4 자동 로그인 검증 — `POST /api/auth/validate`](#54-자동-로그인-검증--post-apiauthvalidate)
+- [5.5 토큰 검증 (인증 미들웨어)](#55-토큰-검증-인증-미들웨어)
 
 Base URL(개발): `http://localhost:5160` (AccountServer)
 
@@ -313,7 +315,84 @@ Base URL(개발): `http://localhost:5160` (AccountServer)
 
 ---
 
-### 5.4 토큰 검증 (인증 미들웨어)
+### 5.4 자동 로그인 검증 — `POST /api/auth/validate`
+
+**목적.** 클라이언트가 직전 로그인 세션(`userId`·`token`)을 로컬에 저장해 두고 다음 실행에서 그대로 사용하는 **자동 로그인**을 지원한다. 저장된 토큰은 만료(TTL 24시간)되거나 다른 기기의 로그인으로 밀려나 무효가 될 수 있으므로, **타이틀 화면(TitleScene)이 게임에 진입하기 전에** 이 API로 유효성을 확인하고 실패 시 로그인 입력을 요구한다.
+
+**Request** (인증 — body의 `userId`·`token`)
+```json
+{
+  "userId": 1,
+  "token": "MToxNzAwMDAwMDAwOmFCM2RFNmZHOWhKMWtM..."
+}
+```
+
+**Response (유효, 200 OK)**
+```json
+{
+  "success": true,
+  "errorCode": 0,
+  "userId": 1,
+  "message": "Token is valid"
+}
+```
+
+**Response (만료·폐기, 401 Unauthorized)**
+```json
+{
+  "success": false,
+  "errorCode": 1005,
+  "userId": 0,
+  "message": "Expired token"
+}
+```
+
+**Response (다른 기기 로그인으로 밀려남, 401 Unauthorized)**
+```json
+{
+  "success": false,
+  "errorCode": 1004,
+  "userId": 0,
+  "message": "Invalid token"
+}
+```
+
+#### 처리 단계
+
+1. **입력 검증** — `userId > 0`, `token` 비어 있지 않음. 아니면 `InvalidRequest(1006)`
+2. **Redis 조회** — `auth:token:{userId}`
+   - 값 없음 → `ExpiredToken(1005)` (TTL 만료 또는 로그아웃으로 폐기)
+   - 값 ≠ 요청 토큰 → `InvalidToken(1004)` (다른 기기 로그인이 UPSERT로 덮어씀 — 단일 세션)
+3. **성공 응답** — `userId` 회신
+
+MySQL은 조회하지 않는다. **인증의 기준은 Redis 토큰값**이고(5.5), 로그아웃과 완전히 같은 판정이라 서비스 내부에서 하나의 대조 로직을 공유한다.
+
+#### 설계 결정 — 검증만 하고 토큰을 건드리지 않는다
+
+| 결정 | 내용 | 이유 |
+|---|---|---|
+| **토큰 재발급 안 함** | 응답에 `token` 필드가 없다. 유효하면 클라이언트가 가진 토큰을 계속 쓴다 | 재발급은 MySQL UPSERT + Redis 덮어쓰기를 수반해 **단일 세션 정책상 다른 기기 세션을 끊는다**(5.2 6단계). 검증하려다 세션을 무효화하는 부작용을 만들지 않는다 |
+| **TTL 연장 안 함(절대 만료 유지)** | 최초 발급 시각 기준 24시간이 지나면 자동 로그인은 실패하고 재로그인이 필요하다 | 슬라이딩 만료는 토큰 하나가 사실상 무기한 유효해지는 문제가 있어 **연장 상한과 함께 별도로 결정**한다(7장) |
+| **MySQL 폴백 없음** | Redis에 값이 없으면 `user_auth_token`을 조회하지 않고 바로 만료로 판정한다 | 현행 인증 체계에서 **Redis가 사실상 정본**이다(5.5). 폴백을 넣으면 "Redis는 캐시, MySQL이 정본"으로 성격이 바뀌므로 함께 결정해야 한다(7장) |
+
+이 결정들의 결과로 **이 API는 상태를 전혀 바꾸지 않는 읽기 전용**이며, 여러 번 호출해도 부작용이 없다.
+
+#### 클라이언트 사용 흐름 (참고)
+
+```
+TitleScene 진입
+ → 저장된 { userId, token } 있음?
+     ├ 없음 → 로그인 화면
+     └ 있음 → POST /api/auth/validate
+                ├ success        → 저장된 토큰으로 게임 진입(재로그인 없음)
+                └ 1004 / 1005    → 저장값 폐기 + 안내 후 로그인 화면
+```
+
+> 클라이언트의 토큰 저장 위치·재시도 정책은 클라이언트 측 설계 영역이다. 다만 로컬에 평문 저장되는 값이므로, 노출 시 피해 범위를 만료 시간이 제한한다는 점을 전제로 한다(7장의 만료 정책과 함께 본다).
+
+---
+
+### 5.5 토큰 검증 (인증 미들웨어)
 
 모든 보호 API 요청에서 미들웨어가 토큰을 검증한다. 기준 문서 10장을 따라 **요청 body(JSON)에서 `userId`·`token`을 읽어** 검증한다(헤더 미사용).
 
@@ -348,8 +427,10 @@ POST 요청 body(JSON): { userId, token, data }
 ## 7. 미결 사항 / TODO
 
 - **비밀번호 정책**: 최소 길이 6자는 기준 문서값. 게임 정책에 맞게 확정.
-- **토큰 만료 시간**: 기본 24시간은 잠정값. 방치형 게임 특성(장시간 미접속)을 고려해 확정.
-- **만료 토큰 정리**: `DELETE FROM user_auth_token WHERE expired_at < UNIX_TIMESTAMP()` 배치 주기 결정.
+- **토큰 만료 시간**: 기본 24시간(`Security:TokenExpirationHours`)은 잠정값. 방치형 게임 특성(장시간 미접속)을 고려해 확정.
+- **만료 토큰 정리**: Redis 키는 TTL로 자동 소멸하지만 **MySQL `user_auth_token` 행은 남는다.** `DELETE FROM user_auth_token WHERE expired_at < UNIX_TIMESTAMP()` 배치 주기 결정.
+- **슬라이딩 만료 도입 여부**: 현행은 발급 시각 기준 **절대 만료**라, 매일 접속하는 사용자도 24시간이 지나면 자동 로그인(5.4)이 실패한다. 도입한다면 **연장 상한**(최초 발급 후 N일이 지나면 무조건 재로그인 — 판정에는 `user_auth_token.created_at`을 그대로 쓸 수 있다)을 함께 두어, 토큰 하나가 무기한 유효해지는 상태를 막는다. 상한 없는 무제한 연장은 채택하지 않는다.
+- **Redis 유실 시 MySQL 폴백 여부**: 현행은 **Redis가 인증의 정본**이라, Redis가 재시작하면 모든 세션이 끊기고 전원 재로그인이 필요하다. 자동 로그인 검증(5.4)에서 Redis miss 시 `user_auth_token`을 조회해 `expired_at`이 유효하면 Redis에 재적재하는 경로를 두면 복구되지만, 그 순간 **"Redis는 캐시, MySQL이 정본"으로 성격이 바뀐다.** 슬라이딩 만료 도입 시 MySQL `expired_at` 동기화 비용과 함께 한 번에 결정한다.
 
 > **AccountServer ↔ GameServer 간 SecretKey 공유는 불필요하다.** GameServer는 서명을 재계산하지 않고, 요청으로 받은 `token`을 Redis(`auth:token:{userId}`)에 저장된 값과 **대조**하는 것만으로 인증한다. 따라서 SecretKey는 토큰을 발급하는 AccountServer만 보유하면 된다.
 

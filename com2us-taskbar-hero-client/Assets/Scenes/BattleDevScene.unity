@@ -446,6 +446,7 @@ MonoBehaviour:
   walkDustFps: 24
   walkDustWorldWidth: 1.2
   bossIcon: {fileID: 0}
+  bossWarningImage: {fileID: 3684577684066637465, guid: fdb8ccc67f83a2941bcb5fa7a0ca834e, type: 3}
   bossMoveSpeedFactor: 0.6
   enemyHpBarFrame: {fileID: 3003013052192031213, guid: 92b7c1ec371896349b22006e2ae7a29c, type: 3}
 --- !u!4 &223499211
@@ -1268,6 +1269,7 @@ MonoBehaviour:
   hpBarOffset: {x: -45, y: -40}
   hpBarBgColor: {r: 0, g: 0, b: 0, a: 0.6}
   hpBarFillColor: {r: 0.25, g: 0.9, b: 0.35, a: 1}
+  hpBarFrame: {fileID: 3003013052192031213, guid: 92b7c1ec371896349b22006e2ae7a29c, type: 3}
 --- !u!114 &1793058198
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -24,7 +24,8 @@
 - [11. UI를 손으로 만들지 않는다 — 에디터 빌더](#11-ui를-손으로-만들지-않는다--에디터-빌더)
 - [12. Unity MCP로 에디터를 원격 조작해 검증한다](#12-unity-mcp로-에디터를-원격-조작해-검증한다)
 - [13. 자산 파이프라인 — 아이콘·이펙트·사운드·마스터 데이터](#13-자산-파이프라인--아이콘이펙트사운드마스터-데이터)
-- [14. 클라이언트 쪽에서 얻은 것과 한계](#14-클라이언트-쪽에서-얻은-것과-한계)
+- [14. 요청 한 줄로 몬스터를 만든다 — master-monster 파이프라인](#14-요청-한-줄로-몬스터를-만든다--master-monster-파이프라인)
+- [15. 클라이언트 쪽에서 얻은 것과 한계](#15-클라이언트-쪽에서-얻은-것과-한계)
 
 ---
 
@@ -139,7 +140,7 @@ docs/
 │   ├── api-통합.md · db-erd-통합.md · db-schema.sql
 │   └── error-code-정의.md · 로깅-규칙.md
 └── images/                       # 원작 화면 캡처(기획 근거)
-    └── 개발환경-images/           # 이 문서에 쓰는 개발 환경 캡처(에디터 메뉴·하네스 씬)
+    └── 개발환경-images/           # 이 문서에 쓰는 캡처(에디터 메뉴·하네스 씬·파이프라인 산출물)
 
 SequenceDiagram/README.md         # 기능별 처리 흐름(Mermaid, 단일 문서)
 ```
@@ -221,7 +222,7 @@ SequenceDiagram/README.md         # 기능별 처리 흐름(Mermaid, 단일 문�
 | 구분 | 내용 |
 |---|---|
 | 엔진 | **Unity 6000.5.3f1**(Unity 6) · 렌더 파이프라인 **URP 2D** · 입력 **새 Input System**(`InputSystem_Actions.inputactions`) |
-| 씬 | 빌드 포함 4개(`TitleScene` · `CreateCharacterScene` · `GameScene` · `TeamListScene`) + **개발용 하네스 2개**(`BattleDevScene` · `AnimDevScene`, 빌드 제외) |
+| 씬 | 빌드 포함 4개(`TitleScene` · `CreateCharacterScene` · `GameScene` · `TeamListScene`) + **개발용 하네스 3개**(`BattleDevScene` · `AnimDevScene` · `CharacterDevScene`, 빌드 제외 · 메뉴 `TaskbarHero/씬/*`의 `Alt+5~7`) |
 | 코드 구성 | `Assets/Scripts/{Managers, UI, Battle, Game, MasterData, Spum}` — 기능 단위 `.asmdef`로 컴파일 범위 분리 |
 | 서버 계약 | `TaskbarHero.Common`을 **로컬 UPM 패키지**(`file:../../TaskbarHero.Common`)로 참조. DTO·`ErrorCode`를 클라이언트에서 **재정의 금지** |
 | 통신 | `UnityWebRequest` + 공유 DTO(`[Serializable]` + public camelCase 필드 → `JsonUtility`와 서버 `System.Text.Json`이 같은 JSON) |
@@ -337,7 +338,7 @@ com2us-taskbar-hero-client/
 
 `AnimDevScene`은 **캐릭터 한 명만 두고 표현을 확인하는 씬**이다. 왼쪽은 SPUM 프리팹에서 런타임에 읽어 만든 클립 목록(IDLE·MOVE·ATTACK·DAMAGED·DEBUFF·DEATH·OTHER + `Assets/Animations/`의 추가 클립 + 분노·돌진·화살비 같은 특수 모션)이고, 위쪽에서 직업·성별을 바꿔 같은 모션을 비교한다. 오른쪽 **무기 강화 단계(+0~+10) 버튼**은 강화 이펙트 검증용으로, 누르면 잔상 색·무기에 서린 빛·반짝임이 즉시 바뀐다 — 이 하네스는 잔상을 항상 방출하므로 `IDLE`에서 보이는 것이 곧 **상시 이펙트**다.
 
-두 하네스의 공통점은 **검증 대상만 남기고 나머지를 잘라낸 것**이다. Unity MCP로 원격 검증할 때(12장) 진입 단계가 짧을수록 실패 지점이 줄고, 측정값도 다른 시스템에 오염되지 않는다.
+하네스의 공통점은 **검증 대상만 남기고 나머지를 잘라낸 것**이다. Unity MCP로 원격 검증할 때(12장) 진입 단계가 짧을수록 실패 지점이 줄고, 측정값도 다른 시스템에 오염되지 않는다. 같은 계열의 세 번째 하네스인 `CharacterDevScene`(몬스터 능력치·외형을 눈으로 확정하는 저작 화면)은 몬스터 파이프라인과 함께 [14장](#14-요청-한-줄로-몬스터를-만든다--master-monster-파이프라인)에서 다룬다.
 
 ## 12. Unity MCP로 에디터를 원격 조작해 검증한다
 
@@ -378,6 +379,7 @@ EditorSceneManager.OpenScene("Assets/Scenes/TitleScene.unity")   # NetworkManage
 | 전투·버프·투사체 이펙트 | `com2us-taskbar-hero-client/.claude/skills/unity-pixel-vfx`(프레임 시퀀스 PNG) | `Assets/Art/Effect/{Character,Combat,Object,UI}` |
 | BGM·효과음 | `tools/poe-sfx/generate_sound.py`(오디오 생성 API 호출) | `Assets/Sound/` (**67종**, 정의서로 목록·트리거 관리) |
 | 마스터 데이터 번들 | `tools/master_data_export.py`(마스터 DB → camelCase JSON) | `Assets/Resources/MasterData/*.json` (**17개**) |
+| 몬스터(능력치 + 외형 + 프리팹) | `.claude/skills/master-monster` + `tools/master_monster_tool.py` → [14장](#14-요청-한-줄로-몬스터를-만든다--master-monster-파이프라인) | `Assets/Prefabs/Character/Monster/monster_{code}.prefab` (**12종**) |
 
 아이콘 스킬에는 실수에서 나온 규칙이 들어 있다 — **렌더된 PNG를 눈으로 확인했다고 가정하지 말고 수치 검사로 검증할 것**, **파일명은 한글 아이템명 그대로**(공백을 언더바로 바꾸거나 음역하지 말 것), **유니코드 이스케이프를 기억으로 타이핑하지 말 것**(`강화석`을 `강화 석`으로 잘못 쓰는 사고).
 
@@ -393,7 +395,87 @@ EditorSceneManager.OpenScene("Assets/Scenes/TitleScene.unity")   # NetworkManage
 
 이 파이프라인이 있어 "아이템 한 종 추가"가 **문서 2곳·DB·아이콘·번들 5곳을 손대는 작업에서 한 번의 요청**으로 줄었다. 실제로 자동화 검증 커밋(`e0a83c3 아이템 생성 자동화 테스트 완료`)이 남아 있다. 이번 장비 강화 작업에서도 같은 도구 계열을 그대로 썼다 — `enhance_master`를 스키마에 넣고 추출기에 테이블을 추가하자 클라 번들 `enhance_master.json`이 함께 생성됐다.
 
-## 14. 클라이언트 쪽에서 얻은 것과 한계
+## 14. 요청 한 줄로 몬스터를 만든다 — master-monster 파이프라인
+
+13장의 자산 파이프라인 중 **가장 많은 경계를 넘는 것이 몬스터**다. 아이콘은 파일 하나로 끝나지만, 몬스터 한 종은 **서버 정본 · 외형 레시피 · Unity 프리팹 · 전투 배선 · 클라 번들**을 모두 맞춰야 게임에 나온다. 그중 절반은 Unity 에디터 조작이라 손으로 하면 순서를 틀리기 쉬웠다. 그래서 `com2us-taskbar-hero-client/.claude/skills/master-monster` 스킬(구현은 `tools/master_monster_tool.py` + `Assets/Editor/MonsterPrefabBuilder.cs`)로 **"입력 한 줄 → 그 몬스터가 실제 전투에 나온다"** 까지를 한 번에 처리한다.
+
+```
+① 입력 해석 → ② 능력치·외형 결정 → ③ 정본 + 스폰 반영 → ④ 프리팹 생성 → ⑤ 전투 배선 → ⑥ 번들 재생성 → ⑦ 검증
+                    └────────── ③ 도구(CLI) ──────────┘   └── ④⑤ Unity MCP ──┘   └ ⑥ CLI ┘
+```
+
+사용자 입력은 `"검은 갑옷의 스켈레톤 기사, 2지역 5스테이지에 4마리"` 정도다. 부족한 값은 **되묻지 않고 규칙으로 채운다** — `monster_code`는 Act 대역에서 자동 채번(보스는 `xx99`), 스테이지 미지정이면 그 Act 중간(5), 마리 수 미지정이면 그 스테이지 총량(일반 8~16마리)을 보고 정한다.
+
+| 단계 | 무엇이 자동인가 | 수단 |
+|---|---|---|
+| ② 능력치 | 클라이언트 `MonsterStatCurve`와 **같은 산식**으로 Act·스테이지에서 hp·attack 산출(`recommend`) | CLI |
+| ② 외형 | SPUM 태그(`--race` + `--classes`)로 파츠를 뽑아 레시피 JSON 생성. Act별 계열 고정(1 빙의된 인간 · 2 언데드 · 3 악마 · 4 타락한 성기사 · 5 공허) | CLI |
+| ③ 정본 | `master-data-값.md` §9·§11 · `master-data-schema.sql` · `monster-appearance-recipe.json` · `stage_spawn` **네 곳을 한 명령으로** 갱신 | CLI |
+| ④ 프리팹 | 레시피에서 `monster_{code}.prefab` 조립(루트 `SPUM_Prefabs`·`_anim` 배선·상태별 클립 검증까지) | Unity MCP |
+| ⑤ 전투 배선 | `DungeonBattleBuilder`로 코드→프리팹 맵 갱신 | Unity MCP |
+| ⑥ 번들 | 마스터 DB 재적용 + 클라 JSON 재추출(**전투는 클라 권위**라 이 단계까지 끝나야 게임이 읽는다) | CLI |
+| ⑦ 검증 | 정본 ↔ 스키마 불일치·코드 규약·개수 문장·미배치 몬스터 검사(`verify`) | CLI |
+
+### 14.1 자동으로 뽑은 능력치·외형을 눈으로 확정하는 하네스
+
+②는 자동이지만 **뽑힌 외형이 쓸 만한지는 사람이 봐야 한다.** 그 확인을 위한 세 번째 하네스가 `CharacterDevScene`이다(씬 이동 `TaskbarHero/씬/CharacterDevScene`·`Alt+7`, 생성 메뉴 `TaskbarHero/UI/캐릭터 개발 씬(CharacterDevScene) 생성`, 명세는 클라 문서 [`캐릭터-개발씬-기획서.md`](../com2us-taskbar-hero-client/docs/캐릭터-개발씬-기획서.md)).
+
+![CharacterDevScene — 왼쪽 몬스터 목록 · 가운데 외형 프리뷰 · 오른쪽 능력치·외형·산출 패널](images/개발환경-images/몬스터-외형자동결정-결과.png)
+
+- **왼쪽 — 몬스터 목록**: 12종의 코드·이름·hp·atk와 **추천값 대비 편차**를 함께 보여 준다(`9102 스켈레톤 기사 hp 150 (+50%) / atk 16 (+60%)`처럼 손댄 값이 바로 드러난다). 뒤의 `[PR]`은 **P**refab·**R**ecipe 보유 표시로, 없으면 `·`으로 비어 12종이 모두 갖춰졌는지 한눈에 보인다.
+- **가운데 — 외형 프리뷰**: 고른 몬스터의 프리팹을 그 자리에 세운다. 위 화면은 `9499 공허의 지배자`(Act5 보스)이고, 뿔 투구(`New_Helmet_04`)와 붉은 망토(`Soon_Back1`)가 태그에서 뽑힌 결과다.
+- **오른쪽 위 「능력치」**: Act 1~5 · 스테이지 1~10을 누르고 **[추천값 채우기]** 를 누르면 그 조합의 hp·attack이 채워진다(9499는 `hp 10000 / atk 75`, 추천값과 ±0%). 계열에서 **이름 후보**(임프·데몬·마계 기사·서큐버스·발록)도 제안하고, 코드 채번 상태(`작업 코드 9499 / 제안 코드 9499 (이미 사용 중)`)를 함께 표시해 규약 위반을 미리 막는다.
+- **오른쪽 가운데 「외형」**: 레시피 한 줄(`race devil / gender 무제한 / theme fantasy / class magical+tank / seed 94991`)과 **그 시드가 실제로 고른 파트 목록**(`Body Devil_1 · Eye Eye11 · Armor New_Armor_10 · Helmet New_Helmet_04 · Back Soon_Back1` …)이 그대로 나온다. **[외형 재생성]** 은 시드를 옮겨 다시 뽑는 것으로, CLI의 `reskin --reroll`과 같은 동작이다. 헤더의 `파츠 215개 / 패키지 3개`가 이 조합이 고르는 후보 풀이다.
+- **오른쪽 아래 「산출」**: **[프리팹 저장]** · **[monster_master 반영]** · **[스니펫 복사 (서버 정본용)]** · **[전투로 검수 (BattleDevScene)]**.
+
+여기서 지킨 경계가 하나 있다. **`[monster_master 반영]`은 클라 번들만 고친다** — 누르면 로그가 "서버 정본 반영은 별도 작업이다 — [스니펫 복사]로 넘길 것"이라고 못 박는다. 씬에서 눈으로 확정한 값을 서버 정본으로 끌어올리는 경로는 CLI의 `adopt-bundle`이고, 이 분리가 있어야 **다음 번들 재추출(⑥)에서 씬에서 한 수정이 덮여 사라지지 않는다**. 씬은 "보고 정하는 곳", 정본은 "남기는 곳"으로 역할을 갈라 둔 것이다.
+
+### 14.2 파이프라인의 산출물
+
+![생성된 몬스터가 실제 전투에 등장한 모습 — 왼쪽 파티와 맞서는 오른쪽 6종이 모두 파이프라인 산출물](images/개발환경-images/몬스터-자동생성-전투.png)
+
+위 화면이 파이프라인의 최종 산출물이다. 오른쪽에 늘어선 스켈레톤 병사·데몬·스켈레톤 기사·공허의 추적자·스켈레톤 군주·타락한 성기사는 **손으로 만든 프리팹이 하나도 없고**, 전부 태그 → 레시피 → 프리팹 → 스폰 테이블을 거쳐 이 전투에 들어왔다. 이름·HP·공격력은 서버 정본에서 추출한 번들에서 읽는다.
+
+![생성된 몬스터 프리팹 12종 — Act1 빙의된 인간부터 Act5 공허까지](images/개발환경-images/몬스터-자동생성-라인업.png)
+
+현재 게임의 몬스터 **12종(일반 7 + Act별 보스 5)** 이 전부 이 파이프라인 산출물이다. 위 줄이 Act1·2 계열(빙의된 인간·스켈레톤), 아래 줄이 Act3~5 계열(악마·타락한 성기사·공허)이며, 계열별 색과 파츠 조합만 태그로 지정하고 나머지는 시드가 고른다.
+
+### 14.3 요청 종류에 따라 흐름을 가른다
+
+전부를 기계적으로 돌리지 않는 것이 이 스킬의 핵심 판단이다. **특히 외형만 바꾸는 요청은 서버 정본·DB·번들을 건드리지 않는다.**
+
+| 사용자가 원하는 것 | 할 일 | 번들 재생성 |
+|---|---|---|
+| 새 몬스터를 만들어 전투에 등장 | ①~⑦ 전체 | 필요 |
+| **외형만 교체**(능력치 유지) | `reskin` → 프리팹 재생성 | **불필요** |
+| 마리 수만 조정 | `spawn` → 번들 | 필요 |
+| 능력치만 조정 | `add --code` → 번들 | 필요 |
+
+외형 교체가 싼 이유는 **GUID를 유지하기 때문**이다. 기존 프리팹을 `Assets/Dev/MonsterPrefabBackup/`에 백업한 뒤 **같은 경로에 덮어쓰므로** `.meta`의 GUID가 그대로여서, 전투의 코드→프리팹 맵이 계속 유효하다. 그래서 "외형이 마음에 안 든다 → 다시 뽑아 달라"(`reskin --reroll`)를 몇 번 반복해도 DB 재적용도, 씬 수정도 없다.
+
+### 14.4 이 파이프라인에서 얻은 함정 목록
+
+12장의 MCP 함정 목록과 같은 성격으로, 몬스터 생성에서 새로 나온 것들이다.
+
+| 함정 | 우회 |
+|---|---|
+| MCP 샌드박스가 `PrefabUtility.SaveAsPrefabAsset`을 차단한다 — 커맨드에서 프리팹 생성 함수를 직접 부르면 "User interactions are not supported"로 실패 | **`EditorApplication.ExecuteMenuItem("TaskbarHero/몬스터/...")`** 로 부른다(메뉴 실행은 샌드박스 밖 경로) |
+| `EditorApplication.delayCall` 우회는 통하지 않는다 | 에디터가 백그라운드면 틱이 돌지 않고, 동적 커맨드의 람다는 어셈블리가 해제되며 사라진다 — 쓰지 않는다 |
+| 대상 코드를 커맨드 인자로 넘길 수 없다(메뉴 실행만 통과) | `EditorPrefs`에 코드를 써 두고 메뉴를 실행한다(키는 실행 시 한 번 쓰고 지워진다) |
+| 레시피의 `colors`는 **곱셈 틴트**라 원본보다 밝게 만들 수 없다 | "더 밝게"에 밝은 색을 주면 오히려 어두워진다 — 그 파트의 색 지정을 **빼서** 원본 밝기를 되찾는다 |
+| 파트가 담당하는 부위가 직관과 다르다 | `Body`는 **피부(얼굴·손·발)만**이고 몸통은 `Armor`·`Cloth`·`Pant`·`Back`이 덮는다. 뿔·볏은 `Helmet` 파츠에 들어 있다 |
+| 파츠 크기는 레시피로 조절할 수 없다 | "더 크게"는 **더 큰 파츠를 고르는 것**으로만 답한다 |
+
+**외형은 결국 눈으로 봐야 하므로 그 확인도 코드로 만들었다.** 프리뷰 씬에 프리팹을 세우고 직교 카메라 → `RenderTexture` → `EncodeToPNG`로 PNG를 남긴 뒤 그 파일을 읽으면, 열려 있는 씬을 건드리지 않고 결과를 확인할 수 있다. 후보를 고를 때는 격자 시트로 한 장에 모아 비교하고, **밝은 배경과 어두운 배경 두 장**을 내어 던전에서 묻히지 않는지 본다(어느 부위가 어느 파트인지 모를 때는 파트별로 원색을 칠해 한 장 렌더하면 즉시 판별된다). 위 라인업 이미지도 같은 방법으로 뽑은 것이다.
+
+### 14.5 남긴 안전장치
+
+- **정본 3파일을 손으로 편집하지 않는다.** 도구만 고치게 해서 값.md·schema.sql·레시피가 갈라지지 않도록 했고, `add`가 끝나면 **자동으로 `verify`** 가 돈다(현재 `12종 — 오류 0 · 경고 0`).
+- **`monster_code`를 임의로 지정하지 않는다.** Act 대역·보스 `xx99` 규약이 깨지기 때문에 채번은 도구에 맡긴다.
+- **사용자가 스테이지를 말했으면 `--spawn`을 반드시 넣는다.** 빠뜨리면 몬스터를 만들어도 어느 스테이지에도 배치되지 않아 전투에 나오지 않는다 — `verify`가 그 상태를 경고로 잡는다.
+- **어시스턴트가 Unity 에디터·MySQL을 대신 띄우지 않는다.** 안 떠 있으면 거기서 멈추고 무엇이 남았는지 보고한다(예: MySQL 미기동으로 ⑥ 미완).
+
+## 15. 클라이언트 쪽에서 얻은 것과 한계
 
 **얻은 것**
 

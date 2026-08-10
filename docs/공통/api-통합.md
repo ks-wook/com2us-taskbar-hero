@@ -35,8 +35,10 @@
 | `POST /api/auth/signup` | 계정 생성(회원가입) | 무인증 | `{ email, password, nickname }` | `userId` | `DuplicateEmail(1003)`, `InvalidRequest(1006)` |
 | `POST /api/auth/login` | 로그인·인증 토큰 발급 | 무인증 | `{ email, password }` | `userId`, `token` | `UserNotFound(1001)`, `InvalidPassword(1002)` |
 | `POST /api/auth/logout` | 로그아웃(토큰 무효화) | 인증 | `{}` | — | `InvalidToken(1004)`, `ExpiredToken(1005)` |
+| `POST /api/auth/validate` | 자동 로그인 검증(저장된 세션 유효성 확인) | 인증 | `{}` | `userId` | `InvalidToken(1004)`, `ExpiredToken(1005)`, `InvalidRequest(1006)` |
 
 - 로그인은 단일 세션(토큰 UPSERT + Redis 덮어쓰기 → 기존 기기 자동 무효).
+- `validate`는 **읽기 전용**이다 — 토큰을 재발급하지도 TTL을 연장하지도 않으며(재발급은 단일 세션 정책상 다른 기기 세션을 끊는다), Redis `auth:token:{userId}`와 대조만 한다. 클라이언트는 타이틀 화면에서 저장된 `{ userId, token }`으로 호출해 성공이면 재로그인 없이 진입하고, `1004`(다른 기기 로그인으로 밀려남)·`1005`(만료·폐기)면 저장값을 버리고 로그인 화면을 띄운다([계정/로그인 기획서](../세부/account-login-기획서.md) 5.4).
 
 ## 3. GameServer API (`:5247`)
 

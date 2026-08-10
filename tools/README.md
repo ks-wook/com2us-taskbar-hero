@@ -114,6 +114,79 @@ python tools/master_item_tool.py link-icons          # <이름>.png → item_{co
 
 ---
 
+## master_monster_tool.py — 마스터 몬스터(monster_master) 생성·검증기
+
+몬스터 한 종을 추가하려면 **정본 세 곳**을 사람이 손으로 맞춰야 했다 — `master-data-값.md` §9 표(+「규모/현황」 문장), `master-data-schema.sql`의 `INSERT INTO monster_master`(+ 머리 주석의 종수 목록), 그리고 클라이언트 개발 씬이 읽는 `Assets/Dev/monster-appearance-recipe.json`(외형 레시피). 이 도구가 셋을 한 번에 만들고(`add`) 서로 어긋나지 않았는지 검사한다(`verify`). 표준 라이브러리만 쓰며 DB에 접속하지 않는다.
+
+### 왜 이 도구가 필요한가 (순서 함정)
+
+`CharacterDevScene`의 F12는 **클라이언트 번들** `Assets/Resources/MasterData/monster_master.json`만 고친다. 반면 `master_data_export.py`는 **schema.sql → MySQL → 번들** 단방향으로 번들을 다시 만든다. 즉 **서버 정본을 먼저 맞추지 않고 export를 돌리면 씬이 고친 값이 조용히 사라진다.** 이 도구로 정본을 먼저 맞춰 그 역전을 막는다.
+
+```
+① master_monster_tool.py add [--spawn "5:4"]
+       →  값.md §9·§11 + schema.sql monster_master·stage_spawn + monster-appearance-recipe.json
+② Unity 메뉴 `TaskbarHero/몬스터/신규 몬스터 전투 반영`
+       →  monster_{code}.prefab 생성(플레이 모드 불필요) + 던전 전투 배선(코드→프리팹 맵)
+③ python tools/master_data_export.py
+       →  DB 재적용 + 클라 JSON 번들 재생성
+```
+
+**세 단계 모두 `com2us-taskbar-hero-client/.claude/skills/master-monster` 스킬이 실행한다** — 외형 컨셉·지역·스테이지만 주면 된다(②는 Unity MCP `ExecuteMenuItem`으로 호출한다). 남는 수동 작업은 **값.md §11 (B) 요약 표를 손보는 것**뿐이고, 그것도 필요할 때만 `verify`가 경고로 알려 준다.
+
+### 명령
+
+```bash
+python tools/master_monster_tool.py verify                          # 정본·레시피·프리팹·번들 정합성
+python tools/master_monster_tool.py list                            # 현황(레시피·프리팹 보유 표시)
+python tools/master_monster_tool.py recommend --act 2 --stage 5     # → hp 120 / attack 16
+python tools/master_monster_tool.py next-code --act 2 [--boss]      # → 9103
+python tools/master_monster_tool.py add --name "스켈레톤 궁수" --act 2 --stage 5 \
+    --race undead --classes ranged,physical --spawn "5:4,6:5" [--boss] [--hp N --attack N] [--dry-run]
+python tools/master_monster_tool.py spawn --code 9103 --stages "5:4,6:5"   # 5스테이지 4마리로 확정
+python tools/master_monster_tool.py spawn --code 9101 --stages "5:+3"      # 3마리 더 (증분), "-2"면 감소
+python tools/master_monster_tool.py reskin --code 9101 --race devil --classes melee,damage
+python tools/master_monster_tool.py reskin --code 9101 --reroll            # 태그 유지, 시드만 옮겨 다시 뽑기
+python tools/master_monster_tool.py adopt-bundle                    # 씬(F12)이 번들에만 반영한 값 → 정본
+```
+
+- **코드 자동 채번**: 일반은 그 Act 대역(`9{act-1}01`~`98`)의 빈 번호, 보스는 `xx99`. 기존 몬스터를 고칠 때만 `--code`로 지정한다(이때 외형 레시피는 보존되며, 덮어쓰려면 `--replace-recipe`).
+- **능력치 자동 산출**: 클라이언트 `MonsterStatCurve`(`CharacterDevRecipe.cs`)와 **같은 산식**을 옮겨 둔 것이다 — 일반(1~9)은 그 Act 하한에서 다음 Act 하한까지 9칸 기하 보간, 보스(10)는 그 Act 보스 실측값. **한쪽을 고치면 다른 쪽도 고쳐야 한다**(추천값이 갈리면 씬 표시와 정본이 어긋난다).
+- **삽입 방식**: SQL 값 블록을 **재포맷하지 않고** 새 줄만 코드 순으로 끼워 넣는다(기존 12줄은 손으로 맞춘 정렬이라 어떤 규칙으로도 재현되지 않아, 재포맷하면 값이 그대로인 줄까지 diff에 섞인다). 새 줄의 열 위치는 기존 줄들의 최빈 열을 흉내 낸다.
+- 「규모/현황」 문장(값.md)과 머리 주석 종수 목록(schema.sql)을 함께 갱신하고, **반영 직후 `verify`를 자동 실행**한다.
+- `spawn` — **전투 등장 여부와 마리 수를 정하는 단계**. `stage_spawn`에 `(stage_id, monster_code, spawn_count)` 행을 넣고 값.md §11의 총 행수·스폰 몬스터 목록 문장을 갱신한다. 난이도 1·2 **양쪽에 넣는 것이 기본**이다(현행 데이터가 동일 구성 — `--difficulty`로 한쪽만 지정 가능). 보스는 여기가 아니라 `stage_master.boss_monster_code`가 담당하므로 거부한다. `add --spawn "5:4,6:5"`로 추가와 동시에 배치할 수도 있다.
+  - **마리 수 표기**: `5:4` = 그 스테이지를 4마리로 **확정**, `5:+3`/`5:-2` = 현재 값 기준 **증분**("3마리 더"). 증분은 난이도별 현재 값에 각각 더하며, 결과가 1 미만이면 거부한다.
+  - 실행할 때마다 스테이지별 `이전 → 이후` 마리 수와 **그 스테이지 총량**을 출력하고, 총량이 값 문서 §11의 통상 범위(**8~16마리**)를 벗어나면 경고한다 — 총 마리 수가 곧 클리어 시간이기 때문이다.
+- `reskin` — **능력치는 그대로 두고 외형만 교체**한다. 바뀌는 것은 `monster-appearance-recipe.json` 한 곳뿐이라 `monster_master`·`stage_spawn`·DB·클라 번들은 건드리지 않는다(**export 불필요**). `--reroll`은 태그를 유지한 채 시드만 옮겨 다시 뽑는다("외형이 마음에 안 든다"는 후속 요청용).
+  - 반영은 Unity 메뉴 **`TaskbarHero/몬스터/외형 교체 반영 (지정 코드 재생성)`** — 대상 코드는 `EditorPrefs`의 `TaskbarHero.Dev.MonsterRebuildCodes`(콤마 구분)로 넘기고, 실행 시 한 번 쓰고 지워진다. 기존 프리팹은 백업 후 **같은 경로에 덮어써져 GUID가 유지되므로 전투 배선도 다시 돌릴 필요가 없다**.
+  - 외형만 바꾸려고 `add --code`를 쓰면 **능력치가 추천값으로 덮어써진다** — 그 용도로는 반드시 `reskin`을 쓴다.
+- `adopt-bundle` — **역방향 경로**. 씬에서 능력치를 먼저 고쳐 F12로 클라 번들에 반영한 뒤 이걸 돌리면 그 차이가 정본으로 올라간다(갱신·신규 모두). 번들에 없고 정본에만 있는 코드는 **지우지 않고 알리기만 한다** — 삭제는 `stage_spawn`·`stage_master` 참조를 끊을 수 있어 사람이 판단할 일이다.
+- `verify` — **오류**(코드 1): 값.md ↔ schema.sql의 코드 집합·이름·hp·attack 불일치 · 코드 규약(9000~9499) 위반 · 중복 코드 · 개수 문장 불일치 · `stage_spawn`에 `monster_master`에 없는 코드나 보스가 들어감 · §11 스폰 총 행수·몬스터 목록 문장 불일치. **경고**: 외형 레시피 없음 · 프리팹 없음 · 클라 번들이 정본과 다름(= export 필요) · **어느 스테이지에도 배치되지 않아 전투에 등장하지 않음** · Act별 스폰 종수가 값.md §11 (B) 요약 표의 전제(Act1·2는 2종 / Act3~5는 1종)와 달라 표를 손봐야 함. 프리팹·번들 경고는 위 ②③ 전이면 정상이다.
+
+### 정본
+- 값: `docs/세부/master-data/master-data-값.md` §9
+- SQL: `docs/세부/master-data/master-data-schema.sql`
+- 외형: `com2us-taskbar-hero-client/Assets/Dev/monster-appearance-recipe.json`
+- 씬 설계: [`캐릭터-개발씬-기획서.md`](../com2us-taskbar-hero-client/docs/캐릭터-개발씬-기획서.md) §4.4(산출식)·§7.4(책임 분리)
+
+---
+
+## mp4_to_gif.py — 문서용 GIF 변환기 (ffmpeg 불필요)
+
+**GitHub 마크다운은 `<video>` 태그를 지우고, 저장소에 올린 mp4도 인라인 재생하지 않는다.** 문서에 움직이는 화면을 넣으려면 GIF여야 한다(이미지로 취급되어 자동 재생). 이 스크립트가 `cv2` + `PIL`만으로 변환한다 — ffmpeg 설치가 필요 없다.
+
+```bash
+python tools/mp4_to_gif.py 입력.mp4 출력.gif --width 1440 --sample-fps 4 --play-fps 10 --colors 64
+python tools/mp4_to_gif.py 입력.mp4 출력.gif --width 500 --colors 48 --crop "680,95,860,860"
+```
+
+- `--sample-fps`(원본에서 뽑는 초당 프레임) < `--play-fps`(GIF 재생 fps)면 **그 비율만큼 빨라진다**. 긴 화면 녹화는 2~3배속으로 줄이는 것이 보기 좋다.
+- `--crop "x,y,w,h"` — 원본 픽셀 기준으로 잘라낸다. 에디터 전체가 담긴 녹화에서 **게임 뷰만** 뽑을 때 쓴다(작게 나오던 화면이 크게 보인다).
+- **용량의 핵심은 공통 팔레트다.** 프레임마다 팔레트를 따로 만들면 매 프레임 팔레트가 실리고 차분 최적화도 막혀 용량이 몇 배가 된다. 이 스크립트는 전체에서 뽑은 팔레트 하나로 통일하고 `disposal=1`로 저장한다 — 실측에서 **17MB → 2.3MB**(같은 해상도·색 수)로 줄었다.
+- 정지 화면이 많은 녹화(터미널·에디터)는 차분이 잘 먹어 고해상도를 써도 가볍고, **움직임이 많은 전투 화면은 반대**라 해상도·색 수를 낮춰야 한다.
+- 목표 용량은 **5MB 이하**로 잡는다(GitHub에서 로딩이 쾌적하고, 도구로 읽어 확인하기도 좋다).
+
+---
+
 ## character_illust_cutout.py — 캐릭터 일러스트 컷아웃 생성기
 
 `Assets/Art/Character/Image/*.png`(직업×성별 8종 전신 일러스트)는 **초록 크로마키 배경**이라 UI에 그대로 얹으면 캐릭터 주변에 초록 사각형이 남는다. 이 스크립트가 배경을 지운 사본과 **얼굴 좌표**를 만든다. 편성창 파티 카드가 이 결과로 얼굴을 확대해 보여준다([파티 편성 UI 기획서](../com2us-taskbar-hero-client/docs/ui/파티-편성-ui-기획서.md)).
