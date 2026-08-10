@@ -34,7 +34,7 @@
 |---|---|---|---|---|---|
 | `POST /api/auth/signup` | 계정 생성(회원가입) | 무인증 | `{ email, password, nickname }` | `userId` | `DuplicateEmail(1003)`, `InvalidRequest(1006)` |
 | `POST /api/auth/login` | 로그인·인증 토큰 발급 | 무인증 | `{ email, password }` | `userId`, `token` | `UserNotFound(1001)`, `InvalidPassword(1002)` |
-| `POST /api/auth/logout` | 로그아웃(토큰 무효화) | 인증 | `{}` | — | `InvalidToken(1004)`, `ExpiredToken(1005)` |
+| `POST /api/auth/logout` | 로그아웃(토큰 무효화) | 인증 | `{}` | — | `InvalidToken(1004)`, `ExpiredToken(1005)`, `InvalidRequest(1006)` |
 | `POST /api/auth/validate` | 자동 로그인 검증(저장된 세션 유효성 확인) | 인증 | `{}` | `userId` | `InvalidToken(1004)`, `ExpiredToken(1005)`, `InvalidRequest(1006)` |
 
 - 로그인은 단일 세션(토큰 UPSERT + Redis 덮어쓰기 → 기존 기기 자동 무효).
@@ -50,7 +50,7 @@
 |---|---|---|---|---|
 | `POST /api/game/load` | 접속 시 코어 세이브 스냅샷 로드(고정 크기 데이터 전량, 가방 아이템 제외) | `{}` | `player`, `characters[]`, `currencies[]`, `equipped[]`, `skills[]`, `runes[]`, `cube`, `activeBuffs[]`, `inventoryTotal`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
 | `POST /api/game/inventory/list` | 가방 아이템 페이지 조회(`slot` 커서 keyset 페이징) | `{ cursor, limit }` | `items[]`, `nextCursor`, `hasMore`, `total` | `SaveNotFound(2001)` |
-| `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정 + 직업 기본 무기 장착) | `{ nickname, classCode, gender }` | `characterId`, `classCode`, `gender`, `level`, `cost`, `balance` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `InvalidGender(2007)`, `PlayerAlreadyExists(2004)`, `InsufficientCurrency(4005)` |
+| `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정 + 직업 기본 무기 장착 + 기본 액티브 스킬 습득·장착) | `{ nickname, classCode, gender }` | `characterId`, `classCode`, `gender`, `level`, `cost`, `balance` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `InvalidGender(2007)`, `PlayerAlreadyExists(2004)`, `InsufficientCurrency(4005)` |
 | `POST /api/game/party/arrange` | 파티 편성 저장(저장 후 파티 **전체 스냅샷**) | `{ members:[{ characterId, slot }] }`(1~3개) | `characters[]`(보유 전체, 자리 순) | `CannotRemoveLastCharacter(2008)`, `CharacterNotFound(2009)`, `PartySlotOccupied(2010)`, `InvalidCharacterId(2006)` |
 | `POST /api/game/update-last-active` | 접속 시각 갱신(heartbeat, 오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
 

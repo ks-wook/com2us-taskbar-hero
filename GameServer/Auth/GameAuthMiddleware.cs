@@ -7,7 +7,7 @@ namespace GameServer.Auth;
 
 /// <summary>
 /// GameServer 인증 미들웨어. /api/game/* 요청 body(JSON)의 userId·token을 읽어
-/// Redis(auth:token:{userId})와 대조한다(헤더 미사용, 계정/로그인 기획서 5.4).
+/// Redis(auth:token:{userId})와 대조한다(헤더 미사용, 계정/로그인 기획서 5.5).
 /// 통과 시 HttpContext.Items["userId"]에 인증된 userId를 주입하고, 실패 시 401로 응답한다.
 /// </summary>
 public sealed class GameAuthMiddleware

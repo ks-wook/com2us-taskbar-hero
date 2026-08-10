@@ -60,4 +60,28 @@ namespace TaskbarHero.Common.Dto
         public int errorCode;
         public string message;
     }
+
+    /// <summary>
+    /// 자동 로그인 검증 요청 body(인증). { userId, token }
+    /// 클라이언트가 저장해 둔 직전 세션을 타이틀 화면에서 그대로 쓸 수 있는지 확인한다.
+    /// </summary>
+    [Serializable]
+    public class ValidateTokenRequest
+    {
+        public long userId;
+        public string token;
+    }
+
+    /// <summary>
+    /// 자동 로그인 검증 응답. { success, errorCode, userId, message }
+    /// 토큰을 재발급하지 않으므로 token 필드가 없다 — 유효하면 클라이언트가 가진 토큰을 계속 쓴다.
+    /// </summary>
+    [Serializable]
+    public class ValidateTokenResponse
+    {
+        public bool success;
+        public int errorCode;
+        public long userId;
+        public string message;
+    }
 }

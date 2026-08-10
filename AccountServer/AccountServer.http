@@ -48,6 +48,33 @@ Content-Type: application/json
   "password": "wrongpassword"
 }
 
+### 자동 로그인 검증 (유효 → 200, userId 회신. 토큰 재발급·TTL 연장 없음)
+POST {{AccountServer_HostAddress}}/api/auth/validate
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "token": "<로그인 응답의 token 붙여넣기>"
+}
+
+### 자동 로그인 검증 (토큰 불일치 → 401, errorCode 1004)
+POST {{AccountServer_HostAddress}}/api/auth/validate
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "token": "this-is-not-a-valid-token"
+}
+
+### 자동 로그인 검증 (요청 형식 오류 → 400, errorCode 1006)
+POST {{AccountServer_HostAddress}}/api/auth/validate
+Content-Type: application/json
+
+{
+  "userId": 0,
+  "token": ""
+}
+
 ### 로그아웃 (인증: body에 userId·token → 성공 시 토큰 무효화)
 POST {{AccountServer_HostAddress}}/api/auth/logout
 Content-Type: application/json
@@ -56,6 +83,15 @@ Content-Type: application/json
   "userId": 1,
   "token": "<로그인 응답의 token 붙여넣기>",
   "data": {}
+}
+
+### 자동 로그인 검증 (로그아웃 후 → 401, errorCode 1005 만료/폐기)
+POST {{AccountServer_HostAddress}}/api/auth/validate
+Content-Type: application/json
+
+{
+  "userId": 1,
+  "token": "<로그아웃에 사용한 token 붙여넣기>"
 }
 
 ###

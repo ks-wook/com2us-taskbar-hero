@@ -6,7 +6,7 @@
 
 | 기능 | 처리 컨트롤러 | 서버 | 주요 엔드포인트 |
 |---|---|---|---|
-| [**로그인/인증**](#로그인인증) (회원가입·로그인·로그아웃) | AuthController | Account | `POST /api/auth/signup` · `login` · `logout` |
+| [**로그인/인증**](#로그인인증) (회원가입·로그인·로그아웃·자동 로그인 검증) | AuthController | Account | `POST /api/auth/signup` · `login` · `logout` · `validate` |
 | [**세이브 데이터/캐릭터 생성**](#세이브-데이터캐릭터-생성) (코어 로드 · 가방 페이지 조회 · 생성 · 파티 편성 저장 · heartbeat) | GameSaveController · GameInventoryController(가방 조회) | Game | `POST /api/game/load` · `inventory/list` · `create-character` · `party/arrange` · `update-last-active` |
 | [**스테이지**](#스테이지) (던전 입장·클리어 보상) | GameStageController | Game | `POST /api/game/stage/enter` · `clear` |
 | [**방치형 오프라인 보상**](#방치형-오프라인-보상) | GameOfflineController | Game | `POST /api/game/offline/claim` |
@@ -63,7 +63,7 @@
 
 ## 로그인/인증
 
-계정/인증 (AuthController, `/api/auth`, AccountServer). `signup`·`login`은 **무인증**, `logout`은 서버가 토큰을 대조한다. 저장소: MySQL `taskbar_hero_account`(`users`·`user_auth_token`) + Redis(`auth:token:{userId}`).
+계정/인증 (AuthController, `/api/auth`, AccountServer). `signup`·`login`은 **무인증**, `logout`·`validate`는 서버가 토큰을 대조한다. 저장소: MySQL `taskbar_hero_account`(`users`·`user_auth_token`) + Redis(`auth:token:{userId}`).
 
 ### POST /api/auth/signup — 회원가입
 
@@ -137,16 +137,52 @@ sequenceDiagram
     participant Redis as Redis
 
     C->>S: POST /logout { userId, token }
-    S->>Redis: 토큰 캐시 데이터 확인
-    Redis-->>S: 캐시 토큰 or 없음
-    alt 토큰 없음(만료/폐기)
-        S-->>C: 실패 { errorCode: ExpiredToken(1005) }
-    else 캐시 토큰 ≠ 요청 토큰
-        S-->>C: 실패 { errorCode: InvalidToken(1004) }
-    else 일치
-        S->>DB: 토큰 데이터 삭제
-        S->>Redis: 토큰 캐시 데이터 삭제
-        S-->>C: 성공 { }
+    S->>S: 입력 검증(userId·token 존재)
+    alt 검증 실패
+        S-->>C: 실패 { errorCode: InvalidRequest(1006) }
+    else 검증 통과
+        S->>Redis: 토큰 캐시 데이터 확인
+        Redis-->>S: 캐시 토큰 or 없음
+        alt 토큰 없음(만료/폐기)
+            S-->>C: 실패 { errorCode: ExpiredToken(1005) }
+        else 캐시 토큰 ≠ 요청 토큰
+            S-->>C: 실패 { errorCode: InvalidToken(1004) }
+        else 일치
+            S->>DB: 토큰 데이터 삭제
+            S->>Redis: 토큰 캐시 데이터 삭제
+            S-->>C: 성공 { }
+        end
+    end
+```
+
+- 토큰 대조 판정은 자동 로그인 검증(아래)과 **같은 로직을 공유**한다 — 입력 검증 → Redis 값 없음(만료/폐기) → 값 불일치(다른 기기 로그인으로 밀려남)까지 세 분기가 동일하고, 통과 이후의 삭제 처리만 로그아웃 고유다.
+
+### POST /api/auth/validate — 자동 로그인 검증
+
+타이틀 화면이 저장해 둔 직전 세션을 그대로 쓸 수 있는지 확인한다. **읽기 전용**이라 토큰을 재발급하지도 TTL을 연장하지도 않으며, MySQL도 조회하지 않는다(인증의 기준이 Redis 토큰값이다 — [계정/로그인 기획서](../docs/세부/account-login-기획서.md) 5.4).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as AccountServer
+    participant Redis as Redis
+
+    C->>S: POST /validate { userId, token }
+    S->>S: 입력 검증(userId·token 존재)
+    alt 검증 실패
+        S-->>C: 실패 { errorCode: InvalidRequest(1006) }
+    else 검증 통과
+        S->>Redis: 토큰 캐시 데이터 확인
+        Redis-->>S: 캐시 토큰 or 없음
+        alt 토큰 없음(TTL 만료/로그아웃으로 폐기)
+            S-->>C: 실패 { errorCode: ExpiredToken(1005) }
+        else 캐시 토큰 ≠ 요청 토큰(다른 기기 로그인으로 밀려남)
+            S-->>C: 실패 { errorCode: InvalidToken(1004) }
+        else 일치
+            S-->>C: 성공 { userId }
+            Note over C: 저장된 토큰으로 그대로 게임 진입
+        end
     end
 ```
 
@@ -224,10 +260,11 @@ sequenceDiagram
         S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) / InvalidClassCode(2005) / InvalidGender(2007) }
     else 유효
         S->>S: 직업 기본 무기 확정(인메모리 마스터 item_master — equip_slot 1·class_req 일치 중 최저 등급, 없으면 지급 생략)
+        S->>S: 직업 기본 액티브 스킬 확정(인메모리 마스터 skill_master — skill_type 1·class_code 일치 중 최소 skill_code, 없으면 습득 생략)
         S->>DB: 플레이어 세이브 데이터 확인
         alt 신규 계정(최초 생성)
             S->>S: 신규 가입 지원금 메일 초안 렌더링(인메모리 마스터 — 문구 템플릿 101 + 첨부 newbie_reward_master)
-            S->>DB: 단일 트랜잭션 — 플레이어·첫 캐릭터(직업·성별, 파티 1번 자리)·기본 무기(장착 상태)·큐브·출석 진행도 + 지원금 메일 적재
+            S->>DB: 단일 트랜잭션 — 플레이어·첫 캐릭터(직업·성별, 파티 1번 자리)·기본 무기(장착 상태)·기본 스킬(레벨 1·장착)·큐브·출석 진행도 + 지원금 메일 적재
             Note over S,DB: 계정당 1행(game_player)이라 이 트랜잭션은 생애 1회만 성공 → 지원금 중복 지급 불가
             S-->>C: 성공 { characterId 1, slot 1, 무료 cost 0 }
         else 기존 계정(추가 생성)
@@ -236,7 +273,7 @@ sequenceDiagram
             alt 이미 보유한 직업
                 S-->>C: 실패 { errorCode: InvalidCharacterId(2006) }
             else 생성 가능
-                S->>DB: 단일 트랜잭션 — 골드 데이터 확인·차감 + 캐릭터(직업·성별·파티 자리) + 기본 무기(장착 상태) 데이터 적재
+                S->>DB: 단일 트랜잭션 — 골드 데이터 확인·차감 + 캐릭터(직업·성별·파티 자리) + 기본 무기(장착 상태) + 기본 스킬(레벨 1·장착) 데이터 적재
                 alt 골드 부족 / 식별자·직업 경합
                     S-->>C: 실패 { errorCode: InsufficientCurrency(4005) / InvalidCharacterId(2006) }
                 else 성공

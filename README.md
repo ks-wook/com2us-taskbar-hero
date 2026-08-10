@@ -46,3 +46,4 @@
 | 장비 강화 시스템(`inventory/enhance` · `enhance_master` +10 · 확정 상승) | Game | ☑ | ☑ |
 | 소모품 사용·활성 버프 조회(경험치·골드 부스터 · [기획서](docs/세부/consumable-buff-기획서.md)) | Game | ☑ | ☑ |
 | 캐릭터 생성 시 직업 기본 무기 지급·장착(`item_master` 최저 등급 무기 · 생성 트랜잭션 동시 적재 · 클라는 기존 `load`의 `equipped[]` 경로 그대로 사용) | Game | ☑ | ☑ |
+| 자동 로그인 검증(`auth/validate` · 저장된 세션 유효성 확인 · 재발급·TTL 연장 없음 · [기획서](docs/세부/account-login-기획서.md) 5.4) | Account | ☑ | ☑ |

@@ -19,6 +19,7 @@ public interface IAuthService
     Task<SignupResult> SignupAsync(SignupRequest request);
     Task<LoginResult> LoginAsync(LoginRequest request);
     Task<ErrorCode> LogoutAsync(long userId, string token);
+    Task<ErrorCode> ValidateTokenAsync(long userId, string token);
 }
 
 public sealed class AuthService : IAuthService
@@ -140,12 +141,40 @@ public sealed class AuthService : IAuthService
     /// </summary>
     public async Task<ErrorCode> LogoutAsync(long userId, string token)
     {
+        var verified = await VerifyTokenAsync(userId, token);
+        if (verified != ErrorCode.Success)
+        {
+            return verified;
+        }
+
+        // MySQL 행 삭제 + Redis 키 삭제.
+        await _authTokenRepository.DeleteAsync(userId);
+        await _authTokenCache.DeleteAsync(userId);
+
+        _logger.ZLogInformation($"로그아웃 성공: userId {userId:@UserId}");
+        return ErrorCode.Success;
+    }
+
+    /// <summary>
+    /// 자동 로그인 검증을 처리한다. 클라이언트가 저장해 둔 직전 세션(userId·token)이 아직 유효한지
+    /// Redis 토큰과 대조만 하고, 토큰을 재발급하거나 TTL을 연장하지 않는다(계정/로그인 기획서 5.4).
+    /// 유효하면 클라이언트가 가진 토큰을 그대로 계속 쓰고, 아니면 타이틀 화면이 로그인 입력을 요구한다.
+    /// </summary>
+    public Task<ErrorCode> ValidateTokenAsync(long userId, string token)
+        => VerifyTokenAsync(userId, token);
+
+    /// <summary>
+    /// 요청의 userId·token이 현재 유효한 세션인지 Redis 토큰과 대조한다(단일 세션의 유효 기준).
+    /// 값이 없으면 만료/폐기(ExpiredToken), 있으나 다르면 다른 기기의 로그인으로 밀려난 토큰(InvalidToken)이다.
+    /// 로그아웃·자동 로그인 검증이 공유하는 판정이라 한 곳에 둔다.
+    /// </summary>
+    private async Task<ErrorCode> VerifyTokenAsync(long userId, string token)
+    {
         if (userId <= 0 || string.IsNullOrEmpty(token))
         {
             return ErrorCode.InvalidRequest;
         }
 
-        // Redis 토큰값이 단일 세션의 유효 기준. 없으면 만료/폐기, 불일치면 무효 토큰.
         var cachedToken = await _authTokenCache.GetAsync(userId);
         if (cachedToken is null)
         {
@@ -157,11 +186,6 @@ public sealed class AuthService : IAuthService
             return ErrorCode.InvalidToken;
         }
 
-        // MySQL 행 삭제 + Redis 키 삭제.
-        await _authTokenRepository.DeleteAsync(userId);
-        await _authTokenCache.DeleteAsync(userId);
-
-        _logger.ZLogInformation($"로그아웃 성공: userId {userId:@UserId}");
         return ErrorCode.Success;
     }
 

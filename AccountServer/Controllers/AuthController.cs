@@ -59,4 +59,24 @@ public sealed class AuthController(IAuthService authService) : AccountApiControl
 
         return ApiResult(errorCode, response);
     }
+
+    /// <summary>
+    /// 자동 로그인 검증. POST /api/auth/validate — 인증(body의 userId·token).
+    /// 저장된 세션이 아직 유효한지만 확인하며 토큰을 재발급하지 않는다.
+    /// </summary>
+    [HttpPost("validate")]
+    public async Task<IActionResult> Validate([FromBody] ValidateTokenRequest request)
+    {
+        var errorCode = await authService.ValidateTokenAsync(request.userId, request.token ?? string.Empty);
+
+        var response = new ValidateTokenResponse
+        {
+            success = errorCode == ErrorCode.Success,
+            errorCode = (int)errorCode,
+            userId = errorCode == ErrorCode.Success ? request.userId : 0,
+            message = MessageFor(errorCode, "Token is valid"),
+        };
+
+        return ApiResult(errorCode, response);
+    }
 }

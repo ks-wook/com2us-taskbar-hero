@@ -125,8 +125,9 @@ public sealed class SaveService : ISaveService
     /// 생성 비용은 마스터 character_create_cost의 <b>생성 순번(보유 수 + 1)</b> 값(현재 정액)이며 최초 생성은 무료다.
     /// 파티 자리는 빈 자리가 있으면 가장 앞자리에 자동 편성하고, 파티가 이미 3명이면 미편성(slot 0)으로 보유만 한다.
     /// 성별(1:남 2:여)은 생성 시 확정되며 이후 변경 수단이 없다(외형 전용, 스탯 무관).
-    /// 생성되는 캐릭터는 그 직업의 <b>가장 등급 낮은 기본 무기</b>를 지급받아 무기 슬롯에 장착한 상태로 시작한다
-    /// (맨손으로 전투에 나가지 않게 하기 위함 — 지급·장착은 캐릭터 삽입과 같은 트랜잭션에서 처리한다).
+    /// 생성되는 캐릭터는 그 직업의 <b>가장 등급 낮은 기본 무기</b>를 지급받아 무기 슬롯에 장착한 상태로 시작하며,
+    /// 그 직업의 <b>첫 번째 액티브 스킬</b>도 레벨 1로 습득·장착한 상태로 시작한다
+    /// (맨손·무스킬로 전투에 나가지 않게 하기 위함 — 지급·습득은 캐릭터 삽입과 같은 트랜잭션에서 처리한다).
     /// 동시 초기화·중복 생성 경합은 UNIQUE 위반을 잡아 에러 코드로 변환한다.
     /// </summary>
     public async Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode, int gender)
@@ -154,6 +155,9 @@ public sealed class SaveService : ISaveService
         // 생성과 함께 지급·장착할 직업 기본 무기(정의가 없으면 null → 맨손 생성).
         var startingWeapon = ResolveStartingWeapon(classCode);
 
+        // 생성과 함께 습득·장착시킬 직업 기본 액티브 스킬(정의가 없으면 null → 스킬 없이 생성).
+        var startingSkillCode = ResolveStartingSkillCode(classCode);
+
         // 최초 생성: game_player 초기화 + 1번 슬롯.
         if (player is null)
         {
@@ -169,7 +173,7 @@ public sealed class SaveService : ISaveService
             {
                 await _saveRepository.CreatePlayerWithFirstCharacterAsync(
                     userId, nickname.Trim(), classCode, gender, MasterDataProvider.BaseInventoryCapacity,
-                    nowUnix, welcomeMail, startingWeapon);
+                    nowUnix, welcomeMail, startingWeapon, startingSkillCode);
             }
             catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
             {
@@ -178,7 +182,7 @@ public sealed class SaveService : ISaveService
                 return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
             }
 
-            _logger.ZLogInformation($"캐릭터 생성 성공(신규 계정): userId {userId:@UserId}, characterId {1:@CharacterId}, classCode {classCode:@ClassCode}, gender {gender:@Gender}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}");
+            _logger.ZLogInformation($"캐릭터 생성 성공(신규 계정): userId {userId:@UserId}, characterId {1:@CharacterId}, classCode {classCode:@ClassCode}, gender {gender:@Gender}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}, startingSkill {startingSkillCode ?? 0:@StartingSkill}");
             // 최초 생성은 계정 초기화라 무료이며 파티 1번 자리에 편성된다.
             return SuccessCharacter(userId, 1, classCode, 1, gender, 0, null);
         }
@@ -198,7 +202,7 @@ public sealed class SaveService : ISaveService
 
         var outcome = await _saveRepository.AddCharacterAsync(
             userId, newCharacterId, classCode, newSlot, gender, cost,
-            startingWeapon, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            startingWeapon, startingSkillCode, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
         switch (outcome.Status)
         {
             case AddCharacterStatus.InsufficientCurrency:
@@ -208,7 +212,7 @@ public sealed class SaveService : ISaveService
                 return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
         }
 
-        _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newCharacterId:@CharacterId}, classCode {classCode:@ClassCode}, slot {newSlot:@Slot}, gender {gender:@Gender}, cost {outcome.Cost:@Cost}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}");
+        _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newCharacterId:@CharacterId}, classCode {classCode:@ClassCode}, slot {newSlot:@Slot}, gender {gender:@Gender}, cost {outcome.Cost:@Cost}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}, startingSkill {startingSkillCode ?? 0:@StartingSkill}");
         return SuccessCharacter(userId, newCharacterId, classCode, newSlot, gender, outcome.Cost, outcome.GoldBalance);
     }
 
@@ -353,6 +357,24 @@ public sealed class SaveService : ISaveService
         }
 
         return new StartingEquipment(weapon.ItemCode, weapon.EquipSlot);
+    }
+
+    /// <summary>
+    /// 생성하는 캐릭터가 <b>기본으로 습득·장착한 채 시작할 액티브 스킬</b>의 코드를 마스터에서 확정한다
+    /// (그 직업 액티브 스킬 중 skill_code가 가장 작은 첫 스킬). 마스터에 그 직업의 액티브 스킬이 없으면
+    /// 습득을 건너뛰도록 null을 반환한다(캐릭터 생성 자체는 막지 않는다 — 스킬 없이 생성된다).
+    /// 마스터 결함은 운영에서 찾아낼 수 있게 Error 로그로 남긴다.
+    /// </summary>
+    private int? ResolveStartingSkillCode(int classCode)
+    {
+        var skill = _masterData.StartingSkill(classCode);
+        if (skill is null)
+        {
+            _logger.ZLogError($"직업 기본 액티브 스킬 미정의: classCode {classCode:@ClassCode} — skill_master의 액티브 스킬(skill_type=1) 확인 필요");
+            return null;
+        }
+
+        return skill.SkillCode;
     }
 
     /// <summary>성별 값이 정의된 범위(1:남 2:여)인지 검사한다. 그 외 값은 InvalidGender로 거절한다.</summary>

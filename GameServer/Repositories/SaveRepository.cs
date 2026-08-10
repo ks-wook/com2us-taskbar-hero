@@ -71,17 +71,17 @@ public interface ISaveRepository
     /// <summary>캐릭터 추가 생성 시 식별자·파티 자리 배정과 직업 중복 검사에 쓸 보유 캐릭터 목록(식별자 + 직업 + 파티 자리)을 조회한다.</summary>
     Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId);
 
-    /// <summary>최초 접속: game_player + 첫 캐릭터(직업·성별, 파티 1번 자리) + 기본 무기(장착 상태) + 큐브 +
-    /// 신규 가입 지원금 메일을 한 트랜잭션으로 초기화한다. welcomeMail·startingEquipment가 null이면 그 항목은 건너뛴다.</summary>
+    /// <summary>최초 접속: game_player + 첫 캐릭터(직업·성별, 파티 1번 자리) + 기본 무기(장착 상태) + 기본 액티브 스킬(습득·장착) +
+    /// 큐브 + 신규 가입 지원금 메일을 한 트랜잭션으로 초기화한다. welcomeMail·startingEquipment·startingSkillCode가 null이면 그 항목은 건너뛴다.</summary>
     Task CreatePlayerWithFirstCharacterAsync(
         long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix,
-        MailDraft? welcomeMail, StartingEquipment? startingEquipment);
+        MailDraft? welcomeMail, StartingEquipment? startingEquipment, int? startingSkillCode);
 
     /// <summary>기존 계정에 캐릭터 1개 추가. 생성 비용(goldCost)을 골드에서 확인·차감하고 지정 파티 자리(slot, 빈 자리 없으면 0)로 삽입하며,
-    /// startingEquipment가 있으면 기본 무기를 지급해 장착까지 마치는 한 트랜잭션.</summary>
+    /// startingEquipment가 있으면 기본 무기를 지급해 장착까지, startingSkillCode가 있으면 기본 액티브 스킬을 습득·장착까지 마치는 한 트랜잭션.</summary>
     Task<AddCharacterOutcome> AddCharacterAsync(
         long userId, int characterId, int classCode, int slot, int gender, long goldCost,
-        StartingEquipment? startingEquipment, long nowUnix);
+        StartingEquipment? startingEquipment, int? startingSkillCode, long nowUnix);
 
     /// <summary>클라이언트가 보낸 파티 편성 스냅샷(자리별 캐릭터)을 그대로 저장한다.
     /// 목록에 없는 보유 캐릭터는 미편성(slot 0)이 되는 한 트랜잭션.</summary>
@@ -194,6 +194,12 @@ public sealed class SaveRepository : ISaveRepository
 
     /// <summary>player_character.slot의 "미편성"(파티에 속하지 않음) 값. 1~3은 파티 자리다.</summary>
     private const int PartySlotUnassigned = 0;
+
+    /// <summary>캐릭터 생성 시 함께 습득시키는 기본 액티브 스킬의 레벨(1레벨 = 스킬 포인트 1을 미리 투자한 상태).</summary>
+    private const int StartingSkillLevel = 1;
+
+    /// <summary>player_skill.equipped의 "장착됨" 값(1). 기본 스킬은 습득과 동시에 장착해 곧바로 전투에 쓰이게 한다.</summary>
+    private const int SkillEquipped = 1;
 
     private readonly GameDbFactory _dbFactory;
 
@@ -373,16 +379,17 @@ public sealed class SaveRepository : ISaveRepository
     /// <para>2) player_character INSERT — 첫 캐릭터(식별자 1)를 선택 직업·성별로, 파티 1번 자리에 레벨 1·경험치 0으로 생성</para>
     /// <para>3) player_item + player_item_equipped INSERT — 직업 기본 무기를 지급해 무기 슬롯에 장착한 상태로 만든다
     ///     (startingEquipment가 있을 때만). 장착 중인 장비는 가방 칸을 쓰지 않으므로 slot은 NULL이다</para>
-    /// <para>4) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
-    /// <para>5) player_attendance INSERT — 출석 진행도를 0(누적 0·마지막 획득 일자 0)으로 초기화.
+    /// <para>4) player_skill INSERT — 직업 기본 액티브 스킬을 레벨 1·장착 상태로 습득시킨다(startingSkillCode가 있을 때만)</para>
+    /// <para>5) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
+    /// <para>6) player_attendance INSERT — 출석 진행도를 0(누적 0·마지막 획득 일자 0)으로 초기화.
     ///     출석 수령은 이 행의 조건부 갱신으로 처리하므로 계정 생성 시 함께 만들어 둔다(attendance 기획서 §4)</para>
-    /// <para>6) player_mail(+player_mail_reward) INSERT — 신규 가입 지원금 메일 발급(welcomeMail이 있을 때만).
+    /// <para>7) player_mail(+player_mail_reward) INSERT — 신규 가입 지원금 메일 발급(welcomeMail이 있을 때만).
     ///     game_player가 계정당 1행이라 이 트랜잭션은 계정 생애에 한 번만 성공하므로, 지급 여부 플래그 없이
     ///     중복 지급이 원천 차단된다(세이브 데이터 기획서 5.3)</para>
     /// </remarks>
     public async Task CreatePlayerWithFirstCharacterAsync(
         long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix,
-        MailDraft? welcomeMail, StartingEquipment? startingEquipment)
+        MailDraft? welcomeMail, StartingEquipment? startingEquipment, int? startingSkillCode)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -420,6 +427,11 @@ public sealed class SaveRepository : ISaveRepository
             if (startingEquipment is not null)
             {
                 await GrantEquippedStartingItemAsync(db, transaction, userId, 1, startingEquipment, nowUnix);
+            }
+
+            if (startingSkillCode is not null)
+            {
+                await GrantEquippedStartingSkillAsync(db, transaction, userId, 1, startingSkillCode.Value);
             }
 
             await db.Query("player_cube").InsertAsync(new
@@ -464,10 +476,11 @@ public sealed class SaveRepository : ISaveRepository
     ///     동시 생성 경합으로 보고 롤백 → DuplicateConflict</para>
     /// <para>4) player_item + player_item_equipped INSERT — 직업 기본 무기를 지급해 무기 슬롯에 장착한 상태로 만든다
     ///     (startingEquipment가 있을 때만). 장착 중이라 가방 칸(slot)은 NULL이므로 용량이 가득 차도 실패하지 않는다</para>
+    /// <para>5) player_skill INSERT — 직업 기본 액티브 스킬을 레벨 1·장착 상태로 습득시킨다(startingSkillCode가 있을 때만)</para>
     /// </remarks>
     public async Task<AddCharacterOutcome> AddCharacterAsync(
         long userId, int characterId, int classCode, int slot, int gender, long goldCost,
-        StartingEquipment? startingEquipment, long nowUnix)
+        StartingEquipment? startingEquipment, int? startingSkillCode, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -524,6 +537,12 @@ public sealed class SaveRepository : ISaveRepository
                 await GrantEquippedStartingItemAsync(db, transaction, userId, characterId, startingEquipment, nowUnix);
             }
 
+            // 5) 기본 액티브 스킬 습득 + 장착(정의가 있을 때만).
+            if (startingSkillCode is not null)
+            {
+                await GrantEquippedStartingSkillAsync(db, transaction, userId, characterId, startingSkillCode.Value);
+            }
+
             await transaction.CommitAsync();
             return new AddCharacterOutcome(AddCharacterStatus.Ok, goldCost, newBalance);
         }
@@ -563,6 +582,27 @@ public sealed class SaveRepository : ISaveRepository
             enhance_level = 0,
             equipped_character_id = characterId,
             equipped_slot = equipment.EquipSlot,
+        }, transaction);
+    }
+
+    /// <summary>
+    /// 캐릭터 생성 트랜잭션 안에서 직업 기본 액티브 스킬 1개를 레벨 1로 습득시키고 곧바로 장착까지 마친다(player_skill 1행).
+    /// <b>호출자의 트랜잭션을 그대로 쓰므로</b> 캐릭터와 기본 스킬이 함께 확정된다.
+    /// <para>레벨 1로 넣는다는 것은 <b>스킬 포인트 1을 미리 투자한 상태</b>라는 뜻이다 — 사용 포인트는 저장하지 않고
+    /// 그 캐릭터의 스킬 레벨 합으로 파생하므로(GrowthRepository.ApplySkillLevelUpAsync), 별도 회계 처리 없이
+    /// 레벨 1 캐릭터의 잔여 포인트가 0이 되고 스킬 초기화 시 그 1포인트가 그대로 회수된다.</para>
+    /// <para>장착 한도(2개) 안에서 첫 칸을 채우는 것이라 기존 장착과 충돌하지 않는다(새 캐릭터라 다른 스킬이 없다).</para>
+    /// </summary>
+    private static async Task GrantEquippedStartingSkillAsync(
+        QueryFactory db, DbTransaction transaction, long userId, int characterId, int skillCode)
+    {
+        await db.Query("player_skill").InsertAsync(new
+        {
+            user_id = userId,
+            character_id = characterId,
+            skill_code = skillCode,
+            level = StartingSkillLevel,
+            equipped = SkillEquipped,
         }, transaction);
     }
 

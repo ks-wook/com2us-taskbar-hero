@@ -311,7 +311,8 @@ Base URL(개발): `http://localhost:5160` (AccountServer)
 }
 ```
 
-- 처리: 미들웨어가 body의 `userId`·`token`을 검증한 뒤 `user_auth_token` 행 삭제 + Redis `auth:token:{userId}` 삭제.
+- 처리: 서버가 body의 `userId`·`token`을 검증한 뒤 `user_auth_token` 행 삭제 + Redis `auth:token:{userId}` 삭제.
+- **토큰 대조 판정은 자동 로그인 검증(5.4)과 동일한 로직을 공유한다** — `userId > 0`·`token` 비어 있지 않음(아니면 `InvalidRequest(1006)`) → Redis 값 없음(`ExpiredToken(1005)`) → 값 불일치(`InvalidToken(1004)`). 통과 이후의 삭제만 로그아웃 고유 처리다.
 
 ---
 

@@ -339,6 +339,9 @@ public sealed class MasterDataProvider
     /// <summary>기본 무기가 만족해야 하는 레벨 제한 상한. 갓 생성한 캐릭터는 레벨 1이므로 그 이하만 장착할 수 있다.</summary>
     private const int StartingCharacterLevel = 1;
 
+    /// <summary>skill_master.skill_type의 액티브 값(1:액티브 2:패시브). 기본 습득 스킬은 액티브 중에서 고른다.</summary>
+    private const int SkillTypeActive = 1;
+
     private readonly MasterDbFactory _masterDbFactory;
     private readonly ILogger<MasterDataProvider> _logger;
 
@@ -351,6 +354,10 @@ public sealed class MasterDataProvider
 
     // 성장(스킬·룬) 정의: 코드 → 정의.
     private IReadOnlyDictionary<int, SkillDef> _skillsByCode = new Dictionary<int, SkillDef>();
+
+    // 클래스별 기본 습득 스킬: class_code → 그 직업의 첫 번째 액티브 스킬(skill_type=1 중 skill_code가 가장 작은 것) 정의.
+    //   캐릭터 생성 시 이 스킬을 레벨 1로 습득·장착한 상태로 시작한다(skill_master에서 파생).
+    private IReadOnlyDictionary<int, SkillDef> _startingSkillByClass = new Dictionary<int, SkillDef>();
     private IReadOnlyDictionary<int, RuneDef> _runesByCode = new Dictionary<int, RuneDef>();
 
     // 룬 레벨별 골드 비용: (rune_code, level) → cost(rune_cost 자식 테이블, 명시값).
@@ -469,6 +476,13 @@ public sealed class MasterDataProvider
     /// <summary>skill_code의 스킬 정의(직업·액티브/패시브·최대 레벨). 없으면 null.</summary>
     public SkillDef? GetSkill(int skillCode)
         => _skillsByCode.TryGetValue(skillCode, out var s) ? s : null;
+
+    /// <summary>
+    /// 직업의 <b>기본 습득 스킬</b> 정의(캐릭터 생성 시 레벨 1로 습득·장착). 그 직업의 액티브 스킬(skill_type=1) 가운데
+    /// <b>skill_code가 가장 작은</b>(= 첫 번째) 스킬이며, 후보가 없으면(액티브 미정의) null — 이때는 스킬 없이 생성한다.
+    /// </summary>
+    public SkillDef? StartingSkill(int classCode)
+        => _startingSkillByClass.TryGetValue(classCode, out var def) ? def : null;
 
     /// <summary>rune_code의 룬 정의(선행 룬·비용·최대 레벨). 없으면 null.</summary>
     public RuneDef? GetRune(int runeCode)
@@ -689,6 +703,7 @@ public sealed class MasterDataProvider
             _consumablesByCode = await LoadConsumablesAsync(db);
             _enhanceByLevel = await LoadEnhanceRulesAsync(db);
             _skillsByCode = await LoadSkillsAsync(db);
+            _startingSkillByClass = BuildStartingSkills(_skillsByCode);
             _runesByCode = await LoadRunesAsync(db);
             _runeCosts = await LoadRuneCostsAsync(db);
             _characterCreateCosts = await LoadCharacterCreateCostsAsync(db);
@@ -1214,6 +1229,19 @@ public sealed class MasterDataProvider
             .ToDictionary(
                 g => g.Key,
                 g => g.OrderBy(i => i.Grade).ThenBy(i => i.ItemCode).First());
+
+    /// <summary>
+    /// 적재한 스킬 정의에서 <b>직업별 기본 습득 스킬</b>(캐릭터 생성 시 레벨 1로 습득·장착할 액티브 스킬)을 파생한다.
+    /// 기본 무기와 같은 방식으로 별도 마스터 테이블 없이 skill_master에서 고르므로, 스킬을 추가·수정해도 규칙이 그대로 따라간다.
+    /// <para>후보 = 그 직업의 액티브 스킬(skill_type=1). 그중 <b>skill_code가 가장 작은</b> 것(코드 규약상 각 직업의 첫 액티브 x01)을 고른다.</para>
+    /// </summary>
+    private static Dictionary<int, SkillDef> BuildStartingSkills(IReadOnlyDictionary<int, SkillDef> skillsByCode)
+        => skillsByCode.Values
+            .Where(s => s.SkillType == SkillTypeActive)
+            .GroupBy(s => s.ClassCode)
+            .ToDictionary(
+                g => g.Key,
+                g => g.OrderBy(s => s.SkillCode).First());
 
     /// <summary>consumable_master를 item_code → 버프 효과 정의로 적재한다(소모품 사용 API가 배율·지속시간을 여기서 읽는다).</summary>
     private static async Task<Dictionary<int, ConsumableDef>> LoadConsumablesAsync(QueryFactory db)

@@ -11,7 +11,7 @@ public interface IAuthTokenReader
 
 /// <summary>
 /// 인증 토큰 Redis 조회기. GameServer는 SecretKey 없이 Redis에 저장된 토큰값과의 대조만으로 인증한다
-/// (계정/로그인 기획서 4.2·5.4). 발급/삭제는 AccountServer가 담당하고, 여기서는 읽기만 한다.
+/// (계정/로그인 기획서 4.2·5.5). 발급/삭제는 AccountServer가 담당하고, 여기서는 읽기만 한다.
 /// </summary>
 public sealed class RedisAuthTokenReader : IAuthTokenReader
 {
