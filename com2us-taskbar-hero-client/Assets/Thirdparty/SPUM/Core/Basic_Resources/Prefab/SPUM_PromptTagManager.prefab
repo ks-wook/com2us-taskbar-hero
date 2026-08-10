@@ -1,0 +1,10109 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3998208182202012551
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5244194305577291963}
+  - component: {fileID: 5282206758521185162}
+  m_Layer: 0
+  m_Name: SPUM_PromptTagManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &5244194305577291963
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3998208182202012551}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &5282206758521185162
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3998208182202012551}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ef6c1e85bfd052445bbbcc6b791592e5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  internalClassData:
+    combat_classes_list:
+    - id: warrior
+      description: "\uC804\uC0AC - \uADFC\uAC70\uB9AC \uBB3C\uB9AC \uC804\uD22C \uC804\uBB38\uAC00"
+      type:
+      - sword
+      - axe
+      - hammer
+      - mace
+      - spear
+      - shield
+      - plate
+      - shoulder
+      - chain_mail
+      - helmet
+      - tunic
+      - belt
+      - pants
+      - cape
+      - banner
+      class_tags:
+      - melee
+      - physical
+      - damage
+      - tank
+      style: []
+      type_negative:
+      - staff
+      - wand
+      - orb
+      - cloth
+      class_negative:
+      - magical
+      - healing
+      - light
+      negative:
+      - magical
+      - healing
+      - light
+      - cloth
+      - staff
+      - wand
+      - orb
+    - id: archer
+      description: "\uAD81\uC218 - \uC6D0\uAC70\uB9AC \uBB3C\uB9AC \uC804\uD22C \uC804\uBB38\uAC00"
+      type:
+      - bow
+      - quiver
+      - shoulder
+      - bracer
+      - helmet
+      - tunic
+      - pants
+      - cape
+      - scarf
+      class_tags:
+      - ranged
+      - physical
+      - damage
+      - support
+      style: []
+      type_negative:
+      - plate
+      - shield
+      - hammer
+      - mace
+      class_negative:
+      - tank
+      - melee
+      negative:
+      - heavy
+      - plate
+      - shield
+      - hammer
+      - mace
+      - tank
+    - id: mage
+      description: "\uB9C8\uBC95\uC0AC - \uC6D0\uAC70\uB9AC \uB9C8\uBC95 \uC804\uD22C
+        \uC804\uBB38\uAC00"
+      type:
+      - staff
+      - wand
+      - orb
+      - spellbook
+      - symbol
+      - robe
+      - tunic
+      - helmet
+      - shoulder
+      - pants
+      - shoes
+      - cape
+      class_tags:
+      - ranged
+      - magical
+      - damage
+      - healing
+      - support
+      style: []
+      type_negative:
+      - plate
+      - chain_mail
+      - shield
+      class_negative:
+      - heavy
+      - physical
+      - melee
+      negative:
+      - heavy
+      - plate
+      - chain_mail
+      - shield
+      - physical
+      - melee
+  internalStyleElementsData:
+    categories_list:
+    - id: quality
+      name: "Grade (\uB4F1\uAE09)"
+      styles:
+      - id: broken
+        description: "\uC2EC\uD558\uAC8C \uC190\uC0C1\uB41C \uC0C1\uD0DC. \uAC70\uC758
+          \uC0AC\uC6A9 \uBD88\uAC00\uB2A5"
+      - id: common
+        description: "\uAE30\uBCF8 \uB4F1\uAE09. \uC77C\uBC18\uC801\uC778 \uC131\uB2A5\uACFC
+          \uC26C\uC6B4 \uD68D\uB4DD"
+      - id: rare
+        description: "\uD5A5\uC0C1\uB41C \uC131\uB2A5\uACFC \uC18C\uC218\uC758 \uD2B9\uC218
+          \uD6A8\uACFC \uBCF4\uC720"
+      - id: epic
+        description: "\uAC15\uB825\uD55C \uC2A4\uD0EF\uACFC \uACE0\uC720 \uC2A4\uD0AC\uC744
+          \uAC00\uC9C4 \uC0C1\uAE09 \uB4F1\uAE09"
+      - id: legendary
+        description: "\uD76C\uADC0\uD558\uACE0 \uB3C5\uD2B9\uD55C \uB2A5\uB825\uC744
+          \uC9C0\uB2CC \uC804\uC124\uAE09"
+      - id: mythic
+        description: "\uC2E0\uD654\uC801 \uD798\uC744 \uAC00\uC9C4 \uCD5C\uACE0 \uB4F1\uAE09"
+    - id: elements
+      name: "\uC6D0\uC18C \uC18D\uC131"
+      styles:
+      - id: fire
+        description: "\uBD88 \uC18D\uC131"
+      - id: dark
+        description: "\uC5B4\uB460 \uC18D\uC131"
+      - id: water
+        description: "\uBB3C \uC18D\uC131"
+      - id: Light
+        description: "\uBE5B \uC18D\uC131"
+      - id: wind
+        description: "\uBC14\uB78C \uC18D\uC131"
+      - id: earth
+        description: "\uB545 \uC18D\uC131"
+    - id: expression
+      name: "\uD45C\uC815"
+      styles:
+      - id: neutral
+        description: "\uC911\uB9BD\uC801\uC778 \uD45C\uC815"
+      - id: closed
+        description: "\uAC10\uC740 \uB208"
+      - id: angry
+        description: "\uD654\uB09C \uD45C\uC815"
+      - id: sad
+        description: "\uC2AC\uD508 \uD45C\uC815"
+      - id: calm
+        description: "\uCC28\uBD84\uD55C \uD45C\uC815"
+      - id: serious
+        description: "\uC9C4\uC9C0\uD55C \uD45C\uC815"
+      - id: smug
+        description: "\uAC70\uB9CC\uD55C \uD45C\uC815"
+      - id: smiling
+        description: "\uC6C3\uB294 \uD45C\uC815"
+      - id: tired
+        description: "\uD53C\uACE4\uD55C \uD45C\uC815"
+      - id: vacant
+        description: "\uBA4D\uD55C \uD45C\uC815"
+    - id: facial_hair
+      name: "\uC218\uC5FC"
+      styles:
+      - id: beard
+        description: "\uC218\uC5FC"
+      - id: mustache
+        description: "\uCF67\uC218\uC5FC"
+      - id: goatee
+        description: "\uC5FC\uC18C\uC218\uC5FC"
+      - id: full_beard
+        description: "\uD48D\uC131\uD55C \uC218\uC5FC"
+      - id: tusks
+        description: "\uC5C4\uB2C8 (\uC624\uD06C)"
+      - id: mouth
+        description: "\uC785 \uD615\uD0DC"
+    - id: hairstyle
+      name: "\uD5E4\uC5B4\uC2A4\uD0C0\uC77C"
+      styles:
+      - id: short
+        description: "\uC9E7\uC740 \uBA38\uB9AC"
+      - id: medium
+        description: "\uC911\uAC04 \uBA38\uB9AC"
+      - id: long
+        description: "\uAE34 \uBA38\uB9AC"
+      - id: ponytail
+        description: "\uD3EC\uB2C8\uD14C\uC77C"
+      - id: braid
+        description: "\uB54B\uC740 \uBA38\uB9AC"
+      - id: curly
+        description: "\uACF1\uC2AC\uBA38\uB9AC"
+      - id: spiky
+        description: "\uBFB0\uC871\uD55C \uBA38\uB9AC"
+      - id: bald
+        description: "\uB300\uBA38\uB9AC"
+      - id: mohawk
+        description: "\uBAA8\uD788\uCE78"
+      - id: wavy
+        description: "\uC6E8\uC774\uBE0C"
+    - id: role
+      name: "RPG \uC5ED\uD560"
+      styles:
+      - id: tank
+        description: "\uC801\uC758 \uACF5\uACA9\uC744 \uBC1B\uC544\uB0B4\uB294 \uBC29\uC5B4
+          \uC5ED\uD560"
+      - id: damage
+        description: "\uC801\uC5D0\uAC8C \uD53C\uD574\uB97C \uC785\uD788\uB294 \uACF5\uACA9
+          \uC5ED\uD560"
+      - id: support
+        description: "\uD300\uC6D0\uC744 \uC9C0\uC6D0\uD558\uB294 \uBCF4\uC870 \uC5ED\uD560"
+      - id: stealth
+        description: "\uC740\uBC00\uD55C \uC811\uADFC\uACFC \uAE30\uC2B5 \uACF5\uACA9"
+      - id: buff
+        description: "\uC544\uAD70\uC5D0\uAC8C \uAE0D\uC815\uC801 \uD6A8\uACFC \uBD80\uC5EC"
+      - id: debuff
+        description: "\uC801\uC5D0\uAC8C \uBD80\uC815\uC801 \uD6A8\uACFC \uBD80\uC5EC"
+      - id: summoner
+        description: "\uC18C\uD658\uC218\uB97C \uD1B5\uD55C \uC804\uD22C \uCC38\uC5EC"
+    - id: distance_type
+      name: "\uAC70\uB9AC \uD0C0\uC785"
+      styles:
+      - id: melee
+        description: "\uADFC\uAC70\uB9AC \uC804\uD22C. \uC801\uACFC \uC9C1\uC811
+          \uB9DE\uC11C \uC2F8\uC6C0"
+      - id: ranged
+        description: "\uC6D0\uAC70\uB9AC \uC804\uD22C. \uBA40\uB9AC\uC11C \uACF5\uACA9"
+    - id: attack_type
+      name: "\uACF5\uACA9 \uD0C0\uC785"
+      styles:
+      - id: physical
+        description: "\uBB3C\uB9AC \uACF5\uACA9. \uBB34\uAE30\uB098 \uC2E0\uCCB4\uB97C
+          \uC774\uC6A9\uD55C \uACF5\uACA9"
+      - id: magical
+        description: "\uB9C8\uBC95 \uACF5\uACA9. \uB9C8\uB098\uB098 \uC815\uC2E0\uB825\uC744
+          \uC774\uC6A9\uD55C \uACF5\uACA9"
+    - id: weapon_melee
+      name: "\uADFC\uAC70\uB9AC \uBB34\uAE30"
+      styles:
+      - id: sword
+        description: "\uAC80"
+      - id: axe
+        description: "\uB3C4\uB07C"
+      - id: hammer
+        description: "\uB9DD\uCE58"
+      - id: mace
+        description: "\uCCA0\uD1F4"
+      - id: spear
+        description: "\uCC3D"
+      - id: dagger
+        description: "\uB2E8\uAC80"
+    - id: weapon_ranged
+      name: "\uC6D0\uAC70\uB9AC \uBB34\uAE30"
+      styles:
+      - id: bow
+        description: "\uD65C"
+      - id: crossbow
+        description: "\uC11D\uAD81"
+      - id: throwing
+        description: "\uD22C\uCC99 \uBB34\uAE30"
+    - id: weapon_magic
+      name: "\uB9C8\uBC95 \uBB34\uAE30"
+      styles:
+      - id: staff
+        description: "\uC9C0\uD321\uC774"
+      - id: wand
+        description: "\uB9C8\uBC95\uBD09"
+      - id: orb
+        description: "\uC218\uC815\uAD6C"
+      - id: spellbook
+        description: "\uB9C8\uBC95\uC11C"
+      - id: symbol
+        description: "\uC131\uBB3C"
+    - id: armor_heavy
+      name: "\uC911\uAC11 \uBC29\uC5B4\uAD6C"
+      styles:
+      - id: plate
+        description: "\uD310\uAE08 \uAC11\uC637"
+      - id: chain_mail
+        description: "\uC0AC\uC2AC \uAC11\uC637"
+      - id: scale_mail
+        description: "\uBE44\uB298 \uAC11\uC637"
+      - id: heavy
+        description: "\uC911\uAC11"
+    - id: armor_light
+      name: "\uACBD\uAC11 \uBC29\uC5B4\uAD6C"
+      styles:
+      - id: leather
+        description: "\uAC00\uC8FD \uAC11\uC637"
+      - id: studded_leather
+        description: "\uC9D5\uBC15\uD78C \uAC00\uC8FD \uAC11\uC637"
+      - id: hide
+        description: "\uC9D0\uC2B9 \uAC00\uC8FD \uAC11\uC637"
+      - id: light
+        description: "\uACBD\uAC11"
+    - id: armor_cloth
+      name: "\uCC9C \uBC29\uC5B4\uAD6C"
+      styles:
+      - id: robe
+        description: "\uB85C\uBE0C"
+      - id: cloth
+        description: "\uCC9C \uAC11\uC637"
+      - id: tunic
+        description: "\uD29C\uB2C9"
+      - id: silk
+        description: "\uBE44\uB2E8 \uAC11\uC637"
+    - id: defensive
+      name: "\uBC29\uC5B4 \uC7A5\uBE44"
+      styles:
+      - id: shield
+        description: "\uBC29\uD328"
+      - id: buckler
+        description: "\uC18C\uD615 \uBC29\uD328"
+      - id: tower_shield
+        description: "\uB300\uD615 \uBC29\uD328"
+    - id: accessory
+      name: "\uC561\uC138\uC11C\uB9AC"
+      styles:
+      - id: cape
+        description: "\uB9DD\uD1A0"
+      - id: scarf
+        description: "\uC2A4\uCE74\uD504"
+      - id: banner
+        description: "\uAE43\uBC1C"
+      - id: quiver
+        description: "\uD654\uC0B4\uD1B5"
+      - id: backpack
+        description: "\uBC30\uB0AD"
+    - id: helmet
+      name: "\uD22C\uAD6C"
+      styles:
+      - id: cloth_cap
+        description: "\uCC9C \uBAA8\uC790"
+      - id: leather_cap
+        description: "\uAC00\uC8FD \uBAA8\uC790"
+      - id: iron_helm
+        description: "\uCCA0 \uD22C\uAD6C"
+      - id: steel_helm
+        description: "\uAC15\uCCA0 \uD22C\uAD6C"
+      - id: gold_helm
+        description: "\uD669\uAE08 \uD22C\uAD6C"
+      - id: horned
+        description: "\uBFD4 \uB2EC\uB9B0 \uD22C\uAD6C"
+      - id: winged
+        description: "\uB0A0\uAC1C \uB2EC\uB9B0 \uD22C\uAD6C"
+      - id: spiked
+        description: "\uAC00\uC2DC \uB2EC\uB9B0 \uD22C\uAD6C"
+      - id: ornate
+        description: "\uC7A5\uC2DD\uB41C \uD22C\uAD6C"
+      - id: full_helm
+        description: "\uC804\uBA74 \uD22C\uAD6C"
+      - id: great_helm
+        description: "\uB300\uD615 \uD22C\uAD6C"
+      - id: pointed
+        description: "\uBFB0\uC871\uD55C \uD22C\uAD6C"
+      - id: bone_helm
+        description: "\uBF08 \uD22C\uAD6C"
+  internalCustomStyleData:
+    custom_styles_list:
+    - id: broken
+      name: "\uD30C\uC190"
+      description: "\uC190\uC0C1\uB41C \uC0C1\uD0DC"
+      elements:
+      - broken
+      required_parts: []
+      negative:
+      - perfect
+      - legendary
+    - id: common
+      name: "\uC77C\uBC18"
+      description: "\uAE30\uBCF8 \uB4F1\uAE09"
+      elements:
+      - common
+      required_parts: []
+      negative:
+      - legendary
+      - rare
+    - id: rare
+      name: "\uD76C\uADC0"
+      description: "\uD76C\uADC0 \uB4F1\uAE09"
+      elements:
+      - rare
+      required_parts: []
+      negative:
+      - common
+      - broken
+    - id: epic
+      name: "\uC11C\uC0AC\uC2DC"
+      description: "\uC11C\uC0AC\uC2DC \uB4F1\uAE09"
+      elements:
+      - epic
+      required_parts: []
+      negative:
+      - common
+      - broken
+      - rare
+    - id: legendary
+      name: "\uC804\uC124"
+      description: "\uC804\uC124 \uB4F1\uAE09"
+      elements:
+      - legendary
+      required_parts: []
+      negative:
+      - common
+      - broken
+      - rare
+      - epic
+    - id: mythic
+      name: "\uC2E0\uD654"
+      description: "\uC2E0\uD654 \uB4F1\uAE09"
+      elements:
+      - mythic
+      required_parts: []
+      negative:
+      - common
+      - broken
+      - rare
+      - epic
+      - legendary
+    - id: fire
+      name: "\uD654\uC5FC"
+      description: "\uD654\uC5FC \uC18D\uC131"
+      elements:
+      - fire
+      required_parts: []
+      negative:
+      - water
+    - id: dark
+      name: "\uC5B4\uB460"
+      description: "\uC5B4\uB460 \uC18D\uC131"
+      elements:
+      - dark
+      required_parts: []
+      negative:
+      - light
+    - id: wind
+      name: "\uBC14\uB78C"
+      description: "\uBC14\uB78C \uC18D\uC131"
+      elements:
+      - wind
+      required_parts: []
+      negative:
+      - earth
+    - id: earth
+      name: "\uB300\uC9C0"
+      description: "\uB300\uC9C0 \uC18D\uC131"
+      elements:
+      - earth
+      required_parts: []
+      negative:
+      - wind
+    - id: water
+      name: "\uBB3C"
+      description: "\uBB3C \uC18D\uC131"
+      elements:
+      - water
+      required_parts: []
+      negative:
+      - fire
+    - id: Light
+      name: "\uBE5B"
+      description: "\uBE5B \uC18D\uC131"
+      elements:
+      - Light
+      required_parts: []
+      negative:
+      - dark
+  themeTogglesResetButton: {fileID: 0}
+  raceTogglesResetButton: {fileID: 0}
+  genderTogglesResetButton: {fileID: 0}
+  classTogglesResetButton: {fileID: 0}
+  styleTogglesResetButton: {fileID: 0}
+  ThemeContent: {fileID: 0}
+  RaceContent: {fileID: 0}
+  GenderContent: {fileID: 0}
+  ClassContent: {fileID: 0}
+  StyleContent: {fileID: 0}
+  generateCharacterButton: {fileID: 0}
+  FilterResetButton: {fileID: 0}
+  FixBodyToggleButton: {fileID: 0}
+  EmptyAllowToggleButton: {fileID: 0}
+  ConceptPrefabButton: {fileID: 4166174929886380043, guid: e807bcf745b11d34daccf333afed9166, type: 3}
+  cachedThemeOptions:
+  - fantasy
+  - modern
+  cachedRaceOptions:
+  - human
+  - orc
+  - undead
+  - elf
+  - devil
+  - highelf
+  cachedGenderOptions:
+  - male
+  - female
+  cachedPartOptions: []
+  filterOptionsCached: 1
+  allCharacterData:
+  - FileName: Human_1
+    Part: Body
+    Theme:
+    - fantasy
+    - modern
+    Race: human
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - light_skin
+    Class: []
+    Style: []
+  - FileName: Human_2
+    Part: Body
+    Theme:
+    - fantasy
+    - modern
+    Race: human
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - light_skin
+    Class: []
+    Style: []
+  - FileName: Human_3
+    Part: Body
+    Theme:
+    - fantasy
+    - modern
+    Race: human
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - medium_skin
+    Class: []
+    Style: []
+  - FileName: Human_4
+    Part: Body
+    Theme:
+    - fantasy
+    - modern
+    Race: human
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - tan_skin
+    Class: []
+    Style: []
+  - FileName: Human_5
+    Part: Body
+    Theme:
+    - fantasy
+    - modern
+    Race: human
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - dark_skin
+    Class: []
+    Style: []
+  - FileName: Orc_1
+    Part: Body
+    Theme:
+    - fantasy
+    Race: orc
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - pointed_ears
+    - green_skin
+    Class: []
+    Style: []
+  - FileName: Orc_2
+    Part: Body
+    Theme:
+    - fantasy
+    Race: orc
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - pointed_ears
+    - olive_skin
+    Class: []
+    Style: []
+  - FileName: Orc_3
+    Part: Body
+    Theme:
+    - fantasy
+    Race: orc
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - pointed_ears
+    - blue_skin
+    Class: []
+    Style: []
+  - FileName: Orc_4
+    Part: Body
+    Theme:
+    - fantasy
+    Race: orc
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - pointed_ears
+    - red_skin
+    Class: []
+    Style: []
+  - FileName: Skelton_1
+    Part: Body
+    Theme:
+    - fantasy
+    Race: undead
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - bone
+    Class: []
+    Style:
+    - common
+  - FileName: Elf_1
+    Part: Body
+    Theme:
+    - fantasy
+    Race: elf
+    Gender: 
+    Type: 
+    Addon: Legacy
+    Properties:
+    - pointed_ears
+    - light_skin
+    Class: []
+    Style: []
+  - FileName: Elf_2
+    Part: Body
+    Theme:
+    - fantasy
+    Race: elf
+    Gender: 
+    Type: 
+    Addon: Legacy
+    Properties:
+    - pointed_ears
+    - dark_skin
+    Class: []
+    Style: []
+  - FileName: Devil_1
+    Part: Body
+    Theme:
+    - fantasy
+    Race: devil
+    Gender: 
+    Type: body
+    Addon: Legacy
+    Properties:
+    - purple_skin
+    Class: []
+    Style: []
+  - FileName: eye
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - neutral
+    Class: []
+    Style: []
+  - FileName: eye_close
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - closed
+    Class: []
+    Style: []
+  - FileName: eye0
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - neutral
+    Class: []
+    Style: []
+  - FileName: eye1
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - angry
+    Class: []
+    Style: []
+  - FileName: eye2
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - neutral
+    Class: []
+    Style: []
+  - FileName: eye3
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - angry
+    Class: []
+    Style: []
+  - FileName: eye4
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - sad
+    Class: []
+    Style: []
+  - FileName: eye5
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - neutral
+    Class: []
+    Style: []
+  - FileName: eye6
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - neutral
+    Class: []
+    Style: []
+  - FileName: eye7
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Legacy
+    Properties:
+    - calm
+    Class: []
+    Style: []
+  - FileName: eye8
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - serious
+    Class: []
+    Style: []
+  - FileName: eye9
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - smug
+    Class: []
+    Style: []
+  - FileName: eye10
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - smiling
+    - silver
+    Class: []
+    Style: []
+  - FileName: eye11
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - tired
+    - silver
+    Class: []
+    Style: []
+  - FileName: eye16
+    Part: Eye
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: eye
+    Addon: Legacy
+    Properties:
+    - vacant
+    Class: []
+    Style: []
+  - FileName: Hair_1
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Legacy
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: Hair_2
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Legacy
+    Properties:
+    - short
+    - spiky
+    Class: []
+    Style: []
+  - FileName: Hair_3
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Legacy
+    Properties:
+    - medium
+    Class: []
+    Style: []
+  - FileName: Hair_4
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: Legacy
+    Properties:
+    - medium
+    - bob
+    Class: []
+    Style: []
+  - FileName: Hair_5
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Legacy
+    Properties:
+    - medium
+    Class: []
+    Style: []
+  - FileName: Hair_6
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Legacy
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: Hair_7
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Legacy
+    Properties:
+    - bun
+    Class: []
+    Style: []
+  - FileName: Hair_8
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: Legacy
+    Properties:
+    - bun
+    Class: []
+    Style: []
+  - FileName: Hair_9
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Legacy
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: FaceHair_1
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: FaceHair
+    Addon: Legacy
+    Properties:
+    - beard
+    - full
+    Class: []
+    Style: []
+  - FileName: FaceHair_2
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: FaceHair
+    Addon: Legacy
+    Properties:
+    - beard
+    - mustache
+    Class: []
+    Style: []
+  - FileName: FaceHair_3
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: FaceHair
+    Addon: Legacy
+    Properties:
+    - beard
+    - mustache
+    - goatee
+    Class: []
+    Style: []
+  - FileName: FaceHair_4
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: FaceHair
+    Addon: Legacy
+    Properties:
+    - beard
+    - full
+    Class: []
+    Style: []
+  - FileName: FaceHair_5
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: FaceHair
+    Addon: Legacy
+    Properties:
+    - beard
+    - goatee
+    Class: []
+    Style: []
+  - FileName: Helmet_1
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Legacy
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Helmet_2
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+  - FileName: Helmet_3
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Legacy
+    Properties:
+    - leather
+    Class:
+    - melee
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Helmet_4
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - fire
+  - FileName: Helmet_5
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - dark
+  - FileName: Helmet_6
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Legacy
+    Properties: []
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: Helmet_7
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Legacy
+    Properties:
+    - steel
+    Class: []
+    Style:
+    - common
+    - water
+    - rare
+  - FileName: Helmet_8
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - Light
+  - FileName: Helmet_9
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: F_SR_Helmet
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class:
+    - melee
+    Style:
+    - legendary
+    - Light
+  - FileName: Cloth_1
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - common
+    - dark
+  - FileName: Cloth_2
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+  - FileName: Cloth_3
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Cloth_4
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+  - FileName: Cloth_5
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+  - FileName: Cloth_6
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: Cloth_7
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Cloth_8
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Cloth_9
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: belt
+    Addon: Legacy
+    Properties:
+    - leather
+    Class:
+    - melee
+    Style:
+    - common
+  - FileName: Cloth_10
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - water
+  - FileName: Cloth_11
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - water
+  - FileName: Cloth_12
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Legacy
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - rare
+    - earth
+    - common
+  - FileName: F_SR_Cloth
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - legendary
+    - Light
+  - FileName: Foot_1
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - common
+  - FileName: Foot_2
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Legacy
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Foot_3
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - common
+    - dark
+  - FileName: Foot_4
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: F_SR_Pants
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - legendary
+    - Light
+  - FileName: Armor_1
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Legacy
+    Properties:
+    - leather
+    Class:
+    - melee
+    Style:
+    - common
+    - earth
+  - FileName: Armor_2
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+  - FileName: Armor_3
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: Armor_4
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - fire
+  - FileName: Armor_5
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bracer
+    Addon: Legacy
+    Properties:
+    - leather
+    Class:
+    - melee
+    Style:
+    - common
+    - earth
+  - FileName: Armor_6
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: belt
+    Addon: Legacy
+    Properties:
+    - leather
+    Class:
+    - melee
+    Style:
+    - common
+    - earth
+  - FileName: Armor_7
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+  - FileName: Armor_8
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+    - Light
+    - rare
+  - FileName: Back_1
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - fire
+  - FileName: Back_2
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+  - FileName: Back_3
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Soon_Back1
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Legacy
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - fire
+  - FileName: BowBack_1
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: quiver
+    Addon: Legacy
+    Properties:
+    - leather
+    Class:
+    - ranged
+    - support
+    Style:
+    - common
+  - FileName: Sword_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: Sword_2
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+  - FileName: Sword_3
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: Sword_4
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: Sword_5
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Legacy
+    Properties:
+    - crystal
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - dark
+  - FileName: Sword_6
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: dagger
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: Axe_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: Legacy
+    Properties:
+    - wood
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: Bow_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: Legacy
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - common
+    - earth
+  - FileName: Shield_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    - physical
+    Style:
+    - rare
+    - common
+  - FileName: Soon_Spear
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: spear
+    Addon: Legacy
+    Properties:
+    - medium
+    - pointed
+    - iron
+    - physical
+    - melee
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - legendary
+    - Light
+  - FileName: Spear_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: spear
+    Addon: Legacy
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+  - FileName: Ward_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: Legacy
+    Properties:
+    - wood
+    Class:
+    - damage
+    - magical
+    - ranged
+    Style:
+    - common
+    - fire
+  - FileName: F_SR_Hammer
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hammer
+    Addon: Legacy
+    Properties:
+    - huge
+    - blunt
+    - wood
+    - heavy
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - legendary
+  - FileName: Normal_Hair1
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - long
+    - straight
+    Class: []
+    Style: []
+  - FileName: Normal_Hair2
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - short
+    - mohawk
+    Class: []
+    Style: []
+  - FileName: Normal_Hair3
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - short
+    - bun
+    Class: []
+    Style: []
+  - FileName: Normal_Hair4
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - medium
+    - bowl
+    Class: []
+    Style: []
+  - FileName: Normal_Hair5
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - medium
+    - wavy
+    Class: []
+    Style: []
+  - FileName: Normal_Hair6
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - short
+    - wavy
+    Class: []
+    Style: []
+  - FileName: Normal_Hair7
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - short
+    - spiky
+    Class: []
+    Style: []
+  - FileName: Normal_Hair8
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - medium
+    Class: []
+    Style: []
+  - FileName: Normal_Hair9
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: Normal_Hair10
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: Normal_Hair11
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - short
+    - spiky
+    Class: []
+    Style: []
+  - FileName: Normal_Hair12
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: Normal_Hair13
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver121
+    Properties:
+    - short
+    - spiky
+    Class: []
+    Style: []
+  - FileName: Normal_Mustache1
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: FaceHair
+    Addon: Ver121
+    Properties:
+    - beard
+    - mustache
+    Class: []
+    Style: []
+  - FileName: Normal_Mustache2
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: FaceHair
+    Addon: Ver121
+    Properties:
+    - beard
+    - full
+    Class: []
+    Style: []
+  - FileName: Normal_Cloth1
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver121
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Normal_Helmet1
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver121
+    Properties: []
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: Normal_Helmet2
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Ver121
+    Properties: []
+    Class:
+    - melee
+    Style:
+    - common
+  - FileName: Normal_Helmet3
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver121
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: Normal_Armor1
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Ver121
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+  - FileName: AxeNormal1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: Ver121
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+  - FileName: AxeLong1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: Ver121
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+  - FileName: AxeSmall1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: Ver121
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: WoodShield1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Ver121
+    Properties:
+    - wood
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - common
+    - earth
+  - FileName: WoodShield2
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Ver121
+    Properties:
+    - wood
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - common
+    - earth
+  - FileName: WoodShield3
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Ver121
+    Properties:
+    - wood
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - common
+    - earth
+  - FileName: WoodShield4
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Ver121
+    Properties:
+    - wood
+    Class:
+    - melee
+    - support
+    - tank
+    - physical
+    Style:
+    - rare
+  - FileName: SteelShield1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Ver121
+    Properties:
+    - steel
+    Class:
+    - melee
+    - support
+    - tank
+    - physical
+    Style:
+    - rare
+    - Light
+  - FileName: New_Hair_01
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - short
+    - spiky
+    Class: []
+    Style: []
+  - FileName: New_Hair_02
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - bun
+    Class: []
+    Style: []
+  - FileName: New_Hair_03
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - medium
+    - bob
+    Class: []
+    Style: []
+  - FileName: New_Hair_04
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: New_Hair_05
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - long
+    - wild
+    Class: []
+    Style: []
+  - FileName: New_Hair_06
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - short
+    - mohawk
+    Class: []
+    Style: []
+  - FileName: New_Hair_07
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - long
+    - straight
+    Class: []
+    Style: []
+  - FileName: New_Hair_08
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - medium
+    - wild
+    Class: []
+    Style: []
+  - FileName: New_Hair_09
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Ver300
+    Properties:
+    - short
+    - spiky
+    Class: []
+    Style: []
+  - FileName: New_Hair_10
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - long
+    Class: []
+    Style: []
+  - FileName: New_Hair_11
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: New_Hair_12
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - long
+    - bun
+    Class: []
+    Style: []
+  - FileName: New_Hair_13
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - long
+    - straight
+    Class: []
+    Style: []
+  - FileName: New_Hair_14
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: New_Hair_15
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - medium
+    Class: []
+    Style: []
+  - FileName: New_Hair_16
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - short
+    - bun
+    Class: []
+    Style: []
+  - FileName: New_Hair_17
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: New_Hair_18
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - medium
+    Class: []
+    Style: []
+  - FileName: New_Hair_19
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: New_Hair_20
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: Ver300
+    Properties:
+    - medium
+    - straight
+    Class: []
+    Style: []
+  - FileName: New_Cloth_01
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - melee
+    Style:
+    - common
+  - FileName: New_Cloth_02
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - common
+    - fire
+    - rare
+  - FileName: New_Cloth_03
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - water
+    - rare
+  - FileName: New_Cloth_04
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: belt
+    Addon: Ver300
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+  - FileName: New_Cloth_05
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: New_Cloth_06
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: New_Cloth_07
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - common
+  - FileName: New_Cloth_08
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: New_Cloth_09
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - fire
+  - FileName: New_Cloth_10
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: New_Cloth_11
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: New_Cloth_12
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: New_Helmet_01
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - dark
+    - epic
+  - FileName: New_Helmet_02
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+  - FileName: New_Helmet_03
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - water
+  - FileName: New_Helmet_04
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver300
+    Properties:
+    - leather
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - earth
+    - common
+  - FileName: New_Helmet_05
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: New_Helmet_06
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: New_Helmet_07
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - fire
+  - FileName: New_Helmet_08
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - dark
+    - legendary
+  - FileName: New_Helmet_09
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver300
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: New_Helmet_10
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: New_Pant_01
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+  - FileName: New_Pant_02
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: New_Pant_03
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - melee
+    Style:
+    - common
+    - water
+  - FileName: New_Pant_04
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+  - FileName: New_Pant_05
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: New_Pant_06
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: New_Pant_07
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: New_Pant_08
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: New_Pant_09
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: New_Pant_10
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoes
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: New_Pant_11
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: New_Pant_12
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: New_Armor_01
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - Light
+  - FileName: New_Armor_02
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: New_Armor_03
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+  - FileName: New_Armor_04
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Ver300
+    Properties:
+    - leather
+    Class:
+    - melee
+    Style:
+    - common
+    - earth
+  - FileName: New_Armor_05
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Ver300
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+  - FileName: New_Armor_06
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - dark
+  - FileName: New_Armor_07
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - Light
+  - FileName: New_Armor_08
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - fire
+  - FileName: New_Armor_09
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bracer
+    Addon: Ver300
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: New_Armor_10
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bracer
+    Addon: Ver300
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: New_Armor_12
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: belt
+    Addon: Ver300
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+    - fire
+  - FileName: New_Shield_01
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Ver300
+    Properties:
+    - wood
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - common
+  - FileName: New_Shield_02
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Ver300
+    Properties:
+    - wood
+    Class:
+    - melee
+    - support
+    - tank
+    - physical
+    Style:
+    - common
+    - earth
+  - FileName: New_Shield_03
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - rare
+    - common
+  - FileName: New_Shield_04
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - support
+    - tank
+    - physical
+    Style:
+    - epic
+    - Light
+  - FileName: New_Weapon_01
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Ver300
+    Properties:
+    - crystal
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - fire
+  - FileName: New_weapon_02
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+  - FileName: New_Weapon_03
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: Ver300
+    Properties:
+    - wood
+    Class:
+    - damage
+    - magical
+    - ranged
+    Style:
+    - common
+    - fire
+  - FileName: New_Weapon_04
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: New_Weapon_05
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: New_Weapon_06
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: New_Weapon_07
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: mace
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - Light
+  - FileName: New_Weapon_08
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+  - FileName: New_Weapon_09
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: spear
+    Addon: Ver300
+    Properties:
+    - wood
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: New_Weapon_10
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: Ver300
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - common
+    - earth
+  - FileName: New_Weapon_11
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: dagger
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: New_Weapon_12
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: Ver300
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - broken
+    - earth
+  - FileName: New_Weapon_13
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: spear
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: New_Weapon_14
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pitchfork
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: New_Weapon_15
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: Ver300
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - epic
+    - earth
+  - FileName: New_Weapon_16
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: spear
+    Addon: Ver300
+    Properties:
+    - silver
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - water
+  - FileName: New_Weapon_17
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Ver300
+    Properties:
+    - silver
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - dark
+  - FileName: New_Weapon_18
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: wand
+    Addon: Ver300
+    Properties:
+    - crystal
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - rare
+    - common
+    - fire
+  - FileName: New_Weapon_19
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: dagger
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: New_Weapon_20
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Ver300
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+    - fire
+  - FileName: New_Back_01
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Ver300
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+  - FileName: New_Back_02
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: quiver
+    Addon: Ver300
+    Properties:
+    - leather
+    Class:
+    - ranged
+    - support
+    Style:
+    - common
+  - FileName: Zombie_1
+    Part: Body
+    Theme:
+    - fantasy
+    Race: undead
+    Gender: 
+    Type: body
+    Addon: Undead
+    Properties:
+    - undead
+    - decayed
+    - green_skin
+    Class: []
+    Style: []
+  - FileName: Zombie_2
+    Part: Body
+    Theme:
+    - fantasy
+    Race: undead
+    Gender: 
+    Type: body
+    Addon: Undead
+    Properties:
+    - undead
+    - decayed
+    - purple_skin
+    Class: []
+    Style: []
+  - FileName: Zombie_3
+    Part: Body
+    Theme:
+    - fantasy
+    Race: undead
+    Gender: 
+    Type: body
+    Addon: Undead
+    Properties:
+    - undead
+    - decayed
+    - blue_skin
+    Class: []
+    Style: []
+  - FileName: Zombie_4
+    Part: Body
+    Theme:
+    - fantasy
+    Race: undead
+    Gender: 
+    Type: body
+    Addon: Undead
+    Properties:
+    - undead
+    - decayed
+    - yellow_skin
+    Class: []
+    Style: []
+  - FileName: Zombie_5
+    Part: Body
+    Theme:
+    - fantasy
+    Race: undead
+    Gender: 
+    Type: body
+    Addon: Undead
+    Properties:
+    - undead
+    - decayed
+    - yellow_skin
+    Class: []
+    Style: []
+  - FileName: Zombie_6
+    Part: Body
+    Theme:
+    - fantasy
+    Race: undead
+    Gender: 
+    Type: body
+    Addon: Undead
+    Properties:
+    - undead
+    - grey_skin
+    Class: []
+    Style: []
+  - FileName: Undead_Cloth_01
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: belt
+    Addon: Undead
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+    - water
+  - FileName: Undead_Cloth_02
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Undead
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - dark
+  - FileName: Undead_Cloth_03
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Undead
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - broken
+    - dark
+  - FileName: Undead_Cloth_04
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Undead
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+  - FileName: Undead_Cloth_05
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: belt
+    Addon: Undead
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+    - dark
+  - FileName: Undead_Cloth_06
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: Undead
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - rare
+    - fire
+  - FileName: Undead_Cloth_07
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: Undead
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - common
+    - dark
+    - rare
+  - FileName: Undead_Pant_01
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Undead
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - water
+  - FileName: Undead_Pant_02
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Undead
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - broken
+    - dark
+  - FileName: Undead_Pant_03
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Undead
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - broken
+    - dark
+  - FileName: Undead_Pant_04
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Undead
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - broken
+  - FileName: Undead_Pant_05
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Undead
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+  - FileName: Undead_Helmet_01
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Undead
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+    - dark
+  - FileName: Undead_Helmet_02
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Undead
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Undead_Helmet_03
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: Undead_Helmet_04
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - tank
+    - melee
+    Style:
+    - rare
+  - FileName: Undead_Helmet_05
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - water
+    - common
+  - FileName: Undead_Helmet_06
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Undead
+    Properties:
+    - leather
+    Class:
+    - tank
+    - melee
+    Style:
+    - epic
+    - dark
+  - FileName: Undead_Helmet_07
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Undead
+    Properties: []
+    Class: []
+    Style:
+    - epic
+    - dark
+  - FileName: Undead_Armor_01
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Undead_Armor_02
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: scarf
+    Addon: Undead
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Undead_Armor_03
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+  - FileName: Undead_Armor_04
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+  - FileName: Undead_Armor_05
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: chain_mail
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - dark
+  - FileName: Undead_Armor_06
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - fire
+  - FileName: Undead_Armor_07
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Undead
+    Properties: []
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - fire
+  - FileName: Undead_Shield_01
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Undead
+    Properties:
+    - wood
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - common
+    - dark
+  - FileName: Undead_Shield_02
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - common
+  - FileName: Undead_Shield_03
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: spellbook
+    Addon: Undead
+    Properties:
+    - leather
+    Class:
+    - ranged
+    - magical
+    - support
+    Style:
+    - rare
+    - common
+    - dark
+  - FileName: Undead_Weapon_01
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - physical
+    - melee
+    Style:
+    - broken
+    - earth
+  - FileName: Undead_Weapon_02
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hammer
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - physical
+    - melee
+    Style:
+    - broken
+    - earth
+  - FileName: Undead_Weapon_03
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+  - FileName: Undead_Weapon_04
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: Undead
+    Properties:
+    - bone
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Undead_Weapon_05
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: Undead
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - common
+    - earth
+  - FileName: Undead_Weapon_06
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+  - FileName: Undead_Weapon_07
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: club
+    Addon: Undead
+    Properties:
+    - bone
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: Undead_Weapon_08
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Undead
+    Properties: []
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+    - broken
+  - FileName: Undead_Weapon_09
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: Undead
+    Properties:
+    - bone
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - rare
+    - epic
+    - dark
+  - FileName: Undead_Weapon_10
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Undead
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - fire
+  - FileName: Undead_Back_01
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Undead
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - dark
+  - FileName: Undead_Back_02
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Undead
+    Properties:
+    - cloth
+    Class:
+    - melee
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Orc_Hair_01
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: MS_Orc
+    Properties:
+    - short
+    - mohawk
+    Class: []
+    Style: []
+  - FileName: Orc_Hair_02
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: MS_Orc
+    Properties:
+    - ponytail
+    Class: []
+    Style: []
+  - FileName: Orc_Hair_03
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: MS_Orc
+    Properties:
+    - ponytail
+    Class: []
+    Style: []
+  - FileName: Orc_Mouse_01
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: orc
+    Gender: 
+    Type: facehair
+    Addon: MS_Orc
+    Properties:
+    - mouth
+    - tusks
+    Class: []
+    Style: []
+  - FileName: Orc_Mouse_02
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: orc
+    Gender: 
+    Type: facehair
+    Addon: MS_Orc
+    Properties:
+    - mouth
+    - closed
+    - red_lips
+    Class: []
+    Style: []
+  - FileName: Orc_Mouse_03
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: orc
+    Gender: 
+    Type: facehair
+    Addon: MS_Orc
+    Properties:
+    - mouth
+    - tusk
+    Class: []
+    Style: []
+  - FileName: Orc_Mouse_04
+    Part: FaceHair
+    Theme:
+    - fantasy
+    Race: orc
+    Gender: 
+    Type: facehair
+    Addon: MS_Orc
+    Properties:
+    - mouth
+    - sad
+    Class: []
+    Style: []
+  - FileName: Orc_Cloth_01
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: belt
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Cloth_02
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class:
+    - melee
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Cloth_03
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: MS_Orc
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - rare
+    - dark
+  - FileName: Orc_Cloth_04
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: MS_Orc
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - broken
+    - earth
+  - FileName: Orc_Cloth_05
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: belt
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Orc_Pant_01
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Pant_02
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Pant_03
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoes
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - common
+  - FileName: Orc_Pant_04
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Orc_Helmet_02
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: MS_Orc
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - dark
+  - FileName: Orc_Helmet_03
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: MS_Orc
+    Properties:
+    - bone
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Helmet_04
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: MS_Orc
+    Properties:
+    - bone
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+  - FileName: Orc_Helmet_05
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Helmet_06
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - rare
+    - common
+  - FileName: Orc_Armor_01
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: MS_Orc
+    Properties:
+    - bone
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - dark
+  - FileName: Orc_Armor_02
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: MS_Orc
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: Orc_Armor_03
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bracer
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+  - FileName: Orc_Armor_04
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: scarf
+    Addon: MS_Orc
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Shield_01
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: MS_Orc
+    Properties:
+    - wood
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - common
+  - FileName: Orc_Weapon_01
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: club
+    Addon: MS_Orc
+    Properties:
+    - wood
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Weapon_02
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: MS_Orc
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+  - FileName: Orc_Weapon_03
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: MS_Orc
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Weapon_04
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: MS_Orc
+    Properties:
+    - bone
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - rare
+    - dark
+  - FileName: Orc_Weapon_05
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: MS_Orc
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+  - FileName: Orc_Weapon_06
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: MS_Orc
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - rare
+    - common
+  - FileName: Orc_Weapon_07
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: axe
+    Addon: MS_Orc
+    Properties:
+    - stone
+    Class:
+    - damage
+    - physical
+    - melee
+    Style:
+    - broken
+    - earth
+  - FileName: Orc_Weapon_08
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: slingshot
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: Orc_Weapon_09
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: MS_Orc
+    Properties:
+    - wood
+    Class:
+    - damage
+    - magical
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Back_01
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: quiver
+    Addon: MS_Orc
+    Properties:
+    - leather
+    Class:
+    - ranged
+    - support
+    Style:
+    - common
+    - earth
+  - FileName: Orc_Back_02
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: banner
+    Addon: MS_Orc
+    Properties:
+    - cloth
+    Class:
+    - melee
+    - support
+    Style:
+    - rare
+    - dark
+  - FileName: Orc_Back_03
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: MS_Orc
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Hair_Archer_1
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: RetroHeroes
+    Properties:
+    - long
+    - ponytail
+    - ribbon
+    Class: []
+    Style: []
+  - FileName: Hair_Arhcer_2
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: RetroHeroes
+    Properties:
+    - medium
+    - bowl
+    Class: []
+    Style: []
+  - FileName: Hair_Healer_1
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: RetroHeroes
+    Properties:
+    - medium
+    - wavy
+    - bob
+    Class: []
+    Style: []
+  - FileName: Hair_Healer_2
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: hair
+    Addon: RetroHeroes
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: Hair_Knight_1
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: RetroHeroes
+    Properties:
+    - short
+    Class: []
+    Style: []
+  - FileName: Hair_Knight_2
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: RetroHeroes
+    Properties:
+    - short
+    - spiky
+    Class: []
+    Style: []
+  - FileName: Hair_Rogue_1
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: RetroHeroes
+    Properties:
+    - medium
+    - spiky
+    Class: []
+    Style: []
+  - FileName: Hair_Rogue_2
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: RetroHeroes
+    Properties:
+    - medium
+    - ponytail
+    Class: []
+    Style: []
+  - FileName: Hair_Sorcerer
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: RetroHeroes
+    Properties:
+    - medium
+    Class: []
+    Style: []
+  - FileName: Hair_Sorceress
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: RetroHeroes
+    Properties:
+    - long
+    - curly
+    Class: []
+    Style: []
+  - FileName: Cloth_Archer_1
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+  - FileName: Cloth_Archer_2
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Cloth_Healer_1
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - common
+    - Light
+  - FileName: Cloth_Healer_2
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - rare
+    - earth
+    - common
+  - FileName: Cloth_Knight_1
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - melee
+    Style:
+    - common
+  - FileName: Cloth_Knight_2
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - melee
+    Style:
+    - common
+    - water
+    - rare
+  - FileName: Cloth_Rogue_1
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+  - FileName: Cloth_Rogue_2
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - rare
+    - dark
+  - FileName: Cloth_Sorcerer
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - damage
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Cloth_Sorceress
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - damage
+    Style:
+    - rare
+    - fire
+  - FileName: Pant_Archer_2
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+  - FileName: Pant_Healer_1
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - common
+    - Light
+  - FileName: Pant_Healer_2
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - common
+    - dark
+  - FileName: Pant_Knight_1
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - melee
+    Style:
+    - common
+    - water
+  - FileName: Pant_Knight_2
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - melee
+    Style:
+    - common
+    - earth
+  - FileName: Pant_Rogue_1
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: RetroHeroes
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+  - FileName: Pant_Rogue_2
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: RetroHeroes
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+  - FileName: Pant_Sorcerer
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - common
+  - FileName: Pant_Sorceress
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Helmet_Archer_1
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - rare
+    - earth
+    - common
+  - FileName: Helmet_Archer_2
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - rare
+    - Light
+  - FileName: Helmet_Healer_1
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - common
+    - Light
+  - FileName: Helmet_Healer_2
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - rare
+    - Light
+  - FileName: Helmet_Knight_1
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - silver
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+  - FileName: Helmet_Knight_2
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: Helmet_Rogue_1
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Helmet_Rogue_2
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+    - rare
+  - FileName: Helmet_Sorcerer
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - damage
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Helmet_Sorceress
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - damage
+    Style:
+    - rare
+    - fire
+  - FileName: Armor_Archer_1
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Armor_Archer_2
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: RetroHeroes
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Armor_Healer_1
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - common
+    - Light
+  - FileName: Armor_Healer_2
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - rare
+    - Light
+  - FileName: Armor_Knight_1
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: RetroHeroes
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - Light
+  - FileName: Armor_Knight_2
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: RetroHeroes
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - common
+  - FileName: Armor_Rogue_1
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+  - FileName: Armor_Rogue_2
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: RetroHeroes
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+    - fire
+    - rare
+  - FileName: Armor_Sorcerer
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - damage
+    Style:
+    - rare
+    - dark
+  - FileName: Shield_Knight_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: RetroHeroes
+    Properties:
+    - steel
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - epic
+    - Light
+  - FileName: Shield_Knight_2
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: RetroHeroes
+    Properties:
+    - steel
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - rare
+    - fire
+  - FileName: Shield_Sorcerer
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: spellbook
+    Addon: RetroHeroes
+    Properties:
+    - leather
+    Class:
+    - ranged
+    - magical
+    - support
+    Style:
+    - rare
+    - fire
+  - FileName: Shield_Sorceress
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: orb
+    Addon: RetroHeroes
+    Properties:
+    - crystal
+    Class:
+    - ranged
+    - magical
+    - support
+    Style:
+    - rare
+    - dark
+  - FileName: Weapon_Archer_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: RetroHeroes
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - rare
+    - fire
+  - FileName: Weapon_Archer_2
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: RetroHeroes
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - common
+    - earth
+  - FileName: Weapon_Healer_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: RetroHeroes
+    Properties:
+    - crystal
+    Class:
+    - ranged
+    - magical
+    - healing
+    Style:
+    - rare
+    - common
+    - water
+  - FileName: Weapon_Healer_2
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: symbol
+    Addon: RetroHeroes
+    Properties: []
+    Class:
+    - ranged
+    - magical
+    - healing
+    Style:
+    - epic
+    - Light
+  - FileName: Weapon_Knight_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: RetroHeroes
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - Light
+  - FileName: Weapon_Knight_2
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: RetroHeroes
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - dark
+  - FileName: Weapon_Rogue_1
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: dagger
+    Addon: RetroHeroes
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: Weapon_Rogue_2
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: dagger
+    Addon: RetroHeroes
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+  - FileName: Weapon_Sorcerer
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: RetroHeroes
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - rare
+    - fire
+  - FileName: Weapon_Sorceress
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: wand
+    Addon: RetroHeroes
+    Properties: []
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - epic
+    - rare
+    - common
+    - dark
+  - FileName: Back_Archer_1
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+  - FileName: Back_Archer_2
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: quiver
+    Addon: RetroHeroes
+    Properties:
+    - leather
+    Class:
+    - ranged
+    - support
+    Style:
+    - common
+    - earth
+  - FileName: Back_Healer_1
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: Back_Healer_2
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    - healing
+    Style:
+    - common
+    - Light
+  - FileName: Back_Knight_1
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - melee
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Back_Knight_2
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - melee
+    Style:
+    - common
+    - water
+  - FileName: Back_Rogue_1
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Back_Rogue_2
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+  - FileName: Back_Sorcerer
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Back_Sorceress
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: RetroHeroes
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: New_Elf_1
+    Part: Body
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: 
+    Addon: Elf
+    Properties:
+    - elf
+    - pointed_ears
+    - light_skin
+    Class: []
+    Style: []
+  - FileName: New_Elf_2
+    Part: Body
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: 
+    Addon: Elf
+    Properties:
+    - dark_elf
+    - pointed_ears
+    - dark_skin
+    Class: []
+    Style: []
+  - FileName: Elf_Hair_01
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: female
+    Type: 
+    Addon: Elf
+    Properties:
+    - long
+    - ponytail
+    Class: []
+    Style: []
+  - FileName: Elf_Hair_02
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: female
+    Type: 
+    Addon: Elf
+    Properties:
+    - medium
+    Class: []
+    Style: []
+  - FileName: Elf_Hair_03
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: female
+    Type: 
+    Addon: Elf
+    Properties:
+    - medium
+    - bob
+    Class: []
+    Style: []
+  - FileName: Elf_Hair_04
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: 
+    Addon: Elf
+    Properties:
+    - short
+    - bob
+    Class: []
+    Style: []
+  - FileName: Elf_Hair_05
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: female
+    Type: 
+    Addon: Elf
+    Properties:
+    - medium
+    Class: []
+    Style: []
+  - FileName: Elf_Hair_06
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: 
+    Addon: Elf
+    Properties:
+    - ponytail
+    Class: []
+    Style: []
+  - FileName: Elf_Hair_07
+    Part: Hair
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: female
+    Type: 
+    Addon: Elf
+    Properties:
+    - medium
+    - ponytail
+    Class: []
+    Style: []
+  - FileName: Elf_Cloth_01
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - fire
+  - FileName: Elf_Cloth_02
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: Elf
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - rare
+    - Light
+  - FileName: Elf_Cloth_03
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - water
+  - FileName: Elf_Cloth_04
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Cloth_05
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - fire
+  - FileName: Elf_Cloth_06
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Cloth_07
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - water
+  - FileName: Elf_Cloth_08
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Cloth_09
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Cloth_10
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Cloth_11
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - epic
+    - fire
+  - FileName: Elf_Cloth_12
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: robe
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - epic
+    - fire
+  - FileName: Elf_Cloth_13
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - water
+  - FileName: Elf_Cloth_14
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: Elf_Cloth_15
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Cloth_16
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - dark
+  - FileName: Elf_Cloth_17
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - dark
+  - FileName: Elf_Cloth_18
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class:
+    - magical
+    Style:
+    - epic
+    - fire
+  - FileName: Elf_Cloth_19
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+  - FileName: Elf_Cloth_20
+    Part: Cloth
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: tunic
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - dark
+  - FileName: Elf_Pant_01
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoes
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Elf_Pant_02
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoes
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: Elf_Pant_03
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Pant_04
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: Elf_Pant_05
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - fire
+  - FileName: Elf_Pant_06
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Pant_07
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Pant_08
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - fire
+  - FileName: Elf_Pant_09
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Pant_10
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoes
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Pant_11
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoes
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Elf_Pant_12
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoes
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Elf_Pant_13
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Pant_14
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoes
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Elf_Pant_15
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - dark
+  - FileName: Elf_Pant_16
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Pant_17
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Pant_18
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoes
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Elf_Pant_19
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+  - FileName: Elf_Pant_20
+    Part: Pant
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: pants
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Helmet_01
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: 
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - epic
+    - Light
+  - FileName: Elf_Helmet_02
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Helmet_03
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: 
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - common
+    - Light
+  - FileName: Elf_Helmet_04
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Helmet_05
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties:
+    - steel
+    Class: []
+    Style:
+    - rare
+    - Light
+  - FileName: Elf_Helmet_06
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - rare
+    - earth
+  - FileName: Elf_Helmet_07
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - earth
+    - common
+  - FileName: Elf_Helmet_08
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - earth
+    - common
+  - FileName: Elf_Helmet_09
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Elf
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - epic
+    - earth
+  - FileName: Elf_Helmet_10
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: 
+    Addon: Elf
+    Properties:
+    - leather
+    Class: []
+    Style:
+    - rare
+    - common
+    - earth
+  - FileName: Elf_Helmet_11
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: 
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - epic
+    - fire
+  - FileName: Elf_Helmet_12
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Elf_Helmet_13
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: Elf_Helmet_14
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Elf_Helmet_15
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - fire
+    - epic
+    - common
+  - FileName: Elf_Helmet_16
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - common
+  - FileName: Elf_Helmet_17
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - dark
+  - FileName: Elf_Helmet_18
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: Elf_Helmet_19
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: 
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - dark
+    - epic
+    - common
+  - FileName: Elf_Helmet_20
+    Part: Helmet
+    Theme:
+    - fantasy
+    Race: highelf
+    Gender: 
+    Type: helmet
+    Addon: Elf
+    Properties: []
+    Class: []
+    Style:
+    - rare
+    - earth
+    - common
+  - FileName: Elf_Armor_01
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Armor_02
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - Light
+  - FileName: Elf_Armor_03
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+    - Light
+    - rare
+  - FileName: Elf_Armor_04
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+    - Light
+    - rare
+  - FileName: Elf_Armor_05
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Armor_06
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - earth
+  - FileName: Elf_Armor_07
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Elf
+    Properties:
+    - leather
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - earth
+  - FileName: Elf_Armor_08
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Armor_09
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - ranged
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Armor_10
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - fire
+  - FileName: Elf_Armor_11
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - ranged
+    Style:
+    - rare
+    - fire
+  - FileName: Elf_Armor_12
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - fire
+    - epic
+  - FileName: Elf_Armor_13
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - ranged
+    Style:
+    - rare
+    - Light
+    - common
+  - FileName: Elf_Armor_14
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - rare
+    - fire
+  - FileName: Elf_Armor_15
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Elf_Armor_16
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - rare
+    - dark
+  - FileName: Elf_Armor_17
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Armor_18
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: plate
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - tank
+    Style:
+    - epic
+    - dark
+  - FileName: Elf_Armor_19
+    Part: Armor
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shoulder
+    Addon: Elf
+    Properties:
+    - leather
+    Class:
+    - ranged
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Elf_Shield_01
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - support
+    Style:
+    - epic
+    - Light
+  - FileName: Elf_Shield_02
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - epic
+    - earth
+  - FileName: Elf_Shield_03
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - epic
+    - fire
+  - FileName: Elf_Shield_04
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: shield
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - support
+    - physical
+    Style:
+    - epic
+    - Light
+  - FileName: Elf_Weapon_01
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: Elf
+    Properties:
+    - silver
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - epic
+    - Light
+  - FileName: Elf_Weapon_02
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - rare
+    - fire
+    - epic
+  - FileName: Elf_Weapon_03
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - Light
+  - FileName: Elf_Weapon_04
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - rare
+    - fire
+  - FileName: Elf_Weapon_05
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Elf
+    Properties: []
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - Light
+  - FileName: Elf_Weapon_06
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - common
+    - earth
+    - rare
+  - FileName: Elf_Weapon_07
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - earth
+  - FileName: Elf_Weapon_08
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - earth
+  - FileName: Elf_Weapon_09
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - rare
+    - common
+    - earth
+  - FileName: Elf_Weapon_10
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - rare
+    - epic
+    - earth
+  - FileName: Elf_Weapon_11
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - fire
+  - FileName: Elf_Weapon_12
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: Elf
+    Properties:
+    - crystal
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - epic
+    - fire
+  - FileName: Elf_Weapon_13
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: sword
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - epic
+    - Light
+  - FileName: Elf_Weapon_14
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - epic
+    - Light
+  - FileName: Elf_Weapon_15
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: wand
+    Addon: Elf
+    Properties:
+    - silver
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - rare
+    - common
+    - Light
+  - FileName: Elf_Weapon_16
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: dagger
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - common
+    - dark
+  - FileName: Elf_Weapon_17
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: dagger
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+    - rare
+  - FileName: Elf_Weapon_18
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: bow
+    Addon: Elf
+    Properties:
+    - wood
+    Class:
+    - ranged
+    - physical
+    - damage
+    Style:
+    - rare
+    - fire
+    - epic
+  - FileName: Elf_Weapon_19
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: dagger
+    Addon: Elf
+    Properties:
+    - steel
+    Class:
+    - melee
+    - physical
+    - damage
+    Style:
+    - common
+    - dark
+    - rare
+  - FileName: Elf_Weapon_20
+    Part: Weapons
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: staff
+    Addon: Elf
+    Properties:
+    - crystal
+    Class:
+    - ranged
+    - magical
+    - damage
+    Style:
+    - rare
+    - dark
+  - FileName: Elf_Back_01
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Elf_Back_02
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Elf_Back_03
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - dark
+  - FileName: Elf_Back_04
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - Light
+  - FileName: Elf_Back_05
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - dark
+  - FileName: Elf_Back_06
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - common
+    - earth
+  - FileName: Elf_Back_07
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Elf_Back_08
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: scarf
+    Addon: Elf
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+    - dark
+    - rare
+  - FileName: Elf_Back_09
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - fire
+    - common
+  - FileName: Elf_Back_10
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: scarf
+    Addon: Elf
+    Properties:
+    - cloth
+    Class:
+    - ranged
+    Style:
+    - common
+  - FileName: Elf_Back_11
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Elf_Back_12
+    Part: Back
+    Theme:
+    - fantasy
+    Race: 
+    Gender: 
+    Type: cape
+    Addon: Elf
+    Properties:
+    - cloth
+    Class: []
+    Style:
+    - rare
+    - dark
+    - common
+  - FileName: Hair_m01
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Short
+    - Neat
+    Class: []
+    Style: []
+  - FileName: Hair_m02
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Short
+    - Spiky
+    Class: []
+    Style: []
+  - FileName: Hair_m03
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Medium
+    - Parted
+    Class: []
+    Style: []
+  - FileName: Hair_m04
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Medium
+    - Mullet
+    Class: []
+    Style: []
+  - FileName: Hair_m05
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Short
+    - Forward
+    Class: []
+    Style: []
+  - FileName: Hair_m06
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Spiky
+    - Up
+    Class: []
+    Style: []
+  - FileName: Hair_m07
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Bald
+    Class: []
+    Style: []
+  - FileName: Hair_m08
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Top
+    - Knot
+    Class: []
+    Style: []
+  - FileName: Hair_m09
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Long
+    - Straight
+    Class: []
+    Style: []
+  - FileName: Hair_m10
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Buzz
+    - Cut
+    Class: []
+    Style: []
+  - FileName: Hair_m11
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Long
+    - Straight
+    Class: []
+    Style: []
+  - FileName: Hair_m12
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Fade
+    - Undercut
+    Class: []
+    Style: []
+  - FileName: Hair_m13
+    Part: Hair
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: hair
+    Addon: ModernPackVer1
+    Properties:
+    - Medium
+    - Slicked
+    - Back
+    Class: []
+    Style: []
+  - FileName: face_acc_m01
+    Part: FaceHair
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Glasses
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: face_acc_m02
+    Part: FaceHair
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Glasses
+    Addon: ModernPackVer1
+    Properties:
+    - Plastic
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: face_acc_m03
+    Part: FaceHair
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Glasses
+    Addon: ModernPackVer1
+    Properties:
+    - Plastic
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: face_acc_m04
+    Part: FaceHair
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Earring
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: face_acc_m05
+    Part: FaceHair
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Earring
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: face_acc_m06
+    Part: FaceHair
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Mask
+    Addon: ModernPackVer1
+    Properties:
+    - Cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: face_cheek
+    Part: FaceHair
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Makeup
+    Addon: ModernPackVer1
+    Properties:
+    - Blush
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: face_eyelash
+    Part: FaceHair
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Makeup
+    Addon: ModernPackVer1
+    Properties:
+    - Eyelash
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: face_lip
+    Part: FaceHair
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Makeup
+    Addon: ModernPackVer1
+    Properties:
+    - Lipstick
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: dress_1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_1_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_1_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_1_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: dress_2_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: dress_2_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: dress_2_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: dress_3
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_3_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_3_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_3_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_4
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_4_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_4_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_4_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: dress_5
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: dress_5_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: dress_5_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: dress_5_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Dress
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: farmer
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Overalls
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: farmer_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Overalls
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: farmer_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Overalls
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: farmer_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Overalls
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: hoodie
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Hoodie
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: hoodie_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Hoodie
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: hoodie_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Hoodie
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: suit_1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_1_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_1_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_1_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_2_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_2_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_2_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_3
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_3_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_3_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: suit_3_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Suit
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: tee_1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_1_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_1_g1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_1_g2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_2_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_2_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_2_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_3
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_3_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_3_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: tee_3_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shirt
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Apparel
+    Class: []
+    Style:
+    - common
+  - FileName: winter1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter1_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter1_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter1_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter2_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter2_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter2_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter3
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter3_c1
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter3_c2
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: winter3_g
+    Part: Cloth
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Jacket
+    Addon: ModernPackVer1
+    Properties:
+    - wool
+    - Apparel
+    Class: []
+    Style:
+    - rare
+  - FileName: Foot_m01
+    Part: Pant
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Shoes
+    Addon: ModernPackVer1
+    Properties:
+    - Leather
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Foot_m02
+    Part: Pant
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Shoes
+    Addon: ModernPackVer1
+    Properties:
+    - Leather
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Foot_m03
+    Part: Pant
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shoes
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Foot_m04
+    Part: Pant
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shoes
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Foot_m05
+    Part: Pant
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shoes
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m01
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Ribbon
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m01_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Ribbon
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m01_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Ribbon
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m01_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Ribbon
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m01_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Ribbon
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m02
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Ribbon
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m02_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Ribbon
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m02_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Ribbon
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m02_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Ribbon
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m02_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: Ribbon
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m03
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: beanie
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m03_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: beanie
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m03_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: beanie
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m03_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: beanie
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m03_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: beanie
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m04
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: beanie
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m04_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: beanie
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m04_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: beanie
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m04_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: beanie
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m04_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: beanie
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m05
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: beret
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m05_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: beret
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m05_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: beret
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m05_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: beret
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m05_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: beret
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m06
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: beret
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m06_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: beret
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m06_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: beret
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m06_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: beret
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m06_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: beret
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m07
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m07_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m07_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m07_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m07_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m08
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m08_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m08_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m08_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m08_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: female
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m09
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m09_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m09_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m09_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m09_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: male
+    Type: cap
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - common
+  - FileName: Helmet_m10
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: headset
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m10_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: headset
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m10_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: headset
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m10_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: headset
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m10_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: headset
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m11
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: fedora
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m11_black
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: fedora
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m11_blonde
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: fedora
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m11_brown
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: fedora
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Helmet_m11_color
+    Part: Helmet
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: fedora
+    Addon: ModernPackVer1
+    Properties:
+    - cloth
+    - Accessory
+    Class: []
+    Style:
+    - rare
+  - FileName: Weapon_m_beer
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Mug
+    Addon: ModernPackVer1
+    Properties:
+    - Glass
+    - Equipment
+    Class: []
+    Style:
+    - common
+  - FileName: Weapon_m_board
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: board
+    Addon: ModernPackVer1
+    Properties:
+    - Wood
+    - Equipment
+    Class: []
+    Style:
+    - rare
+  - FileName: Weapon_m_coffee
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Cup
+    Addon: ModernPackVer1
+    Properties:
+    - Paper
+    - Equipment
+    Class: []
+    Style:
+    - common
+  - FileName: Weapon_m_laptop
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Laptop
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Equipment
+    Class: []
+    Style:
+    - rare
+  - FileName: Weapon_m_map
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Flipper
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Equipment
+    Class: []
+    Style:
+    - common
+  - FileName: Weapon_m_mic
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Microphone
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Equipment
+    Class: []
+    Style:
+    - rare
+  - FileName: Weapon_m_pan
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Pan
+    Addon: ModernPackVer1
+    Properties:
+    - Steel
+    - Equipment
+    Class: []
+    Style:
+    - common
+  - FileName: Weapon_m_phone
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Phone
+    Addon: ModernPackVer1
+    Properties:
+    - steel
+    - Equipment
+    Class: []
+    Style:
+    - rare
+  - FileName: Weapon_m_pouch
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Pouch
+    Addon: ModernPackVer1
+    Properties:
+    - Leather
+    - Equipment
+    Class: []
+    Style:
+    - common
+  - FileName: Weapon_m_shovel
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Shovel
+    Addon: ModernPackVer1
+    Properties:
+    - plastic
+    - Equipment
+    Class: []
+    Style:
+    - common
+  - FileName: Weapon_m_surf
+    Part: Weapons
+    Theme:
+    - modern
+    Race: 
+    Gender: 
+    Type: Surfboard
+    Addon: ModernPackVer1
+    Properties:
+    - plastic
+    - Equipment
+    Class: []
+    Style:
+    - rare
+  enableStyleFilterFallback: 0
+  verboseLogging: 0

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 05d885f5f1f136d4ab420d8b481613fa
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 188715
+  packageName: 2D Pixel Unit Maker - SPUM
+  packageVersion: "1.8.8\uD328\uD0A4\uC9C0\uC5C5\uB85C\uB4DC\uC644"
+  assetPath: Assets/Thirdparty/SPUM/Core/Basic_Resources/Animator/Horse/DAMAGED.anim
+  uploadId: 892164

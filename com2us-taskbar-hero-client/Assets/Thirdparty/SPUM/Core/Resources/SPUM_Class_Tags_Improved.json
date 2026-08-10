@@ -1,0 +1,136 @@
+{
+  "combat_classes_list": [
+    {
+      "id": "warrior",
+      "description": "warrior",
+      "type": [
+        "sword",
+        "axe",
+        "hammer",
+        "mace",
+        "spear",
+        "shield",
+        "plate",
+        "shoulder",
+        "chain_mail",
+        "helmet",
+        "tunic",
+        "belt",
+        "pants",
+        "cape",
+        "banner"
+      ],
+      "class_tags": [
+        "melee",
+        "physical",
+        "damage",
+        "tank"
+      ],
+      "style": [],
+      "type_negative": [
+        "staff",
+        "wand",
+        "orb",
+        "cloth"
+      ],
+      "class_negative": [
+        "magical",
+        "healing",
+        "light"
+      ],
+      "negative": [
+        "magical",
+        "healing",
+        "light",
+        "cloth",
+        "staff",
+        "wand",
+        "orb"
+      ]
+    },
+    {
+      "id": "archer",
+      "description": "archer",
+      "type": [
+        "bow",
+        "quiver",
+        "shoulder",
+        "bracer",
+        "helmet",
+        "tunic",
+        "pants",
+        "cape",
+        "scarf"
+      ],
+      "class_tags": [
+        "ranged",
+        "physical",
+        "damage",
+        "support"
+      ],
+      "style": [],
+      "type_negative": [
+        "plate",
+        "shield",
+        "hammer",
+        "mace"
+      ],
+      "class_negative": [
+        "tank",
+        "melee"
+      ],
+      "negative": [
+        "heavy",
+        "plate",
+        "shield",
+        "hammer",
+        "mace",
+        "tank"
+      ]
+    },
+    {
+      "id": "mage",
+      "description": "mage",
+      "type": [
+        "staff",
+        "wand",
+        "orb",
+        "spellbook",
+        "symbol",
+        "robe",
+        "tunic",
+        "helmet",
+        "shoulder",
+        "pants",
+        "shoes",
+        "cape"
+      ],
+      "class_tags": [
+        "ranged",
+        "magical",
+        "damage",
+        "healing",
+        "support"
+      ],
+      "style": [],
+      "type_negative": [
+        "plate",
+        "chain_mail",
+        "shield"
+      ],
+      "class_negative": [
+        "heavy",
+        "physical",
+        "melee"
+      ],
+      "negative": [
+        "heavy",
+        "plate",
+        "chain_mail",
+        "shield",
+        "physical",
+        "melee"
+      ]
+    }
+  ]
+}

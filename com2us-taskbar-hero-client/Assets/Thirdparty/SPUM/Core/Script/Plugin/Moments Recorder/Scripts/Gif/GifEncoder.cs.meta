@@ -1,0 +1,19 @@
+fileFormatVersion: 2
+guid: a7303ea6ac5f84c418cc4f429d0d5363
+timeCreated: 1429343857
+licenseType: Store
+MonoImporter:
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 188715
+  packageName: 2D Pixel Unit Maker - SPUM
+  packageVersion: "1.8.8\uD328\uD0A4\uC9C0\uC5C5\uB85C\uB4DC\uC644"
+  assetPath: Assets/Thirdparty/SPUM/Core/Script/Plugin/Moments Recorder/Scripts/Gif/GifEncoder.cs
+  uploadId: 892164

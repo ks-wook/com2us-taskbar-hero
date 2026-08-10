@@ -1,0 +1,80 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &3744046105682257372
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3744046105682257373}
+  - component: {fileID: 3744046105682257370}
+  - component: {fileID: 6672946749959962316}
+  m_Layer: 0
+  m_Name: SPUM_Manager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3744046105682257373
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3744046105682257372}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3744046105682257370
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3744046105682257372}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 75342fe1d6ecf4d899773eb76f45e71f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _version: 187
+  unitPath: Assets/SPUM/Resources/Units/
+  unitBackUpPath: Assets/SPUM/Backup/
+  isSaveSamePath: 1
+  EditPrefab: {fileID: 0}
+  PreviewPrefab: {fileID: 0}
+  SPUM_Animator:
+  - Type: Unit
+    RuntimeAnimator: {fileID: 9100000, guid: e9358c226bb09e24da9c5f7064768810, type: 2}
+  - Type: Horse
+    RuntimeAnimator: {fileID: 9100000, guid: 87250caa4eec27040bc5650f38894ee7, type: 2}
+  RandomColorButton: {fileID: 0}
+  spumPackages: []
+  StateList: []
+  UnitTypeList: []
+  SpritePackageNameList: []
+  animationManager: {fileID: 0}
+  UIManager: {fileID: 0}
+  paginationManager: {fileID: 0}
+  ExportScene: {fileID: 0}
+  sceneName: 
+--- !u!114 &6672946749959962316
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3744046105682257372}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7e2a9b21a190c9f4b9987637c53c64c8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 

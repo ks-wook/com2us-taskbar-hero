@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 8dab79cbbd437f7428b3bc97e6a57017
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 188715
+  packageName: 2D Pixel Unit Maker - SPUM
+  packageVersion: "1.8.8\uD328\uD0A4\uC9C0\uC5C5\uB85C\uB4DC\uC644"
+  assetPath: Assets/SPUM/Script/Editor/SPUM_AssetExporterWithPreview.cs
+  uploadId: 892164

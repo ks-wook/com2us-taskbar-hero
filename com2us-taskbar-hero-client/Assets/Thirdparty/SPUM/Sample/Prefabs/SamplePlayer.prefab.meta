@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 4fd99ad1026eb4676b6ed98658f868a9
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 188715
+  packageName: 2D Pixel Unit Maker - SPUM
+  packageVersion: "1.8.8\uD328\uD0A4\uC9C0\uC5C5\uB85C\uB4DC\uC644"
+  assetPath: Assets/Thirdparty/SPUM/Sample/Prefabs/SamplePlayer.prefab
+  uploadId: 892164

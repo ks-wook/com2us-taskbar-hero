@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c5a65547d1edf4a9d882bd6cff83eda8
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 188715
+  packageName: 2D Pixel Unit Maker - SPUM
+  packageVersion: "1.8.8\uD328\uD0A4\uC9C0\uC5C5\uB85C\uB4DC\uC644"
+  assetPath: Assets/Thirdparty/SPUM/Core/Basic_Resources/Materials/SpriteDiffuse.mat
+  uploadId: 892164

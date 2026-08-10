@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: b74b0d85bc9eded449ea143efb3eed3f
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 7400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 188715
+  packageName: 2D Pixel Unit Maker - SPUM
+  packageVersion: "1.8.8\uD328\uD0A4\uC9C0\uC5C5\uB85C\uB4DC\uC644"
+  assetPath: Assets/Thirdparty/SPUM/Resources/Addons/Legacy/1_Horse/1_Animation/04_Death/4_Death.anim
+  uploadId: 892164

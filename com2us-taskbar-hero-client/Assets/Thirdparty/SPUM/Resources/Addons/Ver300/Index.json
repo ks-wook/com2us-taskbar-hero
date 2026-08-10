@@ -1,0 +1,1191 @@
+{
+    "Name": "Ver300",
+    "Path": "Assets/SPUM/Resources/Addons",
+    "Version": "",
+    "CreationDate": "2025-12-04 16:09:49",
+    "SpumAnimationData": [
+        {
+            "index": 0,
+            "Name": "LongSpear_idle.anim",
+            "StateType": "IDLE",
+            "ClipPath": "Addons/Ver300/0_Unit/1_Animation/00_Idle/LongSpear_idle.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "LongSpear_Walk.anim",
+            "StateType": "MOVE",
+            "ClipPath": "Addons/Ver300/0_Unit/1_Animation/01_Move/LongSpear_Walk.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "AxeAttack_1.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Ver300/0_Unit/1_Animation/02_Attack/00_MeleeAttack/AxeAttack_1.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "MeleeAttack"
+        },
+        {
+            "index": 0,
+            "Name": "LongSpearAttack_1.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Ver300/0_Unit/1_Animation/02_Attack/00_MeleeAttack/LongSpearAttack_1.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "MeleeAttack"
+        },
+        {
+            "index": 0,
+            "Name": "ShotSwordAttack_1.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Ver300/0_Unit/1_Animation/02_Attack/00_MeleeAttack/ShotSwordAttack_1.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "MeleeAttack"
+        }
+    ],
+    "SpumTextureData": [
+        {
+            "Name": "New_Hair_01",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_01",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_01"
+        },
+        {
+            "Name": "New_Hair_02",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_02",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_02"
+        },
+        {
+            "Name": "New_Hair_03",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_03",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_03"
+        },
+        {
+            "Name": "New_Hair_04",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_04",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_04"
+        },
+        {
+            "Name": "New_Hair_05",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_05",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_05"
+        },
+        {
+            "Name": "New_Hair_06",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_06",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_06"
+        },
+        {
+            "Name": "New_Hair_07",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_07",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_07"
+        },
+        {
+            "Name": "New_Hair_08",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_08",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_08"
+        },
+        {
+            "Name": "New_Hair_09",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_09",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_09"
+        },
+        {
+            "Name": "New_Hair_10",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_10",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_10"
+        },
+        {
+            "Name": "New_Hair_11",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_11",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_11"
+        },
+        {
+            "Name": "New_Hair_12",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_12",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_12"
+        },
+        {
+            "Name": "New_Hair_13",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_13",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_13"
+        },
+        {
+            "Name": "New_Hair_14",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_14",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_14"
+        },
+        {
+            "Name": "New_Hair_15",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_15",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_15"
+        },
+        {
+            "Name": "New_Hair_16",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_16",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_16"
+        },
+        {
+            "Name": "New_Hair_17",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_17",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_17"
+        },
+        {
+            "Name": "New_Hair_18",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_18",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_18"
+        },
+        {
+            "Name": "New_Hair_19",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_19",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_19"
+        },
+        {
+            "Name": "New_Hair_20",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "New_Hair_20",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/2_Hair/New_Hair_20"
+        },
+        {
+            "Name": "New_Cloth_01",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_01"
+        },
+        {
+            "Name": "New_Cloth_01",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_01"
+        },
+        {
+            "Name": "New_Cloth_01",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_01"
+        },
+        {
+            "Name": "New_Cloth_02",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_02"
+        },
+        {
+            "Name": "New_Cloth_02",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_02"
+        },
+        {
+            "Name": "New_Cloth_02",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_02"
+        },
+        {
+            "Name": "New_Cloth_03",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_03"
+        },
+        {
+            "Name": "New_Cloth_03",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_03"
+        },
+        {
+            "Name": "New_Cloth_03",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_03"
+        },
+        {
+            "Name": "New_Cloth_04",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_04"
+        },
+        {
+            "Name": "New_Cloth_05",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_05"
+        },
+        {
+            "Name": "New_Cloth_05",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_05"
+        },
+        {
+            "Name": "New_Cloth_05",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_05"
+        },
+        {
+            "Name": "New_Cloth_06",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_06"
+        },
+        {
+            "Name": "New_Cloth_06",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_06"
+        },
+        {
+            "Name": "New_Cloth_06",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_06"
+        },
+        {
+            "Name": "New_Cloth_07",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_07"
+        },
+        {
+            "Name": "New_Cloth_07",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_07"
+        },
+        {
+            "Name": "New_Cloth_07",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_07"
+        },
+        {
+            "Name": "New_Cloth_08",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_08"
+        },
+        {
+            "Name": "New_Cloth_08",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_08"
+        },
+        {
+            "Name": "New_Cloth_08",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_08"
+        },
+        {
+            "Name": "New_Cloth_09",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_09"
+        },
+        {
+            "Name": "New_Cloth_09",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_09"
+        },
+        {
+            "Name": "New_Cloth_09",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_09"
+        },
+        {
+            "Name": "New_Cloth_10",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_10"
+        },
+        {
+            "Name": "New_Cloth_10",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_10"
+        },
+        {
+            "Name": "New_Cloth_10",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_10"
+        },
+        {
+            "Name": "New_Cloth_11",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_11"
+        },
+        {
+            "Name": "New_Cloth_11",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_11"
+        },
+        {
+            "Name": "New_Cloth_11",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_11"
+        },
+        {
+            "Name": "New_Cloth_12",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_12"
+        },
+        {
+            "Name": "New_Cloth_12",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_12"
+        },
+        {
+            "Name": "New_Cloth_12",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Cloth/New_Cloth_12"
+        },
+        {
+            "Name": "New_Helmet_01",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "New_Helmet_01",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Helmet/New_Helmet_01"
+        },
+        {
+            "Name": "New_Helmet_02",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "New_Helmet_02",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Helmet/New_Helmet_02"
+        },
+        {
+            "Name": "New_Helmet_03",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "New_Helmet_03",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Helmet/New_Helmet_03"
+        },
+        {
+            "Name": "New_Helmet_04",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "New_Helmet_04",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Helmet/New_Helmet_04"
+        },
+        {
+            "Name": "New_Helmet_05",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "New_Helmet_05",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Helmet/New_Helmet_05"
+        },
+        {
+            "Name": "New_Helmet_06",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "New_Helmet_06",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Helmet/New_Helmet_06"
+        },
+        {
+            "Name": "New_Helmet_07",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "New_Helmet_07",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Helmet/New_Helmet_07"
+        },
+        {
+            "Name": "New_Helmet_08",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "New_Helmet_08",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Helmet/New_Helmet_08"
+        },
+        {
+            "Name": "New_Helmet_09",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "New_Helmet_09",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Helmet/New_Helmet_09"
+        },
+        {
+            "Name": "New_Helmet_10",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "New_Helmet_10",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/4_Helmet/New_Helmet_10"
+        },
+        {
+            "Name": "New_Pant_01",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_01"
+        },
+        {
+            "Name": "New_Pant_01",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_01"
+        },
+        {
+            "Name": "New_Pant_02",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_02"
+        },
+        {
+            "Name": "New_Pant_02",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_02"
+        },
+        {
+            "Name": "New_Pant_03",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_03"
+        },
+        {
+            "Name": "New_Pant_03",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_03"
+        },
+        {
+            "Name": "New_Pant_04",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_04"
+        },
+        {
+            "Name": "New_Pant_04",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_04"
+        },
+        {
+            "Name": "New_Pant_05",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_05"
+        },
+        {
+            "Name": "New_Pant_05",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_05"
+        },
+        {
+            "Name": "New_Pant_06",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_06"
+        },
+        {
+            "Name": "New_Pant_06",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_06"
+        },
+        {
+            "Name": "New_Pant_07",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_07"
+        },
+        {
+            "Name": "New_Pant_07",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_07"
+        },
+        {
+            "Name": "New_Pant_08",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_08"
+        },
+        {
+            "Name": "New_Pant_08",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_08"
+        },
+        {
+            "Name": "New_Pant_09",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_09"
+        },
+        {
+            "Name": "New_Pant_09",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_09"
+        },
+        {
+            "Name": "New_Pant_10",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_10"
+        },
+        {
+            "Name": "New_Pant_10",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_10"
+        },
+        {
+            "Name": "New_Pant_11",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_11"
+        },
+        {
+            "Name": "New_Pant_11",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_11"
+        },
+        {
+            "Name": "New_Pant_12",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_12"
+        },
+        {
+            "Name": "New_Pant_12",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/5_Pant/New_Pant_12"
+        },
+        {
+            "Name": "New_Armor_01",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_01"
+        },
+        {
+            "Name": "New_Armor_01",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_01"
+        },
+        {
+            "Name": "New_Armor_01",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_01"
+        },
+        {
+            "Name": "New_Armor_02",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_02"
+        },
+        {
+            "Name": "New_Armor_02",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_02"
+        },
+        {
+            "Name": "New_Armor_02",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_02"
+        },
+        {
+            "Name": "New_Armor_03",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_03"
+        },
+        {
+            "Name": "New_Armor_04",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_04"
+        },
+        {
+            "Name": "New_Armor_04",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_04"
+        },
+        {
+            "Name": "New_Armor_05",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_05"
+        },
+        {
+            "Name": "New_Armor_05",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_05"
+        },
+        {
+            "Name": "New_Armor_05",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_05"
+        },
+        {
+            "Name": "New_Armor_06",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_06"
+        },
+        {
+            "Name": "New_Armor_06",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_06"
+        },
+        {
+            "Name": "New_Armor_06",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_06"
+        },
+        {
+            "Name": "New_Armor_07",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_07"
+        },
+        {
+            "Name": "New_Armor_07",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_07"
+        },
+        {
+            "Name": "New_Armor_07",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_07"
+        },
+        {
+            "Name": "New_Armor_08",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_08"
+        },
+        {
+            "Name": "New_Armor_08",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_08"
+        },
+        {
+            "Name": "New_Armor_08",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_08"
+        },
+        {
+            "Name": "New_Armor_09",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_09"
+        },
+        {
+            "Name": "New_Armor_09",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_09"
+        },
+        {
+            "Name": "New_Armor_09",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_09"
+        },
+        {
+            "Name": "New_Armor_10",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_10"
+        },
+        {
+            "Name": "New_Armor_10",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_10"
+        },
+        {
+            "Name": "New_Armor_10",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_10"
+        },
+        {
+            "Name": "New_Armor_12",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/7_Armor/New_Armor_12"
+        },
+        {
+            "Name": "New_Weapon_01",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_01",
+            "PartSubType": "Sword",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/0_Sword/New_Weapon_01"
+        },
+        {
+            "Name": "New_Weapon_06",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_06",
+            "PartSubType": "Sword",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/0_Sword/New_Weapon_06"
+        },
+        {
+            "Name": "New_Weapon_17",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_17",
+            "PartSubType": "Sword",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/0_Sword/New_Weapon_17"
+        },
+        {
+            "Name": "New_Weapon_18",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_18",
+            "PartSubType": "Sword",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/0_Sword/New_Weapon_18"
+        },
+        {
+            "Name": "New_Weapon_19",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_19",
+            "PartSubType": "Sword",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/0_Sword/New_Weapon_19"
+        },
+        {
+            "Name": "New_Weapon_20",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_20",
+            "PartSubType": "Sword",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/0_Sword/New_Weapon_20"
+        },
+        {
+            "Name": "New_Weapon_09",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_09",
+            "PartSubType": "Spear",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/1_Spear/New_Weapon_09"
+        },
+        {
+            "Name": "New_Weapon_13",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_13",
+            "PartSubType": "Spear",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/1_Spear/New_Weapon_13"
+        },
+        {
+            "Name": "New_Weapon_14",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_14",
+            "PartSubType": "Spear",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/1_Spear/New_Weapon_14"
+        },
+        {
+            "Name": "New_Weapon_16",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_16",
+            "PartSubType": "Spear",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/1_Spear/New_Weapon_16"
+        },
+        {
+            "Name": "New_weapon_02",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_weapon_02",
+            "PartSubType": "Axe",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/2_Axe/New_weapon_02"
+        },
+        {
+            "Name": "New_Weapon_04",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_04",
+            "PartSubType": "Axe",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/2_Axe/New_Weapon_04"
+        },
+        {
+            "Name": "New_Weapon_08",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_08",
+            "PartSubType": "Axe",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/2_Axe/New_Weapon_08"
+        },
+        {
+            "Name": "New_Weapon_10",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_10",
+            "PartSubType": "Bow",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/3_Bow/New_Weapon_10"
+        },
+        {
+            "Name": "New_Weapon_12",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_12",
+            "PartSubType": "Bow",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/3_Bow/New_Weapon_12"
+        },
+        {
+            "Name": "New_Weapon_15",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_15",
+            "PartSubType": "Bow",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/3_Bow/New_Weapon_15"
+        },
+        {
+            "Name": "New_Weapon_03",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_03",
+            "PartSubType": "Wand",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/5_Wand/New_Weapon_03"
+        },
+        {
+            "Name": "New_Weapon_05",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_05",
+            "PartSubType": "Dagger",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/6_Dagger/New_Weapon_05"
+        },
+        {
+            "Name": "New_Weapon_11",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_11",
+            "PartSubType": "Dagger",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/6_Dagger/New_Weapon_11"
+        },
+        {
+            "Name": "New_Shield_01",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Shield_01",
+            "PartSubType": "Shield",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/7_Shield/New_Shield_01"
+        },
+        {
+            "Name": "New_Shield_02",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Shield_02",
+            "PartSubType": "Shield",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/7_Shield/New_Shield_02"
+        },
+        {
+            "Name": "New_Shield_03",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Shield_03",
+            "PartSubType": "Shield",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/7_Shield/New_Shield_03"
+        },
+        {
+            "Name": "New_Shield_04",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Shield_04",
+            "PartSubType": "Shield",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/7_Shield/New_Shield_04"
+        },
+        {
+            "Name": "New_Weapon_07",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "New_Weapon_07",
+            "PartSubType": "Mace",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/8_Weapons/8_Mace/New_Weapon_07"
+        },
+        {
+            "Name": "New_Back_01",
+            "UnitType": "Unit",
+            "PartType": "Back",
+            "SubType": "New_Back_01",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/10_Back/New_Back_01"
+        },
+        {
+            "Name": "New_Back_02",
+            "UnitType": "Unit",
+            "PartType": "Back",
+            "SubType": "New_Back_02",
+            "PartSubType": "",
+            "Path": "Addons/Ver300/0_Unit/0_Sprite/10_Back/New_Back_02"
+        }
+    ]
+}

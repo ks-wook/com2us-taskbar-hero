@@ -1,0 +1,265 @@
+{
+    "Name": "Ver121",
+    "Path": "Assets/SPUM/Resources/Addons",
+    "Version": "",
+    "CreationDate": "2025-12-04 16:09:49",
+    "SpumAnimationData": [],
+    "SpumTextureData": [
+        {
+            "Name": "Normal_Hair1",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair1",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair1"
+        },
+        {
+            "Name": "Normal_Hair2",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair2",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair2"
+        },
+        {
+            "Name": "Normal_Hair3",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair3",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair3"
+        },
+        {
+            "Name": "Normal_Hair4",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair4",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair4"
+        },
+        {
+            "Name": "Normal_Hair5",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair5",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair5"
+        },
+        {
+            "Name": "Normal_Hair6",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair6",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair6"
+        },
+        {
+            "Name": "Normal_Hair7",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair7",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair7"
+        },
+        {
+            "Name": "Normal_Hair8",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair8",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair8"
+        },
+        {
+            "Name": "Normal_Hair9",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair9",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair9"
+        },
+        {
+            "Name": "Normal_Hair10",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair10",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair10"
+        },
+        {
+            "Name": "Normal_Hair11",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair11",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair11"
+        },
+        {
+            "Name": "Normal_Hair12",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair12",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair12"
+        },
+        {
+            "Name": "Normal_Hair13",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Normal_Hair13",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/0_Hair/Normal_Hair13"
+        },
+        {
+            "Name": "Normal_Mustache1",
+            "UnitType": "Unit",
+            "PartType": "FaceHair",
+            "SubType": "Normal_Mustache1",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/1_FaceHair/Normal_Mustache1"
+        },
+        {
+            "Name": "Normal_Mustache2",
+            "UnitType": "Unit",
+            "PartType": "FaceHair",
+            "SubType": "Normal_Mustache2",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/1_FaceHair/Normal_Mustache2"
+        },
+        {
+            "Name": "Normal_Cloth1",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/2_Cloth/Normal_Cloth1"
+        },
+        {
+            "Name": "Normal_Cloth1",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/2_Cloth/Normal_Cloth1"
+        },
+        {
+            "Name": "Normal_Cloth1",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/2_Cloth/Normal_Cloth1"
+        },
+        {
+            "Name": "Normal_Helmet1",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Normal_Helmet1",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/4_Helmet/Normal_Helmet1"
+        },
+        {
+            "Name": "Normal_Helmet2",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Normal_Helmet2",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/4_Helmet/Normal_Helmet2"
+        },
+        {
+            "Name": "Normal_Helmet3",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Normal_Helmet3",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/4_Helmet/Normal_Helmet3"
+        },
+        {
+            "Name": "Normal_Armor1",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/5_Armor/Normal_Armor1"
+        },
+        {
+            "Name": "Normal_Armor1",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/5_Armor/Normal_Armor1"
+        },
+        {
+            "Name": "Normal_Armor1",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/5_Armor/Normal_Armor1"
+        },
+        {
+            "Name": "AxeLong1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "AxeLong1",
+            "PartSubType": "Axe",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/6_Weapons/2_Axe/AxeLong1"
+        },
+        {
+            "Name": "AxeNormal1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "AxeNormal1",
+            "PartSubType": "Axe",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/6_Weapons/2_Axe/AxeNormal1"
+        },
+        {
+            "Name": "AxeSmall1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "AxeSmall1",
+            "PartSubType": "Axe",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/6_Weapons/2_Axe/AxeSmall1"
+        },
+        {
+            "Name": "SteelShield1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "SteelShield1",
+            "PartSubType": "Shield",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/6_Weapons/7_Shield/SteelShield1"
+        },
+        {
+            "Name": "WoodShield1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "WoodShield1",
+            "PartSubType": "Shield",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/6_Weapons/7_Shield/WoodShield1"
+        },
+        {
+            "Name": "WoodShield2",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "WoodShield2",
+            "PartSubType": "Shield",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/6_Weapons/7_Shield/WoodShield2"
+        },
+        {
+            "Name": "WoodShield3",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "WoodShield3",
+            "PartSubType": "Shield",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/6_Weapons/7_Shield/WoodShield3"
+        },
+        {
+            "Name": "WoodShield4",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "WoodShield4",
+            "PartSubType": "Shield",
+            "Path": "Addons/Ver121/0_Unit/0_Sprite/6_Weapons/7_Shield/WoodShield4"
+        }
+    ]
+}

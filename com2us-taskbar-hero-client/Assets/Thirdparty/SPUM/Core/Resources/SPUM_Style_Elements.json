@@ -1,0 +1,490 @@
+{
+  "categories_list": [
+    {
+      "id": "quality",
+      "name": "quality",
+      "styles": [
+        {
+          "id": "broken",
+          "description": "broken"
+        },
+        {
+          "id": "common",
+          "description": "common"
+        },
+        {
+          "id": "rare",
+          "description": "rare"
+        },
+        {
+          "id": "epic",
+          "description": "epic"
+        },
+        {
+          "id": "legendary",
+          "description": "legendary"
+        },
+        {
+          "id": "mythic",
+          "description": "mythic"
+        }
+      ]
+    },
+    {
+      "id": "elements",
+      "name": "elements",
+      "styles": [
+        {
+          "id": "fire",
+          "description": "fire"
+        },
+        {
+          "id": "dark",
+          "description": "dark"
+        },
+        {
+          "id": "water",
+          "description": "water"
+        },
+        {
+          "id": "light",
+          "description": "light"
+        },
+        {
+          "id": "wind",
+          "description": "wind"
+        },
+        {
+          "id": "earth",
+          "description": "earth"
+        }
+      ]
+    },
+    {
+      "id": "expression",
+      "name": "expression",
+      "styles": [
+        {
+          "id": "neutral",
+          "description": "neutral"
+        },
+        {
+          "id": "closed",
+          "description": "closed"
+        },
+        {
+          "id": "angry",
+          "description": "angry"
+        },
+        {
+          "id": "sad",
+          "description": "sad"
+        },
+        {
+          "id": "calm",
+          "description": "calm"
+        },
+        {
+          "id": "serious",
+          "description": "serious"
+        },
+        {
+          "id": "smug",
+          "description": "smug"
+        },
+        {
+          "id": "smiling",
+          "description": "smiling"
+        },
+        {
+          "id": "tired",
+          "description": "tired"
+        },
+        {
+          "id": "vacant",
+          "description": "vacant"
+        }
+      ]
+    },
+    {
+      "id": "facial_hair",
+      "name": "facial_hair",
+      "styles": [
+        {
+          "id": "beard",
+          "description": "beard"
+        },
+        {
+          "id": "mustache",
+          "description": "mustache"
+        },
+        {
+          "id": "goatee",
+          "description": "goatee"
+        },
+        {
+          "id": "full_beard",
+          "description": "full_beard"
+        },
+        {
+          "id": "tusks",
+          "description": "tusks"
+        },
+        {
+          "id": "mouth",
+          "description": "mouth"
+        }
+      ]
+    },
+    {
+      "id": "hairstyle",
+      "name": "hairstyle",
+      "styles": [
+        {
+          "id": "short",
+          "description": "short"
+        },
+        {
+          "id": "medium",
+          "description": "medium"
+        },
+        {
+          "id": "long",
+          "description": "long"
+        },
+        {
+          "id": "ponytail",
+          "description": "ponytail"
+        },
+        {
+          "id": "braid",
+          "description": "braid"
+        },
+        {
+          "id": "curly",
+          "description": "curly"
+        },
+        {
+          "id": "spiky",
+          "description": "spiky"
+        },
+        {
+          "id": "bald",
+          "description": "bald"
+        },
+        {
+          "id": "mohawk",
+          "description": "mohawk"
+        },
+        {
+          "id": "wavy",
+          "description": "wavy"
+        }
+      ]
+    },
+    {
+      "id": "role",
+      "name": "role",
+      "styles": [
+        {
+          "id": "tank",
+          "description": "tank"
+        },
+        {
+          "id": "damage",
+          "description": "damage"
+        },
+        {
+          "id": "support",
+          "description": "support"
+        },
+        {
+          "id": "stealth",
+          "description": "stealth"
+        },
+        {
+          "id": "buff",
+          "description": "buff"
+        },
+        {
+          "id": "debuff",
+          "description": "debuff"
+        },
+        {
+          "id": "summoner",
+          "description": "summoner"
+        }
+      ]
+    },
+    {
+      "id": "distance_type",
+      "name": "distance_type",
+      "styles": [
+        {
+          "id": "melee",
+          "description": "melee"
+        },
+        {
+          "id": "ranged",
+          "description": "ranged"
+        }
+      ]
+    },
+    {
+      "id": "attack_type",
+      "name": "attack_type",
+      "styles": [
+        {
+          "id": "physical",
+          "description": "physical"
+        },
+        {
+          "id": "magical",
+          "description": "magical"
+        }
+      ]
+    },
+    {
+      "id": "weapon_melee",
+      "name": "weapon_melee",
+      "styles": [
+        {
+          "id": "sword",
+          "description": "sword"
+        },
+        {
+          "id": "axe",
+          "description": "axe"
+        },
+        {
+          "id": "hammer",
+          "description": "hammer"
+        },
+        {
+          "id": "mace",
+          "description": "mace"
+        },
+        {
+          "id": "spear",
+          "description": "spear"
+        },
+        {
+          "id": "dagger",
+          "description": "dagger"
+        }
+      ]
+    },
+    {
+      "id": "weapon_ranged",
+      "name": "weapon_ranged",
+      "styles": [
+        {
+          "id": "bow",
+          "description": "bow"
+        },
+        {
+          "id": "crossbow",
+          "description": "crossbow"
+        },
+        {
+          "id": "throwing",
+          "description": "throwing"
+        }
+      ]
+    },
+    {
+      "id": "weapon_magic",
+      "name": "weapon_magic",
+      "styles": [
+        {
+          "id": "staff",
+          "description": "staff"
+        },
+        {
+          "id": "wand",
+          "description": "wand"
+        },
+        {
+          "id": "orb",
+          "description": "orb"
+        },
+        {
+          "id": "spellbook",
+          "description": "spellbook"
+        },
+        {
+          "id": "symbol",
+          "description": "symbol"
+        }
+      ]
+    },
+    {
+      "id": "armor_heavy",
+      "name": "armor_heavy",
+      "styles": [
+        {
+          "id": "plate",
+          "description": "plate"
+        },
+        {
+          "id": "chain_mail",
+          "description": "chain_mail"
+        },
+        {
+          "id": "scale_mail",
+          "description": "scale_mail"
+        },
+        {
+          "id": "heavy",
+          "description": "heavy"
+        }
+      ]
+    },
+    {
+      "id": "armor_light",
+      "name": "armor_light",
+      "styles": [
+        {
+          "id": "leather",
+          "description": "leather"
+        },
+        {
+          "id": "studded_leather",
+          "description": "studded_leather"
+        },
+        {
+          "id": "hide",
+          "description": "hide"
+        },
+        {
+          "id": "light",
+          "description": "light"
+        }
+      ]
+    },
+    {
+      "id": "armor_cloth",
+      "name": "armor_cloth",
+      "styles": [
+        {
+          "id": "robe",
+          "description": "robe"
+        },
+        {
+          "id": "cloth",
+          "description": "cloth"
+        },
+        {
+          "id": "tunic",
+          "description": "tunic"
+        },
+        {
+          "id": "silk",
+          "description": "silk"
+        }
+      ]
+    },
+    {
+      "id": "defensive",
+      "name": "defensive",
+      "styles": [
+        {
+          "id": "shield",
+          "description": "shield"
+        },
+        {
+          "id": "buckler",
+          "description": "buckler"
+        },
+        {
+          "id": "tower_shield",
+          "description": "tower_shield"
+        }
+      ]
+    },
+    {
+      "id": "accessory",
+      "name": "accessory",
+      "styles": [
+        {
+          "id": "cape",
+          "description": "cape"
+        },
+        {
+          "id": "scarf",
+          "description": "scarf"
+        },
+        {
+          "id": "banner",
+          "description": "banner"
+        },
+        {
+          "id": "quiver",
+          "description": "quiver"
+        },
+        {
+          "id": "backpack",
+          "description": "backpack"
+        }
+      ]
+    },
+    {
+      "id": "helmet",
+      "name": "helmet",
+      "styles": [
+        {
+          "id": "cloth_cap",
+          "description": "cloth_cap"
+        },
+        {
+          "id": "leather_cap",
+          "description": "leather_cap"
+        },
+        {
+          "id": "iron_helm",
+          "description": "iron_helm"
+        },
+        {
+          "id": "steel_helm",
+          "description": "steel_helm"
+        },
+        {
+          "id": "gold_helm",
+          "description": "gold_helm"
+        },
+        {
+          "id": "horned",
+          "description": "horned"
+        },
+        {
+          "id": "winged",
+          "description": "winged"
+        },
+        {
+          "id": "spiked",
+          "description": "spiked"
+        },
+        {
+          "id": "ornate",
+          "description": "ornate"
+        },
+        {
+          "id": "full_helm",
+          "description": "full_helm"
+        },
+        {
+          "id": "great_helm",
+          "description": "great_helm"
+        },
+        {
+          "id": "pointed",
+          "description": "pointed"
+        },
+        {
+          "id": "bone_helm",
+          "description": "bone_helm"
+        }
+      ]
+    }
+  ]
+}

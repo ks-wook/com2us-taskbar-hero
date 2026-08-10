@@ -1,0 +1,2284 @@
+{
+    "Name": "Legacy",
+    "Path": "Assets/SPUM/Resources/Addons",
+    "Version": "",
+    "CreationDate": "2025-12-04 16:09:49",
+    "SpumAnimationData": [
+        {
+            "index": 0,
+            "Name": "0_idle.anim",
+            "StateType": "IDLE",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/00_Idle/0_idle.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "0_move.anim",
+            "StateType": "MOVE",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/01_Move/0_move.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "0_Attack_Normal.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/02_Attack/00_MeleeAttack/0_Attack_Normal.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "MeleeAttack"
+        },
+        {
+            "index": 0,
+            "Name": "1_Skill_Normal.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/02_Attack/00_MeleeAttack/1_Skill_Normal.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "MeleeAttack"
+        },
+        {
+            "index": 0,
+            "Name": "0_Attack_Bow.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/02_Attack/01_LongRangeAttack/0_Attack_Bow.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "LongRangeAttack"
+        },
+        {
+            "index": 0,
+            "Name": "1_Skill_Bow.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/02_Attack/01_LongRangeAttack/1_Skill_Bow.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "LongRangeAttack"
+        },
+        {
+            "index": 0,
+            "Name": "0_Attack_Magic.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/02_Attack/02_MagicAttack/0_Attack_Magic.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "MagicAttack"
+        },
+        {
+            "index": 0,
+            "Name": "1_Skill_Magic.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/02_Attack/02_MagicAttack/1_Skill_Magic.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "MagicAttack"
+        },
+        {
+            "index": 0,
+            "Name": "0_Damaged.anim",
+            "StateType": "DAMAGED",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/03_Damaged/0_Damaged.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "0_Die.anim",
+            "StateType": "DEATH",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/04_Death/0_Die.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "0_Debuff_Stun.anim",
+            "StateType": "DEBUFF",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/05_Debuff/0_Debuff_Stun.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "0_Conecntrate.anim",
+            "StateType": "OTHER",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/06_Other/00_Concentrate/0_Conecntrate.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "Concentrate"
+        },
+        {
+            "index": 0,
+            "Name": "0_Buff.anim",
+            "StateType": "OTHER",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/06_Other/01_Buff/0_Buff.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "Buff"
+        },
+        {
+            "index": 0,
+            "Name": "0_Sit.anim",
+            "StateType": "OTHER",
+            "ClipPath": "Addons/Legacy/0_Unit/1_Animation/06_Other/02_Etc/0_Sit.anim",
+            "HasData": false,
+            "UnitType": "Unit",
+            "SubCategory": "Etc"
+        },
+        {
+            "index": 0,
+            "Name": "0_idle.anim",
+            "StateType": "IDLE",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/00_Idle/0_idle.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "1_run.anim",
+            "StateType": "MOVE",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/01_Move/1_run.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "Walk_Run 1.anim",
+            "StateType": "MOVE",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/01_Move/Walk_Run 1.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "2_Attack_Normal.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/02_Attack/00_MeleeAttack/2_Attack_Normal.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": "MeleeAttack"
+        },
+        {
+            "index": 0,
+            "Name": "2_Attack_Bow.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/02_Attack/01_LongRangeAttack/2_Attack_Bow.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": "LongRangeAttack"
+        },
+        {
+            "index": 0,
+            "Name": "2_Attack_Magic.anim",
+            "StateType": "ATTACK",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/02_Attack/02_MagicAttack/2_Attack_Magic.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": "MagicAttack"
+        },
+        {
+            "index": 0,
+            "Name": "3_damaged.anim",
+            "StateType": "DAMAGED",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/03_Damaged/3_damaged.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "4_Death.anim",
+            "StateType": "DEATH",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/04_Death/4_Death.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "5_debuff.anim",
+            "StateType": "DEBUFF",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/05_Debuff/5_debuff.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": ""
+        },
+        {
+            "index": 0,
+            "Name": "Conventrate.anim",
+            "StateType": "OTHER",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/06_Other/00_Concentrate/Conventrate.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": "Concentrate"
+        },
+        {
+            "index": 0,
+            "Name": "OTHER 1.anim",
+            "StateType": "OTHER",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/06_Other/01_Buff/OTHER 1.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": "Buff"
+        },
+        {
+            "index": 0,
+            "Name": "Ect.anim",
+            "StateType": "OTHER",
+            "ClipPath": "Addons/Legacy/1_Horse/1_Animation/06_Other/02_Etc/Ect.anim",
+            "HasData": false,
+            "UnitType": "Horse",
+            "SubCategory": "Etc"
+        }
+    ],
+    "SpumTextureData": [
+        {
+            "Name": "Eye",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye"
+        },
+        {
+            "Name": "Eye",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye"
+        },
+        {
+            "Name": "Eye0",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye0"
+        },
+        {
+            "Name": "Eye0",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye0"
+        },
+        {
+            "Name": "Eye1",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye1"
+        },
+        {
+            "Name": "Eye1",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye1"
+        },
+        {
+            "Name": "Eye2",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye2"
+        },
+        {
+            "Name": "Eye2",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye2"
+        },
+        {
+            "Name": "Eye3",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye3"
+        },
+        {
+            "Name": "Eye3",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye3"
+        },
+        {
+            "Name": "Eye4",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye4"
+        },
+        {
+            "Name": "Eye4",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye4"
+        },
+        {
+            "Name": "Eye5",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye5"
+        },
+        {
+            "Name": "Eye5",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye5"
+        },
+        {
+            "Name": "Eye6",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye6"
+        },
+        {
+            "Name": "Eye6",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye6"
+        },
+        {
+            "Name": "Eye7",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye7"
+        },
+        {
+            "Name": "Eye7",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye7"
+        },
+        {
+            "Name": "Eye8",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye8"
+        },
+        {
+            "Name": "Eye8",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye8"
+        },
+        {
+            "Name": "Eye9",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye9"
+        },
+        {
+            "Name": "Eye9",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye9"
+        },
+        {
+            "Name": "Eye10",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye10"
+        },
+        {
+            "Name": "Eye10",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye10"
+        },
+        {
+            "Name": "Eye11",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye11"
+        },
+        {
+            "Name": "Eye11",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye11"
+        },
+        {
+            "Name": "Eye16",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye16"
+        },
+        {
+            "Name": "Eye16",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye16"
+        },
+        {
+            "Name": "Eye_Close",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Back",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye_Close"
+        },
+        {
+            "Name": "Eye_Close",
+            "UnitType": "Unit",
+            "PartType": "Eye",
+            "SubType": "Front",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Eye/Eye_Close"
+        },
+        {
+            "Name": "Hair_1",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Hair_1",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Hair/Hair_1"
+        },
+        {
+            "Name": "Hair_2",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Hair_2",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Hair/Hair_2"
+        },
+        {
+            "Name": "Hair_3",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Hair_3",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Hair/Hair_3"
+        },
+        {
+            "Name": "Hair_4",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Hair_4",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Hair/Hair_4"
+        },
+        {
+            "Name": "Hair_5",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Hair_5",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Hair/Hair_5"
+        },
+        {
+            "Name": "Hair_6",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Hair_6",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Hair/Hair_6"
+        },
+        {
+            "Name": "Hair_7",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Hair_7",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Hair/Hair_7"
+        },
+        {
+            "Name": "Hair_8",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Hair_8",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Hair/Hair_8"
+        },
+        {
+            "Name": "Hair_9",
+            "UnitType": "Unit",
+            "PartType": "Hair",
+            "SubType": "Hair_9",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/0_Hair/Hair_9"
+        },
+        {
+            "Name": "Devil_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Devil_1"
+        },
+        {
+            "Name": "Devil_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Devil_1"
+        },
+        {
+            "Name": "Devil_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Devil_1"
+        },
+        {
+            "Name": "Devil_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Devil_1"
+        },
+        {
+            "Name": "Devil_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Devil_1"
+        },
+        {
+            "Name": "Devil_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Devil_1"
+        },
+        {
+            "Name": "Elf_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_1"
+        },
+        {
+            "Name": "Elf_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_1"
+        },
+        {
+            "Name": "Elf_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_1"
+        },
+        {
+            "Name": "Elf_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_1"
+        },
+        {
+            "Name": "Elf_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_1"
+        },
+        {
+            "Name": "Elf_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_1"
+        },
+        {
+            "Name": "Elf_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_2"
+        },
+        {
+            "Name": "Elf_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_2"
+        },
+        {
+            "Name": "Elf_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_2"
+        },
+        {
+            "Name": "Elf_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_2"
+        },
+        {
+            "Name": "Elf_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_2"
+        },
+        {
+            "Name": "Elf_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Elf_2"
+        },
+        {
+            "Name": "Human_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_1"
+        },
+        {
+            "Name": "Human_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_1"
+        },
+        {
+            "Name": "Human_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_1"
+        },
+        {
+            "Name": "Human_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_1"
+        },
+        {
+            "Name": "Human_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_1"
+        },
+        {
+            "Name": "Human_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_1"
+        },
+        {
+            "Name": "Human_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_2"
+        },
+        {
+            "Name": "Human_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_2"
+        },
+        {
+            "Name": "Human_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_2"
+        },
+        {
+            "Name": "Human_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_2"
+        },
+        {
+            "Name": "Human_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_2"
+        },
+        {
+            "Name": "Human_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_2"
+        },
+        {
+            "Name": "Human_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_3"
+        },
+        {
+            "Name": "Human_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_3"
+        },
+        {
+            "Name": "Human_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_3"
+        },
+        {
+            "Name": "Human_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_3"
+        },
+        {
+            "Name": "Human_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_3"
+        },
+        {
+            "Name": "Human_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_3"
+        },
+        {
+            "Name": "Human_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_4"
+        },
+        {
+            "Name": "Human_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_4"
+        },
+        {
+            "Name": "Human_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_4"
+        },
+        {
+            "Name": "Human_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_4"
+        },
+        {
+            "Name": "Human_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_4"
+        },
+        {
+            "Name": "Human_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_4"
+        },
+        {
+            "Name": "Human_5",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_5"
+        },
+        {
+            "Name": "Human_5",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_5"
+        },
+        {
+            "Name": "Human_5",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_5"
+        },
+        {
+            "Name": "Human_5",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_5"
+        },
+        {
+            "Name": "Human_5",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_5"
+        },
+        {
+            "Name": "Human_5",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Human_5"
+        },
+        {
+            "Name": "Orc_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_1"
+        },
+        {
+            "Name": "Orc_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_1"
+        },
+        {
+            "Name": "Orc_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_1"
+        },
+        {
+            "Name": "Orc_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_1"
+        },
+        {
+            "Name": "Orc_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_1"
+        },
+        {
+            "Name": "Orc_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_1"
+        },
+        {
+            "Name": "Orc_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_2"
+        },
+        {
+            "Name": "Orc_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_2"
+        },
+        {
+            "Name": "Orc_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_2"
+        },
+        {
+            "Name": "Orc_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_2"
+        },
+        {
+            "Name": "Orc_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_2"
+        },
+        {
+            "Name": "Orc_2",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_2"
+        },
+        {
+            "Name": "Orc_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_3"
+        },
+        {
+            "Name": "Orc_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_3"
+        },
+        {
+            "Name": "Orc_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_3"
+        },
+        {
+            "Name": "Orc_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_3"
+        },
+        {
+            "Name": "Orc_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_3"
+        },
+        {
+            "Name": "Orc_3",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_3"
+        },
+        {
+            "Name": "Orc_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_4"
+        },
+        {
+            "Name": "Orc_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_4"
+        },
+        {
+            "Name": "Orc_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_4"
+        },
+        {
+            "Name": "Orc_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_4"
+        },
+        {
+            "Name": "Orc_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_4"
+        },
+        {
+            "Name": "Orc_4",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Orc_4"
+        },
+        {
+            "Name": "Skelton_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Skelton_1"
+        },
+        {
+            "Name": "Skelton_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Arm_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Skelton_1"
+        },
+        {
+            "Name": "Skelton_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Skelton_1"
+        },
+        {
+            "Name": "Skelton_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_L",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Skelton_1"
+        },
+        {
+            "Name": "Skelton_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Foot_R",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Skelton_1"
+        },
+        {
+            "Name": "Skelton_1",
+            "UnitType": "Unit",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_Body/Skelton_1"
+        },
+        {
+            "Name": "FaceHair_1",
+            "UnitType": "Unit",
+            "PartType": "FaceHair",
+            "SubType": "FaceHair_1",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_FaceHair/FaceHair_1"
+        },
+        {
+            "Name": "FaceHair_2",
+            "UnitType": "Unit",
+            "PartType": "FaceHair",
+            "SubType": "FaceHair_2",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_FaceHair/FaceHair_2"
+        },
+        {
+            "Name": "FaceHair_3",
+            "UnitType": "Unit",
+            "PartType": "FaceHair",
+            "SubType": "FaceHair_3",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_FaceHair/FaceHair_3"
+        },
+        {
+            "Name": "FaceHair_4",
+            "UnitType": "Unit",
+            "PartType": "FaceHair",
+            "SubType": "FaceHair_4",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_FaceHair/FaceHair_4"
+        },
+        {
+            "Name": "FaceHair_5",
+            "UnitType": "Unit",
+            "PartType": "FaceHair",
+            "SubType": "FaceHair_5",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/1_FaceHair/FaceHair_5"
+        },
+        {
+            "Name": "Cloth_1",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_1"
+        },
+        {
+            "Name": "Cloth_1",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_1"
+        },
+        {
+            "Name": "Cloth_1",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_1"
+        },
+        {
+            "Name": "Cloth_2",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_2"
+        },
+        {
+            "Name": "Cloth_2",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_2"
+        },
+        {
+            "Name": "Cloth_2",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_2"
+        },
+        {
+            "Name": "Cloth_3",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_3"
+        },
+        {
+            "Name": "Cloth_3",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_3"
+        },
+        {
+            "Name": "Cloth_3",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_3"
+        },
+        {
+            "Name": "Cloth_4",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_4"
+        },
+        {
+            "Name": "Cloth_4",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_4"
+        },
+        {
+            "Name": "Cloth_4",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_4"
+        },
+        {
+            "Name": "Cloth_5",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_5"
+        },
+        {
+            "Name": "Cloth_5",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_5"
+        },
+        {
+            "Name": "Cloth_5",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_5"
+        },
+        {
+            "Name": "Cloth_6",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_6"
+        },
+        {
+            "Name": "Cloth_6",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_6"
+        },
+        {
+            "Name": "Cloth_6",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_6"
+        },
+        {
+            "Name": "Cloth_7",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_7"
+        },
+        {
+            "Name": "Cloth_7",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_7"
+        },
+        {
+            "Name": "Cloth_7",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_7"
+        },
+        {
+            "Name": "Cloth_8",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_8"
+        },
+        {
+            "Name": "Cloth_8",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_8"
+        },
+        {
+            "Name": "Cloth_8",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_8"
+        },
+        {
+            "Name": "Cloth_9",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_9"
+        },
+        {
+            "Name": "Cloth_10",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_10"
+        },
+        {
+            "Name": "Cloth_10",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_10"
+        },
+        {
+            "Name": "Cloth_10",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_10"
+        },
+        {
+            "Name": "Cloth_11",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_11"
+        },
+        {
+            "Name": "Cloth_11",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_11"
+        },
+        {
+            "Name": "Cloth_11",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_11"
+        },
+        {
+            "Name": "Cloth_12",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_12"
+        },
+        {
+            "Name": "Cloth_12",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_12"
+        },
+        {
+            "Name": "Cloth_12",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/Cloth_12"
+        },
+        {
+            "Name": "F_SR_Cloth",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/F_SR_Cloth"
+        },
+        {
+            "Name": "F_SR_Cloth",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/F_SR_Cloth"
+        },
+        {
+            "Name": "F_SR_Cloth",
+            "UnitType": "Unit",
+            "PartType": "Cloth",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/2_Cloth/F_SR_Cloth"
+        },
+        {
+            "Name": "F_SR_Pants",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/3_Pant/F_SR_Pants"
+        },
+        {
+            "Name": "F_SR_Pants",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/3_Pant/F_SR_Pants"
+        },
+        {
+            "Name": "Foot_1",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/3_Pant/Foot_1"
+        },
+        {
+            "Name": "Foot_1",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/3_Pant/Foot_1"
+        },
+        {
+            "Name": "Foot_2",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/3_Pant/Foot_2"
+        },
+        {
+            "Name": "Foot_2",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/3_Pant/Foot_2"
+        },
+        {
+            "Name": "Foot_3",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/3_Pant/Foot_3"
+        },
+        {
+            "Name": "Foot_3",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/3_Pant/Foot_3"
+        },
+        {
+            "Name": "Foot_4",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/3_Pant/Foot_4"
+        },
+        {
+            "Name": "Foot_4",
+            "UnitType": "Unit",
+            "PartType": "Pant",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/3_Pant/Foot_4"
+        },
+        {
+            "Name": "F_SR_Helmet",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "F_SR_Helmet",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/4_Helmet/F_SR_Helmet"
+        },
+        {
+            "Name": "Helmet_1",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Helmet_1",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/4_Helmet/Helmet_1"
+        },
+        {
+            "Name": "Helmet_2",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Helmet_2",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/4_Helmet/Helmet_2"
+        },
+        {
+            "Name": "Helmet_3",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Helmet_3",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/4_Helmet/Helmet_3"
+        },
+        {
+            "Name": "Helmet_4",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Helmet_4",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/4_Helmet/Helmet_4"
+        },
+        {
+            "Name": "Helmet_5",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Helmet_5",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/4_Helmet/Helmet_5"
+        },
+        {
+            "Name": "Helmet_6",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Helmet_6",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/4_Helmet/Helmet_6"
+        },
+        {
+            "Name": "Helmet_7",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Helmet_7",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/4_Helmet/Helmet_7"
+        },
+        {
+            "Name": "Helmet_8",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Helmet_8",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/4_Helmet/Helmet_8"
+        },
+        {
+            "Name": "Helmet_9",
+            "UnitType": "Unit",
+            "PartType": "Helmet",
+            "SubType": "Helmet_9",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/4_Helmet/Helmet_9"
+        },
+        {
+            "Name": "Armor_1",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_1"
+        },
+        {
+            "Name": "Armor_1",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_1"
+        },
+        {
+            "Name": "Armor_1",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_1"
+        },
+        {
+            "Name": "Armor_2",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_2"
+        },
+        {
+            "Name": "Armor_2",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_2"
+        },
+        {
+            "Name": "Armor_2",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_2"
+        },
+        {
+            "Name": "Armor_3",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_3"
+        },
+        {
+            "Name": "Armor_3",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_3"
+        },
+        {
+            "Name": "Armor_3",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_3"
+        },
+        {
+            "Name": "Armor_4",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_4"
+        },
+        {
+            "Name": "Armor_4",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_4"
+        },
+        {
+            "Name": "Armor_4",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_4"
+        },
+        {
+            "Name": "Armor_5",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_5"
+        },
+        {
+            "Name": "Armor_6",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_6"
+        },
+        {
+            "Name": "Armor_7",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_7"
+        },
+        {
+            "Name": "Armor_8",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Body",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_8"
+        },
+        {
+            "Name": "Armor_8",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Left",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_8"
+        },
+        {
+            "Name": "Armor_8",
+            "UnitType": "Unit",
+            "PartType": "Armor",
+            "SubType": "Right",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/5_Armor/Armor_8"
+        },
+        {
+            "Name": "Sword_1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Sword_1",
+            "PartSubType": "Sword",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/0_Sword/Sword_1"
+        },
+        {
+            "Name": "Sword_2",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Sword_2",
+            "PartSubType": "Sword",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/0_Sword/Sword_2"
+        },
+        {
+            "Name": "Sword_3",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Sword_3",
+            "PartSubType": "Sword",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/0_Sword/Sword_3"
+        },
+        {
+            "Name": "Sword_4",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Sword_4",
+            "PartSubType": "Sword",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/0_Sword/Sword_4"
+        },
+        {
+            "Name": "Sword_5",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Sword_5",
+            "PartSubType": "Sword",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/0_Sword/Sword_5"
+        },
+        {
+            "Name": "Sword_6",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Sword_6",
+            "PartSubType": "Sword",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/0_Sword/Sword_6"
+        },
+        {
+            "Name": "Axe_1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Axe_1",
+            "PartSubType": "Axe",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/1_Axe/Axe_1"
+        },
+        {
+            "Name": "Bow_1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Bow_1",
+            "PartSubType": "Bow",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/2_Bow/Bow_1"
+        },
+        {
+            "Name": "Shield_1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Shield_1",
+            "PartSubType": "Shield",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/3_Shield/Shield_1"
+        },
+        {
+            "Name": "Soon_Spear",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Soon_Spear",
+            "PartSubType": "Spear",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/4_Spear/Soon_Spear"
+        },
+        {
+            "Name": "Spear_1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Spear_1",
+            "PartSubType": "Spear",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/4_Spear/Spear_1"
+        },
+        {
+            "Name": "Ward_1",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "Ward_1",
+            "PartSubType": "Wand",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/5_Wand/Ward_1"
+        },
+        {
+            "Name": "F_SR_Hammer",
+            "UnitType": "Unit",
+            "PartType": "Weapons",
+            "SubType": "F_SR_Hammer",
+            "PartSubType": "Hammer",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/6_Weapons/6_Hammer/F_SR_Hammer"
+        },
+        {
+            "Name": "Back_1",
+            "UnitType": "Unit",
+            "PartType": "Back",
+            "SubType": "Back_1",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/7_Back/Back_1"
+        },
+        {
+            "Name": "Back_2",
+            "UnitType": "Unit",
+            "PartType": "Back",
+            "SubType": "Back_2",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/7_Back/Back_2"
+        },
+        {
+            "Name": "Back_3",
+            "UnitType": "Unit",
+            "PartType": "Back",
+            "SubType": "Back_3",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/7_Back/Back_3"
+        },
+        {
+            "Name": "BowBack_1",
+            "UnitType": "Unit",
+            "PartType": "Back",
+            "SubType": "BowBack_1",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/7_Back/BowBack_1"
+        },
+        {
+            "Name": "Soon_Back1",
+            "UnitType": "Unit",
+            "PartType": "Back",
+            "SubType": "Soon_Back1",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/0_Unit/0_Sprite/7_Back/Soon_Back1"
+        },
+        {
+            "Name": "BlackHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Acc",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/BlackHorse"
+        },
+        {
+            "Name": "BlackHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "BodyBack",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/BlackHorse"
+        },
+        {
+            "Name": "BlackHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "BodyFront",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/BlackHorse"
+        },
+        {
+            "Name": "BlackHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootBackBottom",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/BlackHorse"
+        },
+        {
+            "Name": "BlackHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootBackTop",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/BlackHorse"
+        },
+        {
+            "Name": "BlackHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootFrontBottom",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/BlackHorse"
+        },
+        {
+            "Name": "BlackHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootFrontTop",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/BlackHorse"
+        },
+        {
+            "Name": "BlackHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/BlackHorse"
+        },
+        {
+            "Name": "BlackHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Neck",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/BlackHorse"
+        },
+        {
+            "Name": "BlackHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Tail",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/BlackHorse"
+        },
+        {
+            "Name": "Horse1",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootBackBottom",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse1"
+        },
+        {
+            "Name": "Horse1",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "BodyFront",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse1"
+        },
+        {
+            "Name": "Horse1",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Neck",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse1"
+        },
+        {
+            "Name": "Horse1",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootFrontTop",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse1"
+        },
+        {
+            "Name": "Horse1",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse1"
+        },
+        {
+            "Name": "Horse1",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootFrontBottom",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse1"
+        },
+        {
+            "Name": "Horse1",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootBackTop",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse1"
+        },
+        {
+            "Name": "Horse1",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "BodyBack",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse1"
+        },
+        {
+            "Name": "Horse1",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Tail",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse1"
+        },
+        {
+            "Name": "Horse1",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Acc",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse1"
+        },
+        {
+            "Name": "Horse2",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Acc",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse2"
+        },
+        {
+            "Name": "Horse2",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "BodyBack",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse2"
+        },
+        {
+            "Name": "Horse2",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "BodyFront",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse2"
+        },
+        {
+            "Name": "Horse2",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootBackBottom",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse2"
+        },
+        {
+            "Name": "Horse2",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootBackTop",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse2"
+        },
+        {
+            "Name": "Horse2",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootFrontBottom",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse2"
+        },
+        {
+            "Name": "Horse2",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootFrontTop",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse2"
+        },
+        {
+            "Name": "Horse2",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse2"
+        },
+        {
+            "Name": "Horse2",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Neck",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse2"
+        },
+        {
+            "Name": "Horse2",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Tail",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/Horse2"
+        },
+        {
+            "Name": "RedHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Acc",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/RedHorse"
+        },
+        {
+            "Name": "RedHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "BodyBack",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/RedHorse"
+        },
+        {
+            "Name": "RedHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "BodyFront",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/RedHorse"
+        },
+        {
+            "Name": "RedHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootBackBottom",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/RedHorse"
+        },
+        {
+            "Name": "RedHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootBackTop",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/RedHorse"
+        },
+        {
+            "Name": "RedHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootFrontBottom",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/RedHorse"
+        },
+        {
+            "Name": "RedHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "FootFrontTop",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/RedHorse"
+        },
+        {
+            "Name": "RedHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Head",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/RedHorse"
+        },
+        {
+            "Name": "RedHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Neck",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/RedHorse"
+        },
+        {
+            "Name": "RedHorse",
+            "UnitType": "Horse",
+            "PartType": "Body",
+            "SubType": "Tail",
+            "PartSubType": "",
+            "Path": "Addons/Legacy/1_Horse/0_Sprite/0_Body/RedHorse"
+        }
+    ]
+}

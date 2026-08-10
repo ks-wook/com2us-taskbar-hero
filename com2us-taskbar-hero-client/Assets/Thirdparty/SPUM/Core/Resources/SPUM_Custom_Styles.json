@@ -1,0 +1,160 @@
+{
+    "custom_styles_list": [
+        {
+            "id": "broken",
+            "name": "broken",
+            "description": "broken",
+            "elements": [
+                "broken"
+            ],
+            "required_parts": [],
+            "negative": [
+                "perfect",
+                "legendary"
+            ]
+        },
+        {
+            "id": "common",
+            "name": "common",
+            "description": "common",
+            "elements": [
+                "common"
+            ],
+            "required_parts": [],
+            "negative": [
+                "legendary",
+                "rare"
+            ]
+        },
+        {
+            "id": "rare",
+            "name": "rare",
+            "description": "rare",
+            "elements": [
+                "rare"
+            ],
+            "required_parts": [],
+            "negative": [
+                "common",
+                "broken"
+            ]
+        },
+        {
+            "id": "epic",
+            "name": "epic",
+            "description": "epic",
+            "elements": [
+                "epic"
+            ],
+            "required_parts": [],
+            "negative": [
+                "common",
+                "broken",
+                "rare"
+            ]
+        },
+        {
+            "id": "legendary",
+            "name": "legendary",
+            "description": "legendary",
+            "elements": [
+                "legendary"
+            ],
+            "required_parts": [],
+            "negative": [
+                "common",
+                "broken",
+                "rare",
+                "epic"
+            ]
+        },
+        {
+            "id": "mythic",
+            "name": "mythic",
+            "description": "mythic",
+            "elements": [
+                "mythic"
+            ],
+            "required_parts": [],
+            "negative": [
+                "common",
+                "broken",
+                "rare",
+                "epic",
+                "legendary"
+            ]
+        },
+        {
+            "id": "fire",
+            "name": "fire",
+            "description": "fire",
+            "elements": [
+                "fire"
+            ],
+            "required_parts": [],
+            "negative": [
+                "water"
+            ]
+        },
+        {
+            "id": "dark",
+            "name": "dark",
+            "description": "dark",
+            "elements": [
+                "dark"
+            ],
+            "required_parts": [],
+            "negative": [
+                "light"
+            ]
+        },
+        {
+            "id": "wind",
+            "name": "wind",
+            "description": "wind",
+            "elements": [
+                "wind"
+            ],
+            "required_parts": [],
+            "negative": [
+                "earth"
+            ]
+        },
+        {
+            "id": "earth",
+            "name": "earth",
+            "description": "earth",
+            "elements": [
+                "earth"
+            ],
+            "required_parts": [],
+            "negative": [
+                "wind"
+            ]
+        },
+        {
+            "id": "water",
+            "name": "water",
+            "description": "water",
+            "elements": [
+                "water"
+            ],
+            "required_parts": [],
+            "negative": [
+                "fire"
+            ]
+        },
+        {
+            "id": "light",
+            "name": "light",
+            "description": "light",
+            "elements": [
+                "light"
+            ],
+            "required_parts": [],
+            "negative": [
+                "dark"
+            ]
+        }
+    ]
+}
