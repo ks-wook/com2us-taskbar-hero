@@ -30,11 +30,11 @@ namespace TaskbarHero.ClientEditor
         // 뻗은 끝(y 91)까지 덮도록 92로 잡아 보석이 늘어나는 가운데 영역에 걸리지 않게 한다.
         private static readonly Vector4 UiBackgroundBorder = new Vector4(60f, 53f, 60f, 92f);
 
-        // ESC 메뉴 아트(Assets/Art/UI/System).
-        private const string SystemBackgroundPath = "Assets/Art/UI/System/system_bg.png";
+        // ESC 메뉴 아트. 창 배경은 가방·스킬·룬 창과 같은 공용 프레임(ui_bg_2)이며, **Multiple로 임포트된
+        // 아트라 임포트 설정을 건드리지 않고**(공용 아트 규칙) 서브 스프라이트 폴백으로 읽어 배선만 한다.
+        private const string WindowFramePath = "Assets/Art/UI/ui_bg_2.png";
         private const string SystemSlotPath = "Assets/Art/UI/System/system_slot.png";
-        // system_bg(512×384): 나무 테두리 + 모서리 장식이 남는 크기. system_slot(2048×731)은 ui_bg와 같은 형태.
-        private static readonly Vector4 SystemBackgroundBorder = new Vector4(30f, 30f, 30f, 30f);
+        // system_slot(2048×731)은 ui_bg와 같은 형태(9-slice로 교정해 버튼 배경으로 쓴다).
         private static readonly Vector4 SystemSlotBorder = new Vector4(191f, 128f, 191f, 128f);
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
 
@@ -48,7 +48,6 @@ namespace TaskbarHero.ClientEditor
             ReimportSingle("출석부");
             ReimportSingleAt(MailIconPath);
             ImportSliced(UiBackgroundPath, UiBackgroundBorder);
-            ImportSliced(SystemBackgroundPath, SystemBackgroundBorder);
             ImportSliced(SystemSlotPath, SystemSlotBorder);
             AssetDatabase.Refresh();
 
@@ -68,7 +67,7 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("inventoryIcon").objectReferenceValue = LoadSprite("인벤토리");
             so.FindProperty("attendanceIcon").objectReferenceValue = LoadSpriteAt(AttendanceIconPath);
             so.FindProperty("uiBackgroundSprite").objectReferenceValue = LoadSpriteAt(UiBackgroundPath);
-            so.FindProperty("systemBackgroundSprite").objectReferenceValue = LoadSpriteAt(SystemBackgroundPath);
+            so.FindProperty("escMenuFrameSprite").objectReferenceValue = LoadSpriteAt(WindowFramePath);
             so.FindProperty("systemSlotSprite").objectReferenceValue = LoadSpriteAt(SystemSlotPath);
             so.FindProperty("activeBuffIcon").objectReferenceValue = LoadSpriteAt(ActiveBuffIconPath);
             so.FindProperty("buffTooltipBackground").objectReferenceValue = LoadSpriteAt(ItemDetailBgPath);

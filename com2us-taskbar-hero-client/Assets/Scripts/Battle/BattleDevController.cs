@@ -101,6 +101,9 @@ namespace TaskbarHero.Client.Battle
         [Header("보스 연출")]
         [Tooltip("보스 몬스터 머리 위에 띄울 아이콘(왕관). 던전 배선 빌더가 자동으로 배선한다.")]
         [SerializeField] private Sprite bossIcon;
+        [Tooltip("보스 등장 경고 이미지(Assets/Art/UI/System/boss_warning.png). 화면 중앙에서 커졌다 작아지는 펄스로 표시한다. " +
+                 "없으면 종전의 붉은 \"Warning!!\" 문구로 대체한다. 던전 배선 빌더가 자동으로 배선한다.")]
+        [SerializeField] private Sprite bossWarningImage;
         [Tooltip("보스의 이동속도 배율(일반 몹 대비). 1보다 작으면 더 느리게 전진한다.")]
         public float bossMoveSpeedFactor = 0.6f;
 
@@ -1109,7 +1112,7 @@ namespace TaskbarHero.Client.Battle
             AttachWalkDust(go, () => mu != null && mu.IsMoving); // 걷기 먼지(전진 애니 재생 중에만 노출)
             if (isBoss)
             {
-                BossWarningBanner.Show(); // 보스 등장 경고 연출(중앙 붉은 "Warning!!" 3회 펄스)
+                BossWarningBanner.Show(bossWarningImage); // 보스 등장 경고 연출(중앙 경고 이미지 3회 펄스)
                 SoundManager.Sfx(SoundId.BossWarning);
                 SoundManager.Bgm(SoundId.BgmBoss, 2f); // 보스전 BGM으로 2초 크로스페이드
                 Log($"보스 등장! — {mname}");

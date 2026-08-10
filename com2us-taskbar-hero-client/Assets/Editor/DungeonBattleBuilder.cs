@@ -28,6 +28,10 @@ namespace TaskbarHero.ClientEditor
         private const string GameScenePath = "Assets/Scenes/GameScene.unity";
         private const string MonsterDir = "Assets/Prefabs/Character/Monster";
         private const string LightGoName = "Global Light 2D";
+        /// <summary>체력바 프레임 아트. 적 HP바(BattleDevController)와 아군 HP바(SkillCooldownUI)가 같은 것을 쓴다.</summary>
+        private const string HpBarFramePath = "Assets/Art/Icon/Combat/체력바.png";
+        /// <summary>보스 등장 경고 이미지(중앙에서 커졌다 작아지는 연출에 쓴다).</summary>
+        private const string BossWarningPath = "Assets/Art/UI/System/boss_warning.png";
 
         /// <summary>
         /// GameScene 전용 전투 띠 상향 오프셋(월드 단위). BattleDevScene은 배경 띠가 화면 바닥에 붙어 있는데,
@@ -150,11 +154,15 @@ namespace TaskbarHero.ClientEditor
             var bossIcon = LoadSprite("Assets/Art/Icon/stage_king.png");
             battleSo.FindProperty("bossIcon").objectReferenceValue = bossIcon;
             // 몬스터 머리 위 HP바 프레임 아트 배선(미배선 시 단색 배경으로 폴백된다).
-            var hpBarFrame = LoadSprite("Assets/Art/Icon/Combat/체력바.png");
+            var hpBarFrame = LoadSprite(HpBarFramePath);
             battleSo.FindProperty("enemyHpBarFrame").objectReferenceValue = hpBarFrame;
+            // 보스 등장 경고 이미지 배선(미배선 시 붉은 "Warning!!" 문구로 폴백된다).
+            var bossWarning = LoadSprite(BossWarningPath);
+            battleSo.FindProperty("bossWarningImage").objectReferenceValue = bossWarning;
             battleSo.ApplyModifiedPropertiesWithoutUndo();
             Debug.Log($"[DungeonBattleBuilder] 보스 왕관 아이콘 {(bossIcon != null ? "배선" : "없음")}, "
-                      + $"몬스터 체력바 프레임 {(hpBarFrame != null ? "배선" : "없음")}.");
+                      + $"몬스터 체력바 프레임 {(hpBarFrame != null ? "배선" : "없음")}, "
+                      + $"보스 경고 이미지 {(bossWarning != null ? "배선" : "없음")}.");
 
             var flow = go.AddComponent<DungeonBattleFlow>();
             var fso = new SerializedObject(flow);
@@ -295,6 +303,16 @@ namespace TaskbarHero.ClientEditor
                 var clone = Object.Instantiate(srcUi);
                 clone.name = "SkillUICanvas";
                 SceneManager.MoveGameObjectToScene(clone, targetScene);
+
+                // 아군 체력바 프레임 아트 배선(적 HP바와 같은 아트). 스프라이트 참조는 복제 시에도 보존되지만,
+                // BattleDevScene 쪽이 비어 있어도 GameScene은 프레임을 갖도록 여기서 한 번 더 확정한다.
+                var skillUi = clone.GetComponentInChildren<SkillCooldownUI>(true);
+                if (skillUi != null)
+                {
+                    var so = new SerializedObject(skillUi);
+                    so.FindProperty("hpBarFrame").objectReferenceValue = LoadSprite(HpBarFramePath);
+                    so.ApplyModifiedPropertiesWithoutUndo();
+                }
                 ok = true;
             }
             else
