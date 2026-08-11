@@ -51,12 +51,12 @@ STAGE_PER_ACT = 10
 BOSS_STAGE = 10
 
 # MonsterStatCurve 와 동일한 앵커(§4.4). 값 문서 §9 실측에서 온다.
-HP_FLOOR = [38, 100, 150, 300, 625]
-ATK_FLOOR = [3, 10, 28, 36, 52]
+HP_FLOOR = [42, 240, 2150, 4300, 8400]
+ATK_FLOOR = [5, 15, 61, 148, 347]
 ACT5_HP_GROWTH = 2.0
-ACT5_ATK_GROWTH = 1.44
-BOSS_HP = [500, 1000, 2000, 5000, 10000]
-BOSS_ATK = [7, 22, 39, 50, 75]
+ACT5_ATK_GROWTH = 2.3
+BOSS_HP = [1000, 7900, 20800, 40600, 80000]
+BOSS_ATK = [7, 31, 77, 241, 522]
 
 
 class ToolError(Exception):
@@ -706,7 +706,7 @@ def build_spawn_rows(code, stages, difficulties, spawn_rows=None):
 def print_spawn_plan(code, stages, difficulties, spawn_rows, new_rows):
     """스테이지별 "이전 → 이후 마리 수 (그 스테이지 총 N마리)" 를 출력한다.
 
-    총 마리 수는 클리어 시간을 좌우하므로(값 문서 §11 기준 일반 스테이지 8~16마리),
+    총 마리 수는 클리어 시간을 좌우하므로(값 문서 §11-B 기준 일반 스테이지 8~19마리),
     바뀐 뒤의 총량을 함께 보여 준다.
     """
     act = act_of_code(code)
@@ -719,7 +719,7 @@ def print_spawn_plan(code, stages, difficulties, spawn_rows, new_rows):
         arrow = f"{before} → {after}마리" if before else f"{after}마리"
         print(f"  · 스테이지 {stage}: {arrow}  (그 스테이지 총 {before_total} → {total}마리)")
         if not 8 <= total <= 16:
-            print(f"    ! 총 {total}마리는 값 문서 §11의 통상 범위(8~16)를 벗어납니다 — 의도한 값인지 확인하세요.")
+            print(f"    ! 총 {total}마리는 값 문서 §11-B의 통상 범위(8~19)를 벗어납니다 — 의도한 값인지 확인하세요.")
 
 
 def cmd_spawn(args):

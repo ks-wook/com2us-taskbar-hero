@@ -25,18 +25,19 @@
 
 이 도구가 필요한 이유는 추상적인 "밸런스 확인"이 아니다. 현재 코드베이스에 **검증 수단이 없어서 방치된 구체적 결함이 다섯 건** 있다. 하나는 두 문서가 정면으로 갈라져 있고, 다른 하나는 **이미 실제 사고로 이어졌다**(2.5).
 
-### 2.1 오프라인 보상의 클리어 주기 가정이 값 문서와 6배 어긋난다
+### 2.1 오프라인 보상의 클리어 주기 가정에 근거가 없었다 — **측정으로 해소됨**
 
-| 출처 | 값 | 근거 |
-|---|---|---|
-| [master-data-값.md:715](master-data/master-data-값.md) | 일반 스테이지 **10초 내외** (보스 10~20초) | 몬스터 `hp`를 이 목표에서 **역산해 확정**했다 |
-| `GameServer/Services/OfflineService.cs:25` | `AssumedClearIntervalSec = 60` | [offline-reward 기획서:277](offline-reward-기획서.md) — *"학습용 baseline"* |
+오프라인 지급식은 `floor(effectiveSec × reward / (AssumedClearIntervalSec × 2))`이며 `AssumedClearIntervalSec = 60`(`GameServer/Services/OfflineService.cs:25`)이다. 이 값만 **다른 상수들과 달리 `// (기획서 확정)` 주석이 없었고** — `OfflineCapSec`·`MinRewardSec`·`OfflineEfficiencyDivisor`는 모두 붙어 있다 — 오프라인 기획서도 *"몬스터 스탯 기반의 정교한 산출은 추후 개선 여지로 남긴다"*고 적어 뒀다. 클리어 주기를 **측정할 수단이 없었기 때문**이다. 실제 클리어가 10초인데 60초로 나누면 시간당 클리어 횟수가 6배 과소 계산되고, 오프라인 효율 50%(`÷2`)까지 곱해져 방치 보상이 온라인의 1/12로 떨어진다.
 
-오프라인 지급식은 `floor(effectiveSec × reward / (60 × 2))`다. 실제 클리어가 10초라면 시간당 클리어 횟수가 **6배 과소 계산**되고, 여기에 오프라인 효율 50%(`÷2`)가 곱해져 **온라인 파밍 대비 약 1/12** 수준이 지급된다. 방치형 게임에서 방치의 보상이 온라인의 1/12이면 방치할 이유가 사라진다.
+**현재 상태 — 이 도구의 `cycle` 명령이 그 측정을 담당하고, 결과는 60초 가정과 맞는다.**
 
-주목할 점은 `OfflineService.cs`의 다른 상수들(`OfflineCapSec`·`MinRewardSec`·`OfflineEfficiencyDivisor`)에는 모두 `// (기획서 확정)` 주석이 붙어 있는데 **`AssumedClearIntervalSec`만 `// 스테이지 1클리어 ≈ 60초 가정`** 이라는 점이다. 코드가 스스로 근거 없는 값임을 인정하고 있다. 오프라인 기획서도 *"몬스터 스탯 기반의 정교한 산출은 추후 개선 여지로 남긴다"*고 적어 뒀다 — **시뮬레이터가 정확히 그 개선이다.**
+| | 값 |
+|---|---|
+| 목표 클리어 시간([master-data-값.md §9.1](master-data/master-data-값.md)) | 지역 안에서 **30초 → 50초**, 보스 **60초** |
+| 실측 실사이클(전투 + 연출 + 클리어 오버레이 5초) | **35~66초** (1-1-1 35.7 · 3-1-9 59.1 · 5-2-10 66.0) |
+| `AssumedClearIntervalSec = 60` 대비 | **0.60~1.10배** — 상수를 바꿀 이유가 없다 |
 
-> 다만 `60`이 전투 시간이 아니라 "이동·재진입 포함 실사이클"을 의도했을 가능성은 열어 둔다. 그 경우에도 전투 10초 + 오버헤드 50초는 과하며, 어느 쪽이든 **측정 없이는 판단할 수 없다는 사실**이 이 도구의 필요성이다.
+> 초기 측정에서 실사이클이 141초까지 나왔던 것은 **도구의 벽시계 모델 결함**이었다. 히트스톱은 `WaitForSecondsRealtime(seconds)`로 기다리므로 늘어나는 실시간은 `seconds × (1 − 배율)`인데, 도구가 게임 시간 환산식 `seconds × (1/배율 − 1)`을 써서 히트스톱 1회당 20배를 더하고 있었다. **측정 도구가 자기 결함을 드러낸 사례**이자, 값 자체보다 산식의 출처를 붙여 두는 일(§5.4 CODE_CONSTANTS)이 왜 필요한지 보여 주는 사례다.
 
 ### 2.2 레벨업 계산이 두 곳에 복사돼 있고 이미 동작이 갈라졌다
 
@@ -179,7 +180,40 @@ Unity 클라이언트 ───────┘      └ UPM 패키지로 이미 
 | 강화 비용·성공 | `MasterDataProvider.GetEnhance` + `GrowthService` | `Economy.EnhanceCalculator` |
 | **전투 규칙** | **클라이언트** `BattleDevController`·`PlayerCombatant`·`MonsterUnit` (2.4) | `Combat.*` — **추출 후 클라이언트도 이것을 호출**(6.2) |
 
-### 5.4 RNG 추상화
+### 5.4 현행 구현 — 오프라인 Python 시뮬레이터 (`tools/balance_sim.py`)
+
+코어 추출(6.2)은 클라이언트 세션과 맞물린 큰 작업이라, **그 앞에 밸런스 근거를 먼저 만들기 위한 경량 도구**를 Python으로 둔다. 이 도구는 5.1의 `TaskbarHero.Simulator`(C# 콘솔)를 대체하는 것이 아니라, **코어가 추출되기 전까지 쓰는 측정 수단**이며 클리어 여부·클리어 소요 시간을 산출한다.
+
+**이 도구가 규칙을 어디서 얻는가** — 하드코딩을 줄이려고 최대한 파일에서 읽는다.
+
+| 대상 | 출처 | 방식 |
+|---|---|---|
+| 마스터 수치(몬스터·스테이지·스폰·직업·레벨·스킬 계수·아이템·강화·룬) | `master-data-schema.sql` | **INSERT를 직접 파싱**(DB·클라 번들 불필요 → `master_monster_tool`로 값을 고친 직후 바로 반영된다) |
+| 전투 상수(스폰 주기·동시 상한·적 이동속도·피해 배수·대형 간격·카메라 오프셋) | `GameScene.unity`의 `BattleDevController` | 씬 YAML에서 **읽는다** |
+| 파티별 사거리·돌진/내려찍기/화살비 지정·광역 스킬 목록·평타 광역 여부 | 같은 씬의 `PartyMemberConfig` | 씬 YAML에서 **읽는다** |
+| 스킬 모션 길이 · 광역 판정 반경 | `Assets/Prefabs/Effects/*.prefab` + 첫 프레임 PNG | 프레임 수/fps로 길이, PNG 크기×스케일로 반경 산출(`EffectDuration`·`EffectRadius`와 같은 규칙) |
+| 그 밖의 규칙 상수(방어 경감 K·보스 페이즈·넉백·히트스톱 등) | `Assets/Scripts/Battle/*.cs` | **전사(transcribe)** — 항목마다 `파일:줄` 출처를 달아 둔다(`constants` 명령으로 확인) |
+
+**모사 범위**: 아군 3인의 대형 행 배치·개별 이동·평타 주기·스킬 쿨다운/모션/광역 판정·돌진·버프·흡혈·자원 소모, 몬스터의 스폰 위치(카메라 우측 바깥)·접근·정지선·공격 주기·넉백·보스 예고와 페이즈, 그리고 전멸 판정까지. **시간은 고정 스텝**으로 진행하며 지연 데미지(코루틴)는 예약 이벤트로 처리한다.
+
+**규칙 사본이라는 점을 잊지 않는다(4장)** — 클라이언트 전투 코드를 고치면 이 도구의 전사 상수도 함께 고쳐야 한다. 어긋남을 빨리 드러내려고 ① 씬·프리팹에서 읽을 수 있는 값은 전부 읽고 ② `baseline` 명령이 값 문서 §9의 손계산 기준표를 재현해 나란히 대조한다(9.1). **코어 추출(4~5단계)이 끝나면 이 도구는 코어를 호출하는 얇은 실행기로 줄인다.**
+
+**명령**
+
+```bash
+python tools/balance_sim.py stage 1-1-1 --level auto     # 한 스테이지: 클리어 여부·소요 시간·병목
+python tools/balance_sim.py act 3 --level auto           # 한 Act 10스테이지 표
+python tools/balance_sim.py all --brief --level auto      # 100스테이지 중 목표를 벗어난 것만
+python tools/balance_sim.py baseline                      # 값.md §9 기준표 재현·대조(도구 검증)
+python tools/balance_sim.py cycle 1-1-9                     # 실사이클 vs 오프라인 60초 가정(2.1)
+python tools/balance_sim.py constants                     # 읽어 온 상수·이펙트 표
+```
+
+파티·레벨·장비·강화·스킬 레벨·패시브·룬·치명타 유무·고정 스텝·화면 비를 옵션으로 바꿔 같은 스테이지를 비교한다(`--party 1,4,3 --gear rough --enhance 3 --no-crit --dt 0.05 --aspect 2.4`). `--json`은 기계 판독용 출력이다.
+
+**산출 지표**: 클리어/패배/시간 초과 · 전투 시간(이동 시간과 교전 시간 분리) · **다음 적이 걸어오길 기다린 시간** · 실효 DPS와 이론 DPS 대비 가동률 · **광역 스킬 헛침 횟수** · 최저 체력 비율·전사 수 · 연출 포함 벽시계 추정 · 실사이클 추정과 `AssumedClearIntervalSec` 대비 배수.
+
+### 5.5 RNG 추상화
 
 ```csharp
 public interface IRandomSource
@@ -313,7 +347,8 @@ public interface IRandomSource
 
 | 단계 | 내용 | 담당 | 산출물 | 검증 |
 |---|---|---|---|---|
-| **1** | RNG 추상화 도입 (5.4) | 서버 | `IRandomSource` + 서버 DI 교체 | 서버 빌드·기존 동작 무변화 |
+| **0** | **오프라인 Python 시뮬레이터** (5.4) | 서버 | `tools/balance_sim.py` — 클리어 여부·소요 시간 산출 | 값 문서 §9 기준표 대조(`baseline`) · 고정 스텝 민감도 |
+| **1** | RNG 추상화 도입 (5.5) | 서버 | `IRandomSource` + 서버 DI 교체 | 서버 빌드·기존 동작 무변화 |
 | **2** | 레벨업 계산 통합 (2.2) | 서버 | `Progression.LevelCalculator` 단일 구현 | 두 기존 구현과 동일 입력→동일 출력 대조 |
 | **3** | 경제 계산 추출 (5.3) | 서버 | 드랍·가챠·오프라인·강화 코어 | 서버 경로 회귀 확인 |
 | **4** | **전투 코어 추출** (6.2) | 서버(코어 작성) | `Combat.*` — 규칙만, 연출 제외 | **값 문서 §9 표 재현** (9.1) |
@@ -322,6 +357,7 @@ public interface IRandomSource
 | **7** | 지표·리포트 | 서버 | CSV·콘솔·HTML | — |
 | **8** | 2.1 정량화 | 서버 | 클리어 주기 실측 → 조정안 | 조정 후 재시뮬레이션 비교 |
 
+- **0단계는 이미 있다** — 클리어 시간·클리어 여부 측정은 `tools/balance_sim.py`로 지금 할 수 있다(5.4). 다만 규칙 사본이므로 4~5단계가 끝나면 코어 호출로 줄인다.
 - **1~3단계는 시뮬레이터 없이도 서버에 이득**이다(중복 제거·테스트 가능성 확보).
 - **4단계까지 마치면 시뮬레이터는 동작한다.** 5단계(클라이언트 전환)가 늦어져도 시뮬레이션은 진행할 수 있다 — 다만 그동안은 코어와 클라이언트에 규칙이 두 벌 존재하므로 **드리프트 위험 구간**이며, 5단계를 미루지 않는 것이 좋다.
 - **5단계는 이 저장소 어시스턴트의 범위 밖**이다(10장). 코어 인터페이스를 확정해 클라이언트측 세션에 인계한다.
@@ -397,13 +433,14 @@ public interface IRandomSource
 | # | 항목 | 내용 |
 |---|---|---|
 | 1 | **`ApplyExp` 정본 결정** | 만렙 도달 시 초과 경험치를 버릴 것인가(`StageService`) 이월할 것인가(`OfflineService`). 통합하려면 하나를 골라야 하며, **기획 판단이 필요하다** |
-| 2 | **클리어 주기 확정** | 2.1의 60초를 실측값으로 교체할지, 연출·재진입 오버헤드(9.4)를 포함한 별도 계수로 재정의할지. 8단계 측정 후 결정 |
+| 2 | ~~**클리어 주기 확정**~~ → **해소** | 2.1 참조. 리밸런싱 후 실측 실사이클이 **35~66초**(연출·클리어 오버레이 포함)로 나와 `AssumedClearIntervalSec = 60`이 유효하다. 상수는 그대로 두고, 앞으로 목표 시간(값 문서 §9.1)을 바꿀 때 `cycle` 명령으로 다시 확인한다 |
 | 3 | **추출 경계선** | 전투 코어에 이동·사거리·교전 판정까지 넣을지, 피해 계산만 넣고 위치는 클라이언트에 남길지. 위치를 빼면 추출이 쉽지만 **"몇 초에 클리어되는가"를 산출할 수 없어** 시뮬레이터의 핵심 목적이 무너진다 — 넣는 쪽으로 기운다 |
-| 4 | **시간 스텝 크기** | 6.4의 고정 스텝 0.05초는 초기값이다. 스텝을 바꿔도 결과가 안정적인지 6단계에서 민감도를 확인해 확정한다 |
+| 4 | **시간 스텝 크기** | `tools/balance_sim.py`(5.4)의 기본값은 **1/60초**(실게임 프레임)이다. 같은 스테이지를 0.05 · 1/60 · 1/120으로 돌린 결과가 **2% 안에서 일치**하므로 스텝 크기는 결론을 바꾸지 않는다. 대신 **화면 가로비**가 결과를 바꾼다 — 스폰 지점이 `카메라 x + 화면 반폭 + 여백`이라 창이 넓을수록 몬스터가 멀리서 걸어온다(16:9 → 21.2초, 2.4:1 → 23.1초, 4:1 → 24.3초). 작업표시줄 도킹 창의 실제 비율을 정해 기준을 고정할 일이 남았다 |
 | 5 | **클라이언트 전환 시점** | 4단계 직후 바로 인계할지, 시뮬레이터를 먼저 완성해 코어를 검증한 뒤 인계할지. 후자가 안전하지만 드리프트 구간이 길어진다(8장) |
 | 6 | **부동소수 재현성** | 전투 계산에 `float`가 쓰인다(`coef`·`critChance` 등). 플랫폼·런타임(Unity Mono/IL2CPP vs .NET 10)이 달라도 같은 결과가 나오는지 확인이 필요하다. 어긋나면 코어를 `decimal`/고정소수로 바꿀지 판단해야 한다 |
 | 7 | **시뮬레이션 규모** | 가상 플레이어 수·기간의 기본값. 성능 측정 후 결정(6단계) |
 | 8 | **RNG 알고리즘** | 시드 고정 구현체 선택. `netstandard2.0` 제약상 .NET 6+ 내장 `Xoshiro`를 직접 쓸 수 없어 자체 구현 또는 대안 필요 |
+| 9 | **후열 광역 스킬의 판정 반경** | 광역 판정은 **시전자 위치를 중심으로** 이펙트 렌더 반경(`EffectRadius`)만큼 걸린다. 그런데 대형이 사거리로 행을 나누므로 후열(마법사)은 전선에서 `rowSpacingX 1.6 + enemyFrontStopGap 1.2 ≈ 2.8`유닛 떨어져 서고, 마법사 스킬 이펙트의 반경은 2.2~2.5다 — 시뮬레이터에서 **마법사의 광역 스킬이 대부분 반경 밖으로 헛친다**(그 시전 시간에 평타도 못 쏘므로 화력이 크게 준다). 이펙트 스프라이트가 좌측 피벗으로 오른쪽으로 뻗어 **그림은 적에게 닿아 보이지만 판정 중심은 마법사 자신**이라 눈으로는 드러나지 않는다. 판정 중심을 이펙트 렌더 중심으로 옮길지, 후열 사거리·반경·행 간격을 조정할지 **클라이언트에서 실측 확인 후 결정**한다(도구 판정: `balance_sim.py stage ... --verbose`의 "헛침" 로그) |
 
 ---
 
@@ -413,7 +450,7 @@ public interface IRandomSource
 |---|---|
 | 클리어 주기 60초 가정 | `GameServer/Services/OfflineService.cs:25` |
 | 오프라인 지급식 | `GameServer/Services/OfflineService.cs:117` · [offline-reward 기획서:277](offline-reward-기획서.md) |
-| 목표 클리어 시간 10초 | [master-data-값.md:715](master-data/master-data-값.md) |
+| 목표 클리어 시간(30~50초 · 보스 60초)과 지역별 기준 파티 | [master-data-값.md §9.1](master-data/master-data-값.md) |
 | 전투 수식·DPS 기준 | [master-data-값.md:714~748](master-data/master-data-값.md) · `master-data-schema.sql:751~764` |
 | `ApplyExp` 중복 | `GameServer/Services/StageService.cs:173` · `GameServer/Services/OfflineService.cs:131` |
 | `Random.Shared` 직접 호출 | `GameServer/MasterData/MasterDataProvider.cs:532,615,647,654,667` |
@@ -428,3 +465,7 @@ public interface IRandomSource
 | 전투 상수(피해 배수 2·주기 1.5초·반감점 100) | `Assets/Scripts/Battle/BattleDevController.cs:54,56,220` |
 | 데미지 공식 정본 | `master-data-기획서 §7.4` (`공격력 × 스킬 계수`, 치명 시 `× 치명피해`) |
 | 공통 라이브러리의 Unity UPM 연결 | `com2us-taskbar-hero-client/Packages/manifest.json` (`com.com2us.taskbarhero.common`) |
+| **현행 오프라인 시뮬레이터** | `tools/balance_sim.py` (사용법·전사 상수 목록은 파일 머리 주석과 `constants` 명령) |
+| 전투 상수·파티 설정이 실제로 놓인 곳 | `Assets/Scenes/GameScene.unity`의 `BattleDevController`(씬 직렬화 — 2.5의 사고가 난 지점) |
+| 스킬 이펙트 길이·광역 반경의 근거 | `Assets/Prefabs/Effects/*.prefab`(프레임 수·fps·스케일) + 첫 프레임 PNG 크기 |
+| 스테이지 사이 연출 시간 | `Assets/Scripts/Battle/StageClearOverlay.cs:31`(자동 닫힘 5초) · `BattleDefeatOverlay.cs:16`(2.5초) |
