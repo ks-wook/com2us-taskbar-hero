@@ -36,6 +36,9 @@ namespace TaskbarHero.Client.UI.Gacha
         private const float BackgroundWidth = 940f;
         private const float BackgroundHeight = 730f;
 
+        // 확인 버튼: 창 <b>아래 테두리에서 안쪽으로</b> 이만큼 올린 자리가 버튼 중심이다(플레이모드에서 맞춘 값).
+        private const float ConfirmButtonBottomInset = 97.7f;
+
         // 창 테두리(액자). 배경 아트가 테두리 없는 그림이라 경계가 그냥 잘려 보이므로 9-slice 프레임을 얹는다.
         private const float FrameThickness = 40f;  // 낮출수록 테두리가 얇아진다(pixelsPerUnitMultiplier로 환산)
         private const float FrameOutset = 10f;     // 배경 rect보다 이만큼 밖으로 키워 배경을 개구부에 꽉 채운다
@@ -226,7 +229,9 @@ namespace TaskbarHero.Client.UI.Gacha
             var crt = confirm.rectTransform;
             crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
             crt.pivot = new Vector2(0.5f, 0.5f);
-            crt.anchoredPosition = new Vector2(0f, -(BackgroundHeight * 0.5f) + 40f - 30f);
+            // 창 아래 테두리에서 안쪽으로 올려 결과 창 안에 놓는다(종전에는 테두리 밖 아래로 내려가 있어 너무 낮았다).
+            crt.anchoredPosition = new Vector2(0f,
+                brt.anchoredPosition.y - BackgroundHeight * 0.5f + ConfirmButtonBottomInset);
             crt.sizeDelta = new Vector2(320f, 96f);
             var ct = NewText("Label", crt, "확인", 34, TextAnchor.MiddleCenter);
             ct.fontStyle = FontStyle.Bold;
