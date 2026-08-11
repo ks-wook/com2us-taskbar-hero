@@ -161,3 +161,8 @@ __pycache__/
 *.py[cod]
 docs/공통/trade-테스트-데이터.sql
 docs/거래소-목록-캐시-제거-판단.md
+
+# --- 문서용 GIF의 원본 녹화(mp4) ---
+# GitHub 마크다운은 mp4를 인라인 재생하지 않아 문서에는 GIF만 올린다(tools/mp4_to_gif.py).
+# 원본 녹화는 수십~수백 MB라 저장소에 넣지 않는다.
+docs/images/**/*.mp4
