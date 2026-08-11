@@ -159,9 +159,17 @@ public sealed class AuthService : IAuthService
     /// 자동 로그인 검증을 처리한다. 클라이언트가 저장해 둔 직전 세션(userId·token)이 아직 유효한지
     /// Redis 토큰과 대조만 하고, 토큰을 재발급하거나 TTL을 연장하지 않는다(계정/로그인 기획서 5.4).
     /// 유효하면 클라이언트가 가진 토큰을 그대로 계속 쓰고, 아니면 타이틀 화면이 로그인 입력을 요구한다.
+    /// 대조 자체는 로그아웃과 공유하는 <see cref="VerifyTokenAsync"/>가 맡고, 이 메서드는 그 앞뒤에
+    /// **자동 로그인 유스케이스에만 필요한 처리**(진입 로그 등)를 얹는 자리다.
     /// </summary>
     public Task<ErrorCode> ValidateTokenAsync(long userId, string token)
-        => VerifyTokenAsync(userId, token);
+    {
+        // 앱 실행마다 호출되는 경로라 Debug로 남긴다(운영에서는 꺼지고, 접근 로그와도 중복되지 않는다).
+        // 토큰 값은 남기지 않는다(로깅 규칙 §7).
+        _logger.ZLogDebug($"자동 로그인 토큰 유효성 검증 요청: userId {userId:@UserId}");
+
+        return VerifyTokenAsync(userId, token);
+    }
 
     /// <summary>
     /// 요청의 userId·token이 현재 유효한 세션인지 Redis 토큰과 대조한다(단일 세션의 유효 기준).
