@@ -76,6 +76,8 @@ namespace TaskbarHero.ClientEditor
             var oso = new SerializedObject(overlay);
             oso.FindProperty("_resultBackground").objectReferenceValue = LoadSprite($"{ArtDir}/gacha_result_bg.png");
             oso.FindProperty("_slotFrame").objectReferenceValue = LoadSprite($"{ArtDir}/gacha_result_slot.png");
+            // 제목 명판(텍스트 제목 대신 노출된다 — 없으면 텍스트로 폴백).
+            oso.FindProperty("_titleImageSprite").objectReferenceValue = LoadSprite($"{ArtDir}/gacha_result_ui.png");
             oso.FindProperty("_windowFrame").objectReferenceValue = LoadSprite(WindowFramePath);
             oso.FindProperty("_buttonSprite").objectReferenceValue = LoadSprite(ButtonPath);
             oso.FindProperty("_itemSlotPrefab").objectReferenceValue =

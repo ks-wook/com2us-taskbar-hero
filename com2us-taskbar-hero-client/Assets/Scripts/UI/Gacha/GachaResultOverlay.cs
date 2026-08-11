@@ -15,6 +15,9 @@ namespace TaskbarHero.Client.UI.Gacha
     /// 재생하고(3등급 미만이면 생략) ② 별빛 배경(<c>gacha_result_bg</c>, 위에 9-slice 액자 테두리
     /// <c>window_frame_hollow</c>를 얹는다) 위에 결과 칸을 <b>스케일 0에서 원래 크기로</b> 왼쪽부터 하나씩 띄운다.
     /// 아무 곳이나 누르면 영상을 건너뛰고 결과로 넘어간다(연출은 매 뽑기마다 반복되므로 스킵이 필수다).</para>
+    /// <para>제목은 문구가 아니라 <b>명판 이미지</b>(<c>Assets/Art/UI/Gacha/gacha_result_ui.png</c>)이며, 결과 화면이
+    /// 열리는 순간 작은 크기에서 <b>원본 크기까지 커지며</b> 등장한다(<see cref="TitlePopIn"/>). 아트가 배선돼 있지
+    /// 않을 때만 예전처럼 텍스트 제목("뽑기 결과"·"N연 뽑기 결과")으로 폴백한다.</para>
     /// <para>결과 칸은 공용 아이템 슬롯 프리팹(<c>ItemSlot</c>)을 써서 아이콘·수량·hover 상세를 그대로 재사용하고,
     /// 프레임만 가챠 전용 아트(<c>gacha_result_slot</c>)로 교체한다. 천장(<c>isPity</c>)·10연 보장
     /// (<c>isGuaranteed</c>)으로 확정된 칸은 슬롯 아래에 배지를 달아 왜 그 등급이 나왔는지 알려 준다.</para>
@@ -43,6 +46,14 @@ namespace TaskbarHero.Client.UI.Gacha
         private const float RevealStartScale = 0f;   // 아예 안 보이는 상태에서 원래 크기까지 커진다
         private const float VideoStartTimeout = 1.5f; // 재생이 시작되지 않으면 연출을 건너뛴다
 
+        // 제목 명판(gacha_result_ui 595×266) — 창 위쪽 테두리에 걸치도록 얹어 결과 칸을 가리지 않는다.
+        // 크기는 원본 비율을 유지한 값이며, 이것이 등장 연출이 끝나는 "원본 크기"다.
+        private static readonly Vector2 TitleImageSize = new Vector2(480f, 215f);
+        private const float TitlePopSeconds = 0.32f;    // 작은 크기 → 원본 크기까지 걸리는 시간
+        private const float TitlePopStartScale = 0.25f; // 등장 시작 크기(원본 대비)
+        // 원본 크기를 살짝 넘겼다가 제자리로 돌아오는 back-out 이징 계수(0이면 오버슈트 없음).
+        private const float TitlePopOvershoot = 1.4f;
+
         // 4·5등급 칸 뒤에서 도는 글로우(원본 800×800 방사형). 칸보다 크게 깔아 빛이 밖으로 번지게 한다.
         private const float GlowSizeScale = 1.9f;
         private const float GlowFps = 20f;
@@ -52,6 +63,8 @@ namespace TaskbarHero.Client.UI.Gacha
         [SerializeField] private Sprite _resultBackground;
         [Tooltip("결과 칸 프레임(Assets/Art/UI/Gacha/gacha_result_slot.png).")]
         [SerializeField] private Sprite _slotFrame;
+        [Tooltip("제목 명판 이미지(Assets/Art/UI/Gacha/gacha_result_ui.png). 없으면 제목 텍스트로 폴백한다.")]
+        [SerializeField] private Sprite _titleImageSprite;
         [Tooltip("결과 창 테두리(Assets/Art/UI/Trade/01_Frames_Panels/window_frame_hollow.png, 9-slice). " +
                  "가운데가 비어 있어 별빛 배경 위에 액자처럼 얹힌다. 없으면 테두리 없이 배경만 보인다(기존 동작).")]
         [SerializeField] private Sprite _windowFrame;
@@ -79,6 +92,7 @@ namespace TaskbarHero.Client.UI.Gacha
         [SerializeField] private RawImage _videoImage;
         [SerializeField] private GameObject _resultRoot;
         [SerializeField] private RectTransform _slotArea;
+        [SerializeField] private Image _titleImage;
         [SerializeField] private Text _titleText;
         [SerializeField] private Button _confirmButton;
         [SerializeField] private Button _skipButton;
@@ -187,6 +201,10 @@ namespace TaskbarHero.Client.UI.Gacha
             // 테두리(액자) — 배경 다음 형제로 만들어 배경 위, 확인 버튼 아래에 그려진다.
             BuildWindowFrame(root, brt);
 
+            // 제목 명판(이미지). 액자 <b>다음</b> 형제로 만들어야 위쪽 테두리 위에 그려진다
+            // (배경의 자식으로 두면 액자가 명판을 가로질러 잘린 것처럼 보인다).
+            BuildTitlePlate(root, brt);
+
             _titleText = NewText("Title", brt, "뽑기 결과", 46, TextAnchor.MiddleCenter);
             _titleText.fontStyle = FontStyle.Bold;
             _titleText.color = new Color(1f, 0.94f, 0.72f);
@@ -249,6 +267,59 @@ namespace TaskbarHero.Client.UI.Gacha
             rt.sizeDelta = backgroundRect.sizeDelta + new Vector2(FrameOutset * 2f, FrameOutset * 2f);
         }
 
+        /// <summary>
+        /// 제목 명판(<c>gacha_result_ui</c>)을 결과 창 <b>위쪽 테두리에 걸치도록</b> 얹는다 — 제목 텍스트가 있던
+        /// 창 안쪽에 이 크기로 넣으면 결과 칸 영역을 침범하므로, 절반이 창 밖으로 올라오게 놓아 칸을 가리지 않는다.
+        /// 피벗은 가운데라 등장 연출(<see cref="TitlePopIn"/>)이 명판 중심을 기준으로 커진다.
+        /// <para>아트가 배선되지 않았으면 만들지 않는다 — 그 경우 <see cref="Show"/>가 제목 텍스트를 노출한다.</para>
+        /// </summary>
+        private void BuildTitlePlate(RectTransform parent, RectTransform backgroundRect)
+        {
+            if (_titleImageSprite == null)
+            {
+                return;
+            }
+
+            var plate = NewImage("TitlePlate", parent, Color.white);
+            ApplySimple(plate, _titleImageSprite);
+            plate.preserveAspect = true;
+            plate.raycastTarget = false; // 클릭은 딤(스킵)·확인 버튼이 받는다
+            _titleImage = plate;
+
+            var rt = plate.rectTransform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = TitleImageSize;
+            // 창 위쪽 테두리 선에 명판 중심을 맞춘다(절반은 창 밖, 절반은 창 안).
+            rt.anchoredPosition = backgroundRect.anchoredPosition + new Vector2(0f, BackgroundHeight * 0.5f);
+        }
+
+        /// <summary>
+        /// 제목 명판을 <see cref="TitlePopStartScale"/>(작은 크기) → 원본 크기(1)로 키운다.
+        /// 원본 크기를 살짝 넘겼다가 제자리로 돌아오는 back-out 이징이라 "팡 나타났다"로 읽히며,
+        /// 결과 칸 등장과 같은 unscaled 시간을 쓴다. 연출을 건너뛰면(<see cref="_skipRequested"/>) 즉시 원본 크기로 맞춘다.
+        /// </summary>
+        private IEnumerator TitlePopIn()
+        {
+            var rt = _titleImage.rectTransform;
+            rt.localScale = new Vector3(TitlePopStartScale, TitlePopStartScale, 1f);
+            for (float t = 0f; t < TitlePopSeconds; t += Time.unscaledDeltaTime)
+            {
+                if (_skipRequested)
+                {
+                    break;
+                }
+                float k = Mathf.Clamp01(t / TitlePopSeconds);
+                // easeOutBack: k=1에서 정확히 1로 끝나고, 그 직전에 1을 조금 넘어선다.
+                float u = k - 1f;
+                float ease = 1f + (TitlePopOvershoot + 1f) * u * u * u + TitlePopOvershoot * u * u;
+                float scale = Mathf.LerpUnclamped(TitlePopStartScale, 1f, ease);
+                rt.localScale = new Vector3(scale, scale, 1f);
+                yield return null;
+            }
+            rt.localScale = Vector3.one; // 원본 크기로 마무리
+        }
+
         /// <summary>버튼 리스너를 실행 시점에 다시 연결한다(프리팹에 직렬화되지 않는 비영구 리스너).</summary>
         private void WireRuntime()
         {
@@ -289,9 +360,21 @@ namespace TaskbarHero.Client.UI.Gacha
             _skipRequested = false;
             BuildSlots(data.results);
             bool multi = data.pullType == (int)TaskbarHero.Common.GachaPullType.Multi;
+            // 제목은 명판 이미지가 정본이고(등장 연출은 결과 화면이 열릴 때 재생한다), 아트가 배선되지 않았을
+            // 때만 텍스트로 폴백한다. 연차는 결과 칸 수로 드러나므로 명판에는 회차 수를 쓰지 않는다.
+            bool useImage = _titleImage != null;
+            if (_titleImage != null)
+            {
+                _titleImage.gameObject.SetActive(true);
+                _titleImage.rectTransform.localScale = new Vector3(TitlePopStartScale, TitlePopStartScale, 1f);
+            }
             if (_titleText != null)
             {
-                _titleText.text = multi ? $"{data.results.Count}연 뽑기 결과" : "뽑기 결과";
+                _titleText.gameObject.SetActive(!useImage);
+                if (!useImage)
+                {
+                    _titleText.text = multi ? $"{data.results.Count}연 뽑기 결과" : "뽑기 결과";
+                }
             }
             // 뽑기 시전음(사운드 정의서 §7). 비용 차감음은 시전음과 겹치므로 재생하지 않는다.
             SoundManager.Sfx(multi ? SoundId.GachaPullMulti : SoundId.GachaPullSingle);
@@ -343,6 +426,11 @@ namespace TaskbarHero.Client.UI.Gacha
             _skipRequested = false; // 영상 스킵이 결과 등장까지 삼키지 않도록 초기화
             if (_resultRoot != null) _resultRoot.SetActive(true);
             SoundManager.Sfx(SoundId.UiPanelOpen); // 결과 요약판 표시(§8 공용음 매핑)
+            if (_titleImage != null)
+            {
+                // 제목 명판이 커지는 동안 결과 칸도 함께 드러나기 시작한다(대기 없이 병행 재생).
+                StartCoroutine(TitlePopIn());
+            }
             yield return RevealSlots();
             _routine = null;
         }

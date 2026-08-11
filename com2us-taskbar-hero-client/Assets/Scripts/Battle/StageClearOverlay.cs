@@ -44,6 +44,7 @@ namespace TaskbarHero.Client.Battle
         // 크기는 스프라이트 원본 비율(526×287)을 유지한 값이며, 이것이 연출이 끝나는 "원본 크기"다.
         private static readonly Vector2 TitleImageSize = new Vector2(560f, 306f);
         private const float TitleImageY = 440f;          // 타이틀 텍스트가 있던 자리(상단 중앙)
+        private const float TitleImageTopMargin = 24f;   // 화면 위쪽으로 이만큼은 남긴다(잘림 방지)
         private const float TitlePopDuration = 0.42f;    // 작은 크기 → 원본 크기까지 걸리는 시간
         private const float TitlePopStartScale = 0.25f;  // 등장 시작 크기(원본 대비)
         // 원본 크기를 살짝 넘겼다가 제자리로 돌아오는 back-out 이징 계수(0이면 오버슈트 없음).
@@ -196,6 +197,7 @@ namespace TaskbarHero.Client.Battle
                 if (useImage)
                 {
                     _titleImage.sprite = titleSprite;
+                    PlaceTitleImage();
                     StartTitlePopIn();
                 }
             }
@@ -208,6 +210,26 @@ namespace TaskbarHero.Client.Battle
                     _titleText.text = title;
                 }
             }
+        }
+
+        /// <summary>
+        /// 타이틀 이미지를 상단 중앙에 놓는다. 기본 자리는 타이틀 텍스트가 있던 <see cref="TitleImageY"/>이지만,
+        /// <b>창이 낮고 넓으면 그 자리에서 이미지 윗변이 화면 밖으로 나간다</b>(기본 규격 캔버스는 match 0.5라
+        /// 창이 납작할수록 논리 세로 길이가 줄어든다 — 텍스트 타이틀은 높이가 낮아 드러나지 않던 문제다).
+        /// 캔버스의 실제 논리 높이를 보고 윗변이 <see cref="TitleImageTopMargin"/>만큼 안쪽에 들어오도록 내린다.
+        /// </summary>
+        private void PlaceTitleImage()
+        {
+            var rt = (RectTransform)_titleImage.transform;
+            float y = TitleImageY;
+            var canvas = GetComponent<Canvas>();
+            if (canvas != null && canvas.scaleFactor > 0.0001f)
+            {
+                float halfHeight = canvas.pixelRect.height / canvas.scaleFactor * 0.5f; // 논리 단위 화면 반높이
+                float limit = halfHeight - rt.sizeDelta.y * 0.5f - TitleImageTopMargin;
+                y = Mathf.Min(y, limit);
+            }
+            rt.anchoredPosition = new Vector2(0f, y);
         }
 
         /// <summary>타이틀 이미지를 <b>같은 프레임에</b> 작게 줄여 둔 뒤 커지는 연출을 시작한다
