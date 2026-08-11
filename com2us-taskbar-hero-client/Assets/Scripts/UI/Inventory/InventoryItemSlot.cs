@@ -180,20 +180,33 @@ namespace TaskbarHero.Client.UI
             _equippedLabel.verticalOverflow = VerticalWrapMode.Overflow;
         }
 
-        /// <summary>장착 아이콘을 이 칸 안에 꽉 차게(여백 14) 되돌린다 — 생성 직후와 드래그 취소 시 공용.</summary>
+        /// <summary>
+        /// 장착 아이콘이 부위 칸 안에서 남기는 여백. <b>등급 배경까지 칸에 거의 꽉 차게</b> 보이도록
+        /// 칸 아트(ui_slot_portrait)의 테두리 두께만큼만 남긴다 — 종전 14는 아이콘이 칸 한가운데
+        /// 작게 떠 보였다.
+        /// </summary>
+        private const float EquippedIconInset = 4f;
+
+        /// <summary>장착 아이콘을 이 칸 안에 꽉 차게(여백 <see cref="EquippedIconInset"/>) 되돌린다 —
+        /// 생성 직후와 드래그 취소 시 공용.
+        /// 칸으로 돌아왔으니 드래그 중 켰던 슬롯 프레임도 함께 끈다(부위 칸 프레임과 이중으로 겹치지 않게).</summary>
         private void RestoreEquippedIconLayout()
         {
             if (_equippedIcon == null)
             {
                 return;
             }
+            if (_equippedSlotView != null)
+            {
+                _equippedSlotView.SetFrameVisible(false);
+            }
             var rt = (RectTransform)_equippedIcon.transform;
             rt.SetParent(transform, false);
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;
             rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.offsetMin = new Vector2(14f, 14f);
-            rt.offsetMax = new Vector2(-14f, -14f);
+            rt.offsetMin = new Vector2(EquippedIconInset, EquippedIconInset);
+            rt.offsetMax = new Vector2(-EquippedIconInset, -EquippedIconInset);
             rt.localScale = Vector3.one;
         }
 
@@ -251,6 +264,12 @@ namespace TaskbarHero.Client.UI
                 _dragGroup.blocksRaycasts = false; // 아래 가방 칸이 레이캐스트에 잡히도록
             }
             RaiseDragIconAboveOtherPanels(true); // 큐브 창 뒤로 숨지 않게
+            // 부위 칸에서 떨어져 나온 동안에는 슬롯 테두리를 아이콘에 직접 그린다
+            // (제자리에서는 부위 칸이 자기 프레임을 그리므로 꺼 둔다 — RestoreEquippedIconLayout에서 되돌린다).
+            if (_equippedSlotView != null)
+            {
+                _equippedSlotView.SetFrameVisible(true);
+            }
         }
 
         /// <summary>

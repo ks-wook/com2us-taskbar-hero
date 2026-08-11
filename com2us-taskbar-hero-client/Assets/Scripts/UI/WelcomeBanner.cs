@@ -16,7 +16,10 @@ namespace TaskbarHero.Client.UI
     public class WelcomeBanner : MonoBehaviour
     {
         private const float SlideIn = 0.45f;   // 내려오는 시간(초)
-        private const float Hold = 1.6f;       // 머무는 시간(초)
+        // 머무는 시간(초). 1.6초는 문구를 읽기 전에 사라져 계정을 확인할 틈이 없었다 —
+        // 이메일 한 줄을 읽고 "내 계정이 맞나" 확인할 여유를 두려고 늘렸다.
+        // 배너가 떠 있어도 화면을 누르면 바로 게임에 들어가므로, 길어도 진입을 막지 않는다.
+        private const float Hold = 3.2f;
         private const float SlideOut = 0.4f;   // 올라가는 시간(초)
 
         private const float BannerWidth = 720f;

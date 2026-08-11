@@ -43,8 +43,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private int columns = 5;
         [Tooltip("최초 아이템 슬롯 수. 그리드 마지막에는 확장 버튼 1칸이 추가된다(초기 총 칸 = +1).")]
         [SerializeField] private int initialItemSlots = 14;
-        [Tooltip("한 번에 보이는 줄 수(스크롤). 2줄 = 10칸.")]
-        [SerializeField] private int visibleRows = 2;
+        [Tooltip("한 번에 보이는 줄 수(스크롤). 3줄 = 15칸.")]
+        [SerializeField] private int visibleRows = 3;
         [Tooltip("스크롤 지연 로딩의 페이지 크기(칸 수). 창고를 열면 이만큼만 먼저 받고, 스크롤이 아직 받지 않은 칸에 닿으면 한 페이지씩 더 받는다.")]
         [SerializeField] private int bagPageLimit = InventoryLoader.ScrollPageLimit;
         [Tooltip("미리 받아 둘 여유 줄 수. 뷰포트 아래로 이만큼 더 채워 두어 스크롤이 빈 칸에 닿기 전에 도착하게 한다.")]
@@ -54,7 +54,6 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private List<InventoryItemSlot> _gridSlots = new List<InventoryItemSlot>();
         [SerializeField] private List<InventoryItemSlot> _equipSlots = new List<InventoryItemSlot>();
         [SerializeField] private InventoryTooltip _tooltip;
-        [SerializeField] private Text _charIndicatorText;
         [SerializeField] private Text _portraitLabel;
         [SerializeField] private RawImage _portraitImage;     // 초상화 캐릭터 렌더 표시(런타임 텍스처 배정)
         [SerializeField] private Button _prevButton;
@@ -367,6 +366,7 @@ namespace TaskbarHero.Client.UI
             // 내용물은 모두 프레임 테두리 안쪽 빈 칸에만 놓는다(테두리·상단 장식판을 침범하지 않도록).
             // 제목 텍스트는 두지 않는다 — 배경 아트(ui_bg_2)의 상단 장식판이 제목 자리를 그린다.
             var content = PanelFrame.CreateContentArea(panel);
+            ExtendContentTop(content);
             BuildGoldArea(content);  // 보유 골드 표시
             BuildEquipArea(content); // 캐릭터 네비게이션 포함, 가로 중앙 정렬
             BuildGrid(content);
@@ -374,10 +374,22 @@ namespace TaskbarHero.Client.UI
             BuildTooltip();
         }
 
+        // 내용 영역을 프레임 기본 안쪽 칸보다 <b>위로</b> 더 넓히는 양(UI 단위).
+        // 가방을 3줄로 늘리면서 위쪽 여백을 끌어다 쓴 값으로, 플레이 모드에서 직접 옮겨 확정했다.
+        // 위쪽만 늘리므로 아래(성장 버튼 줄)는 프레임 바닥 기준 그대로고, 상단 기준으로 놓인
+        // 골드·장비·가방 블록이 통째로 92만큼 올라가 아래에 가방 한 줄이 더 들어갈 자리가 생긴다.
+        private const float ContentTopExtend = 92f;
+
+        /// <summary>내용 영역 위쪽을 <see cref="ContentTopExtend"/>만큼 넓힌다(프레임 상단 장식판 아래 여백을 회수).</summary>
+        private static void ExtendContentTop(RectTransform content)
+        {
+            content.offsetMax = new Vector2(content.offsetMax.x, content.offsetMax.y + ContentTopExtend);
+        }
+
         // 성장 진입 버튼 줄의 기하. y는 <b>내용 영역 바닥</b>에서 띄우는 높이다.
         private const float GrowthButtonWidth = 210f;
         private const float GrowthButtonHeight = 44f;
-        private const float GrowthButtonY = 14f;
+        private const float GrowthButtonY = 11f;
         private const float GrowthButtonGapX = 224f;  // 가운데(룬) 기준 좌우 간격
 
         /// <summary>성장 진입 버튼(스킬 레벨업·룬·큐브)을 내용 영역 최하단(가방 격자 아래)에 가로 중앙으로 배치한다.
@@ -417,10 +429,11 @@ namespace TaskbarHero.Client.UI
 
         // 보유 골드 블록의 표시 배율(1이면 원래 크기). 자식 좌표를 다시 잡지 않고 블록째로 줄인다.
         private const float GoldAreaScale = 0.7f;
-        // 내용 영역 <b>우상단 기준</b> 골드 블록 위치(장비 영역과 가방 영역 사이 줄의 오른쪽).
-        // 피벗이 우상단이라 축소(0.7배)도 그 모서리를 기준으로 일어나므로, 오른쪽 끝이 이 위치에 고정된다.
-        private const float GoldAreaY = 492f;
-        private static readonly Vector2 GoldAreaPos = new Vector2(-8f, -GoldAreaY);
+        // 내용 영역 <b>우상단 기준</b> 골드 블록 위치(장비 영역과 가방 영역 사이 줄). 피벗이 우상단이라
+        // 축소(0.7배)도 그 모서리를 기준으로 일어나므로, 오른쪽 끝이 이 위치에 고정된다.
+        // x를 크게 당겨 <b>가방 제목 위 왼쪽</b>에 붙였다(플레이 모드에서 직접 옮겨 확정).
+        private const float GoldAreaY = 486f;
+        private static readonly Vector2 GoldAreaPos = new Vector2(-511f, -GoldAreaY);
 
         /// <summary>보유 골드 영역(골드 아이콘 + 수량)을 구성한다. 아이콘/수량은 런타임에 세션에서 채운다.
         /// 과하게 커 보이지 않도록 블록 전체를 0.7배로 축소해 얹는다(자식 크기는 그대로 둔다).</summary>
@@ -775,15 +788,6 @@ namespace TaskbarHero.Client.UI
             area.sizeDelta = new Vector2(EquipBlockWidth, EquipBlockHeight);
             area.anchoredPosition = new Vector2(0f, -EquipAreaY);
 
-            // 캐릭터 전환 네비게이션 (◀ 인디케이터 ▶). 좌표는 플레이 모드에서 직접 옮겨 확정한 값 —
-            // 화살표를 블록 양 끝이 아니라 인디케이터 글자 바로 옆으로 좁혀 붙이고, 줄 전체를 아래로 내렸다.
-            _prevButton = BuildNavButton(area, "PrevCharButton", "<", NavPrevX, NavRowY, true, out _prevPunch);
-
-            _charIndicatorText = NewText("CharIndicator", area, "", 28, TextAnchor.MiddleCenter);
-            TopLeft(_charIndicatorText.rectTransform, 70f, NavIndicatorY, EquipBlockWidth - 140f, 64f);
-
-            _nextButton = BuildNavButton(area, "NextCharButton", ">", NavNextX, NavRowY, false, out _nextPunch);
-
             // '장비' 라벨은 두지 않는다 — 배경 아트(ui_bg_2)의 장식과 겹쳐 보여 제거했다(플레이 모드에서 확인).
 
             // 능력치 패널(초상화 좌측): 장비 포함 현재 캐릭터 능력치.
@@ -813,6 +817,15 @@ namespace TaskbarHero.Client.UI
             plrt.pivot = new Vector2(0.5f, 0f);
             plrt.sizeDelta = new Vector2(0f, 34f);
             plrt.anchoredPosition = new Vector2(0f, 10f);
+
+            // 캐릭터 전환 네비게이션 (◀ ▶). 좌표는 플레이 모드에서 직접 옮겨 확정한 값 —
+            // 초상화 좌우 가장자리에 겹쳐 세로 가운데에 둔다.
+            // <b>반드시 초상 슬롯보다 나중에</b> 만든다 — uGUI는 형제 순서대로 그리므로, 먼저 만들면
+            // 초상 슬롯 아트가 화살표를 덮어 버려 보이지 않는다(실제로 그렇게 가려져 있었다).
+            // "캐릭터 N / M" 인디케이터 글자는 두지 않는다 — 초상화 아래 이름표(직업 Lv.N)로 충분해
+            // 플레이 모드에서 제거했다.
+            _prevButton = BuildNavButton(area, "PrevCharButton", "<", NavPrevX, NavRowY, true, out _prevPunch);
+            _nextButton = BuildNavButton(area, "NextCharButton", ">", NavNextX, NavRowY, false, out _nextPunch);
 
             // 6부위 장착 슬롯 (2열 x 3행) — 초상화보다 작은 크기
             const float startX = EquipSlotsX;
@@ -902,10 +915,10 @@ namespace TaskbarHero.Client.UI
         private const float NavButtonSize = 64f;      // 캐릭터 전환 화살표 버튼 한 변
         private const float NavArrowPadding = 6f;     // 버튼 안쪽에서 화살표를 줄이는 여백(클릭 영역은 그대로)
         // 캐릭터 전환 줄의 좌표(장비 블록 좌상단 기준, 아래로 +). 플레이 모드에서 확정한 값이다.
-        private const float NavRowY = 80f;            // 화살표 버튼 줄의 y
-        private const float NavIndicatorY = 83f;      // 인디케이터 글자의 y(버튼보다 3 아래 — 시각 정렬)
-        private const float NavPrevX = 168f;          // 이전(◀) 버튼 x
-        private const float NavNextX = 452f;          // 다음(▶) 버튼 x
+        // 화살표를 초상화 위가 아니라 <b>초상화 좌우 가장자리에 겹쳐</b> 세로 가운데 높이에 둔다.
+        private const float NavRowY = 262f;           // 화살표 버튼 줄의 y(초상화 세로 중앙)
+        private const float NavPrevX = 211f;          // 이전(◀) 버튼 x — 초상화 왼쪽 가장자리
+        private const float NavNextX = 412f;          // 다음(▶) 버튼 x — 초상화 오른쪽 가장자리
 
         /// <summary>
         /// 캐릭터 전환 화살표 버튼 하나(이전/다음). 구조는 <b>투명한 루트(클릭 영역) + 화살표 자식</b>이다.
@@ -1248,17 +1261,13 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>선택된 캐릭터의 인디케이터·초상 라벨·장착 슬롯을 세션 실데이터로 갱신한다.</summary>
+        /// <summary>선택된 캐릭터의 초상 라벨·장착 슬롯을 세션 실데이터로 갱신한다.</summary>
         private void RefreshCharacter()
         {
             var chars = Characters;
             _partyCount = chars != null && chars.Count > 0 ? chars.Count : 1;
             _selectedCharacter = Mathf.Clamp(_selectedCharacter, 0, _partyCount - 1);
 
-            if (_charIndicatorText != null)
-            {
-                _charIndicatorText.text = $"캐릭터 {_selectedCharacter + 1} / {_partyCount}";
-            }
             if (_portraitLabel != null)
             {
                 _portraitLabel.text = CurrentCharacterLabel(chars);

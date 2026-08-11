@@ -217,6 +217,7 @@ namespace TaskbarHero.Client.UI
             _icon.raycastTarget = false; // 아래 칸이 레이캐스트에 잡히도록
             _rt.position = eventData.position;
             RaiseAboveOtherPanels(true); // 큐브 등 다른 패널 뒤로 숨지 않게
+            SetDragFrame(true); // 칸에서 떼어진 동안에는 슬롯 테두리를 아이콘에 직접 그린다
 
             // 이 장비를 놓을 수 있는 부위 칸을 강조해, 어디에 떨어뜨려야 장착되는지 보이게 한다.
             Controller.HighlightEquipTarget(_data, true);
@@ -247,6 +248,21 @@ namespace TaskbarHero.Client.UI
             }
         }
 
+        /// <summary>
+        /// 끌고 있는 동안에만 공용 슬롯의 테두리 프레임을 켠다.
+        /// <para>평소에는 <b>가방 격자 칸이 자기 프레임을 그리므로</b> 슬롯 프레임을 꺼 둔다(이중 테두리 방지).
+        /// 그런데 드래그 중에는 아이콘이 그 칸에서 떨어져 나와 캔버스 위를 떠다니므로, 프레임이 꺼진 채로는
+        /// <b>아이콘만 맨몸으로</b> 보인다. 끌기 시작할 때 켜고 놓을 때 다시 꺼서, 떠 있는 동안에도
+        /// 다른 화면의 아이템 칸과 같은 테두리를 갖게 한다.</para>
+        /// </summary>
+        private void SetDragFrame(bool on)
+        {
+            if (_slotView != null)
+            {
+                _slotView.SetFrameVisible(on);
+            }
+        }
+
         public void OnDrag(PointerEventData eventData)
         {
             if (_dragging)
@@ -264,6 +280,7 @@ namespace TaskbarHero.Client.UI
             _dragging = false;
             _icon.raycastTarget = true;
             RaiseAboveOtherPanels(false);
+            SetDragFrame(false); // 어느 칸에 놓이든 그 칸이 자기 프레임을 그린다
             Controller.HighlightEquipTarget(_data, false);
 
             // 큐브 창의 등록 칸에 떨어뜨렸다 → 그 탭에 아이템을 올린다(가방 칸 이동이 아니다).
