@@ -1,14 +1,14 @@
 [
   {
     "characterId": 2,
-    "goldCost": 500000
+    "goldCost": 5000
   },
   {
     "characterId": 3,
-    "goldCost": 500000
+    "goldCost": 50000
   },
   {
     "characterId": 4,
-    "goldCost": 500000
+    "goldCost": 400000
   }
 ]

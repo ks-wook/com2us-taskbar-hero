@@ -4,7 +4,7 @@
     "requiredExp": 100,
     "skillPoints": 1,
     "statBonus": {
-      "hp": 10,
+      "hp": 35,
       "atk": 2,
       "def": 1,
       "moveSpeed": 0.0,
@@ -18,7 +18,7 @@
     "requiredExp": 200,
     "skillPoints": 2,
     "statBonus": {
-      "hp": 20,
+      "hp": 70,
       "atk": 4,
       "def": 2,
       "moveSpeed": 0.0,
@@ -32,7 +32,7 @@
     "requiredExp": 300,
     "skillPoints": 3,
     "statBonus": {
-      "hp": 30,
+      "hp": 105,
       "atk": 6,
       "def": 3,
       "moveSpeed": 0.0,
@@ -46,7 +46,7 @@
     "requiredExp": 400,
     "skillPoints": 4,
     "statBonus": {
-      "hp": 40,
+      "hp": 140,
       "atk": 8,
       "def": 4,
       "moveSpeed": 0.0,
@@ -60,7 +60,7 @@
     "requiredExp": 500,
     "skillPoints": 5,
     "statBonus": {
-      "hp": 50,
+      "hp": 175,
       "atk": 10,
       "def": 5,
       "moveSpeed": 0.0,
@@ -74,7 +74,7 @@
     "requiredExp": 600,
     "skillPoints": 6,
     "statBonus": {
-      "hp": 60,
+      "hp": 210,
       "atk": 12,
       "def": 6,
       "moveSpeed": 0.0,
@@ -88,7 +88,7 @@
     "requiredExp": 700,
     "skillPoints": 7,
     "statBonus": {
-      "hp": 70,
+      "hp": 245,
       "atk": 14,
       "def": 7,
       "moveSpeed": 0.0,
@@ -102,7 +102,7 @@
     "requiredExp": 800,
     "skillPoints": 8,
     "statBonus": {
-      "hp": 80,
+      "hp": 280,
       "atk": 16,
       "def": 8,
       "moveSpeed": 0.0,
@@ -116,7 +116,7 @@
     "requiredExp": 900,
     "skillPoints": 9,
     "statBonus": {
-      "hp": 90,
+      "hp": 315,
       "atk": 18,
       "def": 9,
       "moveSpeed": 0.0,
@@ -130,7 +130,7 @@
     "requiredExp": 1000,
     "skillPoints": 10,
     "statBonus": {
-      "hp": 100,
+      "hp": 350,
       "atk": 20,
       "def": 10,
       "moveSpeed": 0.0,
@@ -144,7 +144,7 @@
     "requiredExp": 1100,
     "skillPoints": 11,
     "statBonus": {
-      "hp": 110,
+      "hp": 385,
       "atk": 22,
       "def": 11,
       "moveSpeed": 0.0,
@@ -158,7 +158,7 @@
     "requiredExp": 1200,
     "skillPoints": 12,
     "statBonus": {
-      "hp": 120,
+      "hp": 420,
       "atk": 24,
       "def": 12,
       "moveSpeed": 0.0,
@@ -172,7 +172,7 @@
     "requiredExp": 1300,
     "skillPoints": 13,
     "statBonus": {
-      "hp": 130,
+      "hp": 455,
       "atk": 26,
       "def": 13,
       "moveSpeed": 0.0,
@@ -186,7 +186,7 @@
     "requiredExp": 1400,
     "skillPoints": 14,
     "statBonus": {
-      "hp": 140,
+      "hp": 490,
       "atk": 28,
       "def": 14,
       "moveSpeed": 0.0,
@@ -200,7 +200,7 @@
     "requiredExp": 1500,
     "skillPoints": 15,
     "statBonus": {
-      "hp": 150,
+      "hp": 525,
       "atk": 30,
       "def": 15,
       "moveSpeed": 0.0,
@@ -214,7 +214,7 @@
     "requiredExp": 1600,
     "skillPoints": 16,
     "statBonus": {
-      "hp": 160,
+      "hp": 560,
       "atk": 32,
       "def": 16,
       "moveSpeed": 0.0,
@@ -228,7 +228,7 @@
     "requiredExp": 1700,
     "skillPoints": 17,
     "statBonus": {
-      "hp": 170,
+      "hp": 595,
       "atk": 34,
       "def": 17,
       "moveSpeed": 0.0,
@@ -242,7 +242,7 @@
     "requiredExp": 1800,
     "skillPoints": 18,
     "statBonus": {
-      "hp": 180,
+      "hp": 630,
       "atk": 36,
       "def": 18,
       "moveSpeed": 0.0,
@@ -256,7 +256,7 @@
     "requiredExp": 1900,
     "skillPoints": 19,
     "statBonus": {
-      "hp": 190,
+      "hp": 665,
       "atk": 38,
       "def": 19,
       "moveSpeed": 0.0,
@@ -270,7 +270,7 @@
     "requiredExp": 2000,
     "skillPoints": 20,
     "statBonus": {
-      "hp": 200,
+      "hp": 700,
       "atk": 40,
       "def": 20,
       "moveSpeed": 0.0,
@@ -284,7 +284,7 @@
     "requiredExp": 2100,
     "skillPoints": 21,
     "statBonus": {
-      "hp": 210,
+      "hp": 735,
       "atk": 42,
       "def": 21,
       "moveSpeed": 0.0,
@@ -298,7 +298,7 @@
     "requiredExp": 2200,
     "skillPoints": 22,
     "statBonus": {
-      "hp": 220,
+      "hp": 770,
       "atk": 44,
       "def": 22,
       "moveSpeed": 0.0,
@@ -312,7 +312,7 @@
     "requiredExp": 2300,
     "skillPoints": 23,
     "statBonus": {
-      "hp": 230,
+      "hp": 805,
       "atk": 46,
       "def": 23,
       "moveSpeed": 0.0,
@@ -326,7 +326,7 @@
     "requiredExp": 2400,
     "skillPoints": 24,
     "statBonus": {
-      "hp": 240,
+      "hp": 840,
       "atk": 48,
       "def": 24,
       "moveSpeed": 0.0,
@@ -340,7 +340,7 @@
     "requiredExp": 2500,
     "skillPoints": 25,
     "statBonus": {
-      "hp": 250,
+      "hp": 875,
       "atk": 50,
       "def": 25,
       "moveSpeed": 0.0,
@@ -354,7 +354,7 @@
     "requiredExp": 2600,
     "skillPoints": 26,
     "statBonus": {
-      "hp": 260,
+      "hp": 910,
       "atk": 52,
       "def": 26,
       "moveSpeed": 0.0,
@@ -368,7 +368,7 @@
     "requiredExp": 2700,
     "skillPoints": 27,
     "statBonus": {
-      "hp": 270,
+      "hp": 945,
       "atk": 54,
       "def": 27,
       "moveSpeed": 0.0,
@@ -382,7 +382,7 @@
     "requiredExp": 2800,
     "skillPoints": 28,
     "statBonus": {
-      "hp": 280,
+      "hp": 980,
       "atk": 56,
       "def": 28,
       "moveSpeed": 0.0,
@@ -396,7 +396,7 @@
     "requiredExp": 2900,
     "skillPoints": 29,
     "statBonus": {
-      "hp": 290,
+      "hp": 1015,
       "atk": 58,
       "def": 29,
       "moveSpeed": 0.0,
@@ -410,7 +410,7 @@
     "requiredExp": 3000,
     "skillPoints": 30,
     "statBonus": {
-      "hp": 300,
+      "hp": 1050,
       "atk": 60,
       "def": 30,
       "moveSpeed": 0.0,
@@ -424,7 +424,7 @@
     "requiredExp": 3100,
     "skillPoints": 31,
     "statBonus": {
-      "hp": 310,
+      "hp": 1085,
       "atk": 62,
       "def": 31,
       "moveSpeed": 0.0,
@@ -438,7 +438,7 @@
     "requiredExp": 3200,
     "skillPoints": 32,
     "statBonus": {
-      "hp": 320,
+      "hp": 1120,
       "atk": 64,
       "def": 32,
       "moveSpeed": 0.0,
@@ -452,7 +452,7 @@
     "requiredExp": 3300,
     "skillPoints": 33,
     "statBonus": {
-      "hp": 330,
+      "hp": 1155,
       "atk": 66,
       "def": 33,
       "moveSpeed": 0.0,
@@ -466,7 +466,7 @@
     "requiredExp": 3400,
     "skillPoints": 34,
     "statBonus": {
-      "hp": 340,
+      "hp": 1190,
       "atk": 68,
       "def": 34,
       "moveSpeed": 0.0,
@@ -480,7 +480,7 @@
     "requiredExp": 3500,
     "skillPoints": 35,
     "statBonus": {
-      "hp": 350,
+      "hp": 1225,
       "atk": 70,
       "def": 35,
       "moveSpeed": 0.0,
@@ -494,7 +494,7 @@
     "requiredExp": 3600,
     "skillPoints": 36,
     "statBonus": {
-      "hp": 360,
+      "hp": 1260,
       "atk": 72,
       "def": 36,
       "moveSpeed": 0.0,
@@ -508,7 +508,7 @@
     "requiredExp": 3700,
     "skillPoints": 37,
     "statBonus": {
-      "hp": 370,
+      "hp": 1295,
       "atk": 74,
       "def": 37,
       "moveSpeed": 0.0,
@@ -522,7 +522,7 @@
     "requiredExp": 3800,
     "skillPoints": 38,
     "statBonus": {
-      "hp": 380,
+      "hp": 1330,
       "atk": 76,
       "def": 38,
       "moveSpeed": 0.0,
@@ -536,7 +536,7 @@
     "requiredExp": 3900,
     "skillPoints": 39,
     "statBonus": {
-      "hp": 390,
+      "hp": 1365,
       "atk": 78,
       "def": 39,
       "moveSpeed": 0.0,
@@ -550,7 +550,7 @@
     "requiredExp": 4000,
     "skillPoints": 40,
     "statBonus": {
-      "hp": 400,
+      "hp": 1400,
       "atk": 80,
       "def": 40,
       "moveSpeed": 0.0,
@@ -564,7 +564,7 @@
     "requiredExp": 4100,
     "skillPoints": 41,
     "statBonus": {
-      "hp": 410,
+      "hp": 1435,
       "atk": 82,
       "def": 41,
       "moveSpeed": 0.0,
@@ -578,7 +578,7 @@
     "requiredExp": 4200,
     "skillPoints": 42,
     "statBonus": {
-      "hp": 420,
+      "hp": 1470,
       "atk": 84,
       "def": 42,
       "moveSpeed": 0.0,
@@ -592,7 +592,7 @@
     "requiredExp": 4300,
     "skillPoints": 43,
     "statBonus": {
-      "hp": 430,
+      "hp": 1505,
       "atk": 86,
       "def": 43,
       "moveSpeed": 0.0,
@@ -606,7 +606,7 @@
     "requiredExp": 4400,
     "skillPoints": 44,
     "statBonus": {
-      "hp": 440,
+      "hp": 1540,
       "atk": 88,
       "def": 44,
       "moveSpeed": 0.0,
@@ -620,7 +620,7 @@
     "requiredExp": 4500,
     "skillPoints": 45,
     "statBonus": {
-      "hp": 450,
+      "hp": 1575,
       "atk": 90,
       "def": 45,
       "moveSpeed": 0.0,
@@ -634,7 +634,7 @@
     "requiredExp": 4600,
     "skillPoints": 46,
     "statBonus": {
-      "hp": 460,
+      "hp": 1610,
       "atk": 92,
       "def": 46,
       "moveSpeed": 0.0,
@@ -648,7 +648,7 @@
     "requiredExp": 4700,
     "skillPoints": 47,
     "statBonus": {
-      "hp": 470,
+      "hp": 1645,
       "atk": 94,
       "def": 47,
       "moveSpeed": 0.0,
@@ -662,7 +662,7 @@
     "requiredExp": 4800,
     "skillPoints": 48,
     "statBonus": {
-      "hp": 480,
+      "hp": 1680,
       "atk": 96,
       "def": 48,
       "moveSpeed": 0.0,
@@ -676,7 +676,7 @@
     "requiredExp": 4900,
     "skillPoints": 49,
     "statBonus": {
-      "hp": 490,
+      "hp": 1715,
       "atk": 98,
       "def": 49,
       "moveSpeed": 0.0,
@@ -690,7 +690,7 @@
     "requiredExp": 5000,
     "skillPoints": 50,
     "statBonus": {
-      "hp": 500,
+      "hp": 1750,
       "atk": 100,
       "def": 50,
       "moveSpeed": 0.0,
@@ -704,7 +704,7 @@
     "requiredExp": 5100,
     "skillPoints": 51,
     "statBonus": {
-      "hp": 510,
+      "hp": 1785,
       "atk": 102,
       "def": 51,
       "moveSpeed": 0.0,
@@ -718,7 +718,7 @@
     "requiredExp": 5200,
     "skillPoints": 52,
     "statBonus": {
-      "hp": 520,
+      "hp": 1820,
       "atk": 104,
       "def": 52,
       "moveSpeed": 0.0,
@@ -732,7 +732,7 @@
     "requiredExp": 5300,
     "skillPoints": 53,
     "statBonus": {
-      "hp": 530,
+      "hp": 1855,
       "atk": 106,
       "def": 53,
       "moveSpeed": 0.0,
@@ -746,7 +746,7 @@
     "requiredExp": 5400,
     "skillPoints": 54,
     "statBonus": {
-      "hp": 540,
+      "hp": 1890,
       "atk": 108,
       "def": 54,
       "moveSpeed": 0.0,
@@ -760,7 +760,7 @@
     "requiredExp": 5500,
     "skillPoints": 55,
     "statBonus": {
-      "hp": 550,
+      "hp": 1925,
       "atk": 110,
       "def": 55,
       "moveSpeed": 0.0,
@@ -774,7 +774,7 @@
     "requiredExp": 5600,
     "skillPoints": 56,
     "statBonus": {
-      "hp": 560,
+      "hp": 1960,
       "atk": 112,
       "def": 56,
       "moveSpeed": 0.0,
@@ -788,7 +788,7 @@
     "requiredExp": 5700,
     "skillPoints": 57,
     "statBonus": {
-      "hp": 570,
+      "hp": 1995,
       "atk": 114,
       "def": 57,
       "moveSpeed": 0.0,
@@ -802,7 +802,7 @@
     "requiredExp": 5800,
     "skillPoints": 58,
     "statBonus": {
-      "hp": 580,
+      "hp": 2030,
       "atk": 116,
       "def": 58,
       "moveSpeed": 0.0,
@@ -816,7 +816,7 @@
     "requiredExp": 5900,
     "skillPoints": 59,
     "statBonus": {
-      "hp": 590,
+      "hp": 2065,
       "atk": 118,
       "def": 59,
       "moveSpeed": 0.0,
@@ -830,7 +830,7 @@
     "requiredExp": 6000,
     "skillPoints": 60,
     "statBonus": {
-      "hp": 600,
+      "hp": 2100,
       "atk": 120,
       "def": 60,
       "moveSpeed": 0.0,
@@ -844,7 +844,7 @@
     "requiredExp": 6100,
     "skillPoints": 61,
     "statBonus": {
-      "hp": 610,
+      "hp": 2135,
       "atk": 122,
       "def": 61,
       "moveSpeed": 0.0,
@@ -858,7 +858,7 @@
     "requiredExp": 6200,
     "skillPoints": 62,
     "statBonus": {
-      "hp": 620,
+      "hp": 2170,
       "atk": 124,
       "def": 62,
       "moveSpeed": 0.0,
@@ -872,7 +872,7 @@
     "requiredExp": 6300,
     "skillPoints": 63,
     "statBonus": {
-      "hp": 630,
+      "hp": 2205,
       "atk": 126,
       "def": 63,
       "moveSpeed": 0.0,
@@ -886,7 +886,7 @@
     "requiredExp": 6400,
     "skillPoints": 64,
     "statBonus": {
-      "hp": 640,
+      "hp": 2240,
       "atk": 128,
       "def": 64,
       "moveSpeed": 0.0,
@@ -900,7 +900,7 @@
     "requiredExp": 6500,
     "skillPoints": 65,
     "statBonus": {
-      "hp": 650,
+      "hp": 2275,
       "atk": 130,
       "def": 65,
       "moveSpeed": 0.0,
@@ -914,7 +914,7 @@
     "requiredExp": 6600,
     "skillPoints": 66,
     "statBonus": {
-      "hp": 660,
+      "hp": 2310,
       "atk": 132,
       "def": 66,
       "moveSpeed": 0.0,
@@ -928,7 +928,7 @@
     "requiredExp": 6700,
     "skillPoints": 67,
     "statBonus": {
-      "hp": 670,
+      "hp": 2345,
       "atk": 134,
       "def": 67,
       "moveSpeed": 0.0,
@@ -942,7 +942,7 @@
     "requiredExp": 6800,
     "skillPoints": 68,
     "statBonus": {
-      "hp": 680,
+      "hp": 2380,
       "atk": 136,
       "def": 68,
       "moveSpeed": 0.0,
@@ -956,7 +956,7 @@
     "requiredExp": 6900,
     "skillPoints": 69,
     "statBonus": {
-      "hp": 690,
+      "hp": 2415,
       "atk": 138,
       "def": 69,
       "moveSpeed": 0.0,
@@ -970,7 +970,7 @@
     "requiredExp": 7000,
     "skillPoints": 70,
     "statBonus": {
-      "hp": 700,
+      "hp": 2450,
       "atk": 140,
       "def": 70,
       "moveSpeed": 0.0,
@@ -984,7 +984,7 @@
     "requiredExp": 7100,
     "skillPoints": 71,
     "statBonus": {
-      "hp": 710,
+      "hp": 2485,
       "atk": 142,
       "def": 71,
       "moveSpeed": 0.0,
@@ -998,7 +998,7 @@
     "requiredExp": 7200,
     "skillPoints": 72,
     "statBonus": {
-      "hp": 720,
+      "hp": 2520,
       "atk": 144,
       "def": 72,
       "moveSpeed": 0.0,
@@ -1012,7 +1012,7 @@
     "requiredExp": 7300,
     "skillPoints": 73,
     "statBonus": {
-      "hp": 730,
+      "hp": 2555,
       "atk": 146,
       "def": 73,
       "moveSpeed": 0.0,
@@ -1026,7 +1026,7 @@
     "requiredExp": 7400,
     "skillPoints": 74,
     "statBonus": {
-      "hp": 740,
+      "hp": 2590,
       "atk": 148,
       "def": 74,
       "moveSpeed": 0.0,
@@ -1040,7 +1040,7 @@
     "requiredExp": 7500,
     "skillPoints": 75,
     "statBonus": {
-      "hp": 750,
+      "hp": 2625,
       "atk": 150,
       "def": 75,
       "moveSpeed": 0.0,
@@ -1054,7 +1054,7 @@
     "requiredExp": 7600,
     "skillPoints": 76,
     "statBonus": {
-      "hp": 760,
+      "hp": 2660,
       "atk": 152,
       "def": 76,
       "moveSpeed": 0.0,
@@ -1068,7 +1068,7 @@
     "requiredExp": 7700,
     "skillPoints": 77,
     "statBonus": {
-      "hp": 770,
+      "hp": 2695,
       "atk": 154,
       "def": 77,
       "moveSpeed": 0.0,
@@ -1082,7 +1082,7 @@
     "requiredExp": 7800,
     "skillPoints": 78,
     "statBonus": {
-      "hp": 780,
+      "hp": 2730,
       "atk": 156,
       "def": 78,
       "moveSpeed": 0.0,
@@ -1096,7 +1096,7 @@
     "requiredExp": 7900,
     "skillPoints": 79,
     "statBonus": {
-      "hp": 790,
+      "hp": 2765,
       "atk": 158,
       "def": 79,
       "moveSpeed": 0.0,
@@ -1110,7 +1110,7 @@
     "requiredExp": 8000,
     "skillPoints": 80,
     "statBonus": {
-      "hp": 800,
+      "hp": 2800,
       "atk": 160,
       "def": 80,
       "moveSpeed": 0.0,
@@ -1124,7 +1124,7 @@
     "requiredExp": 8100,
     "skillPoints": 81,
     "statBonus": {
-      "hp": 810,
+      "hp": 2835,
       "atk": 162,
       "def": 81,
       "moveSpeed": 0.0,
@@ -1138,7 +1138,7 @@
     "requiredExp": 8200,
     "skillPoints": 82,
     "statBonus": {
-      "hp": 820,
+      "hp": 2870,
       "atk": 164,
       "def": 82,
       "moveSpeed": 0.0,
@@ -1152,7 +1152,7 @@
     "requiredExp": 8300,
     "skillPoints": 83,
     "statBonus": {
-      "hp": 830,
+      "hp": 2905,
       "atk": 166,
       "def": 83,
       "moveSpeed": 0.0,
@@ -1166,7 +1166,7 @@
     "requiredExp": 8400,
     "skillPoints": 84,
     "statBonus": {
-      "hp": 840,
+      "hp": 2940,
       "atk": 168,
       "def": 84,
       "moveSpeed": 0.0,
@@ -1180,7 +1180,7 @@
     "requiredExp": 8500,
     "skillPoints": 85,
     "statBonus": {
-      "hp": 850,
+      "hp": 2975,
       "atk": 170,
       "def": 85,
       "moveSpeed": 0.0,
@@ -1194,7 +1194,7 @@
     "requiredExp": 8600,
     "skillPoints": 86,
     "statBonus": {
-      "hp": 860,
+      "hp": 3010,
       "atk": 172,
       "def": 86,
       "moveSpeed": 0.0,
@@ -1208,7 +1208,7 @@
     "requiredExp": 8700,
     "skillPoints": 87,
     "statBonus": {
-      "hp": 870,
+      "hp": 3045,
       "atk": 174,
       "def": 87,
       "moveSpeed": 0.0,
@@ -1222,7 +1222,7 @@
     "requiredExp": 8800,
     "skillPoints": 88,
     "statBonus": {
-      "hp": 880,
+      "hp": 3080,
       "atk": 176,
       "def": 88,
       "moveSpeed": 0.0,
@@ -1236,7 +1236,7 @@
     "requiredExp": 8900,
     "skillPoints": 89,
     "statBonus": {
-      "hp": 890,
+      "hp": 3115,
       "atk": 178,
       "def": 89,
       "moveSpeed": 0.0,
@@ -1250,7 +1250,7 @@
     "requiredExp": 9000,
     "skillPoints": 90,
     "statBonus": {
-      "hp": 900,
+      "hp": 3150,
       "atk": 180,
       "def": 90,
       "moveSpeed": 0.0,
@@ -1264,7 +1264,7 @@
     "requiredExp": 9100,
     "skillPoints": 91,
     "statBonus": {
-      "hp": 910,
+      "hp": 3185,
       "atk": 182,
       "def": 91,
       "moveSpeed": 0.0,
@@ -1278,7 +1278,7 @@
     "requiredExp": 9200,
     "skillPoints": 92,
     "statBonus": {
-      "hp": 920,
+      "hp": 3220,
       "atk": 184,
       "def": 92,
       "moveSpeed": 0.0,
@@ -1292,7 +1292,7 @@
     "requiredExp": 9300,
     "skillPoints": 93,
     "statBonus": {
-      "hp": 930,
+      "hp": 3255,
       "atk": 186,
       "def": 93,
       "moveSpeed": 0.0,
@@ -1306,7 +1306,7 @@
     "requiredExp": 9400,
     "skillPoints": 94,
     "statBonus": {
-      "hp": 940,
+      "hp": 3290,
       "atk": 188,
       "def": 94,
       "moveSpeed": 0.0,
@@ -1320,7 +1320,7 @@
     "requiredExp": 9500,
     "skillPoints": 95,
     "statBonus": {
-      "hp": 950,
+      "hp": 3325,
       "atk": 190,
       "def": 95,
       "moveSpeed": 0.0,
@@ -1334,7 +1334,7 @@
     "requiredExp": 9600,
     "skillPoints": 96,
     "statBonus": {
-      "hp": 960,
+      "hp": 3360,
       "atk": 192,
       "def": 96,
       "moveSpeed": 0.0,
@@ -1348,7 +1348,7 @@
     "requiredExp": 9700,
     "skillPoints": 97,
     "statBonus": {
-      "hp": 970,
+      "hp": 3395,
       "atk": 194,
       "def": 97,
       "moveSpeed": 0.0,
@@ -1362,7 +1362,7 @@
     "requiredExp": 9800,
     "skillPoints": 98,
     "statBonus": {
-      "hp": 980,
+      "hp": 3430,
       "atk": 196,
       "def": 98,
       "moveSpeed": 0.0,
@@ -1376,7 +1376,7 @@
     "requiredExp": 9900,
     "skillPoints": 99,
     "statBonus": {
-      "hp": 990,
+      "hp": 3465,
       "atk": 198,
       "def": 99,
       "moveSpeed": 0.0,
@@ -1390,7 +1390,7 @@
     "requiredExp": 0,
     "skillPoints": 100,
     "statBonus": {
-      "hp": 1000,
+      "hp": 3500,
       "atk": 200,
       "def": 100,
       "moveSpeed": 0.0,

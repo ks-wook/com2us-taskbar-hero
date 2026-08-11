@@ -23,7 +23,8 @@
       "race": "human",
       "theme": "fantasy",
       "classes": ["magical", "damage"],
-      "seed": 9099
+      "seed": 9099,
+      "effectColor": "#4DE07A"
     },
     {
       "monsterCode": 9101,
@@ -47,7 +48,8 @@
       "race": "undead",
       "theme": "fantasy",
       "classes": ["tank", "magical"],
-      "seed": 9199
+      "seed": 9199,
+      "effectColor": "#F0F5FF"
     },
     {
       "monsterCode": 9201,
@@ -63,7 +65,8 @@
       "race": "devil",
       "theme": "fantasy",
       "classes": ["magical", "damage"],
-      "seed": 9299
+      "seed": 9299,
+      "effectColor": "#FF6B2E"
     },
     {
       "monsterCode": 9301,
@@ -79,15 +82,17 @@
       "race": "elf",
       "theme": "fantasy",
       "classes": ["magical", "support"],
-      "seed": 9399
+      "seed": 9399,
+      "effectColor": "#FFD157"
     },
     {
       "monsterCode": 9401,
-      "note": "공허의 추적자",
+      "note": "공허의 추적자 — devil+ranged 조합에 무기 파츠가 없어 창을 고정 지정했다(무기가 없으면 스윙 이펙트도 나오지 않는다)",
       "race": "devil",
       "theme": "fantasy",
       "classes": ["ranged", "damage"],
-      "seed": 9401
+      "seed": 9401,
+      "fixedParts": { "Weapons": "Spear_1" }
     },
     {
       "monsterCode": 9499,
@@ -96,8 +101,9 @@
       "theme": "fantasy",
       "classes": ["magical", "tank"],
       "seed": 94991,
-      "fixedParts": { "Helmet": "New_Helmet_04" },
-      "colors": { "Helmet": "#2A2733", "Eye": "#E02A34" }
+      "fixedParts": { "Helmet": "New_Helmet_04", "Weapons": "AxeLong1" },
+      "colors": { "Helmet": "#2A2733", "Eye": "#E02A34" },
+      "effectColor": "#AD61FF"
     }
   ]
 }

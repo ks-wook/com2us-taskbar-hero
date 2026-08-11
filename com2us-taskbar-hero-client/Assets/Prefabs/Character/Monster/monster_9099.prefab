@@ -836,6 +836,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5620087414748496909}
   - component: {fileID: 5566594581421774514}
+  - component: {fileID: 1534559832372986938}
   m_Layer: 5
   m_Name: monster_9099
   m_TagString: Untagged
@@ -3839,6 +3840,19 @@ MonoBehaviour:
   - {fileID: 7400000, guid: 4c70df3312bb83346a1bf065b30d3467, type: 2}
   - {fileID: 7400000, guid: 1ef525d53ae254f7d82ef364ced85490, type: 2}
   - {fileID: 7400000, guid: fabe4f140fdb9cb448bc941c7c93e8b6, type: 2}
+--- !u!114 &1534559832372986938
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2026461799492179603}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50749ed1195ac284da69206e3b9f3d3e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: TaskbarHero.Client.Battle::TaskbarHero.Client.Battle.MonsterSwingFxPalette
+  baseColor: {r: 0.3019608, g: 0.8784314, b: 0.47843137, a: 1}
 --- !u!1 &2107399227456154203
 GameObject:
   m_ObjectHideFlags: 0
