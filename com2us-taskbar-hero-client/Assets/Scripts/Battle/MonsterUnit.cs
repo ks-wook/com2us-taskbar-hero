@@ -99,9 +99,7 @@ namespace TaskbarHero.Client.Battle
         private const float KnockbackSpeed = 9f;          // 기본 밀림 속도(유닛/초) — 0.9를 0.1초에 이동
         private const float KnockbackMaxSeconds = 0.28f;  // 먼 거리는 속도를 올려 이 시간 안에 밀어낸다
         private const float KnockbackLimit = 3.5f;        // 목표 라인에서 이만큼 이상 밀려나지 않는다(기본)
-        private const float KnockbackReturnSpeed = 3f;    // 밀려난 뒤 되돌아올 때의 이동 속도 배수
-        private const float DamagedMotionSeconds = 0.3f; // 피격 모션 길이(이 사이 재피격은 모션을 겹치지 않음)
-        private const float AttackMotionSeconds = 0.5f;  // 공격 모션 추정 길이(이 사이에는 피격 모션 생략)
+        private const float AttackMotionSeconds = 0.5f;  // 공격 모션 추정 길이(무기 스윙 이펙트 노출 구간)
 
         // ---- HP바 juice(고스트 바·바 흔들림) ----
         // 상태를 <b>몬스터에</b> 두는 이유: HP바 오브젝트는 인덱스로 재사용되는 풀이라, 같은 몬스터가
@@ -134,17 +132,13 @@ namespace TaskbarHero.Client.Battle
         private SpriteRenderer[] _tintParts;   // 틴트 대상 SPUM 파트(스폰 후 1회 캐시)
         private Color[] _tintOriginals;        // 파트별 원래 색(SPUM은 파트마다 색이 다르다)
         private float _tintTimer;
-        private float _damagedMotionTimer;
         private float _crowdOffsetX;           // 전선에서 겹치지 않게 이 개체만 밀어 두는 x 오프셋
-        private float _attackMotionTimer;
-        // 무기를 실제로 휘두르는 구간(공격 모션 재생 중). <see cref="_attackMotionTimer"/>와 따로 세는 이유는
-        // 그 타이머가 보스의 예고(웅크리는 준비 동작) 구간까지 포함하기 때문이다 — 예고 중에는 무기가
-        // 움직이지 않으므로 스윙 이펙트가 켜지면 안 된다.
+        // 무기를 실제로 휘두르는 구간(공격 모션 재생 중) — 이 사이에만 무기 궤적·불티가 나온다.
+        // 보스의 예고(웅크리는 준비 동작) 구간은 포함하지 않는다 — 예고 중에는 무기가 움직이지 않는다.
         private float _swingTimer;
         private MonsterWeaponSwingFx _swingFx;   // 무기 끝 궤적·불티(무기가 없는 몬스터는 null)
         private float _knockbackRemaining;     // 아직 밀려나야 하는 거리(유닛)
         private float _knockbackSpeed;         // 이번 밀림의 속도(거리가 멀면 더 빠르게)
-        private bool _returningFromKnockback;  // 밀려난 위치에서 전선으로 되돌아오는 중
         private bool _engaged;                 // 전선(목표 x)에 한 번이라도 닿았는지 — 공격 주기 누적 시작 조건
         private int _lastReactionFrame = -1;   // 프레임당 1회 제한(상주 소형 창이므로 과한 점멸 금지)
 
@@ -193,13 +187,10 @@ namespace TaskbarHero.Client.Battle
             _hasHeadAnchor = false; // 풀에서 재사용될 수 있으므로 머리 기준점을 다시 측정한다
             _tintParts = null;      // 같은 이유로 틴트 대상 파트도 다시 캐시한다
             _tintTimer = 0f;
-            _damagedMotionTimer = 0f;
             _crowdOffsetX = 0f;   // 풀에서 재사용될 수 있으므로 초기화(스폰 직후 컨트롤러가 다시 지정한다)
-            _attackMotionTimer = 0f;
             _swingTimer = 0f;
             _knockbackRemaining = 0f;
             _knockbackSpeed = KnockbackSpeed;
-            _returningFromKnockback = false;
             _engaged = false;
             _ghostRatio = 1f;
             _ghostHold = 0f;
@@ -397,15 +388,16 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>
-        /// 피격 반응 연출을 재생한다 — ① 피격 모션 ② 붉은 틴트 ③ 넉백(요청한 거리만큼).
+        /// 피격 반응 연출을 재생한다 — ① 붉은 틴트 ② 넉백(요청한 거리만큼).
         /// 데미지 단일 관문(<c>BattleDevController.DoDamageAfter</c>·<c>DoAreaDamageAfter</c>)에서 호출하므로
         /// 기본공격·스킬·투사체·돌진 전 경로에 같은 반응이 걸린다.
+        /// <para><b>SPUM 피격(DAMAGED) 모션은 재생하지 않는다</b> — 초당 여러 번 들어오는 타격마다 움찔거려
+        /// 몬스터가 전진·공격 자세를 유지하지 못했다. 맞았다는 신호는 틴트·넉백·데미지 숫자·HP바가 맡는다.</para>
         /// <para><paramref name="heavy"/>가 false면 <b>틴트만</b> 준다 — 광역기는 대상 수만큼 루프를 돌기 때문에
-        /// 전원에게 모션·넉백을 주면 화면이 찢어진다(피격음이 이미 첫 대상만 울리는 것과 같은 이유).</para>
+        /// 전원을 밀어내면 화면이 찢어진다(피격음이 이미 첫 대상만 울리는 것과 같은 이유).</para>
         /// <para><paramref name="knockback"/>은 밀려날 거리이며 <b>0이면 밀리지 않는다</b> — 기본공격이 이 경우다
         /// (<see cref="SkillKnockback"/>·<see cref="ChargeKnockback"/> 참고).</para>
-        /// <para>죽은 대상에는 아무것도 하지 않는다 — 마지막 타격의 피드백은 사망 모션·사망음이 맡는다
-        /// (피격 모션을 겹치면 사망 모션을 끊는다).</para>
+        /// <para>죽은 대상에는 아무것도 하지 않는다 — 마지막 타격의 피드백은 사망 모션·사망음이 맡는다.</para>
         /// </summary>
         public void PlayHitReaction(bool heavy, float knockback = 0f)
         {
@@ -418,12 +410,11 @@ namespace TaskbarHero.Client.Battle
             if (!heavy) return;
 
             ApplyKnockback(knockback);
-            TryPlayDamagedMotion();
         }
 
         /// <summary>
         /// 데미지 없이 밀어내기만 한다(기사 방패 돌진처럼 <b>밀치는 것 자체가 효과</b>인 스킬의 부수 대상용).
-        /// 피격 모션·틴트·데미지 숫자는 붙이지 않는다 — 맞은 것이 아니라 부딪혀 밀린 것이다.
+        /// 틴트·데미지 숫자는 붙이지 않는다 — 맞은 것이 아니라 부딪혀 밀린 것이다.
         /// </summary>
         public void ApplyPush(float distance)
         {
@@ -520,8 +511,8 @@ namespace TaskbarHero.Client.Battle
         /// 밀면 0.36초나 걸려 "날아갔다"가 아니라 "끌려갔다"로 보인다.</para>
         /// <para>연타로 무한히 밀려나지 않도록 목표 라인에서 일정 거리까지만 밀린다(기본
         /// <see cref="KnockbackLimit"/>, 그보다 큰 밀치기를 요청하면 그 거리까지 허용). 이미 한계 밖에 있으면
-        /// 위치를 건드리지 않는다. 되돌아오는 이동은 <see cref="Update"/>가
-        /// <see cref="KnockbackReturnSpeed"/>배 속도로 처리한다.</para>
+        /// 위치를 건드리지 않는다. 되돌아오는 이동은 <see cref="Update"/>가 <b>평소 걷는 속도</b>로 처리한다
+        /// — 밀려난 뒤 순간이동처럼 따라붙으면 넉백이 맞은 것으로 읽히지 않는다.</para>
         /// </summary>
         private void ApplyKnockback(float distance)
         {
@@ -533,7 +524,6 @@ namespace TaskbarHero.Client.Battle
             if (room <= 0f) return;
             _knockbackRemaining += Mathf.Min(dist, room);
             _knockbackSpeed = Mathf.Max(KnockbackSpeed, _knockbackRemaining / KnockbackMaxSeconds);
-            _returningFromKnockback = true; // 밀림이 끝나면 빠르게 되돌아온다
         }
 
         /// <summary>
@@ -553,22 +543,7 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>
-        /// SPUM 피격 모션을 1회 재생한다. 두 경우에는 생략한다 — ① <b>공격 모션 중</b>(피격 모션이 공격을
-        /// 끊어 몬스터가 때리지도 못한 채 계속 움찔거린다) ② <b>이미 움찔거리는 중</b>(연타·광역에서 모션이
-        /// 매 프레임 재시작해 자세가 굳어 보인다). 이때도 틴트는 매 타격 갱신되므로 피드백은 남는다.
-        /// </summary>
-        private void TryPlayDamagedMotion()
-        {
-            if (_attackMotionTimer > 0f || _damagedMotionTimer > 0f) return;
-            SendMessage("PlayDamagedOnce", SendMessageOptions.DontRequireReceiver);
-            _damagedMotionTimer = DamagedMotionSeconds;
-        }
-
-        /// <summary>
-        /// 피격 연출 타이머를 진행한다 — 틴트 복귀와, 피격 모션이 끝난 뒤의 <b>이동/대기 모션 복원</b>.
-        /// <para>SPUM은 피격 모션을 끝내면 IDLE로 떨어지는데 <see cref="_moving"/>은 그대로라
-        /// <see cref="SetMoving"/>이 아무것도 보내지 않아 <b>걷는 몬스터가 차렷 자세로 미끄러진다</b>.
-        /// 그래서 모션이 끝나는 시점에 현재 상태를 다시 한 번 보낸다.</para>
+        /// 피격 연출 타이머를 진행한다 — 붉은 틴트 복귀, 무기 스윙 구간·빙결 지속 시간 감소.
         /// <para>일시정지·사망과 무관하게 돌고 <b>unscaled 시간</b>을 쓴다 — 정지 중에 붉은 틴트가 굳거나,
         /// 나중에 히트스톱(<c>timeScale</c> 감속)을 넣었을 때 2~3프레임 점멸이 20배로 늘어지면 안 된다.</para>
         /// </summary>
@@ -580,20 +555,6 @@ namespace TaskbarHero.Client.Battle
             {
                 _tintTimer -= dt;
                 if (_tintTimer <= 0f) RestoreTint();
-            }
-
-            if (_damagedMotionTimer > 0f)
-            {
-                _damagedMotionTimer -= dt;
-                if (_damagedMotionTimer <= 0f && _alive)
-                {
-                    SendMessage(_moving ? "PlayMove" : "PlayIdle", SendMessageOptions.DontRequireReceiver);
-                }
-            }
-
-            if (_attackMotionTimer > 0f)
-            {
-                _attackMotionTimer -= dt;
             }
 
             if (_swingTimer > 0f)
@@ -654,9 +615,9 @@ namespace TaskbarHero.Client.Battle
 
         /// <summary>
         /// 매 프레임 파티를 향해 왼쪽으로만 전진하고, 목표 x에 닿으면 멈춘다(전진/정지 애니 전환).
-        /// 넉백으로 밀려나는 동안에는 전진하지 않고, 밀림이 끝나면 <see cref="KnockbackReturnSpeed"/>배 속도로
-        /// 전선까지 되돌아온다 — <b>넉백이 전투 효율을 바꾸지 않게</b> 하기 위한 장치다(공격 주기 쪽은
-        /// <see cref="TickAttack"/> 참고).
+        /// 넉백으로 밀려나는 동안에는 전진하지 않고, 밀림이 끝나면 <b>평소 걷는 속도</b>로 전선까지 걸어서
+        /// 되돌아온다(복귀 가속 없음 — 밀려난 것이 눈에 보이게). <b>넉백이 전투 효율을 바꾸지 않는</b> 것은
+        /// 위치와 무관하게 차는 공격 주기가 담당한다(<see cref="TickAttack"/> 참고).
         /// </summary>
         private void Update()
         {
@@ -693,15 +654,15 @@ namespace TaskbarHero.Client.Battle
             }
             if (x - _targetX > 0.02f)
             {
-                float speed = _moveSpeed * (_returningFromKnockback ? KnockbackReturnSpeed : 1f);
-                float nx = Mathf.MoveTowards(x, _targetX, speed * Time.deltaTime);
+                // 밀려난 뒤 복귀도 <b>평소 걷는 속도</b>로만 한다 — 넉백 직후 빠르게 따라붙으면
+                // 밀린 것이 눈에 남지 않는다(공격 주기는 위치와 무관하게 차므로 난이도는 그대로다).
+                float nx = Mathf.MoveTowards(x, _targetX, _moveSpeed * Time.deltaTime);
                 var p = transform.position; p.x = nx; transform.position = p;
                 SetMoving(true);
             }
             else
             {
-                _returningFromKnockback = false; // 전선 복귀 완료 — 다음 넉백까지 평소 속도로
-                _engaged = true;                 // 이 시점부터 공격 주기를 누적한다
+                _engaged = true; // 이 시점부터 공격 주기를 누적한다
                 SetMoving(false);
                 TickAttack(); // 목표 지점(파티 앞)에 멈춘 동안 주기적으로 아군 공격
             }
@@ -760,7 +721,6 @@ namespace TaskbarHero.Client.Battle
         {
             _telegraphTimer = TelegraphSeconds;
             ShowTelegraph(true);
-            _attackMotionTimer = TelegraphSeconds + AttackMotionSeconds; // 예고 내내 피격 모션을 생략한다
         }
 
         /// <summary>실제 타격 — 아군에게 피해를 넘기고 공격음·공격 모션을 재생한다.</summary>
@@ -773,8 +733,7 @@ namespace TaskbarHero.Client.Battle
             // 몬스터·보스 공격은 전 계열 공용음 하나를 쓴다(사운드 정의서 §5.6·§8).
             SoundManager.Sfx(SoundId.MonAttack);
             SendMessage("PlayAttackOnce", SendMessageOptions.DontRequireReceiver);
-            _attackMotionTimer = AttackMotionSeconds; // 이 사이에 맞으면 피격 모션을 생략한다
-            _swingTimer = AttackMotionSeconds;        // 이 사이에만 무기 궤적·불티가 나온다
+            _swingTimer = AttackMotionSeconds; // 이 사이에만 무기 궤적·불티가 나온다
         }
 
         /// <summary>
@@ -853,9 +812,6 @@ namespace TaskbarHero.Client.Battle
         {
             if (moving == _moving) return;
             _moving = moving;
-            // 피격 모션 재생 중이면 보내지 않는다(움찔거림을 끊는다). 모션이 끝날 때
-            // TickHitReaction이 그 시점의 상태를 다시 보내 복원한다.
-            if (_damagedMotionTimer > 0f) return;
             SendMessage(moving ? "PlayMove" : "PlayIdle", SendMessageOptions.DontRequireReceiver);
         }
 
@@ -867,9 +823,7 @@ namespace TaskbarHero.Client.Battle
             // 위치는 지금 자리로 고정한다 — 시신은 DeathFlight로 날아가므로 바가 따라가면 안 된다.
             _hpBarLinger = HpBarDeathLinger;
             _hpBarDeathPos = transform.position;
-            // 피격 연출을 즉시 걷어낸다 — 붉은 틴트가 사망 모션 내내 남거나, 피격 모션 복원이
-            // 사망 모션을 idle로 덮어쓰지 않게 한다.
-            _damagedMotionTimer = 0f;
+            // 피격 연출을 즉시 걷어낸다 — 붉은 틴트가 사망 모션 내내 남지 않게 한다.
             _tintTimer = 0f;
             RestoreTint();
             _knockbackRemaining = 0f;

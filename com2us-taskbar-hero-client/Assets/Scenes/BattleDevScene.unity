@@ -239,7 +239,7 @@ MonoBehaviour:
     slamSkillCode: 0
     slamAirTime: 0.46
     aoeSkillCodes: 67000000
-    basicAttackAoe: 1
+    basicAttackAoe: 0
     weaponTrail: 1
     weaponTrailStyle: 0
     selfEffectXOffset: 0.4
@@ -400,6 +400,14 @@ MonoBehaviour:
   enemyFrontStopGap: 1.2
   enemyAttackInterval: 1.5
   enemyDamageMultiplier: 2
+  spawnBurstMax: 3
+  spawnBurstChance: 0.45
+  spawnIntervalMinFactor: 0.5
+  spawnIntervalMaxFactor: 1.7
+  spawnBurstSpacing: 0.8
+  spawnPositionJitter: 0.35
+  crowdSpreadX: 0.22
+  crowdSpreadY: 0.09
   devSkillLevel: 1
   skillCooldown: 10
   effectYOffset: 0.6
@@ -1249,6 +1257,7 @@ MonoBehaviour:
   portraitFrameTemplate: {fileID: 583243579}
   slotFrameSprite: {fileID: 4400792897899385541, guid: da1984ed974c4054889d94d8f39c9faa, type: 3}
   slotIconInset: 10
+  uiScale: 0.7
   slotStartX: -204
   slotStepX: 92
   rowStartY: -20

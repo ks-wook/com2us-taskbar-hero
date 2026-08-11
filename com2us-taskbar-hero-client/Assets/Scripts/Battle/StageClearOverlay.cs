@@ -20,6 +20,9 @@ namespace TaskbarHero.Client.Battle
     ///   "EXP" 텍스트 라벨 칸으로 폴백한다.
     ///   보상 칸은 한꺼번에 나타나지 않고 <b>왼쪽 칸부터 하나씩</b> 없던 상태에서 커지며 등장한다
     ///   (<see cref="StartRewardPopIn"/>).
+    /// - 보상 획득 연출(우편 수령 등)의 상단 타이틀은 <b>문구가 아니라 이미지</b>(reward_ui)이며,
+    ///   작은 크기에서 원본 크기까지 커지며 등장한다(<see cref="TitlePopIn"/>). 이미지가 배선돼 있지
+    ///   않을 때만 텍스트 문구로 폴백한다.
     /// - 화면 클릭 또는 5초 경과 시 자동으로 닫히며, 닫힐 때 게임 속도를 정상으로 복원한다.
     /// 정적 계층(Canvas·팡파레·타이틀·보상 행 컨테이너·안내 문구)은 <see cref="EditorConstruct"/>가
     /// 구성해 <c>Assets/Prefabs/UI/StageClearOverlay.prefab</c>으로 저장되고(StageClearOverlayBuilder),
@@ -36,6 +39,15 @@ namespace TaskbarHero.Client.Battle
         // (칸 최대 7개 = 경험치·골드·전리품 5개일 때 마지막 칸이 약 1.8초에 끝나 자동 닫힘 5초 안에 들어온다).
         private const float RewardPopDuration = 0.36f;  // 칸 하나가 다 커지는 데 걸리는 시간
         private const float RewardPopInterval = 0.24f;  // 다음 칸이 등장하기까지의 간격
+
+        // 상단 타이틀 이미지(보상 획득 연출) 규격·등장 연출.
+        // 크기는 스프라이트 원본 비율(526×287)을 유지한 값이며, 이것이 연출이 끝나는 "원본 크기"다.
+        private static readonly Vector2 TitleImageSize = new Vector2(560f, 306f);
+        private const float TitleImageY = 440f;          // 타이틀 텍스트가 있던 자리(상단 중앙)
+        private const float TitlePopDuration = 0.42f;    // 작은 크기 → 원본 크기까지 걸리는 시간
+        private const float TitlePopStartScale = 0.25f;  // 등장 시작 크기(원본 대비)
+        // 원본 크기를 살짝 넘겼다가 제자리로 돌아오는 back-out 이징 계수(0이면 오버슈트 없음).
+        private const float TitlePopOvershoot = 1.4f;
 
         // 버프 적용 표시 마크: 보상 칸(150×150) 우상단 모서리에 살짝 걸치도록 슬롯 밖으로 내민다.
         // 오프셋은 슬롯 우상단 모서리 기준(피벗이 마크 중앙) — 값을 줄일수록 마크가 왼쪽·아래,
@@ -57,7 +69,9 @@ namespace TaskbarHero.Client.Battle
         [SerializeField] private Button _dimButton;
         [Tooltip("클리어 팡파레 프레임 시퀀스를 그리는 이미지.")]
         [SerializeField] private Image _fanfareImage;
-        [Tooltip("상단 타이틀 텍스트. 보상 획득 재활용(우편 수령 등)에서만 노출되며, 스테이지 클리어에서는 감춘다.")]
+        [Tooltip("상단 타이틀 이미지(reward_ui). 보상 획득 재활용(우편 수령 등)에서 텍스트 대신 노출되며, 작았다가 원본 크기까지 커진다.")]
+        [SerializeField] private Image _titleImage;
+        [Tooltip("상단 타이틀 텍스트. 타이틀 이미지가 배선돼 있지 않을 때의 폴백이며, 스테이지 클리어에서는 감춘다.")]
         [SerializeField] private Text _titleText;
         [Tooltip("보상 칸(공용 아이템 슬롯)이 채워지는 가로 정렬 컨테이너.")]
         [SerializeField] private RectTransform _rewardsRow;
@@ -164,22 +178,64 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>
-        /// 상단 타이틀 문구를 정한다. <b>빈 값이면 타이틀을 통째로 감춘다</b>(스테이지 클리어 경로).
+        /// 상단 타이틀을 정한다. <b>빈 값이면 타이틀을 통째로 감춘다</b>(스테이지 클리어 경로).
         /// 문자열만 비우는 것으로는 부족하다 — 프리팹에 문구가 구워져 있어 그대로 노출되기 때문이다.
+        /// <para>타이틀 이미지(<see cref="StageClearAssets.rewardTitleImage"/>)가 배선돼 있으면 <b>문구 대신
+        /// 그 이미지를 띄우고</b> 작은 크기에서 원본 크기까지 커지는 등장 연출을 재생한다. 이미지가 없을 때만
+        /// 예전처럼 텍스트 문구로 폴백한다(에셋 미빌드 대비).</para>
         /// </summary>
         private void SetTitle(string title)
         {
-            if (_titleText == null)
+            bool visible = !string.IsNullOrEmpty(title);
+            Sprite titleSprite = visible && _assets != null ? _assets.rewardTitleImage : null;
+            bool useImage = visible && titleSprite != null && _titleImage != null;
+
+            if (_titleImage != null)
             {
-                return;
+                _titleImage.gameObject.SetActive(useImage);
+                if (useImage)
+                {
+                    _titleImage.sprite = titleSprite;
+                    StartTitlePopIn();
+                }
             }
 
-            bool visible = !string.IsNullOrEmpty(title);
-            _titleText.gameObject.SetActive(visible);
-            if (visible)
+            if (_titleText != null)
             {
-                _titleText.text = title;
+                _titleText.gameObject.SetActive(visible && !useImage);
+                if (visible && !useImage)
+                {
+                    _titleText.text = title;
+                }
             }
+        }
+
+        /// <summary>타이틀 이미지를 <b>같은 프레임에</b> 작게 줄여 둔 뒤 커지는 연출을 시작한다
+        /// (한 프레임 원본 크기로 보였다 줄어드는 깜빡임 방지 — 보상 칸 등장과 같은 방식).</summary>
+        private void StartTitlePopIn()
+        {
+            var rt = (RectTransform)_titleImage.transform;
+            rt.localScale = Vector3.one * TitlePopStartScale;
+            StartCoroutine(TitlePopIn(rt));
+        }
+
+        /// <summary>타이틀 이미지를 <see cref="TitlePopStartScale"/> → 원본 크기(1)로 키운다.
+        /// 원본 크기를 살짝 넘겼다가 제자리로 돌아오는 back-out 이징이라 "팡 나타났다"로 읽히며,
+        /// 슬로우모션과 무관하게 unscaled 시간을 쓴다(보상 칸 등장과 동일).</summary>
+        private static IEnumerator TitlePopIn(RectTransform rt)
+        {
+            float elapsed = 0f;
+            while (elapsed < TitlePopDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float k = Mathf.Clamp01(elapsed / TitlePopDuration);
+                // easeOutBack: k=1에서 정확히 1로 끝나고, 그 직전에 1을 조금 넘어선다.
+                float u = k - 1f;
+                float ease = 1f + (TitlePopOvershoot + 1f) * u * u * u + TitlePopOvershoot * u * u;
+                rt.localScale = Vector3.one * Mathf.LerpUnclamped(TitlePopStartScale, 1f, ease);
+                yield return null;
+            }
+            rt.localScale = Vector3.one; // 원본 크기로 마무리
         }
 
 #if UNITY_EDITOR
@@ -249,7 +305,18 @@ namespace TaskbarHero.Client.Battle
             _fanfareImage.raycastTarget = false;
             _fanfareImage.preserveAspect = true; // 전체 프레임을 잘림 없이 표시
 
-            // 타이틀(상단). 문구는 런타임에 SetTitle이 정한다 — 보상 획득 재활용은 문구를 바꾸고,
+            // 타이틀 이미지(상단 중앙, reward_ui). 보상 획득 연출에서 문구 대신 노출되며 스프라이트는
+            // 런타임에 SetTitle이 StageClearAssets에서 받아 지정한다(프리팹에 스프라이트를 굽지 않는다 —
+            // 런타임 폴백 구성에서도 같은 경로로 배선되도록).
+            var titleImg = CreateChild("TitleImage", transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            titleImg.sizeDelta = TitleImageSize;
+            titleImg.anchoredPosition = new Vector2(0f, TitleImageY);
+            _titleImage = titleImg.gameObject.AddComponent<Image>();
+            _titleImage.raycastTarget = false; // 클릭 닫기(Dim)를 가로채지 않는다
+            _titleImage.preserveAspect = true;
+            titleImg.gameObject.SetActive(false); // 스테이지 클리어에서는 타이틀이 없다 — SetTitle이 켠다
+
+            // 타이틀 텍스트(폴백). 문구는 런타임에 SetTitle이 정한다 — 타이틀 이미지가 없을 때만 노출되고,
             // 스테이지 클리어는 타이틀을 감춘다. 여기서 굽는 값은 노출되지 않는 플레이스홀더다.
             var title = CreateText("Title", transform, font, TitlePlaceholder, 96, TextAnchor.MiddleCenter);
             title.color = new Color(1f, 0.92f, 0.4f);

@@ -39,6 +39,9 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("스테이지 클리어 연출 오버레이 프리팹(Assets/Prefabs/UI/StageClearOverlay.prefab). 없으면 런타임 코드 구성 폴백.")]
         public GameObject overlayPrefab;
 
+        [Tooltip("보상 획득 연출 상단 타이틀 이미지(Assets/Art/UI/System/reward_ui.png). 없으면 텍스트 타이틀로 폴백한다.")]
+        public Sprite rewardTitleImage;
+
         /// <summary>아이템 코드와 아이콘 스프라이트의 한 쌍.</summary>
         [Serializable]
         public struct IconEntry

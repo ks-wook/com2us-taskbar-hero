@@ -1526,7 +1526,7 @@ namespace TaskbarHero.Client.Battle
             SoundManager.Sfx(BattleSounds.MonsterHitFor(target.MonsterName));
             bool isBoss = target.IsBoss;
             bool killed = target.TakeDamage(dmg);
-            // 맞는 반응(피격 모션·붉은 틴트·넉백). 죽은 대상은 사망 모션·사망음이 피드백을 맡는다.
+            // 맞는 반응(붉은 틴트·넉백). 죽은 대상은 사망 모션·사망음이 피드백을 맡는다.
             if (!killed)
             {
                 target.PlayHitReaction(heavy: true, knockback: knockback);

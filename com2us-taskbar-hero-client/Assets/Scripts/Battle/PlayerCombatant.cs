@@ -1112,10 +1112,19 @@ namespace TaskbarHero.Client.Battle
                     // 몬스터가 이미 죽었/없어도 시전 시 무조건 연출되도록 대상 위치를 캡처해 무조건 스폰.
                     _moving = false;
                     SendMessage("PlayArrowRain", motion, SendMessageOptions.DontRequireReceiver);
-                    SpawnEffectAt(sk.effect, ArrowRainTargetPos(), sk.scale);
+                    Vector3 rainPos = ArrowRainTargetPos(); // 한 번만 구해 이펙트와 판정이 같은 지점을 쓰게 한다
+                    var rainFx = SpawnEffectAt(sk.effect, rainPos, sk.scale);
                     // 화살비 착탄음은 데미지가 들어가는 시점에 맞춘다(시전음은 활 소리, §8).
                     StartCoroutine(PlaySfxAfter(hitDelay, SoundId.ArcherArrowImpact));
-                    DealDamage(hitDelay, dmg, crit, label, bigHit: true, knockback: MonsterUnit.SkillKnockback);
+                    // 넓게 쏟아지는 비 그림대로 <b>범위 안의 적 전부</b>가 맞는다(단일 대상 아님).
+                    // 판정 크기는 다른 광역기와 같은 기준 — 스폰된 이펙트의 렌더 크기 그대로다.
+                    // 다만 중심은 그림 중앙(공중)이 아니라 <b>대상의 발밑 라인</b>으로 내린다 — 비는 지면에
+                    // 떨어지는데 중심을 EffectYOffset만큼 띄우면 원 판정의 가로 도달이 그만큼 줄어
+                    // (1.85 → 1.75) 그림 가장자리에 선 적이 빠진다. 적은 발밑 y로 판정되므로 이렇게 맞춘다.
+                    Vector3 rainCenter = new Vector3(EffectCenter(rainFx, rainPos).x,
+                                                     rainPos.y - _ctrl.EffectYOffset, 0f);
+                    DealAreaDamage(hitDelay, dmg, crit, label, rainCenter, EffectRadius(rainFx),
+                                   bigHit: true, knockback: MonsterUnit.SkillKnockback);
                     _busyTimer = motion + 0.4f; // 점프+홀드+착지 동안 대기
                 }
                 else if (_slamSkillCode != 0 && sk.code == _slamSkillCode)
