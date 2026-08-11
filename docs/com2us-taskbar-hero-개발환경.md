@@ -39,7 +39,7 @@
 | 구성 | `AccountServer`(계정·인증, `:5160`) · `GameServer`(게임 로직, `:5247`) · `TaskbarHero.Common`(공유 라이브러리) |
 | 공유 라이브러리 | `netstandard2.0;net10.0` 멀티타겟 — 서버는 `ProjectReference`, Unity 클라이언트는 **로컬 UPM 패키지**로 같은 소스를 소비 |
 | DB | MySQL 8.4 (Docker Compose) — 게임 DB / 마스터 DB 분리 |
-| 캐시·부가 저장소 | Redis (저장소 내 로컬 바이너리로 실행) — **인증 토큰, 배치 리더 락**. 게임 데이터 조회 캐시는 실측 후 전부 제거했다(인벤토리 §6.5 · 거래소 §7.3) |
+| 캐시·부가 저장소 | Redis 8.2 (Docker Compose, `127.0.0.1:6379`) — **인증 토큰, 배치 리더 락**. 게임 데이터 조회 캐시는 실측 후 전부 제거했다(인벤토리 §6.5 · 거래소 §7.3) |
 | 데이터 접근 | **SqlKata** 쿼리 빌더 + Dapper 제네릭 매핑(원시 SQL 조립·`dynamic` 금지) |
 | Redis 접근 | **CloudStructures** 타입 구조체 |
 | 로깅 | **ZLogger** (구조화 필드, `:@PascalCase` 규약) |

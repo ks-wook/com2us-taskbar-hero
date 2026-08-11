@@ -12,44 +12,34 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 $root = $PSScriptRoot
 
-# ── MySQL (docker-compose) ─────────────────────────────────────────────
-$mysqlUp = docker ps --filter "name=taskbar-hero-mysql" --filter "status=running" -q
-if ([string]::IsNullOrWhiteSpace($mysqlUp)) {
-    Write-Host "MySQL 컨테이너가 꺼져 있어 시작합니다..." -ForegroundColor Yellow
-    docker compose -f (Join-Path $root "docker-compose.yml") up -d | Out-Null
+# ── 의존 서비스(MySQL·Redis) — docker-compose ──────────────────────────
+#   Redis는 컨테이너(taskbar-hero-redis)로 띄운다. 단, 저장소 내 Windows 바이너리
+#   Redis를 이미 6379로 띄워 둔 경우에는 포트가 충돌하므로 compose의 redis는 건드리지 않는다.
+$composeFile = Join-Path $root "docker-compose.yml"
 
-    Write-Host "MySQL 준비 대기 중(healthy)..." -ForegroundColor DarkGray
-    for ($i = 0; $i -lt 30; $i++) {
-        Start-Sleep -Seconds 2
-        $health = docker inspect --format '{{.State.Health.Status}}' taskbar-hero-mysql 2>$null
-        if ($health -eq "healthy") { break }
-    }
-    if ($health -eq "healthy") { Write-Host "MySQL 준비 완료." -ForegroundColor Green }
-    else { Write-Host "MySQL이 아직 healthy가 아닙니다(계속 진행). 상태: $health" -ForegroundColor Yellow }
-}
-else {
-    Write-Host "MySQL 컨테이너 이미 실행 중." -ForegroundColor DarkGray
-}
-
-# ── Redis (프로젝트 경로, 127.0.0.1:6379) ──────────────────────────────
+$redisContainerUp = docker ps --filter "name=taskbar-hero-redis" --filter "status=running" -q
 $redisListening = [bool](Get-NetTCPConnection -LocalPort 6379 -State Listen -ErrorAction SilentlyContinue)
-if (-not $redisListening) {
-    $redisDir = Join-Path $root "Redis-8.8.0-Windows-x64-cygwin-with-Service"
-    Write-Host "Redis(6379)가 꺼져 있어 프로젝트 경로 Redis를 시작합니다..." -ForegroundColor Yellow
-    Start-Process -FilePath (Join-Path $redisDir "redis-server.exe") `
-        -ArgumentList "redis.conf" -WorkingDirectory $redisDir -WindowStyle Hidden
-
-    for ($i = 0; $i -lt 10; $i++) {
-        Start-Sleep -Seconds 1
-        if (Get-NetTCPConnection -LocalPort 6379 -State Listen -ErrorAction SilentlyContinue) { break }
-    }
-    if (Get-NetTCPConnection -LocalPort 6379 -State Listen -ErrorAction SilentlyContinue) {
-        Write-Host "Redis 준비 완료." -ForegroundColor Green
-    }
-    else { Write-Host "Redis가 아직 리스닝하지 않습니다(계속 진행)." -ForegroundColor Yellow }
+$services = @("mysql")
+if ([string]::IsNullOrWhiteSpace($redisContainerUp) -and -not $redisListening) {
+    $services += "redis"
 }
-else {
-    Write-Host "Redis(6379) 이미 실행 중." -ForegroundColor DarkGray
+elseif ([string]::IsNullOrWhiteSpace($redisContainerUp)) {
+    Write-Host "Redis(6379)가 컨테이너 밖에서 이미 실행 중 — compose redis는 건너뜁니다." -ForegroundColor DarkGray
+}
+
+Write-Host "의존 서비스 확인/기동: $($services -join ', ')" -ForegroundColor DarkGray
+docker compose -f $composeFile up -d @services | Out-Null
+
+# 헬스체크가 붙은 서비스만 healthy를 기다린다(위에서 건너뛴 redis는 제외).
+foreach ($c in @("taskbar-hero-mysql") + $(if ($services -contains "redis" -or -not [string]::IsNullOrWhiteSpace($redisContainerUp)) { @("taskbar-hero-redis") } else { @() })) {
+    $health = $null
+    for ($i = 0; $i -lt 30; $i++) {
+        $health = docker inspect --format '{{.State.Health.Status}}' $c 2>$null
+        if ($health -eq "healthy") { break }
+        Start-Sleep -Seconds 2
+    }
+    if ($health -eq "healthy") { Write-Host "$c 준비 완료." -ForegroundColor Green }
+    else { Write-Host "$c 가 아직 healthy가 아닙니다(계속 진행). 상태: $health" -ForegroundColor Yellow }
 }
 
 # ── 선(先) 빌드: 두 watch를 띄우기 전에 솔루션을 직렬로 한 번 빌드 ──────

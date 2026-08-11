@@ -44,7 +44,8 @@
 - MySQL DB 연동은 **SqlKata**를 사용해 개발한다. 쿼리는 SqlKata의 쿼리 빌더로 작성하고, 원시(raw) SQL 문자열을 직접 조립하지 않는다.
 - **DB 조회 결과는 `dynamic`으로 다루지 않는다.** 반드시 **제네릭 매핑**(`.GetAsync<T>()`·`.FirstOrDefaultAsync<T>()`, 단일 컬럼은 `.GetAsync<int>()`/`<long?>` 등 스칼라)으로 **POCO/스칼라 타입에 매핑**한다. 컬럼 접근을 `row.column`(dynamic) + `Convert.ToXxx(...)`로 하지 않는다(컴파일 타임 타입 검사 상실 + dynamic 전염으로 인한 튜플/변환 런타임 오류 방지). 행 매핑용 POCO는 리포지토리 파일에 `file sealed class`로 두고, `snake_case` 컬럼은 `Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true`(각 서버 `Program.cs`에서 1회 설정)로 `PascalCase` 프로퍼티에 자동 매핑한다. `DECIMAL` 컬럼은 POCO에서 `decimal`로 받아 `float`/`double`로 캐스팅한다.
 - Redis와의 통신은 **CloudStructures**를 사용한다. Redis 접근은 CloudStructures가 제공하는 타입 구조체를 통해 처리한다.
-- **Redis 인스턴스**: 로컬 개발용 Redis는 저장소 내 `Redis-8.8.0-Windows-x64-cygwin-with-Service/`의 Redis를 사용한다(`redis.conf` 기준 `127.0.0.1:6379`). `start.bat` 또는 `redis-server.exe redis.conf`로 실행하며, docker-compose에는 Redis를 두지 않는다(MySQL만 컨테이너로 관리).
+- **Redis 인스턴스**: 로컬 개발용 Redis는 **docker-compose의 `redis` 서비스**(`redis:8.2-alpine`, 컨테이너명 `taskbar-hero-redis`, `127.0.0.1:6379`, AOF 활성)를 기본으로 쓴다 — MySQL과 함께 `docker compose up -d`로 함께 뜨고, `watch-all.ps1`도 이 컨테이너를 띄운다. `redis-cli`는 `docker exec taskbar-hero-redis redis-cli ...`로 호출한다.
+  - 저장소 내 Windows 바이너리 `Redis-8.8.0-Windows-x64-cygwin-with-Service/`(`start.bat` 또는 `redis-server.exe redis.conf`)도 그대로 쓸 수 있으나 **같은 6379를 쓰므로 둘 중 하나만 띄운다**(컨테이너가 이미 리스닝 중이면 바이너리 기동은 실패한다).
 - **작업 완료 시 README 현황판 갱신**: 기능/작업이 완료되면 `README.md`의 「개발 현황」 체크리스트에서 해당 항목의 상태 기호를 갱신한다(☐ 미착수 → ◐ 진행 중 → ☑ 완료). 서버 구현·클라 실연동은 각각 별도로 표시한다.
 - **컨트롤러는 HTTP 응답 메서드만 포함**: 컨트롤러 클래스에는 엔드포인트 액션 메서드(`[HttpGet]`/`[HttpPost]` 등이 붙은 HTTP 요청/응답 처리 메서드)만 둔다. 그 외 로직은 **private 헬퍼라도 예외 없이** 컨트롤러 밖으로 분리한다:
   - **컨트롤러 공통 보조 메서드**(인증 userId 추출, 공통 응답 변환, ErrorCode ↔ HTTP 상태/메시지 매핑 등)는 **베이스 컨트롤러 클래스**(`ControllerBase`를 상속한 추상 클래스, 예: `GameApiControllerBase`·`AccountApiControllerBase`)에 `protected`/`private static`으로 구현하고, 각 컨트롤러가 이를 **상속**해 사용한다.
