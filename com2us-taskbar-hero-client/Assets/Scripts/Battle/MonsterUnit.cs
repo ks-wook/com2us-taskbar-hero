@@ -135,7 +135,13 @@ namespace TaskbarHero.Client.Battle
         private Color[] _tintOriginals;        // 파트별 원래 색(SPUM은 파트마다 색이 다르다)
         private float _tintTimer;
         private float _damagedMotionTimer;
+        private float _crowdOffsetX;           // 전선에서 겹치지 않게 이 개체만 밀어 두는 x 오프셋
         private float _attackMotionTimer;
+        // 무기를 실제로 휘두르는 구간(공격 모션 재생 중). <see cref="_attackMotionTimer"/>와 따로 세는 이유는
+        // 그 타이머가 보스의 예고(웅크리는 준비 동작) 구간까지 포함하기 때문이다 — 예고 중에는 무기가
+        // 움직이지 않으므로 스윙 이펙트가 켜지면 안 된다.
+        private float _swingTimer;
+        private MonsterWeaponSwingFx _swingFx;   // 무기 끝 궤적·불티(무기가 없는 몬스터는 null)
         private float _knockbackRemaining;     // 아직 밀려나야 하는 거리(유닛)
         private float _knockbackSpeed;         // 이번 밀림의 속도(거리가 멀면 더 빠르게)
         private bool _returningFromKnockback;  // 밀려난 위치에서 전선으로 되돌아오는 중
@@ -146,6 +152,9 @@ namespace TaskbarHero.Client.Battle
         public bool IsBoss => _isBoss;
         /// <summary>현재 전진(이동) 애니메이션이 재생 중인지. 걷기 먼지 이펙트 노출 판정에 사용.</summary>
         public bool IsMoving => _moving && _alive;
+        /// <summary>지금 무기를 휘두르는 중인지(공격 모션 재생 구간). 무기 스윙 이펙트의 방출 조건이다.
+        /// 보스 예고 구간은 포함하지 않는다 — 그때는 무기가 움직이지 않는다.</summary>
+        public bool IsSwinging => _swingTimer > 0f && _alive;
         public long Hp => _hp;
         public long MaxHp => _maxHp;
         public long Atk => _atk;
@@ -185,7 +194,9 @@ namespace TaskbarHero.Client.Battle
             _tintParts = null;      // 같은 이유로 틴트 대상 파트도 다시 캐시한다
             _tintTimer = 0f;
             _damagedMotionTimer = 0f;
+            _crowdOffsetX = 0f;   // 풀에서 재사용될 수 있으므로 초기화(스폰 직후 컨트롤러가 다시 지정한다)
             _attackMotionTimer = 0f;
+            _swingTimer = 0f;
             _knockbackRemaining = 0f;
             _knockbackSpeed = KnockbackSpeed;
             _returningFromKnockback = false;
@@ -206,6 +217,21 @@ namespace TaskbarHero.Client.Battle
                 {
                     StartCoroutine(AttachCrown(bossIcon));
                 }
+            }
+
+            // 무기를 휘두를 때만 보이는 궤적·불티. 몬스터 자식으로 한 번만 붙이고(풀에서 재사용되면
+            // 그대로 다시 쓴다), 무기 렌더러가 없는 몬스터에는 붙지 않는다(Create가 null).
+            if (_swingFx == null)
+            {
+                // 색은 프리팹에 담긴 팔레트가 정본이다(보스는 지역별 색). 없으면 기본 불티색.
+                var palette = GetComponent<MonsterSwingFxPalette>();
+                _swingFx = MonsterWeaponSwingFx.Create(
+                    transform, () => IsSwinging,
+                    palette != null ? palette.BaseColor : (Color?)null);
+            }
+            else
+            {
+                _swingFx.ResetEmission(); // 이전 등장에서 남은 궤적이 새 스폰 지점까지 이어지지 않게
             }
 
             SendMessage("PlayIdle", SendMessageOptions.DontRequireReceiver);
@@ -317,8 +343,16 @@ namespace TaskbarHero.Client.Battle
             crownGo.transform.position = new Vector3(centerX, topY + BossHpBarBand + crownWorldHeight * 0.5f, 0f);
         }
 
-        /// <summary>이 몬스터가 멈출 목표 x(파티 앞 라인). 왼쪽으로만 이동하며 이 지점에서 정지한다.</summary>
-        public void SetTargetX(float x) { _targetX = x; }
+        /// <summary>이 몬스터가 멈출 목표 x(파티 앞 라인). 왼쪽으로만 이동하며 이 지점에서 정지한다.
+        /// <para>실제 정지 지점은 여기에 <see cref="SetCrowdOffsetX"/>의 개체별 오프셋을 더한 값이다 —
+        /// 전선에 몰린 몬스터들이 한 점에 완전히 겹쳐 <b>한 마리처럼 보이는</b> 것을 막는다.</para></summary>
+        public void SetTargetX(float x) { _targetX = x + _crowdOffsetX; }
+
+        /// <summary>
+        /// 전선에서 다른 몬스터와 겹치지 않도록 이 개체만 앞뒤로 밀어 두는 오프셋(유닛).
+        /// 스폰 직후 컨트롤러가 아주 작은 무작위 값으로 1회 지정한다(세로 흩뜨림은 스폰 y가 담당).
+        /// </summary>
+        public void SetCrowdOffsetX(float offset) { _crowdOffsetX = offset; }
 
         /// <summary>데미지를 적용하고, 이번 타격으로 죽었으면 true를 1회 반환한다.
         /// HP바 연출(고스트 바 유지·바 흔들림)도 여기서 시작한다 — <b>모든</b> 피해가 이 창구를 지난다.</summary>
@@ -562,6 +596,11 @@ namespace TaskbarHero.Client.Battle
                 _attackMotionTimer -= dt;
             }
 
+            if (_swingTimer > 0f)
+            {
+                _swingTimer -= dt;
+            }
+
             if (_freezeTimer > 0f)
             {
                 _freezeTimer -= dt;
@@ -735,6 +774,7 @@ namespace TaskbarHero.Client.Battle
             SoundManager.Sfx(SoundId.MonAttack);
             SendMessage("PlayAttackOnce", SendMessageOptions.DontRequireReceiver);
             _attackMotionTimer = AttackMotionSeconds; // 이 사이에 맞으면 피격 모션을 생략한다
+            _swingTimer = AttackMotionSeconds;        // 이 사이에만 무기 궤적·불티가 나온다
         }
 
         /// <summary>

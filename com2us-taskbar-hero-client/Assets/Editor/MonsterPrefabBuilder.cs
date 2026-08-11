@@ -74,6 +74,52 @@ namespace TaskbarHero.ClientEditor
             Finish(RebuildRequested);
         }
 
+        [MenuItem("TaskbarHero/몬스터/무기 스윙 이펙트 색 반영", false, 22)]
+        public static void ApplySwingFxColorsMenu()
+        {
+            Finish(ApplySwingFxColors);
+        }
+
+        /// <summary>
+        /// 이미 있는 몬스터 프리팹 전체에 <b>무기 스윙 이펙트 색만</b> 다시 심는다(외형은 건드리지 않는다).
+        /// <para>색의 근거는 레시피의 <c>effectColor</c>이고, 없으면 보스는 지역(Act) 컬러링, 일반 몬스터는
+        /// 기본 불티색(컴포넌트 제거)이다. 색 규칙을 바꾼 뒤 <b>프리팹을 재생성하지 않고</b> 반영할 때 쓴다.</para>
+        /// </summary>
+        public static string ApplySwingFxColors()
+        {
+            var recipes = MonsterUnitFactory.LoadRecipeBook(out string recipeError);
+            if (!string.IsNullOrEmpty(recipeError))
+            {
+                return "실패 — " + recipeError;
+            }
+
+            var changed = new List<string>();
+            int scanned = 0;
+            foreach (var code in recipes.Keys.OrderBy(c => c))
+            {
+                string path = MonsterUnitFactory.PrefabPath(code);
+                if (AssetDatabase.LoadAssetAtPath<GameObject>(path) == null)
+                {
+                    continue; // 아직 프리팹이 없는 코드는 생성 시 자동으로 색이 들어간다
+                }
+                scanned++;
+                var color = MonsterUnitFactory.SwingFxColorFor(recipes[code], code);
+                if (MonsterUnitFactory.ApplySwingFxPalette(path, color))
+                {
+                    changed.Add($"monster_{code}({(color.HasValue ? ColorUtility.ToHtmlStringRGB(color.Value) : "기본")})");
+                }
+            }
+            AssetDatabase.SaveAssets();
+
+            var sb = new StringBuilder();
+            sb.Append($"스윙 이펙트 색 반영 — 프리팹 {scanned}종 검사, 변경 {changed.Count}건");
+            if (changed.Count > 0)
+            {
+                sb.Append(" — ").Append(string.Join(", ", changed));
+            }
+            return sb.ToString();
+        }
+
         /// <summary>
         /// <see cref="RebuildCodesKey"/> 에 담긴 코드만 <b>강제로 다시 만든다</b>(외형 교체용).
         ///

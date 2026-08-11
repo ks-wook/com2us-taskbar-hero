@@ -55,6 +55,24 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("몬스터 공격력 배수(아군에게 주는 데미지). 마스터 데이터 값 자체는 불변")]
         public float enemyDamageMultiplier = 2f;
 
+        [Header("적 웨이브 — 불규칙 스폰")]
+        [Tooltip("한 번에 나올 수 있는 최대 마리 수. 1이면 종전처럼 한 마리씩만 나온다")]
+        public int spawnBurstMax = 3;
+        [Tooltip("무리로 나올 확률(0~1). 이 확률로 2마리 이상이 뭉쳐 나온다")]
+        [Range(0f, 1f)] public float spawnBurstChance = 0.45f;
+        [Tooltip("스폰 간격에 곱하는 최소 배수(작을수록 빨리 이어 나온다)")]
+        public float spawnIntervalMinFactor = 0.5f;
+        [Tooltip("스폰 간격에 곱하는 최대 배수(클수록 뜸해진다)")]
+        public float spawnIntervalMaxFactor = 1.7f;
+        [Tooltip("무리로 나올 때 개체 사이의 x 간격(유닛). 같은 자리에 겹쳐 나오지 않게 뒤로 물려 세운다")]
+        public float spawnBurstSpacing = 0.8f;
+        [Tooltip("스폰 x 위치에 더하는 무작위 흔들림(±유닛). 줄 맞춰 나오는 느낌을 없앤다")]
+        public float spawnPositionJitter = 0.35f;
+        [Tooltip("전선에 몰렸을 때 개체별로 앞뒤로 벌리는 폭(±유닛). 겹쳐서 한 마리로 보이지 않을 만큼만 아주 작게")]
+        public float crowdSpreadX = 0.22f;
+        [Tooltip("전선에 몰렸을 때 개체별로 위아래로 벌리는 폭(±유닛). 발밑 라인이 무너지지 않게 x보다 훨씬 작게")]
+        public float crowdSpreadY = 0.09f;
+
         [Header("스킬 설정")]
         [Tooltip("개발용 스킬 레벨(계수 조회 기준)")]
         public int devSkillLevel = 1;
@@ -192,6 +210,8 @@ namespace TaskbarHero.Client.Battle
 
         // 적 웨이브 스폰 타이머(스폰 시점/위치·스탯은 컨트롤러가 결정, 생성/추적은 ObjectManager가 담당)
         private float _spawnTimer;
+        // 이번에 기다릴 스폰 간격(매 스폰마다 다시 뽑는다 — 0이면 다음 프레임에 바로 낸다).
+        private float _nextSpawnDelay;
 
         // ObjectManager 카테고리 키
         private const string CatAlly = "battle_ally";
@@ -265,7 +285,8 @@ namespace TaskbarHero.Client.Battle
             _om = ObjectManager.EnsureInstance();
             _om.Clear(CatAlly);
             _om.Clear(CatEnemy);
-            _spawnTimer = enemySpawnInterval; // 시작하자마자 1기 스폰
+            _spawnTimer = enemySpawnInterval; // 시작하자마자 첫 무리 스폰
+            _nextSpawnDelay = 0f;             // 첫 스폰은 기다리지 않는다(이후부터 간격을 무작위로 뽑는다)
 
             InitSelection();
             SpawnParty(start);
@@ -1025,6 +1046,62 @@ namespace TaskbarHero.Client.Battle
 
         // ---- 적 웨이브(스폰 시점/위치·스탯은 컨트롤러가 결정, 생성/추적/정리는 ObjectManager) ----
 
+        // ── 불규칙 스폰 ──
+        // 고정 간격으로 한 마리씩 내보내면 "한 줄로 배급되는" 인상이 강해, 몰려오는 웨이브로 읽히지 않는다.
+        // 그래서 ① 다음 스폰까지의 대기를 매번 다시 뽑고(간격 지터) ② 가끔 2~3마리를 한 번에 내며(무리)
+        // ③ 무리는 x를 뒤로 물려 세워 겹치지 않게 한다. 동시 상한(maxConcurrentEnemies)은 그대로 지킨다.
+
+        /// <summary>이번 스폰까지 기다릴 시간을 뽑는다(기본 주기 × 무작위 배수).</summary>
+        private float RollSpawnDelay()
+        {
+            float baseInterval = Mathf.Max(0.1f, enemySpawnInterval);
+            float lo = Mathf.Max(0.05f, spawnIntervalMinFactor);
+            float hi = Mathf.Max(lo, spawnIntervalMaxFactor);
+            return baseInterval * Random.Range(lo, hi);
+        }
+
+        /// <summary>이번에 한 번에 내보낼 마리 수(1 ~ <see cref="spawnBurstMax"/>).
+        /// <see cref="spawnBurstChance"/>로 무리 여부를 정하고, 무리면 2마리 이상에서 균등하게 뽑는다.</summary>
+        private int RollBurstSize()
+        {
+            int max = Mathf.Max(1, spawnBurstMax);
+            if (max == 1 || Random.value >= spawnBurstChance)
+            {
+                return 1;
+            }
+            return Random.Range(2, max + 1);
+        }
+
+        /// <summary>무리 중 <paramref name="index"/>번째 개체의 스폰 x 오프셋(뒤로 물린 간격 + 흔들림).</summary>
+        private float BurstOffsetX(int index)
+        {
+            return index * Mathf.Max(0f, spawnBurstSpacing)
+                   + Random.Range(-spawnPositionJitter, spawnPositionJitter);
+        }
+
+        /// <summary>
+        /// 전선에 몰린 몬스터가 한 마리처럼 보이지 않도록 개체별 미세 분산을 준다.
+        /// <para>x는 정지 지점을 앞뒤로 밀고(<see cref="MonsterUnit.SetCrowdOffsetX"/>), y는 스폰 높이를 흔든다 —
+        /// 이동 로직이 x만 건드리므로 y는 스폰 때 한 번 정하면 그대로 유지된다.</para>
+        /// <para>겹칠 때 누가 앞인지 읽히도록 <b>아래쪽(더 앞) 개체를 위에 그린다</b> — 정렬값은 적 기본값
+        /// 근처에서만 움직여(±1) 아군(20)보다 뒤라는 관계는 그대로 둔다.</para>
+        /// <para>보스는 단독 등장이라 겹칠 일이 없고, 3배 크기라 흔들면 발밑 라인이 눈에 띄게 어긋나므로 제외한다.</para>
+        /// </summary>
+        private void ApplyCrowdSpread(GameObject go, MonsterUnit mu, bool isBoss)
+        {
+            if (isBoss || go == null || mu == null)
+            {
+                return;
+            }
+
+            mu.SetCrowdOffsetX(Random.Range(-crowdSpreadX, crowdSpreadX));
+
+            float dy = Random.Range(-crowdSpreadY, crowdSpreadY);
+            var p = go.transform.position;
+            go.transform.position = new Vector3(p.x, p.y + dy, p.z);
+            SetUnitSortingOrder(go, EnemySortingOrder + (dy < 0f ? 1 : -1));
+        }
+
         /// <summary>주기적으로 적을 카메라 우측 바깥에 스폰(동시 상한 이내)하고, 살아있는 적을 파티 앞 라인으로 몰아넣는다.</summary>
         private void TickWave(float dt)
         {
@@ -1037,10 +1114,16 @@ namespace TaskbarHero.Client.Battle
             if (monsterPrefab != null)
             {
                 _spawnTimer += dt;
-                if (_spawnTimer >= Mathf.Max(0.1f, enemySpawnInterval) && AliveEnemyCount() < Mathf.Max(1, maxConcurrentEnemies))
+                int room = Mathf.Max(1, maxConcurrentEnemies) - AliveEnemyCount();
+                if (_spawnTimer >= _nextSpawnDelay && room > 0)
                 {
                     _spawnTimer = 0f;
-                    SpawnMonster();
+                    _nextSpawnDelay = RollSpawnDelay();
+                    int count = Mathf.Min(RollBurstSize(), room);
+                    for (int i = 0; i < count; i++)
+                    {
+                        SpawnMonster(BurstOffsetX(i));
+                    }
                 }
             }
             UpdateQueue();
@@ -1052,11 +1135,28 @@ namespace TaskbarHero.Client.Battle
             if (_serverQueue != null && _serverQueue.Count > 0)
             {
                 _spawnTimer += dt;
-                if (_spawnTimer >= Mathf.Max(0.1f, enemySpawnInterval) && AliveEnemyCount() < Mathf.Max(1, maxConcurrentEnemies))
+                int room = Mathf.Max(1, maxConcurrentEnemies) - AliveEnemyCount();
+                if (_spawnTimer >= _nextSpawnDelay && room > 0)
                 {
                     _spawnTimer = 0f;
-                    SpawnMonsterByCode(_serverQueue.Dequeue());
-                    _serverSpawned++;
+                    _nextSpawnDelay = RollSpawnDelay();
+                    int count = Mathf.Min(Mathf.Min(RollBurstSize(), room), _serverQueue.Count);
+                    for (int i = 0; i < count; i++)
+                    {
+                        // 보스는 등장 경고·BGM 전환이 붙는 단독 연출이라 무리에 섞지 않는다.
+                        // 무리 중간에 보스가 걸리면 거기서 끊고, 보스는 다음 스폰에서 혼자 나온다.
+                        int next = _serverQueue.Peek();
+                        if (_bossCode != 0 && next == _bossCode && i > 0)
+                        {
+                            break;
+                        }
+                        SpawnMonsterByCode(_serverQueue.Dequeue(), BurstOffsetX(i));
+                        _serverSpawned++;
+                        if (_bossCode != 0 && next == _bossCode)
+                        {
+                            break; // 보스를 냈으면 이번 무리는 여기까지
+                        }
+                    }
                 }
             }
 
@@ -1072,8 +1172,9 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
-        /// <summary>지정 몬스터 코드의 프리팹(리졸버)과 마스터 스탯으로 적 1기를 스폰한다.</summary>
-        private void SpawnMonsterByCode(int code)
+        /// <summary>지정 몬스터 코드의 프리팹(리졸버)과 마스터 스탯으로 적 1기를 스폰한다.
+        /// <paramref name="offsetX"/>는 무리 스폰에서 개체를 뒤로 물리는 간격이다(0 = 종전 위치).</summary>
+        private void SpawnMonsterByCode(int code, float offsetX = 0f)
         {
             string mname = "Monster";
             long hp = 100;
@@ -1095,7 +1196,7 @@ namespace TaskbarHero.Client.Battle
             }
 
             float rightEdge = _cam != null ? _cam.transform.position.x + _cam.orthographicSize * _cam.aspect : 10f;
-            Vector3 pos = new Vector3(rightEdge + enemyOffscreenMargin, _pathY, 0f);
+            Vector3 pos = new Vector3(rightEdge + enemyOffscreenMargin + offsetX, _pathY, 0f);
 
             var go = _om.Spawn(CatEnemy, prefab, pos, Quaternion.identity);
             if (go == null) return;
@@ -1109,6 +1210,7 @@ namespace TaskbarHero.Client.Battle
             float speed = isBoss ? enemyMoveSpeed * Mathf.Max(0.05f, bossMoveSpeedFactor) : enemyMoveSpeed;
             mu.Init(mname, hp, atk, speed, () => _paused, OnMonsterKilled, isBoss, isBoss ? bossIcon : null,
                     OnMonsterAttack, enemyAttackInterval, OnBossPhase);
+            ApplyCrowdSpread(go, mu, isBoss); // 전선에서 겹쳐도 여러 마리로 보이게(Init 뒤 — Init이 오프셋을 리셋한다)
             AttachWalkDust(go, () => mu != null && mu.IsMoving); // 걷기 먼지(전진 애니 재생 중에만 노출)
             if (isBoss)
             {
@@ -1153,14 +1255,16 @@ namespace TaskbarHero.Client.Battle
             _serverKilled = 0;
             _serverCleared = false;
             _spawnTimer = enemySpawnInterval; // 곧 첫 스폰
+            _nextSpawnDelay = 0f;
             Log($"서버 전투 시작 — 총 {_serverQueue.Count}마리 예정");
         }
 
-        /// <summary>카메라 우측 바깥(보이지 않는 지점)에 적 1기를 생성·배선한다.</summary>
-        private void SpawnMonster()
+        /// <summary>카메라 우측 바깥(보이지 않는 지점)에 적 1기를 생성·배선한다.
+        /// <paramref name="offsetX"/>는 무리 스폰에서 개체를 뒤로 물리는 간격이다(0 = 종전 위치).</summary>
+        private void SpawnMonster(float offsetX = 0f)
         {
             float rightEdge = _cam != null ? _cam.transform.position.x + _cam.orthographicSize * _cam.aspect : 10f;
-            Vector3 pos = new Vector3(rightEdge + enemyOffscreenMargin, _pathY, 0f);
+            Vector3 pos = new Vector3(rightEdge + enemyOffscreenMargin + offsetX, _pathY, 0f);
 
             var go = _om.Spawn(CatEnemy, monsterPrefab, pos, Quaternion.identity);
             if (go == null) return;
@@ -1172,6 +1276,7 @@ namespace TaskbarHero.Client.Battle
             mu.Init(_monsterName, _monsterMaxHp, _monsterAtk, enemyMoveSpeed,
                     () => _paused, OnMonsterKilled, false, null,
                     OnMonsterAttack, enemyAttackInterval, OnBossPhase);
+            ApplyCrowdSpread(go, mu, false); // 전선에서 겹쳐도 여러 마리로 보이게(Init 뒤 — Init이 오프셋을 리셋한다)
             AttachWalkDust(go, () => mu != null && mu.IsMoving); // 걷기 먼지(전진 애니 재생 중에만 노출)
         }
 
@@ -1335,6 +1440,7 @@ namespace TaskbarHero.Client.Battle
             StopAllCoroutines();
             if (_om != null) _om.Clear(CatEnemy);
             _spawnTimer = enemySpawnInterval;
+            _nextSpawnDelay = 0f;
 
             _killCount = 0;
             _phase = Phase.Advancing;
@@ -1662,14 +1768,17 @@ namespace TaskbarHero.Client.Battle
             _members.Remove(a);
             Log($"{(a != null ? a.DisplayName : "아군")} 전사 — 남은 파티 {_members.Count}인");
 
+            // 전투 UI는 다시 만들지 않고 <b>그 줄만 죽은 표시</b>로 바꾼다 — 재구성하면 전사자 초상화가
+            // 통째로 사라져 누가 죽었는지 알 수 없고, 남은 멤버의 줄 위치까지 밀린다.
+            // 초상화는 캐릭터를 실시간 렌더하므로 <b>파괴되기 전인 지금</b> 흑백 스냅숏으로 굳혀야 한다.
+            var skillUi = FindAnyObjectByType<SkillCooldownUI>();
+            if (skillUi != null) skillUi.MarkMemberDead(a);
+
             if (_members.Count > 0)
             {
                 // 남은 멤버로 대형·선두 속도 재계산.
                 _partySpeed = Mathf.Max(0.1f, _members[0].MoveSpeed);
                 ComputeFormation();
-                // 아군 HP바·스킬 슬롯(전투 UI) 재구성.
-                var ui = FindAnyObjectByType<SkillCooldownUI>();
-                if (ui != null) ui.Rebuild();
             }
             else
             {

@@ -1680,6 +1680,7 @@ MonoBehaviour:
   portraitFrameTemplate: {fileID: 184828749}
   slotFrameSprite: {fileID: 4400792897899385541, guid: da1984ed974c4054889d94d8f39c9faa, type: 3}
   slotIconInset: 10
+  uiScale: 0.7
   slotStartX: -204
   slotStepX: 92
   rowStartY: -20

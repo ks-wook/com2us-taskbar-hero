@@ -135,8 +135,9 @@ namespace TaskbarHero.Client.Battle
             ApplyPalette();
         }
 
-        /// <summary>캐릭터에서 무기 스프라이트 렌더러를 찾는다(오른손 무기 우선).</summary>
-        private static SpriteRenderer FindWeapon(Transform ownerRoot)
+        /// <summary>캐릭터에서 무기 스프라이트 렌더러를 찾는다(오른손 무기 우선).
+        /// 몬스터 스윙 이펙트(<see cref="MonsterWeaponSwingFx"/>)도 같은 규칙으로 무기를 찾는다.</summary>
+        internal static SpriteRenderer FindWeapon(Transform ownerRoot)
         {
             SpriteRenderer fallback = null;
             foreach (var sr in ownerRoot.GetComponentsInChildren<SpriteRenderer>(true))
@@ -165,7 +166,7 @@ namespace TaskbarHero.Client.Battle
         /// 생겨 몸통과 겹친 얼룩처럼 보인다. 그래서 활은 끝이 아니라 <b>스프라이트 세로 중앙
         /// (= 시위를 잡는 그립)</b>에서 궤적이 나가게 한다.</para>
         /// </summary>
-        private static Vector3 TipLocalPosition(SpriteRenderer weapon, WeaponTrailStyle style)
+        internal static Vector3 TipLocalPosition(SpriteRenderer weapon, WeaponTrailStyle style)
         {
             var b = weapon.sprite.bounds;
             if (style == WeaponTrailStyle.Bow)
@@ -510,7 +511,7 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>2D 조명에 영향받지 않는 스프라이트 머티리얼(잔상용).</summary>
-        private static Material UnlitSpriteMaterial()
+        internal static Material UnlitSpriteMaterial()
         {
             var shader = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default");
             if (shader == null)
@@ -524,7 +525,7 @@ namespace TaskbarHero.Client.Battle
         /// 불꽃 입자용 머티리얼. 알파 블렌드라 밝은 불길과 <b>어두운 혀(+10의 암흑)</b>가 모두 표현된다
         /// (가산 블렌드는 어둡게 만들 수 없어 쓰지 않는다). 입자 색은 파티클 시스템이 정점 색으로 넘긴다.
         /// </summary>
-        private static Material GlowParticleMaterial()
+        internal static Material GlowParticleMaterial()
         {
             var mat = new Material(Shader.Find("Sprites/Default"))
             {

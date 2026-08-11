@@ -48,6 +48,22 @@ public sealed class MonsterAppearanceRecipe
     /// <summary>예약 필드(§4.1). 값이 있으면 태그 조합을 건너뛰고 이 코드로 복원 — 이번 범위에서는 미구현.</summary>
     public string shareCode = string.Empty;
 
+    /// <summary>
+    /// 무기 스윙 이펙트(궤적·불티)의 기준색 "#RRGGBB". 비면 기본 불티색을 쓴다.
+    /// 보스는 지역(Act) 컬러링을 여기에 적어 둔다(<c>MonsterSwingFxPalette.ActColor</c>와 같은 값).
+    /// </summary>
+    public string effectColor = string.Empty;
+
+    /// <summary>레시피의 이펙트 색을 Color로 해석한다(비었거나 형식이 틀리면 null).</summary>
+    public Color? EffectColorOrNull()
+    {
+        if (string.IsNullOrEmpty(effectColor))
+        {
+            return null;
+        }
+        return ColorUtility.TryParseHtmlString(effectColor, out Color c) ? c : (Color?)null;
+    }
+
     /// <summary>레시피가 지정한 시드(없으면 몬스터 코드). 같은 시드면 같은 외형이 나온다(F6).</summary>
     public int EffectiveSeed => seed != 0 ? seed : monsterCode;
 
@@ -131,6 +147,7 @@ public static class MonsterRecipeBook
                 theme = ReadString(dict, "theme"),
                 seed = ReadInt(dict, "seed", 0),
                 shareCode = ReadString(dict, "shareCode"),
+                effectColor = ReadString(dict, "effectColor"),
             };
 
             if (dict.TryGetValue("classes", out object classesObj) && classesObj is List<object> classList)

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using TaskbarHero.Client.Battle;   // MonsterSwingFxPalette — 스윙 이펙트 색 프리셋
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
@@ -66,6 +67,10 @@ public partial class CharacterDevController
     private readonly List<(int Code, Image Bg)> _listRows = new List<(int, Image)>();
     private readonly List<(int Value, Image Bg)> _actRows = new List<(int, Image)>();
     private readonly List<(int Value, Image Bg)> _stageRows = new List<(int, Image)>();
+    // 무기 스윙 이펙트 색 프리셋 버튼(Value: -1 = 기본색, 1~5 = 지역 색)
+    private readonly List<(int Value, Image Bg)> _effectColorRows = new List<(int, Image)>();
+    private Image _effectColorSwatch;   // 현재 색 견본 막대
+    private Text _effectColorText;
 
     // ══════════════════════════════════════════════════════════════════
     //  구성
@@ -82,6 +87,7 @@ public partial class CharacterDevController
         _listRows.Clear();
         _actRows.Clear();
         _stageRows.Clear();
+        _effectColorRows.Clear();
         _tabRows.Clear();
 
         _canvasGo = new GameObject("CharacterDevCanvas", typeof(RectTransform), typeof(Canvas),
@@ -297,6 +303,28 @@ public partial class CharacterDevController
 
         _appearanceText = MakeText(content, "현재 외형: -", 11, FontStyle.Normal, HintColor, 52f);
         MakeText(content, "파트별로 바꾸려면 왼쪽 [파츠 고르기] 탭을 쓰세요.", 11, FontStyle.Normal, HintColor, 18f);
+
+        // ── 무기 스윙 이펙트 색 ──
+        // 몬스터가 무기를 휘두를 때 나오는 궤적·불티의 기준색이다(MonsterSwingFxPalette).
+        // 지역 색 프리셋으로 고르며, 보스는 그 지역 컬러링을 쓰는 것이 기본이다.
+        MakeText(content, "▍무기 스윙 이펙트 색", 15, FontStyle.Bold, TitleColor, 26f);
+        MakeText(content, "휘두를 때 나오는 궤적·불티의 색입니다(무기가 있는 몬스터만).",
+            11, FontStyle.Normal, HintColor, 16f);
+        var fxRowA = MakeRow(content, 26f);
+        var fxRowB = MakeRow(content, 26f);
+        _effectColorRows.Add((-1, MakeChoice(fxRowA, "기본(불티)", () => SetEffectColor(null))));
+        for (int act = 1; act <= 5; act++)
+        {
+            int captured = act;
+            var row = act <= 2 ? fxRowA : fxRowB;
+            var image = MakeChoice(row, $"{act}지역 {MonsterSwingFxPalette.ActColorName(act)}",
+                () => SetEffectColor(MonsterSwingFxPalette.ActColor(captured)));
+            _effectColorRows.Add((captured, image));
+        }
+        _effectColorSwatch = MakeSwatch(content, 16f);
+        _effectColorText = MakeText(content, "현재 색: -", 11, FontStyle.Normal, HintColor, 18f);
+        MakeText(content, "저장하면 프리팹에 기록됩니다. 레시피 JSON의 effectColor가 초기값입니다.",
+            11, FontStyle.Normal, HintColor, 18f);
 
         // ── 산출 ──
         MakeText(content, "▍산출", 15, FontStyle.Bold, TitleColor, 26f);
@@ -566,11 +594,82 @@ public partial class CharacterDevController
             _stage = MonsterStatCurve.IsBossCode(code) ? MonsterStatCurve.BossStage : 1;
         }
 
+        LoadEffectColorFor(code);
+
         foreach (var (rowCode, bg) in _listRows)
         {
             bg.color = rowCode == _selectedCode ? RowSelected : RowNormal;
         }
         RefreshRightPanel();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  무기 스윙 이펙트 색
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 고른 몬스터의 스윙 이펙트 색을 편집 상태로 올린다.
+    /// <para>우선순위는 <b>저장된 프리팹 → 레시피(effectColor, 없으면 보스는 지역 색)</b>이다 —
+    /// 씬에서 색만 바꿔 저장한 몬스터를 다시 골랐을 때 그 값이 그대로 보여야 하기 때문이다.</para>
+    /// </summary>
+    private void LoadEffectColorFor(int code)
+    {
+        _effectColor = null;
+#if UNITY_EDITOR
+        var saved = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+            MonsterUnitFactory.PrefabPath(code, monsterPrefabFolder));
+        var palette = saved != null ? saved.GetComponent<MonsterSwingFxPalette>() : null;
+        if (palette != null)
+        {
+            _effectColor = palette.BaseColor;
+            return;
+        }
+        if (saved != null)
+        {
+            return; // 프리팹은 있는데 팔레트가 없다 = 기본색으로 저장된 상태
+        }
+#endif
+        _effectColor = MonsterUnitFactory.SwingFxColorFor(RecipeFor(code), code);
+    }
+
+    /// <summary>이펙트 색을 고른다(null = 기본 불티색). 저장할 때 프리팹에 반영된다.</summary>
+    private void SetEffectColor(Color? color)
+    {
+        _effectColor = color;
+        RefreshEffectColorUi();
+        Log(color.HasValue
+            ? $"스윙 이펙트 색 선택 — #{ColorUtility.ToHtmlStringRGB(color.Value)} (저장해야 프리팹에 반영됩니다)"
+            : "스윙 이펙트 색 선택 — 기본(불티) (저장해야 프리팹에 반영됩니다)");
+    }
+
+    /// <summary>이펙트 색 프리셋 버튼 선택 표시·견본·설명을 현재 값으로 갱신한다.</summary>
+    private void RefreshEffectColorUi()
+    {
+        foreach (var (value, bg) in _effectColorRows)
+        {
+            bool selected = value < 0
+                ? !_effectColor.HasValue
+                : _effectColor.HasValue && SameColor(_effectColor.Value, MonsterSwingFxPalette.ActColor(value));
+            bg.color = selected ? RowSelected : ButtonColor;
+        }
+
+        if (_effectColorSwatch != null)
+        {
+            _effectColorSwatch.color = _effectColor ?? MonsterSwingFxPalette.DefaultColor;
+        }
+        if (_effectColorText != null)
+        {
+            _effectColorText.text = _effectColor.HasValue
+                ? $"현재 색: #{ColorUtility.ToHtmlStringRGB(_effectColor.Value)}"
+                : $"현재 색: 기본(불티) #{ColorUtility.ToHtmlStringRGB(MonsterSwingFxPalette.DefaultColor)}";
+        }
+    }
+
+    /// <summary>색 비교(프리셋 선택 표시용) — 부동소수 오차와 8비트 저장 왕복을 견디도록 여유를 둔다.</summary>
+    private static bool SameColor(Color a, Color b)
+    {
+        const float e = 0.01f;
+        return Mathf.Abs(a.r - b.r) < e && Mathf.Abs(a.g - b.g) < e && Mathf.Abs(a.b - b.b) < e;
     }
 
     /// <summary>우측 패널(선택 상태·추천·레시피 요약·이름 후보)을 현재 값으로 다시 칠한다.</summary>
@@ -584,6 +683,7 @@ public partial class CharacterDevController
         {
             bg.color = value == _stage ? RowSelected : ButtonColor;
         }
+        RefreshEffectColorUi();
 
         if (_codeText != null)
         {
@@ -861,6 +961,16 @@ public partial class CharacterDevController
         layout.childControlHeight = true;
         go.GetComponent<LayoutElement>().minHeight = height;
         return rt;
+    }
+
+    /// <summary>가로 폭 전체를 채우는 단색 견본 막대(고른 색을 눈으로 확인하는 용도).</summary>
+    private static Image MakeSwatch(RectTransform parent, float height)
+    {
+        var rt = NewUi("Swatch", parent, out Image bg);
+        bg.color = Color.white;
+        bg.raycastTarget = false;
+        rt.gameObject.AddComponent<LayoutElement>().minHeight = height;
+        return bg;
     }
 
     /// <summary>세로 레이아웃 안의 가로 폭 전체를 쓰는 버튼.</summary>

@@ -32,6 +32,12 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("프레임 테두리가 보이도록 아이콘을 슬롯 안쪽으로 줄이는 여백(캔버스 단위). skill_slot의 테두리 두께 비율(약 12%)에 맞춘 값.")]
         public float slotIconInset = 10f;
 
+        [Header("전체 크기")]
+        [Tooltip("초상화·스킬 슬롯·아군 체력바 블록 전체에 곱하는 배율(1 = 종전 크기). " +
+                 "GameScene 창이 작아 종전 크기(3인 파티 기준 세로 약 30%)로는 전투 화면을 가리므로 기본값을 1보다 작게 둔다. " +
+                 "블록이 붙는 모서리(좌측 정렬이면 좌상단)를 기준으로 축소하므로 배치 순서·도킹 위치는 그대로다.")]
+        public float uiScale = 0.7f;
+
         [Header("레이아웃(우상단 앵커 기준, 음수 = 좌/하)")]
         public float slotStartX = -204f;
         public float slotStepX = 92f;
@@ -92,11 +98,29 @@ namespace TaskbarHero.Client.Battle
             public Image fill;
         }
 
+        /// <summary>
+        /// 멤버 한 명의 UI 묶음(초상화 리그 + 그 줄에서 어둡게 처리할 그래픽들).
+        /// <b>전사해도 이 줄을 지우지 않는다</b> — 초상화를 흑백으로 굳히고 줄 전체를 어둡게 해
+        /// "이 자리에 있던 아군이 죽었다"가 보이게 한다.
+        /// </summary>
+        private class MemberRow
+        {
+            public PlayerCombatant member;
+            public PortraitCameraRig rig;
+            public readonly List<Graphic> tintables = new List<Graphic>();
+            public bool dead;
+        }
+
         private readonly List<SlotRT> _slots = new List<SlotRT>();
         private readonly List<HpBar> _hpBars = new List<HpBar>();
+        private readonly List<MemberRow> _rows = new List<MemberRow>();
+
+        /// <summary>전사한 줄의 그래픽에 곱하는 밝기(초상화 자체는 리그가 흑백으로 굳힌다).</summary>
+        private const float DeadRowDim = 0.45f;
         private readonly List<GameObject> _spawned = new List<GameObject>(); // 재구성 시 제거할 생성물(슬롯/초상화/리그/체력바)
 
         private RectTransform _dockRoot;       // 생성물을 묶는 컨테이너(스트립 도킹 시 통째로 이동)
+        private RectTransform _scaleRoot;      // DockRoot에 꽉 찬 자식 — 생성물의 실제 부모이자 uiScale 축소 기준
         private float _blockBottomFromTop;     // 캔버스 상단 기준 UI 블록 하단까지의 거리(캔버스 단위)
         private ScrollingBackground _background;
         private Canvas _canvas;
@@ -172,9 +196,64 @@ namespace TaskbarHero.Client.Battle
             _spawned.Clear();
             _slots.Clear();
             _hpBars.Clear();
+            _rows.Clear();
             _hoverSlots.Clear();
             if (controller != null && controller.Party != null && controller.Party.Count > 0)
                 BuildUI();
+        }
+
+        /// <summary>
+        /// 전사한 멤버의 줄을 <b>지우지 않고</b> 죽은 표시로 바꾼다 — 초상화는 마지막 모습 그대로 흑백으로 굳히고,
+        /// 슬롯·프레임은 어둡게, 체력바는 0으로 만든다.
+        /// <para>초상화는 캐릭터 프리팹을 실시간으로 렌더하는 구조라, 캐릭터가 파괴되면 그림이 비거나
+        /// 다른 아군으로 바뀐다. 그래서 <see cref="PortraitCameraRig.FreezeGrayscale"/>로 <b>파괴 전에</b>
+        /// 현재 프레임을 정지 이미지로 복사해 둔다 — 이 호출이 늦으면 초상화가 비어 버린다.</para>
+        /// </summary>
+        public void MarkMemberDead(PlayerCombatant member)
+        {
+            if (member == null)
+            {
+                return;
+            }
+            foreach (var row in _rows)
+            {
+                if (row == null || row.member != member || row.dead)
+                {
+                    continue;
+                }
+                row.dead = true;
+
+                if (row.rig != null)
+                {
+                    row.rig.FreezeGrayscale();
+                }
+                foreach (var g in row.tintables)
+                {
+                    if (g == null) continue;
+                    var c = g.color;
+                    g.color = new Color(c.r * DeadRowDim, c.g * DeadRowDim, c.b * DeadRowDim, c.a);
+                }
+                foreach (var hb in _hpBars)
+                {
+                    if (hb != null && hb.member == member && hb.fill != null)
+                    {
+                        hb.fill.fillAmount = 0f;
+                    }
+                }
+            }
+        }
+
+        /// <summary>줄 전체를 어둡게 만들 대상으로 그 오브젝트의 그래픽을 등록한다(자식 포함).</summary>
+        private static void AddTintable(MemberRow row, GameObject go)
+        {
+            if (row == null || go == null)
+            {
+                return;
+            }
+            foreach (var g in go.GetComponentsInChildren<Graphic>(true))
+            {
+                if (g != null) row.tintables.Add(g);
+            }
         }
 
         private void BuildUI()
@@ -191,18 +270,21 @@ namespace TaskbarHero.Client.Battle
                 var member = party[i];
                 if (member == null) continue;
                 float baseY = rowStartY + i * rowStepY;
+                var row = new MemberRow { member = member };
+                _rows.Add(row);
 
                 // 초상화 프레임 + RawImage
                 if (portraitFrameTemplate != null)
                 {
-                    var frame = Instantiate(portraitFrameTemplate, _dockRoot);
+                    var frame = Instantiate(portraitFrameTemplate, _scaleRoot);
                     frame.gameObject.SetActive(true);
                     PlaceTopCorner(frame, portraitX + frameOffset.x, baseY + frameOffset.y);
                     _spawned.Add(frame.gameObject);
+                    AddTintable(row, frame.gameObject);
                 }
                 if (portraitTemplate != null)
                 {
-                    var por = Instantiate(portraitTemplate, _dockRoot);
+                    var por = Instantiate(portraitTemplate, _scaleRoot);
                     por.gameObject.SetActive(true);
                     PlaceTopCorner(por, portraitX, baseY);
                     _spawned.Add(por.gameObject);
@@ -216,6 +298,7 @@ namespace TaskbarHero.Client.Battle
                     rig.portraitLayer = portraitBaseLayer - i;
                     rig.orthoSize = portraitOrtho;
                     rig.aimOffset = portraitAim;
+                    row.rig = rig;
                 }
 
                 // 아군 세로 체력바(초상화 왼쪽 옆, 하단을 초상화 좌측 하단에 정렬)
@@ -230,11 +313,12 @@ namespace TaskbarHero.Client.Battle
                 for (int j = 0; j < member.SkillCount; j++)
                 {
                     int code = member.SkillCodeAt(j);
-                    var slotGo = Instantiate(slotTemplate, _dockRoot);
+                    var slotGo = Instantiate(slotTemplate, _scaleRoot);
                     slotGo.SetActive(true);
                     var rt = slotGo.GetComponent<RectTransform>();
                     if (rt != null) PlaceTopCorner(rt, slotStartX + j * slotStepX, baseY);
                     _spawned.Add(slotGo);
+                    AddTintable(row, slotGo);
 
                     // hover 툴팁 배선: 슬롯 루트가 레이캐스트를 받도록 보장(창 클릭 통과 판정의 uGUI 대상)하고,
                     // 폴링 대상 목록에 등록한다.
@@ -344,15 +428,39 @@ namespace TaskbarHero.Client.Battle
         /// <para>GameScene에서는 캔버스 전체가 아니라 <b>전투 화면 밴드</b>에만 걸친다
         /// (<see cref="GameAreaRect"/>) — 초상화(좌상단 앵커)·툴팁(우상단 앵커)이 좌우 패널 여백으로
         /// 밀려나지 않게 한다. 레이아웃이 꺼진 BattleDevScene에서는 종전대로 전체 스트레치가 된다.</para>
+        /// <para>그 밑에 <b>ScaleRoot</b>(생성물의 실제 부모)를 두어 <see cref="uiScale"/> 축소를 건다.</para>
         /// </summary>
         private void EnsureDockRoot()
         {
-            if (_dockRoot != null) return;
-            var go = new GameObject("DockRoot", typeof(RectTransform));
-            _dockRoot = (RectTransform)go.transform;
-            _dockRoot.SetParent(transform, false);
-            GameAreaRect.Attach(_dockRoot);
+            if (_dockRoot == null)
+            {
+                var go = new GameObject("DockRoot", typeof(RectTransform));
+                _dockRoot = (RectTransform)go.transform;
+                _dockRoot.SetParent(transform, false);
+                GameAreaRect.Attach(_dockRoot);
+            }
+
+            // 축소 컨테이너: DockRoot에 꽉 차게 스트레치하고 <b>피벗을 블록이 붙는 상단 모서리</b>에 둔다.
+            // 스케일은 피벗을 중심으로 걸리므로, 이렇게 해야 축소해도 블록이 그 모서리에 그대로 붙어 있고
+            // 내부 배치(체력바-초상화-슬롯)의 상대 위치만 비례해 줄어든다.
+            // (DockRoot 자체에 스케일을 걸면 GameAreaRect가 피벗을 중앙(0.5,0.5)으로 되돌려 놓기 때문에
+            //  블록이 화면 가운데로 끌려간다.)
+            if (_scaleRoot == null)
+            {
+                var sgo = new GameObject("ScaleRoot", typeof(RectTransform));
+                _scaleRoot = (RectTransform)sgo.transform;
+                _scaleRoot.SetParent(_dockRoot, false);
+                _scaleRoot.anchorMin = Vector2.zero;
+                _scaleRoot.anchorMax = Vector2.one;
+                _scaleRoot.offsetMin = Vector2.zero;
+                _scaleRoot.offsetMax = Vector2.zero;
+            }
+            _scaleRoot.pivot = new Vector2(alignLeft ? 0f : 1f, 1f);
+            _scaleRoot.localScale = new Vector3(Scale, Scale, 1f);
         }
+
+        /// <summary>실제로 적용할 UI 배율(0 이하·비정상 값 방어).</summary>
+        private float Scale => uiScale > 0.05f ? uiScale : 1f;
 
         /// <summary>uGUI hover 이벤트 전제 조건을 보장한다: 씬에 EventSystem이 없으면 생성, 캔버스에 GraphicRaycaster 부착.</summary>
         private void EnsurePointerInfra()
@@ -376,12 +484,16 @@ namespace TaskbarHero.Client.Battle
 
             var go = new GameObject("SkillTooltip", typeof(RectTransform), typeof(Image));
             _tooltipRoot = (RectTransform)go.transform;
-            _tooltipRoot.SetParent(_dockRoot, false);
+            _tooltipRoot.SetParent(_scaleRoot, false);
             // 슬롯과 같은 상단 코너 앵커 공간(좌측 정렬이면 좌상단). 피벗은 슬롯 반대편 모서리.
             Vector2 corner = alignLeft ? new Vector2(0f, 1f) : new Vector2(1f, 1f);
             _tooltipRoot.anchorMin = _tooltipRoot.anchorMax = corner;
             _tooltipRoot.pivot = corner;
             _tooltipRoot.sizeDelta = new Vector2(320f, 168f);
+            // 슬롯은 줄이되 <b>툴팁 글자 크기는 유지</b>한다(hover 시에만 잠깐 뜨는 정보창이라 화면을 상시 가리지 않는다).
+            // ScaleRoot의 축소를 역보정하며, 피벗이 슬롯 쪽 모서리라 위치는 그대로 두고 바깥으로만 커진다.
+            float inv = 1f / Scale;
+            _tooltipRoot.localScale = new Vector3(inv, inv, 1f);
             var bg = go.GetComponent<Image>();
             bg.color = new Color(0.06f, 0.07f, 0.12f, 0.95f);
             bg.raycastTarget = false; // 정보 전용 — 슬롯 hover를 가로채지 않음
@@ -495,7 +607,7 @@ namespace TaskbarHero.Client.Battle
             foreach (var go in _spawned)
             {
                 var rt = go != null ? go.transform as RectTransform : null;
-                if (rt == null || rt.parent != _dockRoot) continue;
+                if (rt == null || rt.parent != _scaleRoot) continue;
                 float bottomEdge = rt.anchoredPosition.y - rt.pivot.y * rt.sizeDelta.y;
                 lowest = Mathf.Min(lowest, bottomEdge);
             }
@@ -533,7 +645,8 @@ namespace TaskbarHero.Client.Battle
             float scale = _canvas.scaleFactor > 0f ? _canvas.scaleFactor : 1f;
             float stripTopScreenY = cam.WorldToScreenPoint(new Vector3(cam.transform.position.x, _background.VisibleTopY, 0f)).y;
             float stripFromTop = (Screen.height - stripTopScreenY) / scale; // 캔버스 단위, 화면 상단 기준
-            float shift = stripFromTop - dockMargin - _blockBottomFromTop;
+            // 블록 높이는 ScaleRoot 축소가 걸린 뒤의 실제 크기로 환산한다(_blockBottomFromTop은 축소 전 값).
+            float shift = stripFromTop - dockMargin - _blockBottomFromTop * Scale;
             float target = -Mathf.Max(0f, shift);
             if (Mathf.Abs(_dockRoot.anchoredPosition.y - target) > DockCorrectionThreshold)
             {
@@ -547,7 +660,7 @@ namespace TaskbarHero.Client.Battle
         {
             // 배경(상단 코너 앵커 기준, 피벗을 하단 중앙으로 두어 pos가 바닥 시작점이 되게)
             var bg = new GameObject("HpBarBg_" + i, typeof(RectTransform), typeof(Image));
-            bg.transform.SetParent(_dockRoot, false);
+            bg.transform.SetParent(_scaleRoot, false);
             var bgRt = bg.GetComponent<RectTransform>();
             bgRt.pivot = new Vector2(0.5f, 0f); // 하단 중앙 피벗 → anchoredPosition.y = 바 바닥
             bgRt.sizeDelta = new Vector2(hpBarWidth, hpBarHeight);

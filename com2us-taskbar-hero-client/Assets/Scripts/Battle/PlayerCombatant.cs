@@ -132,6 +132,15 @@ namespace TaskbarHero.Client.Battle
 
         [Tooltip("사망 애니 후 오브젝트가 사라지기까지 지연(초)")]
         private const float DeathLinger = 1.0f;
+
+        // ---- 사망 시 나가떨어지는 연출(몬스터 DeathFlight와 같은 문법, 방향만 반대) ----
+        // 아군은 오른쪽에서 맞으므로 <b>왼쪽(-x)</b>으로 날아간다. 몬스터 쪽 값(3.4·3.2·9·220)을 그대로 쓰면
+        // 화면 밖까지 크게 튀어 파티 자리가 휑해 보여, 아군은 조금 짧게·낮게 잡았다.
+        private const float DeathLaunchX = 2.6f;      // 뒤(왼쪽)로 날아가는 초기 속도(유닛/초)
+        private const float DeathLaunchY = 2.9f;      // 위로 솟는 초기 속도
+        private const float DeathGravity = 9f;        // 낙하 가속
+        private const float DeathSpin = 190f;         // 회전 속도(도/초)
+        private const float DeathFadeDelay = 0.35f;   // 이 시간 뒤부터 서서히 투명해진다
         private float _moveSpeed;
         private float _baseMoveSpeed = 3f;  // 패시브 제외 기본 이동속도(클래스)
 
@@ -570,13 +579,55 @@ namespace TaskbarHero.Client.Battle
             SoundManager.Sfx(SoundId.AllyDeath); // 아군 사망(사운드 정의서 §5.1)
             SendMessage("PlayDeathOnce", SendMessageOptions.DontRequireReceiver);
             if (_ctrl != null) _ctrl.OnAllyKilled(this);
-            StartCoroutine(DespawnAfter());
+            StartCoroutine(DeathFlight());
         }
 
-        /// <summary>사망 애니가 보이도록 잠깐 대기 후 오브젝트를 파괴한다.</summary>
-        private IEnumerator DespawnAfter()
+        /// <summary>
+        /// 사망 연출 — 몬스터 처치와 같은 문법으로 <b>뒤(왼쪽)로 포물선을 그리며 나가떨어지고</b> 회전하다
+        /// 서서히 사라진 뒤 파괴된다. 아군만 그 자리에서 스르륵 사라지면 "쓰러졌다"가 잘 읽히지 않는다.
+        /// <para>초상화는 이 시점에 이미 정지·흑백으로 고정되므로(<see cref="SkillCooldownUI"/>)
+        /// 시신이 날아가도 좌상단 초상화가 함께 날아가거나 비지 않는다.</para>
+        /// </summary>
+        private IEnumerator DeathFlight()
         {
-            yield return new WaitForSeconds(DeathLinger);
+            var parts = GetComponentsInChildren<SpriteRenderer>(true);
+            var baseColors = new Color[parts.Length];
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (parts[i] != null) baseColors[i] = parts[i].color;
+            }
+
+            float vx = -DeathLaunchX;   // 왼쪽으로(적에게 맞아 뒤로 밀려나는 방향)
+            float vy = DeathLaunchY;
+            float spin = DeathSpin * (Random.value < 0.5f ? -1f : 1f);
+            Quaternion baseRot = transform.rotation;
+            float t = 0f;
+
+            while (t < DeathLinger)
+            {
+                float dt = Time.deltaTime;
+                t += dt;
+
+                var p = transform.position;
+                p.x += vx * dt;
+                p.y += vy * dt;
+                vy -= DeathGravity * dt;   // 포물선
+                transform.position = p;
+                transform.rotation = baseRot * Quaternion.Euler(0f, 0f, spin * t);
+
+                if (t >= DeathFadeDelay)
+                {
+                    float k = 1f - Mathf.Clamp01((t - DeathFadeDelay) / Mathf.Max(0.01f, DeathLinger - DeathFadeDelay));
+                    for (int i = 0; i < parts.Length; i++)
+                    {
+                        var r = parts[i];
+                        if (r == null) continue;
+                        var c = baseColors[i];
+                        r.color = new Color(c.r, c.g, c.b, c.a * k);
+                    }
+                }
+                yield return null;
+            }
             Destroy(gameObject);
         }
 

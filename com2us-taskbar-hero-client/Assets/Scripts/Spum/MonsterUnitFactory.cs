@@ -42,6 +42,88 @@ public static class MonsterUnitFactory
     }
 
     // ══════════════════════════════════════════════════════════════════
+    //  무기 스윙 이펙트 색(MonsterSwingFxPalette)
+    // ══════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 저장된 몬스터 프리팹에 무기 스윙 이펙트 색을 심는다(<see cref="TaskbarHero.Client.Battle.MonsterSwingFxPalette"/>).
+    /// <para><paramref name="color"/>가 null이면 컴포넌트를 <b>떼어</b> 기본 불티색으로 되돌린다 —
+    /// 색을 지운 레시피가 옛 색을 남기지 않게 하기 위해서다.</para>
+    /// <para>런타임이 몬스터 코드로 색을 유추하지 않고 프리팹에 담긴 값을 읽으므로, 이 함수가
+    /// 프리팹을 만드는 두 경로(자동 빌더·CharacterDevScene)에서 모두 불려야 색이 갈라지지 않는다.</para>
+    /// </summary>
+    /// <returns>프리팹을 실제로 고쳤으면 true.</returns>
+    public static bool ApplySwingFxPalette(string assetPath, Color? color)
+    {
+#if UNITY_EDITOR
+        if (string.IsNullOrEmpty(assetPath))
+        {
+            return false;
+        }
+        var root = PrefabUtility.LoadPrefabContents(assetPath);
+        if (root == null)
+        {
+            return false;
+        }
+
+        bool changed = false;
+        try
+        {
+            var palette = root.GetComponent<TaskbarHero.Client.Battle.MonsterSwingFxPalette>();
+            if (color.HasValue)
+            {
+                if (palette == null)
+                {
+                    palette = root.AddComponent<TaskbarHero.Client.Battle.MonsterSwingFxPalette>();
+                    changed = true;
+                }
+                if (palette.BaseColor != color.Value)
+                {
+                    palette.SetBaseColor(color.Value);
+                    changed = true;
+                }
+            }
+            else if (palette != null)
+            {
+                UnityEngine.Object.DestroyImmediate(palette, true);
+                changed = true;
+            }
+
+            if (changed)
+            {
+                PrefabUtility.SaveAsPrefabAsset(root, assetPath);
+            }
+        }
+        finally
+        {
+            PrefabUtility.UnloadPrefabContents(root);
+        }
+        return changed;
+#else
+        return false;
+#endif
+    }
+
+    /// <summary>
+    /// 레시피가 정한 스윙 이펙트 색. 레시피에 <c>effectColor</c>가 있으면 그 값이고,
+    /// 없으면 <b>보스는 지역(Act) 컬러링</b>, 일반 몬스터는 null(기본 불티색)이다.
+    /// </summary>
+    public static Color? SwingFxColorFor(MonsterAppearanceRecipe recipe, int code)
+    {
+        var explicitColor = recipe != null ? recipe.EffectColorOrNull() : null;
+        if (explicitColor.HasValue)
+        {
+            return explicitColor;
+        }
+        if (!TaskbarHero.Client.Battle.MonsterSwingFxPalette.IsBossCode(code))
+        {
+            return null;
+        }
+        int act = TaskbarHero.Client.Battle.MonsterSwingFxPalette.ActOf(code);
+        return act > 0 ? TaskbarHero.Client.Battle.MonsterSwingFxPalette.ActColor(act) : (Color?)null;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
     //  레시피 검증(§6.4)
     // ══════════════════════════════════════════════════════════════════
 
@@ -444,7 +526,13 @@ public static class MonsterUnitFactory
             UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(unit.gameObject, scene);
 
             composer.ApplyToUnit(unit, elements);
-            return SaveUnitAsPrefab(composer, unit, code, prefabFolder, backupFolder, out error);
+            if (!SaveUnitAsPrefab(composer, unit, code, prefabFolder, backupFolder, out error))
+            {
+                return false;
+            }
+            // 저장 직후 스윙 이펙트 색을 심는다(레시피 effectColor, 없으면 보스는 지역 색).
+            ApplySwingFxPalette(PrefabPath(code, prefabFolder), SwingFxColorFor(recipe, code));
+            return true;
         }
         finally
         {

@@ -98,6 +98,9 @@ public partial class CharacterDevController : MonoBehaviour
     private int _selectedCode;
     private int _act = 1;
     private int _stage = 1;
+    // 무기 스윙 이펙트(궤적·불티)의 기준색. null이면 기본 불티색이다.
+    // 몬스터를 고를 때 레시피·저장된 프리팹에서 읽어 채우고, 저장 시 프리팹에 심는다.
+    private Color? _effectColor;
     private bool _batchOnlyMissing = true;
     private bool _busy;
     private readonly List<string> _log = new List<string>();
@@ -487,6 +490,10 @@ public partial class CharacterDevController : MonoBehaviour
         {
             return false;
         }
+
+        // 무기 스윙 이펙트 색을 프리팹에 심는다(씬에서 고른 값이 정본 — null이면 기본 불티색으로 되돌린다).
+        MonsterUnitFactory.ApplySwingFxPalette(
+            MonsterUnitFactory.PrefabPath(code, monsterPrefabFolder), _effectColor);
 
         // 저장 후 후처리 훅(N2) — 몬스터는 붙일 것이 없고, 아군 확장 시 여기에 얹는다.
         var saved = AssetDatabase.LoadAssetAtPath<GameObject>(
