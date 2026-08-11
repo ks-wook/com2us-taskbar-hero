@@ -41,11 +41,10 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Text _messageText;         // 결과/오류 안내(하단)
         [SerializeField] private RectTransform _listContent;        // 액티브 스킬 행 부모(위쪽 스크롤 콘텐츠)
         [SerializeField] private RectTransform _passiveListContent; // 패시브 스킬 행 부모(아래쪽 스크롤 콘텐츠)
-        // 액티브 스킬 장착 슬롯(최대 2). 아이콘/라벨/버튼 참조(에디터 빌더가 배선).
+        // 액티브 스킬 장착 슬롯(최대 2). 아이콘/버튼 참조(에디터 빌더가 배선).
+        // 스킬 이름 라벨은 두지 않는다 — 타일 2개를 붙여 좁게 두는 배치라 이름이 들어갈 자리가 없다.
         [SerializeField] private Image _equipSlotIcon0;
         [SerializeField] private Image _equipSlotIcon1;
-        [SerializeField] private Text _equipSlotLabel0;
-        [SerializeField] private Text _equipSlotLabel1;
         [SerializeField] private Button _equipSlotButton0;
         [SerializeField] private Button _equipSlotButton1;
         // hover 상세 툴팁(인벤토리 아이템 툴팁처럼 별도 UI로 스킬 상세 노출). 정적 계층으로 baked.
@@ -262,17 +261,28 @@ namespace TaskbarHero.Client.UI
         private const float CharNavY = 0f;            // 캐릭터 전환 줄
         private const float CharNavHeight = 72f;
         private const float NavArrowSize = 72f;
-        private const float NavPrevX = 61f;           // 이전(◀) 화살표 x — 글자 옆에 좁혀 붙인다
-        private const float NavNextX = ContentWidth - NavPrevX - NavArrowSize; // 다음(▶) 화살표 x(좌우 대칭)
+        // 인디케이터 글자 블록(◀ 직업 Lv.N · i/N ▶)은 줄 가운데에 그대로 두고, 화살표 <b>버튼</b>은
+        // 그 줄이 아니라 <b>한 줄 아래(윗줄=스킬 포인트·장착 슬롯 옆)</b> 좌우 끝에 놓는다 —
+        // 글자에도 ◀▶가 있어 버튼을 글자 옆에 붙이면 화살표가 두 번 겹쳐 보인다.
+        private const float CharIndicatorX = 141f;
+        private const float CharIndicatorWidth = 462f;
+        private const float NavArrowY = 127f;         // 화살표 버튼 y(CharNav 상단 기준, 아래로 +)
+        private const float NavPrevX = 29f;           // 이전(◀) 화살표 x — 내용 영역 왼쪽 끝
+        private const float NavNextX = 704f;          // 다음(▶) 화살표 x — 내용 영역 오른쪽 끝
 
         // 스킬 포인트 배너 + 장착 액티브 슬롯을 <b>한 줄에</b> 둔다. 목록을 둘로 나눈 만큼 위쪽에서 세로를
         // 아껴야 각 목록에 스킬 3개가 스크롤 없이 들어간다(따로 두면 한 줄당 약 90이 더 든다).
-        private const float TopRowY = 88f;
+        // 윗줄은 내용 영역 전체 폭이 아니라, 좌우에 놓인 캐릭터 전환 화살표 사이에 들어가도록 좁혀 가운데에 둔다.
+        private const float TopRowX = 63.55f;
+        private const float TopRowY = 92f;
+        private const float TopRowWidth = 616.98f;
         private const float TopRowHeight = 150f;
         private const float PointBannerWidth = 330f;  // 배너 폭(글자 길이에 맞춰 좁혔다)
         private const float PointBannerHeight = 76f;
-        private const float EquipAreaX = 352f;        // 배너 오른쪽에 붙는 장착 슬롯 블록
-        private const float EquipSlotUnitWidth = 196f; // 아이콘 타일(88) + 간격(8) + 이름(96) + 여백(4)
+        private const float EquipTitleX = 338.2f;     // "장착 액티브 스킬 (최대 2)" 라벨
+        private const float EquipTitleWidth = 282.81f;
+        private const float EquipAreaX = 352f;        // 배너 오른쪽에 붙는 장착 슬롯 블록(타일 시작 x)
+        private const float EquipSlotUnitWidth = 102.4f; // 아이콘 타일(88) + 간격(14.4) — 이름 라벨을 두지 않아 타일만 붙는다
 
         // ── 액티브/패시브 2분할 목록 영역 ──
         // 같은 목록에 섞여 있던 스킬을 <b>가로 구분선으로 위아래 두 영역</b>으로 나눈다(위=액티브, 아래=패시브).
@@ -316,17 +326,16 @@ namespace TaskbarHero.Client.UI
             TopLeft(area, 0f, CharNavY, ContentWidth, CharNavHeight);
 
             var prev = BuildNavArrow("PrevCharButton", area, "<", flip: true);
-            TopLeft(prev.rectTransform, NavPrevX, 0f, NavArrowSize, CharNavHeight);
+            TopLeft(prev.rectTransform, NavPrevX, NavArrowY, NavArrowSize, CharNavHeight);
             _prevButton = prev.gameObject.AddComponent<Button>();
             AddPunch(prev);
 
             _charIndicatorText = NewText("CharIndicator", area, "", 32, TextAnchor.MiddleCenter);
             _charIndicatorText.fontStyle = FontStyle.Bold;
-            float textX = NavPrevX + NavArrowSize + 8f;
-            TopLeft(_charIndicatorText.rectTransform, textX, 0f, NavNextX - 8f - textX, CharNavHeight);
+            TopLeft(_charIndicatorText.rectTransform, CharIndicatorX, 0f, CharIndicatorWidth, CharNavHeight);
 
             var next = BuildNavArrow("NextCharButton", area, ">", flip: false);
-            TopLeft(next.rectTransform, NavNextX, 0f, NavArrowSize, CharNavHeight);
+            TopLeft(next.rectTransform, NavNextX, NavArrowY, NavArrowSize, CharNavHeight);
             _nextButton = next.gameObject.AddComponent<Button>();
             AddPunch(next);
         }
@@ -365,7 +374,7 @@ namespace TaskbarHero.Client.UI
         private void BuildTopRow(RectTransform content)
         {
             var area = NewRect("TopRow", content);
-            TopLeft(area, 0f, TopRowY, ContentWidth, TopRowHeight);
+            TopLeft(area, TopRowX, TopRowY, TopRowWidth, TopRowHeight);
             BuildPointBanner(area);
             BuildEquipSlots(area);
         }
@@ -384,12 +393,12 @@ namespace TaskbarHero.Client.UI
             Stretch(_pointText.rectTransform);
         }
 
-        /// <summary>액티브 스킬 장착 슬롯 블록(최대 2). 라벨 + 슬롯 2개(아이콘·이름·클릭 해제). 윗줄 오른쪽.</summary>
+        /// <summary>액티브 스킬 장착 슬롯 블록(최대 2). 라벨 + 아이콘 타일 2개(클릭하면 해제). 윗줄 오른쪽.</summary>
         private void BuildEquipSlots(RectTransform row)
         {
             var label = NewText("EquipTitle", row, "장착 액티브 스킬 (최대 2)", 24, TextAnchor.MiddleLeft);
             label.color = new Color(0.8f, 0.85f, 0.95f);
-            TopLeft(label.rectTransform, EquipAreaX, 4f, ContentWidth - EquipAreaX, 30f);
+            TopLeft(label.rectTransform, EquipTitleX, 4f, EquipTitleWidth, 30f);
 
             for (int i = 0; i < MaxActiveSkills; i++)
             {
@@ -400,7 +409,8 @@ namespace TaskbarHero.Client.UI
         private const float EquipSlotTileSize = 88f;
         private const float EquipSlotTileY = 42f;   // 윗줄 안에서 타일 상단 y(제목 아래)
 
-        /// <summary>장착 슬롯 1칸(아이콘 타일 + 이름 + 클릭 시 해제).</summary>
+        /// <summary>장착 슬롯 1칸(아이콘 타일 + 클릭 시 해제). 스킬 이름은 붙이지 않는다(타일만 좁게 둔다 —
+        /// 어떤 스킬인지는 아이콘과 아래 목록의 '해제' 표시로 알 수 있다).</summary>
         private void BuildEquipSlot(RectTransform area, int index, float x)
         {
             var slotBg = NewImage($"EquipSlot{index}", area, slotNormal);
@@ -414,14 +424,9 @@ namespace TaskbarHero.Client.UI
             icon.rectTransform.offsetMax = new Vector2(-8f, -8f);
             icon.color = new Color(1f, 1f, 1f, 0f);
 
-            // 이름은 아이콘 타일 오른쪽에 붙되 타일 높이의 세로 중앙에 맞춘다.
-            var nameLabel = NewText("Name", area, "비었음", 22, TextAnchor.MiddleLeft);
-            nameLabel.color = new Color(0.7f, 0.72f, 0.8f);
-            TopLeft(nameLabel.rectTransform, x + EquipSlotTileSize + 8f, EquipSlotTileY, 96f, EquipSlotTileSize);
-
             var btn = slotBg.gameObject.AddComponent<Button>();
-            if (index == 0) { _equipSlotIcon0 = icon; _equipSlotLabel0 = nameLabel; _equipSlotButton0 = btn; }
-            else { _equipSlotIcon1 = icon; _equipSlotLabel1 = nameLabel; _equipSlotButton1 = btn; }
+            if (index == 0) { _equipSlotIcon0 = icon; _equipSlotButton0 = btn; }
+            else { _equipSlotIcon1 = icon; _equipSlotButton1 = btn; }
         }
 
         private const float ScrollbarWidth = 18f;
@@ -635,7 +640,8 @@ namespace TaskbarHero.Client.UI
             RefreshSkillList(chars);
         }
 
-        /// <summary>현재 캐릭터의 장착 액티브 스킬(equipped=1)을 2칸 슬롯에 반영한다(없으면 '비었음').</summary>
+        /// <summary>현재 캐릭터의 장착 액티브 스킬(equipped=1)을 2칸 슬롯에 반영한다.
+        /// 빈 칸은 아이콘을 투명하게 두어 빈 타일로 보이게 한다(이름 라벨은 두지 않는다).</summary>
         private void RefreshEquipSlots(List<CharacterDto> chars)
         {
             var equipped = EquippedActiveCodes(CurrentCharacter(chars));
@@ -644,30 +650,13 @@ namespace TaskbarHero.Client.UI
                 int code = i < equipped.Count ? equipped[i] : 0;
                 _equipSlotCodes[i] = code;
                 var icon = i == 0 ? _equipSlotIcon0 : _equipSlotIcon1;
-                var label = i == 0 ? _equipSlotLabel0 : _equipSlotLabel1;
-                if (code != 0)
+                if (icon == null)
                 {
-                    var sp = _iconDb != null ? _iconDb.Get(code) : null;
-                    if (icon != null)
-                    {
-                        icon.sprite = sp;
-                        icon.color = sp != null ? Color.white : new Color(1f, 1f, 1f, 0f);
-                    }
-                    if (label != null)
-                    {
-                        label.text = SkillName(code);
-                        label.color = Color.white;
-                    }
+                    continue;
                 }
-                else
-                {
-                    if (icon != null) icon.color = new Color(1f, 1f, 1f, 0f);
-                    if (label != null)
-                    {
-                        label.text = "비었음";
-                        label.color = new Color(0.7f, 0.72f, 0.8f);
-                    }
-                }
+                var sp = code != 0 && _iconDb != null ? _iconDb.Get(code) : null;
+                icon.sprite = sp;
+                icon.color = sp != null ? Color.white : new Color(1f, 1f, 1f, 0f);
             }
         }
 
@@ -1067,13 +1056,6 @@ namespace TaskbarHero.Client.UI
             }
             list.Sort();
             return list;
-        }
-
-        /// <summary>스킬 코드의 이름(마스터). 없으면 코드 표기.</summary>
-        private static string SkillName(int skillCode)
-        {
-            var db = MasterDataManager.Db;
-            return db != null && db.Skills.TryGetValue(skillCode, out var s) ? s.name : $"스킬 {skillCode}";
         }
 
         // ── 캐릭터 전환 ──
