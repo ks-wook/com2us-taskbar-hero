@@ -21,6 +21,7 @@ namespace TaskbarHero.Client.Battle
 
         private SpriteRenderer _sr;
         private float _baseScale = 1f;   // 지정 월드 너비에 맞춘 기준 스케일
+        private float _faceSign = 1f;    // 부모(캐릭터)의 좌우 반전 상쇄용 x 부호(-1이면 뒤집어 그린다)
         private Coroutine _anim;
 
         /// <summary>지정 캐릭터 위에 레벨업 배너 이미지를 생성해 애니메이션을 재생한다(재생 후 자동 파괴).
@@ -41,9 +42,13 @@ namespace TaskbarHero.Client.Battle
             float spriteW = sprite.bounds.size.x;
             float scale = spriteW > 0.001f && worldWidth > 0.001f ? worldWidth / spriteW : 1f;
 
-            // 피벗이 좌하단인 스프라이트(레벨업.png)도 중앙 정렬되도록 로컬 중심만큼 역보정한다(스케일 반영).
+            // 캐릭터는 바라보는 방향을 localScale.x 부호로 표현한다(SPUM 기본 스프라이트가 왼쪽을 보므로 오른쪽=음수).
+            // 그 자식으로 붙으면 배너 글자까지 좌우 반전되므로, 부모의 x 부호를 상쇄해 항상 정방향으로 그린다.
+            float faceSign = parent != null && parent.lossyScale.x < 0f ? -1f : 1f;
+
+            // 피벗이 좌하단인 스프라이트(레벨업.png)도 중앙 정렬되도록 로컬 중심만큼 역보정한다(스케일·반전 반영).
             Vector3 c = sprite.bounds.center;
-            go.transform.localPosition = new Vector3(-c.x * scale, localYOffset - c.y * scale, 0f);
+            go.transform.localPosition = new Vector3(-c.x * scale * faceSign, localYOffset - c.y * scale, 0f);
 
             var sr = go.GetComponent<SpriteRenderer>();
             sr.sprite = sprite;
@@ -52,6 +57,7 @@ namespace TaskbarHero.Client.Battle
 
             var banner = go.GetComponent<LevelUpBanner>();
             banner._baseScale = scale;
+            banner._faceSign = faceSign;
             banner.Begin();
         }
 
@@ -59,7 +65,7 @@ namespace TaskbarHero.Client.Battle
         private void Begin()
         {
             _sr = GetComponent<SpriteRenderer>();
-            transform.localScale = Vector3.one * (_baseScale * StartScale);
+            SetScale(StartScale);
             SetAlpha(1f);
             if (_anim != null)
             {
@@ -92,7 +98,7 @@ namespace TaskbarHero.Client.Battle
                 {
                     mul = 1f;
                 }
-                transform.localScale = Vector3.one * (_baseScale * mul);
+                SetScale(mul);
 
                 // 알파: FadeStart 이후 서서히 0으로(끝으로 갈수록 부드럽게)
                 float alpha = n < FadeStart ? 1f : Mathf.SmoothStep(1f, 0f, (n - FadeStart) / (1f - FadeStart));
@@ -106,6 +112,14 @@ namespace TaskbarHero.Client.Battle
 
             _anim = null;
             Destroy(gameObject);
+        }
+
+        /// <summary>기준 스케일에 배율을 곱해 적용한다. x에는 부모 반전 상쇄 부호(<see cref="_faceSign"/>)를 함께 곱해
+        /// 캐릭터가 어느 쪽을 보든 이미지가 정방향으로 보이게 한다.</summary>
+        private void SetScale(float mul)
+        {
+            float s = _baseScale * mul;
+            transform.localScale = new Vector3(s * _faceSign, s, s);
         }
 
         /// <summary>배너 이미지의 알파값만 갱신한다(fade out용).</summary>

@@ -55,6 +55,9 @@ namespace TaskbarHero.Client.Managers
 
         // ── 공개 API ──
 
+        /// <summary>모달이 현재 화면에 떠 있는지(뒤쪽 패널이 키 입력을 받으면 안 되는 상태인지).</summary>
+        public bool IsShowing => _content != null && _content.gameObject.activeSelf;
+
         /// <summary>'확인'만 있는 안내 모달을 표시한다. 확인 클릭 시 <paramref name="onOk"/> 실행.</summary>
         public void ShowOk(string title, string message, Action onOk = null)
         {

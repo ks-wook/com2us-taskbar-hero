@@ -164,6 +164,18 @@ namespace TaskbarHero.Client.UI
             // 이 창은 그 창들과 <b>동시에 열려 있을 수 있어</b> OnEnable만으로는 갱신 시점을 놓친다
             // (강화한 단계가 그대로 보이거나 판 아이템이 남아 있던 원인).
             Session.InventoryChanged += OnSessionInventoryChanged;
+            // 큐브에 올리거나 내린 아이템을 가방 격자에서 즉시 감추고/되돌리기 위해 등록 변화도 듣는다.
+            CubeRegisteredItems.Changed += OnCubeRegistrationChanged;
+        }
+
+        /// <summary>큐브 등록 칸의 내용이 바뀌었다 — 감출 아이템이 달라졌으므로 가방 격자만 다시 그린다.</summary>
+        private void OnCubeRegistrationChanged()
+        {
+            if (this == null || !gameObject.activeInHierarchy)
+            {
+                return;
+            }
+            RefreshGrid();
         }
 
         /// <summary>
@@ -314,6 +326,7 @@ namespace TaskbarHero.Client.UI
         private void OnDisable()
         {
             Session.InventoryChanged -= OnSessionInventoryChanged;
+            CubeRegisteredItems.Changed -= OnCubeRegistrationChanged;
             if (_portraitStage != null)
             {
                 _portraitStage.SetActive(false);
@@ -550,6 +563,13 @@ namespace TaskbarHero.Client.UI
             foreach (var item in bag)
             {
                 if (item == null)
+                {
+                    continue;
+                }
+                // 큐브 등록 칸에 올려 둔 아이템은 가방에서 감춘다. 등록은 서버에 없는 클라이언트 상태라
+                // Session.Bag에는 그대로 남아 있고, 그냥 그리면 같은 아이템이 큐브와 가방 양쪽에 보인다.
+                // 실행하지 않고 큐브를 닫으면 등록이 취소되어 여기서 다시 그려진다.
+                if (CubeRegisteredItems.Contains(item.itemId))
                 {
                     continue;
                 }

@@ -495,10 +495,14 @@ namespace TaskbarHero.Client.Battle
             var go = new GameObject("LevelUpGlow");
             go.SetActive(false); // 프레임 배정 후 활성화(OnEnable에서 Play 호출됨)
             go.transform.SetParent(target.transform, false);
-            go.transform.localScale = Vector3.one * scale;
-            // 좌하단 피벗 → 몸통 중심 정렬(스프라이트 로컬 중심만큼 역보정, 스케일 반영).
+
+            // 캐릭터는 바라보는 방향을 localScale.x 부호로 표현하므로(오른쪽=음수), 자식으로 붙이면 이펙트도 좌우 반전된다.
+            // 부모의 x 부호를 상쇄해 항상 정방향으로 그린다.
+            float faceSign = target.transform.lossyScale.x < 0f ? -1f : 1f;
+            go.transform.localScale = new Vector3(scale * faceSign, scale, scale);
+            // 좌하단 피벗 → 몸통 중심 정렬(스프라이트 로컬 중심만큼 역보정, 스케일·반전 반영).
             Vector3 c = sp0.bounds.center;
-            go.transform.localPosition = new Vector3(-c.x * scale, levelUpYOffset - c.y * scale, 0f);
+            go.transform.localPosition = new Vector3(-c.x * scale * faceSign, levelUpYOffset - c.y * scale, 0f);
 
             var sr = go.AddComponent<SpriteRenderer>();
             sr.sortingLayerID = sortingLayerId;

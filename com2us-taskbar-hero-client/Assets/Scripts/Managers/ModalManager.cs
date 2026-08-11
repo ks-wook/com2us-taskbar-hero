@@ -18,6 +18,9 @@ namespace TaskbarHero.Client.Managers
 
         private ModalController _modal;
 
+        /// <summary>모달이 떠 있는지. 뒤쪽 패널이 Tab·Enter 같은 키 입력을 삼키지 않게 하는 데 쓴다.</summary>
+        public bool IsShowing => _modal != null && _modal.IsShowing;
+
         private void Awake()
         {
             if (Instance != null && Instance != this)

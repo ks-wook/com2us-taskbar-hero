@@ -9,7 +9,7 @@ namespace TaskbarHero.Client.UI
 {
     /// <summary>
     /// 로그인 패널 컨트롤러. 입력값 검증 후 AccountServer(/api/auth/login)에 로그인 요청을 보내고,
-    /// 결과를 에러 문구로 표시한다. 회원가입 버튼은 회원가입 UI로 전환한다.
+    /// 결과는 공용 모달(<see cref="ModalManager"/>)로 안내한다. 회원가입 버튼은 회원가입 UI로 전환한다.
     /// </summary>
     public class LoginPanelController : MonoBehaviour
     {
@@ -17,7 +17,6 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private InputField passwordInput;
         [SerializeField] private Button loginButton;
         [SerializeField] private Button signUpButton;
-        [SerializeField] private Text errorText;
 
         private CanvasGroup _panelGroup; // 로딩 중 로그인 UI 전체를 숨기고 입력을 차단하기 위한 그룹
         private string _lastEmail = string.Empty; // 로그인 요청에 쓴 이메일(성공 시 자동 로그인용으로 저장)
@@ -56,18 +55,23 @@ namespace TaskbarHero.Client.UI
 
         private void OnEnable()
         {
-            SetError(string.Empty);
             SetLoginUiShown(true); // 패널이 다시 표시될 때 로그인 UI를 확실히 노출(숨김 상태 잔존 방지)
             FocusInput(emailInput);  // 열자마자 바로 타이핑할 수 있게 아이디 칸에 커서를 둔다
         }
 
         /// <summary>키보드만으로 로그인할 수 있게 한다 — <b>Tab</b>은 아이디↔비밀번호 이동,
         /// <b>Enter</b>는 로그인 요청. 새 Input System에는 Tab 기본 내비게이션 바인딩이 없어 직접 처리한다.
-        /// 입력이 막힌 상태(로딩 중)에는 반응하지 않는다.</summary>
+        /// 입력이 막힌 상태(로딩 중)나 모달이 떠 있는 동안에는 반응하지 않는다.</summary>
         private void Update()
         {
             var kb = Keyboard.current;
             if (kb == null || _panelGroup == null || !_panelGroup.interactable)
+            {
+                return;
+            }
+
+            // 안내 모달(로그인 실패 등)이 떠 있는 동안에는 뒤쪽 패널이 키를 먹지 않게 한다.
+            if (ModalManager.Instance != null && ModalManager.Instance.IsShowing)
             {
                 return;
             }
@@ -123,7 +127,6 @@ namespace TaskbarHero.Client.UI
                 return;
             }
 
-            SetError(string.Empty);
             SetInteractable(false);
             SetLoginUiShown(false);           // 로그인 UI 숨김 → 로딩 스피너만 노출
             LoadingOverlay.Instance?.Show();   // 완료(씬 전환/오류)까지 스피너 표시 + 입력 차단
@@ -144,14 +147,11 @@ namespace TaskbarHero.Client.UI
             Debug.Log($"[LoginPanel] 로그인 성공. userId={response.userId} → 게임 데이터 로드");
 
             // 이후 진입 연쇄(세이브 로드 → 캐릭터 유무 → 오프라인 정산 → 씬 전환)는 자동 로그인과 공유한다.
+            // 진행 문구는 로딩 스피너가 대신하므로 로그로만 남긴다(로그인 UI는 이 구간에서 숨겨져 있다).
             GameEntryFlow.Begin(
-                onProgress: SetError,
+                onProgress: progress => Debug.Log($"[LoginPanel] {progress}"),
                 onFailed: OnEntryFailed,
-                onEnteringScene: () =>
-                {
-                    SetInteractable(true);
-                    SetError(string.Empty);
-                });
+                onEnteringScene: () => SetInteractable(true));
         }
 
         /// <summary>게임 진입 실패(세이브 로드 오류·씬 매니저 없음): 로그인 UI를 되살리고 안내한다.</summary>
@@ -160,7 +160,6 @@ namespace TaskbarHero.Client.UI
             LoadingOverlay.Instance?.Hide();
             SetLoginUiShown(true);
             SetInteractable(true);
-            SetError(string.Empty);
             ShowModal("데이터 로드 실패",
                 error != null ? ErrorMessages.ToKorean(error) : "게임 진입에 실패했습니다.");
             Debug.LogWarning($"[LoginPanel] 게임 진입 실패: {error}");
@@ -172,22 +171,19 @@ namespace TaskbarHero.Client.UI
             LoadingOverlay.Instance?.Hide();
             SetLoginUiShown(true);
             SetInteractable(true);
-            SetError(string.Empty);
             ShowModal("로그인 실패", ErrorMessages.ToKorean(error));
             Debug.LogWarning($"[LoginPanel] 로그인 실패: {error}");
         }
 
-        /// <summary>공용 모달로 안내한다(매니저가 없으면 인라인 문구로 폴백).</summary>
+        /// <summary>공용 모달로 안내한다(매니저 배선 누락 시에는 표시할 수단이 없으므로 로그로 남긴다).</summary>
         private void ShowModal(string title, string message)
         {
             if (ModalManager.Instance != null)
             {
                 ModalManager.Instance.ShowConfirm(title, message);
+                return;
             }
-            else
-            {
-                SetError(message);
-            }
+            Debug.LogError($"[LoginPanel] ModalManager가 없어 안내를 표시하지 못했습니다: {title} - {message}", this);
         }
 
         private void OnSignUpClicked()
@@ -195,14 +191,6 @@ namespace TaskbarHero.Client.UI
             if (UIManager.Instance != null)
             {
                 UIManager.Instance.ShowSignUp();
-            }
-        }
-
-        private void SetError(string message)
-        {
-            if (errorText != null)
-            {
-                errorText.text = message;
             }
         }
 

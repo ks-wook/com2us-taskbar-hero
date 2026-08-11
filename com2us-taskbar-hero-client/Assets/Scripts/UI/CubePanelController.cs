@@ -161,6 +161,21 @@ namespace TaskbarHero.Client.UI
             InventoryLoader.ReloadBag(RefreshIfOpen, OnBagLoadError);
         }
 
+        /// <summary>
+        /// 패널을 닫을 때 등록을 모두 취소한다 — <b>실행하지 않고 닫으면 아무 일도 일어나지 않은 것</b>이므로,
+        /// 올려 뒀던 아이템은 가방으로 되돌아가야 한다(등록은 서버에 없는 클라이언트 상태다).
+        /// 감춰 뒀던 아이템은 <see cref="CubeRegisteredItems.Clear"/>가 가방에 알리는 즉시 다시 나타난다.
+        /// </summary>
+        private void OnDisable()
+        {
+            _selCombine.Clear();
+            _selDismantle.Clear();
+            _selEnhance = 0;
+            _selRecipe = 0;
+            ClearEnhanceResult();
+            CubeRegisteredItems.Clear();
+        }
+
         /// <summary>가방 조회 완료 후 목록을 다시 그린다(그 사이 패널이 닫혔으면 아무것도 하지 않는다).</summary>
         private void RefreshIfOpen()
         {
@@ -534,6 +549,24 @@ namespace TaskbarHero.Client.UI
                 case Mode.Dismantle: BuildDismantleContent(); break;
                 case Mode.Craft: BuildCraftContent(); break;
                 case Mode.Enhance: BuildEnhanceContent(); break;
+            }
+            PublishRegisteredItems();
+        }
+
+        /// <summary>
+        /// 지금 등록 칸에 올라가 있는 아이템 id를 가방에 알린다 — 가방은 그 아이템을 격자에서 감춘다
+        /// (<see cref="CubeRegisteredItems"/>). 화면을 다시 그리는 모든 경로가 <see cref="RebuildContent"/>를
+        /// 지나므로 여기 한 곳에서만 알리면 등록·해제·탭 전환·실행 후가 모두 덮인다.
+        /// <para>제작 탭은 등록 칸이 없으므로(레시피를 고르는 방식) 감출 아이템도 없다.</para>
+        /// </summary>
+        private void PublishRegisteredItems()
+        {
+            switch (_mode)
+            {
+                case Mode.Combine: CubeRegisteredItems.Set(_selCombine); break;
+                case Mode.Dismantle: CubeRegisteredItems.Set(_selDismantle); break;
+                case Mode.Enhance: CubeRegisteredItems.Set(new[] { _selEnhance }); break;
+                default: CubeRegisteredItems.Clear(); break;
             }
         }
 

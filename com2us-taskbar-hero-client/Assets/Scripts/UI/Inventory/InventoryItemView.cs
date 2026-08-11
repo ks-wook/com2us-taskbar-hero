@@ -272,7 +272,9 @@ namespace TaskbarHero.Client.UI
             {
                 if (_originSlot != null)
                 {
-                    _originSlot.SetItem(this); // 등록은 원본을 소비하지 않는다 — 제자리로 되돌린다
+                    // 일단 원래 칸으로 되돌린다. 등록이 받아들여지면 이어지는 격자 갱신이 이 아이콘을
+                    // 치우고(가방에서 감춤), 거절되면 그대로 제자리에 남는다(CubeRegisteredItems 참조).
+                    _originSlot.SetItem(this);
                 }
                 var cube = cubeSlot.GetComponentInParent<CubePanelController>();
                 if (cube != null)
