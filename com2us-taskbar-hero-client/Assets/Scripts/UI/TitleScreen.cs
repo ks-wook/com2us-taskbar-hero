@@ -226,6 +226,7 @@ namespace TaskbarHero.Client.UI
             }
 
             // 로그인 이전에 접속 서버 선택 UI를 노출하고, '확인' 후 로그인 UI를 활성화한다.
+            // QA 빌드는 접속처가 원격으로 고정이라 이 화면이 뜨지 않고 곧바로 로그인 UI로 넘어간다.
             ServerSelectPanelController.Show(ShowLogin);
         }
 

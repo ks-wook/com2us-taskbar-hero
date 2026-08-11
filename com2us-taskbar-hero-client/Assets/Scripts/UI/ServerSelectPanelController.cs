@@ -10,8 +10,10 @@ namespace TaskbarHero.Client.UI
     /// <summary>
     /// 로그인 UI보다 먼저 노출되는 '접속 서버 선택' 화면. <b>빌드 옵션(접속 환경) 버튼</b>(Dev / QA)과
     /// 선택된 환경의 계정·게임 서버 주소 표시, 호스트를 직접 입력하는 칸, 하단의 '확인' 버튼으로 구성된다.
-    /// 기본 선택은 빌드에 구워진 환경(<see cref="ServerEnvironment.BuildDefault"/> — QA 빌드는 QA)이며,
+    /// 기본 선택은 빌드에 구워진 환경(<see cref="ServerEnvironment.BuildDefault"/>)이며,
     /// 여기서 바꾼 환경은 <b>그 실행에만</b> 적용된다(저장하지 않는다 — 이유는 <see cref="ServerEnvironment"/> 참조).
+    /// <b>QA 빌드에서는 이 화면 자체가 뜨지 않는다</b> — 접속처가 QA(원격)로 고정이므로 <see cref="Show"/>가
+    /// 곧바로 다음 단계(로그인)로 넘긴다.
     /// '확인'을 누르면 환경과 접속 호스트가 확정(NetworkManager에 적용)되고, 이 화면은 파괴되며 로그인 UI가 활성화된다.
     /// 런타임에 자체 Canvas·EventSystem을 코드로 구성한다(타이틀 단계에는 EventSystem이 없으므로 필요 시 생성).
     /// </summary>
@@ -30,9 +32,24 @@ namespace TaskbarHero.Client.UI
         private Image _qaButtonImage;
         private Text _addressText;
 
-        /// <summary>접속 서버 선택 화면을 생성·표시한다. onConfirmed는 '확인' 후(서버 확정·화면 파괴 직후) 1회 호출된다.</summary>
+        /// <summary>
+        /// 접속 서버 선택 화면을 생성·표시한다. onConfirmed는 '확인' 후(서버 확정·화면 파괴 직후) 1회 호출된다.
+        /// <para><b>접속처가 고정된 빌드</b>(QA — <see cref="ServerEnvironment.AllowServerSelection"/>가 false)에서는
+        /// 화면을 만들지 않고 onConfirmed를 즉시 호출한다. 접속처는 이미 <see cref="NetworkManager"/>가 기동 시
+        /// 구워진 환경 프리셋으로 확정해 뒀으므로, 여기서 더 확정할 것이 없다.</para>
+        /// </summary>
         public static void Show(Action onConfirmed)
         {
+            if (!ServerEnvironment.AllowServerSelection)
+            {
+                var env = NetworkManager.Instance != null
+                    ? NetworkManager.Instance.CurrentEnvironment
+                    : ServerEnvironment.BuildDefault;
+                Debug.Log($"[ServerSelect] 접속처 고정 빌드({ServerEnvironment.DisplayNameOf(env)}) — 서버 선택 화면을 건너뛴다");
+                onConfirmed?.Invoke();
+                return;
+            }
+
             var go = new GameObject("ServerSelectPanel");
             var c = go.AddComponent<ServerSelectPanelController>();
             c._onConfirmed = onConfirmed;

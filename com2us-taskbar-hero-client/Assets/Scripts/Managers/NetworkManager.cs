@@ -76,11 +76,16 @@ namespace TaskbarHero.Client.Managers
             DontDestroyOnLoad(gameObject);
 
             // 인스펙터 값이 아니라 빌드 옵션(환경) 프리셋을 정본으로 삼고, 그 환경에 저장된 접속 호스트가 있으면 적용한다.
+            // 단 접속처가 고정된 빌드(QA)에서는 저장된 호스트 override를 적용하지 않는다 — 그 빌드는 서버 선택
+            // 화면도 뜨지 않으므로, 옛 빌드에서 저장된 호스트가 남아 있으면 되돌릴 방법 없이 원격이 아닌 곳으로 붙는다.
             ApplyEnvironment(ServerEnvironment.BuildDefault);
-            string savedHost = PlayerPrefs.GetString(HostPrefKey(_environment), string.Empty);
-            if (!string.IsNullOrEmpty(savedHost))
+            if (ServerEnvironment.AllowServerSelection)
             {
-                ApplyServerHost(savedHost);
+                string savedHost = PlayerPrefs.GetString(HostPrefKey(_environment), string.Empty);
+                if (!string.IsNullOrEmpty(savedHost))
+                {
+                    ApplyServerHost(savedHost);
+                }
             }
 
             Debug.Log($"[NET] 접속 환경={ServerEnvironment.DisplayNameOf(_environment)}(빌드 옵션)" +
