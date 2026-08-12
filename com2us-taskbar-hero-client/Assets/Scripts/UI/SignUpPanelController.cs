@@ -19,6 +19,10 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Button signUpButton;
         [SerializeField] private Button backButton;
 
+        /// <summary>비밀번호 최소 길이. 서버(<c>AuthService.MinPasswordLength</c> = 6)와 같은 값이며,
+        /// 미달이면 요청을 보내지 않고 여기서 막는다(왕복 없이 즉시 안내 + 서버가 다시 검증하는 이중 방어).</summary>
+        private const int MinPasswordLength = 6;
+
         private CanvasGroup _panelGroup; // 로딩 중 회원가입 UI 전체를 숨기고 입력을 차단하기 위한 그룹
 
         private void Awake()
@@ -150,6 +154,13 @@ namespace TaskbarHero.Client.UI
             if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(nickname))
             {
                 ShowModal("회원가입", "이메일, 비밀번호, 닉네임을 모두 입력하세요.");
+                return;
+            }
+
+            // 서버도 같은 규칙으로 거르지만(ErrorCode.InvalidRequest = 1006), 실패가 뻔한 요청은 보내지 않고 여기서 안내한다.
+            if (password.Length < MinPasswordLength)
+            {
+                ShowModal("회원가입", $"비밀번호는 {MinPasswordLength}자 이상이어야 합니다.");
                 return;
             }
 
