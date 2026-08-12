@@ -18,8 +18,6 @@ namespace TaskbarHero.ClientEditor
         private const string ArtDir = "Assets/Art/UI/Inventory";
         // 패널 본체 배경 프레임(인벤토리·룬 패널과 같은 공용 프레임).
         private const string PanelBgPath = "Assets/Art/UI/ui_bg_2.png";
-        // 캐릭터 전환 화살표는 인벤토리 공용 아트가 아니라 Assets/Art/UI에 있다.
-        private const string CharNavArrowPath = "Assets/Art/UI/화살표버튼.png";
         // 버튼 공용 아트(모달·출석부·메일 등과 동일).
         private const string ButtonSpritePath = "Assets/Art/UI/pixel_rpg_button.png";
         private const string PrefabPath = "Assets/Prefabs/UI/SkillPanel.prefab";
@@ -56,8 +54,6 @@ namespace TaskbarHero.ClientEditor
             so.FindProperty("panelBackground").objectReferenceValue = LoadSpriteAt(PanelBgPath);
             so.FindProperty("slotNormal").objectReferenceValue = LoadSprite("ui_slot_normal");
             so.FindProperty("slotHighlight").objectReferenceValue = LoadSprite("ui_slot_highlight");
-            // 캐릭터 전환 화살표도 EditorConstruct 전에 배선해야 계층에 함께 구워진다.
-            so.FindProperty("charNavArrow").objectReferenceValue = LoadSpriteAt(CharNavArrowPath);
             // 하단 '스킬 초기화' 버튼 아트(다른 패널 버튼과 같은 공용 아트, 9-slice).
             so.FindProperty("buttonSprite").objectReferenceValue = LoadSpriteAt(ButtonSpritePath);
             so.ApplyModifiedPropertiesWithoutUndo();

@@ -1222,11 +1222,14 @@ namespace TaskbarHero.Client.UI
             RefreshGrid(); // 선택 캐릭터 클래스 변경 → 다른 클래스 장비 X 표시 갱신
         }
 
-        /// <summary>스킬 레벨업 패널을 연다(UIManager 위임). 없으면 무시.</summary>
+        /// <summary>스킬 레벨업 패널을 연다(UIManager 위임). 없으면 무시.
+        /// 스킬 패널에는 캐릭터 전환이 없으므로, <b>가방에서 보고 있던 캐릭터</b>를 열기 전에 알려 준다
+        /// (Show 뒤에 알리면 이전 캐릭터로 한 번 그려졌다 바뀐다).</summary>
         private void OnOpenSkillPanel()
         {
             if (UIManager.Instance != null)
             {
+                SkillPanelController.RequestCharacter(_selectedCharacter);
                 UIManager.Instance.Show(UIManager.PanelType.Skill);
             }
             else

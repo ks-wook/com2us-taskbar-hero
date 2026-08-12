@@ -11,7 +11,9 @@ namespace TaskbarHero.Client.UI
 {
     /// <summary>
     /// 캐릭터 스킬 레벨업 오버레이 패널(growth 기획서 §5.1·5.2). 인벤토리의 '스킬 레벨업' 버튼으로 진입한다.
-    /// 계층은 에디터 빌드 시 정적 부분(캐릭터 네비·스킬포인트 배너·장착 슬롯·액티브/패시브 두 목록·초기화 버튼)이
+    /// <b>보여 주는 캐릭터는 가방에서 고른 캐릭터를 그대로 따른다</b> — 이 패널에는 캐릭터 전환 버튼이 없고,
+    /// 진입 화면이 <see cref="RequestCharacter"/>로 알려 준 파티 인덱스를 그린다.
+    /// 계층은 에디터 빌드 시 정적 부분(캐릭터 표시줄·스킬포인트 배너·장착 슬롯·액티브/패시브 두 목록·초기화 버튼)이
     /// 생성돼 프리팹에 저장되고, 표시될 때마다 세션 세이브(<see cref="Session.GameData"/>)의 실데이터로
     /// 스킬 목록·레벨·사용 가능 스킬 포인트를 채운다. 스킬 포인트는 저장값이 아니라 캐릭터 레벨에서 파생한다
     /// (사용 가능 = 레벨 비례 총량 − 그 캐릭터가 이미 투자한 스킬 레벨 합). 서버가 최종 확정한다(서버 권위).
@@ -25,16 +27,12 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite panelBackground; // ui_bg_2(인벤토리·룬 패널과 공용 프레임)
         [SerializeField] private Sprite slotNormal;      // ui_slot_normal
         [SerializeField] private Sprite slotHighlight;   // ui_slot_highlight
-        [Tooltip("캐릭터 전환 버튼 아트(Assets/Art/UI/화살표버튼.png). 오른쪽을 가리키는 그림이라 이전 버튼은 좌우 반전해 쓴다. 없으면 슬롯 배경 + '<'/'>' 글자로 폴백.")]
-        [SerializeField] private Sprite charNavArrow;    // 화살표버튼
         [Tooltip("하단 '스킬 초기화' 버튼 아트(Assets/Art/UI/pixel_rpg_button.png, 9-slice). 없으면 슬롯 배경으로 폴백.")]
         [SerializeField] private Sprite buttonSprite;    // pixel_rpg_button
 
         [Header("구성 참조 (에디터 빌더가 배선 — 직접 수정 불필요)")]
-        [SerializeField] private Text _charIndicatorText;   // 직업 Lv.N · 캐릭터 i/N
+        [SerializeField] private Text _charIndicatorText;   // 직업 Lv.N
         [SerializeField] private Text _pointText;           // 스킬 포인트 available / total
-        [SerializeField] private Button _prevButton;
-        [SerializeField] private Button _nextButton;
         [SerializeField] private Button _dimButton;
         [SerializeField] private Button _resetButton;
         [SerializeField] private Text _resetLabel;
@@ -76,6 +74,11 @@ namespace TaskbarHero.Client.UI
         private RectTransform _rootRect;
         private int _selectedCharacter;      // 현재 보고 있는 파티 캐릭터(0-based)
         private int _partyCount = 1;
+
+        /// <summary>진입 화면(가방)이 지정한 파티 캐릭터(0-based). 이 패널에는 캐릭터 전환 버튼이 없으므로
+        /// <b>어떤 캐릭터의 스킬을 보여 줄지는 전적으로 이 값이 정한다.</b> 패널 인스턴스는 UIManager가
+        /// 재사용하며 열릴 때마다 진입 화면이 다시 지정하므로, 값은 정적으로 들고 있다가 표시 시점에 반영한다.</summary>
+        private static int _requestedCharacter = -1;
         private SkillIconDatabase _iconDb;
         private bool _busy;                  // 레벨업/초기화 요청 진행 중(중복 요청 방지)
 
@@ -114,6 +117,15 @@ namespace TaskbarHero.Client.UI
             }
             SetMessage(string.Empty);
             RefreshFromSession();
+        }
+
+        /// <summary>이 패널을 여는 화면(가방)이 <b>지금 보고 있는 캐릭터</b>를 미리 알려 준다.
+        /// 스킬 패널은 캐릭터를 스스로 바꾸지 않으므로 이 값이 곧 표시 대상이다.
+        /// <see cref="UIManager.Show"/>보다 <b>먼저</b> 호출해야 첫 표시(<c>OnEnable</c>)부터 그 캐릭터로 그려진다
+        /// (뒤에 부르면 이전 캐릭터로 한 번 그려졌다가 바뀐다).</summary>
+        public static void RequestCharacter(int partyIndex)
+        {
+            _requestedCharacter = Mathf.Max(0, partyIndex);
         }
 
         /// <summary>에디터 빌드 전용: 전체 정적 계층을 생성하고 참조를 배선한다(프리팹 저장용).</summary>
@@ -258,17 +270,12 @@ namespace TaskbarHero.Client.UI
         // ── 내용 영역(ContentArea) 안의 배치 ──
         // 모든 y는 ContentArea <b>좌상단 기준, 아래로 +</b>다(TopLeft 규약). 세로 합이 ContentHeight(1024)에
         // 정확히 맞도록 잡아, 어느 줄도 프레임 테두리를 넘지 않는다.
-        private const float CharNavY = 0f;            // 캐릭터 전환 줄
+        private const float CharNavY = 0f;            // 캐릭터 표시줄
         private const float CharNavHeight = 72f;
-        private const float NavArrowSize = 72f;
-        // 인디케이터 글자 블록(◀ 직업 Lv.N · i/N ▶)은 줄 가운데에 그대로 두고, 화살표 <b>버튼</b>은
-        // 그 줄이 아니라 <b>한 줄 아래(윗줄=스킬 포인트·장착 슬롯 옆)</b> 좌우 끝에 놓는다 —
-        // 글자에도 ◀▶가 있어 버튼을 글자 옆에 붙이면 화살표가 두 번 겹쳐 보인다.
-        private const float CharIndicatorX = 141f;
-        private const float CharIndicatorWidth = 462f;
-        private const float NavArrowY = 127f;         // 화살표 버튼 y(CharNav 상단 기준, 아래로 +)
-        private const float NavPrevX = 29f;           // 이전(◀) 화살표 x — 내용 영역 왼쪽 끝
-        private const float NavNextX = 704f;          // 다음(▶) 화살표 x — 내용 영역 오른쪽 끝
+        // 캐릭터 표시 글자('직업 Lv.N')는 줄 전체 폭을 써 가운데 정렬한다 —
+        // 캐릭터 전환은 가방에서 하므로 이 줄에는 화살표 버튼을 두지 않는다.
+        private const float CharIndicatorX = 0f;
+        private const float CharIndicatorWidth = ContentWidth;
 
         // 스킬 포인트 배너 + 장착 액티브 슬롯을 <b>한 줄에</b> 둔다. 목록을 둘로 나눈 만큼 위쪽에서 세로를
         // 아껴야 각 목록에 스킬 3개가 스크롤 없이 들어간다(따로 두면 한 줄당 약 90이 더 든다).
@@ -318,56 +325,16 @@ namespace TaskbarHero.Client.UI
         private static readonly Color PassiveHeaderBg = new Color(0.09f, 0.15f, 0.26f, 0.95f);
         private static readonly Color PassiveListBg = new Color(0.05f, 0.08f, 0.14f, 0.6f);
 
-        /// <summary>캐릭터 전환 네비게이션(◀ 직업 Lv.N · 캐릭터 i/N ▶). 내용 영역 맨 윗줄이며
-        /// 화살표는 블록 양 끝이 아니라 글자 옆으로 좁혀 붙인다(좌우 대칭).</summary>
+        /// <summary>지금 보고 있는 캐릭터 표시줄('직업 Lv.N'). 내용 영역 맨 윗줄 가운데.
+        /// 캐릭터 전환은 가방에서 하므로 이 줄에는 글자만 둔다(전환 화살표 없음).</summary>
         private void BuildCharacterNav(RectTransform content)
         {
             var area = NewRect("CharNav", content);
             TopLeft(area, 0f, CharNavY, ContentWidth, CharNavHeight);
 
-            var prev = BuildNavArrow("PrevCharButton", area, "<", flip: true);
-            TopLeft(prev.rectTransform, NavPrevX, NavArrowY, NavArrowSize, CharNavHeight);
-            _prevButton = prev.gameObject.AddComponent<Button>();
-            AddPunch(prev);
-
             _charIndicatorText = NewText("CharIndicator", area, "", 32, TextAnchor.MiddleCenter);
             _charIndicatorText.fontStyle = FontStyle.Bold;
             TopLeft(_charIndicatorText.rectTransform, CharIndicatorX, 0f, CharIndicatorWidth, CharNavHeight);
-
-            var next = BuildNavArrow("NextCharButton", area, ">", flip: false);
-            TopLeft(next.rectTransform, NavNextX, NavArrowY, NavArrowSize, CharNavHeight);
-            _nextButton = next.gameObject.AddComponent<Button>();
-            AddPunch(next);
-        }
-
-        /// <summary>캐릭터 전환 화살표 버튼 이미지를 만든다. 화살표 아트가 배선돼 있으면 그것을 쓰고
-        /// (오른쪽 방향 그림이라 이전 버튼은 <paramref name="flip"/>으로 좌우 반전), 없으면 종전처럼
-        /// 슬롯 배경 + 글자(<paramref name="fallbackLabel"/>)로 폴백한다.</summary>
-        private Image BuildNavArrow(string name, RectTransform parent, string fallbackLabel, bool flip)
-        {
-            if (charNavArrow == null)
-            {
-                var box = NewImage(name, parent, slotNormal);
-                Stretch(NewText(name + "Label", box.rectTransform, fallbackLabel, 40, TextAnchor.MiddleCenter).rectTransform);
-                return box;
-            }
-            var img = NewImage(name, parent, charNavArrow);
-            // 9-slice 테두리가 없는 아트라 Simple로 그리고 비율을 지켜 왜곡을 막는다.
-            img.preserveAspect = true;
-            if (flip)
-            {
-                // 좌우 반전은 스케일로 처리한다(반전용 아트를 따로 두지 않는다).
-                img.rectTransform.localScale = new Vector3(-1f, 1f, 1f);
-            }
-            return img;
-        }
-
-        /// <summary>캐릭터 전환 버튼에 클릭 피드백(잠깐 커졌다 작아짐)을 붙인다.
-        /// <see cref="ButtonPunchScale"/>은 Awake의 현재 스케일을 기준으로 배율을 곱하므로
-        /// 좌우 반전된(scale.x = -1) 이전 버튼도 반전 상태를 유지한 채 커졌다 돌아온다.</summary>
-        private static ButtonPunchScale AddPunch(Image img)
-        {
-            return img.gameObject.AddComponent<ButtonPunchScale>();
         }
 
         /// <summary>스킬 포인트 배너(왼쪽)와 장착 액티브 슬롯 블록(오른쪽)을 한 줄에 배치한다.</summary>
@@ -608,12 +575,36 @@ namespace TaskbarHero.Client.UI
             // 마지막으로 둔 자리는 기억했다가 다시 열 때 그 자리에 띄운다(스킬 행·스크롤 동작은 그대로).
             PanelDragMove.Attach(panelRoot, "Skill");
 
-            if (_prevButton != null) _prevButton.onClick.AddListener(OnPrevCharacter);
-            if (_nextButton != null) _nextButton.onClick.AddListener(OnNextCharacter);
+            RemoveLegacyNavArrows();
+
             if (_dimButton != null) _dimButton.onClick.AddListener(Close);
             if (_resetButton != null) _resetButton.onClick.AddListener(OnResetSkills);
             if (_equipSlotButton0 != null) _equipSlotButton0.onClick.AddListener(() => OnUnequipSlot(0));
             if (_equipSlotButton1 != null) _equipSlotButton1.onClick.AddListener(() => OnUnequipSlot(1));
+        }
+
+        /// <summary>캐릭터 전환 화살표를 두던 시절의 프리팹 보정 — 계층에 구워진 두 버튼을 지운다.
+        /// 캐릭터 선택은 가방이 정하므로 이 패널에는 전환 수단이 없어야 한다(빌더로 프리팹을 다시 구우면
+        /// 애초에 만들어지지 않지만, 굽기 전 프리팹으로도 화살표가 보이지 않게 한다).</summary>
+        private void RemoveLegacyNavArrows()
+        {
+            var nav = transform.Find("PanelRoot/ContentArea/CharNav");
+            if (nav == null)
+            {
+                return;
+            }
+            DestroyChild(nav, "PrevCharButton");
+            DestroyChild(nav, "NextCharButton");
+        }
+
+        /// <summary>이름이 일치하는 자식 오브젝트가 있으면 제거한다(없으면 아무 일도 하지 않는다).</summary>
+        private static void DestroyChild(Transform parent, string childName)
+        {
+            var child = parent.Find(childName);
+            if (child != null)
+            {
+                Destroy(child.gameObject);
+            }
         }
 
         // ── 세션 실데이터 연동 ──
@@ -633,6 +624,11 @@ namespace TaskbarHero.Client.UI
 
             var chars = Characters;
             _partyCount = chars != null && chars.Count > 0 ? chars.Count : 1;
+            // 진입 화면(가방)이 고른 캐릭터를 그대로 따른다. 지정이 없으면(다른 경로로 열린 경우) 첫 캐릭터.
+            if (_requestedCharacter >= 0)
+            {
+                _selectedCharacter = _requestedCharacter;
+            }
             _selectedCharacter = Mathf.Clamp(_selectedCharacter, 0, _partyCount - 1);
 
             RefreshHeader(chars);
@@ -660,7 +656,7 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>선택 캐릭터의 인디케이터(직업·레벨·슬롯)와 스킬 포인트 배너를 갱신한다.</summary>
+        /// <summary>선택 캐릭터의 표시줄(직업 Lv.N)과 스킬 포인트 배너를 갱신한다.</summary>
         private void RefreshHeader(List<CharacterDto> chars)
         {
             CharacterDto cur = CurrentCharacter(chars);
@@ -676,7 +672,7 @@ namespace TaskbarHero.Client.UI
                 {
                     string cls = db != null && db.Classes.TryGetValue(cur.classCode, out var cm)
                         ? cm.name : $"직업 {cur.classCode}";
-                    _charIndicatorText.text = $"◀  {cls} Lv.{cur.level}  ·  {_selectedCharacter + 1} / {_partyCount}  ▶";
+                    _charIndicatorText.text = $"{cls} Lv.{cur.level}";
                 }
             }
 
@@ -1056,50 +1052,6 @@ namespace TaskbarHero.Client.UI
             }
             list.Sort();
             return list;
-        }
-
-        // ── 캐릭터 전환 ──
-
-        /// <summary>이전 파티 캐릭터로 전환(순환).</summary>
-        private void OnPrevCharacter()
-        {
-            PlayNavPunch(_prevButton);
-            if (_partyCount <= 1)
-            {
-                return;
-            }
-            _selectedCharacter = (_selectedCharacter - 1 + _partyCount) % _partyCount;
-            SetMessage(string.Empty);
-            RefreshFromSession();
-        }
-
-        /// <summary>다음 파티 캐릭터로 전환(순환).</summary>
-        private void OnNextCharacter()
-        {
-            PlayNavPunch(_nextButton);
-            if (_partyCount <= 1)
-            {
-                return;
-            }
-            _selectedCharacter = (_selectedCharacter + 1) % _partyCount;
-            SetMessage(string.Empty);
-            RefreshFromSession();
-        }
-
-        /// <summary>캐릭터 전환 버튼의 클릭 피드백(커졌다 작아짐)을 재생한다.
-        /// 화면 갱신은 기다리지 않고 바로 진행하므로(전환 반응이 늦으면 답답하다) 연출만 겹쳐 돌린다.
-        /// 파티가 1명이라 전환이 없을 때도 눌린 느낌은 주도록 이 호출은 조기 반환보다 앞에 둔다.</summary>
-        private static void PlayNavPunch(Button button)
-        {
-            if (button == null)
-            {
-                return;
-            }
-            var punch = button.GetComponent<ButtonPunchScale>();
-            if (punch != null)
-            {
-                punch.Play();
-            }
         }
 
         // ── 서버 연동(레벨업 / 초기화) ──

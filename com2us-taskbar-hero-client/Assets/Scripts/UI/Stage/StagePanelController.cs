@@ -205,9 +205,9 @@ namespace TaskbarHero.Client.UI
                 canvas = gameObject.AddComponent<Canvas>();
             }
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            // 하단 HUD(10)보다 아래에 둬서 스테이지 선택 중에도 하단 아이콘 줄이 가려지지 않게 한다
-            // (클릭도 sortingOrder가 높은 HUD가 먼저 받으므로 딤이 버튼을 가로채지 않는다).
-            canvas.sortingOrder = UiSortingOrder.PanelBelowHud;
+            // 다른 기능 패널(인벤토리·메일·거래소 등)과 같은 띠에 둔다 — 아래에 두면 하단 메뉴 버튼 줄(HUD 15)과
+            // 좌측 상단 아군 스킬 상태 UI(씬에 구워진 SkillUICanvas 10)에 지도·지역 창이 가려진다.
+            canvas.sortingOrder = UiSortingOrder.Panel;
 
             var scaler = gameObject.GetComponent<CanvasScaler>();
             if (scaler == null)
