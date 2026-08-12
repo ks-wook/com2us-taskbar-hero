@@ -1361,8 +1361,8 @@ CREATE TABLE gacha_master (
 INSERT INTO gacha_master (gacha_code, name, banner_image, is_active, open_at, close_at, sort_order,
                           cost_currency_code, cost_single, cost_multi, multi_count, multi_guaranteed_grade,
                           pickup_item_code) VALUES
-    -- 픽업(한정): 2026-08-03 00:00 KST ~ 2026-08-17 00:00 KST (14일). 종료는 미포함(now < close_at).
-    (60002, '성검 엑스칼리버 픽업', 'gacha_banner_pickup_31151', 1, 1785682800, 1786892400, 1, 1, 60000, 540000, 10, 3, 31151),
+    -- 픽업(한정): 2026-08-03 00:00 KST ~ 2026-10-31 00:00 KST (89일). 종료는 미포함(now < close_at).
+    (60002, '성검 엑스칼리버 픽업', 'gacha_banner_pickup_31151', 1, 1785682800, 1793372400, 1, 1, 60000, 540000, 10, 3, 31151),
     -- 상시: 기간 없음
     (60001, '상시 뽑기',            'gacha_banner_normal',        1,          0,          0, 2, 1, 50000, 450000, 10, 3,     0);
 -- sort_order: 한정(픽업)을 앞(1), 상시를 뒤(2)에 노출한다.

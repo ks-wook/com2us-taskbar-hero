@@ -479,7 +479,7 @@ erDiagram
 ### gacha_master
 
 - **역할**: 가챠(뽑기) 정의. **한 행이 하나의 배너**이며 노출 스위치·기간으로 "지금 돌릴 수 있는 배너"를 정의한다(서버 시각 판정). 1연·10연 API의 입력이며 가챠 자체는 저장하지 않는다(골드 차감·아이템 지급 모두 `player_item`, 이력은 `player_gacha_pull`).
-- **정의 데이터**: `gacha_code`·`name`·`banner_image`·**노출 조건**(`is_active`·`open_at`·`close_at`·`sort_order`)·`cost_currency_code`·`cost_single`(1연 비용)·`cost_multi`(10연 묶음 비용)·`multi_count`(현재 10)·`multi_guaranteed_grade`(10연 보장 최소 등급, 0=없음)·`pickup_item_code`(픽업 대상 선언, 0=상시 배너). 등급 가중치·지급 후보·천장 규칙은 각각 자식 테이블로 분리한다(JSON 컬럼 금지 규칙). 확정 배너 2종 — `60001` 상시(기간 없음, 5등급 슬롯 = 전설 장비 20종)·`60002` 성검 엑스칼리버 픽업(**한정 14일**, 5등급 슬롯 = `31151` 1종이라 그 배너의 전설은 항상 픽업 아이템). **픽업 = 한정이므로 `pickup_item_code`≠0인 배너는 `close_at`≠0 필수**이며, 기간이 끝난 행은 과거 뽑기 기록이 참조하므로 지우지 않는다.
+- **정의 데이터**: `gacha_code`·`name`·`banner_image`·**노출 조건**(`is_active`·`open_at`·`close_at`·`sort_order`)·`cost_currency_code`·`cost_single`(1연 비용)·`cost_multi`(10연 묶음 비용)·`multi_count`(현재 10)·`multi_guaranteed_grade`(10연 보장 최소 등급, 0=없음)·`pickup_item_code`(픽업 대상 선언, 0=상시 배너). 등급 가중치·지급 후보·천장 규칙은 각각 자식 테이블로 분리한다(JSON 컬럼 금지 규칙). 확정 배너 2종 — `60001` 상시(기간 없음, 5등급 슬롯 = 전설 장비 20종)·`60002` 성검 엑스칼리버 픽업(**한정 89일**, 5등급 슬롯 = `31151` 1종이라 그 배너의 전설은 항상 픽업 아이템). **픽업 = 한정이므로 `pickup_item_code`≠0인 배너는 `close_at`≠0 필수**이며, 기간이 끝난 행은 과거 뽑기 기록이 참조하므로 지우지 않는다.
 
 ### gacha_grade_weight
 
