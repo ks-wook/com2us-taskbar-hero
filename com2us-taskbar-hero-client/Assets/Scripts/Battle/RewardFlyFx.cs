@@ -42,6 +42,15 @@ namespace TaskbarHero.Client.Battle
             return TargetProvider != null ? TargetProvider() : null;
         }
 
+        /// <summary>아직 날아가는 중인(대기 중 포함) 보상 오브 수.</summary>
+        private static int _flying;
+
+        /// <summary>
+        /// 보상 오브가 하나라도 날아가는 중인지. <b>연출이 끝나는 시점을 밖에서 알 수 있게</b> 공개한다 —
+        /// 하단 메뉴가 접혀 있을 때 잠깐 띄운 가방 아이콘을 언제 다시 감출지 HUD가 이 값으로 판단한다.
+        /// </summary>
+        public static bool IsFlying => _flying > 0;
+
         private Canvas _canvas;
         private RectTransform _root;
         private readonly List<Image> _pool = new List<Image>();
@@ -68,6 +77,9 @@ namespace TaskbarHero.Client.Battle
                 return;
             }
             EnsureInstance();
+            // 대기(delay) 구간도 "연출 중"으로 센다 — 시차로 날리는 오브가 아직 출발하지 않았을 뿐이므로,
+            // 여기서 세지 않으면 첫 오브와 둘째 오브 사이에 IsFlying이 잠깐 false가 되어 목표가 사라진다.
+            _flying++;
             _instance.StartCoroutine(_instance.FlyRoutine(icon, tint, fromScreen, target, delay));
         }
 
@@ -100,10 +112,26 @@ namespace TaskbarHero.Client.Battle
             if (_instance == this)
             {
                 _instance = null;
+                // 파괴로 멈춘 코루틴은 finally를 타지 않으므로 진행 수를 여기서 비운다
+                // (남겨 두면 IsFlying이 영원히 true가 되어 HUD가 가방 아이콘을 못 감춘다).
+                _flying = 0;
             }
         }
 
         private IEnumerator FlyRoutine(Sprite icon, Color tint, Vector2 fromScreen, RectTransform target, float delay)
+        {
+            // try/finally로 감싸 <b>어느 경로로 끝나든</b> 진행 수를 되돌린다(목표가 사라져 중간에 빠지는 경우 포함).
+            try
+            {
+                yield return FlyBody(icon, tint, fromScreen, target, delay);
+            }
+            finally
+            {
+                if (_flying > 0) _flying--;
+            }
+        }
+
+        private IEnumerator FlyBody(Sprite icon, Color tint, Vector2 fromScreen, RectTransform target, float delay)
         {
             if (delay > 0f)
             {

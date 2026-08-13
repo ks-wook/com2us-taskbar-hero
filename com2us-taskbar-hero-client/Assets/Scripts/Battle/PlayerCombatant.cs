@@ -64,14 +64,30 @@ namespace TaskbarHero.Client.Battle
         private Skill _chargeSkill;
         public bool IsCharging => _charging;
 
-        /// <summary>돌진 자세를 최소 이만큼은 유지한다(초). 적이 이미 사거리 안이라 돌진 이동 거리가 0인
-        /// **제자리 발동**에서는, 이 하한이 없으면 자세 진입(애니메이터 트랜지션)이 끝나기도 전에
-        /// 종료 처리돼 이펙트만 나오고 애니메이션이 보이지 않는다.</summary>
-        private const float MinChargeMotion = 0.45f;
+        /// <summary>
+        /// 방패에 <b>부딪힌 뒤</b> 자세를 정리하기까지의 시간(초). 짧게 끊어야 "부딪혀서 멈췄다"로 읽힌다 —
+        /// 예전처럼 이펙트 길이만큼 자세를 유지하면 이미 충돌했는데도 계속 밀고 나가는 그림이 남는다.
+        /// </summary>
+        private const float ChargeImpactWrapUpSeconds = 0.12f;
 
-        /// <summary>방패 돌진이 적을 밀어내는 범위 = 공격 사거리 + 이 값(유닛). 사거리 안에서 데미지를 받는
-        /// 대상뿐 아니라 그 바로 뒤에 몰려 있던 적들까지 방패에 밀려 함께 날아가도록 조금 넓게 잡는다.</summary>
+        /// <summary>방패 돌진이 적을 쓸어 담는 범위 = 공격 사거리 + 이 값(유닛). 정면의 대상뿐 아니라
+        /// 그 바로 뒤에 몰려 있던 적들까지 방패에 부딪혀 함께 맞고 날아가도록 조금 넓게 잡는다.</summary>
         private const float ChargeShoveExtraRange = 1.8f;
+
+        /// <summary>방패 돌진 전 <b>뒤로 도약하는</b> 거리(유닛). 제자리에서 튀어나가는 것보다 준비 동작이 있어야
+        /// 앞으로 나가는 순간이 크게 읽힌다. 뒤 행 아군과의 간격(<c>rowSpacingX</c> 1.6)보다 작게 잡아
+        /// 물러나면서 뒷사람과 겹치지 않게 한다.</summary>
+        private const float ChargeWindupDistance = 1.2f;
+
+        /// <summary>뒤로 도약하는 데 걸리는 시간(초). 도약이 읽힐 만큼은 주되, 전투 흐름이 끊기지 않게 짧게 잡는다.</summary>
+        private const float ChargeWindupSeconds = 0.34f;
+
+        /// <summary>뒤로 도약할 때 솟구치는 정점 높이(유닛). 뒤로 가는 거리와 한 벌로 맞춰야 포물선이 자연스럽다.</summary>
+        private const float ChargeWindupJumpHeight = 0.7f;
+
+        private float _chargeWindup;    // 남은 준비 동작(뒤로 물러남) 시간. 0보다 크면 아직 돌진 전이다
+        private float _windupApplied;   // 지금 위치에 반영돼 있는 물러남 오프셋
+        private float _chargeStartX;    // 물러나기 <b>전</b>의 x — 돌진은 최소한 여기까지는 되돌아온다
 
         // ---- 근접 lunge(찔러 들어갔다 복귀) ----
         // 제자리 스윙은 "때렸다"가 약하게 읽힌다. 평타마다 0.1초 앞으로 파고들었다 돌아오면 체감이 확 다르다.
@@ -101,14 +117,34 @@ namespace TaskbarHero.Client.Battle
 
         private const float FrostNovaFreezeSeconds = 0.5f;
         private const float FrostNovaFreezeRadius = 3.2f;
+
+        /// <summary>
+        /// 전(全)스킬 광역 캐스터(마법사)의 휩쓸기 판정 세로 여유(월드 유닛, 중심 기준 ±).
+        /// 이펙트 스프라이트는 얇은 프레임(높이 0.4 남짓)이 많아 세로를 그림 그대로 쓰면 몸 높이가 조금만
+        /// 어긋나도 빠진다. 적은 사실상 한 줄로 서므로(스폰 세로 분산 ±0.09) 이 정도 여유면 줄 안의 적을 모두 덮는다.
+        /// </summary>
+        private const float CasterSweepHalfHeight = 0.9f;
+
+        /// <summary>
+        /// 원거리 관통 스킬(정조준 사격)의 휩쓸기 판정 세로 여유(월드 유닛, 중심 기준 ±).
+        /// 궤적 그림이 얇아 세로를 그림 그대로 쓰면 몸 높이가 조금만 어긋나도 빠지므로 캐스터와 같은 여유를 둔다.
+        /// </summary>
+        private const float RangedSweepHalfHeight = 0.9f;
+
+        /// <summary>전스킬 광역 캐스터의 이펙트가 대상보다 짧을 때, 대상 뒤까지 더 뻗게 할 여유(월드 유닛).</summary>
+        private const float CasterSweepOvershoot = 1.2f;
+
+        /// <summary>전스킬 광역 캐스터의 이펙트를 앞으로 늘릴 수 있는 최대 배율. 그림이 늘어나 보이지 않도록 상한을 둔다.</summary>
+        private const float CasterSweepMaxStretch = 2f;
         private const float LightningFlashSeconds = 0.09f;
         private const float DecalWidthStrike = 1.6f;
         private const float DecalWidthSlam = 2.4f;
         private static readonly Color LightningFlashColor = new Color(1f, 1f, 1f, 0.35f); // 상주 창이라 옅게
 
         private bool _chargeImpacted;  // 이번 돌진의 타격을 이미 예약했는지(중복 데미지 방지)
-        private float _chargeElapsed;  // 돌진 시작 후 경과 시간
-        private float _chargeMotion;   // 이번 돌진의 자세 유지 시간(이펙트 길이와 최소 시간 중 큰 값)
+        private float _chargeElapsed;  // 돌진(준비 동작 이후) 시작 후 경과 시간
+        private float _chargeEndAt;    // 이 경과 시간에 돌진을 끝낸다(충돌 전에는 무한 — 충돌해야 정해진다)
+        private GameObject _chargeFx;  // 돌진 중 두르고 있는 방패 이펙트(충돌 시 즉시 치운다)
 
         private string _name = "Ally";
         private long _atk;
@@ -143,6 +179,27 @@ namespace TaskbarHero.Client.Battle
         private const float DeathFadeDelay = 0.35f;   // 이 시간 뒤부터 서서히 투명해진다
         private float _moveSpeed;
         private float _baseMoveSpeed = 3f;  // 패시브 제외 기본 이동속도(클래스)
+
+        // ---- 좌상단 아군 HP바 juice(고스트 바 · 피격 흔들림 · 붉은 점멸) ----
+        // 연출 상태를 <b>아군 쪽에</b> 둔다 — 바를 그리는 <see cref="SkillCooldownUI"/>는 파티 재구성 때 통째로
+        // 다시 만들어지므로, 상태를 UI에 두면 그 순간 연출이 끊긴다(적 HP바가 상태를 <see cref="MonsterUnit"/>에
+        // 두는 것과 같은 이유). 수치는 적 HP바와 같은 값을 써서 아군·적 바가 같은 문법으로 읽히게 한다.
+        private const float HpGhostHoldSeconds = 0.18f;   // 깎인 직후 고스트를 이만큼 그대로 둔다(방금 잃은 양 노출)
+        private const float HpGhostCatchUpPerSec = 1.4f;  // 그 뒤 비율/초로 현재 체력까지 따라 내려온다
+        private const float HpBarShakeSeconds = 0.16f;    // 피격 시 바가 흔들리는 시간
+        private const float HpBarFlashSeconds = 0.22f;    // 피격 시 바가 붉게 물들었다 돌아오는 시간
+
+        private float _hpGhostRatio = 1f;
+        private float _hpGhostHold;
+        private float _hpBarShakeTimer;
+        private float _hpBarFlashTimer;
+
+        /// <summary>HP바 고스트(지연) 비율 0~1 — 현재 체력 비율보다 크면 그 차이가 "방금 깎인 양"이다.</summary>
+        public float HpGhostRatio => _hpGhostRatio;
+        /// <summary>피격 직후 HP바를 흔드는 강도 0~1(시간이 지나며 0으로 감쇠).</summary>
+        public float HpBarShake01 => HpBarShakeSeconds > 0f ? Mathf.Clamp01(_hpBarShakeTimer / HpBarShakeSeconds) : 0f;
+        /// <summary>피격 직후 HP바를 붉게 물들이는 강도 0~1(시간이 지나며 0으로 감쇠).</summary>
+        public float HpBarFlash01 => HpBarFlashSeconds > 0f ? Mathf.Clamp01(_hpBarFlashTimer / HpBarFlashSeconds) : 0f;
 
         /// <summary>아군 현재 체력.</summary>
         public long Hp => _hp;
@@ -562,11 +619,45 @@ namespace TaskbarHero.Client.Battle
         public void TakeDamage(long dmg)
         {
             if (_dead) return;
+            if (dmg > 0)
+            {
+                // HP바 연출 시작 — 고스트를 잠깐 붙들어 방금 잃은 양을 남기고, 바를 흔들며 붉게 물들인다.
+                _hpGhostHold = HpGhostHoldSeconds;
+                _hpBarShakeTimer = HpBarShakeSeconds;
+                _hpBarFlashTimer = HpBarFlashSeconds;
+            }
             _hp -= dmg;
             if (_hp <= 0)
             {
                 _hp = 0;
                 Die();
+            }
+        }
+
+        /// <summary>
+        /// HP바 연출 상태를 진행한다 — 고스트 바가 <see cref="HpGhostHoldSeconds"/> 동안 멈춰 방금 깎인 양을
+        /// 보여준 뒤 현재 체력까지 내려오고, 흔들림·붉은 점멸 강도가 시간에 따라 0으로 감쇠한다.
+        /// <para><b>사망·일시정지와 무관하게 돌고 unscaled 시간을 쓴다</b> — 정지 중에 붉은 점멸이 굳거나,
+        /// 히트스톱(timeScale 감속) 동안 0.2초짜리 연출이 몇 배로 늘어지면 안 된다. 전사한 뒤에도 계속 돌아야
+        /// 마지막 한 방으로 바가 쭉 빠지는 것이 보인다.</para>
+        /// </summary>
+        private void TickHpBarJuice(float dt)
+        {
+            if (_hpBarShakeTimer > 0f) _hpBarShakeTimer -= dt;
+            if (_hpBarFlashTimer > 0f) _hpBarFlashTimer -= dt;
+
+            float current = _maxHp > 0 ? Mathf.Clamp01((float)_hp / _maxHp) : 0f;
+            if (_hpGhostHold > 0f)
+            {
+                _hpGhostHold -= dt;
+            }
+            else if (_hpGhostRatio > current)
+            {
+                _hpGhostRatio = Mathf.MoveTowards(_hpGhostRatio, current, HpGhostCatchUpPerSec * dt);
+            }
+            if (_hpGhostRatio < current)
+            {
+                _hpGhostRatio = current; // 회복으로 현재가 더 높아지면 즉시 맞춘다(고스트는 감소 전용 연출)
             }
         }
 
@@ -633,6 +724,9 @@ namespace TaskbarHero.Client.Battle
 
         private void Update()
         {
+            // HP바 연출은 사망·일시정지와 무관하게 먼저 진행한다(마지막 한 방의 연출이 끝까지 보이게).
+            TickHpBarJuice(Time.unscaledDeltaTime);
+
             if (_dead) return;
             if (_ctrl == null || _ctrl.IsPaused) return;
 
@@ -934,11 +1028,12 @@ namespace TaskbarHero.Client.Battle
             ScheduleLifesteal(delay, dmg);
         }
 
-        /// <summary>광역 데미지 + 흡혈. 회복량은 대상 1기분 피해 기준이다(적중 수만큼 배로 늘리지 않는다).</summary>
+        /// <summary>광역 데미지 + 흡혈. 회복량은 대상 1기분 피해 기준이다(적중 수만큼 배로 늘리지 않는다).
+        /// <paramref name="knockbackAll"/>가 true면 맞은 적 <b>전부</b>가 밀려난다(방패 돌진 — 밀치는 것이 곧 스킬).</summary>
         private void DealAreaDamage(float delay, long dmg, bool crit, string label, Vector3 center, float radius,
-                                    bool bigHit = false, float knockback = 0f)
+                                    bool bigHit = false, float knockback = 0f, bool knockbackAll = false)
         {
-            _ctrl.DealAreaDamageAfter(delay, dmg, crit, label, center, radius, bigHit, knockback);
+            _ctrl.DealAreaDamageAfter(delay, dmg, crit, label, center, radius, bigHit, knockback, knockbackAll);
             ScheduleLifesteal(delay, dmg);
         }
 
@@ -1033,7 +1128,13 @@ namespace TaskbarHero.Client.Battle
             {
                 case FrostNovaSkillCode:
                 {
-                    Vector3 center = _allSkillsAoe ? SelfEffectPos(sk.offset) : TargetOrForwardPos();
+                    if (_allSkillsAoe)
+                    {
+                        // 전스킬 광역 캐스터(마법사)는 휩쓸기 판정이 데미지와 빙결을 함께 처리한다
+                        // (얼음이 닿은 적만 언다) — 여기서 별도 원 판정으로 얼리면 그림과 어긋난다.
+                        break;
+                    }
+                    Vector3 center = TargetOrForwardPos();
                     _ctrl.FreezeEnemiesNear(hitDelay, center, FrostNovaFreezeRadius, FrostNovaFreezeSeconds);
                     break;
                 }
@@ -1137,29 +1238,54 @@ namespace TaskbarHero.Client.Battle
                 }
                 else if (_allSkillsAoe && sk.effect != null)
                 {
-                    // 캐스터 전(全)스킬 광역(마법사): 이펙트를 **자기 위치 기준**으로 띄우고(대상 위치가 아님)
-                    // 이펙트 크기(EffectRadius) 내 모든 적에게 데미지. 몬스터가 이미 죽었어도 이펙트는 무조건 나간다.
+                    // 캐스터 전(全)스킬 광역(마법사): 이펙트를 **자기 위치 기준**으로 쏘고(대상 위치가 아님),
+                    // 그 이펙트가 앞으로 뻗어 나가며 <b>닿은 적을 모두</b> 때린다(휩쓸기 판정).
+                    // 몬스터가 이미 죽었어도 이펙트는 무조건 나간다.
+                    //
+                    // 시전 시점의 이펙트 크기를 반경으로 쓰는 원 판정(DealAreaDamage)은 쓸 수 없다 —
+                    // 마법사 이펙트는 시전자 손끝의 작은 불씨(반경 0.2 남짓)로 시작해 프레임이 지나며 앞으로
+                    // 자라는 그림이라, 시전 순간 크기로 재면 판정이 시전자 발밑에만 생겨 **아무도 맞지 않는다**
+                    // (파이어볼이 허공을 치는 것처럼 보이던 원인).
                     if (_castHold)
                         SendMessage("PlayCastHold", motion, SendMessageOptions.DontRequireReceiver);
                     else
                         PlayAttackAnim();
                     Vector3 center = SelfEffectPos(sk.offset);
                     var fx = SpawnEffectAt(sk.effect, center, sk.scale);
-                    DealAreaDamage(hitDelay, dmg, crit, label, center, EffectRadius(fx), bigHit: true,
-                        knockback: MonsterUnit.SkillKnockback);
+                    StretchCasterEffectToTarget(fx, center);
+                    // 프로스트 노바는 같은 판정으로 빙결까지 처리한다(얼음이 닿은 적만 언다).
+                    float freeze = sk.code == FrostNovaSkillCode ? FrostNovaFreezeSeconds : 0f;
+                    _ctrl.DealSweepDamage(fx, dmg, crit, label, CasterSweepHalfHeight, bigHit: true,
+                        knockback: MonsterUnit.SkillKnockback, freezeSeconds: freeze);
+                    ScheduleLifesteal(hitDelay, dmg);
                     _busyTimer = motion;
                 }
                 else if (_ranged && sk.effect != null && _ctrl.MonsterTransform != null)
                 {
-                    // 원거리(레인저): 스킬 이펙트를 투사체로 발사(자기 위치 → 대상). 도달 시 데미지.
+                    // 원거리(레인저): 스킬 이펙트를 투사체로 발사(자기 위치 → 대상).
                     PlayAttackAnim();
                     Vector3 origin = transform.position + Vector3.up * _ctrl.EffectYOffset;
                     var fx = Instantiate(sk.effect, origin, Quaternion.identity);
                     if (sk.scale > 0f && sk.scale != 1f) fx.transform.localScale *= sk.scale; // 이펙트 크기 배율(정조준·다중 사격 2배 등)
                     var proj = fx.GetComponent<ProjectileEffect>();
                     if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
-                    proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
-                                () => DealDamage(0f, dmg, crit, label, bigHit: true, knockback: MonsterUnit.SkillKnockback));
+
+                    if (_aoeSkillCodes.Contains(sk.code))
+                    {
+                        // 광역(관통) 지정 스킬: 대상 한 기만 맞히는 대신, <b>날아가는 이펙트가 훑고 지나간 적을
+                        // 모두</b> 1회씩 맞힌다(정조준 사격). 판정을 그려진 궤적에 맡기므로 관통 사거리·굵기를
+                        // 따로 정하지 않아도 그림과 어긋나지 않는다.
+                        _ctrl.DealSweepDamage(fx, dmg, crit, label, RangedSweepHalfHeight, bigHit: true,
+                            knockback: MonsterUnit.SkillKnockback);
+                        ScheduleLifesteal(hitDelay, dmg);
+                        proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset, null);
+                    }
+                    else
+                    {
+                        // 단일 대상: 종전대로 도달 시점에 대상에게만 데미지.
+                        proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
+                                    () => DealDamage(0f, dmg, crit, label, bigHit: true, knockback: MonsterUnit.SkillKnockback));
+                    }
                     _busyTimer = motion;
                 }
                 else
@@ -1205,8 +1331,10 @@ namespace TaskbarHero.Client.Battle
                 var proj = fx.GetComponent<ProjectileEffect>();
                 if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
                 string label = $"[{_name}] → 몬스터";
+                // 기본공격은 <b>명중하는 순간 투사체가 사라진다</b>(화살과 같은 규칙) — 남은 프레임을 이어
+                // 재생하면 맞은 자리에서 불길이 더 번지는 것처럼 보여 한 대 때린 시점이 흐려진다.
                 proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
-                            () => DealDamage(0f, dmg, crit, label));
+                            () => DealDamage(0f, dmg, crit, label), stopOnArrive: true);
                 _busyTimer = _ctrl.BasicHitDelay;
             }
             else if (_ranged && _arrowPrefab != null)
@@ -1257,27 +1385,77 @@ namespace TaskbarHero.Client.Battle
             _chargeSkill.timer = 0f;
             _chargeImpacted = false;
             _chargeElapsed = 0f;
-            // 자세 유지 시간은 이펙트 길이에 맞추되, 애니메이터 트랜지션이 보이도록 하한을 둔다.
-            _chargeMotion = Mathf.Max(MinChargeMotion, EffectDuration(_chargeSkill.effect));
+            // 충돌하기 전까지는 시간 제한을 두지 않는다 — 자세가 보이는 시간은 준비 동작(뒤로 도약)이 보장한다.
+            _chargeEndAt = float.MaxValue;
 
-            // 이펙트를 본인에게 두른다(자식 부착 → 돌진 중 함께 이동)
+            // 준비 동작부터 시작한다 — 제자리에서 바로 튀어나가지 않고 <b>살짝 뒤로 물러섰다가</b> 돌진한다.
+            // 이펙트와 개시음은 물러남이 끝나고 앞으로 튀어나가는 순간에 터뜨린다(그때가 이 스킬의 시작점이다).
+            _chargeWindup = ChargeWindupSeconds;
+            _windupApplied = 0f;
+            _chargeStartX = transform.position.x;
+            SendMessage("PlayChargeDash", SendMessageOptions.DontRequireReceiver); // 물러나는 동안 자세를 잡는다
+            // 물러남을 <b>뒤로 도약</b>으로 보여 준다 — x는 여기서, y 포물선은 애니메이터가 같은 시간 동안 그린다.
+            // 시간·높이를 함께 넘겨 도약 연출 수치가 이 스킬 상수들과 한자리에 모이게 한다(Vector2 = 시간, 높이).
+            SendMessage("PlayBackJump", new Vector2(ChargeWindupSeconds, ChargeWindupJumpHeight),
+                SendMessageOptions.DontRequireReceiver);
+            return true;
+        }
+
+        /// <summary>
+        /// 물러남이 끝나고 <b>앞으로 튀어나가는 순간</b> — 방패 이펙트를 두르고 개시음을 낸다.
+        /// 이펙트는 자기 자식으로 붙여 돌진 중 함께 따라오게 한다.
+        /// </summary>
+        private void BeginChargeDash()
+        {
             if (_chargeSkill.effect != null)
             {
-                var fx = Instantiate(_chargeSkill.effect, transform, false);
-                fx.transform.localPosition = new Vector3(0f, _ctrl.EffectYOffset, 0f);
+                _chargeFx = Instantiate(_chargeSkill.effect, transform, false);
+                _chargeFx.transform.localPosition = new Vector3(0f, _ctrl.EffectYOffset, 0f);
             }
             SoundManager.Sfx(BattleSounds.SkillFor(_chargeSkill.code)); // 돌진 개시음(§5.2)
-            SendMessage("PlayChargeDash", SendMessageOptions.DontRequireReceiver);
-            return true;
+            _chargeElapsed = 0f; // 자세 유지 시간은 물러남이 아니라 돌진부터 센다
+        }
+
+        /// <summary>
+        /// 준비 동작: 적 반대쪽(뒤)으로 <see cref="ChargeWindupDistance"/>만큼 물러난다.
+        /// <para><b>절대 좌표가 아니라 이번 프레임에 더할 차이만 적용한다</b>(<see cref="_windupApplied"/>) —
+        /// 근접 lunge와 같은 이유로, 절대 위치로 되돌리면 다른 이동 처리를 취소해 캐릭터가 끌린다.</para>
+        /// <para>뒤로 빼는 양은 감속(ease-out)해 "주춤했다가 튀어나간다"로 읽히게 한다.</para>
+        /// </summary>
+        private void UpdateChargeWindup()
+        {
+            _chargeWindup -= Time.deltaTime;
+            float k = 1f - Mathf.Clamp01(_chargeWindup / ChargeWindupSeconds);
+            float target = -ChargeWindupDistance * Mathf.Sin(k * Mathf.PI * 0.5f); // ease-out으로 뒤로 뺀다
+            float delta = target - _windupApplied;
+            if (!Mathf.Approximately(delta, 0f))
+            {
+                var p = transform.position;
+                p.x += delta;
+                transform.position = p;
+                _windupApplied = target;
+            }
+            if (_chargeWindup <= 0f)
+            {
+                _chargeWindup = 0f;
+                BeginChargeDash();
+            }
         }
 
         private float ChargeSpeedEffective() => Mathf.Max(_chargeSpeed, _moveSpeed * 1.5f);
 
-        /// <summary>돌진 진행: 사거리에 닿을 때까지 전진하고, 닿으면 타격을 예약한다.
-        /// 타격 뒤에도 <see cref="_chargeMotion"/>이 끝날 때까지 돌진 자세를 유지해,
-        /// 적이 이미 코앞이라 이동 거리가 0인 **제자리 발동**에서도 돌진 애니메이션이 보이게 한다.</summary>
+        /// <summary>돌진 진행: <b>준비 동작(뒤로 도약) → 전진 → 충돌 → 짧은 마무리</b> 순으로 돈다.
+        /// 충돌하기 전에는 시간 제한 없이 전진하고, 부딪히는 순간 데미지·이펙트 정리를 끝낸 뒤
+        /// <see cref="ChargeImpactWrapUpSeconds"/>만큼만 자세를 남기고 종료한다.</summary>
         private void UpdateCharge()
         {
+            // 준비 동작(뒤로 물러나기)이 남아 있으면 그것부터 — 돌진은 물러남이 끝난 뒤 시작한다.
+            if (_chargeWindup > 0f)
+            {
+                UpdateChargeWindup();
+                return;
+            }
+
             _chargeElapsed += Time.deltaTime;
 
             if (!_chargeImpacted)
@@ -1289,41 +1467,60 @@ namespace TaskbarHero.Client.Battle
                     return;
                 }
 
-                float dist = _ctrl.MonsterTransform.position.x - transform.position.x;
-                if (dist > _attackRange)
+                // 돌진 목표 x — 사거리에 닿는 지점이되, <b>최소한 물러나기 전 자리까지는 되돌아온다</b>.
+                // 이 하한이 없으면 물러난 뒤 적이 이미 사거리 안이라 전진 거리가 0이 되어,
+                // 뒤로 빠지기만 하고 돌진이 보이지 않는다(실측: 3회 중 2회가 전진 0).
+                float targetX = Mathf.Max(_ctrl.MonsterTransform.position.x - _attackRange, _chargeStartX);
+                if (transform.position.x < targetX - 0.01f)
                 {
                     Vector3 p = transform.position;
-                    p.x += ChargeSpeedEffective() * Time.deltaTime;
+                    p.x = Mathf.Min(targetX, p.x + ChargeSpeedEffective() * Time.deltaTime);
                     p.y = _ctrl.PathY;
                     transform.position = p;
                     return;
                 }
 
-                // 도달(또는 발동 시점부터 사거리 안). 데미지는 자세가 끝나는 순간에 들어간다.
+                // 부딪혔다. <b>부딪힌 순간이 곧 타격</b>이다 — 데미지·충돌음을 지연 없이 넣고, 방패 이펙트도
+                // 그 자리에서 정리한 뒤 짧게(<see cref="ChargeImpactWrapUpSeconds"/>) 마무리하고 끝낸다.
+                // 예전에는 이펙트 길이만큼(_chargeMotion) 자세를 더 유지해, <b>이미 부딪혔는데도 계속 앞으로
+                // 밀고 나가는 자세</b>가 남아 부자연스러웠다.
                 _chargeImpacted = true;
+                _chargeEndAt = _chargeElapsed + ChargeImpactWrapUpSeconds;
                 long dmg = Damage(_chargeSkill.coef, out bool crit);
-                float impactDelay = Mathf.Max(0f, _chargeMotion - _chargeElapsed);
-                // 돌진 충돌음은 강타음을 재사용한다(§8) — 데미지와 같은 시점에 울린다.
-                StartCoroutine(PlaySfxAfter(impactDelay, SoundId.KnightPowerStrike));
-                DealDamage(impactDelay, dmg, crit,
+                SoundManager.Sfx(SoundId.KnightPowerStrike); // 돌진 충돌음은 강타음을 재사용한다(§8)
+                DestroyChargeFx();                           // 돌진이 끝났으니 방패 아우라도 함께 끝낸다
+                // 방패 돌진은 '밀치는 것'이 스킬의 정체성이라 <b>방패에 부딪힌 전방의 적 전부</b>가 대상이다 —
+                // 예전에는 데미지가 단일 대상뿐이고 나머지는 밀리기만 했지만, 이제 맞은 적 모두가
+                // 데미지와 넉백을 함께 받는다(knockbackAll). 판정 범위는 종전에 밀어내던 범위 그대로다.
+                float hitRange = _attackRange + ChargeShoveExtraRange;
+                Vector3 hitCenter = transform.position + Vector3.right * (hitRange * 0.5f);
+                DealAreaDamage(0f, dmg, crit,
                     $"[{_name}] 돌진 {_chargeSkill.name} ×{_chargeSkill.coef:0.##}",
-                    bigHit: true, knockback: MonsterUnit.ChargeKnockback);
-                // 방패 돌진은 '밀치는 것'이 스킬의 정체성이라, 방패에 부딪힌 <b>전방의 적 전부</b>가 함께 날아간다.
-                // 데미지는 위의 단일 대상만 받는다(전투 수치는 그대로 두고 연출만 확장).
-                _ctrl.ShoveEnemiesAhead(impactDelay, transform.position.x,
-                    _attackRange + ChargeShoveExtraRange, MonsterUnit.ChargeKnockback);
+                    hitCenter, hitRange * 0.5f, bigHit: true,
+                    knockback: MonsterUnit.ChargeKnockback, knockbackAll: true);
             }
 
-            // 타격 후 남은 자세 유지(이 동안 _charging이 다른 행동을 막으므로 별도 _busyTimer는 불필요).
-            if (_chargeElapsed >= _chargeMotion)
+            // 충돌 마무리 시간이 지나면 종료(이 동안 _charging이 다른 행동을 막으므로 별도 _busyTimer는 불필요).
+            if (_chargeElapsed >= _chargeEndAt)
             {
                 EndCharge();
+            }
+        }
+
+        /// <summary>돌진 중 두르고 있던 방패 이펙트를 즉시 치운다(충돌·중단 시).</summary>
+        private void DestroyChargeFx()
+        {
+            if (_chargeFx != null)
+            {
+                Destroy(_chargeFx);
+                _chargeFx = null;
             }
         }
 
         private void EndCharge()
         {
             _charging = false;
+            DestroyChargeFx(); // 대상이 먼저 사라져 타격 없이 끝나는 경로도 이펙트를 남기지 않는다
             SendMessage("StopChargeDash", SendMessageOptions.DontRequireReceiver);
             _ctrl.RequestFighting(); // 돌진 도달 → 파티 교전 진입
         }
@@ -1435,6 +1632,61 @@ namespace TaskbarHero.Client.Battle
                 }
             }
             return fallback;
+        }
+
+        /// <summary>
+        /// 전(全)스킬 광역 캐스터(마법사)의 이펙트가 <b>대상까지 닿지 못할 때</b> 앞으로만(가로) 늘려 준다.
+        /// <para>판정이 그려진 그림을 그대로 따르므로(<see cref="BattleDevController.DealSweepDamage"/>),
+        /// 그림이 대상에 못 미치면 그만큼 맞지 않는다. 파티에 근접 직업이 없어 교전 거리가 멀어지면
+        /// (교전 거리 = 파티 최소 사거리) 마법사가 대상보다 훨씬 뒤에 서게 되는데, 그때도 마법이 적에게
+        /// 닿아 보이도록 부족한 만큼만 늘린다. 세로는 건드리지 않아 두께는 그대로다.</para>
+        /// <para>근접 직업이 있는 보통 편성에서는 이펙트가 이미 대상을 넘으므로 아무 일도 하지 않는다.</para>
+        /// </summary>
+        private void StretchCasterEffectToTarget(GameObject fx, Vector3 origin)
+        {
+            if (fx == null)
+            {
+                return;
+            }
+            var target = _ctrl.MonsterTransform;
+            if (target == null)
+            {
+                return;
+            }
+
+            float reach = EffectForwardReach(fx);
+            float need = target.position.x - origin.x + CasterSweepOvershoot;
+            if (reach <= 0.01f || need <= reach)
+            {
+                return;
+            }
+
+            float stretch = Mathf.Min(need / reach, CasterSweepMaxStretch);
+            var s = fx.transform.localScale;
+            s.x *= stretch;
+            fx.transform.localScale = s;
+        }
+
+        /// <summary>
+        /// 이펙트가 <b>앞(적 방향)으로 뻗는 최대 거리</b>(월드). 스프라이트 시퀀스는 프레임마다 크기가 다르므로
+        /// 모든 프레임 중 가장 멀리 뻗는 값을 쓴다. 스프라이트 바운즈는 피벗 기준이라 왼쪽 피벗 이펙트(마법사)는
+        /// 곧 그림의 길이가 된다. 프레임 정보를 못 구하면 0(늘리지 않음).
+        /// </summary>
+        private static float EffectForwardReach(GameObject fx)
+        {
+            var seq = fx.GetComponent<SpriteSequenceEffect>();
+            if (seq == null || seq.frames == null || seq.frames.Length == 0)
+            {
+                return 0f;
+            }
+            float reach = 0f;
+            foreach (var f in seq.frames)
+            {
+                if (f == null) continue;
+                float r = f.bounds.max.x;
+                if (r > reach) reach = r;
+            }
+            return reach * Mathf.Abs(fx.transform.localScale.x);
         }
 
         /// <summary>지정 위치에 스킬 이펙트를 무조건 발생시키고 인스턴스를 반환한다(몬스터 생존 여부와 무관 —

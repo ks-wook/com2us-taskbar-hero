@@ -119,6 +119,9 @@ namespace TaskbarHero.Client.UI
         // 아이콘만 노출한다(뒷배경 프레임 없음) — 버튼 크기가 곧 아이콘 크기다.
         private const float MenuToggleSize = 128f;
         private const float MenuToggleGapFromBuff = 12f;
+        // 토글 아이콘 색. 아이콘(메뉴.png)은 흰색 픽셀아트라 Image.color가 그대로 틴트로 먹는다.
+        // 아이콘이 배선되지 않았을 때 쓰는 화살표 폴백에도 같은 색을 쓴다.
+        private static readonly Color MenuToggleIconColor = new Color(0.35f, 0.62f, 1f, 1f);
         // BuffIconPos(static readonly)를 참조하지 않고 좌표 상수로 계산한다 —
         // 정적 필드는 선언 순서대로 초기화되므로 뒤에 선언된 필드를 읽으면 0이 된다.
         private static readonly Vector2 MenuTogglePos =
@@ -184,6 +187,20 @@ namespace TaskbarHero.Client.UI
         private ButtonPunchScale _menuTogglePunch; // 클릭 시 아이콘이 커졌다 작아지는 연출(아이콘/화살표에 부착)
         private Coroutine _menuAnim;             // 진행 중인 열기/닫기 연출
         private bool _menuOpen = false;          // 기본은 접힌 상태(손잡이만 보이고, 눌러야 펼쳐진다)
+
+        // 하단 메뉴가 접혀 있을 때 보상 획득 연출을 위해 <b>가방 아이콘 하나만</b> 잠깐 띄운다.
+        // 접힌 메뉴 영역(_menuArea)은 폭 0 + RectMask2D라 그 안의 진짜 가방 버튼은 잘려 보이지 않으므로,
+        // 마스크 <b>바깥</b>에 같은 아이콘을 하나 두고 그 자리(진짜 버튼 좌표)에 띄웠다 지운다.
+        private const float RewardBagIconSize = 104f;        // 메뉴 버튼 안의 아이콘과 같은 크기
+        private const float RewardBagFadeSeconds = 0.18f;    // 나타나고 사라지는 시간
+        private const float RewardBagPopStartScale = 0.55f;  // 나타날 때의 시작 크기
+        private const float RewardBagHoldSeconds = 0.45f;    // 마지막 보상이 도착한 뒤 남아 있는 시간(도착 팝을 보여 준다)
+        private const float RewardBagMinVisibleSeconds = 0.6f; // 최소 노출(오브가 아직 출발 전이라 IsFlying이 false인 구간을 덮는다)
+        private const float RewardBagMaxSeconds = 8f;        // 연출이 끝나지 않는 이상 상황에서도 반드시 사라지게 하는 상한
+
+        private Image _rewardBagIcon;            // 접힌 메뉴용 임시 가방 아이콘(없으면 만들지 않음)
+        private Coroutine _rewardBagAnim;        // 진행 중인 노출/숨김 연출
+        private float _rewardBagKeepUntil;       // 이 시각(unscaled)까지는 무조건 띄워 둔다
 
         private void Awake()
         {
@@ -550,6 +567,7 @@ namespace TaskbarHero.Client.UI
             iconGo.transform.SetParent(parent, false);
             var iconImg = iconGo.GetComponent<Image>();
             iconImg.sprite = _menuToggleSprite;
+            iconImg.color = MenuToggleIconColor;
             iconImg.preserveAspect = true;
             iconImg.raycastTarget = false; // 클릭은 부모 버튼이 받는다
             var irt = iconImg.rectTransform;
@@ -571,7 +589,7 @@ namespace TaskbarHero.Client.UI
             _menuToggleLabel.fontSize = 40;
             _menuToggleLabel.fontStyle = FontStyle.Bold;
             _menuToggleLabel.alignment = TextAnchor.MiddleCenter;
-            _menuToggleLabel.color = Color.white;
+            _menuToggleLabel.color = MenuToggleIconColor;
             _menuToggleLabel.raycastTarget = false;
             _menuToggleLabel.text = MenuToggleArrow(_menuOpen);
             var lrt = (RectTransform)labelGo.transform;
@@ -912,20 +930,142 @@ namespace TaskbarHero.Client.UI
         /// <summary>
         /// 클리어 보상 획득 연출(<see cref="Battle.RewardFlyFx"/>)이 날아갈 HUD 목표를 돌려준다 —
         /// 골드·경험치·전리품 <b>모두 가방</b>으로 향한다(획득물이 한곳으로 모이는 것으로 읽히게 통일).
-        /// <para>메뉴 바가 접혀 있으면 버튼이 폭 0으로 눌려 있어 그 자리로 보내면 어디로 갔는지 알 수 없다.
-        /// 그때는 항상 보이는 <b>토글 손잡이</b>를 목표로 준다.</para>
+        /// <para>메뉴 바가 접혀 있으면 진짜 가방 버튼이 폭 0인 마스크 영역 안에 잘려 있어 그 자리로 보내도
+        /// 아무것도 보이지 않는다. 예전에는 그럴 때 <b>토글 손잡이</b>로 보냈는데, 보상이 '가방에 들어갔다'가
+        /// 아니라 '메뉴 손잡이로 빨려 들어갔다'로 읽혔다. 그래서 이제는 <b>가방 아이콘만 잠깐 띄우고</b>
+        /// 그 자리로 보낸 뒤, 연출이 끝나면 도로 감춘다(<see cref="ShowRewardBagIcon"/>).</para>
         /// </summary>
         public RectTransform RewardFlyTarget()
         {
-            if (!_menuOpen)
-            {
-                return _menuToggleRect;
-            }
-            if (_menuButtons != null && InventorySlot < _menuButtons.Length && _menuButtons[InventorySlot] != null)
+            if (_menuOpen && _menuButtons != null && InventorySlot < _menuButtons.Length
+                && _menuButtons[InventorySlot] != null)
             {
                 return _menuButtons[InventorySlot];
             }
-            return _menuToggleRect;
+
+            var temp = ShowRewardBagIcon();
+            return temp != null ? temp : _menuToggleRect; // 아이콘을 못 만들면 종전대로 손잡이
+        }
+
+        /// <summary>
+        /// 접힌 메뉴 대신 쓸 <b>임시 가방 아이콘</b>을 진짜 가방 버튼 자리에 띄우고, 그 RectTransform을 돌려준다.
+        /// <para>자리는 진짜 버튼의 월드 좌표를 그대로 복사한다 — 메뉴가 접혀 있어도(영역이 비활성이어도)
+        /// transform 좌표는 살아 있으므로, 메뉴를 펼쳤을 때 보상이 도착하던 <b>바로 그 지점</b>이 된다.</para>
+        /// <para>이미 떠 있으면 노출 시간만 연장한다 — 보상은 여러 개가 시차로 도착하므로 매번 다시 띄우면
+        /// 아이콘이 깜빡인다.</para>
+        /// </summary>
+        private RectTransform ShowRewardBagIcon()
+        {
+            var icon = EnsureRewardBagIcon();
+            if (icon == null)
+            {
+                return null;
+            }
+
+            _rewardBagKeepUntil = Time.unscaledTime + RewardBagMinVisibleSeconds;
+            var rt = icon.rectTransform;
+            rt.position = RewardBagAnchorPosition();
+
+            // HUD가 꺼져 있으면 코루틴을 시작할 수 없다 — 그때는 목표를 주지 않고 폴백(손잡이)에 맡긴다.
+            if (_rewardBagAnim == null)
+            {
+                if (!isActiveAndEnabled)
+                {
+                    return null;
+                }
+                _rewardBagAnim = StartCoroutine(RewardBagRoutine());
+            }
+            return rt;
+        }
+
+        /// <summary>임시 가방 아이콘이 놓일 월드 좌표 — 진짜 가방 버튼 자리(없으면 토글 손잡이 자리).</summary>
+        private Vector3 RewardBagAnchorPosition()
+        {
+            if (_menuButtons != null && InventorySlot < _menuButtons.Length && _menuButtons[InventorySlot] != null)
+            {
+                return _menuButtons[InventorySlot].position;
+            }
+            return _menuToggleRect != null ? _menuToggleRect.position : Vector3.zero;
+        }
+
+        /// <summary>
+        /// 임시 가방 아이콘을 1회 만든다(이후 재사용). 아이콘 스프라이트가 배선되지 않았으면 만들지 않는다(null).
+        /// <para>부모는 접히는 영역이 아니라 <b>전투 화면 밴드</b>(토글 손잡이와 같은 부모)다 —
+        /// 접히는 영역 안에 두면 <see cref="RectMask2D"/>에 잘려 접힌 상태에서 보이지 않는다.</para>
+        /// </summary>
+        private Image EnsureRewardBagIcon()
+        {
+            if (_rewardBagIcon != null)
+            {
+                return _rewardBagIcon;
+            }
+            if (inventoryIcon == null || _menuToggleRect == null)
+            {
+                return null;
+            }
+
+            var go = new GameObject("RewardBagIcon", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(_menuToggleRect.parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(RewardBagIconSize, RewardBagIconSize);
+
+            _rewardBagIcon = go.GetComponent<Image>();
+            _rewardBagIcon.sprite = inventoryIcon;
+            _rewardBagIcon.preserveAspect = true;
+            _rewardBagIcon.raycastTarget = false; // 보여 주기만 하는 연출 — 클릭을 가로채지 않는다
+            go.SetActive(false);
+            return _rewardBagIcon;
+        }
+
+        /// <summary>
+        /// 임시 가방 아이콘의 한살이: <b>팝하며 나타나기 → 보상이 다 도착할 때까지 대기 → 잠시 유지 → 사라지기</b>.
+        /// <para>대기는 <see cref="Battle.RewardFlyFx.IsFlying"/>이 내려갈 때까지이며,
+        /// <see cref="RewardBagMaxSeconds"/> 상한을 둬 어떤 경우에도 아이콘이 남지 않게 한다.
+        /// 크기는 나타남/사라짐 구간에서만 건드린다 — 그 사이는 도착 팝(RewardFlyFx)이 크기를 쓴다.</para>
+        /// <para>모든 시간은 <b>unscaled</b>다 — 클리어 연출은 슬로우모션 중일 수 있다.</para>
+        /// </summary>
+        private IEnumerator RewardBagRoutine()
+        {
+            var icon = _rewardBagIcon;
+            icon.gameObject.SetActive(true);
+            yield return FadeRewardBagIcon(0f, 1f, RewardBagPopStartScale, 1f);
+
+            float deadline = Time.unscaledTime + RewardBagMaxSeconds;
+            while (Time.unscaledTime < deadline && !_menuOpen
+                   && (Battle.RewardFlyFx.IsFlying || Time.unscaledTime < _rewardBagKeepUntil))
+            {
+                yield return null;
+            }
+            yield return new WaitForSecondsRealtime(RewardBagHoldSeconds); // 도착 팝이 보이도록 잠시 남긴다
+
+            yield return FadeRewardBagIcon(1f, 0f, 1f, RewardBagPopStartScale);
+            icon.gameObject.SetActive(false);
+            _rewardBagAnim = null;
+        }
+
+        /// <summary>임시 가방 아이콘의 투명도·크기를 <see cref="RewardBagFadeSeconds"/> 동안 보간한다.</summary>
+        private IEnumerator FadeRewardBagIcon(float fromAlpha, float toAlpha, float fromScale, float toScale)
+        {
+            var icon = _rewardBagIcon;
+            var rt = icon.rectTransform;
+            for (float t = 0f; t < RewardBagFadeSeconds; t += Time.unscaledDeltaTime)
+            {
+                float k = EaseOutCubic(Mathf.Clamp01(t / RewardBagFadeSeconds));
+                SetRewardBagIcon(Mathf.Lerp(fromAlpha, toAlpha, k), Mathf.Lerp(fromScale, toScale, k));
+                yield return null;
+            }
+            SetRewardBagIcon(toAlpha, toScale);
+            // 도착 팝(RewardFlyFx.PunchTarget)이 이 크기를 기준으로 잡으므로 정확히 목표값으로 맞춰 둔다.
+            rt.localScale = new Vector3(toScale, toScale, 1f);
+        }
+
+        private void SetRewardBagIcon(float alpha, float scale)
+        {
+            var c = _rewardBagIcon.color;
+            _rewardBagIcon.color = new Color(c.r, c.g, c.b, alpha);
+            _rewardBagIcon.rectTransform.localScale = new Vector3(scale, scale, 1f);
         }
 
         /// <summary>인벤토리 패널 토글(UIManager 위임).</summary>

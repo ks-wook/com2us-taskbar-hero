@@ -24,6 +24,7 @@ public class SpumCharacterAnimator : MonoBehaviour
     private bool _initialized;
     private AnimationClip _savedMoveClip;   // 돌진 중 MOVE 오버라이드 전 원본 걷기 클립
     private int _rageIndex = -1;            // ATTACK_List에 추가한 분노 클립 인덱스(1회 추가)
+    private Coroutine _backJump;            // 진행 중인 뒤로 점프(겹치면 이전 것을 버린다)
 
     private void Awake()
     {
@@ -148,6 +149,55 @@ public class SpumCharacterAnimator : MonoBehaviour
             moveList[0] = chargeDashClip;
             _spum.PlayAnimation(PlayerState.MOVE, 0); // MOVE 상태 유지(크라우치 클립)
         }
+    }
+
+    /// <summary>
+    /// 뒤로 <b>도약</b>한다 — <paramref name="secondsAndHeight"/>.x초 동안 y로 포물선을 그렸다 제자리 높이로
+    /// 착지한다(.y = 정점 높이, 월드 유닛). <b>시간·높이를 호출측이 넘기는 이유</b>: 이 값들은 방패 돌진의
+    /// 뒤로 물러나는 거리·시간과 한 벌로 맞춰야 하므로 <c>PlayerCombatant</c>에 모아 둔다. 인스펙터 필드로
+    /// 두면 프리팹마다 다른 값이 구워져(기사 0.45 / 몬스터 0.7로 갈렸던 실제 사례) 조용히 어긋난다.
+    /// 방패 돌진의 준비 동작(뒤로 물러나기)에 얹어 "주춤 → 튀어나감"이 도약으로 읽히게 하는 연출이다.
+    /// <para>뒤로 가는 <b>x 이동은 <c>PlayerCombatant</c>가</b> 같은 시간 동안 처리하므로 여기서는 y만 건드린다
+    /// (둘이 같은 transform을 서로 다른 축으로 나눠 쓴다). SPUM에는 점프 클립이 없어, 내려찍기
+    /// (<see cref="PlayGroundSlam"/>)와 같은 방식으로 transform을 움직여 도약을 만든다 —
+    /// 자세는 이 시점에 이미 걸려 있는 돌진 크라우치(<see cref="PlayChargeDash"/>)가 맡는다.</para>
+    /// <para>착지 높이를 <b>시작 높이로</b> 되돌리므로, 이어지는 돌진이 y를 PathY로 되잡을 때 튐이 없다.</para>
+    /// </summary>
+    public void PlayBackJump(Vector2 secondsAndHeight)
+    {
+        EnsureInitialized();
+        if (_spum == null)
+        {
+            return;
+        }
+        if (_backJump != null)
+        {
+            StopCoroutine(_backJump);
+        }
+        _backJump = StartCoroutine(BackJumpRoutine(secondsAndHeight.x, secondsAndHeight.y));
+    }
+
+    private IEnumerator BackJumpRoutine(float seconds, float height)
+    {
+        float dur = Mathf.Max(0.05f, seconds);
+        float baseY = transform.position.y;
+        float t = 0f;
+        while (t < dur)
+        {
+            t += Time.deltaTime;
+            // sin(0→π): 0에서 떠올라 정점을 찍고 다시 0으로 — 한 번의 도약.
+            float h = Mathf.Sin(Mathf.Clamp01(t / dur) * Mathf.PI) * height;
+            var p = transform.position;
+            p.y = baseY + h;
+            transform.position = p;
+            yield return null;
+        }
+        {
+            var p = transform.position;
+            p.y = baseY;
+            transform.position = p;
+        }
+        _backJump = null;
     }
 
     /// <summary>돌진 애니메이션을 끝내고 걷기 클립을 복원한 뒤 IDLE로 되돌린다.</summary>

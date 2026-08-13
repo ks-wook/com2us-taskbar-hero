@@ -1551,15 +1551,17 @@ namespace TaskbarHero.Client.Battle
 
         /// <summary>지연 후 지정 중심 반경 내 모든 살아있는 적에게 데미지를 적용한다(광역 스킬).
         /// <paramref name="bigHit"/>는 스킬 타격 표시(히트스톱 판단용) — 광역 <b>평타</b>도 있으므로 여기서도 구분한다.
-        /// <paramref name="knockback"/>은 대표 대상이 밀려날 거리(0이면 밀지 않는다).</summary>
+        /// <paramref name="knockback"/>은 밀려날 거리(0이면 밀지 않는다).
+        /// <paramref name="knockbackAll"/>가 false면 <b>대표(첫) 대상만</b> 밀린다(광역 한 방에 화면이 찢어지는 것을 막는다).
+        /// true면 맞은 적 전부가 밀린다 — <b>밀치는 것 자체가 스킬인</b> 기사 방패 돌진이 이 경우다.</summary>
         public void DealAreaDamageAfter(float delay, long dmg, bool crit, string label, Vector3 center, float radius,
-                                        bool bigHit = false, float knockback = 0f)
+                                        bool bigHit = false, float knockback = 0f, bool knockbackAll = false)
         {
-            StartCoroutine(DoAreaDamageAfter(delay, dmg, crit, label, center, radius, bigHit, knockback));
+            StartCoroutine(DoAreaDamageAfter(delay, dmg, crit, label, center, radius, bigHit, knockback, knockbackAll));
         }
 
         private IEnumerator DoAreaDamageAfter(float delay, long dmg, bool crit, string label, Vector3 center, float radius,
-                                              bool bigHit, float knockback)
+                                              bool bigHit, float knockback, bool knockbackAll)
         {
             if (delay > 0f)
             {
@@ -1606,9 +1608,11 @@ namespace TaskbarHero.Client.Battle
                     }
                     // 피격음과 같은 기준으로 나눈다 — 대표(첫) 대상만 모션·넉백까지, 나머지는 틴트만.
                     // 전원에게 모션·넉백을 주면 광역 한 방에 화면이 찢어진다(사운드 정의서 §9.3과 같은 이유).
+                    // 단 knockbackAll(방패 돌진)은 예외다 — 부딪힌 적이 다 같이 날아가는 것이 곧 그 스킬의 그림이다.
                     if (!killed)
                     {
-                        mu.PlayHitReaction(heavy: hit == 0, knockback: hit == 0 ? knockback : 0f);
+                        bool heavy = knockbackAll || hit == 0;
+                        mu.PlayHitReaction(heavy: heavy, knockback: heavy ? knockback : 0f);
                     }
                     // 광역은 대상마다 숫자가 동시에 떠 한 덩어리로 보이므로 대상 순서대로 시차를 준다.
                     DamageNumberPool.GetOrCreate().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f),
@@ -1635,6 +1639,154 @@ namespace TaskbarHero.Client.Battle
         private const float AreaNumberStagger = 0.05f;
 
         /// <summary>
+        /// <b>이펙트 그림이 실제로 덮은 자리</b>에 들어온 적을 닿는 순간 1회씩 때린다(휩쓸기 판정).
+        /// <para>앞으로 <b>뻗어 나가는</b> 이펙트(마법사 파이어볼·프로스트 노바·라이트닝 볼트처럼 시전자에서
+        /// 적 쪽으로 날아가며 자라는 스프라이트 시퀀스)는 <b>한 점 중심의 원 판정</b>으로는 표현되지 않는다 —
+        /// 시전 순간의 그림은 시전자 손끝의 작은 불씨뿐이고, 적을 덮는 것은 그 뒤 프레임들이기 때문이다.
+        /// 시전 시점의 렌더 크기를 반경으로 쓰면 반경이 0.2 남짓이라 <b>아무도 맞지 않는다</b>(파이어볼의 증상).</para>
+        /// <para>그래서 여기서는 이펙트 인스턴스가 살아 있는 동안 <b>매 프레임 렌더 바운즈를 다시 읽어</b>
+        /// 그 사각형 안에 들어온 적을 피격시킨다. 적은 발밑 좌표를 쓰므로 세로는 몸 중심(<see cref="effectYOffset"/>)으로
+        /// 올려 비교하고, 얇은 프레임에서 빠지지 않도록 <paramref name="minHalfHeight"/>를 세로 여유로 둔다.</para>
+        /// <para><paramref name="freezeSeconds"/>가 0보다 크면 닿은 적을 그만큼 빙결시킨다(프로스트 노바) —
+        /// 데미지와 같은 판정을 쓰므로 "맞은 적만 언다".</para>
+        /// </summary>
+        /// <summary>휩쓸기 판정이 유지되는 최대 시간(초). 이펙트가 스스로 사라지지 않는 경우의 안전 상한이다.</summary>
+        private const float SweepMaxSeconds = 5f;
+
+        public void DealSweepDamage(GameObject fx, long dmg, bool crit, string label, float minHalfHeight,
+                                    bool bigHit = false, float knockback = 0f, float freezeSeconds = 0f)
+        {
+            if (fx == null || _om == null)
+            {
+                return;
+            }
+            StartCoroutine(DoSweepDamage(fx, dmg, crit, label, minHalfHeight, bigHit, knockback, freezeSeconds));
+        }
+
+        private IEnumerator DoSweepDamage(GameObject fx, long dmg, bool crit, string label, float minHalfHeight,
+                                          bool bigHit, float knockback, float freezeSeconds)
+        {
+            var rends = fx.GetComponentsInChildren<Renderer>();
+            if (rends == null || rends.Length == 0)
+            {
+                yield break; // 판정할 그림이 없다(렌더러 없는 이펙트)
+            }
+
+            var alreadyHit = new HashSet<MonsterUnit>();
+            var targets = new List<MonsterUnit>(); // 프레임마다 재사용(순회 중 사망·풀 반환에 대비한 스냅샷)
+            int hitTotal = 0;
+            int killedTotal = 0;
+            bool impactShown = false; // 히트스톱·셰이크는 첫 접촉에 한 번만(휩쓸기는 여러 프레임에 걸쳐 맞는다)
+            float elapsed = 0f;
+
+            // 이펙트가 스스로 사라질 때까지 따라간다(SpriteSequenceEffect의 destroyOnFinish).
+            // 반복 재생 이펙트가 잘못 물려 판정이 영원히 남지 않도록 상한을 둔다.
+            while (fx != null && elapsed < SweepMaxSeconds)
+            {
+                if (_paused)
+                {
+                    yield return null;
+                    continue;
+                }
+                elapsed += Time.deltaTime;
+
+                // 이펙트 바운즈는 프레임이 넘어갈수록 앞으로 자란다 — 매 프레임 다시 읽어야 "닿은 만큼" 맞는다.
+                bool hasBounds = false;
+                Bounds b = default;
+                foreach (var r in rends)
+                {
+                    if (r == null || !r.enabled)
+                    {
+                        continue;
+                    }
+                    if (!hasBounds) { b = r.bounds; hasBounds = true; }
+                    else { b.Encapsulate(r.bounds); }
+                }
+                if (!hasBounds)
+                {
+                    yield return null;
+                    continue;
+                }
+
+                float halfW = b.extents.x;
+                float halfH = Mathf.Max(b.extents.y, minHalfHeight);
+                int batch = 0;
+                int batchKilled = 0;
+                bool batchKilledBoss = false, batchHitBoss = false;
+
+                targets.Clear();
+                foreach (var go in _om.Active(CatEnemy))
+                {
+                    if (go == null) continue;
+                    var mu = go.GetComponent<MonsterUnit>();
+                    if (mu != null && mu.Alive && !alreadyHit.Contains(mu))
+                    {
+                        targets.Add(mu);
+                    }
+                }
+
+                foreach (var mu in targets)
+                {
+                    if (mu == null || !mu.Alive) continue;
+
+                    // 적 좌표는 발밑이므로 몸 중심으로 올려 비교한다(이펙트는 몸 높이에서 날아간다).
+                    Vector3 body = mu.transform.position + Vector3.up * effectYOffset;
+                    if (Mathf.Abs(body.x - b.center.x) > halfW || Mathf.Abs(body.y - b.center.y) > halfH)
+                    {
+                        continue;
+                    }
+
+                    alreadyHit.Add(mu);
+                    batchHitBoss |= mu.IsBoss;
+                    if (batch == 0)
+                    {
+                        // 피격음은 프레임당 한 번만(대상마다 재생하면 소리가 찢어진다 — 사운드 정의서 §9.3).
+                        SoundManager.Sfx(BattleSounds.MonsterHitFor(mu.MonsterName));
+                    }
+                    if (freezeSeconds > 0f)
+                    {
+                        mu.ApplyFreeze(freezeSeconds);
+                    }
+                    bool killed = mu.TakeDamage(dmg);
+                    if (killed)
+                    {
+                        killedTotal++;
+                        batchKilled++;
+                        batchKilledBoss |= mu.IsBoss;
+                    }
+                    else
+                    {
+                        // 넉백·피격 모션은 대표(첫) 대상만 — 전원을 밀면 한 번의 스킬에 화면이 찢어진다.
+                        mu.PlayHitReaction(heavy: batch == 0, knockback: batch == 0 ? knockback : 0f);
+                    }
+                    DamageNumberPool.GetOrCreate().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f),
+                        crit, DamageSizeMul(dmg, mu.MaxHp), batch * AreaNumberStagger);
+                    batch++;
+                    hitTotal++;
+                }
+
+                // 히트스톱은 <b>첫 접촉에 한 번만</b> — 관통 중 매 접촉마다 걸면 시간이 계단처럼 끊긴다.
+                if (batch > 0 && !impactShown)
+                {
+                    impactShown = true;
+                    if (crit || bigHit || batchHitBoss)
+                    {
+                        RequestHitStop(batchHitBoss ? BossHitStopSeconds : HitStopSeconds);
+                    }
+                    RequestShake(batchKilledBoss || batchHitBoss || batch >= 3 ? ShakeHeavy : ShakeLight);
+                }
+                else if (batchKilled > 0)
+                {
+                    RequestShake(batchKilledBoss ? ShakeHeavy : ShakeLight); // 휩쓸며 추가로 쓰러뜨린 반응
+                }
+
+                yield return null;
+            }
+
+            Log($"{label} (관통 광역) → {hitTotal}체 -{dmg}{(crit ? " (치명타)" : string.Empty)}");
+        }
+
+        /// <summary>
         /// 데미지 숫자 크기 배수. <b>절대 데미지 값이 아니라 대상 최대 체력 대비 비중</b>으로 정한다 —
         /// 절대값은 성장에 따라 계속 커져(3자리 → 6자리) 어느 값이 "큰 타격"인지 기준이 사라진다.
         /// 체력의 절반을 날린 한 방은 어느 구간에서든 큰 타격이다.
@@ -1645,41 +1797,9 @@ namespace TaskbarHero.Client.Battle
             return Mathf.Lerp(0.9f, 1.35f, weight);
         }
 
-        /// <summary>
-        /// 지정 x의 <b>앞쪽(오른쪽) <paramref name="range"/> 안</b>에 있는 살아있는 적들을 데미지 없이 밀어낸다.
-        /// 기사 방패 돌진처럼 <b>밀치는 것 자체가 스킬 효과</b>인 경우에 쓴다 — 데미지는 여전히 단일 대상에만
-        /// 들어가고(전투 수치는 그대로), 방패에 부딪힌 적들이 함께 날아가는 것만 연출로 표현한다.
-        /// </summary>
-        public void ShoveEnemiesAhead(float delay, float fromX, float range, float distance)
-        {
-            StartCoroutine(DoShoveEnemiesAhead(delay, fromX, range, distance));
-        }
-
-        private IEnumerator DoShoveEnemiesAhead(float delay, float fromX, float range, float distance)
-        {
-            if (delay > 0f)
-            {
-                yield return new WaitForSeconds(delay); // 타격(충돌) 시점에 맞춘다
-            }
-            if (_om == null || distance <= 0f)
-            {
-                yield break;
-            }
-            int pushed = 0;
-            foreach (var go in _om.Active(CatEnemy))
-            {
-                var mu = go.GetComponent<MonsterUnit>();
-                if (mu == null || !mu.Alive) continue;
-                float dx = mu.transform.position.x - fromX;
-                if (dx < 0f || dx > range) continue; // 앞쪽 일정 범위만(지나친 적·뒤쪽 적은 제외)
-                mu.ApplyPush(distance);
-                pushed++;
-            }
-            if (pushed > 0)
-            {
-                RequestShake(ShakeHeavy); // 방패로 밀어붙이는 충격
-            }
-        }
+        // 데미지 없이 밀기만 하던 ShoveEnemiesAhead는 제거했다 — 방패 돌진이 광역 타격으로 바뀌면서
+        // 부딪힌 적이 데미지와 넉백을 함께 받게 되었고(DealAreaDamageAfter의 knockbackAll), 밀기 전용 경로가
+        // 필요 없어졌다. 데미지 없는 밀기가 다시 필요해지면 MonsterUnit.ApplyPush로 되살릴 수 있다.
 
         /// <summary>MonsterUnit이 죽는 순간 주입된 콜백으로 호출된다 — 누적 킬/로그 갱신 + 웨이브 종료 슬로우.</summary>
         public void OnMonsterKilled(MonsterUnit m)

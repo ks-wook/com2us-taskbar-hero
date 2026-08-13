@@ -74,6 +74,11 @@ namespace TaskbarHero.Client.Battle
         public Vector2 hpBarOffset = new Vector2(-45f, -40f);
         public Color hpBarBgColor = new Color(0f, 0f, 0f, 0.6f);
         public Color hpBarFillColor = new Color(0.25f, 0.9f, 0.35f, 1f);
+        [Tooltip("고스트(지연) 바 색 — 채움 바 뒤에서 늦게 따라 내려오며 '방금 잃은 양'을 남긴다. "
+                 + "적 HP바의 고스트와 같은 흰빛이라 아군·적 바가 같은 문법으로 읽힌다.")]
+        public Color hpBarGhostColor = new Color(1f, 0.93f, 0.88f, 0.9f);
+        [Tooltip("피격 순간 채움 바가 물드는 색. 시간이 지나며 hpBarFillColor로 되돌아온다.")]
+        public Color hpBarHitFlashColor = new Color(1f, 0.25f, 0.2f, 1f);
         [Tooltip("체력바 프레임 아트(Assets/Art/Icon/Combat/체력바.png, 768×144 — 적 HP바·경험치 바와 같은 아트). "
                  + "가로로 그려진 아트라 세로 바에 쓰려면 90도 돌려야 하며, 이 컴포넌트가 그렇게 얹는다. "
                  + "미배선이면 종전처럼 단색(hpBarBgColor) 배경으로 폴백한다.")]
@@ -83,6 +88,16 @@ namespace TaskbarHero.Client.Battle
         // 채움 막대를 그만큼 안쪽으로 들여 테두리를 덮지 않게 한다(프레임이 없을 때는 종전대로 1px).
         private const float HpBarFillInsetFramed = 3f;
         private const float HpBarFillInsetPlain = 1f;
+
+        // ---- 피격 juice ----
+        // 강도(0~1)는 아군이 감쇠시켜 넘겨주고(<see cref="PlayerCombatant.HpBarShake01"/>·
+        // <see cref="PlayerCombatant.HpBarFlash01"/>), 여기서는 그 강도를 화면 표현으로만 바꾼다.
+        /// <summary>피격 시 바가 떨리는 초당 진동 수(적 HP바와 같은 값).</summary>
+        private const float HpBarShakeFrequency = 26f;
+        /// <summary>피격 흔들림의 최대 진폭(캔버스 단위). 바 너비(14)의 1/4쯤 — 더 키우면 바가 자리를 벗어나 읽기 어렵다.</summary>
+        private const float HpBarShakeAmplitude = 3.5f;
+        /// <summary>피격 순간 바가 부풀어 오르는 최대 배율 증가분(0.18 = 최대 1.18배).</summary>
+        private const float HpBarPunchScale = 0.18f;
 
         private class SlotRT
         {
@@ -95,7 +110,10 @@ namespace TaskbarHero.Client.Battle
         private class HpBar
         {
             public PlayerCombatant member;
+            public RectTransform root;   // 바 컨테이너 — 흔들림·부풀림은 여기에 건다(프레임·채움이 함께 움직인다)
+            public Vector2 basePos;      // 흔들기 전 제자리(흔들림이 누적돼 바가 떠내려가지 않도록 기준을 기억한다)
             public Image fill;
+            public Image ghost;          // 방금 잃은 양(채움 뒤에서 늦게 따라 내려온다)
         }
 
         /// <summary>
@@ -614,10 +632,11 @@ namespace TaskbarHero.Client.Battle
             _blockBottomFromTop = -lowest; // 도킹 위치는 UpdateDock이 매 프레임 목표와 대조해 교정한다
         }
 
-        /// <summary>매 프레임 스트립 도킹 위치와 슬롯 hover 툴팁을 갱신한다.</summary>
+        /// <summary>매 프레임 스트립 도킹 위치·아군 체력바 연출·슬롯 hover 툴팁을 갱신한다.</summary>
         private void LateUpdate()
         {
             UpdateDock();
+            UpdateHpBars();
             UpdateHover();
         }
 
@@ -692,33 +711,106 @@ namespace TaskbarHero.Client.Battle
 
             // 채움(부모에 꽉 차게 인셋) — 세로 채움(아래에서 위로).
             // 프레임 위에 그려지도록 프레임보다 <b>나중에</b> 만든다(형제 순서 = 그리는 순서).
+            // 순서는 프레임 → 고스트 → 채움이다: 고스트가 채움보다 위로 더 차 있으므로,
+            // 채움을 나중에(=위에) 그려야 <b>채움 위쪽으로 삐져나온 고스트만</b> 방금 잃은 양으로 보인다.
             float inset = framed ? HpBarFillInsetFramed : HpBarFillInsetPlain;
-            var fg = new GameObject("HpBarFill_" + i, typeof(RectTransform), typeof(Image));
-            fg.transform.SetParent(bg.transform, false);
-            var fgRt = fg.GetComponent<RectTransform>();
-            fgRt.anchorMin = new Vector2(0f, 0f);
-            fgRt.anchorMax = new Vector2(1f, 1f);
-            fgRt.offsetMin = new Vector2(inset, inset);
-            fgRt.offsetMax = new Vector2(-inset, -inset);
-            var fgImg = fg.GetComponent<Image>();
-            fgImg.sprite = WhiteSprite;
-            fgImg.type = Image.Type.Filled;
-            fgImg.fillMethod = Image.FillMethod.Vertical;
-            fgImg.fillOrigin = (int)Image.OriginVertical.Bottom;
-            fgImg.color = hpBarFillColor;
-            fgImg.fillAmount = 1f;
+            var ghostImg = NewHpBarFill(bg.transform, "HpBarGhost_" + i, inset, hpBarGhostColor);
+            var fgImg = NewHpBarFill(bg.transform, "HpBarFill_" + i, inset, hpBarFillColor);
 
-            _hpBars.Add(new HpBar { member = member, fill = fgImg });
+            _hpBars.Add(new HpBar
+            {
+                member = member,
+                root = bgRt,
+                basePos = bgRt.anchoredPosition,
+                fill = fgImg,
+                ghost = ghostImg,
+            });
+        }
+
+        /// <summary>아군 세로 체력바의 채움용 Image(아래→위 세로 채움)를 만든다 — 고스트와 현재 체력이 공유한다.</summary>
+        private static Image NewHpBarFill(Transform parent, string name, float inset, Color color)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0f, 0f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.offsetMin = new Vector2(inset, inset);
+            rt.offsetMax = new Vector2(-inset, -inset);
+            var img = go.GetComponent<Image>();
+            img.sprite = WhiteSprite;
+            img.type = Image.Type.Filled;
+            img.fillMethod = Image.FillMethod.Vertical;
+            img.fillOrigin = (int)Image.OriginVertical.Bottom;
+            img.color = color;
+            img.fillAmount = 1f;
+            img.raycastTarget = false;
+            return img;
+        }
+
+        /// <summary>
+        /// 아군 체력바를 <b>매 프레임</b> 갱신한다 — 채움/고스트 비율, 피격 시 붉은 점멸·부풀림·흔들림.
+        /// <para>쿨타임 갱신(<see cref="UpdateCooldowns"/>)은 0.05초 주기 코루틴이라 0.16~0.22초짜리 피격 연출을
+        /// 3~4스텝으로밖에 못 그린다(끊겨 보인다). 그래서 체력바는 <see cref="LateUpdate"/>에서 따로 돌린다.</para>
+        /// </summary>
+        private void UpdateHpBars()
+        {
+            foreach (var hb in _hpBars)
+            {
+                if (hb == null || hb.fill == null) continue;
+
+                if (hb.member == null)
+                {
+                    // 전사해 캐릭터가 파괴된 줄 — 빈 바로 굳히고 흔들림·부풀림도 되돌린다.
+                    hb.fill.fillAmount = 0f;
+                    if (hb.ghost != null) hb.ghost.fillAmount = 0f;
+                    if (hb.root != null)
+                    {
+                        hb.root.anchoredPosition = hb.basePos;
+                        hb.root.localScale = Vector3.one;
+                    }
+                    continue;
+                }
+
+                float ratio = hb.member.MaxHp > 0 ? Mathf.Clamp01((float)hb.member.Hp / hb.member.MaxHp) : 0f;
+                hb.fill.fillAmount = ratio;
+                if (hb.ghost != null)
+                {
+                    // 고스트는 채움보다 아래로 내려가지 않는다(회복 시 흰 띠가 남지 않도록).
+                    hb.ghost.fillAmount = Mathf.Max(ratio, hb.member.HpGhostRatio);
+                }
+
+                float flash = hb.member.HpBarFlash01;
+                hb.fill.color = flash > 0f ? Color.Lerp(hpBarFillColor, hpBarHitFlashColor, flash) : hpBarFillColor;
+
+                if (hb.root != null)
+                {
+                    hb.root.anchoredPosition = hb.basePos + HpBarJitter(hb.member.HpBarShake01);
+                    // 부풀림은 바 하단 중앙 피벗을 기준으로 걸려 초상화 쪽으로 파고들지 않는다.
+                    float punch = 1f + HpBarPunchScale * flash;
+                    hb.root.localScale = new Vector3(punch, punch, 1f);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 피격 직후 체력바를 흔들 오프셋(캔버스 단위). 강도(<paramref name="shake01"/>)는 아군이 감쇠시켜 넘겨준다.
+        /// x·y에 서로 다른 주파수의 사인을 써서 한 방향으로만 왕복하지 않게 한다(적 HP바와 같은 방식).
+        /// 시간은 <b>unscaled</b> — 히트스톱으로 시간이 멈춘 동안에도 바가 흔들려야 화면 연출과 결이 맞는다.
+        /// </summary>
+        private static Vector2 HpBarJitter(float shake01)
+        {
+            if (shake01 <= 0f)
+            {
+                return Vector2.zero;
+            }
+            float phase = Time.unscaledTime * HpBarShakeFrequency;
+            float amp = HpBarShakeAmplitude * shake01;
+            return new Vector2(Mathf.Sin(phase) * amp, Mathf.Sin(phase * 1.7f) * amp * 0.6f);
         }
 
         private void UpdateCooldowns()
         {
-            foreach (var hb in _hpBars)
-            {
-                if (hb == null || hb.member == null || hb.fill == null) continue;
-                hb.fill.fillAmount = hb.member.MaxHp > 0 ? Mathf.Clamp01((float)hb.member.Hp / hb.member.MaxHp) : 0f;
-            }
-
             foreach (var s in _slots)
             {
                 if (s == null || s.member == null) continue;

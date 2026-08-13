@@ -279,7 +279,7 @@ MonoBehaviour:
     rainSkillCode: 203
     slamSkillCode: 0
     slamAirTime: 0.46
-    aoeSkillCodes: 
+    aoeSkillCodes: c9000000
     basicAttackAoe: 0
     weaponTrail: 1
     weaponTrailStyle: 1
@@ -1278,6 +1278,8 @@ MonoBehaviour:
   hpBarOffset: {x: -45, y: -40}
   hpBarBgColor: {r: 0, g: 0, b: 0, a: 0.6}
   hpBarFillColor: {r: 0.25, g: 0.9, b: 0.35, a: 1}
+  hpBarGhostColor: {r: 1, g: 0.93, b: 0.88, a: 0.9}
+  hpBarHitFlashColor: {r: 1, g: 0.25, b: 0.2, a: 1}
   hpBarFrame: {fileID: 3003013052192031213, guid: 92b7c1ec371896349b22006e2ae7a29c, type: 3}
 --- !u!114 &1793058198
 MonoBehaviour:

@@ -345,7 +345,7 @@
     "skillCode": 201,
     "classCode": 2,
     "name": "정조준 사격",
-    "description": "정조준해 단일 대상에게 강한 피해를 준다.",
+    "description": "정조준해 꿰뚫으며 강한 피해를 준다.",
     "skillType": 1,
     "statType": 0,
     "coefs": [
