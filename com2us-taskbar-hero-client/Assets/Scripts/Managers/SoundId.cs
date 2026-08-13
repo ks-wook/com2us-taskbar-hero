@@ -62,6 +62,7 @@ namespace TaskbarHero.Client.Managers
         // ── SFX/Battle/Knight (사운드 리소스 정의서 §5.2) ──
         KnightBasic,
         KnightShieldChargeStart,
+        KnightShieldChargeImpact,
         KnightPowerStrike,
         KnightRage,
 

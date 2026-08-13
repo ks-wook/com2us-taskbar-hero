@@ -67,6 +67,7 @@ namespace TaskbarHero.ClientEditor
 
             { SoundId.KnightBasic, "sfx_knight_basic" },
             { SoundId.KnightShieldChargeStart, "sfx_knight_shield_charge_start" },
+            { SoundId.KnightShieldChargeImpact, "sfx_knight_shield_charge_impact" },
             { SoundId.KnightPowerStrike, "sfx_knight_power_strike" },
             { SoundId.KnightRage, "sfx_knight_rage" },
 

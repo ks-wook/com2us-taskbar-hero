@@ -1,0 +1,2314 @@
+fileFormatVersion: 2
+guid: f1d869eef50bac14ea315ec4c4d9bcd3
+TextureImporter:
+  internalIDToNameTable:
+  - first:
+      213: -297804482481906659
+    second: ExplosionDustImpact_07_0
+  - first:
+      213: -170268150274843759
+    second: ExplosionDustImpact_07_1
+  - first:
+      213: -4381863654650180189
+    second: ExplosionDustImpact_07_2
+  - first:
+      213: 2085962539434662345
+    second: ExplosionDustImpact_07_3
+  - first:
+      213: 8723885765688680079
+    second: ExplosionDustImpact_07_4
+  - first:
+      213: 8514053339732622596
+    second: ExplosionDustImpact_07_5
+  - first:
+      213: 4117017043249198009
+    second: ExplosionDustImpact_07_6
+  - first:
+      213: -7020056601328318802
+    second: ExplosionDustImpact_07_7
+  - first:
+      213: -2329211983425342162
+    second: ExplosionDustImpact_07_8
+  - first:
+      213: -5173440350899715095
+    second: ExplosionDustImpact_07_9
+  - first:
+      213: -4216405394231916613
+    second: ExplosionDustImpact_07_10
+  - first:
+      213: 2944001092925624043
+    second: ExplosionDustImpact_07_11
+  - first:
+      213: -4809110885756371035
+    second: ExplosionDustImpact_07_12
+  - first:
+      213: -7608785904345452057
+    second: ExplosionDustImpact_07_13
+  - first:
+      213: -3648319515434760811
+    second: ExplosionDustImpact_07_14
+  - first:
+      213: 2026758493710997668
+    second: ExplosionDustImpact_07_15
+  - first:
+      213: 92778818627262684
+    second: ExplosionDustImpact_07_16
+  - first:
+      213: -7544502142420699182
+    second: ExplosionDustImpact_07_17
+  - first:
+      213: 5308378960070706190
+    second: ExplosionDustImpact_07_18
+  - first:
+      213: -1705349454409313649
+    second: ExplosionDustImpact_07_19
+  - first:
+      213: -3235260175188308264
+    second: ExplosionDustImpact_07_20
+  - first:
+      213: -2655178071030094632
+    second: ExplosionDustImpact_07_21
+  - first:
+      213: -2605689666679827254
+    second: ExplosionDustImpact_07_22
+  - first:
+      213: 4710294660344538523
+    second: ExplosionDustImpact_07_23
+  - first:
+      213: 5206717747567397853
+    second: ExplosionDustImpact_07_24
+  - first:
+      213: -408917684673964468
+    second: ExplosionDustImpact_07_25
+  - first:
+      213: -8647699970287982707
+    second: ExplosionDustImpact_07_26
+  - first:
+      213: -3744478788046674484
+    second: ExplosionDustImpact_07_27
+  - first:
+      213: 3653299075867229218
+    second: ExplosionDustImpact_07_28
+  - first:
+      213: -2624677357032582661
+    second: ExplosionDustImpact_07_29
+  - first:
+      213: 5593438477921872193
+    second: ExplosionDustImpact_07_30
+  - first:
+      213: 3629892410874242665
+    second: ExplosionDustImpact_07_31
+  - first:
+      213: -945539912274415991
+    second: ExplosionDustImpact_07_32
+  - first:
+      213: 2712688736219246163
+    second: ExplosionDustImpact_07_33
+  - first:
+      213: -8916409659187530469
+    second: ExplosionDustImpact_07_34
+  - first:
+      213: -8590284386715420172
+    second: ExplosionDustImpact_07_35
+  - first:
+      213: -3709334465933116347
+    second: ExplosionDustImpact_07_36
+  - first:
+      213: 6305612040515214442
+    second: ExplosionDustImpact_07_37
+  - first:
+      213: 3553981392868775815
+    second: ExplosionDustImpact_07_38
+  - first:
+      213: -4731980640056464056
+    second: ExplosionDustImpact_07_39
+  - first:
+      213: -3542594701450337757
+    second: ExplosionDustImpact_07_40
+  - first:
+      213: 8828397000730776219
+    second: ExplosionDustImpact_07_41
+  - first:
+      213: -6875726044306894977
+    second: ExplosionDustImpact_07_42
+  - first:
+      213: -6557040891299682148
+    second: ExplosionDustImpact_07_43
+  - first:
+      213: 4793724867748844577
+    second: ExplosionDustImpact_07_44
+  - first:
+      213: 9135456904790327932
+    second: ExplosionDustImpact_07_45
+  - first:
+      213: 7040647170968624493
+    second: ExplosionDustImpact_07_46
+  - first:
+      213: -1152602799530866752
+    second: ExplosionDustImpact_07_47
+  - first:
+      213: -6022425063368721071
+    second: ExplosionDustImpact_07_48
+  - first:
+      213: -6226086713393683001
+    second: ExplosionDustImpact_07_49
+  - first:
+      213: -6064642672584370100
+    second: ExplosionDustImpact_07_50
+  - first:
+      213: -7570606639261601061
+    second: ExplosionDustImpact_07_51
+  - first:
+      213: 5967533546416386281
+    second: ExplosionDustImpact_07_52
+  - first:
+      213: -8966440592451514467
+    second: ExplosionDustImpact_07_53
+  - first:
+      213: 5684430668594200853
+    second: ExplosionDustImpact_07_54
+  - first:
+      213: -2057983239043163760
+    second: ExplosionDustImpact_07_55
+  - first:
+      213: -5821311196337049703
+    second: ExplosionDustImpact_07_56
+  - first:
+      213: 1940233010676262399
+    second: ExplosionDustImpact_07_57
+  - first:
+      213: -3916977290905723922
+    second: ExplosionDustImpact_07_58
+  - first:
+      213: 4924974880169883810
+    second: ExplosionDustImpact_07_59
+  - first:
+      213: -2171002120280284717
+    second: ExplosionDustImpact_07_60
+  - first:
+      213: -7815016527949088831
+    second: ExplosionDustImpact_07_61
+  - first:
+      213: 2270224362820882351
+    second: ExplosionDustImpact_07_62
+  - first:
+      213: -2274871358005099115
+    second: ExplosionDustImpact_07_63
+  - first:
+      213: 1116923425541827706
+    second: ExplosionDustImpact_07_64
+  - first:
+      213: 8956905457503175688
+    second: ExplosionDustImpact_07_65
+  - first:
+      213: 3016074191059873675
+    second: ExplosionDustImpact_07_66
+  - first:
+      213: -8497121264163918506
+    second: ExplosionDustImpact_07_67
+  - first:
+      213: -4656058218345212233
+    second: ExplosionDustImpact_07_68
+  - first:
+      213: 3260303270714902569
+    second: ExplosionDustImpact_07_69
+  - first:
+      213: 5070375014597225881
+    second: ExplosionDustImpact_07_70
+  - first:
+      213: -5203665731120105630
+    second: ExplosionDustImpact_07_71
+  - first:
+      213: -6065293758855607997
+    second: ExplosionDustImpact_07_72
+  - first:
+      213: 9134877991981266647
+    second: ExplosionDustImpact_07_73
+  - first:
+      213: 617079735663959730
+    second: ExplosionDustImpact_07_74
+  - first:
+      213: -5801689889907843393
+    second: ExplosionDustImpact_07_75
+  - first:
+      213: 7649417923315452692
+    second: ExplosionDustImpact_07_76
+  - first:
+      213: 79727759377935873
+    second: ExplosionDustImpact_07_77
+  - first:
+      213: -4507512636050873982
+    second: ExplosionDustImpact_07_78
+  - first:
+      213: -5066250538408991668
+    second: ExplosionDustImpact_07_79
+  - first:
+      213: 2585622101455307985
+    second: ExplosionDustImpact_07_80
+  - first:
+      213: -345052180816052887
+    second: ExplosionDustImpact_07_81
+  - first:
+      213: 5211939624134436981
+    second: ExplosionDustImpact_07_82
+  - first:
+      213: -5235355311151047453
+    second: ExplosionDustImpact_07_83
+  externalObjects: {}
+  serializedVersion: 13
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 0
+    sRGBTexture: 1
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 0
+  streamingMipmapsPriority: 0
+  vTOnly: 0
+  ignoreMipmapLimit: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 2048
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 1
+    mipBias: 0
+    wrapU: 1
+    wrapV: 1
+    wrapW: 1
+  nPOTScale: 0
+  lightmap: 0
+  compressionQuality: 50
+  spriteMode: 2
+  spriteExtrude: 1
+  spriteMeshType: 1
+  alignment: 0
+  spritePivot: {x: 0.5, y: 0.5}
+  spritePixelsToUnits: 100
+  spriteBorder: {x: 0, y: 0, z: 0, w: 0}
+  spriteGenerateFallbackPhysicsShape: 1
+  alphaUsage: 1
+  alphaIsTransparency: 1
+  spriteTessellationDetail: -1
+  textureType: 8
+  textureShape: 1
+  singleChannelComponent: 0
+  flipbookRows: 1
+  flipbookColumns: 1
+  maxTextureSizeSet: 0
+  compressionQualitySet: 0
+  textureFormatSet: 0
+  ignorePngGamma: 0
+  applyGammaDecoding: 0
+  swizzle: 50462976
+  cookieLightType: 0
+  platformSettings:
+  - serializedVersion: 4
+    buildTarget: DefaultTexturePlatform
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: Standalone
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  - serializedVersion: 4
+    buildTarget: WebGL
+    maxTextureSize: 2048
+    resizeAlgorithm: 0
+    textureFormat: -1
+    textureCompression: 1
+    compressionQuality: 50
+    crunchedCompression: 0
+    allowsAlphaSplitting: 0
+    overridden: 0
+    ignorePlatformSupport: 0
+    androidETC2FallbackOverride: 0
+    forceMaximumCompressionQuality_BC6H_BC7: 0
+  spriteSheet:
+    serializedVersion: 2
+    sprites:
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_0
+      rect:
+        serializedVersion: 2
+        x: 191
+        y: 407
+        width: 20
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d1c9529a66cfddbf0800000000000000
+      internalID: -297804482481906659
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_1
+      rect:
+        serializedVersion: 2
+        x: 194
+        y: 389
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 19b1e4af40613adf0800000000000000
+      internalID: -170268150274843759
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_2
+      rect:
+        serializedVersion: 2
+        x: 200
+        y: 389
+        width: 23
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3ad8162e83e7033c0800000000000000
+      internalID: -4381863654650180189
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_3
+      rect:
+        serializedVersion: 2
+        x: 221
+        y: 398
+        width: 17
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9c956c1b0e3d2fc10800000000000000
+      internalID: 2085962539434662345
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_4
+      rect:
+        serializedVersion: 2
+        x: 230
+        y: 389
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f8ed5fcf1e7711970800000000000000
+      internalID: 8723885765688680079
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_5
+      rect:
+        serializedVersion: 2
+        x: 239
+        y: 395
+        width: 44
+        height: 38
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 40dbd71376ef72670800000000000000
+      internalID: 8514053339732622596
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_6
+      rect:
+        serializedVersion: 2
+        x: 260
+        y: 383
+        width: 20
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9b3f81d1035922930800000000000000
+      internalID: 4117017043249198009
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_7
+      rect:
+        serializedVersion: 2
+        x: 281
+        y: 365
+        width: 80
+        height: 62
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ea680b607bfb39e90800000000000000
+      internalID: -7020056601328318802
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_8
+      rect:
+        serializedVersion: 2
+        x: 359
+        y: 389
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e257951ba0afcafd0800000000000000
+      internalID: -2329211983425342162
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_9
+      rect:
+        serializedVersion: 2
+        x: 362
+        y: 389
+        width: 29
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9e343f1396f3438b0800000000000000
+      internalID: -5173440350899715095
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_10
+      rect:
+        serializedVersion: 2
+        x: 182
+        y: 344
+        width: 29
+        height: 44
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bb704c722a15c75c0800000000000000
+      internalID: -4216405394231916613
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_11
+      rect:
+        serializedVersion: 2
+        x: 212
+        y: 377
+        width: 17
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bee813265613bd820800000000000000
+      internalID: 2944001092925624043
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_12
+      rect:
+        serializedVersion: 2
+        x: 227
+        y: 353
+        width: 20
+        height: 32
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 5aff601112b924db0800000000000000
+      internalID: -4809110885756371035
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_13
+      rect:
+        serializedVersion: 2
+        x: 236
+        y: 368
+        width: 29
+        height: 23
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7e17d777889286690800000000000000
+      internalID: -7608785904345452057
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_14
+      rect:
+        serializedVersion: 2
+        x: 314
+        y: 374
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 595c267fab09e5dc0800000000000000
+      internalID: -3648319515434760811
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_15
+      rect:
+        serializedVersion: 2
+        x: 347
+        y: 377
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4a8562f9c1e702c10800000000000000
+      internalID: 2026758493710997668
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_16
+      rect:
+        serializedVersion: 2
+        x: 353
+        y: 383
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cd855fe08dd994100800000000000000
+      internalID: 92778818627262684
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_17
+      rect:
+        serializedVersion: 2
+        x: 365
+        y: 347
+        width: 41
+        height: 41
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2d737d1264b8c4790800000000000000
+      internalID: -7544502142420699182
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_18
+      rect:
+        serializedVersion: 2
+        x: 188
+        y: 173
+        width: 179
+        height: 194
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: e040c280a862ba940800000000000000
+      internalID: 5308378960070706190
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_19
+      rect:
+        serializedVersion: 2
+        x: 212
+        y: 347
+        width: 14
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f82d600e4b16558e0800000000000000
+      internalID: -1705349454409313649
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_20
+      rect:
+        serializedVersion: 2
+        x: 215
+        y: 365
+        width: 14
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8decee5030c0a13d0800000000000000
+      internalID: -3235260175188308264
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_21
+      rect:
+        serializedVersion: 2
+        x: 248
+        y: 362
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8d428d4bc99e62bd0800000000000000
+      internalID: -2655178071030094632
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_22
+      rect:
+        serializedVersion: 2
+        x: 266
+        y: 362
+        width: 17
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ac494aebd0bb6dbd0800000000000000
+      internalID: -2605689666679827254
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_23
+      rect:
+        serializedVersion: 2
+        x: 305
+        y: 332
+        width: 32
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b95614199045e5140800000000000000
+      internalID: 4710294660344538523
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_24
+      rect:
+        serializedVersion: 2
+        x: 338
+        y: 362
+        width: 11
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ddb0a7d743af14840800000000000000
+      internalID: 5206717747567397853
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_25
+      rect:
+        serializedVersion: 2
+        x: 350
+        y: 353
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c4612a6488b335af0800000000000000
+      internalID: -408917684673964468
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_26
+      rect:
+        serializedVersion: 2
+        x: 356
+        y: 350
+        width: 8
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d8724dac1b23df780800000000000000
+      internalID: -8647699970287982707
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_27
+      rect:
+        serializedVersion: 2
+        x: 359
+        y: 371
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: cc52e71a160f80cc0800000000000000
+      internalID: -3744478788046674484
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_28
+      rect:
+        serializedVersion: 2
+        x: 404
+        y: 359
+        width: 17
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 22c345b472023b230800000000000000
+      internalID: 3653299075867229218
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_29
+      rect:
+        serializedVersion: 2
+        x: 407
+        y: 320
+        width: 23
+        height: 41
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bf1df0499d5439bd0800000000000000
+      internalID: -2624677357032582661
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_30
+      rect:
+        serializedVersion: 2
+        x: 410
+        y: 359
+        width: 23
+        height: 23
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 149e88d09a2ef9d40800000000000000
+      internalID: 5593438477921872193
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_31
+      rect:
+        serializedVersion: 2
+        x: 155
+        y: 290
+        width: 53
+        height: 65
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 966ab0b6ae7ff5230800000000000000
+      internalID: 3629892410874242665
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_32
+      rect:
+        serializedVersion: 2
+        x: 203
+        y: 338
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 98eedef9574c0e2f0800000000000000
+      internalID: -945539912274415991
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_33
+      rect:
+        serializedVersion: 2
+        x: 347
+        y: 344
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 35e2d8c780865a520800000000000000
+      internalID: 2712688736219246163
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_34
+      rect:
+        serializedVersion: 2
+        x: 353
+        y: 338
+        width: 8
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b15f348f7ac824480800000000000000
+      internalID: -8916409659187530469
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_35
+      rect:
+        serializedVersion: 2
+        x: 362
+        y: 341
+        width: 8
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 4f93e321ddd29c880800000000000000
+      internalID: -8590284386715420172
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_36
+      rect:
+        serializedVersion: 2
+        x: 365
+        y: 326
+        width: 20
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 54c71f4c4fbc58cc0800000000000000
+      internalID: -3709334465933116347
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_37
+      rect:
+        serializedVersion: 2
+        x: 386
+        y: 326
+        width: 20
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a6cd5560eb8028750800000000000000
+      internalID: 6305612040515214442
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_38
+      rect:
+        serializedVersion: 2
+        x: 215
+        y: 332
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7879a4c3f37425130800000000000000
+      internalID: 3553981392868775815
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_39
+      rect:
+        serializedVersion: 2
+        x: 353
+        y: 323
+        width: 8
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 84da861dda0a45eb0800000000000000
+      internalID: -4731980640056464056
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_40
+      rect:
+        serializedVersion: 2
+        x: 356
+        y: 314
+        width: 17
+        height: 23
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3222fd473ec26dec0800000000000000
+      internalID: -3542594701450337757
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_41
+      rect:
+        serializedVersion: 2
+        x: 374
+        y: 332
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b929eac1c44c48a70800000000000000
+      internalID: 8828397000730776219
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_42
+      rect:
+        serializedVersion: 2
+        x: 203
+        y: 311
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: f7f8f2487938490a0800000000000000
+      internalID: -6875726044306894977
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_43
+      rect:
+        serializedVersion: 2
+        x: 344
+        y: 317
+        width: 11
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c982f50dc06b005a0800000000000000
+      internalID: -6557040891299682148
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_44
+      rect:
+        serializedVersion: 2
+        x: 362
+        y: 308
+        width: 20
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 12450257e5bb68240800000000000000
+      internalID: 4793724867748844577
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_45
+      rect:
+        serializedVersion: 2
+        x: 368
+        y: 314
+        width: 14
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c72cae637a9a7ce70800000000000000
+      internalID: 9135456904790327932
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_46
+      rect:
+        serializedVersion: 2
+        x: 380
+        y: 275
+        width: 38
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d6d917e8c4765b160800000000000000
+      internalID: 7040647170968624493
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_47
+      rect:
+        serializedVersion: 2
+        x: 407
+        y: 281
+        width: 53
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 0c787de4cd12100f0800000000000000
+      internalID: -1152602799530866752
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_48
+      rect:
+        serializedVersion: 2
+        x: 353
+        y: 302
+        width: 14
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 15d7f73205c0c6ca0800000000000000
+      internalID: -6022425063368721071
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_49
+      rect:
+        serializedVersion: 2
+        x: 353
+        y: 281
+        width: 47
+        height: 26
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7c5e3631f1f7899a0800000000000000
+      internalID: -6226086713393683001
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_50
+      rect:
+        serializedVersion: 2
+        x: 167
+        y: 236
+        width: 26
+        height: 53
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c48dee20f9f06dba0800000000000000
+      internalID: -6064642672584370100
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_51
+      rect:
+        serializedVersion: 2
+        x: 206
+        y: 251
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: bd239945f5dcfe690800000000000000
+      internalID: -7570606639261601061
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_52
+      rect:
+        serializedVersion: 2
+        x: 218
+        y: 272
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 9e03063a420f0d250800000000000000
+      internalID: 5967533546416386281
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_53
+      rect:
+        serializedVersion: 2
+        x: 329
+        y: 251
+        width: 29
+        height: 41
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: d9fc84399cdc09380800000000000000
+      internalID: -8966440592451514467
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_54
+      rect:
+        serializedVersion: 2
+        x: 344
+        y: 227
+        width: 38
+        height: 35
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 511c4ef539723ee40800000000000000
+      internalID: 5684430668594200853
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_55
+      rect:
+        serializedVersion: 2
+        x: 359
+        y: 260
+        width: 32
+        height: 32
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 099df13d5239073e0800000000000000
+      internalID: -2057983239043163760
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_56
+      rect:
+        serializedVersion: 2
+        x: 386
+        y: 245
+        width: 14
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 99f635f3f4c863fa0800000000000000
+      internalID: -5821311196337049703
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_57
+      rect:
+        serializedVersion: 2
+        x: 392
+        y: 254
+        width: 14
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: ff568d6b4a71dea10800000000000000
+      internalID: 1940233010676262399
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_58
+      rect:
+        serializedVersion: 2
+        x: 398
+        y: 230
+        width: 20
+        height: 20
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: eebda4e28e914a9c0800000000000000
+      internalID: -3916977290905723922
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_59
+      rect:
+        serializedVersion: 2
+        x: 413
+        y: 242
+        width: 26
+        height: 53
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2a87f345f86095440800000000000000
+      internalID: 4924974880169883810
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_60
+      rect:
+        serializedVersion: 2
+        x: 221
+        y: 221
+        width: 14
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3d1e216f21d0fd1e0800000000000000
+      internalID: -2171002120280284717
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_61
+      rect:
+        serializedVersion: 2
+        x: 233
+        y: 221
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1c7b9c1afdb7b8390800000000000000
+      internalID: -7815016527949088831
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_62
+      rect:
+        serializedVersion: 2
+        x: 245
+        y: 218
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: faf4062a705718f10800000000000000
+      internalID: 2270224362820882351
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_63
+      rect:
+        serializedVersion: 2
+        x: 251
+        y: 233
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 595456c7d880e60e0800000000000000
+      internalID: -2274871358005099115
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_64
+      rect:
+        serializedVersion: 2
+        x: 260
+        y: 218
+        width: 26
+        height: 23
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: a7cabb410fb108f00800000000000000
+      internalID: 1116923425541827706
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_65
+      rect:
+        serializedVersion: 2
+        x: 296
+        y: 221
+        width: 8
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 8040c31de025d4c70800000000000000
+      internalID: 8956905457503175688
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_66
+      rect:
+        serializedVersion: 2
+        x: 317
+        y: 227
+        width: 17
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: b8fe8563f7f3bd920800000000000000
+      internalID: 3016074191059873675
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_67
+      rect:
+        serializedVersion: 2
+        x: 317
+        y: 215
+        width: 14
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 65d671cda39241a80800000000000000
+      internalID: -8497121264163918506
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_68
+      rect:
+        serializedVersion: 2
+        x: 347
+        y: 224
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7b6def128bb526fb0800000000000000
+      internalID: -4656058218345212233
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_69
+      rect:
+        serializedVersion: 2
+        x: 368
+        y: 194
+        width: 41
+        height: 47
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 92881070d8cee3d20800000000000000
+      internalID: 3260303270714902569
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_70
+      rect:
+        serializedVersion: 2
+        x: 215
+        y: 212
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 99d651736379d5640800000000000000
+      internalID: 5070375014597225881
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_71
+      rect:
+        serializedVersion: 2
+        x: 257
+        y: 212
+        width: 11
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 26776b6769dd8c7b0800000000000000
+      internalID: -5203665731120105630
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_72
+      rect:
+        serializedVersion: 2
+        x: 329
+        y: 203
+        width: 14
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 349840d267fb3dba0800000000000000
+      internalID: -6065293758855607997
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_73
+      rect:
+        serializedVersion: 2
+        x: 341
+        y: 212
+        width: 11
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 7d6b392922b95ce70800000000000000
+      internalID: 9134877991981266647
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_74
+      rect:
+        serializedVersion: 2
+        x: 206
+        y: 203
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2be975a00ce409800800000000000000
+      internalID: 617079735663959730
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_75
+      rect:
+        serializedVersion: 2
+        x: 215
+        y: 203
+        width: 11
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: fbe5117a8c14c7fa0800000000000000
+      internalID: -5801689889907843393
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_76
+      rect:
+        serializedVersion: 2
+        x: 221
+        y: 191
+        width: 11
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 41b49b9a211382a60800000000000000
+      internalID: 7649417923315452692
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_77
+      rect:
+        serializedVersion: 2
+        x: 335
+        y: 191
+        width: 14
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 10ea57889ff3b1100800000000000000
+      internalID: 79727759377935873
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_78
+      rect:
+        serializedVersion: 2
+        x: 275
+        y: 185
+        width: 8
+        height: 8
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 2816a9ba3291271c0800000000000000
+      internalID: -4507512636050873982
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_79
+      rect:
+        serializedVersion: 2
+        x: 344
+        y: 176
+        width: 11
+        height: 14
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: c44200b3aff01b9b0800000000000000
+      internalID: -5066250538408991668
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_80
+      rect:
+        serializedVersion: 2
+        x: 353
+        y: 185
+        width: 8
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 1d484a02a99f1e320800000000000000
+      internalID: 2585622101455307985
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_81
+      rect:
+        serializedVersion: 2
+        x: 260
+        y: 149
+        width: 26
+        height: 29
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 96d3c75aed0263bf0800000000000000
+      internalID: -345052180816052887
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_82
+      rect:
+        serializedVersion: 2
+        x: 275
+        y: 173
+        width: 8
+        height: 11
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 578e05f5977845840800000000000000
+      internalID: 5211939624134436981
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    - serializedVersion: 2
+      name: ExplosionDustImpact_07_83
+      rect:
+        serializedVersion: 2
+        x: 284
+        y: 167
+        width: 14
+        height: 17
+      alignment: 0
+      pivot: {x: 0, y: 0}
+      border: {x: 0, y: 0, z: 0, w: 0}
+      customData: 
+      outline: []
+      physicsShape: []
+      tessellationDetail: -1
+      bones: []
+      spriteID: 3ec13e525184857b0800000000000000
+      internalID: -5235355311151047453
+      vertices: []
+      indices: 
+      edges: []
+      weights: []
+    outline: []
+    customData: 
+    physicsShape: []
+    bones: []
+    spriteID: 
+    internalID: 0
+    vertices: []
+    indices: 
+    edges: []
+    weights: []
+    secondaryTextures: []
+    spriteCustomMetadata:
+      entries: []
+    nameFileIdTable:
+      ExplosionDustImpact_07_0: -297804482481906659
+      ExplosionDustImpact_07_1: -170268150274843759
+      ExplosionDustImpact_07_10: -4216405394231916613
+      ExplosionDustImpact_07_11: 2944001092925624043
+      ExplosionDustImpact_07_12: -4809110885756371035
+      ExplosionDustImpact_07_13: -7608785904345452057
+      ExplosionDustImpact_07_14: -3648319515434760811
+      ExplosionDustImpact_07_15: 2026758493710997668
+      ExplosionDustImpact_07_16: 92778818627262684
+      ExplosionDustImpact_07_17: -7544502142420699182
+      ExplosionDustImpact_07_18: 5308378960070706190
+      ExplosionDustImpact_07_19: -1705349454409313649
+      ExplosionDustImpact_07_2: -4381863654650180189
+      ExplosionDustImpact_07_20: -3235260175188308264
+      ExplosionDustImpact_07_21: -2655178071030094632
+      ExplosionDustImpact_07_22: -2605689666679827254
+      ExplosionDustImpact_07_23: 4710294660344538523
+      ExplosionDustImpact_07_24: 5206717747567397853
+      ExplosionDustImpact_07_25: -408917684673964468
+      ExplosionDustImpact_07_26: -8647699970287982707
+      ExplosionDustImpact_07_27: -3744478788046674484
+      ExplosionDustImpact_07_28: 3653299075867229218
+      ExplosionDustImpact_07_29: -2624677357032582661
+      ExplosionDustImpact_07_3: 2085962539434662345
+      ExplosionDustImpact_07_30: 5593438477921872193
+      ExplosionDustImpact_07_31: 3629892410874242665
+      ExplosionDustImpact_07_32: -945539912274415991
+      ExplosionDustImpact_07_33: 2712688736219246163
+      ExplosionDustImpact_07_34: -8916409659187530469
+      ExplosionDustImpact_07_35: -8590284386715420172
+      ExplosionDustImpact_07_36: -3709334465933116347
+      ExplosionDustImpact_07_37: 6305612040515214442
+      ExplosionDustImpact_07_38: 3553981392868775815
+      ExplosionDustImpact_07_39: -4731980640056464056
+      ExplosionDustImpact_07_4: 8723885765688680079
+      ExplosionDustImpact_07_40: -3542594701450337757
+      ExplosionDustImpact_07_41: 8828397000730776219
+      ExplosionDustImpact_07_42: -6875726044306894977
+      ExplosionDustImpact_07_43: -6557040891299682148
+      ExplosionDustImpact_07_44: 4793724867748844577
+      ExplosionDustImpact_07_45: 9135456904790327932
+      ExplosionDustImpact_07_46: 7040647170968624493
+      ExplosionDustImpact_07_47: -1152602799530866752
+      ExplosionDustImpact_07_48: -6022425063368721071
+      ExplosionDustImpact_07_49: -6226086713393683001
+      ExplosionDustImpact_07_5: 8514053339732622596
+      ExplosionDustImpact_07_50: -6064642672584370100
+      ExplosionDustImpact_07_51: -7570606639261601061
+      ExplosionDustImpact_07_52: 5967533546416386281
+      ExplosionDustImpact_07_53: -8966440592451514467
+      ExplosionDustImpact_07_54: 5684430668594200853
+      ExplosionDustImpact_07_55: -2057983239043163760
+      ExplosionDustImpact_07_56: -5821311196337049703
+      ExplosionDustImpact_07_57: 1940233010676262399
+      ExplosionDustImpact_07_58: -3916977290905723922
+      ExplosionDustImpact_07_59: 4924974880169883810
+      ExplosionDustImpact_07_6: 4117017043249198009
+      ExplosionDustImpact_07_60: -2171002120280284717
+      ExplosionDustImpact_07_61: -7815016527949088831
+      ExplosionDustImpact_07_62: 2270224362820882351
+      ExplosionDustImpact_07_63: -2274871358005099115
+      ExplosionDustImpact_07_64: 1116923425541827706
+      ExplosionDustImpact_07_65: 8956905457503175688
+      ExplosionDustImpact_07_66: 3016074191059873675
+      ExplosionDustImpact_07_67: -8497121264163918506
+      ExplosionDustImpact_07_68: -4656058218345212233
+      ExplosionDustImpact_07_69: 3260303270714902569
+      ExplosionDustImpact_07_7: -7020056601328318802
+      ExplosionDustImpact_07_70: 5070375014597225881
+      ExplosionDustImpact_07_71: -5203665731120105630
+      ExplosionDustImpact_07_72: -6065293758855607997
+      ExplosionDustImpact_07_73: 9134877991981266647
+      ExplosionDustImpact_07_74: 617079735663959730
+      ExplosionDustImpact_07_75: -5801689889907843393
+      ExplosionDustImpact_07_76: 7649417923315452692
+      ExplosionDustImpact_07_77: 79727759377935873
+      ExplosionDustImpact_07_78: -4507512636050873982
+      ExplosionDustImpact_07_79: -5066250538408991668
+      ExplosionDustImpact_07_8: -2329211983425342162
+      ExplosionDustImpact_07_80: 2585622101455307985
+      ExplosionDustImpact_07_81: -345052180816052887
+      ExplosionDustImpact_07_82: 5211939624134436981
+      ExplosionDustImpact_07_83: -5235355311151047453
+      ExplosionDustImpact_07_9: -5173440350899715095
+  mipmapLimitGroupName: 
+  pSDRemoveMatte: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

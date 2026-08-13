@@ -144,7 +144,6 @@ namespace TaskbarHero.Client.Battle
         private bool _chargeImpacted;  // 이번 돌진의 타격을 이미 예약했는지(중복 데미지 방지)
         private float _chargeElapsed;  // 돌진(준비 동작 이후) 시작 후 경과 시간
         private float _chargeEndAt;    // 이 경과 시간에 돌진을 끝낸다(충돌 전에는 무한 — 충돌해야 정해진다)
-        private GameObject _chargeFx;  // 돌진 중 두르고 있는 방패 이펙트(충돌 시 즉시 치운다)
 
         private string _name = "Ally";
         private long _atk;
@@ -1402,18 +1401,32 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>
-        /// 물러남이 끝나고 <b>앞으로 튀어나가는 순간</b> — 방패 이펙트를 두르고 개시음을 낸다.
-        /// 이펙트는 자기 자식으로 붙여 돌진 중 함께 따라오게 한다.
+        /// 물러남이 끝나고 <b>앞으로 튀어나가는 순간</b> — 돌진 개시음을 낸다.
+        /// <para>스킬 이펙트는 여기서 두르지 않는다. 방패 돌진의 이펙트는 <b>부딪히는 순간 터지는 폭발</b>이라
+        /// 충돌 지점에서 1회 재생한다(<see cref="SpawnChargeImpactFx"/>).</para>
         /// </summary>
         private void BeginChargeDash()
         {
-            if (_chargeSkill.effect != null)
-            {
-                _chargeFx = Instantiate(_chargeSkill.effect, transform, false);
-                _chargeFx.transform.localPosition = new Vector3(0f, _ctrl.EffectYOffset, 0f);
-            }
             SoundManager.Sfx(BattleSounds.SkillFor(_chargeSkill.code)); // 돌진 개시음(§5.2)
             _chargeElapsed = 0f; // 자세 유지 시간은 물러남이 아니라 돌진부터 센다
+        }
+
+        /// <summary>
+        /// 충돌 지점에 방패 돌진 폭발 이펙트를 1회 터뜨린다 — 자기 자식이 아니라 <b>월드에</b> 놓아
+        /// 돌진 자세가 끝나도(캐릭터가 움직여도) 그 자리에서 흩어지게 한다. 재생이 끝나면 스스로 사라진다.
+        /// 대상 위치를 쓰되, 대상이 없으면 방패가 닿는 자기 앞쪽으로 폴백한다.
+        /// </summary>
+        private void SpawnChargeImpactFx()
+        {
+            if (_chargeSkill.effect == null)
+            {
+                return;
+            }
+            var target = _ctrl.MonsterTransform;
+            Vector3 pos = target != null
+                ? target.position
+                : transform.position + Vector3.right * _attackRange;
+            SpawnEffectAt(_chargeSkill.effect, pos + Vector3.up * _ctrl.EffectYOffset, _chargeSkill.scale);
         }
 
         /// <summary>
@@ -1487,8 +1500,8 @@ namespace TaskbarHero.Client.Battle
                 _chargeImpacted = true;
                 _chargeEndAt = _chargeElapsed + ChargeImpactWrapUpSeconds;
                 long dmg = Damage(_chargeSkill.coef, out bool crit);
-                SoundManager.Sfx(SoundId.KnightPowerStrike); // 돌진 충돌음은 강타음을 재사용한다(§8)
-                DestroyChargeFx();                           // 돌진이 끝났으니 방패 아우라도 함께 끝낸다
+                SoundManager.Sfx(SoundId.KnightShieldChargeImpact); // 방패가 터지는 파열음(§5.2)
+                SpawnChargeImpactFx();                             // 부딪힌 자리에 폭발 이펙트
                 // 방패 돌진은 '밀치는 것'이 스킬의 정체성이라 <b>방패에 부딪힌 전방의 적 전부</b>가 대상이다 —
                 // 예전에는 데미지가 단일 대상뿐이고 나머지는 밀리기만 했지만, 이제 맞은 적 모두가
                 // 데미지와 넉백을 함께 받는다(knockbackAll). 판정 범위는 종전에 밀어내던 범위 그대로다.
@@ -1507,20 +1520,9 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
-        /// <summary>돌진 중 두르고 있던 방패 이펙트를 즉시 치운다(충돌·중단 시).</summary>
-        private void DestroyChargeFx()
-        {
-            if (_chargeFx != null)
-            {
-                Destroy(_chargeFx);
-                _chargeFx = null;
-            }
-        }
-
         private void EndCharge()
         {
             _charging = false;
-            DestroyChargeFx(); // 대상이 먼저 사라져 타격 없이 끝나는 경로도 이펙트를 남기지 않는다
             SendMessage("StopChargeDash", SendMessageOptions.DontRequireReceiver);
             _ctrl.RequestFighting(); // 돌진 도달 → 파티 교전 진입
         }

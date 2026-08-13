@@ -5,9 +5,9 @@
     "description": "높은 체력과 방어력으로 최전방에서 적을 막아서는 근접 전사다.",
     "unlockType": 0,
     "baseStats": {
-      "hp": 560,
-      "atk": 10,
-      "def": 16,
+      "hp": 1000,
+      "atk": 21,
+      "def": 60,
       "moveSpeed": 3.0,
       "critChance": 0.05,
       "critDamage": 1.5,

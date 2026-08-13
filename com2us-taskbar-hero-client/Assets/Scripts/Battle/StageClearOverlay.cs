@@ -44,6 +44,10 @@ namespace TaskbarHero.Client.Battle
         // 크기는 스프라이트 원본 비율(526×287)을 유지한 값이며, 이것이 연출이 끝나는 "원본 크기"다.
         private static readonly Vector2 TitleImageSize = new Vector2(560f, 306f);
         private const float TitleImageY = 440f;          // 타이틀 텍스트가 있던 자리(상단 중앙)
+
+        /// <summary>안내 문구의 y(화면 중앙 기준). 보상 줄(높이 220 = ±110) 아래로 여유를 두되,
+        /// 던전 배경 영역 안에 남도록 화면 중앙에서 크게 내려가지 않는 값으로 잡는다.</summary>
+        private const float HintY = -260f;
         private const float TitleImageTopMargin = 24f;   // 화면 위쪽으로 이만큼은 남긴다(잘림 방지)
         private const float TitlePopDuration = 0.42f;    // 작은 크기 → 원본 크기까지 걸리는 시간
         private const float TitlePopStartScale = 0.25f;  // 등장 시작 크기(원본 대비)
@@ -361,14 +365,17 @@ namespace TaskbarHero.Client.Battle
             layout.childControlWidth = false;
             layout.childControlHeight = false;
 
-            // 안내 문구.
+            // 안내 문구. <b>화면 중앙 기준</b>으로 보상 줄 바로 아래에 둔다.
+            // 예전에는 이것만 화면 <b>하단</b> 앵커(y=70)였는데, GameScene에서는 창 맨 아래가 던전 배경 밖
+            // (하단 HUD 자리)이라 문구가 던전 화면을 벗어나 걸쳤다. 이 오버레이의 다른 요소(팡파레·타이틀·
+            // 보상 줄)는 모두 중앙 앵커라, 같은 기준으로 맞추면 창 높이가 바뀌어도 함께 따라간다.
             var hint = CreateText("Hint", transform, font, "클릭하거나 잠시 기다리면 닫힙니다", 34, TextAnchor.MiddleCenter);
             hint.color = new Color(1f, 1f, 1f, 0.7f);
             var hrt = (RectTransform)hint.transform;
-            hrt.anchorMin = hrt.anchorMax = new Vector2(0.5f, 0f);
-            hrt.pivot = new Vector2(0.5f, 0f);
+            hrt.anchorMin = hrt.anchorMax = new Vector2(0.5f, 0.5f);
+            hrt.pivot = new Vector2(0.5f, 0.5f);
             hrt.sizeDelta = new Vector2(900f, 60f);
-            hrt.anchoredPosition = new Vector2(0f, 70f);
+            hrt.anchoredPosition = new Vector2(0f, HintY);
         }
 
         /// <summary>보상 데이터로 팡파레·보상 칸을 채우고 자동 닫기 타이머를 시작한다.
