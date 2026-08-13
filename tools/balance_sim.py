@@ -117,9 +117,13 @@ CODE_CONSTANTS = {
     "knockback_max_seconds": (0.28, "Battle/MonsterUnit.cs:100 KnockbackMaxSeconds"),
     "knockback_limit": (3.5, "Battle/MonsterUnit.cs:101 KnockbackLimit"),
     "knockback_return_speed": (3.0, "Battle/MonsterUnit.cs:102 KnockbackReturnSpeed"),
-    # 돌진: 자세 최소 유지 시간 / 유효 속도 하한(걷기 1.5배)
-    "min_charge_motion": (0.45, "Battle/PlayerCombatant.cs:70 MinChargeMotion"),
-    "charge_speed_move_factor": (1.5, "Battle/PlayerCombatant.cs:1214 ChargeSpeedEffective"),
+    # 돌진(방패 돌진): 뒤로 도약하는 준비 동작 → 돌진 → 부딪힌 자리에서 **광역** 타격.
+    #   판정 반경은 (공격 사거리 + 1.8)의 절반이고 맞은 적 전부가 데미지·넉백을 받는다(knockbackAll).
+    "charge_windup_seconds": (0.34, "Battle/PlayerCombatant.cs:83 ChargeWindupSeconds"),
+    "charge_windup_distance": (1.2, "Battle/PlayerCombatant.cs:80 ChargeWindupDistance"),
+    "charge_shove_extra_range": (1.8, "Battle/PlayerCombatant.cs:75 ChargeShoveExtraRange"),
+    "charge_impact_wrapup": (0.12, "Battle/PlayerCombatant.cs:71 ChargeImpactWrapUpSeconds"),
+    "charge_speed_move_factor": (1.5, "Battle/PlayerCombatant.cs:1480 ChargeSpeedEffective"),
     # 치명피해 기본값(마스터에 0일 때) / 화살 투사체 속도
     "default_crit_damage": (1.5, "Battle/PlayerCombatant.cs:119 DefaultCritDamage"),
     "arrow_speed": (9.0, "Battle/PlayerCombatant.cs:48 _arrowSpeed"),
@@ -192,10 +196,11 @@ ACT_FLOOR = {
 }
 
 # 긴장도(값 문서 §9.3) — 전투 중 파티가 떨어진 최저 체력 비율의 현재 실측 곡선.
-#   "아슬아슬하게 깨는 맛"을 위해 지역이 오를수록 좁히는 것이 목표이며,
-#   2지역이 헐겁고(0.47) 4지역이 아슬아슬한(0.07) 불균형은 미결이다(기획서 11장 9번).
-TENSION_S9 = {1: 0.22, 2: 0.47, 3: 0.20, 4: 0.07, 5: 0.14}
-TENSION_BOSS = {1: 0.59, 2: 0.61, 3: 0.43, 4: 0.23, 5: 0.21}
+#   "아슬아슬하게 깨는 맛"을 위해 지역이 오를수록 좁히는 것이 목표인데, 현재 곡선은
+#   평평하고 전반적으로 헐겁다(1지역만 37%, 나머지 41~59%). 지역별 몬스터 attack 기울기를
+#   손봐야 하는 4직업 공통 문제라 미결로 둔다(기획서 11장 9번).
+TENSION_S9 = {1: 0.37, 2: 0.59, 3: 0.56, 4: 0.58, 5: 0.41}
+TENSION_BOSS = {1: 0.52, 2: 0.58, 3: 0.47, 4: 0.40, 5: 0.38}
 
 
 # =============================================================================
@@ -1005,7 +1010,9 @@ class Ally:
 
         self.charging = False
         self.charge_elapsed = 0.0
-        self.charge_motion = 0.0
+        self.charge_windup = 0.0     # 남은 준비 동작(뒤로 도약) 시간
+        self.charge_start_x = 0.0    # 물러나기 전 x — 돌진은 최소한 여기까지 되돌아온다
+        self.charge_end_at = 0.0     # 충돌 뒤 자세 정리가 끝나는 시각
         self.charge_impacted = False
         self.charge_skill = next((s for s in skills if s.code == cfg.charge_skill_code), None)
 
@@ -1229,7 +1236,9 @@ class Battle:
         if killed:
             self.on_monster_killed(target)
 
-    def deal_area(self, attacker, center, radius, dmg, crit, big_hit, label, sk=None):
+    def deal_area(self, attacker, center, radius, dmg, crit, big_hit, label, sk=None,
+                  knockback=0.0, knockback_all=False):
+        """DoAreaDamageAfter — 넉백은 대표(첫) 대상만, knockback_all이면 맞은 적 전부."""
         hit, killed_list = 0, []
         r2 = radius * radius
         for m in list(self.alive_monsters()):
@@ -1239,9 +1248,11 @@ class Battle:
                 killed = self.apply_damage(m, dmg)
                 attacker.damage_dealt += dmg
                 self.damage_dealt += dmg
-                hit += 1
                 if killed:
                     killed_list.append(m)
+                elif knockback > 0 and (knockback_all or hit == 0):
+                    self.knockback(m, knockback)
+                hit += 1
         if hit:
             if crit or big_hit:
                 self.request_hitstop(any(m.is_boss for m in killed_list))
@@ -1442,7 +1453,8 @@ class Battle:
                                                                        f"[{a.name}] 투사체"))
             a.busy = delay
         elif a.cfg.basic_attack_aoe:
-            # 기사: 대상 위치를 중심으로 사거리 안 모든 적(= 앞 라인에 겹쳐 있는 무리 전체)
+            # 평타 광역(씬의 basicAttackAoe): 대상 위치를 중심으로 사거리 안 모든 적을 친다.
+            #   현재 4직업 중 이 설정을 켠 직업은 없다 — 기사의 광역은 평타가 아니라 방패 돌진(101)이다.
             center = (target.x if target else a.x + max(1.0, a.cfg.attack_range * 0.5),
                       self.path_y if target else a.y + self.cfg.effect_y_offset)
             self.schedule(delay, lambda c=center: self.deal_area(a, c, a.cfg.attack_range, dmg, crit,
@@ -1543,31 +1555,46 @@ class Battle:
         sk.casts += 1
         a.charge_impacted = False
         a.charge_elapsed = 0.0
-        a.charge_motion = max(K("min_charge_motion"), sk.motion)
+        # 충돌 전에는 시간 제한이 없다 — 자세가 보이는 시간은 준비 동작이 보장한다.
+        a.charge_end_at = float("inf")
+        a.charge_windup = K("charge_windup_seconds")
+        a.charge_start_x = a.x
         self.say(f"[{a.name}] 돌진 {sk.name} 개시 (거리 {dist:.2f})")
         return True
 
     def update_charge(self, a):
-        a.charge_elapsed += self.dt
         sk = a.charge_skill
+        # 준비 동작: 적 반대쪽으로 물러섰다가 돌진한다(UpdateChargeWindup).
+        if a.charge_windup > 0:
+            a.charge_windup -= self.dt
+            k = 1.0 - max(0.0, min(1.0, a.charge_windup / K("charge_windup_seconds")))
+            a.x = a.charge_start_x - K("charge_windup_distance") * math.sin(k * math.pi * 0.5)
+            a.y = self.path_y
+            return
+
+        a.charge_elapsed += self.dt
         if not a.charge_impacted:
             front = self.front_monster()
             if front is None:
                 a.charging = False
                 return
-            dist = front.x - a.x
-            if dist > a.cfg.attack_range:
+            # 돌진 목표 x — 사거리에 닿는 지점이되 최소한 물러나기 전 자리까지는 되돌아온다.
+            target_x = max(front.x - a.cfg.attack_range, a.charge_start_x)
+            if a.x < target_x - 0.01:
                 speed = max(a.cfg.charge_speed, a.stats.move_speed * K("charge_speed_move_factor"))
-                a.x += speed * self.dt
+                a.x = min(target_x, a.x + speed * self.dt)
                 a.y = self.path_y
                 return
+            # 부딪힌 순간이 곧 타격이다. 방패에 부딪힌 전방의 적 전부가 데미지·넉백을 함께 받는다.
             a.charge_impacted = True
+            a.charge_end_at = a.charge_elapsed + K("charge_impact_wrapup")
             dmg, crit = self.roll_damage(a, sk.coef)
-            impact_delay = max(0.0, a.charge_motion - a.charge_elapsed)
-            self.schedule(impact_delay, lambda t=front: self.deal_single(
-                a, t, dmg, crit, True, f"[{a.name}] 돌진 {sk.name} ×{sk.coef:.2f}"))
-            self.schedule(impact_delay, lambda t=front: self.knockback(t, K("charge_knockback")))
-        if a.charge_elapsed >= a.charge_motion:
+            hit_range = a.cfg.attack_range + K("charge_shove_extra_range")
+            center = (a.x + hit_range * 0.5, self.path_y)
+            self.deal_area(a, center, hit_range * 0.5, dmg, crit, True,
+                           f"[{a.name}] 돌진 {sk.name} ×{sk.coef:.2f}", sk,
+                           knockback=K("charge_knockback"), knockback_all=True)
+        if a.charge_elapsed >= a.charge_end_at:
             a.charging = False
             # RequestFighting: 돌진 도달 → 교전 진입
             front = self.front_monster()

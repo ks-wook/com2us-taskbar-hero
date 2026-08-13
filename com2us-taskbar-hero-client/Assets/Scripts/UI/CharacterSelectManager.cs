@@ -18,6 +18,8 @@ namespace TaskbarHero.Client.UI
         [Header("참조")]
         [SerializeField] private Camera cam;
         [SerializeField] private GameObject selectPanelPrefab;
+        [Tooltip("좌측 상단 '뒤로가기' 버튼 배경(Assets/Art/UI/pixel_rpg_button.png, 9-slice). 없으면 단색 버튼.")]
+        [SerializeField] private Sprite backButtonSprite;
 
         // ── 화면 배치 ───────────────────────────────────────────────────────────────
         // 좌: 큰 일러스트(주인공) + 그 아래 성별 버튼 │ 중: 선택 캐릭터(SPUM) │ 우: 정보 패널
@@ -141,19 +143,19 @@ namespace TaskbarHero.Client.UI
             var btnGo = new GameObject("BackButton", typeof(RectTransform), typeof(Image));
             btnGo.transform.SetParent(canvasGo.transform, false);
             var img = btnGo.GetComponent<Image>();
-            img.color = new Color(0.20f, 0.22f, 0.30f, 0.95f);
+            ApplyButtonSprite(img);
             var rt = (RectTransform)btnGo.transform;
             rt.anchorMin = rt.anchorMax = new Vector2(0f, 1f); // 좌측 상단
             rt.pivot = new Vector2(0f, 1f);
             rt.anchoredPosition = new Vector2(40f, -40f);
-            rt.sizeDelta = new Vector2(200f, 84f);
+            rt.sizeDelta = new Vector2(130f, 60f);
 
             var labelGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
             labelGo.transform.SetParent(btnGo.transform, false);
             var t = labelGo.GetComponent<Text>();
             t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            t.text = "◀ 뒤로";
-            t.fontSize = 34;
+            t.text = "뒤로";
+            t.fontSize = 26;
             t.alignment = TextAnchor.MiddleCenter;
             t.color = Color.white;
             t.raycastTarget = false;
@@ -164,6 +166,20 @@ namespace TaskbarHero.Client.UI
             lrt.offsetMax = Vector2.zero;
 
             btnGo.AddComponent<Button>().onClick.AddListener(OnBack);
+        }
+
+        /// <summary>뒤로가기 버튼 배경에 공용 버튼 아트(pixel_rpg_button 9-slice)를 적용한다.
+        /// 스프라이트가 배선되지 않았으면 기존 단색 배경으로 폴백한다.</summary>
+        private void ApplyButtonSprite(Image img)
+        {
+            if (backButtonSprite == null)
+            {
+                img.color = new Color(0.20f, 0.22f, 0.30f, 0.95f);
+                return;
+            }
+            img.sprite = backButtonSprite;
+            img.type = Image.Type.Sliced; // 테두리 장식을 유지한 채 버튼 크기에 맞춰 늘린다
+            img.color = Color.white;
         }
 
         /// <summary>뒤로가기: 게임 진입 플래그를 해제하고 진입한 화면(편성 씬 또는 GameScene)으로 돌아간다.</summary>

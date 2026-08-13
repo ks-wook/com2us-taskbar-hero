@@ -541,6 +541,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: TaskbarHero.Client.UI::TaskbarHero.Client.UI.CharacterSelectManager
   cam: {fileID: 1864903867}
   selectPanelPrefab: {fileID: 7250920551284720571, guid: 0e2fa557e8ab4ae4290a8b8e5a9bd3fd, type: 3}
+  backButtonSprite: {fileID: -4938201203985708848, guid: 213effa653e24b641b29b2dbce05066a, type: 3}
   zoomSize: 3.4
   zoomDuration: 0.4
   focusScreen: {x: 0.551, y: 0.2}
@@ -1206,11 +1207,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 1567720465911105452, guid: aec85af960a9b5641a641a8fb6bb0cb0, type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: 0
+      value: -5.77
       objectReference: {fileID: 0}
     - target: {fileID: 1567720465911105452, guid: aec85af960a9b5641a641a8fb6bb0cb0, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -170
+      value: -2.89
       objectReference: {fileID: 0}
     - target: {fileID: 1567720465911105452, guid: aec85af960a9b5641a641a8fb6bb0cb0, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x

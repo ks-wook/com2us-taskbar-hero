@@ -6,8 +6,8 @@
     "unlockType": 0,
     "baseStats": {
       "hp": 1300,
-      "atk": 12,
-      "def": 100,
+      "atk": 10,
+      "def": 12,
       "moveSpeed": 3.0,
       "critChance": 0.05,
       "critDamage": 1.5,
