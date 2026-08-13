@@ -91,8 +91,15 @@ namespace TaskbarHero.Client.Battle
 
         // ---- 근접 lunge(찔러 들어갔다 복귀) ----
         // 제자리 스윙은 "때렸다"가 약하게 읽힌다. 평타마다 0.1초 앞으로 파고들었다 돌아오면 체감이 확 다르다.
-        /// <summary>자버프 이펙트를 캐릭터 파트보다 얼마나 뒤에 둘지(정렬 칸 수).</summary>
+        /// <summary>자버프 이펙트를 캐릭터 묶음보다 얼마나 뒤에 둘지(정렬 칸 수).</summary>
         private const int BuffEffectSortingGap = 1;
+
+        /// <summary>
+        /// 자버프 이펙트가 내려갈 수 있는 <b>정렬 하한</b>. 던전 배경(<c>ScrollingBackground.sortingOrder</c>
+        /// 기본 -100)보다 확실히 앞이어야 아우라가 배경에 가려지지 않는다. 0으로 두면 배경(-100)보다 앞이면서
+        /// 아군 묶음(20)·적 묶음(10)보다는 뒤라 "캐릭터 뒤에서 번지는" 그림이 유지된다.
+        /// </summary>
+        private const int MinBuffEffectOrder = 0;
 
         private const float LungeDistance = 0.32f;      // 앞으로 파고드는 거리(유닛)
         private const float LungeOutSeconds = 0.06f;    // 나가는 시간(짧고 빠르게)
@@ -896,11 +903,17 @@ namespace TaskbarHero.Client.Battle
         private float AttackCooldown => Mathf.Max(0.05f, _cooldown * _cooldownBuffMult);
 
         /// <summary>
-        /// 자버프 이펙트를 <b>캐릭터 스프라이트 뒤</b>로 보낸다(기사의 분노·광전사의 힘).
-        /// 이펙트가 캐릭터를 덮으면 무슨 캐릭터가 무엇을 하는지 안 보이므로, 아우라는 뒤에서 번지게 한다.
-        /// <para>캐릭터 파트(SPUM 스프라이트) 중 <b>가장 뒤</b> 정렬값을 찾아 그보다 한 칸 더 뒤에 둔다.
-        /// 이펙트가 자기 <see cref="SortingGroup"/>을 갖고 있으면 개별 렌더러 값이 무시되므로 그룹 값을 바꾼다.
-        /// 캐릭터 루트의 <c>SortingGroup</c> 안에서의 <b>상대</b> 정렬이라 배경·다른 유닛과의 앞뒤는 그대로다.</para>
+        /// 자버프 이펙트를 <b>캐릭터 스프라이트 뒤, 던전 배경 앞</b>에 놓는다(기사의 분노·광전사의 힘).
+        /// 이펙트가 캐릭터를 덮으면 무슨 캐릭터가 무엇을 하는지 안 보이므로 아우라는 뒤에서 번지게 하되,
+        /// 배경보다는 앞이어야 한다.
+        /// <para><b>기준은 캐릭터 묶음의 <see cref="SortingGroup"/> 순서</b>다. SPUM 캐릭터는 그룹이
+        /// 루트가 아니라 자식(<c>UnitRoot</c>)에 있고 자버프 이펙트는 캐릭터 <b>루트</b>의 자식이라,
+        /// 이펙트는 그 그룹 <b>밖</b>에 있고 자기 sortingOrder가 <b>전역 값</b>으로 해석된다.
+        /// 그래서 캐릭터 파트의 정렬값(그룹 안에서만 의미 있는 상대값)을 기준으로 삼으면 안 된다 —
+        /// 실제로 파트 스캔 결과가 -100까지 내려가 이펙트가 -101이 되었고, 던전 배경(-100)보다 뒤라
+        /// <b>아우라가 배경에 가려 보이지 않았다</b>(2026-08-13 실측·수정).</para>
+        /// <para>그룹을 못 찾는 경우에만 예전처럼 파트를 훑고, 어느 경로든 <see cref="MinBuffEffectOrder"/>로
+        /// 하한을 걸어 배경 뒤로 내려가지 않게 한다.</para>
         /// </summary>
         private void SendBuffEffectBehind(GameObject effect)
         {
@@ -909,25 +922,34 @@ namespace TaskbarHero.Client.Battle
                 return;
             }
 
-            int minOrder = int.MaxValue;
-            foreach (var sr in GetComponentsInChildren<SpriteRenderer>(true))
+            int reference;
+            var charGroup = GetComponentInChildren<UnityEngine.Rendering.SortingGroup>(true);
+            if (charGroup != null)
             {
-                // 이펙트 자신은 기준에서 뺀다(방금 붙었으므로 이 시점엔 아직 옛 값이다).
-                if (sr.transform.IsChildOf(effect.transform))
-                {
-                    continue;
-                }
-                if (sr.sortingOrder < minOrder)
-                {
-                    minOrder = sr.sortingOrder;
-                }
+                reference = charGroup.sortingOrder; // 캐릭터 묶음 전체의 전역 순서(아군 20 / 적 10)
             }
-            if (minOrder == int.MaxValue)
+            else
             {
-                minOrder = 0;
+                reference = int.MaxValue;
+                foreach (var sr in GetComponentsInChildren<SpriteRenderer>(true))
+                {
+                    // 이펙트 자신은 기준에서 뺀다(방금 붙었으므로 이 시점엔 아직 옛 값이다).
+                    if (sr.transform.IsChildOf(effect.transform))
+                    {
+                        continue;
+                    }
+                    if (sr.sortingOrder < reference)
+                    {
+                        reference = sr.sortingOrder;
+                    }
+                }
+                if (reference == int.MaxValue)
+                {
+                    reference = 0;
+                }
             }
 
-            int target = minOrder - BuffEffectSortingGap;
+            int target = Mathf.Max(reference - BuffEffectSortingGap, MinBuffEffectOrder);
 
             var group = effect.GetComponentInChildren<UnityEngine.Rendering.SortingGroup>(true);
             if (group != null)
