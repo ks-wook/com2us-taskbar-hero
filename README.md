@@ -25,9 +25,9 @@
 
 ## 구성
 
-- **AccountServer** — 계정/인증 서비스 (`http://localhost:5160`, `https://localhost:7110`)
-- **GameServer** — 게임 로직 서비스 (`http://localhost:5247`, `https://localhost:7179`)
-- **TaskbarHero.Common** — 서버-클라 공유 라이브러리 (`netstandard2.0`, Unity UPM 패키지로도 소비)
+- **AccountServer** — 계정/인증 서비스 (`http://localhost:5160`)
+- **GameServer** — 게임 로직 서비스 (`http://localhost:5247`)
+- **TaskbarHero.Common** — 서버-클라 공유 라이브러리
 
 전체 개발 로드맵은 [docs/서버-개발-계획.md](docs/서버-개발-계획.md)를 정본으로 한다. 아래 현황판은 서버/클라 작업 진척을 추적하기 위한 체크리스트다.
 
