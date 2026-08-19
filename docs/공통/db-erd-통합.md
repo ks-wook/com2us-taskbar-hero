@@ -28,6 +28,10 @@
   - [player_gacha_counter](#player_gacha_counter)
   - [player_gacha_pull](#player_gacha_pull)
   - [player_gacha_pull_item](#player_gacha_pull_item)
+  - [boss_rush_season](#boss_rush_season)
+  - [boss_rush_run](#boss_rush_run)
+  - [boss_rush_run_round](#boss_rush_run_round)
+  - [boss_rush_record](#boss_rush_record)
 - [4. 마스터 데이터 (정적 · 읽기 전용)](#4-마스터-데이터-정적--읽기-전용)
   - [grade_master](#grade_master)
   - [class_master](#class_master)
@@ -52,6 +56,10 @@
   - [character_create_cost](#character_create_cost)
   - [mail_master](#mail_master)
   - [newbie_reward_master](#newbie_reward_master)
+  - [boss_rush_master](#boss_rush_master)
+  - [boss_rush_round](#boss_rush_round)
+  - [boss_rush_spawn](#boss_rush_spawn)
+  - [boss_rush_rank_reward](#boss_rush_rank_reward)
 - [5. 출처 문서](#5-출처-문서)
 
 
@@ -61,8 +69,10 @@
 |---|---|---|
 | MySQL (Account DB) | `AccountServer` | 계정·인증 토큰 영속 저장 |
 | Redis | `AccountServer` 발급 / `GameServer` 검증 | 인증 토큰 캐시(`auth:token:{userId}`) — **필수 의존**(없으면 인증 불가) |
-| Redis | `GameServer` | 배치 리더 락(`batch:lock:{배치키}`) — 거래 만료·메일 GC 등 주기 배치의 중복 실행 방지. **GameServer가 Redis를 쓰는 유일한 용도**이며, 게임 데이터 조회에는 캐시를 두지 않는다([거래소 기획서](../세부/trade-기획서.md) 7.3 · [인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 6.5) |
-| MySQL (Game DB) | `GameServer` | 플레이어 진행 세이브 데이터. **가방 조회(`inventory/list`)를 포함한 개인 데이터 읽기에는 캐시를 두지 않는다** — `(user_id, slot)` 인덱스 keyset 질의로 직접 읽는다([인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 6.5) |
+| Redis | `GameServer` | 배치 리더 락(`batch:lock:{배치키}`) — 거래 만료·메일 GC·보스러시 시즌 정산 등 주기 배치의 중복 실행 방지 |
+| Redis | `GameServer` | **보스러시 랭킹 리더보드**(`rank:bossrush:{seasonId}`, Sorted Set) — 시즌 순위 조회 전용 **파생 인덱스**. 정본은 MySQL `boss_rush_record`이며 ZADD는 커밋 이후에만 하고, 유실 시 기동 워밍업으로 재구축·장애 시 MySQL 정렬 조회로 폴백한다. `ZRANK`(내 순위)·`ZRANGE`(페이지)가 O(log N + M)이라 **전체 등재 유저를 순위 상한 없이 페이징**할 수 있다([보스러시 기획서](../세부/boss-rush-기획서.md) 4.3·6.3) |
+| Redis | `GameServer` | **보스러시 조회 캐시 2종** — `player:nickname`(Hash, `userId`→`nickname`, TTL 없음, **lazy 채움**·정본은 `game_player.nickname`)과 `bossrush:season:current`(Hash, `seasonId`·`startAt`·`endAt`·`status`, 시즌 정산 배치가 갱신·정본은 `boss_rush_season`). 이 둘이 있어 **현재 시즌 랭킹 조회는 정상 경로에서 MySQL을 건드리지 않는다**(같은 문서 4.3) |
+| MySQL (Game DB) | `GameServer` | 플레이어 진행 세이브 데이터. **가방 조회(`inventory/list`)를 포함한 개인 데이터 읽기에는 캐시를 두지 않는다** — `(user_id, slot)` 인덱스 keyset 질의로 직접 읽는다([인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 6.5). **유일한 캐시 예외는 보스러시 랭킹**이다 — 순위는 "정렬된 전체 집합에서의 위치"라 개인 행 조회로 답할 수 없어 Redis Sorted Set을 파생 인덱스로 둔다 |
 | 인메모리 캐시(원천 CSV/JSON) | `GameServer` | 마스터(정적 기획) 데이터. 관계형 영속 테이블이 아닌 읽기 전용 정의 |
 
 - **서버 간 공유 키**: 모든 게임 DB 테이블의 `user_id`는 `AccountServer`의 `users.user_id`와 **동일 식별자**다.
@@ -124,6 +134,11 @@ erDiagram
     game_player      ||--o{ player_gacha_counter : "천장 진행도"
     game_player      ||--o{ player_gacha_pull : pulls
     player_gacha_pull ||--o{ player_gacha_pull_item : "뽑기 결과"
+    game_player      ||--o{ boss_rush_run     : "보스러시 도전"
+    game_player      ||--o{ boss_rush_record  : "시즌 최고 기록"
+    boss_rush_season ||--o{ boss_rush_run     : "runs in"
+    boss_rush_season ||--o{ boss_rush_record  : ranks
+    boss_rush_run    ||--o{ boss_rush_run_round : "라운드 기록"
     player_item      ||--o| player_item_equipped : "equipped as"
     player_character ||--o{ player_item_equipped : equips
     player_character ||--o{ player_skill     : has
@@ -203,7 +218,7 @@ erDiagram
     player_mail {
         bigint  mail_id PK
         bigint  user_id FK
-        int     category "1:운영 2:거래 3:출석 4:시스템"
+        int     category "1:운영 2:거래 3:출석 4:시스템 5:랭킹"
         varchar title
         varchar body
         int     is_read "0/1"
@@ -269,6 +284,40 @@ erDiagram
         int     pity_applied "0/1 하드 천장 확정"
         int     guaranteed "0/1 10연 보장 대체"
     }
+
+    boss_rush_season {
+        int     season_id PK "AUTO_INCREMENT"
+        bigint  start_at "시즌 시작(KST 월요일 00:00)"
+        bigint  end_at "시즌 종료(= 다음 시즌 start_at)"
+        int     status "1:진행 2:정산중 3:종료"
+        bigint  settled_at "정산 완료 시각(미정산 0)"
+    }
+
+    boss_rush_run {
+        bigint  run_id PK "AUTO_INCREMENT"
+        bigint  user_id FK "game_player.user_id"
+        int     season_id FK "시작 시점 시즌(고정)"
+        bigint  started_at "런 개시 시각(ms) — 일일 횟수·만료 판정 기준"
+        bigint  finished_at "종결 시각(ms, 진행 중 0)"
+        int     status "1:진행 2:클리어 3:만료"
+        int     clear_ms "클라 보고 클리어 시간(ms). 클리어만 유효"
+    }
+
+    boss_rush_run_round {
+        bigint  run_id PK,FK
+        int     round PK "1~5"
+        int     elapsed_ms "그 라운드 소요(ms, 클라 측정)"
+    }
+
+    boss_rush_record {
+        int     season_id PK,FK
+        bigint  user_id PK,FK
+        int     best_clear_ms "시즌 개인 최고 기록(ms)"
+        bigint  best_run_id "그 기록의 run_id"
+        bigint  recorded_at "최고 기록 달성 시각(초) — 동점 tie-break"
+        int     final_rank "정산 확정 순위(미정산 0)"
+        bigint  rank_reward_mail_id "순위 보상 메일 id(미발급 0)"
+    }
 ```
 
 **PK / 유니크**
@@ -290,6 +339,10 @@ erDiagram
 | `player_gacha_counter` | `(user_id, gacha_code, grade)` PK | 계정 공유(가챠별·등급별 천장 진행도) |
 | `player_gacha_pull` | `pull_id` PK, `(user_id, pull_id)` 인덱스(전체 기록 최신순 커서 페이징), `(user_id, gacha_code, pull_id)` 인덱스(가챠별 필터) | 계정 뽑기 원장(부모) |
 | `player_gacha_pull_item` | `(pull_id, seq)` PK | 뽑기 결과(자식, 1연 1행·10연 10행) |
+| `boss_rush_season` | `season_id` PK, `start_at` 유니크, `(status, end_at)` 인덱스(정산 대상 탐색) | 전역(콘텐츠 시즌) |
+| `boss_rush_run` | `run_id` PK, `(user_id, started_at)` 인덱스(일일 횟수 집계·진행 중 런 조회·내 이력) | 계정 도전 원장 |
+| `boss_rush_run_round` | `(run_id, round)` PK | 런의 라운드 기록(자식, 클리어 시 5행) |
+| `boss_rush_record` | `(season_id, user_id)` PK, `(season_id, best_clear_ms, recorded_at)` 인덱스(랭킹 MySQL 폴백·정산 정렬), `(season_id, final_rank)` 인덱스(종료 시즌 랭킹 조회) | 시즌별 계정 최고 기록(랭킹 정본) |
 
 **테이블별 역할·저장 데이터**
 
@@ -342,7 +395,7 @@ erDiagram
 ### player_mail
 
 - **역할**: 계정 우편함. 운영·거래·출석·시스템 보상을 메일로 지급하고 읽음/수령 상태를 관리한다. 첨부 보상은 `player_mail_reward`에 분리 저장.
-- **저장 데이터**: `mail_id`(PK), `category`(1:운영 2:거래 3:출석 4:시스템), `title`/`body`, `is_read`(0/1), `claimed`(첨부 수령 0/1), 생성/만료(`expires_at`, 0=무기한)/수령 시각.
+- **저장 데이터**: `mail_id`(PK), `category`(1:운영 2:거래 3:출석 4:시스템 5:랭킹), `title`/`body`, `is_read`(0/1), `claimed`(첨부 수령 0/1), 생성/만료(`expires_at`, 0=무기한)/수령 시각.
 
 ### player_mail_reward
 
@@ -374,6 +427,28 @@ erDiagram
 - **역할**: 그 요청의 **회차별 결과**(`player_gacha_pull`의 자식, 1:N). 반복 구조를 JSON이 아니라 자식 테이블로 분리하는 공통 규칙을 따른다(`player_mail`/`player_mail_reward`와 같은 형태).
 - **저장 데이터**: `(pull_id, seq)` 키, `item_code`·`grade`(추첨된 등급 슬롯)·`quantity`, `pity_applied`(하드 천장으로 등급이 확정된 회차), `guaranteed`(10연 보장으로 대체된 회차). 뒤 두 플래그가 사후 확률 검증의 근거다.
 
+### boss_rush_season
+
+- **역할**: 보스러시 랭킹 **시즌의 정본**. 랭킹은 시즌 단위로 리셋되므로 "지금 어느 시즌인가"·"정산했는가"가 서버 판단의 기준이 된다. `status`를 조건부 갱신(`1 → 2`)으로 전이시켜 **정산 배치의 선점 단위**로도 쓴다.
+- **저장 데이터**: `season_id`(PK, AUTO_INCREMENT), `start_at`·`end_at`(KST 월요일 00:00 경계, 주간), `status`(1:진행 2:정산중 3:종료), `settled_at`(정산 완료 시각). 정산 중(`2`)에는 새 런을 받지 않는다(`BossRushSeasonClosed(13007)`).
+
+### boss_rush_run
+
+- **역할**: 보스러시 도전 1회의 원장. **일일 횟수 집계와 만료 판정**을 담당하며, 랭킹에 쓰이는 시간은 여기서 계산되지 않는다 — `clear_ms`는 **클라이언트가 측정해 보고한 값**이다(전투를 실제로 돌린 쪽이 순수 전투 시간을 재야 라운드 전환 연출·로딩·네트워크 지연이 기록에 섞이지 않는다).
+- **저장 데이터**: `run_id`(PK), `user_id`, `season_id`(시작 시점 시즌으로 고정), `started_at`·`finished_at`(**밀리초**, 서버 시각 — 일일 횟수·만료 판정과 **사후 관측**(`finished_at − started_at`과 보고 `clear_ms`의 괴리)에 쓴다), `status`(1:진행 2:클리어 3:만료 — 실패 보고 경로가 없어 "실패" 상태를 두지 않는다), `clear_ms`(클라 보고 기록).
+- **만료는 배치가 아니라 런을 읽는 경로가 lazy하게 기록한다**(거래소의 만료 판정 규약과 동일) — `clear`·`info`·`enter`가 `started_at + time_limit_sec + expire_grace_sec` 나이를 함께 검사하므로, 아무도 건드리지 않은 만료 런은 `status`가 `1`로 남을 수 있고 기능상 차이가 없다. 정리 전용 배치를 두지 않는 이유는 만료된 런에 반송할 자산이 없어 배치가 할 일이 컬럼 정리뿐이기 때문이다.
+- **일일 횟수 카운터 컬럼을 따로 두지 않는다** — `started_at`이 오늘(KST) 범위인 행 수가 곧 오늘 사용 횟수다. 카운터를 이중으로 두면 원장과 어긋날 여지가 생기고, 런 INSERT 자체가 차감이므로 "차감했는데 런이 없음"이 구조적으로 불가능하다. 자동 삭제하지 않는다(재화가 오간 원장).
+
+### boss_rush_run_round
+
+- **역할**: **라운드별 소요 시간**(클라 측정, `boss_rush_run`의 자식). 반복 구조를 JSON이 아니라 자식 테이블로 분리하는 공통 규칙을 따른다.
+- **저장 데이터**: `(run_id, round)` 키, `monster_code`, `elapsed_ms`. 합계가 `boss_rush_run.clear_ms`와 **일치해야** 클리어 보고가 통과하며(자기정합성 검증), 이후에는 어느 라운드에서 시간이 갈리는지 분석하는 근거가 된다.
+
+### boss_rush_record
+
+- **역할**: 시즌별 **개인 최고 기록**이자 **랭킹의 정본**. Redis Sorted Set은 이 테이블에서 파생된 조회 인덱스일 뿐이라, Redis가 비거나 죽어도 기록은 손실되지 않는다.
+- **저장 데이터**: `(season_id, user_id)` 키, `best_clear_ms`(시즌 최고 기록), `best_run_id`, `recorded_at`(**동점 순위의 tie-break 축** — 같은 기록이면 먼저 달성한 쪽이 상위), `final_rank`·`rank_reward_mail_id`(정산 결과). 기록이 **개선될 때만** 조건부 UPSERT하며, 정산은 `final_rank = 0` 조건으로 이미 처리한 행을 건너뛰어 **재진입 멱등성**을 확보한다. 행을 삭제하지 않으므로 **지난 시즌 랭킹을 기간 제한 없이** 조회할 수 있고(`(season_id, final_rank)` 인덱스로 순위 재계산 없이 읽는다), 그 순위는 정산 시점에 고정된 최종 순위다.
+
 ## 4. 마스터 데이터 (정적 · 읽기 전용)
 
 > 출처: [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 5장. 관계형 영속 테이블이 아니라 원천(CSV/JSON)에서 로드하는 인메모리 정의이며, 세이브 테이블이 코드로 참조한다.
@@ -404,6 +479,10 @@ erDiagram
 | `character_create_cost` | `character_id` | 캐릭터 추가 생성 골드(생성 순번별) · `player_character` 생성 시 차감 |
 | `mail_master` | `mail_template_code` | `player_mail.category`/`title`/`body`/`expires_at`의 원천(발급 시 렌더링해 스냅샷 저장) · **서버 전용** |
 | `newbie_reward_master` | `seq` | 계정 초기화 시 발급하는 환영 메일의 `player_mail_reward` 첨부 목록 · **서버 전용** |
+| `boss_rush_master` | `content_id`(고정 1) | 보스러시 전역 규칙 — 제한 시간·일일 횟수·해금 순번·시즌 길이·랭킹 페이지 크기 상한 (`game_player.max_stage_cleared`가 해금 판정에 참조) |
+| `boss_rush_round` | `round`(1~5) | (라운드 정의 — 배경 타입. 등장 몬스터는 자식 `boss_rush_spawn`) |
+| `boss_rush_spawn` | `(round, monster_code)` | `boss_rush_round.round`·`monster_master.monster_code`(라운드별 등장 몬스터·레벨·마리 수·보스) |
+| `boss_rush_rank_reward` | `rank_group` | (시즌 순위 구간·지급 골드 정의 · `boss_rush_record.final_rank`가 이 구간에 매칭돼 보상 메일이 발급된다) |
 
 **테이블별 역할·정의 데이터** (모두 정적·읽기 전용 정의이며 유저가 변경하지 않는다. 실제 값은 [마스터 데이터 값](../세부/master-data/master-data-값.md))
 
@@ -516,12 +595,33 @@ erDiagram
 ### mail_master
 
 - **역할**: 메일 발급 **문구 템플릿**. 발급 시 서버가 자리표시자에 파라미터를 채워 렌더링한 결과를 `player_mail.title`/`body`에 **스냅샷으로 저장**하므로, 템플릿 수정은 이미 발급된 메일에 소급되지 않는다([메일 기획서](../세부/mail-기획서.md) 4장·6.4). **서버 전용**(클라이언트 번들 제외).
-- **정의 데이터**: `mail_template_code`(PK, `category`×100+순번), `category`(1:운영 2:거래 3:출석 4:시스템), `title_format`·`body_format`(`{0}` 자리표시자), `valid_days`(만료 일수 → `player_mail.expires_at`, `0`=무기한). `category`·만료 일수는 템플릿이 확정하며 발급자가 임의 지정하지 않는다.
+- **정의 데이터**: `mail_template_code`(PK, `category`×100+순번), `category`(1:운영 2:거래 3:출석 4:시스템 5:랭킹 — 보스러시 시즌 순위 보상이 템플릿 501), `title_format`·`body_format`(`{0}` 자리표시자), `valid_days`(만료 일수 → `player_mail.expires_at`, `0`=무기한). `category`·만료 일수는 템플릿이 확정하며 발급자가 임의 지정하지 않는다.
 
 ### newbie_reward_master
 
 - **역할**: **신규 가입 지원금** 첨부 목록. 계정 세이브가 처음 만들어질 때(최초 캐릭터 생성) 서버가 이 행들을 그대로 `player_mail_reward`로 적재해 환영 메일(`mail_master` 101)로 발급한다. `game_player`가 계정당 1행이라 초기화 트랜잭션이 생애 한 번만 성공하므로 중복 지급 방지 플래그가 불필요하다. **서버 전용**.
 - **정의 데이터**: `seq`(PK, 첨부 순번), `reward_type`(1:골드 2:아이템 3:재료 — 메일 첨부·출석 보상과 동일 enum), `reward_code`(골드면 0), `quantity`. 지급 품목을 늘리려면 행만 추가한다(스키마·코드 불변).
+
+### boss_rush_master
+
+- **역할**: 보스러시 **콘텐츠 전역 규칙**(단일 행). 제한 시간·일일 횟수·해금 조건은 밸런스 값이고 **클라이언트가 같은 값으로 판정**해야 하므로(시간 측정이 클라 측이라 제한 시간 초과 판정도 클라에 있다) `appsettings`가 아니라 마스터에 둔다 — `appsettings`에는 배치 주기처럼 **운영 파라미터**만 남긴다.
+- **정의 데이터**: `content_id`(PK, 고정 `1`), `round_count`(5), `time_limit_sec`(600 = 10분 — 보고된 클리어 시간의 상한), `daily_entry_limit`(3), `unlock_stage_sequence`(10 = Act1 보스), `season_period_days`(7), `expire_grace_sec`(300 — 제한 시간 경과 후 클리어 보고를 받아 주는 여유이자 만료 판정 기준), `rank_page_limit`(100 — 랭킹 조회 **1페이지 크기** 상한이며 조회 가능한 순위 범위에는 상한이 없다). **`time_limit_sec`은 랭킹 점수 인코딩의 전제**이기도 하다(클리어 시간 상한이 double 정밀도 안에 들어가야 한다, [보스러시 기획서](../세부/boss-rush-기획서.md) 4.3).
+
+### boss_rush_round
+
+- **역할**: **라운드 정의**(1~5, 라운드 `r`이 Act `r`에 대응). 등장 몬스터는 자식 테이블 `boss_rush_spawn`이 담당하며, `stage_master` ↔ `stage_spawn`과 같은 부모-자식 구조다.
+- **정의 데이터**: `round`(PK, 1~5), `background_type`(라운드 배경 타입 1~5). 보스러시는 **Act `r`의 스테이지 배경을 재활용**하므로 이 값은 Act `r`의 `stage_master.background_type`과 일치해야 한다(마스터 검증 대상). 라운드 전환의 포탈 이동은 **클라이언트 연출**이라 서버 계약에 영향이 없다.
+
+### boss_rush_spawn
+
+- **역할**: 라운드별 **등장 몬스터·레벨·마리 수**(`boss_rush_round`의 자식). 보스러시 라운드는 그 Act의 **일반 몬스터 무리 + Act 보스**로 구성되므로, 한 라운드에 여러 몬스터가 각자의 레벨·마리 수로 등장하는 반복 구조다 — JSON 컬럼을 두지 않고 자식 테이블로 분리한다(설계 규칙). **보스도 이 테이블의 `is_boss = 1` 행**이며, `stage_spawn`이 채택한 방식 그대로다(보스에도 레벨을 주려면 일반 몬스터와 같은 축에 있어야 한다).
+- **정의 데이터**: `(round, monster_code)` 복합 PK, `monster_level`(**그 라운드에서 이 몬스터가 등장하는 레벨** — 보스러시 전용 값이며 스테이지의 같은 몬스터보다 높다), `spawn_count`(마리 수, 보스는 1), `is_boss`(1=보스, 라운드당 최대 1행). 마리 수가 0인 조합은 행을 두지 않는다(sparse). 레벨은 몬스터가 아니라 **등장 자리의 속성**이라 같은 몬스터를 라운드마다 다른 레벨로 세울 수 있고, 실제 스탯은 클라이언트가 `monster_master`의 레벨 1 기준값에 레벨 배율을 곱해 산출한다.
+
+### boss_rush_rank_reward
+
+- **역할**: **시즌 순위 구간** 정의. 정산 배치가 확정한 순위(`boss_rush_record.final_rank`)를 이 구간에 매칭해 보상 메일(템플릿 501)을 발급한다. **순위 보상 대상은 1~3위뿐**이라 현재 3행(1위·2위·3위)이며, 보스러시에는 라운드별·완주 보상이 없으므로 **4위 이하는 보상이 없다**.
+- **정의 데이터**: `rank_group`(PK, 상위 구간이 작은 값), `rank_from`·`rank_to`(포함 범위), `reward_gold`(그 구간에 지급할 골드). 현재는 **3행**(1위·2위·3위, 각 `rank_from = rank_to`)이며 **4위 이하는 행을 두지 않는다**. 구간은 **1위부터 시작해 겹치지 않고 빈틈이 없어야** 한다(`다음 rank_from = 이전 rank_to + 1`, 마스터 검증 대상).
+- **지급 품목은 골드뿐이라 자식 테이블을 두지 않는다** — 구간당 항목이 하나여서 반복 구조가 아니다. 메일 발급 시 `player_mail_reward` 1행(`reward_type=1`·`reward_code=0`·`quantity=reward_gold`)으로 첨부하며, 가방 칸을 쓰지 않아 수령 단계의 용량 실패 경로가 없다.
 
 - 마스터 데이터는 **클라이언트 빌드에 번들**되고 서버도 같은 원천을 기동 시 자체 로드한다(런타임 다운로드·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 6·8장).
 
@@ -537,4 +637,5 @@ erDiagram
 - [성장 시스템 기획서](../세부/growth-기획서.md) — 캐릭터·스킬·룬 세부 규칙
 - [오프라인 보상 정산 기획서](../세부/offline-reward-기획서.md) — 경험치·골드 지급(세이브 테이블 사용)
 - [가챠(뽑기) 시스템 기획서](../세부/gacha-기획서.md) — `player_gacha_counter`·`player_gacha_pull`·`player_gacha_pull_item`, `gacha_master` 계열 소비 규칙
+- [보스러시 / 랭킹 기획서](../세부/boss-rush-기획서.md) — `boss_rush_season`·`boss_rush_run`·`boss_rush_run_round`·`boss_rush_record`, `boss_rush_master` 계열 마스터, Redis 랭킹 리더보드(정본 MySQL · 캐시 Redis)
 - [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) — 마스터 테이블 정의

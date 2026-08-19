@@ -16,6 +16,7 @@
   - [3.7 메일(보상)](#37-메일보상)
   - [3.8 출석부 보상](#38-출석부-보상)
   - [3.9 가챠(뽑기)](#39-가챠뽑기)
+  - [3.10 보스러시 / 랭킹](#310-보스러시--랭킹)
 - [4. 에러 코드](#4-에러-코드)
 - [5. 출처 문서](#5-출처-문서)
 
@@ -178,6 +179,37 @@
 - 등급·아이템·천장·보장 판정은 전부 서버가 확정한다(요청에 결과·확률·횟수를 넣을 필드가 없다). 비용 차감 → 추첨 → 지급 → 카운터 갱신 → 기록 적재가 **하나의 트랜잭션**이며, 가방 용량 초과(`InventoryFull`) 시 골드 차감까지 전체 롤백된다.
 - 기록 조회는 오프셋이 아니라 **커서 페이징**이다(append-only 로그라 `OFFSET`이 깊어질수록 비싸고, 조회 중 새 뽑기가 들어오면 기준이 밀린다). `limit`은 서버가 1~50으로 clamp하며 전체 건수(`total`)는 내려주지 않는다.
 
+### 3.10 보스러시 / 랭킹
+
+> 출처: [보스러시 / 랭킹 기획서](../세부/boss-rush-기획서.md) 5장
+
+| 경로 | 기능 | 요청 `data` | 응답 주요 | 주요 에러 |
+|---|---|---|---|---|
+| `POST /api/game/boss-rush/info` | **보스러시 정보 조회** — 해금 여부·일일 잔여 횟수·현 시즌·내 최고 기록·진행 중 런(서버만 아는 값) | `{}` | `serverTime`, `unlocked`, `maxStageCleared`, `dailyEntryUsed`/`dailyEntryLimit`, `dailyResetAt`, `timeLimitMs`, `season`, `myRecord`(`bestClearMs`·`rank`), `activeRun` | `SaveNotFound(2001)`, `MasterDataNotLoaded(10001)` |
+| `POST /api/game/boss-rush/enter` | **도전 시작** — 일일 횟수 차감 + 런 개시(`runId` 발급). 요청 파라미터 없음 | `{}` | `runId`, `seasonId`, `timeLimitMs`, `rounds[]`(`round`·`backgroundType`·`monsters[]`(`monsterCode`·`monsterLevel`·`count`)·`boss`), `dailyEntryUsed` | `BossRushLocked(13001)`, `BossRushDailyLimitExceeded(13002)`, `BossRushSeasonClosed(13007)`, `SaveNotFound(2001)`, `MasterDataNotLoaded(10001)` |
+| `POST /api/game/boss-rush/clear` | **클리어 보고** — **클라이언트가 측정한 클리어 시간**을 받아 형식 검증 후 그대로 기록 + 시즌 최고 기록 갱신. **보상 지급 없음** | `{ runId, clearMs, rounds:[{ round, elapsedMs }] }`(1~5 전부, 합계 = `clearMs`) | `clearMs`, `isNewRecord`, `bestClearMs`, `rank` | `BossRushRunNotFound(13003)`, `BossRushRunAlreadyFinished(13004)`, `BossRushTimeout(13005)`, `BossRushInvalidProgress(13006)`, `InvalidRequest(1006)` |
+| `POST /api/game/boss-rush/rank` | **랭킹 목록 조회** — 시즌 **전체 등재 유저**를 오프셋 페이징으로 한 페이지씩 조회(순위 상한 없음). **뷰어 무관 데이터** | `{ seasonId?, offset?, limit? }` | `seasonId`, `seasonStatus`, `seasonEndAt`, `totalEntries`, `offset`, `limit`, `source`(1:Redis 2:MySQL 폴백), `entries[]`(`rank`·`userId`·`nickname`·`clearMs`·`recordedAt`) | `BossRushSeasonClosed(13007)`, `MasterDataNotLoaded(10001)` |
+| `POST /api/game/boss-rush/my-rank` | **내 순위 조회** — 요청자 본인의 시즌 순위 1건(랭킹 UI의 "내 순위" 고정 영역용) | `{ seasonId? }` | `seasonId`, `totalEntries`, `source`, `myRank`(기록 없으면 `null`) | `BossRushSeasonClosed(13007)`, `MasterDataNotLoaded(10001)` |
+
+- **도메인 세그먼트에 kebab-case(`boss-rush`)를 쓴다.** 기존 규약이 이미 액션 세그먼트에 kebab을 쓰고 있고(`update-last-active`·`claim-all`), 두 단어 도메인을 붙여 쓰면 읽기 어렵다.
+- **액션 이름은 스테이지 도메인(3.5)과 같은 `enter`/`clear` 짝**이다 — 도전 개시가 `start`가 아니라 `boss-rush/enter`인 이유이며, 같은 "진입 → 클리어" 흐름을 두 콘텐츠가 다른 동사로 부르지 않게 한다. **개시 응답에 `startedAt`이 없다** — 시간 측정이 클라 측으로 옮겨가 클라이언트가 서버 시각을 쓸 곳이 없고, `boss_rush_run.started_at`은 일일 횟수 집계·만료 판정·사후 관측용 내부 값으로만 남는다. 진행 중 런의 잔여 시간은 `boss-rush/info`의 `activeRun`이 알려 준다.
+- **클리어 시간은 클라이언트가 측정해 보고하고, 서버는 그 값을 그대로 기록한다.** 전투가 클라 권위인 프로젝트에서 시간 측정만 서버로 가져오면 라운드 전환 연출·로딩·네트워크 지연이 전부 기록에 섞여 **같은 파티가 같은 전투를 해도 회선 상태로 순위가 갈린다** — 시간 경쟁 콘텐츠에서 그 오염이 조작 위험보다 크다고 판단했다([보스러시 기획서](../세부/boss-rush-기획서.md) 8장 확정).
+- **서버 검증은 형식·자기정합성뿐이다** — ①`clearMs`가 제한 시간(10분) 초과 → `BossRushTimeout(13005)` ②`rounds` 누락·중복·`elapsedMs ≤ 0`, 또는 **합계가 `clearMs`와 불일치** → `BossRushInvalidProgress(13006)`. **기록의 진위는 판정하지 않는다**(파티 전투력 역산 이론 하한 검증은 도입하지 않는다). 조작 방어는 **일일 3회라는 총량 상한**과 **사후 관측**(런의 `finished_at − started_at`과 보고 `clearMs`의 괴리를 로그로 남긴다)에 맡긴다(같은 문서 6.2).
+- **실패·포기 보고 엔드포인트가 없다.** 5라운드를 못 깨면 클라이언트는 아무것도 보내지 않고, 그 런은 제한 시간이 지나 만료된다. 전멸을 서버가 확인할 수 없어 실패 보고는 순수 신뢰 경로가 되기 때문이다.
+- **진입 응답이 5라운드 전부의 스폰 구성을 한 번에 내려준다.** 라운드 `r`은 Act `r`의 **일반 몬스터 무리 + Act 보스**로 구성되며(스테이지 진입의 `monsters`/`boss` 규약과 동일 — 서버가 `boss_rush_spawn`을 `is_boss`로 갈라 내려준다), 각 항목에 **등장 레벨**과 그 라운드의 `backgroundType`(Act `r`의 스테이지 배경 재활용)이 실린다. 스탯은 내려주지 않는다(클라가 `monster_master`의 레벨 1 기준값에 레벨 배율을 곱해 산출). 라운드마다 서버를 다시 부르지 않는 이유는 라운드 전환이 **전투 중**에 일어나 왕복이 곧 기록 오염이 되기 때문이며, 라운드 전환의 **포탈 이동은 클라이언트 연출**이라 서버 호출이 없고 그 시간은 `clearMs`에서 제외된다.
+- **요청에 난이도·라운드 선택 파라미터가 없다.** 라운드 구성·보스 레벨·제한 시간은 전부 마스터 값이며, 클라이언트에 선택 축을 주면 곧 "쉬운 구성으로 빠른 기록"이 되어 랭킹이 무의미해진다.
+- **보스러시 API는 재화·아이템을 지급하지 않는다.** 라운드별·완주 보상이 없어 `clear` 응답에 `rewards`·`characters`·`balance`·`inventoryDelta`가 없고, 이 호출이 바꾸는 것은 런 상태와 시즌 최고 기록뿐이다. 보상은 **시즌 순위 보상 메일**(3.7, 템플릿 501·`category=5` 랭킹)로만 나가며 **골드뿐**이다 — 가방 칸을 쓰지 않으므로 수령 단계에서도 `InventoryFull(4002)`이 발생하지 않는다.
+- **현재 시즌 랭킹 조회(`rank`·`my-rank`)는 정상 경로에서 MySQL을 건드리지 않는다.** 순위·기록은 리더보드 ZSET(점수에 `clearMs`·`recordedAt`이 인코딩되어 있다), 표시 이름은 `player:nickname` 해시(`HMGET`, 미스만 `game_player`에서 부분 백필), 시즌 메타는 `bossrush:season:current` 해시에서 나온다. MySQL은 **캐시 미스·Redis 폴백·종료 시즌 조회**에서만 개입한다([보스러시 기획서](../세부/boss-rush-기획서.md) 4.3·6.3).
+- **`source`는 "순위를 어디서 산출했는지"** 다 — `1`=Redis(`ZRANGE`/`ZRANK`) `2`=MySQL 폴백. **닉네임 캐시 미스나 종료 시즌 메타 조회로 MySQL을 거쳐도 `1`** 이며, "MySQL을 접근했는가"를 뜻하지 않는다.
+- **랭킹 정본은 MySQL(`boss_rush_record`)이고 Redis Sorted Set(`rank:bossrush:{seasonId}`)은 순위 조회 전용 캐시**다. 캐시가 비면 기동 워밍업으로 재구축하며, Redis 장애 시에는 MySQL 정렬 조회로 축소 운전한다(응답 `source=2`). 동점은 **먼저 달성한 쪽이 상위**이며, Redis 정렬이 이 규칙을 표현하도록 점수를 `clearMs × 10^10 + recordedAt`으로 인코딩한다(같은 문서 4.3·6.3).
+- **순위 산출 순서**: `clear`는 **MySQL에 기록을 확정(커밋) → Redis 리더보드 갱신(ZADD) → 갱신된 리더보드에서 `ZRANK`로 순위 계산 → 순위를 담은 결과 반환** 순으로 처리한다. ZADD는 반드시 커밋 이후여야 하고(Redis에는 롤백이 없다), 기록을 갱신하지 못했어도(`isNewRecord=false`) `ZRANK`는 수행해 **현재 순위**를 내려준다(같은 문서 6.2).
+- **랭킹 목록과 내 순위를 별도 엔드포인트로 나눈다.** 페이징을 도입한 이상 목록(`rank`)은 **페이지를 넘길 때마다** 호출되지만 내 순위(`my-rank`)는 페이지와 무관하게 한 번만 필요하므로, 합쳐 두면 같은 값을 페이지 수만큼 중복 계산·전송한다. 나눠 두면 목록 응답이 `(seasonId, offset, limit)`만으로 결정되는 **뷰어 무관 데이터**로 남는다. 서버 비용도 늘지 않는다 — 목록은 `ZRANGE`, 내 순위는 `ZRANK`+`ZSCORE`로 애초에 다른 연산이다. 클라이언트는 랭킹 UI를 열 때 두 API를 각각 호출하고, 내 페이지로 점프할 때는 `my-rank`의 `myRank.rank`로 `offset = floor((rank-1)/limit) × limit`을 계산해 `rank`를 호출한다([보스러시 기획서](../세부/boss-rush-기획서.md) 5.4·5.5).
+- **랭킹 목록은 전체 등재 유저를 페이징으로 노출한다** — 상위 N위로 자르지 않으며 1위부터 꼴찌까지 `offset`으로 넘겨 볼 수 있다. `ZRANGE`가 O(log N + M)이라 깊은 오프셋도 반환 크기에만 비례해 싸기 때문이다(MySQL 폴백에서만 `OFFSET`이 비싸지지만 커버링 인덱스 안의 스캔이라 감수한다). 서버가 clamp하는 것은 **페이지 크기(`limit` ≤ 100)** 뿐이고, 페이지 이동은 클라이언트가 `totalEntries`와 `myRank.rank`(→ `offset = floor((rank-1)/limit) × limit`)로 계산한다(같은 문서 4.3·5.4).
+- **페이지 간 스냅샷은 보장하지 않는다.** 각 페이지는 조회 시점 최신이고 페이지끼리 시점이 달라, 넘기는 사이 기록이 갱신되면 중복·누락이 생긴다. 그래서 클라이언트는 페이지를 **이어붙이지 않고 교체**하며(순위 번호가 항상 연속이라 불일치가 드러나지 않는다), `source`가 페이지 간에 바뀌면 처음부터 재조회하고, "마지막 페이지" 판정은 캐시값이 아니라 **매 응답의 `totalEntries`·`entries` 길이**로 한다([보스러시 기획서](../세부/boss-rush-기획서.md) 5.4·6.5).
+- **시즌은 주간(KST 월요일 00:00 경계)** 이며, 정산 배치가 순위 보상 메일을 발급하고 다음 시즌을 개시한다. **정산 중(`seasonStatus=2`)에는 새 런을 받지 않는다**(`BossRushSeasonClosed(13007)` → 클라이언트는 잠시 뒤 `info` 재조회). **순위 보상은 1~3위에게 골드만** 발급되므로(4위 이하는 보상이 없다) 시즌당 순위 보상 메일은 3건이다.
+- **지난 시즌 랭킹은 기간 제한 없이 조회된다.** `boss_rush_record`가 시즌별로 무기한 보존되고 정산이 `final_rank`를 확정하므로, Redis 캐시(7일 TTL)가 만료된 뒤에는 MySQL에서 `final_rank`를 그대로 읽는다(순위 재계산 없음, `source=2`).
+- **버려진 런을 정리하는 배치는 두지 않는다.** 만료된 런에는 반송할 자산이 없어 배치가 할 일이 `status` 컬럼 정리뿐이므로, 거래소와 같은 규약으로 **만료 판정을 읽는 시점에** 한다(3.6) — `clear`는 `started_at + time_limit_sec + expire_grace_sec`(10분 + 300초)을 넘긴 런을 그 자리에서 `status=3`으로 종결하고 `BossRushRunAlreadyFinished(13004)`로 거부하며, `info`는 만료된 런을 `activeRun: null`로, `enter`는 남은 런을 자동 종결한다. **그레이스 300초는 보고가 네트워크 오류로 실패했을 때 재시도가 통하는 구간**이다([보스러시 기획서](../세부/boss-rush-기획서.md) 6.2).
+
 > **마스터(기획) 데이터 다운로드 API는 두지 않는다.** 본 프로젝트는 학습 목적이므로 마스터 데이터는 **클라이언트에 번들로 포함**되고, 서버도 같은 원천을 기동 시 자체 로드한다(런타임 배포·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md)).
 
 ## 4. 에러 코드
@@ -185,6 +217,7 @@
 전체 코드 목록·블록 규약(도메인 4.N → N000)은 [ErrorCode 통합 정의](error-code-정의.md) 참고. 공통 성공은 `0`, 인증 실패는 HTTP 401.
 
 - **가챠(뽑기)만 규약의 예외다**: 도메인 4.11이지만 `11000`번대를 공통/시스템이 선점해 **12000번대**를 쓴다(`GachaNotFound(12001)`·`GachaPoolEmpty(12002)`·`GachaNotAvailable(12003)`).
+- **보스러시도 같은 이유로 밀렸다**: 도메인 4.12이지만 `12000`번대를 가챠가 이미 쓰고 있어 **13000번대**를 쓴다(`BossRushLocked(13001)` ~ `BossRushSeasonClosed(13007)`).
 
 ## 5. 출처 문서
 
@@ -199,4 +232,5 @@
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md)
 - [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md)
 - [가챠(뽑기) 시스템 기획서](../세부/gacha-기획서.md)
+- [보스러시 / 랭킹 기획서](../세부/boss-rush-기획서.md)
 - [ErrorCode 통합 정의](error-code-정의.md)

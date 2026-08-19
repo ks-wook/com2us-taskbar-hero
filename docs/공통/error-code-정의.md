@@ -192,16 +192,15 @@
 | BossRushLocked | 13001 | 해금 조건 미달(`max_stage_cleared < unlock_stage_sequence`) |
 | BossRushDailyLimitExceeded | 13002 | 오늘 도전 횟수를 모두 사용함 |
 | BossRushRunNotFound | 13003 | 그 `runId`의 런이 없거나 본인 런이 아님 |
-| BossRushRunAlreadyFinished | 13004 | 이미 종결된 런(중복 보고 · 동시 요청의 패자) |
-| BossRushTimeout | 13005 | 제한 시간(10분)을 초과한 클리어 보고. 런은 실패 종결되고 기록은 남지 않는다 |
-| BossRushInvalidProgress | 13006 | 라운드 보고가 형식·정합성 검증에 실패(누락·중복·서버 측정 시간과 모순) |
-| BossRushTimeImplausible | 13007 | 측정 시간이 파티 전투력의 **이론 하한** 미만(조작 의심). 런은 실패 종결하고 Warning 로그를 남긴다 |
-| BossRushSeasonClosed | 13008 | 진행 중 시즌이 없음(시즌 정산 중) 또는 존재하지 않는 `seasonId` |
+| BossRushRunAlreadyFinished | 13004 | 이미 종결된 런(중복 보고 · 동시 요청의 패자 · 만료된 런) |
+| BossRushTimeout | 13005 | 보고된 `clearMs`가 제한 시간(10분)을 넘음 |
+| BossRushInvalidProgress | 13006 | 라운드 보고가 형식·자기정합성 검증에 실패(누락·중복·합계가 `clearMs`와 불일치) |
+| BossRushSeasonClosed | 13007 | 진행 중 시즌이 없음(시즌 정산 중) 또는 존재하지 않는 `seasonId` |
 
 - 보스러시는 **도메인 4.12**이지만 블록 규약(도메인 4.N → N000)의 `12000`번대를 가챠가 이미 쓰고 있어(가챠는 4.11이나 `11000`번대를 공통/시스템이 선점해 12000으로 밀렸다) **13000번대**를 할당했다.
 - 재사용: 세이브 없음은 `SaveNotFound(2001)`, 요청 필드 형식 오류는 `InvalidRequest(1006)`, 마스터 미로드는 `MasterDataNotLoaded(10001)`.
-- **보스러시는 아이템을 지급하지도 재화를 소모하지도 않는다** — 도달 보상이 골드·경험치뿐이라 `InventoryFull(4002)`·`InsufficientCurrency(4005)`가 발생하지 않는다. 아이템은 **시즌 순위 보상 메일**로만 지급되므로, 그 수령 단계의 오류는 메일 도메인 코드(`MailNotFound(8001)`·`MailAlreadyClaimed(8002)`·`MailExpired(8003)`·`InventoryFull(4002)`)를 따른다.
-- **`BossRushTimeout(13005)`과 `BossRushTimeImplausible(13007)`을 구분한다.** 전자는 정상적인 실패(다시 도전 안내), 후자는 조작 의심(재시도 안내 없이 오류 표시 + 서버 Warning 로그)이라 클라이언트 대응이 다르다.
+- **보스러시는 아이템을 지급하지도 재화를 소모하지도 않는다** — 클리어 보상이 골드·경험치뿐이라 `InventoryFull(4002)`·`InsufficientCurrency(4005)`가 발생하지 않는다. 아이템은 **시즌 순위 보상 메일**로만 지급되므로, 그 수령 단계의 오류는 메일 도메인 코드(`MailNotFound(8001)`·`MailAlreadyClaimed(8002)`·`MailExpired(8003)`·`InventoryFull(4002)`)를 따른다.
+- **`BossRushTimeout(13005)`과 `BossRushInvalidProgress(13006)`은 대응이 다르다.** 전자는 정상적인 실패(제한 시간을 넘겼으니 다시 도전 안내), 후자는 **클라이언트 버그**(보고값이 내부적으로 앞뒤가 안 맞음)이므로 재시도 안내 없이 오류를 표시하고 서버는 Warning 로그를 남긴다.
 
 ## 3. `TaskbarHero.Common/ErrorCode.cs` 반영안
 
@@ -314,8 +313,7 @@ namespace TaskbarHero.Common
         BossRushRunAlreadyFinished = 13004,
         BossRushTimeout = 13005,
         BossRushInvalidProgress = 13006,
-        BossRushTimeImplausible = 13007,
-        BossRushSeasonClosed = 13008,
+        BossRushSeasonClosed = 13007,
     }
 }
 ```

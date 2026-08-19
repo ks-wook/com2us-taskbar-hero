@@ -101,5 +101,14 @@ namespace TaskbarHero.Common
         GachaNotFound = 12001,
         GachaPoolEmpty = 12002,
         GachaNotAvailable = 12003,
+
+        // 보스러시 / 랭킹 (13000번대 — 도메인 4.12이나 12000번대를 가챠가 선점해 13000번대 할당)
+        BossRushLocked = 13001,
+        BossRushDailyLimitExceeded = 13002,
+        BossRushRunNotFound = 13003,
+        BossRushRunAlreadyFinished = 13004,
+        BossRushTimeout = 13005,
+        BossRushInvalidProgress = 13006,
+        BossRushSeasonClosed = 13007,
     }
 }
