@@ -963,7 +963,7 @@ namespace TaskbarHero.Common.Dto
     public class MailDto
     {
         public long mailId;
-        public int category;   // 1:운영 2:거래 3:출석 4:시스템
+        public int category;   // 1:운영 2:거래 3:출석 4:시스템 5:랭킹
         public string title;
         public string body;
         public List<MailAttachmentDto> attachments = new List<MailAttachmentDto>();
@@ -1554,5 +1554,276 @@ namespace TaskbarHero.Common.Dto
         public int errorCode;
         public string message;
         public GachaHistoryResultData data = new GachaHistoryResultData();
+    }
+
+    // ── 보스러시 / 랭킹 (보스러시 기획서 §5) ────────────────────────────────────────────────────
+
+    /// <summary>보스러시 시즌 메타. status는 BossRushSeasonStatus(1:진행 2:정산중 3:종료).</summary>
+    [Serializable]
+    public class BossRushSeasonDto
+    {
+        public int seasonId;
+        public long startAt;
+        public long endAt;
+        public int status;
+    }
+
+    /// <summary>현 시즌 개인 최고 기록. 기록이 없으면 info 응답에서 null로 내려간다.
+    /// rank는 랭킹 캐시(ZRANK+1)로 얻으며, 캐시를 쓸 수 없으면 0(= 순위 계산 불가)으로 내려간다.</summary>
+    [Serializable]
+    public class BossRushMyRecordDto
+    {
+        public int bestClearMs;
+        public long recordedAt;
+        public int rank;
+    }
+
+    /// <summary>진행 중인 도전 런. expiresAt = startedAt + timeLimitSec + expireGraceSec이며,
+    /// 이 시각이 지난 런은 서버가 만료로 보고 info 응답에서 null로 내려간다(§5.1).</summary>
+    [Serializable]
+    public class BossRushActiveRunDto
+    {
+        public long runId;
+        public long startedAt;
+        public long expiresAt;
+    }
+
+    /// <summary>보스러시 정보 조회 응답 데이터(§5.1). 라운드 스폰 구성은 여기 없다 — 도전 시작(enter)이 내려준다.</summary>
+    [Serializable]
+    public class BossRushInfoResultData
+    {
+        public long serverTime;
+        public bool unlocked;
+        public int unlockStageSequence;
+        public int maxStageCleared;
+        public int dailyEntryLimit;
+        public int dailyEntryUsed;
+        public long dailyResetAt;
+        public int timeLimitMs;
+        public BossRushSeasonDto season;
+        public BossRushMyRecordDto myRecord;
+        public BossRushActiveRunDto activeRun;
+    }
+
+    /// <summary>보스러시 정보 조회 응답 { success, errorCode, message, data(BossRushInfoResultData) }.</summary>
+    [Serializable]
+    public class BossRushInfoResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public BossRushInfoResultData data = new BossRushInfoResultData();
+    }
+
+    /// <summary>보스러시 라운드의 일반 몬스터 스폰 1건. 서버는 레벨만 내려주고 스탯은 클라이언트가
+    /// monster_master의 레벨 1 기준값에 레벨 배율을 곱해 산출한다(§5.2).</summary>
+    [Serializable]
+    public class BossRushSpawnDto
+    {
+        public int monsterCode;
+        public int monsterLevel;
+        public int count;
+    }
+
+    /// <summary>보스러시 라운드의 보스. 라운드당 1마리(boss_rush_spawn의 is_boss=1 행).</summary>
+    [Serializable]
+    public class BossRushBossDto
+    {
+        public int monsterCode;
+        public int monsterLevel;
+    }
+
+    /// <summary>보스러시 라운드 1개의 구성(§5.2). 라운드 r은 Act r의 전투이며 배경도 그 지역 것을 재활용한다.</summary>
+    [Serializable]
+    public class BossRushRoundDto
+    {
+        public int round;
+        public int backgroundType;
+        public List<BossRushSpawnDto> monsters = new List<BossRushSpawnDto>();
+        public BossRushBossDto boss;
+    }
+
+    /// <summary>
+    /// 도전 시작 응답 데이터(§5.2). rounds는 <b>5라운드 전부</b>를 담는다 — 라운드 전환이 전투 중에
+    /// 일어나므로 라운드마다 서버를 다시 부르지 않는다. startedAt은 내려주지 않는다(서버 내부 값).
+    /// </summary>
+    [Serializable]
+    public class BossRushEnterResultData
+    {
+        public long runId;
+        public int seasonId;
+        public int timeLimitMs;
+        public List<BossRushRoundDto> rounds = new List<BossRushRoundDto>();
+        public int dailyEntryUsed;
+        public int dailyEntryLimit;
+    }
+
+    /// <summary>도전 시작 응답 { success, errorCode, message, data(BossRushEnterResultData) }.</summary>
+    [Serializable]
+    public class BossRushEnterResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public BossRushEnterResultData data = new BossRushEnterResultData();
+    }
+
+    /// <summary>클리어 보고의 라운드별 소요 시간(누적이 아니라 라운드별). 합계가 clearMs와 일치해야 한다(§5.3).</summary>
+    [Serializable]
+    public class BossRushRoundTimeDto
+    {
+        public int round;
+        public int elapsedMs;
+    }
+
+    /// <summary>
+    /// 클리어 보고 요청 데이터. { runId, clearMs, rounds }
+    /// <para>clearMs는 <b>클라이언트가 측정한 순수 전투 시간</b>(첫 라운드 전투 시작 ~ 마지막 보스 처치,
+    /// 라운드 전환 연출 제외)이며 <b>이 값이 곧 랭킹 점수</b>다. 서버는 형식만 검증하고 진위는 판정하지 않는다(§5.3).</para>
+    /// </summary>
+    [Serializable]
+    public class BossRushClearData
+    {
+        public long runId;
+        public int clearMs;
+        public List<BossRushRoundTimeDto> rounds = new List<BossRushRoundTimeDto>();
+    }
+
+    /// <summary>클리어 보고 요청 body(인증).</summary>
+    [Serializable]
+    public class BossRushClearRequest
+    {
+        public long userId;
+        public string token;
+        public BossRushClearData data;
+    }
+
+    /// <summary>
+    /// 클리어 보고 응답 데이터(§5.3). <b>재화·아이템을 지급하지 않으므로 보상 필드가 없다</b> —
+    /// 이 호출이 바꾸는 것은 런 상태와 시즌 최고 기록뿐이다. rank는 갱신 후 순위(캐시를 쓸 수 없으면 0).
+    /// </summary>
+    [Serializable]
+    public class BossRushClearResultData
+    {
+        public long runId;
+        public int seasonId;
+        public int clearMs;
+        public bool isNewRecord;
+        public int bestClearMs;
+        public int rank;
+    }
+
+    /// <summary>클리어 보고 응답 { success, errorCode, message, data(BossRushClearResultData) }.</summary>
+    [Serializable]
+    public class BossRushClearResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public BossRushClearResultData data = new BossRushClearResultData();
+    }
+
+    /// <summary>
+    /// 랭킹 목록 조회 요청 데이터. { seasonId, offset, limit }
+    /// <para>seasonId 생략(0)이면 현재 시즌. <b>노출 순위에 상한이 없다</b> — 1위부터 꼴찌까지 offset으로
+    /// 넘겨 볼 수 있고, 서버가 clamp하는 것은 페이지 크기(limit)뿐이다(§5.4).</para>
+    /// </summary>
+    [Serializable]
+    public class BossRushRankData
+    {
+        public int seasonId;
+        public int offset;
+        public int limit;
+    }
+
+    /// <summary>랭킹 목록 조회 요청 body(인증).</summary>
+    [Serializable]
+    public class BossRushRankRequest
+    {
+        public long userId;
+        public string token;
+        public BossRushRankData data;
+    }
+
+    /// <summary>랭킹 목록 1행. 순위는 1부터이며 오름차순(빠른 기록이 1위). 동점은 recordedAt이 작은 쪽이 상위.</summary>
+    [Serializable]
+    public class BossRushRankEntryDto
+    {
+        public int rank;
+        public long userId;
+        public string nickname;
+        public int clearMs;
+        public long recordedAt;
+    }
+
+    /// <summary>
+    /// 랭킹 목록 조회 응답 데이터(§5.4). <b>뷰어와 무관한 데이터</b>로 같은 (seasonId, offset, limit)이면
+    /// 누가 불러도 같은 결과다 — 내 순위는 my-rank(§5.5)가 따로 내려준다.
+    /// <para>페이지 간 스냅샷은 보장하지 않는다. 클라이언트는 페이지를 이어붙이지 않고 교체하며,
+    /// source가 페이지 간에 바뀌면 처음부터 재조회하고, "마지막 페이지" 판정은 매 응답의
+    /// totalEntries·entries 길이로 한다(§5.4·6.5).</para>
+    /// </summary>
+    [Serializable]
+    public class BossRushRankResultData
+    {
+        public int seasonId;
+        public int seasonStatus;
+        public long seasonEndAt;
+        public int totalEntries;
+        public int offset;
+        public int limit;
+        public int source;   // BossRushRankSource (1:랭킹 캐시 2:MySQL 폴백)
+        public List<BossRushRankEntryDto> entries = new List<BossRushRankEntryDto>();
+    }
+
+    /// <summary>랭킹 목록 조회 응답 { success, errorCode, message, data(BossRushRankResultData) }.</summary>
+    [Serializable]
+    public class BossRushRankResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public BossRushRankResultData data = new BossRushRankResultData();
+    }
+
+    /// <summary>내 순위 조회 요청 데이터. { seasonId } — 생략(0)이면 현재 시즌(§5.5).</summary>
+    [Serializable]
+    public class BossRushMyRankData
+    {
+        public int seasonId;
+    }
+
+    /// <summary>내 순위 조회 요청 body(인증).</summary>
+    [Serializable]
+    public class BossRushMyRankRequest
+    {
+        public long userId;
+        public string token;
+        public BossRushMyRankData data;
+    }
+
+    /// <summary>
+    /// 내 순위 조회 응답 데이터(§5.5). 랭킹 UI의 "내 순위" 고정 영역이 쓰는 값이라 목록 페이지를 넘기는
+    /// 동안 다시 호출할 필요가 없다. 기록이 없으면 myRank가 null이다.
+    /// <para>시즌 메타(seasonStatus·seasonEndAt)는 담지 않는다 — info·rank가 이미 내려준다.
+    /// seasonId는 생략 호출 시 어느 시즌이 답했는지 확인하는 용도다.</para>
+    /// </summary>
+    [Serializable]
+    public class BossRushMyRankResultData
+    {
+        public int seasonId;
+        public int totalEntries;
+        public int source;   // BossRushRankSource (1:랭킹 캐시 2:MySQL 폴백)
+        public BossRushRankEntryDto myRank;
+    }
+
+    /// <summary>내 순위 조회 응답 { success, errorCode, message, data(BossRushMyRankResultData) }.</summary>
+    [Serializable]
+    public class BossRushMyRankResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public BossRushMyRankResultData data = new BossRushMyRankResultData();
     }
 }

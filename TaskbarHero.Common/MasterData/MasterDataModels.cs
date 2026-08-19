@@ -314,4 +314,59 @@ namespace TaskbarHero.Common.MasterData
         public GachaItemPoolEntry[] itemPool;
         public GachaPityRule[] pityRules;
     }
+
+    /// <summary>
+    /// 보스러시 전역 규칙(boss_rush_master, 단일 행). 제한 시간·일일 횟수·해금 조건은 밸런스 값이고
+    /// <b>클라이언트가 같은 값으로 판정</b>해야 하므로(시간 측정이 클라 측이라 초과 판정도 클라에 있다)
+    /// 마스터에 둔다(보스러시 기획서 4.1).
+    /// </summary>
+    [Serializable]
+    public class BossRushMaster
+    {
+        public int contentId;             // 고정 1(콘텐츠 단일)
+        public int roundCount;            // 라운드 수(현재 5 = Act 수)
+        public int timeLimitSec;          // 클리어 시간 상한(초). 이 값을 넘는 보고는 기록으로 받지 않는다
+        public int dailyEntryLimit;       // 일일 도전 횟수
+        public int unlockStageSequence;   // 해금 요구 진행 순번(max_stage_cleared 기준)
+        public int seasonPeriodDays;      // 시즌 길이(일)
+        public int expireGraceSec;        // 제한 시간 경과 후 클리어 보고를 받아 주는 여유(초)
+        public int rankPageLimit;         // 랭킹 조회 1페이지 크기 상한(순위 범위에는 상한이 없다)
+    }
+
+    /// <summary>보스러시 라운드 스폰 1행(boss_rush_spawn 자식, is_boss=0). BossRushRoundMaster.spawns 배열로 직렬화.</summary>
+    [Serializable]
+    public struct BossRushSpawn
+    {
+        public int monsterCode;
+        public int monsterLevel;  // 그 라운드에서 이 몬스터가 등장하는 레벨(보스러시 전용 값)
+        public int count;
+    }
+
+    /// <summary>
+    /// 보스러시 라운드 정의(boss_rush_round). 라운드 r은 Act r에 대응하며 <b>배경도 그 Act의 스테이지
+    /// 배경을 재활용</b>한다(backgroundType이 Act r의 StageMaster 배경과 같은 값). 라운드 전환의
+    /// 포탈 이동은 클라이언트 연출이라 서버 계약에 없다(보스러시 기획서 2장·4.1).
+    /// </summary>
+    [Serializable]
+    public class BossRushRoundMaster
+    {
+        public int round;                 // 1~roundCount
+        public int backgroundType;        // Act r의 stage_master.background_type과 같은 값
+        public BossRushSpawn[] spawns;    // 등장 일반 몬스터(boss_rush_spawn 의 is_boss=0 행)
+        public int bossMonsterCode;       // 그 Act 보스(9N99). boss_rush_spawn 의 is_boss=1 행에서 투영
+        public int bossMonsterLevel;      // 보스 등장 레벨
+    }
+
+    /// <summary>
+    /// 보스러시 시즌 순위 보상(boss_rush_rank_reward). 지급 품목이 <b>골드뿐</b>이라 자식 테이블이 없다.
+    /// 현재 3행(1위·2위·3위, 각 rankFrom = rankTo)이며 4위 이하는 행이 없어 보상을 받지 않는다(보스러시 기획서 4.1).
+    /// </summary>
+    [Serializable]
+    public class BossRushRankReward
+    {
+        public int rankGroup;    // 순위 구간 순번(1부터, 상위 구간이 작은 값)
+        public int rankFrom;     // 구간 시작 순위(포함)
+        public int rankTo;       // 구간 끝 순위(포함)
+        public long rewardGold;  // 그 구간에 지급할 골드
+    }
 }

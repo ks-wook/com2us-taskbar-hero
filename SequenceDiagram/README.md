@@ -18,6 +18,7 @@
 | [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchService(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
 | [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchService(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
 | [**출석부 보상**](#출석부-보상) (이번달 진행도 조회 / 오늘자 보상 획득→메일 발급, 일차 = 누적 출석 순번 1~30) | GameAttendanceController | Game | `POST /api/game/attendance/status` · `claim` |
+| [**보스러시/랭킹**](#보스러시랭킹) (정보 조회 / 도전 시작 / 클리어 보고=클라 측정 시간 기록 / 랭킹 목록 / 내 순위 / 시즌 정산 배치) | GameBossRushController · BossRushSeasonBatchService(배치) | Game | `POST /api/game/boss-rush/info` · `enter` · `clear` · `rank` · `my-rank` |
 
 > **가방 변경분 공통 규약(`inventoryDelta`)** — 가방을 바꾸는 액션(`cube/*`·`gacha/pull`·`consumable/use`·`mail/claim`·`mail/claim-all`·`stage/clear`·`trade/register`·`trade/cancel`)은 변경분을 응답에 담는다. 클라이언트는 응답만으로 가방을 갱신하며 **액션 뒤에 `/load`·`/inventory/list`를 재조회하지 않는다**([인벤토리/아이템/큐브 기획서](../docs/세부/inventory-item-cube-기획서.md) 5.0).
 >
@@ -1322,3 +1323,231 @@ sequenceDiagram
     end
     Note over S: 주기 실행 실패는 Error 로그 후 루프 유지(다음 주기에 재시도)
 ```
+
+
+## 보스러시/랭킹
+
+1~5지역 보스 5종이 5라운드로 순차 등장하는 도전 콘텐츠와, 클리어 시간으로 경쟁하는 주간 시즌 랭킹
+([보스러시 / 랭킹 기획서](../docs/세부/boss-rush-기획서.md)).
+
+> **전투와 시간 측정 모두 클라이언트 권위**다. 서버는 도전 원장을 관리하고 **보고된 기록의 형식만 검증**해
+> 그대로 등재하며, 진위를 판정하지 않는다. 그래서 `clear`는 재화·아이템을 **지급하지 않는다** — 보상은
+> 시즌 정산의 순위 보상(1~3위, 골드)뿐이다.
+>
+> **랭킹 조회의 정상 경로는 Redis 단독**이다 — 순위·기록은 리더보드 ZSET(점수에 `clearMs`·`recordedAt`
+> 인코딩), 표시 이름은 `player:nickname` 해시, 시즌 메타는 `bossrush:season:current` 해시에서 나온다.
+> MySQL은 캐시 미스·폴백·종료 시즌 조회에서만 개입한다.
+>
+> **실패 보고 엔드포인트가 없다.** 5라운드를 못 깨면 클라이언트는 아무것도 보내지 않고, 그 런은 제한 시간
+> + 그레이스가 지나 만료된다. 만료 판정은 정리 배치가 아니라 **런을 읽는 경로**(`clear`·`info`·`enter`)가 한다.
+
+### 보스러시 정보 조회 — `POST /api/game/boss-rush/info`
+
+```mermaid
+sequenceDiagram
+    actor C as 클라이언트
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    C->>S: POST /api/game/boss-rush/info { userId, token }
+    S->>S: 마스터 전역 규칙 확인(boss_rush_master)
+    alt 마스터 미적재
+        S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) }
+    else 정상
+        S->>R: 현재 시즌 메타 조회(bossrush:season:current)
+        alt 캐시 미스 또는 진행 중 시즌 아님
+            S->>DB: 진행 중 시즌 조회(status=1)
+            S->>R: 시즌 메타 캐시 채움
+        end
+        S->>DB: 진행도·오늘(KST) 사용 횟수·진행 중 런·내 최고 기록 조회
+        alt 세이브 없음
+            S-->>C: 실패 { errorCode: SaveNotFound(2001) }
+        else 정상
+            S->>R: 내 순위 조회(ZRANK + 1)
+            S->>S: 해금 판정(max_stage_cleared >= unlock_stage_sequence)
+            S->>S: 진행 중 런 나이 검사 — 제한 시간+그레이스 지났으면 activeRun을 null로
+            S-->>C: 성공 { serverTime, unlocked, dailyEntryUsed/Limit, dailyResetAt, timeLimitMs, season, myRecord, activeRun }
+        end
+    end
+```
+
+### 도전 시작 — `POST /api/game/boss-rush/enter`
+
+```mermaid
+sequenceDiagram
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /api/game/boss-rush/enter { userId, token }
+    S->>S: 마스터 규칙·라운드 구성 확인(boss_rush_master · boss_rush_round + boss_rush_spawn)
+    Note over S,DB: 트랜잭션 시작(game_player 행 잠금 — 일일 횟수 검증과 런 INSERT를 직렬화)
+    S->>DB: 진행도 조회(SELECT ... FOR UPDATE)
+    alt 세이브 없음
+        S-->>C: 실패 { errorCode: SaveNotFound(2001) }
+    else 해금 조건 미달
+        S-->>C: 실패 { errorCode: BossRushLocked(13001) }
+    else 진행 중 시즌 없음(정산 중)
+        S-->>C: 실패 { errorCode: BossRushSeasonClosed(13007) }
+    else 오늘 도전 횟수 소진
+        S-->>C: 실패 { errorCode: BossRushDailyLimitExceeded(13002) }
+    else 정상
+        S->>DB: 남아 있는 진행 중 런을 만료 종결(status=3, 보상 없음 — 일일 횟수는 회복하지 않음)
+        S->>DB: 새 런 INSERT(started_at = 서버 시각(ms), status=1)
+        Note over S,DB: 커밋 — 런 INSERT 자체가 일일 횟수 차감이다(별도 카운터 없음)
+        S-->>C: 성공 { runId, seasonId, timeLimitMs, rounds[5](round·backgroundType·monsters[]·boss), dailyEntryUsed/Limit }
+    end
+    Note over C: 5라운드 스폰을 한 번에 받아 연속 진행(라운드 전환은 포탈 이동 연출, 서버 호출 없음)
+```
+
+### 클리어 보고 — `POST /api/game/boss-rush/clear`
+
+```mermaid
+sequenceDiagram
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+    participant R as Redis
+
+    C->>S: POST /api/game/boss-rush/clear { runId, clearMs, rounds[5] }
+    S->>S: 제한 시간 상한 검사(clearMs <= time_limit_sec × 1000)
+    alt 상한 초과
+        S-->>C: 실패 { errorCode: BossRushTimeout(13005) } (런은 종결하지 않음 — 그레이스 안이면 재보고 가능)
+    else 통과
+        S->>S: 라운드 형식·자기정합성 검증(1..5 빠짐없이·중복 없음·합계 == clearMs)
+        alt 어긋남(클라이언트 버그)
+            S-->>C: 실패 { errorCode: BossRushInvalidProgress(13006) } + Warning 로그
+        else 통과
+            Note over S,DB: 트랜잭션 시작(boss_rush_run 행 잠금)
+            S->>DB: 런 조회(SELECT ... FOR UPDATE)
+            alt 런 없음 또는 타인 런
+                S-->>C: 실패 { errorCode: BossRushRunNotFound(13003) }
+            else 이미 종결된 런
+                S-->>C: 실패 { errorCode: BossRushRunAlreadyFinished(13004) }
+            else 제한 시간+그레이스 경과(lazy 만료)
+                S->>DB: status=3으로 종결
+                S-->>C: 실패 { errorCode: BossRushRunAlreadyFinished(13004) }
+            else 정상
+                S->>DB: 런 조건부 종결(status=1일 때만 → 2, clear_ms 기록)
+                alt 0행(동시 중복 보고의 패자)
+                    S-->>C: 실패 { errorCode: BossRushRunAlreadyFinished(13004) }
+                else 선점 성공
+                    S->>DB: 라운드별 소요 INSERT(boss_rush_run_round)
+                    S->>S: 사후 관측 로그(서버 왕복 경과 vs 보고 clearMs 괴리 — 판정에는 쓰지 않음)
+                    S->>DB: 시즌 최고 기록 조건부 UPSERT(개선된 경우만. 시즌이 진행 중이 아니면 생략)
+                    Note over S,DB: 커밋 — 보상 지급 없음(런 상태와 최고 기록만 바뀐다)
+                    S->>R: 기록 갱신 시 ZADD(커밋 이후에만 — Redis에는 롤백이 없다)
+                    S->>R: ZRANK로 순위 산출(미갱신이어도 현재 순위를 내려준다)
+                    S-->>C: 성공 { runId, seasonId, clearMs, isNewRecord, bestClearMs, rank }
+                end
+            end
+        end
+    end
+```
+
+### 랭킹 목록 조회 — `POST /api/game/boss-rush/rank`
+
+```mermaid
+sequenceDiagram
+    actor C as 클라이언트
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    C->>S: POST /api/game/boss-rush/rank { seasonId?, offset?, limit? }
+    S->>S: 시즌 해석(seasonId 생략 → 현재 시즌) · limit clamp(1~rank_page_limit)
+    alt 존재하지 않는 시즌
+        S-->>C: 실패 { errorCode: BossRushSeasonClosed(13007) }
+    else 정상
+        S->>R: ZRANGE(offset ~ offset+limit-1, WITHSCORES) + ZCARD
+        alt 캐시 사용 가능(source=1)
+            S->>S: 점수에서 clearMs·recordedAt 복원(순위 = offset + 인덱스 + 1)
+        else 캐시 장애(source=2, 축소 운전)
+            S->>DB: 종료 시즌은 final_rank로, 진행 중 시즌은 (best_clear_ms, recorded_at) 정렬로 한 페이지 조회
+            S->>DB: 등재 인원 COUNT
+        end
+        S->>R: 표시 이름 조회(HMGET player:nickname)
+        alt 캐시 미스 있음
+            S->>DB: 미스된 userId만 닉네임 조회
+            S->>R: 닉네임 캐시 백필(HSET)
+        end
+        S-->>C: 성공 { seasonId, seasonStatus, seasonEndAt, totalEntries, offset, limit, source, entries[] }
+    end
+    Note over C: 페이지를 이어붙이지 않고 교체한다(페이지 간 스냅샷 미보장 — 순위 번호가 항상 연속이라 불일치가 드러나지 않는다)
+```
+
+### 내 순위 조회 — `POST /api/game/boss-rush/my-rank`
+
+```mermaid
+sequenceDiagram
+    actor C as 클라이언트
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    C->>S: POST /api/game/boss-rush/my-rank { seasonId? }
+    S->>S: 시즌 해석(seasonId 생략 → 현재 시즌)
+    alt 존재하지 않는 시즌
+        S-->>C: 실패 { errorCode: BossRushSeasonClosed(13007) }
+    else 정상
+        S->>R: ZRANK + ZSCORE + ZCARD
+        alt 캐시 사용 가능(source=1)
+            S->>S: 미등재면 myRank = null
+        else 캐시 장애(source=2)
+            S->>DB: 종료 시즌은 final_rank, 진행 중 시즌은 "앞선 기록 수 + 1"로 계산
+        end
+        S->>R: 표시 이름 조회(HMGET, 미스는 MySQL 백필)
+        S-->>C: 성공 { seasonId, totalEntries, source, myRank }
+    end
+    Note over C: 랭킹 UI 고정 영역용 — 목록 페이지를 넘기는 동안 다시 호출하지 않는다
+```
+
+### 시즌 정산 배치 — `BossRushSeasonBatchService`
+
+```mermaid
+sequenceDiagram
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    Note over S: BossRushSeasonBatchService — 기동 직후 1회 실행 후 10분 주기 반복(재진입 없음)
+    loop 매 주기
+        S->>R: 리더 락 시도(batch:lock:bossrush-season, SET NX + TTL=min(주기,5분))
+        alt 락 미획득(다른 인스턴스가 이번 주기 실행)
+            S->>S: 스킵(Debug 로그)
+        else 락 획득(Redis 장애 시에도 락 없이 진행 — 축소 운전)
+            S->>DB: 진행 중 시즌 확인
+            alt 시즌 없음(첫 기동)
+                S->>DB: 첫 시즌 개시(이번 주 월요일 00:00 KST ~ +7일)
+            end
+            S->>R: 현재 시즌 메타 캐시 갱신
+            S->>R: 리더보드 존재 확인
+            alt 리더보드 비어 있음(캐시 유실)
+                S->>DB: 시즌 기록을 정렬 순서로 페이지 스캔
+                S->>R: ZADD로 재구축(워밍업)
+            end
+            S->>DB: 종료 시각 지난 시즌 선점(status 1 → 2, 조건부 갱신)
+            alt 정산 대상 없음
+                S->>S: 종료(로그 생략 — 소음 방지)
+            else 선점 성공
+                loop 순위 미확정 기록(페이지 단위, 각 페이지가 1트랜잭션)
+                    S->>DB: final_rank=0 기록을 (best_clear_ms, recorded_at) 순으로 조회
+                    S->>S: 순위 산출 + 보상 구간 매칭(boss_rush_rank_reward — 1~3위만)
+                    Note over S,DB: 트랜잭션 — 순위 보상 메일 발급(템플릿 501) + final_rank 조건부 확정(멱등)
+                    S->>DB: player_mail + player_mail_reward INSERT(골드 1건) → boss_rush_record UPDATE
+                end
+                S->>DB: 시즌 종료 처리(status=3, settled_at)
+                S->>R: 종료 시즌 리더보드 TTL 7일
+                S->>DB: 다음 시즌 개시(start_at 유니크로 중복 방지)
+                S->>R: 현재 시즌 메타 캐시 갱신
+                S->>S: 요약 로그(순위 확정 N건 · 보상 발급 M건)
+            end
+        end
+    end
+    Note over S: 주기 실행 실패는 Error 로그 후 루프 유지(final_rank=0 조건이 재진입 멱등성을 보장)
+```
+
+> **버려진 런을 정리하는 배치는 두지 않는다.** 만료된 런에는 반송할 자산이 없어 배치가 할 일이 `status`
+> 컬럼 정리뿐이므로, 거래소와 같은 규약으로 **만료 판정을 읽는 시점**에 한다 — `clear`가 그 자리에서
+> `status=3`으로 종결하고 거부하며, `info`는 만료된 런을 `activeRun: null`로, `enter`는 남은 런을 자동 종결한다.

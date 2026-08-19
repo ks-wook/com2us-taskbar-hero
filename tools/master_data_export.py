@@ -416,6 +416,65 @@ def export_gacha(conn):
     return result
 
 
+def export_boss_rush(conn):
+    """보스러시 전역 규칙(단일 행)."""
+    rows = q(conn, "SELECT * FROM boss_rush_master ORDER BY content_id")
+    return [{
+        "contentId": _i(r["content_id"]),
+        "roundCount": _i(r["round_count"]),
+        "timeLimitSec": _i(r["time_limit_sec"]),
+        "dailyEntryLimit": _i(r["daily_entry_limit"]),
+        "unlockStageSequence": _i(r["unlock_stage_sequence"]),
+        "seasonPeriodDays": _i(r["season_period_days"]),
+        "expireGraceSec": _i(r["expire_grace_sec"]),
+        "rankPageLimit": _i(r["rank_page_limit"]),
+    } for r in rows]
+
+
+def export_boss_rush_round(conn):
+    """보스러시 라운드 + 자식 스폰. stage_master 와 같은 방식으로 is_boss 행을 갈라 투영한다.
+
+    라운드 r 은 Act r 의 전투이며 배경도 그 Act 의 스테이지 배경을 재활용한다
+    (backgroundType 이 Act r 의 stage_master.background_type 과 같은 값).
+    """
+    rounds = q(conn, "SELECT * FROM boss_rush_round ORDER BY round")
+    spawns = q(conn, "SELECT * FROM boss_rush_spawn ORDER BY round, monster_code")
+    by_round, boss_by_round = {}, {}
+    for sp in spawns:
+        rnd = _i(sp["round"])
+        if _i(sp["is_boss"]):
+            boss_by_round[rnd] = (_i(sp["monster_code"]), _i(sp["monster_level"]))
+            continue
+        by_round.setdefault(rnd, []).append({
+            "monsterCode": _i(sp["monster_code"]),
+            "monsterLevel": _i(sp["monster_level"]),
+            "count": _i(sp["spawn_count"]),
+        })
+    result = []
+    for r in rounds:
+        rnd = _i(r["round"])
+        boss_code, boss_level = boss_by_round.get(rnd, (0, 0))
+        result.append({
+            "round": rnd,
+            "backgroundType": _i(r["background_type"]),
+            "spawns": by_round.get(rnd, []),
+            "bossMonsterCode": boss_code,
+            "bossMonsterLevel": boss_level,
+        })
+    return result
+
+
+def export_boss_rush_rank_reward(conn):
+    """보스러시 시즌 순위 보상(1~3위, 골드만). 지급 항목이 하나라 자식 테이블이 없다."""
+    rows = q(conn, "SELECT * FROM boss_rush_rank_reward ORDER BY rank_group")
+    return [{
+        "rankGroup": _i(r["rank_group"]),
+        "rankFrom": _i(r["rank_from"]),
+        "rankTo": _i(r["rank_to"]),
+        "rewardGold": _i(r["reward_gold"]),
+    } for r in rows]
+
+
 # 파일명(테이블명) -> 추출 함수
 EXPORTERS = [
     ("equip_slot_master", export_equip_slot),
@@ -435,6 +494,9 @@ EXPORTERS = [
     ("character_create_cost", export_character_create_cost),
     ("inventory_expand_master", export_inventory_expand_cost),
     ("gacha_master", export_gacha),
+    ("boss_rush_master", export_boss_rush),
+    ("boss_rush_round", export_boss_rush_round),
+    ("boss_rush_rank_reward", export_boss_rush_rank_reward),
 ]
 
 

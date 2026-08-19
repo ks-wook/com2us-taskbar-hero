@@ -24,4 +24,17 @@ public static class MailComposer
         var expiresAt = template.ValidDays > 0 ? nowUnix + template.ValidDays * SecondsPerDay : 0;
         return new MailDraft(template.Category, title, body, expiresAt, rewards);
     }
+
+    /// <summary>
+    /// 자리표시자가 둘인 템플릿({0}·{1})용 오버로드. 보스러시 시즌 순위 보상(템플릿 501)이
+    /// 시즌 번호와 최종 순위를 함께 채우는 데 쓴다(보스러시 기획서 6.4).
+    /// </summary>
+    public static MailDraft Compose(
+        MailTemplateDef template, string arg0, string arg1, long nowUnix, IReadOnlyList<MailAttachment> rewards)
+    {
+        var title = string.Format(template.TitleFormat, arg0, arg1);
+        var body = string.Format(template.BodyFormat, arg0, arg1);
+        var expiresAt = template.ValidDays > 0 ? nowUnix + template.ValidDays * SecondsPerDay : 0;
+        return new MailDraft(template.Category, title, body, expiresAt, rewards);
+    }
 }

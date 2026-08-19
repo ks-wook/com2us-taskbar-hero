@@ -56,6 +56,10 @@ public abstract class GameApiControllerBase : ControllerBase
         // 가챠: 없는 배너 코드는 404, 후보 풀 부재는 마스터 결함이라 500.
         ErrorCode.GachaNotFound => StatusCodes.Status404NotFound,
         ErrorCode.GachaPoolEmpty => StatusCodes.Status500InternalServerError,
+        // 보스러시: 없는 런은 404, 이미 종결된 런(중복 보고·동시 요청의 패자·만료)은 409,
+        //   해금 미달·일일 소진·시즌 미개방은 정상적인 거부라 400(기본 매핑).
+        ErrorCode.BossRushRunNotFound => StatusCodes.Status404NotFound,
+        ErrorCode.BossRushRunAlreadyFinished => StatusCodes.Status409Conflict,
         // 인증 실패 계열(미들웨어가 대부분 선처리하나 방어적으로 매핑).
         ErrorCode.InvalidToken => StatusCodes.Status401Unauthorized,
         ErrorCode.ExpiredToken => StatusCodes.Status401Unauthorized,
@@ -120,6 +124,14 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.GachaNotFound => "Gacha not found",
         ErrorCode.GachaPoolEmpty => "Gacha item pool is empty",
         ErrorCode.GachaNotAvailable => "Gacha banner is not available",
+        // 보스러시 / 랭킹
+        ErrorCode.BossRushLocked => "Boss rush locked",
+        ErrorCode.BossRushDailyLimitExceeded => "Boss rush daily limit exceeded",
+        ErrorCode.BossRushRunNotFound => "Boss rush run not found",
+        ErrorCode.BossRushRunAlreadyFinished => "Boss rush run already finished",
+        ErrorCode.BossRushTimeout => "Boss rush clear time exceeds the limit",
+        ErrorCode.BossRushInvalidProgress => "Boss rush round report is inconsistent",
+        ErrorCode.BossRushSeasonClosed => "Boss rush season is not open",
         ErrorCode.MasterDataNotLoaded => "Master data not loaded",
         ErrorCode.InvalidToken => "Invalid token",
         ErrorCode.ExpiredToken => "Expired token",

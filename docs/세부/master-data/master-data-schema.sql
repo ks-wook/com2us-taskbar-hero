@@ -1697,3 +1697,118 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- =====================================================================
 -- 끝. (inventory_expand_master는 인벤토리 확장 기능으로, enhance_master(7)는 장비 강화 기능으로 추가됨.)
 -- =====================================================================
+
+
+-- ══════════════════════════════════════════════════════════════════════════════════════════════
+-- 보스러시 / 랭킹 마스터 (보스러시 기획서 4.1)
+--   * 네 테이블 모두 클라이언트 번들에 포함된다 — 몬스터 소환·순위 보상 안내·제한 시간 판정이
+--     모두 클라 측에서 필요하다(시간 측정이 클라 권위라 제한 시간 초과 판정도 클라에 있다).
+--   * 아래 시드의 **스폰 구성(등장 레벨·마리 수)과 순위 보상 골드는 잠정값**이다.
+--     기획서 8장 미결 — tools/balance_sim.py로 "최종 스테이지를 깬 기준 파티가 5라운드를 4~6분에
+--     클리어"하도록 측정해 확정한 뒤 이 파일과 master-data-값.md를 함께 고치고 클라 번들을 재생성한다.
+-- ══════════════════════════════════════════════════════════════════════════════════════════════
+
+-- boss_rush_master — 콘텐츠 전역 규칙(단일 행).
+--   * 제한 시간·일일 횟수·해금 조건은 밸런스 값이고 클라이언트가 같은 값으로 판정해야 하므로
+--     appsettings가 아니라 마스터에 둔다. 배치 주기 같은 운영 파라미터만 appsettings에 남긴다.
+--   * time_limit_sec은 랭킹 점수 인코딩의 전제다 — score = clearMs × 10^10 + recordedAt(초)이므로
+--     600,000ms × 10^10 = 6e15 < 2^53(≈9.007e15)로 double 정밀도 안에 들어간다.
+DROP TABLE IF EXISTS boss_rush_master;
+CREATE TABLE boss_rush_master (
+    content_id            INT NOT NULL          COMMENT '고정 1(콘텐츠 단일)',
+    round_count           INT NOT NULL          COMMENT '라운드 수(현재 5 = Act 수)',
+    time_limit_sec        INT NOT NULL          COMMENT '클리어 시간 상한(초). 넘는 보고는 기록으로 받지 않는다',
+    daily_entry_limit     INT NOT NULL          COMMENT '일일 도전 횟수(KST 자정 리셋)',
+    unlock_stage_sequence INT NOT NULL          COMMENT '해금 요구 진행 순번(game_player.max_stage_cleared 기준)',
+    season_period_days    INT NOT NULL          COMMENT '시즌 길이(일)',
+    expire_grace_sec      INT NOT NULL          COMMENT '제한 시간 경과 후 클리어 보고를 받아 주는 여유(초) = 만료 판정 기준',
+    rank_page_limit       INT NOT NULL          COMMENT '랭킹 조회 1페이지 크기 상한(순위 범위에는 상한이 없다)',
+    PRIMARY KEY (content_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 전역 규칙(단일 행)';
+
+INSERT INTO boss_rush_master
+    (content_id, round_count, time_limit_sec, daily_entry_limit, unlock_stage_sequence,
+     season_period_days, expire_grace_sec, rank_page_limit) VALUES
+    (1, 5, 600, 3, 10, 7, 300, 100);
+
+
+-- boss_rush_round — 라운드 정의. 라운드 r은 Act r에 대응한다.
+--   * background_type은 **Act r의 스테이지 배경을 재활용**하므로 그 Act의 stage_master.background_type과
+--     같은 값이어야 한다(마스터 검증 대상). 라운드 전환의 포탈 이동은 클라이언트 연출이라 서버 계약에 없다.
+--   * 등장 몬스터는 자식 테이블 boss_rush_spawn이 정의한다(stage_master ↔ stage_spawn과 같은 구조).
+DROP TABLE IF EXISTS boss_rush_round;
+CREATE TABLE boss_rush_round (
+    round           INT NOT NULL          COMMENT '라운드 번호(1~round_count). 라운드 r = Act r',
+    background_type INT NOT NULL          COMMENT '배경 타입(1~5) = Act r의 stage_master.background_type',
+    PRIMARY KEY (round)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 라운드 정의';
+
+INSERT INTO boss_rush_round (round, background_type) VALUES
+    (1, 1),   -- Act1 배경 재활용
+    (2, 2),   -- Act2
+    (3, 3),   -- Act3
+    (4, 4),   -- Act4
+    (5, 5);   -- Act5
+
+
+-- boss_rush_spawn — 라운드별 등장 몬스터·레벨·마리 수(boss_rush_round의 자식).
+--   * 보스러시 라운드는 그 Act의 **일반 몬스터 무리 + Act 보스**로 구성된다(보스 단독이 아니다).
+--   * **보스도 이 테이블의 is_boss=1 행**이다(stage_spawn과 동일 방식) — 보스에도 레벨을 주려면
+--     일반 몬스터와 같은 축(레벨·마리 수)에 있어야 하고, 클라이언트도 한 목록을 순회해 소환할 수 있다.
+--   * 검증: 라운드마다 is_boss=1 행이 정확히 1개이고 그 코드는 해당 Act 보스(9N99)여야 하며,
+--     일반 몬스터(is_boss=0)는 그 Act 대역(9N01~9N98) 코드여야 한다. monster_level·spawn_count >= 1.
+--   * 아래 레벨·마리 수는 **잠정값**(기획서 8장 미결) — 스테이지 보스전(보스 1 + 강몹 8)을 출발점으로
+--     잡고, 라운드 사이 회복이 없다는 점을 감안해 마리 수보다 레벨로 난이도를 올린다.
+DROP TABLE IF EXISTS boss_rush_spawn;
+CREATE TABLE boss_rush_spawn (
+    round        INT     NOT NULL          COMMENT '부모(boss_rush_round.round)',
+    monster_code INT     NOT NULL          COMMENT '등장 몬스터(monster_master.monster_code)',
+    monster_level INT    NOT NULL          COMMENT '그 라운드 등장 레벨(1 이상, 보스러시 전용 값)',
+    spawn_count  INT     NOT NULL          COMMENT '등장 마리 수(보스는 1)',
+    is_boss      TINYINT NOT NULL DEFAULT 0 COMMENT '1=보스(라운드당 최대 1행)',
+    PRIMARY KEY (round, monster_code),
+    CONSTRAINT fk_bossrushspawn_round FOREIGN KEY (round)
+        REFERENCES boss_rush_round (round) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 라운드 스폰(자식, 보스 포함)';
+
+INSERT INTO boss_rush_spawn (round, monster_code, monster_level, spawn_count, is_boss) VALUES
+    -- 라운드 1 (Act1): 일반 9001·9002 + 보스 9099
+    (1, 9001, 14,  6, 0),
+    (1, 9002, 14,  3, 0),
+    (1, 9099, 16,  1, 1),
+    -- 라운드 2 (Act2): 일반 9101·9102 + 보스 9199
+    (2, 9101, 28,  6, 0),
+    (2, 9102, 28,  3, 0),
+    (2, 9199, 30,  1, 1),
+    -- 라운드 3 (Act3): 일반 9201 + 보스 9299
+    (3, 9201, 42,  8, 0),
+    (3, 9299, 45,  1, 1),
+    -- 라운드 4 (Act4): 일반 9301 + 보스 9399
+    (4, 9301, 56,  8, 0),
+    (4, 9399, 60,  1, 1),
+    -- 라운드 5 (Act5): 일반 9401 + 보스 9499
+    (5, 9401, 70,  8, 0),
+    (5, 9499, 75,  1, 1);
+
+
+-- boss_rush_rank_reward — 시즌 순위 보상.
+--   * **1~3위에게만, 골드로만** 지급한다(4위 이하는 행이 없어 보상이 없다 — 보스러시에는 라운드별·
+--     완주 보상도 없다). 지급 항목이 하나라 반복 구조가 아니므로 자식 테이블을 두지 않는다.
+--   * 정산 배치가 확정한 순위(boss_rush_record.final_rank)를 이 구간에 매칭해 메일(템플릿 501)로 발급하며,
+--     첨부는 player_mail_reward 1행(reward_type=1 골드 · reward_code=0 · quantity=reward_gold)이다.
+--   * 구간은 1위부터 시작해 겹치지 않고 빈틈이 없어야 한다(다음 rank_from = 이전 rank_to + 1).
+--   * 아래 골드 액수는 **잠정값** — 주 1회 1~3위에게만 나가는 유입량이라 거래소 기준가·가챠 기대값과
+--     비교해 확정한다(기획서 8장에서 값 결정을 master-data-값.md로 넘김).
+DROP TABLE IF EXISTS boss_rush_rank_reward;
+CREATE TABLE boss_rush_rank_reward (
+    rank_group  INT    NOT NULL          COMMENT '순위 구간 순번(1부터, 상위 구간이 작은 값)',
+    rank_from   INT    NOT NULL          COMMENT '구간 시작 순위(포함)',
+    rank_to     INT    NOT NULL          COMMENT '구간 끝 순위(포함)',
+    reward_gold BIGINT NOT NULL          COMMENT '그 구간에 지급할 골드',
+    PRIMARY KEY (rank_group)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 시즌 순위 보상(1~3위, 골드)';
+
+INSERT INTO boss_rush_rank_reward (rank_group, rank_from, rank_to, reward_gold) VALUES
+    (1, 1, 1, 30000000),
+    (2, 2, 2, 15000000),
+    (3, 3, 3,  7000000);

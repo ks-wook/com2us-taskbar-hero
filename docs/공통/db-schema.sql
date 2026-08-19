@@ -361,4 +361,85 @@ CREATE TABLE player_gacha_pull_item (
         REFERENCES player_gacha_pull (pull_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='가챠 뽑기 결과(회차별, 1:N)';
 
+
+-- ── 보스러시 / 랭킹 (보스러시 기획서 4.2) ────────────────────────────────────────────────────────
+
+-- 보스러시 랭킹 시즌. 랭킹은 시즌 단위로 리셋되므로 "지금 어느 시즌인가"·"정산했는가"가 서버 판단의 기준이다.
+--   status를 조건부 갱신(1 → 2)으로 전이시켜 정산 배치의 선점 단위로도 쓴다.
+--   start_at 유니크 — 정산 배치가 여러 인스턴스에서 돌아도 같은 시즌이 두 번 개시되지 않는다.
+DROP TABLE IF EXISTS boss_rush_season;
+CREATE TABLE boss_rush_season (
+    season_id  INT    NOT NULL AUTO_INCREMENT COMMENT '시즌 식별자',
+    start_at   BIGINT NOT NULL          COMMENT '시즌 시작(Unix 초, KST 월요일 00:00)',
+    end_at     BIGINT NOT NULL          COMMENT '시즌 종료(= 다음 시즌 start_at)',
+    status     TINYINT NOT NULL DEFAULT 1 COMMENT '1:진행 2:정산중 3:종료(BossRushSeasonStatus)',
+    settled_at BIGINT NOT NULL DEFAULT 0 COMMENT '정산 완료 시각(Unix 초, 미정산 0)',
+    PRIMARY KEY (season_id),
+    UNIQUE KEY uk_bossrush_season_start (start_at),
+    KEY idx_bossrush_season_settle (status, end_at) COMMENT '정산 대상 시즌 탐색'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 랭킹 시즌(전역)';
+
+
+-- 보스러시 도전 1회의 원장. 일일 횟수 집계와 만료 판정의 근거다.
+--   **일일 횟수 카운터 컬럼을 두지 않는다** — started_at이 오늘(KST) 범위인 행 수가 곧 오늘 사용 횟수이며,
+--   런 INSERT 자체가 차감이라 "차감했는데 런이 없음"이 구조적으로 불가능하다.
+--   clear_ms는 **클라이언트가 측정해 보고한 클리어 시간**이고(랭킹 점수), started_at·finished_at은
+--   일일 횟수·만료 판정·사후 관측용 서버 시각이다(밀리초 — 시간 경쟁 콘텐츠라 초 단위로는 순위가 뭉친다).
+--   만료(status=3)는 배치가 아니라 런을 읽는 경로(clear·info·enter)가 lazy하게 기록한다.
+DROP TABLE IF EXISTS boss_rush_run;
+CREATE TABLE boss_rush_run (
+    run_id      BIGINT  NOT NULL AUTO_INCREMENT COMMENT '도전 런 식별자',
+    user_id     BIGINT  NOT NULL          COMMENT '도전한 계정(game_player.user_id)',
+    season_id   INT     NOT NULL          COMMENT '시작 시점 시즌(고정, boss_rush_season.season_id)',
+    started_at  BIGINT  NOT NULL          COMMENT '런 개시 시각(Unix 밀리초) — 일일 횟수·만료 판정 기준',
+    finished_at BIGINT  NOT NULL DEFAULT 0 COMMENT '종결 시각(Unix 밀리초, 진행 중 0)',
+    status      TINYINT NOT NULL DEFAULT 1 COMMENT '1:진행 2:클리어 3:만료(BossRushRunStatus)',
+    clear_ms    INT     NOT NULL DEFAULT 0 COMMENT '클라 보고 클리어 시간(ms). 클리어만 유효',
+    PRIMARY KEY (run_id),
+    KEY idx_bossrush_run_user (user_id, started_at) COMMENT '일일 횟수 집계·진행 중 런 조회·내 이력',
+    CONSTRAINT fk_bossrushrun_player FOREIGN KEY (user_id)
+        REFERENCES game_player (user_id) ON DELETE CASCADE,
+    CONSTRAINT fk_bossrushrun_season FOREIGN KEY (season_id)
+        REFERENCES boss_rush_season (season_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 도전 원장(계정)';
+
+
+-- 도전 런의 라운드별 소요 시간(클라 측정, boss_rush_run의 자식). 합계가 clear_ms와 일치해야 보고가 통과한다.
+--   **몬스터 구성은 복사하지 않는다** — 그 라운드의 구성은 boss_rush_spawn(마스터)이 정본이고,
+--   여기에는 어느 라운드에서 시간이 갈렸는지 분석할 참고값(그 라운드 보스)만 남긴다.
+DROP TABLE IF EXISTS boss_rush_run_round;
+CREATE TABLE boss_rush_run_round (
+    run_id       BIGINT NOT NULL          COMMENT '소속 런(boss_rush_run.run_id)',
+    round        INT    NOT NULL          COMMENT '라운드 번호(1~round_count)',
+    monster_code INT    NOT NULL DEFAULT 0 COMMENT '그 라운드 보스(monster_master, 참고값)',
+    elapsed_ms   INT    NOT NULL          COMMENT '그 라운드 소요(ms, 클라 측정)',
+    PRIMARY KEY (run_id, round),
+    CONSTRAINT fk_bossrushrunround_run FOREIGN KEY (run_id)
+        REFERENCES boss_rush_run (run_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 라운드 기록(자식, 1:N)';
+
+
+-- 시즌별 개인 최고 기록 = **랭킹의 정본**. Redis Sorted Set은 이 테이블에서 파생된 조회 인덱스일 뿐이다.
+--   기록이 개선될 때만 조건부 UPSERT하며, recorded_at이 동점 순위의 tie-break 축이다
+--   (같은 기록이면 먼저 달성한 쪽이 상위).
+--   정산이 final_rank·rank_reward_mail_id를 채워 재진입 멱등성을 확보하고, 행을 삭제하지 않으므로
+--   **지난 시즌 랭킹을 기간 제한 없이** 조회할 수 있다(순위는 final_rank로 고정).
+DROP TABLE IF EXISTS boss_rush_record;
+CREATE TABLE boss_rush_record (
+    season_id           INT    NOT NULL   COMMENT '시즌(boss_rush_season.season_id)',
+    user_id             BIGINT NOT NULL   COMMENT '계정(game_player.user_id)',
+    best_clear_ms       INT    NOT NULL   COMMENT '시즌 개인 최고 기록(ms, 클라 보고)',
+    best_run_id         BIGINT NOT NULL   COMMENT '그 기록을 세운 런(boss_rush_run.run_id)',
+    recorded_at         BIGINT NOT NULL   COMMENT '최고 기록 달성 시각(Unix 초) — 동점 tie-break',
+    final_rank          INT    NOT NULL DEFAULT 0 COMMENT '정산 확정 순위(미정산 0)',
+    rank_reward_mail_id BIGINT NOT NULL DEFAULT 0 COMMENT '순위 보상 메일(player_mail.mail_id, 미발급 0)',
+    PRIMARY KEY (season_id, user_id),
+    KEY idx_bossrush_record_rank (season_id, best_clear_ms, recorded_at) COMMENT '랭킹 MySQL 폴백·정산 정렬',
+    KEY idx_bossrush_record_final (season_id, final_rank) COMMENT '종료 시즌 랭킹 조회(순위 재계산 없음)',
+    CONSTRAINT fk_bossrushrecord_player FOREIGN KEY (user_id)
+        REFERENCES game_player (user_id) ON DELETE CASCADE,
+    CONSTRAINT fk_bossrushrecord_season FOREIGN KEY (season_id)
+        REFERENCES boss_rush_season (season_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 시즌 최고 기록(랭킹 정본)';
+
 SET FOREIGN_KEY_CHECKS = 1;

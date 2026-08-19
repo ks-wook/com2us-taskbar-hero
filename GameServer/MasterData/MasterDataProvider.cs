@@ -117,6 +117,44 @@ public static class GachaPityTypes
 /// <summary>가챠 1회 추첨 결과(서버 RNG 확정). PityApplied는 하드 천장으로 등급이 확정된 회차임을 뜻한다.</summary>
 public sealed record GachaRoll(int Grade, int ItemCode, int Quantity, bool PityApplied, bool Guaranteed);
 
+/// <summary>
+/// 보스러시 전역 규칙(boss_rush_master, 단일 행). 제한 시간·일일 횟수·해금 조건은 밸런스 값이고
+/// 클라이언트가 같은 값으로 판정해야 하므로 마스터에 둔다(보스러시 기획서 4.1).
+/// <para><see cref="TimeLimitSec"/>은 랭킹 점수 인코딩의 전제이기도 하다 — 클리어 시간 상한이
+/// double 정밀도(2^53) 안에 들어가야 한다(같은 문서 4.3).</para>
+/// </summary>
+public sealed record BossRushRuleDef(
+    int RoundCount, int TimeLimitSec, int DailyEntryLimit, int UnlockStageSequence,
+    int SeasonPeriodDays, int ExpireGraceSec, int RankPageLimit)
+{
+    /// <summary>클리어 시간 상한(ms). 보고된 clearMs가 이 값을 넘으면 기록으로 받지 않는다.</summary>
+    public int TimeLimitMs => TimeLimitSec * 1000;
+
+    /// <summary>런이 만료로 취급되기까지의 총 수명(ms) = 제한 시간 + 그레이스(6.2 lazy 만료).</summary>
+    public long RunLifetimeMs => (long)(TimeLimitSec + ExpireGraceSec) * 1000;
+}
+
+/// <summary>보스러시 라운드 스폰 1건(boss_rush_spawn, is_boss=0). 레벨은 등장 자리의 속성이다.</summary>
+public sealed record BossRushSpawnEntry(int MonsterCode, int MonsterLevel, int Count);
+
+/// <summary>
+/// 보스러시 라운드 정의(boss_rush_round + 자식 boss_rush_spawn). 라운드 r은 Act r의 전투이며
+/// 배경도 그 Act의 스테이지 배경을 재활용한다. 보스는 자식 테이블의 is_boss=1 행에서 투영한다.
+/// </summary>
+public sealed record BossRushRoundDef(
+    int Round, int BackgroundType, int BossMonsterCode, int BossMonsterLevel,
+    IReadOnlyList<BossRushSpawnEntry> Spawns);
+
+/// <summary>
+/// 보스러시 시즌 순위 보상 구간(boss_rush_rank_reward). 지급 품목이 골드뿐이라 자식 테이블이 없다.
+/// 현재 3행(1위·2위·3위)이며 4위 이하는 행이 없어 보상을 받지 않는다(보스러시 기획서 4.1).
+/// </summary>
+public sealed record BossRushRankRewardDef(int RankGroup, int RankFrom, int RankTo, long RewardGold)
+{
+    /// <summary>이 구간이 해당 순위를 포함하는지.</summary>
+    public bool Contains(int rank) => rank >= RankFrom && rank <= RankTo;
+}
+
 // ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑.
 //    DECIMAL 컬럼은 decimal로 받아 float/double로 캐스팅한다. ──
 file sealed class ClassMasterRow
@@ -406,6 +444,49 @@ public sealed class MasterDataProvider
 
     // 가챠 배너: gacha_code → 정의(gacha_master + 자식 가중치·후보·천장). 적재 시 유효성 검증을 통과한 배너만 담는다.
     private IReadOnlyDictionary<int, GachaBannerDef> _gachaByCode = new Dictionary<int, GachaBannerDef>();
+
+    /// <summary>보스러시 전역 규칙(boss_rush_master 단일 행 키). 콘텐츠가 하나라 고정 1이다.</summary>
+    private const int BossRushContentId = 1;
+
+    /// <summary>보스러시 전역 규칙. 마스터에 행이 없으면 null(콘텐츠 미구성).</summary>
+    private BossRushRuleDef? _bossRushRule;
+
+    /// <summary>보스러시 라운드 정의(round → 배경·스폰·보스).</summary>
+    private IReadOnlyDictionary<int, BossRushRoundDef> _bossRushRounds = new Dictionary<int, BossRushRoundDef>();
+
+    /// <summary>보스러시 시즌 순위 보상 구간(rank_group 오름차순 = 상위 구간 먼저).</summary>
+    private IReadOnlyList<BossRushRankRewardDef> _bossRushRankRewards = new List<BossRushRankRewardDef>();
+
+    /// <summary>보스러시 전역 규칙(제한 시간·일일 횟수·해금 순번 등). 마스터에 없으면 null.</summary>
+    public BossRushRuleDef? BossRushRule => _bossRushRule;
+
+    /// <summary>
+    /// 보스러시 라운드 구성을 라운드 번호 순으로 반환한다. 전역 규칙의 round_count만큼만 내려주므로
+    /// 마스터에 여분 라운드가 있어도 응답에 섞이지 않는다(빈 목록이면 콘텐츠 미구성).
+    /// </summary>
+    public IReadOnlyList<BossRushRoundDef> BossRushRounds()
+    {
+        var count = _bossRushRule?.RoundCount ?? 0;
+        if (count <= 0)
+        {
+            return Array.Empty<BossRushRoundDef>();
+        }
+
+        var rounds = new List<BossRushRoundDef>(count);
+        for (var round = 1; round <= count; round++)
+        {
+            if (_bossRushRounds.TryGetValue(round, out var def))
+            {
+                rounds.Add(def);
+            }
+        }
+
+        return rounds;
+    }
+
+    /// <summary>지정 순위가 속한 시즌 순위 보상 구간. 매칭 구간이 없으면(4위 이하) null = 보상 없음.</summary>
+    public BossRushRankRewardDef? BossRushRankRewardFor(int rank)
+        => _bossRushRankRewards.FirstOrDefault(r => r.Contains(rank));
 
     public MasterDataProvider(MasterDbFactory masterDbFactory, ILogger<MasterDataProvider> logger)
     {
@@ -715,6 +796,9 @@ public sealed class MasterDataProvider
             _mailTemplates = await LoadMailTemplatesAsync(db);
             _newbieRewards = await LoadNewbieRewardsAsync(db);
             _gachaByCode = await LoadGachaAsync(db);
+            _bossRushRule = await LoadBossRushRuleAsync(db);
+            _bossRushRounds = await LoadBossRushRoundsAsync(db);
+            _bossRushRankRewards = await LoadBossRushRankRewardsAsync(db);
 
             // 인벤토리 확장은 부가 기능이라 별도 try로 감싼다(테이블 부재 시 다른 마스터 적재까지 실패하지 않도록).
             _expandCosts = await LoadExpandCostsAsync(db);
@@ -725,7 +809,7 @@ public sealed class MasterDataProvider
             }
 
             IsLoaded = true;
-            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · item {_itemsByCode.Count:@Items} · dropGrades {_itemsByGrade.Count:@Grades} · consumable {_consumablesByCode.Count:@Consumables} · enhance {_enhanceByLevel.Count:@Enhances} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates} · newbieReward {_newbieRewards.Count:@NewbieRewards} · gacha {_gachaByCode.Count:@Gachas}");
+            _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · item {_itemsByCode.Count:@Items} · dropGrades {_itemsByGrade.Count:@Grades} · consumable {_consumablesByCode.Count:@Consumables} · enhance {_enhanceByLevel.Count:@Enhances} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates} · newbieReward {_newbieRewards.Count:@NewbieRewards} · gacha {_gachaByCode.Count:@Gachas} · bossRushRound {_bossRushRounds.Count:@BossRushRounds} · bossRushRankReward {_bossRushRankRewards.Count:@BossRushRankRewards}");
         }
         catch (Exception ex)
         {
@@ -983,6 +1067,90 @@ public sealed class MasterDataProvider
     /// ③소프트 threshold &lt; 하드 threshold ④픽업(pickup_item_code≠0)이면 close_at≠0이고 그 배너 최고 등급 슬롯
     /// 후보가 정확히 그 아이템 하나.
     /// </summary>
+    /// <summary>
+    /// 보스러시 전역 규칙을 읽는다(boss_rush_master, 단일 행 content_id=1). 행이 없으면 null을 돌려주고
+    /// 호출측이 콘텐츠를 잠근다(BossRushLocked 대신 MasterDataNotLoaded로 안내하지 않도록 서비스가 판단).
+    /// </summary>
+    private static async Task<BossRushRuleDef?> LoadBossRushRuleAsync(QueryFactory db)
+    {
+        var row = await db.Query("boss_rush_master")
+            .Select("round_count", "time_limit_sec", "daily_entry_limit", "unlock_stage_sequence",
+                    "season_period_days", "expire_grace_sec", "rank_page_limit")
+            .Where("content_id", BossRushContentId)
+            .FirstOrDefaultAsync<BossRushMasterRow>();
+
+        return row is null
+            ? null
+            : new BossRushRuleDef(
+                row.RoundCount, row.TimeLimitSec, row.DailyEntryLimit, row.UnlockStageSequence,
+                row.SeasonPeriodDays, row.ExpireGraceSec, row.RankPageLimit);
+    }
+
+    /// <summary>
+    /// 보스러시 라운드 정의를 읽는다(boss_rush_round + 자식 boss_rush_spawn). stage_master ↔ stage_spawn과
+    /// 같은 부모-자식 구조이며, 자식 행을 is_boss로 갈라 일반 스폰 목록과 보스로 나눠 담는다
+    /// (보스 행은 라운드당 최대 1개).
+    /// </summary>
+    private static async Task<Dictionary<int, BossRushRoundDef>> LoadBossRushRoundsAsync(QueryFactory db)
+    {
+        var roundRows = await db.Query("boss_rush_round")
+            .Select("round", "background_type")
+            .OrderBy("round")
+            .GetAsync<BossRushRoundRow>();
+
+        var spawnRows = await db.Query("boss_rush_spawn")
+            .Select("round", "monster_code", "monster_level", "spawn_count", "is_boss")
+            .OrderBy("round", "monster_code")
+            .GetAsync<BossRushSpawnRow>();
+
+        var spawnsByRound = new Dictionary<int, List<BossRushSpawnEntry>>();
+        var bossByRound = new Dictionary<int, (int Code, int Level)>();
+        foreach (var sp in spawnRows)
+        {
+            if (sp.IsBoss != 0)
+            {
+                bossByRound[sp.Round] = (sp.MonsterCode, sp.MonsterLevel);
+                continue;
+            }
+
+            if (!spawnsByRound.TryGetValue(sp.Round, out var list))
+            {
+                list = new List<BossRushSpawnEntry>();
+                spawnsByRound[sp.Round] = list;
+            }
+
+            list.Add(new BossRushSpawnEntry(sp.MonsterCode, sp.MonsterLevel, sp.SpawnCount));
+        }
+
+        var rounds = new Dictionary<int, BossRushRoundDef>();
+        foreach (var row in roundRows)
+        {
+            spawnsByRound.TryGetValue(row.Round, out var spawns);
+            bossByRound.TryGetValue(row.Round, out var boss);
+            rounds[row.Round] = new BossRushRoundDef(
+                row.Round, row.BackgroundType, boss.Code, boss.Level,
+                spawns ?? new List<BossRushSpawnEntry>());
+        }
+
+        return rounds;
+    }
+
+    /// <summary>
+    /// 보스러시 시즌 순위 보상 구간을 읽는다(boss_rush_rank_reward). 상위 구간이 먼저 오도록 rank_group
+    /// 오름차순으로 담아, 정산이 앞에서부터 순위를 매칭한다. 4위 이하는 행이 없어 매칭에서 빠진다.
+    /// </summary>
+    private static async Task<List<BossRushRankRewardDef>> LoadBossRushRankRewardsAsync(QueryFactory db)
+    {
+        var rows = await db.Query("boss_rush_rank_reward")
+            .Select("rank_group", "rank_from", "rank_to", "reward_gold")
+            .OrderBy("rank_group")
+            .GetAsync<BossRushRankRewardRow>();
+
+        return rows
+            .Select(r => new BossRushRankRewardDef(r.RankGroup, r.RankFrom, r.RankTo, r.RewardGold))
+            .ToList();
+    }
+
     private async Task<Dictionary<int, GachaBannerDef>> LoadGachaAsync(QueryFactory db)
     {
         var bannerRows = await db.Query("gacha_master")
@@ -1362,4 +1530,42 @@ public sealed class MasterDataProvider
             return new List<long>();
         }
     }
+}
+
+/// <summary>boss_rush_master 행 매핑용 POCO(단일 행).</summary>
+file sealed class BossRushMasterRow
+{
+    public int RoundCount { get; set; }
+    public int TimeLimitSec { get; set; }
+    public int DailyEntryLimit { get; set; }
+    public int UnlockStageSequence { get; set; }
+    public int SeasonPeriodDays { get; set; }
+    public int ExpireGraceSec { get; set; }
+    public int RankPageLimit { get; set; }
+}
+
+/// <summary>boss_rush_round 행 매핑용 POCO.</summary>
+file sealed class BossRushRoundRow
+{
+    public int Round { get; set; }
+    public int BackgroundType { get; set; }
+}
+
+/// <summary>boss_rush_spawn 행 매핑용 POCO(일반 몬스터와 보스를 is_boss로 구분).</summary>
+file sealed class BossRushSpawnRow
+{
+    public int Round { get; set; }
+    public int MonsterCode { get; set; }
+    public int MonsterLevel { get; set; }
+    public int SpawnCount { get; set; }
+    public int IsBoss { get; set; }
+}
+
+/// <summary>boss_rush_rank_reward 행 매핑용 POCO.</summary>
+file sealed class BossRushRankRewardRow
+{
+    public int RankGroup { get; set; }
+    public int RankFrom { get; set; }
+    public int RankTo { get; set; }
+    public long RewardGold { get; set; }
 }

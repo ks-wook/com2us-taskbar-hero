@@ -105,6 +105,15 @@ builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 builder.Services.AddScoped<IGachaRepository, GachaRepository>();
 builder.Services.AddScoped<IGachaService, GachaService>();
 
+// 보스러시 / 랭킹 계층(정보 조회·도전 시작·클리어 보고·랭킹 목록·내 순위).
+// 전투와 시간 측정은 클라이언트 권위이므로 서버는 도전 원장과 보고된 기록의 형식 검증·등재·순위 산출만 한다.
+// 랭킹 조회의 정상 경로는 Redis 단독이다 — 순위·기록은 리더보드 ZSET(점수에 clearMs·recordedAt 인코딩),
+// 표시 이름은 player:nickname 해시(HMGET, 미스만 game_player에서 부분 백필), 시즌 메타는
+// bossrush:season:current 해시에서 나온다. MySQL은 캐시 미스·폴백·종료 시즌 조회에서만 개입한다(기획서 4.3·6.3).
+builder.Services.AddScoped<IBossRushRepository, BossRushRepository>();
+builder.Services.AddScoped<IBossRushRankCache, BossRushRankCache>();
+builder.Services.AddScoped<IBossRushService, BossRushService>();
+
 // 거래소(교역선) 계층(목록·등록·구매·취소). Redis를 쓰지 않는다 — 목록은 전용 색인을 타는 MySQL 직접 조회,
 // 등록·구매·취소·만료의 직렬화는 MySQL 행 잠금이 담당한다(거래소 기획서 7.3·7.4).
 builder.Services.AddScoped<ITradeRepository, TradeRepository>();
@@ -139,6 +148,16 @@ builder.Services.AddHostedService<TradeExpireBatchService>();
 //   보관 기간(7일)에 비해 삭제가 몇 분~한 시간 늦어도 사용자에게 보이는 차이가 없어 시간 단위로 넉넉히 잡았다.
 //   상한을 넘긴 분량은 다음 주기로 이월된다(1시간마다 최대 500건 정리).
 builder.Services.AddHostedService<MailGcBatchService>();
+
+// 보스러시 시즌 정산 배치(주간 시즌 종료 → 순위 확정 + 1~3위 골드 보상 메일 발급 → 다음 시즌 개시, 기획서 6.4).
+//   실행 주기: **600초 = 10분** — appsettings "BossRushSeasonBatch:IntervalSeconds"(기본 600).
+//   1회(페이지) 처리 상한 500건("BatchSize") — 페이지 단위 트랜잭션으로 쪼개 긴 잠금을 만들지 않는다.
+//   정산은 final_rank=0 조건부 갱신이라 멱등하며, 중간에 죽어도 다음 주기가 남은 행만 이어서 처리한다.
+//   기동 시에는 정산 전에 **랭킹 캐시 워밍업**(리더보드가 비었으면 boss_rush_record에서 재구축 + 시즌 메타 캐시
+//   채우기)도 수행한다 — 이미 리더 락이 여기 있어 scale-out 시 중복 재구축을 그대로 막아 준다.
+//   **버려진 런을 정리하는 배치는 두지 않는다** — 만료된 런에 반송할 자산이 없어 배치가 할 일이 status 정리
+//   뿐이므로, 만료 판정을 읽는 시점(clear·info·enter)에 한다(거래소의 만료 판정 규약과 동일).
+builder.Services.AddHostedService<BossRushSeasonBatchService>();
 
 // 리더 락은 주기 종료와 함께 해제되므로, 정상 종료·재기동 후에는 곧바로 다시 실행된다(옛 방식처럼 주기만큼
 // 스킵되지 않는다). 프로세스가 락을 잡은 채 강제 종료된 경우에만 TTL(최대 5분)이 지나야 풀린다.
