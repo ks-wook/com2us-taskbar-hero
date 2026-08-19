@@ -46,8 +46,9 @@ namespace TaskbarHero.Client.Battle
         private static int _flying;
 
         /// <summary>
-        /// 보상 오브가 하나라도 날아가는 중인지. <b>연출이 끝나는 시점을 밖에서 알 수 있게</b> 공개한다 —
-        /// 하단 메뉴가 접혀 있을 때 잠깐 띄운 가방 아이콘을 언제 다시 감출지 HUD가 이 값으로 판단한다.
+        /// 보상 오브가 하나라도 날아가는 중인지. <b>연출이 끝나는 시점을 밖에서 알 수 있게</b> 공개한다.
+        /// <para>하단 메뉴가 상시 노출로 바뀌어(접힘 없음) 보상은 항상 진짜 가방 버튼으로 향하므로,
+        /// 접힘 대비 임시 아이콘을 언제 감출지 판단하던 종전 소비처는 없어졌다.</para>
         /// </summary>
         public static bool IsFlying => _flying > 0;
 
