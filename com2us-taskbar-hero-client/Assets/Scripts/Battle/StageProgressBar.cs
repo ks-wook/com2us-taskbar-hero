@@ -5,7 +5,7 @@ using TaskbarHero.Client.Managers;
 namespace TaskbarHero.Client.Battle
 {
     /// <summary>
-    /// <b>던전 배경 띠의 우측 하단</b>에 현재 스테이지 진행도(처치 몬스터 ÷ 전체 몬스터)를 표시하는 진행 바.
+    /// <b>던전 배경 띠의 우측 하단</b>(하단 메뉴 UI 위)에 현재 스테이지 진행도(처치 몬스터 ÷ 전체 몬스터)를 표시하는 진행 바.
     /// 스테이지 입장 시 0%에서 시작해 몬스터를 처치할수록 상승하고, 전멸(클리어) 시 100%가 된다.
     /// 현재 진행 위치는 바 아래의 위쪽 화살표(straight_up)가 따라가며 가리키고, 바 우측 끝에는
     /// 보스(boss) 아이콘을 두어 "어디까지 왔는지 → 목표(보스)"가 한눈에 읽히게 한다(스프라이트 미배선 시 생략).
@@ -16,14 +16,17 @@ namespace TaskbarHero.Client.Battle
     /// </summary>
     public class StageProgressBar : MonoBehaviour
     {
-        // 던전 배경 띠(캔버스 y 216~576) 안쪽 우측 하단에 놓는다. 화면 최하단은 하단 UI(아이콘 줄 +
-        // ui_bg_3 배경, y 30~216 — 던전 띠 아래에 여백 없이 맞붙는다)가 쓰므로 그 위로 올려 겹치지 않게
-        // 하고, 눈에 들어오도록 크게 잡는다.
-        // 하단 UI 토글 버튼은 우측 상단(버프 아이콘 아래)에 있어 이 자리와 겹치지 않는다.
+        // 던전 배경 띠 안쪽 우측 하단에 놓는다. 화면 하단은 하단 메뉴 UI(아이콘 줄 + ui_bg_3 배경)가
+        // 쓰는데, 그 프레임 위쪽 끝은 캔버스 y 337.54다
+        // (GameSceneHudController: MenuRowY 127 + MenuButtonHeight 144 + UiBackTopExtend 66.54).
+        // 진행 바는 <b>아래로 내려오는 화살표까지</b> 그 위에 있어야 하므로, 바 하단을
+        // 337.54 + (ArrowSize - ArrowYOffset) = 375.54 보다 위로 올려 잡는다(여유 약 14).
+        // 눈에 들어오도록 크게 잡되, 보스 아이콘 상단(바 하단 + BarHeight/2 + BossSize/2 ≒ 437)까지
+        // 던전 띠 안에 들어간다.
         private const float BarWidth = 420f;
         private const float BarHeight = 34f;
         private const float BarRightMargin = -32f; // 화면 우측에서 띄우는 거리
-        private const float BarBottomY = 270f;     // 바 하단 y(아래 화살표까지 던전 띠 안에 들어가는 높이)
+        private const float BarBottomY = 390f;     // 바 하단 y(아래 화살표가 하단 메뉴 UI 위에 오는 높이)
         private const float FillInset = 3f;        // 배경 테두리 안쪽 여백
         private const float ArrowSize = 46f;       // 진행 위치 화살표 크기
         private const float BossSize = 64f;        // 우측 끝 보스(목표) 아이콘 크기

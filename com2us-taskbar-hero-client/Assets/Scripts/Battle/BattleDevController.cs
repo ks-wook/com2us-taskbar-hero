@@ -222,7 +222,7 @@ namespace TaskbarHero.Client.Battle
         private int _killCount;
 
         // 서버 구동 모드 상태
-        private Queue<int> _serverQueue;                       // 스폰할 몬스터 코드(순서대로)
+        private Queue<QueuedMonster> _serverQueue;             // 스폰할 몬스터(코드+등장 레벨, 순서대로)
         private System.Func<int, GameObject> _prefabResolver;  // 코드 → 프리팹
         private System.Action _onAllCleared;                   // 전멸 시 1회 호출
         private System.Action _onDefeat;                       // 아군 전멸(패배) 시 1회 호출
@@ -232,6 +232,20 @@ namespace TaskbarHero.Client.Battle
         private bool _serverCleared;
         private bool _defeated;                                // 아군 전멸 판정 1회 가드
         private int _bossCode;                                 // 이 스테이지의 보스 몬스터 코드(0=없음)
+
+        /// <summary>스폰 큐 원소 — 몬스터 코드와 <b>그 자리의 등장 레벨</b>.
+        /// 레벨은 몬스터가 아니라 등장 자리의 속성이라(마스터 데이터 값 §9.4) 코드와 함께 실어 나른다.</summary>
+        private readonly struct QueuedMonster
+        {
+            public readonly int Code;
+            public readonly int Level;
+
+            public QueuedMonster(int code, int level)
+            {
+                Code = code;
+                Level = level;
+            }
+        }
 
         // 소환 캐릭터 선택(테스트용). 현재 구현된 직업만 선택 가능.
         private static readonly HashSet<int> ImplementedClasses = new HashSet<int> { 1, 2, 3, 4 }; // 기사1·레인저2·마법사3·슬레이어4
@@ -800,8 +814,9 @@ namespace TaskbarHero.Client.Battle
             if (db != null && db.Monsters.TryGetValue(monsterCode, out MonsterMaster mon))
             {
                 _monsterName = mon.name;
-                _monsterMaxHp = mon.hp;
-                _monsterAtk = mon.attack;
+                // 개발용 무한 웨이브는 등장 자리(stage_spawn)가 없어 레벨도 없다 → 레벨 1 기준값을 그대로 쓴다.
+                // 레벨 배율이 붙는 것은 서버 플랜으로 스폰하는 경로(SpawnMonsterByCode)뿐이다.
+                MonsterStats.Scale(mon, 1, out _monsterMaxHp, out _monsterAtk);
             }
             else
             {
@@ -1145,14 +1160,15 @@ namespace TaskbarHero.Client.Battle
                     {
                         // 보스는 등장 경고·BGM 전환이 붙는 단독 연출이라 무리에 섞지 않는다.
                         // 무리 중간에 보스가 걸리면 거기서 끊고, 보스는 다음 스폰에서 혼자 나온다.
-                        int next = _serverQueue.Peek();
-                        if (_bossCode != 0 && next == _bossCode && i > 0)
+                        var next = _serverQueue.Peek();
+                        if (_bossCode != 0 && next.Code == _bossCode && i > 0)
                         {
                             break;
                         }
-                        SpawnMonsterByCode(_serverQueue.Dequeue(), BurstOffsetX(i));
+                        _serverQueue.Dequeue();
+                        SpawnMonsterByCode(next.Code, next.Level, BurstOffsetX(i));
                         _serverSpawned++;
-                        if (_bossCode != 0 && next == _bossCode)
+                        if (_bossCode != 0 && next.Code == _bossCode)
                         {
                             break; // 보스를 냈으면 이번 무리는 여기까지
                         }
@@ -1173,8 +1189,12 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>지정 몬스터 코드의 프리팹(리졸버)과 마스터 스탯으로 적 1기를 스폰한다.
+        /// <para><paramref name="level"/>은 <b>이 스테이지에서 이 몬스터가 등장하는 레벨</b>이며,
+        /// <c>monster_master</c>의 값은 레벨 1 기준값이므로 <see cref="MonsterStats"/>로 배율을 곱해
+        /// 실제 hp·attack을 만든다(마스터 데이터 값 §9.4 · 스테이지/전투 결과 기획서 5.1).
+        /// 서버는 레벨만 내려주고 스탯은 내려주지 않는다 — 전투가 클라이언트 권위이기 때문이다.</para>
         /// <paramref name="offsetX"/>는 무리 스폰에서 개체를 뒤로 물리는 간격이다(0 = 종전 위치).</summary>
-        private void SpawnMonsterByCode(int code, float offsetX = 0f)
+        private void SpawnMonsterByCode(int code, int level, float offsetX = 0f)
         {
             string mname = "Monster";
             long hp = 100;
@@ -1183,8 +1203,7 @@ namespace TaskbarHero.Client.Battle
             if (db != null && db.Monsters.TryGetValue(code, out MonsterMaster mon))
             {
                 mname = mon.name;
-                hp = mon.hp;
-                atk = mon.attack;
+                MonsterStats.Scale(mon, level, out hp, out atk);
             }
 
             GameObject prefab = _prefabResolver != null ? _prefabResolver(code) : null;
@@ -1222,9 +1241,12 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>서버 스테이지 진입 데이터로 유한 웨이브 전투를 시작한다.
-        /// plan: (몬스터코드→마리수) 순서 목록, prefabResolver: 코드→프리팹, onAllCleared: 전멸 시 1회,
-        /// bossCode: 보스 몬스터 코드(0=없음). 해당 코드 스폰 시 3배 크기·감속·왕관·경고 연출을 적용한다.</summary>
-        public void BeginServerBattle(List<KeyValuePair<int, int>> plan,
+        /// <para>plan: 등장 순서대로의 <see cref="Spawn"/>(몬스터코드·<b>등장 레벨</b>·마리 수) 목록,
+        /// prefabResolver: 코드→프리팹, onAllCleared: 전멸 시 1회,
+        /// bossCode: 보스 몬스터 코드(0=없음). 해당 코드 스폰 시 3배 크기·감속·왕관·경고 연출을 적용한다.</para>
+        /// <para>같은 몬스터라도 <b>스테이지마다 등장 레벨이 다를 수 있으므로</b> 레벨을 마리 단위로 큐에 실어 두고,
+        /// 스폰 시점에 <see cref="MonsterStats"/>로 레벨 1 기준값에 배율을 곱한다.</para></summary>
+        public void BeginServerBattle(List<Spawn> plan,
                                       System.Func<int, GameObject> prefabResolver, System.Action onAllCleared,
                                       int bossCode = 0, System.Action onDefeat = null)
         {
@@ -1239,14 +1261,14 @@ namespace TaskbarHero.Client.Battle
             _onDefeat = onDefeat;
             _defeated = false;
             _bossCode = bossCode;
-            _serverQueue = new Queue<int>();
+            _serverQueue = new Queue<QueuedMonster>();
             if (plan != null)
             {
-                foreach (var kv in plan)
+                foreach (var sp in plan)
                 {
-                    for (int i = 0; i < kv.Value; i++)
+                    for (int i = 0; i < sp.count; i++)
                     {
-                        _serverQueue.Enqueue(kv.Key);
+                        _serverQueue.Enqueue(new QueuedMonster(sp.monsterCode, sp.monsterLevel));
                     }
                 }
             }
@@ -1470,7 +1492,7 @@ namespace TaskbarHero.Client.Battle
 
         /// <summary>전투 필드를 처음 상태로 초기화한 뒤 새 플랜으로 서버 전투를 처음부터 다시 시작한다.
         /// 스테이지 UI에서 특정 스테이지를 선택해 "처음부터" 입장할 때 사용한다(진행 중인 전투를 리셋).</summary>
-        public void RestartServerBattle(List<KeyValuePair<int, int>> plan,
+        public void RestartServerBattle(List<Spawn> plan,
                                         System.Func<int, GameObject> prefabResolver, System.Action onAllCleared,
                                         int bossCode = 0, System.Action onDefeat = null)
         {

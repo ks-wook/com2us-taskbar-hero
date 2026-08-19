@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using TaskbarHero.Client.Managers;
 using TaskbarHero.Common.Dto;
+using TaskbarHero.Common.MasterData;   // Spawn(몬스터코드·등장 레벨·마리 수) — 스폰 플랜에 그대로 쓴다
 
 namespace TaskbarHero.Client.Battle
 {
@@ -178,24 +179,27 @@ namespace TaskbarHero.Client.Battle
             _difficulty = d.difficulty;
             _stage = d.stage;
 
-            var plan = new List<KeyValuePair<int, int>>();
+            // 스폰 플랜에는 <b>등장 레벨</b>을 함께 싣는다 — monster_master의 hp·attack은 레벨 1 기준값이고,
+            // 실제 전투 스탯은 클라이언트가 레벨 배율을 곱해 만든다(마스터 데이터 값 §9.4).
+            // 서버는 코드·레벨·마리 수만 내려준다(스테이지/전투 결과 기획서 5.1).
+            var plan = new List<Spawn>();
             if (d.monsters != null)
             {
                 foreach (var m in d.monsters)
                 {
-                    plan.Add(new KeyValuePair<int, int>(m.monsterCode, m.count));
+                    plan.Add(new Spawn { monsterCode = m.monsterCode, monsterLevel = m.monsterLevel, count = m.count });
                 }
             }
             int bossCode = d.boss != null ? d.boss.monsterCode : 0;
             if (bossCode != 0)
             {
-                plan.Add(new KeyValuePair<int, int>(bossCode, 1));
+                plan.Add(new Spawn { monsterCode = bossCode, monsterLevel = d.boss.monsterLevel, count = 1 });
             }
 
             int total = 0;
-            foreach (var kv in plan)
+            foreach (var sp in plan)
             {
-                total += kv.Value;
+                total += sp.count;
             }
             ShowEnterBanner(d.act, d.difficulty, d.stage); // 상단 중앙 입장 배너(페이드 인/아웃)
             Debug.Log($"[Dungeon] 진입 완료 {d.act}-{d.difficulty}-{d.stage}, 배경타입 {d.backgroundType} → 스폰 예정 {total}마리");

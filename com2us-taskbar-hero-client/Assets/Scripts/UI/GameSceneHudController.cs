@@ -11,7 +11,8 @@ namespace TaskbarHero.Client.UI
     /// <summary>
     /// GameScene 상시 HUD. <b>화면 하단 가로 중앙</b>에 기능 버튼(뽑기·거래소·출석부·메일·편성·스테이지·가방·환경설정)을
     /// 한 줄로 노출하고, ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
-    /// 아이콘 줄은 던전 배경 띠보다 아래(화면 최하단)에 놓여 배경 아트에 묻히지 않는다 —
+    /// 아이콘 줄은 던전 배경 띠보다 아래에 놓여 배경 아트에 묻히지 않는다(화면 최하단에서
+    /// <see cref="MenuRowY"/>만큼 띄운 자리) —
     /// 배경 띠를 위로 띄우는 쪽은 <c>DungeonBattleBuilder</c>가 GameScene을 구울 때 처리한다.
     /// 다만 <b>뒷배경 프레임은 아이콘 줄보다 위로 더 커서 던전 띠에 얹힌다</b>(<see cref="UiBackTopExtend"/>) —
     /// 그래서 HUD 캔버스를 전투 오버레이보다 위(<see cref="UiSortingOrder.Hud"/>)에 둔다.
@@ -78,18 +79,22 @@ namespace TaskbarHero.Client.UI
         private const float MenuButtonHeight = MenuIconSize + MenuLabelHeight;
         private const float MenuIconSize = 104f;
         private const float MenuLabelHeight = 40f;
-        private const float MenuRowY = 30f;       // 화면 하단에서 아이콘 줄을 띄우는 높이
+        // 화면 하단에서 아이콘 줄(= 바 밑단)을 띄우는 높이. 플레이 모드에서 바를 직접 올려 확정한 값이다.
+        private const float MenuRowY = 127f;
 
         // 하단 UI 뒷배경(ui_bg_3) 크기 계산용.
         // 아이콘 줄 위아래 여백은 두지 않는다(0) — 바 높이를 아이콘이 차지하는 만큼으로만 잡기 위함이다.
         private const float UiBackPadding = 0f;           // 아이콘 줄과 배경 프레임 안쪽 여백
         private const float UiBackSidePadding = 24f;      // 좌우 여백
-        // 프레임을 아이콘 줄 위로 더 키우는 높이 — 프레임 상단 장식이 아이콘을 덮지 않을 만큼만 남긴다.
+        // 프레임을 아이콘 줄 위로 더 키우는 높이. 프레임 아트(ui_bg_3)의 9-slice 상단 테두리가 92px로 두꺼워
+        // 이 값이 작으면 상단 장식이 아이콘 위로 내려앉는다 — 플레이 모드에서 영역 높이를 210.54로 늘려
+        // 확정한 값이다(210.54 = MenuButtonHeight 144 + 66.54).
         // 하단 UI가 던전 위에 얹히는 것이 의도이며, 그러려면 HUD 캔버스가 전투 오버레이보다 위여야 한다
         // (UiSortingOrder.Hud).
-        private const float UiBackTopExtend = 24f;
+        private const float UiBackTopExtend = 66.54f;
         // ui_bg_3(1024×434)의 9-slice 테두리는 상 92 / 하 53px(GameSceneHudBuilder.UiBackgroundBorder)로
-        // 합 145 < 바 높이(252.26)라 원본 픽셀 크기(배율 1)로 그려도 들어간다 — 픽셀아트를 축소하지 않는다.
+        // 합 145 < 프레임 높이(바 210.54 + 아래 오버행 30 = 240.54)라 원본 픽셀 크기(배율 1)로 그려도
+        // 들어간다 — 픽셀아트를 축소하지 않는다.
         private const float UiBackPixelsPerUnitMultiplier = 1f;
         // 프레임 안쪽(비어 있는 구멍)에 깔 짙은 파랑 바닥. 색은 패널 프레임(ui_bg_2) 내부색과 같은 톤이라
         // 하단 바와 인벤토리·스킬 패널의 배경이 같은 계열로 읽힌다.
@@ -101,9 +106,10 @@ namespace TaskbarHero.Client.UI
         // 바닥이 비어 보였으므로 아래는 바 밑단까지(0) 내리고 위는 프레임 상단 장식 아래에 맞췄다.
         private const float UiBackFillBottomInset = 0f;
         private const float UiBackFillTopInset = 68.86f;
-        // 프레임을 바 밑단보다 더 내려 그리는 높이. 아래 테두리가 화면 최하단(y 0)에 닿도록
-        // 바 밑단(= MenuRowY - UiBackPadding)만큼 내린다.
-        private const float UiBackFrameBottomOverhang = MenuRowY - UiBackPadding;
+        // 프레임을 바 밑단보다 더 내려 그리는 높이(아래 테두리 몫). 플레이 모드에서 확정한 고정값이며,
+        // <b>MenuRowY와 묶지 않는다</b> — 바가 화면 최하단에 붙어 있을 때만 "밑단만큼 내린다"가 성립했고,
+        // 바를 위로 띄운 지금 같이 커지면 프레임 아래가 그만큼 늘어져 버린다.
+        private const float UiBackFrameBottomOverhang = 30f;
 
         // 바 기하. 바 = 배경 프레임 + 아이콘 줄이며, 이 폭 그대로 화면 하단 중앙에 놓인다.
         private const float MenuAreaWidth = (MenuSlotCount - 1) * MenuSlotStep + MenuButtonWidth + UiBackSidePadding * 2f;
