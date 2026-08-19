@@ -50,9 +50,9 @@
     "description": "거대한 도끼를 휘둘러 적을 베어 넘기는 공격 특화 근접 전사다.",
     "unlockType": 0,
     "baseStats": {
-      "hp": 540,
+      "hp": 720,
       "atk": 15,
-      "def": 9,
+      "def": 11,
       "moveSpeed": 3.4,
       "critChance": 0.12,
       "critDamage": 1.6,

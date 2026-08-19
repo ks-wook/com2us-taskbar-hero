@@ -7,10 +7,12 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 16
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -21,14 +23,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 15
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 1
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -39,14 +44,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 13
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 4
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -57,14 +65,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 12
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 5
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -75,14 +86,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 11
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 7
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -93,14 +107,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 9
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 9
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -111,14 +128,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 7
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 12
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -129,14 +149,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 4
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 15
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -147,10 +170,12 @@
     "spawns": [
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 19
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -161,10 +186,12 @@
     "spawns": [
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 9099,
+    "bossMonsterLevel": 1,
     "backgroundType": 1
   },
   {
@@ -175,10 +202,12 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 16
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -189,14 +218,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 15
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 1
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -207,14 +239,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 13
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 4
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -225,14 +260,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 12
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 5
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -243,14 +281,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 11
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 7
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -261,14 +302,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 9
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 9
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -279,14 +323,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 7
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 12
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -297,14 +344,17 @@
     "spawns": [
       {
         "monsterCode": 9001,
+        "monsterLevel": 1,
         "count": 4
       },
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 15
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -315,10 +365,12 @@
     "spawns": [
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 19
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 1
   },
   {
@@ -329,10 +381,12 @@
     "spawns": [
       {
         "monsterCode": 9002,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 9099,
+    "bossMonsterLevel": 1,
     "backgroundType": 1
   },
   {
@@ -343,10 +397,12 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 16
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -357,14 +413,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 15
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 1
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -375,14 +434,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 13
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 4
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -393,14 +455,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 12
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 5
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -411,14 +476,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 11
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 7
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -429,14 +497,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 9
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 9
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -447,14 +518,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 7
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 12
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -465,14 +539,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 4
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 15
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -483,10 +560,12 @@
     "spawns": [
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 19
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -497,10 +576,12 @@
     "spawns": [
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 9199,
+    "bossMonsterLevel": 1,
     "backgroundType": 2
   },
   {
@@ -511,10 +592,12 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 16
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -525,14 +608,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 15
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 1
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -543,14 +629,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 13
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 4
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -561,14 +650,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 12
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 5
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -579,14 +671,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 11
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 7
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -597,14 +692,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 9
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 9
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -615,14 +713,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 7
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 12
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -633,14 +734,17 @@
     "spawns": [
       {
         "monsterCode": 9101,
+        "monsterLevel": 1,
         "count": 4
       },
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 15
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -651,10 +755,12 @@
     "spawns": [
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 19
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 2
   },
   {
@@ -665,10 +771,12 @@
     "spawns": [
       {
         "monsterCode": 9102,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 9199,
+    "bossMonsterLevel": 1,
     "backgroundType": 2
   },
   {
@@ -679,10 +787,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -693,10 +803,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 9
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -707,10 +819,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 10
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -721,10 +835,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 11
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -735,10 +851,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 12
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -749,10 +867,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 14
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -763,10 +883,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 15
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -777,10 +899,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 16
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -791,10 +915,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 17
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -805,10 +931,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 9299,
+    "bossMonsterLevel": 1,
     "backgroundType": 3
   },
   {
@@ -819,10 +947,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -833,10 +963,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 9
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -847,10 +979,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 10
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -861,10 +995,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 11
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -875,10 +1011,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 12
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -889,10 +1027,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 14
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -903,10 +1043,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 15
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -917,10 +1059,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 16
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -931,10 +1075,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 17
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 3
   },
   {
@@ -945,10 +1091,12 @@
     "spawns": [
       {
         "monsterCode": 9201,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 9299,
+    "bossMonsterLevel": 1,
     "backgroundType": 3
   },
   {
@@ -959,10 +1107,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -973,10 +1123,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 9
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -987,10 +1139,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 10
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1001,10 +1155,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 11
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1015,10 +1171,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 12
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1029,10 +1187,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 14
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1043,10 +1203,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 15
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1057,10 +1219,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 16
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1071,10 +1235,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 17
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1085,10 +1251,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 9399,
+    "bossMonsterLevel": 1,
     "backgroundType": 4
   },
   {
@@ -1099,10 +1267,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1113,10 +1283,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 9
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1127,10 +1299,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 10
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1141,10 +1315,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 11
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1155,10 +1331,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 12
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1169,10 +1347,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 14
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1183,10 +1363,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 15
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1197,10 +1379,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 16
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1211,10 +1395,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 17
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 4
   },
   {
@@ -1225,10 +1411,12 @@
     "spawns": [
       {
         "monsterCode": 9301,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 9399,
+    "bossMonsterLevel": 1,
     "backgroundType": 4
   },
   {
@@ -1239,10 +1427,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1253,10 +1443,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 9
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1267,10 +1459,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 10
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1281,10 +1475,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 11
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1295,10 +1491,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 12
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1309,10 +1507,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 14
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1323,10 +1523,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 15
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1337,10 +1539,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 16
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1351,10 +1555,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 17
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1365,10 +1571,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 9499,
+    "bossMonsterLevel": 1,
     "backgroundType": 5
   },
   {
@@ -1379,10 +1587,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1393,10 +1603,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 9
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1407,10 +1619,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 10
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1421,10 +1635,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 11
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1435,10 +1651,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 12
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1449,10 +1667,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 14
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1463,10 +1683,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 15
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1477,10 +1699,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 16
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1491,10 +1715,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 17
       }
     ],
     "bossMonsterCode": 0,
+    "bossMonsterLevel": 0,
     "backgroundType": 5
   },
   {
@@ -1505,10 +1731,12 @@
     "spawns": [
       {
         "monsterCode": 9401,
+        "monsterLevel": 1,
         "count": 8
       }
     ],
     "bossMonsterCode": 9499,
+    "bossMonsterLevel": 1,
     "backgroundType": 5
   }
 ]
