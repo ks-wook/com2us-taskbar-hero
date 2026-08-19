@@ -42,6 +42,9 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("보상 획득 연출 상단 타이틀 이미지(Assets/Art/UI/System/reward_ui.png). 없으면 텍스트 타이틀로 폴백한다.")]
         public Sprite rewardTitleImage;
 
+        [Tooltip("전투 패배 연출 타이틀 이미지(Assets/Art/UI/System/defeat.png). 없으면 \"패배\" 텍스트로 폴백한다.")]
+        public Sprite defeatTitleImage;
+
         /// <summary>아이템 코드와 아이콘 스프라이트의 한 쌍.</summary>
         [Serializable]
         public struct IconEntry

@@ -242,3 +242,4 @@ MonoBehaviour:
   expIcon: {fileID: -3018594828616864601, guid: 3139f831907b61e4096c067f685aac1a, type: 3}
   overlayPrefab: {fileID: 5183006189998545633, guid: 2a46d392c3c03b343a3998863daaa4cb, type: 3}
   rewardTitleImage: {fileID: 4572727934291656123, guid: 2d3abfebf7f240d4cb3193976b03a510, type: 3}
+  defeatTitleImage: {fileID: -6822013724275910522, guid: df3a513599c38e240b425401d44e9dff, type: 3}
