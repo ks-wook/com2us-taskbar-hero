@@ -17,11 +17,18 @@ namespace TaskbarHero.Client.Managers
     /// <para>
     /// 기본 환경은 스크립팅 정의 심볼 <see cref="QaDefineSymbol"/>(<c>TH_QA</c>) 유무로 <b>빌드 시점에 결정</b>된다
     /// (에디터 메뉴 <c>TaskbarHero/Build/…</c>의 QA 빌드가 <c>extraScriptingDefines</c>로 넣는다).
-    /// <b>QA 빌드는 접속처를 고정</b>한다 — 서버 선택 화면을 띄우지 않고 항상 QA(원격) 프리셋으로 접속한다
-    /// (<see cref="AllowServerSelection"/>). Dev 빌드·에디터 플레이만 선택 화면에서 환경·호스트를 바꿀 수 있고,
-    /// 그 선택은 <b>해당 실행에만</b> 적용된다(환경은 저장하지 않는다) — PlayerPrefs는 Dev/QA 빌드가 같은
-    /// product 이름으로 공유하므로, 저장하면 Dev에서 고른 값이 QA 빌드의 기본 접속처를 덮어써
+    /// </para>
+    /// <para>
+    /// <b>접속처는 어느 빌드에서든 바꿀 수 있고, 마지막 선택이 다음 실행까지 유지된다</b> —
+    /// 타이틀 화면 우측 하단의 톱니바퀴(<c>ServerSettingsButton</c>)로 '접속 서버 변경' 화면을 열며,
+    /// 확정한 환경·호스트는 <see cref="NetworkManager"/>가 PlayerPrefs에 저장해 다음 실행에 되살린다.
+    /// 저장 키는 <b>빌드에 구워진 기본 환경별로 분리</b>돼 있다 — PlayerPrefs는 Dev/QA 빌드가 같은
+    /// product 이름으로 공유하므로, 키가 하나면 Dev 빌드에서 고른 값이 QA 빌드의 시작 접속처를 덮어써
     /// "QA 빌드인데 로컬로 붙는" 사고가 난다.
+    /// </para>
+    /// <para>
+    /// <b>QA 빌드는 로그인 전 서버 선택 화면을 자동으로 띄우지 않는다</b>(<see cref="ShowServerSelectOnStart"/>) —
+    /// 접속처가 원격으로 정해진 배포본이라 매 실행 선택을 물을 이유가 없다. 바꿔야 할 때는 톱니바퀴로 연다.
     /// </para>
     /// 실제 적용은 <see cref="NetworkManager"/>가 담당한다.
     /// </summary>
@@ -42,7 +49,8 @@ namespace TaskbarHero.Client.Managers
         /// <summary>QA 게임 서버 주소(Tailscale, https 8443).</summary>
         public const string QaGameBaseUrl = "https://ksu864-1.tail961c4e.ts.net:8443";
 
-        /// <summary>이 빌드에 구워진 기본 환경(정의 심볼 <c>TH_QA</c>가 있으면 QA). 실행마다 이 값에서 시작한다.</summary>
+        /// <summary>이 빌드에 구워진 기본 환경(정의 심볼 <c>TH_QA</c>가 있으면 QA).
+        /// 저장된 선택이 없을 때의 시작 환경이자, 접속처 저장 키를 가르는 기준이다.</summary>
         public static ServerEnvironmentKind BuildDefault
         {
             get
@@ -56,10 +64,12 @@ namespace TaskbarHero.Client.Managers
         }
 
         /// <summary>
-        /// 실행 중 접속처(환경·호스트) 변경을 허용하는가. <b>QA 빌드는 false</b> — 서버 선택 화면을 띄우지 않고
-        /// 항상 QA(원격) 프리셋으로 접속한다(저장된 호스트 override도 무시한다). Dev 빌드·에디터 플레이는 true다.
+        /// 로그인 직전에 '접속 서버 선택' 화면을 <b>자동으로</b> 띄우는가. <b>QA 빌드는 false</b> —
+        /// 접속처가 정해진 배포본이라 매 실행 선택을 묻지 않는다.
+        /// <para>이 값이 false여도 <b>접속처를 바꿀 수 없다는 뜻은 아니다</b> — 타이틀 화면의 톱니바퀴로
+        /// 언제든 '접속 서버 변경'을 열 수 있다(<c>ServerSelectPanelController.ShowManual</c>).</para>
         /// </summary>
-        public static bool AllowServerSelection
+        public static bool ShowServerSelectOnStart
         {
             get
             {

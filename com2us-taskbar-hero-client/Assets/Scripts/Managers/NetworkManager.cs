@@ -20,7 +20,7 @@ namespace TaskbarHero.Client.Managers
     {
         public static NetworkManager Instance { get; private set; }
 
-        [Header("서버 주소 (실행 시 빌드 옵션 = ServerEnvironment 프리셋으로 덮어씀 · 표시용)")]
+        [Header("서버 주소 (실행 시 마지막 선택 = ServerEnvironment 프리셋으로 덮어씀 · 표시용)")]
         [SerializeField] private string accountServerBaseUrl = ServerEnvironment.DevAccountBaseUrl;
         [SerializeField] private string gameServerBaseUrl = ServerEnvironment.DevGameBaseUrl;
 
@@ -46,6 +46,11 @@ namespace TaskbarHero.Client.Managers
         // QA 빌드의 주소를 덮어써 접속이 깨지는 것을 막기 위함이다.
         private const string PrefKeyServerHostPrefix = "th_server_host_";
 
+        // 마지막으로 고른 접속 환경 저장 키. **빌드에 구워진 기본 환경별로 나눈다**(th_server_env_dev / th_server_env_qa) —
+        // PlayerPrefs는 Dev/QA 빌드가 같은 product 이름으로 공유하므로, 키가 하나면 Dev 빌드에서 고른 값이
+        // QA 빌드의 시작 접속처를 덮어써 "QA 빌드인데 로컬로 붙는" 사고가 난다.
+        private const string PrefKeyServerEnvPrefix = "th_server_env_";
+
         /// <summary>로그인 인증 토큰(캐시된 세션에서 조회). 있으면 요청 헤더(Authorization: Bearer)에 자동 첨부된다.</summary>
         public string AuthToken => Session.Token;
 
@@ -55,7 +60,8 @@ namespace TaskbarHero.Client.Managers
         public string AccountServerBaseUrl => accountServerBaseUrl;
         public string GameServerBaseUrl => gameServerBaseUrl;
 
-        /// <summary>현재 접속 환경(빌드 옵션). 기본값은 빌드에 구워진 환경이고, 서버 선택 화면에서 이 실행 동안만 바꿀 수 있다.</summary>
+        /// <summary>현재 접속 환경. 시작값은 마지막으로 고른 환경(없으면 빌드에 구워진 환경)이고,
+        /// '접속 서버 변경' 화면에서 바꾸면 다음 실행까지 유지된다.</summary>
         public ServerEnvironmentKind CurrentEnvironment => _environment;
 
         /// <summary>현재 접속 서버 호스트(계정 서버 URL에서 추출). 예: "localhost".</summary>
@@ -75,31 +81,66 @@ namespace TaskbarHero.Client.Managers
             Instance = this;
             DontDestroyOnLoad(gameObject);
 
-            // 인스펙터 값이 아니라 빌드 옵션(환경) 프리셋을 정본으로 삼고, 그 환경에 저장된 접속 호스트가 있으면 적용한다.
-            // 단 접속처가 고정된 빌드(QA)에서는 저장된 호스트 override를 적용하지 않는다 — 그 빌드는 서버 선택
-            // 화면도 뜨지 않으므로, 옛 빌드에서 저장된 호스트가 남아 있으면 되돌릴 방법 없이 원격이 아닌 곳으로 붙는다.
-            ApplyEnvironment(ServerEnvironment.BuildDefault);
-            if (ServerEnvironment.AllowServerSelection)
-            {
-                string savedHost = PlayerPrefs.GetString(HostPrefKey(_environment), string.Empty);
-                if (!string.IsNullOrEmpty(savedHost))
-                {
-                    ApplyServerHost(savedHost);
-                }
-            }
+            // 인스펙터 값이 아니라 "마지막으로 접속한 곳"을 정본으로 삼는다 — 저장된 환경(없으면 빌드 기본값)을
+            // 적용한 뒤, 그 환경에 저장된 접속 호스트 override가 있으면 이어서 적용한다.
+            // 저장값은 QA 빌드에서도 되살린다 — 타이틀 우측 하단 톱니바퀴로 언제든 되돌릴 수 있으므로,
+            // 옛 저장값에 갇혀 되돌릴 방법이 없어지는 상황이 생기지 않는다.
+            var startEnv = LoadSavedEnvironment();
+            ApplyEnvironment(startEnv);
+            ApplySavedHost();
 
-            Debug.Log($"[NET] 접속 환경={ServerEnvironment.DisplayNameOf(_environment)}(빌드 옵션)" +
+            Debug.Log($"[NET] 접속 환경={ServerEnvironment.DisplayNameOf(_environment)}" +
+                      $"({(startEnv == ServerEnvironment.BuildDefault ? "빌드 옵션" : "저장된 선택")})" +
                       $" account={accountServerBaseUrl} game={gameServerBaseUrl}");
         }
 
-        /// <summary>접속 환경을 바꾼다(이 실행에만 적용 — 저장하지 않는다). 계정·게임 서버 주소를 그 환경의 프리셋으로 되돌린다.</summary>
+        /// <summary>
+        /// 접속 환경을 바꾸고 <b>다음 실행을 위해 저장</b>한다. 계정·게임 서버 주소를 그 환경의 프리셋으로 되돌린 뒤,
+        /// 그 환경에 저장해 둔 접속 호스트 override가 있으면 함께 되살린다(환경마다 마지막 주소를 따로 기억한다).
+        /// </summary>
         public void SetEnvironment(ServerEnvironmentKind kind)
         {
+            SaveEnvironment(kind);
             if (_environment == kind)
             {
                 return;   // 같은 환경이면 호스트 override를 날리지 않는다.
             }
             ApplyEnvironment(kind);
+            ApplySavedHost();
+        }
+
+        /// <summary>마지막으로 고른 접속 환경을 읽는다(저장값이 없거나 알 수 없는 값이면 빌드 기본 환경).</summary>
+        private static ServerEnvironmentKind LoadSavedEnvironment()
+        {
+            int saved = PlayerPrefs.GetInt(EnvPrefKey, -1);
+            return saved == (int)ServerEnvironmentKind.Dev || saved == (int)ServerEnvironmentKind.Qa
+                ? (ServerEnvironmentKind)saved
+                : ServerEnvironment.BuildDefault;
+        }
+
+        /// <summary>고른 접속 환경을 저장한다. 빌드 기본 환경과 같으면 저장하지 않고 키를 지운다 —
+        /// 기본 환경이 나중에 바뀌었을 때 옛 선택이 새 기본값을 덮어쓰는 것을 막기 위함이다(호스트 override와 같은 규칙).</summary>
+        private static void SaveEnvironment(ServerEnvironmentKind kind)
+        {
+            if (kind == ServerEnvironment.BuildDefault)
+            {
+                PlayerPrefs.DeleteKey(EnvPrefKey);
+            }
+            else
+            {
+                PlayerPrefs.SetInt(EnvPrefKey, (int)kind);
+            }
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>현재 환경에 저장된 접속 호스트 override가 있으면 적용한다(없으면 환경 프리셋 주소를 그대로 둔다).</summary>
+        private void ApplySavedHost()
+        {
+            string savedHost = PlayerPrefs.GetString(HostPrefKey(_environment), string.Empty);
+            if (!string.IsNullOrEmpty(savedHost))
+            {
+                ApplyServerHost(savedHost);
+            }
         }
 
         /// <summary>환경 프리셋 주소를 현재 주소로 적용한다(스킴·호스트·포트 전부). 호스트 override의 기준값도 이 값이 된다.</summary>
@@ -138,6 +179,11 @@ namespace TaskbarHero.Client.Managers
         /// <summary>환경별 접속 호스트 override 저장 키.</summary>
         private static string HostPrefKey(ServerEnvironmentKind kind)
             => PrefKeyServerHostPrefix + ServerEnvironment.DisplayNameOf(kind).ToLowerInvariant();
+
+        /// <summary>접속 환경 저장 키. <b>빌드에 구워진 기본 환경</b>으로 가른다(선택한 환경이 아니다) —
+        /// Dev 빌드의 선택과 QA 빌드의 선택이 서로를 덮어쓰지 않게 하기 위함이다.</summary>
+        private static string EnvPrefKey
+            => PrefKeyServerEnvPrefix + ServerEnvironment.DisplayNameOf(ServerEnvironment.BuildDefault).ToLowerInvariant();
 
         /// <summary>입력 호스트로 계정·게임 서버 base URL을 재구성한다(저장 없이). 유효하면 true.</summary>
         private bool ApplyServerHost(string host)

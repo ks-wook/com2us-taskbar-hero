@@ -19,6 +19,11 @@ namespace TaskbarHero.Client.UI
     ///   (접속 서버 선택 → 로그인 UI)으로 돌아간다. 사용자에게 모달로 알리지는 않는다 —
     ///   자동 로그인은 편의 기능이라 실패를 알릴 필요 없이 로그인 화면을 보여 주면 된다.</item>
     /// </list></para>
+    ///
+    /// <para><b>접속 서버 변경</b> — 화면 <b>우측 하단의 톱니바퀴</b>(<see cref="ServerSettingsButton"/>)로
+    /// '접속 서버 변경' 화면을 연다. 로그인 직전의 자동 노출과 달리 <b>QA 빌드에서도 열린다</b> —
+    /// 그 빌드는 서버 선택 화면이 뜨지 않아 접속처를 되돌릴 통로가 없기 때문이다.
+    /// 게임이 시작되면 톱니바퀴는 사라진다(로그인 이후에는 접속처를 바꿀 수 없다).</para>
     /// </summary>
     public class TitleScreen : MonoBehaviour
     {
@@ -30,6 +35,13 @@ namespace TaskbarHero.Client.UI
 
         [Tooltip("깜빡임 한 주기의 길이(초).")]
         [SerializeField] private float blinkPeriod = 1.2f;
+
+        [Tooltip("우측 하단 '접속 서버 변경' 톱니바퀴 아이콘(Assets/Art/Icon/환경설정.png). " +
+                 "에디터 빌더(TaskbarHero/UI/환경설정 패널·씬 배선)가 배선한다. 없으면 글자 버튼으로 대체된다.")]
+        [SerializeField] private Sprite settingsIcon;
+
+        // 우측 하단 톱니바퀴(런타임 생성). 게임을 시작하면 파괴한다.
+        private ServerSettingsButton _serverSettingsButton;
 
         private bool _started;
         private bool _quitModalOpen;      // 종료 확인 모달 중복 표시 방지
@@ -45,10 +57,40 @@ namespace TaskbarHero.Client.UI
             SoundManager.Bgm(SoundId.BgmTitle);
         }
 
-        /// <summary>저장된 마지막 세션이 있으면 자동 로그인을 시도한다.</summary>
+        /// <summary>우측 하단 톱니바퀴를 만들고, 저장된 마지막 세션이 있으면 자동 로그인을 시도한다.</summary>
         private void Start()
         {
+            CreateServerSettingsButton();
             TryAutoLogin();
+        }
+
+        /// <summary>우측 하단에 '접속 서버 변경' 톱니바퀴 버튼을 만든다(이미 있으면 그대로 쓴다).</summary>
+        private void CreateServerSettingsButton()
+        {
+            _serverSettingsButton = ServerSettingsButton.Create(settingsIcon, OpenServerChange);
+        }
+
+        /// <summary>
+        /// 톱니바퀴를 눌렀을 때: '접속 서버 변경' 화면을 연다.
+        /// <para>접속처가 <b>실제로 바뀌면</b> 자동 로그인 상태를 버리고 새 서버 기준으로 다시 검증한다 —
+        /// 앞선 검증은 <b>이전 서버</b>가 내준 결과라 그대로 두면 바꾼 서버에 이전 계정으로 진입하게 된다.
+        /// 저장 세션 자체는 지우지 않는다(<see cref="SavedSession"/>이 환경까지 함께 보관하므로,
+        /// 원래 서버로 되돌리면 자동 로그인이 다시 살아난다).</para>
+        /// </summary>
+        private void OpenServerChange()
+        {
+            ServerSelectPanelController.ShowManual(changed =>
+            {
+                if (!changed)
+                {
+                    return;
+                }
+                Session.Clear();
+                _autoLoginReady = false;
+                _autoLoginPending = false;
+                _startQueued = false;
+                TryAutoLogin();
+            });
         }
 
         /// <summary>
@@ -81,10 +123,21 @@ namespace TaskbarHero.Client.UI
                 error =>
                 {
                     // 만료(1005)·다른 기기 로그인으로 밀려남(1004) 등 → 저장값을 버리고 로그인 화면으로.
+                    //
+                    // <b>전송 계층 실패는 예외</b>(연결 불가·타임아웃) — 토큰이 무효라는 근거가 아니라
+                    // 그 주소에 서버가 없다는 뜻일 뿐이다. 톱니바퀴로 접속처를 잘못 바꿔 보기만 해도
+                    // 원래 서버의 <b>멀쩡한 토큰</b>이 지워져 재로그인을 강요당하므로, 이때는 남긴다.
                     _autoLoginPending = false;
                     _autoLoginReady = false;
-                    SavedSession.Clear();
-                    Debug.Log($"[TitleScreen] 자동 로그인 실패(code={error.ErrorCode}) → 저장 세션 폐기, 로그인 화면 사용");
+                    if (error != null && error.IsTransportError)
+                    {
+                        Debug.Log($"[TitleScreen] 자동 로그인 검증 실패(서버 연결 불가) → 저장 세션은 남기고 로그인 화면 사용");
+                    }
+                    else
+                    {
+                        SavedSession.Clear();
+                        Debug.Log($"[TitleScreen] 자동 로그인 실패(code={error?.ErrorCode}) → 저장 세션 폐기, 로그인 화면 사용");
+                    }
                     ResumeQueuedStart();
                 });
         }
@@ -106,6 +159,15 @@ namespace TaskbarHero.Client.UI
 
         private void Update()
         {
+            // '접속 서버 변경' 창이 떠 있는 동안에는 타이틀 입력(ESC 종료·화면 클릭 시작)을 받지 않는다.
+            // 이 화면의 클릭 감지는 EventSystem이 아니라 Pointer 직접 읽기라, 창의 딤 이미지가
+            // 클릭을 막아 주지 못한다(창을 닫는 클릭이 그대로 게임 시작으로 이어진다).
+            if (ServerSelectPanelController.IsOpen)
+            {
+                _pressHeld = false;
+                return;
+            }
+
             // ESC → 종료 확인 모달. 시작 전/후(로그인 화면 포함) 모두 동작.
             var kb = Keyboard.current;
             if (kb != null && kb.escapeKey.wasPressedThisFrame)
@@ -131,7 +193,9 @@ namespace TaskbarHero.Client.UI
             // 발생했다면 시작 클릭이 아니라 창 이동이므로 게임을 시작하지 않는다.
             if (pointer.press.wasPressedThisFrame)
             {
-                _pressHeld = true;
+                // 톱니바퀴 위에서 시작한 누름은 게임 시작이 아니다(버튼만 눌리고 타이틀은 그대로).
+                // 포커스 없는 오버레이 창에서도 동작하도록 EventSystem 상태가 아닌 수동 레이캐스트로 판정한다.
+                _pressHeld = !ServerSettingsButton.PointerOverButton;
                 _draggedDuringPress = false;
             }
             if (_pressHeld && TaskbarWindow.DraggingWindow)
@@ -219,6 +283,14 @@ namespace TaskbarHero.Client.UI
                 titleRoot.SetActive(false);
             }
 
+            // 로그인 이후에는 접속처를 바꿀 수 없으므로 톱니바퀴를 없앤다.
+            // (버튼이 만들어 둔 EventSystem도 함께 사라져 이후 패널들이 자기 것을 만드는 데 방해되지 않는다.)
+            if (_serverSettingsButton != null)
+            {
+                Destroy(_serverSettingsButton.gameObject);
+                _serverSettingsButton = null;
+            }
+
             if (_autoLoginReady)
             {
                 EnterGameDirectly();
@@ -253,6 +325,7 @@ namespace TaskbarHero.Client.UI
                 {
                     titleRoot.SetActive(true);
                 }
+                CreateServerSettingsButton();   // 시작할 때 없앴으므로 다시 만든다
                 string message = error != null ? ErrorMessages.ToKorean(error) : "게임 진입에 실패했습니다.";
                 ModalManager.Instance?.ShowConfirm("자동 로그인 실패", message);
                 Debug.LogWarning($"[TitleScreen] 자동 로그인 진입 실패 → 타이틀 복귀: {error}");

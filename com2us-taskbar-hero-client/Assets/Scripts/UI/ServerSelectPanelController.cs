@@ -2,19 +2,25 @@ using System;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
 using TaskbarHero.Client.Managers;
 
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// 로그인 UI보다 먼저 노출되는 '접속 서버 선택' 화면. <b>빌드 옵션(접속 환경) 버튼</b>(Dev / QA)과
-    /// 선택된 환경의 계정·게임 서버 주소 표시, 호스트를 직접 입력하는 칸, 하단의 '확인' 버튼으로 구성된다.
-    /// 기본 선택은 빌드에 구워진 환경(<see cref="ServerEnvironment.BuildDefault"/>)이며,
-    /// 여기서 바꾼 환경은 <b>그 실행에만</b> 적용된다(저장하지 않는다 — 이유는 <see cref="ServerEnvironment"/> 참조).
-    /// <b>QA 빌드에서는 이 화면 자체가 뜨지 않는다</b> — 접속처가 QA(원격)로 고정이므로 <see cref="Show"/>가
-    /// 곧바로 다음 단계(로그인)로 넘긴다.
-    /// '확인'을 누르면 환경과 접속 호스트가 확정(NetworkManager에 적용)되고, 이 화면은 파괴되며 로그인 UI가 활성화된다.
+    /// '접속 서버' 화면. <b>빌드 옵션(접속 환경) 버튼</b>(Dev / QA)과 선택된 환경의 계정·게임 서버 주소 표시,
+    /// 호스트를 직접 입력하는 칸, 하단 버튼으로 구성된다. 여는 경로가 둘이다:
+    /// <list type="bullet">
+    /// <item><b>로그인 직전 자동 노출</b>(<see cref="Show"/>) — 종전 흐름. QA 빌드에서는 뜨지 않고
+    ///   (<see cref="ServerEnvironment.ShowServerSelectOnStart"/>) 곧바로 로그인으로 넘어간다.</item>
+    /// <item><b>타이틀 우측 하단 톱니바퀴</b>(<see cref="ShowManual"/>) — <b>빌드 종류와 무관하게</b> 열린다.
+    ///   접속처를 되돌릴 통로가 없으면 안 되므로 QA 빌드에서도 이 경로는 막지 않는다.
+    ///   '취소'(또는 ESC)로 아무것도 바꾸지 않고 닫을 수 있다.</item>
+    /// </list>
+    /// 기본 선택은 <b>지금 접속 중인 환경</b>(= 마지막으로 고른 환경)이다. '확인'을 누르면 환경과 접속 호스트가
+    /// 확정(<see cref="NetworkManager"/>에 적용)되고 <b>다음 실행을 위해 저장</b>된다 — 마지막으로 접속한
+    /// 서버가 계속 유지된다.
     /// 런타임에 자체 Canvas·EventSystem을 코드로 구성한다(타이틀 단계에는 EventSystem이 없으므로 필요 시 생성).
     /// </summary>
     public class ServerSelectPanelController : MonoBehaviour
@@ -23,8 +29,14 @@ namespace TaskbarHero.Client.UI
         private static readonly Color EnvSelectedColor = new Color(0.20f, 0.45f, 0.65f, 1f);
         private static readonly Color EnvUnselectedColor = new Color(0.18f, 0.20f, 0.26f, 1f);
 
+        // 하단 버튼 색(확인 / 취소).
+        private static readonly Color ConfirmColor = new Color(0.18f, 0.45f, 0.28f, 1f);
+        private static readonly Color CancelColor = new Color(0.30f, 0.22f, 0.24f, 1f);
+
         private InputField _input;
         private Action _onConfirmed;
+        private Action<bool> _onClosed;
+        private bool _manual;
 
         // 선택 중인 환경(확인 시점에 NetworkManager로 확정한다).
         private ServerEnvironmentKind _selectedEnv;
@@ -33,26 +45,55 @@ namespace TaskbarHero.Client.UI
         private Text _addressText;
 
         /// <summary>
-        /// 접속 서버 선택 화면을 생성·표시한다. onConfirmed는 '확인' 후(서버 확정·화면 파괴 직후) 1회 호출된다.
-        /// <para><b>접속처가 고정된 빌드</b>(QA — <see cref="ServerEnvironment.AllowServerSelection"/>가 false)에서는
-        /// 화면을 만들지 않고 onConfirmed를 즉시 호출한다. 접속처는 이미 <see cref="NetworkManager"/>가 기동 시
-        /// 구워진 환경 프리셋으로 확정해 뒀으므로, 여기서 더 확정할 것이 없다.</para>
+        /// 이 화면이 떠 있는가. 타이틀 화면은 <b>Pointer를 직접 읽어</b> 화면 아무 곳이나 누르면 게임을 시작하므로
+        /// (딤 이미지가 그 입력을 막아 주지 못한다) <see cref="TitleScreen"/>이 이 값으로 입력을 멈춘다.
+        /// </summary>
+        public static bool IsOpen { get; private set; }
+
+        /// <summary>
+        /// 로그인 직전의 접속 서버 선택 화면을 표시한다. onConfirmed는 '확인' 후(서버 확정·화면 파괴 직후) 1회 호출된다.
+        /// <para><b>서버 선택을 자동으로 묻지 않는 빌드</b>(QA — <see cref="ServerEnvironment.ShowServerSelectOnStart"/>가
+        /// false)에서는 화면을 만들지 않고 onConfirmed를 즉시 호출한다. 접속처는 이미 <see cref="NetworkManager"/>가
+        /// 기동 시 확정해 뒀으므로(마지막 선택 또는 빌드 프리셋) 여기서 더 확정할 것이 없다.
+        /// 바꿔야 할 때는 타이틀의 톱니바퀴(<see cref="ShowManual"/>)로 연다.</para>
         /// </summary>
         public static void Show(Action onConfirmed)
         {
-            if (!ServerEnvironment.AllowServerSelection)
+            if (!ServerEnvironment.ShowServerSelectOnStart)
             {
                 var env = NetworkManager.Instance != null
                     ? NetworkManager.Instance.CurrentEnvironment
                     : ServerEnvironment.BuildDefault;
-                Debug.Log($"[ServerSelect] 접속처 고정 빌드({ServerEnvironment.DisplayNameOf(env)}) — 서버 선택 화면을 건너뛴다");
+                Debug.Log($"[ServerSelect] 서버 선택을 자동으로 묻지 않는 빌드({ServerEnvironment.DisplayNameOf(env)}) — 화면을 건너뛴다");
                 onConfirmed?.Invoke();
                 return;
             }
+            Create(manual: false, onConfirmed: onConfirmed, onClosed: null);
+        }
 
-            var go = new GameObject("ServerSelectPanel");
+        /// <summary>
+        /// 타이틀의 톱니바퀴로 여는 '접속 서버 변경' 화면. <b>빌드 종류와 무관하게 항상 열린다.</b>
+        /// </summary>
+        /// <param name="onClosed">닫힌 뒤 1회 호출된다. 인자는 <b>접속 주소가 실제로 바뀌었는지</b>이며,
+        /// true면 호출측이 그 서버 기준으로 상태를 다시 잡아야 한다(예: 자동 로그인 재검증).</param>
+        public static void ShowManual(Action<bool> onClosed)
+        {
+            if (IsOpen)
+            {
+                return;   // 이미 떠 있으면 겹쳐 열지 않는다.
+            }
+            Create(manual: true, onConfirmed: null, onClosed: onClosed);
+        }
+
+        /// <summary>화면 오브젝트를 만들어 구성한다(두 진입 경로가 공유하는 생성부).</summary>
+        private static void Create(bool manual, Action onConfirmed, Action<bool> onClosed)
+        {
+            var go = new GameObject(manual ? "ServerChangePanel" : "ServerSelectPanel");
             var c = go.AddComponent<ServerSelectPanelController>();
+            c._manual = manual;
             c._onConfirmed = onConfirmed;
+            c._onClosed = onClosed;
+            IsOpen = true;
             c.Build();
         }
 
@@ -88,7 +129,7 @@ namespace TaskbarHero.Client.UI
             cardImg.color = new Color(0.10f, 0.13f, 0.20f, 0.98f);
 
             // 제목
-            var title = NewText("Title", card, font, "접속 서버 선택", 40, TextAnchor.MiddleCenter);
+            var title = NewText("Title", card, font, _manual ? "접속 서버 변경" : "접속 서버 선택", 40, TextAnchor.MiddleCenter);
             title.color = new Color(1f, 0.95f, 0.7f);
             title.fontStyle = FontStyle.Bold;
             var trt = title.rectTransform;
@@ -106,7 +147,7 @@ namespace TaskbarHero.Client.UI
             elrt.sizeDelta = new Vector2(-80f, 30f);
             elrt.anchoredPosition = new Vector2(0f, -104f);
 
-            // 환경 선택 버튼(Dev / QA). 기본 선택 = 이 빌드에 구워진 환경.
+            // 환경 선택 버튼(Dev / QA). 기본 선택 = 지금 접속 중인 환경(= 마지막으로 고른 환경).
             _selectedEnv = NetworkManager.Instance != null ? NetworkManager.Instance.CurrentEnvironment : ServerEnvironment.BuildDefault;
 
             var devBtn = NewButton("DevButton", card, font, "Dev (로컬)", 26, EnvUnselectedColor);
@@ -145,7 +186,7 @@ namespace TaskbarHero.Client.UI
             lrt.sizeDelta = new Vector2(-80f, 30f);
             lrt.anchoredPosition = new Vector2(0f, -282f);
 
-            // 직접 입력 칸(기본값 = 현재 접속 호스트)
+            // 직접 입력 칸(기본값 = 현재 접속 호스트 = 마지막으로 접속한 주소)
             string current = NetworkManager.Instance != null ? NetworkManager.Instance.ServerHost : "localhost";
             _input = NewInputField("ServerInput", card, font, current, "서버 주소(호스트) 입력");
             var irt = (RectTransform)_input.transform;
@@ -156,19 +197,61 @@ namespace TaskbarHero.Client.UI
 
             RefreshEnvironmentView(fillInput: false);
 
-            // '확인' 버튼(하단)
-            var confirm = NewButton("ConfirmButton", card, font, "확인", 30, new Color(0.18f, 0.45f, 0.28f, 1f));
+            BuildFooterButtons(card, font);
+        }
+
+        /// <summary>하단 버튼을 만든다. 톱니바퀴로 연 경우에는 아무것도 바꾸지 않고 닫는 '취소'를 함께 둔다
+        /// (로그인 직전 자동 노출에서는 접속처를 반드시 확정하고 넘어가야 하므로 '확인' 하나뿐이다).</summary>
+        private void BuildFooterButtons(RectTransform card, Font font)
+        {
+            if (!_manual)
+            {
+                var confirmOnly = NewButton("ConfirmButton", card, font, "확인", 30, ConfirmColor);
+                var only = (RectTransform)confirmOnly.transform;
+                only.anchorMin = new Vector2(0.5f, 0f); only.anchorMax = new Vector2(0.5f, 0f);
+                only.pivot = new Vector2(0.5f, 0f);
+                only.sizeDelta = new Vector2(600f, 72f);
+                only.anchoredPosition = new Vector2(0f, 28f);
+                confirmOnly.onClick.AddListener(OnConfirm);
+                return;
+            }
+
+            var cancel = NewButton("CancelButton", card, font, "취소", 30, CancelColor);
+            var lrt2 = (RectTransform)cancel.transform;
+            lrt2.anchorMin = new Vector2(0.5f, 0f); lrt2.anchorMax = new Vector2(0.5f, 0f);
+            lrt2.pivot = new Vector2(0.5f, 0f);
+            lrt2.sizeDelta = new Vector2(292f, 72f);
+            lrt2.anchoredPosition = new Vector2(-154f, 28f);
+            cancel.onClick.AddListener(OnCancel);
+
+            var confirm = NewButton("ConfirmButton", card, font, "확인", 30, ConfirmColor);
             var crt = (RectTransform)confirm.transform;
             crt.anchorMin = new Vector2(0.5f, 0f); crt.anchorMax = new Vector2(0.5f, 0f);
             crt.pivot = new Vector2(0.5f, 0f);
-            crt.sizeDelta = new Vector2(600f, 72f);
-            crt.anchoredPosition = new Vector2(0f, 28f);
+            crt.sizeDelta = new Vector2(292f, 72f);
+            crt.anchoredPosition = new Vector2(154f, 28f);
             confirm.onClick.AddListener(OnConfirm);
+        }
+
+        /// <summary>톱니바퀴로 연 화면은 ESC로도 닫는다(취소와 같다).
+        /// 자동 노출 화면은 접속처를 확정하고 넘어가야 하므로 ESC를 무시한다.</summary>
+        private void Update()
+        {
+            if (!_manual)
+            {
+                return;
+            }
+            var kb = Keyboard.current;
+            if (kb != null && kb.escapeKey.wasPressedThisFrame)
+            {
+                OnCancel();
+            }
         }
 
         /// <summary>환경 버튼을 눌렀을 때: 선택 환경을 바꾸고 표시·입력 칸을 그 환경의 프리셋 값으로 갱신한다(확정은 '확인' 시점).</summary>
         private void SelectEnvironment(ServerEnvironmentKind kind)
         {
+            SoundManager.Sfx(SoundId.UiTab);
             _selectedEnv = kind;
             RefreshEnvironmentView(fillInput: true);
         }
@@ -204,24 +287,58 @@ namespace TaskbarHero.Client.UI
             catch { return url; }
         }
 
-        /// <summary>'확인': 선택한 환경과 입력한 접속 호스트를 확정(NetworkManager에 적용)하고, 이 화면을 파괴한 뒤 로그인 UI를 활성화한다.</summary>
+        /// <summary>'확인': 선택한 환경과 입력한 접속 호스트를 확정한다 — <see cref="NetworkManager"/>에 적용하고
+        /// 다음 실행을 위해 저장한 뒤 화면을 닫는다.</summary>
         private void OnConfirm()
         {
+            SoundManager.Sfx(SoundId.UiModalOk);
+
             string host = _input != null ? _input.text : null;
+            bool changed = false;
             if (NetworkManager.Instance != null)
             {
-                // 환경(스킴·포트 프리셋)을 먼저 확정한 뒤, 호스트 override를 적용한다.
+                string before = NetworkManager.Instance.AccountServerBaseUrl;
+                // 환경(스킴·포트 프리셋)을 먼저 확정한 뒤, 호스트 override를 적용한다. 둘 다 저장된다.
                 NetworkManager.Instance.SetEnvironment(_selectedEnv);
                 if (!string.IsNullOrWhiteSpace(host))
                 {
                     NetworkManager.Instance.SetServerHost(host.Trim());
                 }
+                changed = !string.Equals(before, NetworkManager.Instance.AccountServerBaseUrl, StringComparison.Ordinal);
+                if (changed)
+                {
+                    Debug.Log($"[ServerSelect] 접속 서버 변경: {before} → {NetworkManager.Instance.AccountServerBaseUrl}");
+                }
             }
+            Close(changed);
+        }
 
-            var cb = _onConfirmed;
+        /// <summary>'취소'(톱니바퀴 경로 전용): 아무것도 확정하지 않고 닫는다.</summary>
+        private void OnCancel()
+        {
+            SoundManager.Sfx(SoundId.UiClickBack);
+            Close(false);
+        }
+
+        /// <summary>화면을 파괴하고 대기 중인 콜백을 1회씩 실행한다.</summary>
+        /// <param name="changed">접속 주소가 실제로 바뀌었는지(톱니바퀴 경로의 onClosed 인자).</param>
+        private void Close(bool changed)
+        {
+            var confirmed = _onConfirmed;
+            var closed = _onClosed;
             _onConfirmed = null;
-            Destroy(gameObject);   // 서버 선택 UI 비활성화(파괴)
-            cb?.Invoke();          // 로그인 UI 활성화
+            _onClosed = null;
+
+            Destroy(gameObject);   // 실제 파괴는 프레임 끝 — IsOpen은 OnDestroy에서 내린다
+            confirmed?.Invoke();   // (자동 노출 경로) 로그인 UI 활성화
+            closed?.Invoke(changed);
+        }
+
+        /// <summary>화면이 사라지면 열림 표시를 내린다. <b>여기서만</b> 내리는 이유 — 확인/취소 클릭이 처리된
+        /// 그 프레임에 표시를 내리면, 같은 프레임에 타이틀이 그 클릭의 '뗌'을 보고 게임을 시작해 버린다.</summary>
+        private void OnDestroy()
+        {
+            IsOpen = false;
         }
 
         /// <summary>씬에 EventSystem이 없으면(타이틀 단계) 이 화면 하위에 InputSystem용 EventSystem을 만든다.

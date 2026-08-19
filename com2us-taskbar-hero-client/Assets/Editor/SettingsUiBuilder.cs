@@ -9,7 +9,8 @@ namespace TaskbarHero.ClientEditor
     /// <summary>
     /// 환경설정 패널 프리팹 생성 + 씬 배선 도구. 패널 정적 계층은 코드로 구성되므로
     /// (<see cref="SettingsPanelController.EditorConstruct"/>) 프리팹은 컨트롤러 + 계층 + 아트 참조만 담는다.
-    /// GameScene HUD의 환경설정 아이콘도 함께 배선한다.
+    /// 같은 톱니바퀴 아이콘을 쓰는 두 곳도 함께 배선한다 — GameScene HUD의 환경설정 버튼과,
+    /// TitleScene 우측 하단의 '접속 서버 변경' 버튼(<see cref="TitleScreen"/>의 settingsIcon).
     /// 메뉴: TaskbarHero/UI/환경설정 패널·씬 배선
     /// </summary>
     public static class SettingsUiBuilder
@@ -31,7 +32,8 @@ namespace TaskbarHero.ClientEditor
             AssignToScene(TitleScenePath, prefab, false);
             AssignToScene(GameScenePath, prefab, true);
             AssetDatabase.SaveAssets();
-            Debug.Log("[SettingsUiBuilder] 완료: 환경설정 패널 프리팹 생성 + Title/GameScene 배선.");
+            Debug.Log("[SettingsUiBuilder] 완료: 환경설정 패널 프리팹 생성 + Title/GameScene 배선"
+                      + "(타이틀 톱니바퀴 · GameScene HUD 아이콘 포함).");
         }
 
         private static GameObject BuildPrefab()
@@ -71,6 +73,17 @@ namespace TaskbarHero.ClientEditor
                 var so = new SerializedObject(uiManager);
                 so.FindProperty("settingsPanelPrefab").objectReferenceValue = prefab;
                 so.ApplyModifiedPropertiesWithoutUndo();
+            }
+
+            // 타이틀 화면 우측 하단 톱니바퀴('접속 서버 변경') 아이콘. 없으면 글자 버튼으로 대체되므로
+            // 기능이 사라지지는 않지만, 배선해 두어야 의도한 모양으로 나온다.
+            var titleScreen = Object.FindAnyObjectByType<TitleScreen>(FindObjectsInactive.Include);
+            if (titleScreen != null)
+            {
+                var tso = new SerializedObject(titleScreen);
+                tso.FindProperty("settingsIcon").objectReferenceValue = LoadSpriteAt(SettingsIconPath);
+                tso.ApplyModifiedPropertiesWithoutUndo();
+                Debug.Log($"[SettingsUiBuilder] {scene.name} 타이틀 톱니바퀴 아이콘 배선 완료.");
             }
 
             if (wireHudIcon)

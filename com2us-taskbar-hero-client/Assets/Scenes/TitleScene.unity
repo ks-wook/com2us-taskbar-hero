@@ -1838,6 +1838,51 @@ MonoBehaviour:
   gameServerBaseUrl: http://localhost:5247
   timeoutSeconds: 10
   showNetworkErrorModal: 1
+--- !u!21 &1099553150
+Material:
+  serializedVersion: 8
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: UITextSharpen (runtime)
+  m_Shader: {fileID: 4800000, guid: 5794afe3056d01a4395f1e64779f1c7b, type: 3}
+  m_Parent: {fileID: 0}
+  m_ModifiedSerializedProperties: 0
+  m_ValidKeywords: []
+  m_InvalidKeywords: []
+  m_LightmapFlags: 4
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: 0
+  m_CustomRenderQueue: -1
+  stringTagMap: {}
+  disabledShaderPasses: []
+  m_LockedProperties: 
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+    - _MainTex:
+        m_Texture: {fileID: 0}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
+    m_Ints: []
+    m_Floats:
+    - _ColorMask: 15
+    - _InkFloor: 0.35
+    - _SharpenAmount: 1.6
+    - _SharpenHigh: 0.7407407
+    - _SharpenLow: 0
+    - _SharpenRadius: 0.7
+    - _Stencil: 0
+    - _StencilComp: 8
+    - _StencilOp: 0
+    - _StencilReadMask: 255
+    - _StencilWriteMask: 255
+    - _UseUIAlphaClip: 0
+    m_Colors:
+    - _Color: {r: 1, g: 1, b: 1, a: 1}
+  m_BuildTextureStacks: []
+  m_AllowLocking: 1
 --- !u!1 &1178964606
 GameObject:
   m_ObjectHideFlags: 0
@@ -1872,6 +1917,7 @@ MonoBehaviour:
   titleRoot: {fileID: 316847406}
   pressToStartGroup: {fileID: 1873596886}
   blinkPeriod: 1.2
+  settingsIcon: {fileID: 21300000, guid: e96efdf00edbc62438e3eeaa98707ae3, type: 3}
 --- !u!114 &1178964608
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3033,7 +3079,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
-  m_Material: {fileID: 0}
+  m_Material: {fileID: 1099553150}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_RaycastTarget: 0
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
