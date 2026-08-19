@@ -32,6 +32,7 @@
 | 10000번대 | 마스터 데이터 | [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) 8 | 사용 중 |
 | 11000번대 | 공통 / 시스템 | [서버 로깅 규칙](로깅-규칙.md) 6장(전역 예외 처리) | 사용 중 |
 | 12000번대 | 가챠(뽑기) | [가챠 시스템 기획서](../세부/gacha-기획서.md) 7장 | 사용 중 |
+| 13000번대 | 보스러시 / 랭킹 | [보스러시 / 랭킹 기획서](../세부/boss-rush-기획서.md) 7장 | 사용 중 |
 
 ## 2. 전체 코드 목록
 
@@ -184,6 +185,24 @@
 - **`GachaNotFound`(없는 코드)와 `GachaNotAvailable`(닫힌 배너)을 구분한다.** 전자는 클라이언트 번들과 서버 마스터가 어긋난 상황(갱신 안내), 후자는 정상적인 배너 개폐(목록 재조회)라 클라이언트 대응이 다르다.
 - **배너 조회(`gacha/banners`)·뽑기 기록 조회(`gacha/history`)는 전용 코드를 두지 않는다** — 열려 있는 배너가 없거나 기록이 없으면 빈 목록으로 성공 응답하고 `cursor`·`limit`은 서버가 보정한다.
 
+### 2.14 보스러시 / 랭킹 (13000번대)
+
+| 이름 | 값 | 의미 |
+|---|---|---|
+| BossRushLocked | 13001 | 해금 조건 미달(`max_stage_cleared < unlock_stage_sequence`) |
+| BossRushDailyLimitExceeded | 13002 | 오늘 도전 횟수를 모두 사용함 |
+| BossRushRunNotFound | 13003 | 그 `runId`의 런이 없거나 본인 런이 아님 |
+| BossRushRunAlreadyFinished | 13004 | 이미 종결된 런(중복 보고 · 동시 요청의 패자) |
+| BossRushTimeout | 13005 | 제한 시간(10분)을 초과한 클리어 보고. 런은 실패 종결되고 기록은 남지 않는다 |
+| BossRushInvalidProgress | 13006 | 라운드 보고가 형식·정합성 검증에 실패(누락·중복·서버 측정 시간과 모순) |
+| BossRushTimeImplausible | 13007 | 측정 시간이 파티 전투력의 **이론 하한** 미만(조작 의심). 런은 실패 종결하고 Warning 로그를 남긴다 |
+| BossRushSeasonClosed | 13008 | 진행 중 시즌이 없음(시즌 정산 중) 또는 존재하지 않는 `seasonId` |
+
+- 보스러시는 **도메인 4.12**이지만 블록 규약(도메인 4.N → N000)의 `12000`번대를 가챠가 이미 쓰고 있어(가챠는 4.11이나 `11000`번대를 공통/시스템이 선점해 12000으로 밀렸다) **13000번대**를 할당했다.
+- 재사용: 세이브 없음은 `SaveNotFound(2001)`, 요청 필드 형식 오류는 `InvalidRequest(1006)`, 마스터 미로드는 `MasterDataNotLoaded(10001)`.
+- **보스러시는 아이템을 지급하지도 재화를 소모하지도 않는다** — 도달 보상이 골드·경험치뿐이라 `InventoryFull(4002)`·`InsufficientCurrency(4005)`가 발생하지 않는다. 아이템은 **시즌 순위 보상 메일**로만 지급되므로, 그 수령 단계의 오류는 메일 도메인 코드(`MailNotFound(8001)`·`MailAlreadyClaimed(8002)`·`MailExpired(8003)`·`InventoryFull(4002)`)를 따른다.
+- **`BossRushTimeout(13005)`과 `BossRushTimeImplausible(13007)`을 구분한다.** 전자는 정상적인 실패(다시 도전 안내), 후자는 조작 의심(재시도 안내 없이 오류 표시 + 서버 Warning 로그)이라 클라이언트 대응이 다르다.
+
 ## 3. `TaskbarHero.Common/ErrorCode.cs` 반영안
 
 아래 전체 목록이 `TaskbarHero.Common/ErrorCode.cs`에 구현되어 있다(`netstandard2.0`, 서버-클라이언트 공유). 코드를 추가/폐기할 때는 이 문서와 해당 파일을 함께 갱신한다.
@@ -287,6 +306,16 @@ namespace TaskbarHero.Common
         GachaNotFound = 12001,
         GachaPoolEmpty = 12002,
         GachaNotAvailable = 12003,
+
+        // 보스러시 / 랭킹 (13000번대 — 도메인 4.12이나 12000번대를 가챠가 선점해 13000번대 할당)
+        BossRushLocked = 13001,
+        BossRushDailyLimitExceeded = 13002,
+        BossRushRunNotFound = 13003,
+        BossRushRunAlreadyFinished = 13004,
+        BossRushTimeout = 13005,
+        BossRushInvalidProgress = 13006,
+        BossRushTimeImplausible = 13007,
+        BossRushSeasonClosed = 13008,
     }
 }
 ```
@@ -305,3 +334,4 @@ namespace TaskbarHero.Common
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md) — 7장 에러 코드 (9000번대)
 - [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) — 8장 에러 코드 (10000번대)
 - [가챠(뽑기) 시스템 기획서](../세부/gacha-기획서.md) — 7장 에러 코드 (12000번대)
+- [보스러시 / 랭킹 기획서](../세부/boss-rush-기획서.md) — 7장 에러 코드 (13000번대)
