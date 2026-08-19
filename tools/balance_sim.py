@@ -168,6 +168,20 @@ def target_sec(stage):
     return TARGET_SEC[min(max(stage, 1), len(TARGET_SEC)) - 1]
 
 
+# 몬스터 레벨 배율(값 문서 §9.4) — monster_master 의 hp·attack 은 레벨 1 기준값이고,
+#   실제 등장 스탯은 stage_spawn.monster_level 로 이 기하 곡선을 곱해 얻는다.
+#   클라이언트 전투 구현과 같은 식이어야 한다(전투는 클라 권위).
+MONSTER_HP_GROWTH = 1.25
+MONSTER_ATK_GROWTH = 1.18
+
+
+def monster_stats_at(base_hp, base_atk, level):
+    """레벨 1 기준값(base_hp·base_atk)에 레벨 배율을 적용한 (hp, attack)."""
+    e = max(1, int(level)) - 1
+    return (max(1, round(base_hp * (MONSTER_HP_GROWTH ** e))),
+            max(1, round(base_atk * (MONSTER_ATK_GROWTH ** e))))
+
+
 # 기준 파티(값 문서 §9.1) — 지역이 오를수록 인원·장비·투자가 함께 오른다.
 #   party    : 직업 코드(1 기사 · 2 레인저 · 3 마법사 · 4 슬레이어). Act1은 신규 계정의 캐릭터 1명.
 #   gear     : 그 지역에서 실제로 구할 수 있는 등급의 6부위(1지역만 생성 시 지급되는 등급1 무기).
@@ -362,8 +376,9 @@ class StageMaster:
     difficulty: int
     stage: int
     stage_id: int
-    boss_monster_code: int
-    spawns: list = field(default_factory=list)   # [(monster_code, count)]
+    boss_monster_code: int = 0                   # stage_spawn 의 is_boss=1 행에서 채운다(없으면 0)
+    boss_monster_level: int = 0
+    spawns: list = field(default_factory=list)   # [(monster_code, monster_level, count)] — 보스 제외
     reward_gold: int = 0
     reward_exp: int = 0
 
@@ -415,14 +430,20 @@ class MasterData:
         self.stages = {}
         by_id = {}
         for r in t.get("stage_master", []):
-            st = StageMaster(int(r["act"]), int(r["difficulty"]), int(r["stage"]), int(r["stage_id"]),
-                             int(r["boss_monster_code"]))
+            st = StageMaster(int(r["act"]), int(r["difficulty"]), int(r["stage"]), int(r["stage_id"]))
             self.stages[(st.act, st.difficulty, st.stage)] = st
             by_id[st.stage_id] = st
+        # stage_spawn 은 일반 몬스터와 보스를 한 테이블에 담는다(is_boss). 서버·클라와 같게 갈라 담는다.
         for r in t.get("stage_spawn", []):
             st = by_id.get(r["stage_id"])
-            if st:
-                st.spawns.append((int(r["monster_code"]), int(r["spawn_count"])))
+            if not st:
+                continue
+            if int(r.get("is_boss", 0)):
+                st.boss_monster_code = int(r["monster_code"])
+                st.boss_monster_level = int(r["monster_level"])
+            else:
+                st.spawns.append((int(r["monster_code"]), int(r["monster_level"]),
+                                  int(r["spawn_count"])))
         for r in t.get("stage_reward", []):
             st = by_id.get(r["stage_id"])
             if st:
@@ -1137,13 +1158,13 @@ class Battle:
         self.damage_dealt = 0
         self.spawn_distance = 0.0
 
-        # 스폰 계획: stage_spawn 순서대로, 보스는 마지막
+        # 스폰 계획: stage_spawn 순서대로, 보스는 마지막. 항목은 (몬스터 코드, 등장 레벨).
         self.queue = []
-        for code, count in stage.spawns:
-            self.queue.extend([code] * count)
+        for code, level, count in stage.spawns:
+            self.queue.extend([(code, level)] * count)
         self.boss_code = stage.boss_monster_code
         if self.boss_code:
-            self.queue.append(self.boss_code)
+            self.queue.append((self.boss_code, stage.boss_monster_level))
         self.total_monsters = len(self.queue)
 
         self.compute_formation()
@@ -1317,7 +1338,7 @@ class Battle:
         if self.queue and self.spawn_timer >= max(0.1, self.cfg.enemy_spawn_interval) \
                 and len(self.alive_monsters()) < max(1, self.cfg.max_concurrent_enemies):
             self.spawn_timer = 0.0
-            self.spawn_monster(self.queue.pop(0))
+            self.spawn_monster(*self.queue.pop(0))
             self.spawned += 1
         # UpdateQueue: 살아있는 적 전부를 파티 앞 라인으로
         line = self.front_x() + self.cfg.enemy_front_stop_gap
@@ -1326,8 +1347,9 @@ class Battle:
         if not self.cleared and self.spawned > 0 and not self.queue and not self.alive_monsters():
             self.cleared = True
 
-    def spawn_monster(self, code):
-        name, hp, atk = self.md.monsters.get(code, (f"Monster({code})", 100, 5))
+    def spawn_monster(self, code, level=1):
+        name, base_hp, base_atk = self.md.monsters.get(code, (f"Monster({code})", 100, 5))
+        hp, atk = monster_stats_at(base_hp, base_atk, level)
         is_boss = self.boss_code != 0 and code == self.boss_code
         speed = self.cfg.enemy_move_speed * (max(0.05, self.cfg.boss_move_speed_factor) if is_boss else 1.0)
         right_edge = self.cam_x + self.cfg.ortho_size * self.aspect
@@ -1335,7 +1357,7 @@ class Battle:
         self.spawn_distance = max(self.spawn_distance, x - self.front_x())
         self.monsters.append(Monster(code, name, hp, atk, speed, is_boss,
                                      self.cfg.enemy_attack_interval, x))
-        self.say(f"스폰 {name}{' [보스]' if is_boss else ''} x={x:.2f} "
+        self.say(f"스폰 {name}{' [보스]' if is_boss else ''} Lv{level} x={x:.2f} "
                  f"(hp {hp} atk {atk})")
 
     # ---- 전진/교전 (UpdatePhase) ----
@@ -1925,9 +1947,10 @@ def verdict(st, res):
 
 
 def print_stage_report(md, cfg, st, res, level, times, opts):
-    comp = ", ".join(f"{md.monsters.get(c, ('?',))[0]}×{n}" for c, n in st.spawns)
+    comp = ", ".join(f"{md.monsters.get(c, ('?',))[0]} Lv{lv}×{n}" for c, lv, n in st.spawns)
     if st.boss_monster_code:
-        comp += f" + [보스]{md.monsters.get(st.boss_monster_code, ('?',))[0]}×1"
+        comp += (f" + [보스]{md.monsters.get(st.boss_monster_code, ('?',))[0]}"
+                 f" Lv{st.boss_monster_level}×1")
     print(f"■ 스테이지 {fmt_stage(st)}  —  {comp}  (총 {res.total_monsters}마리)")
     print(f"  파티: " + " / ".join(
         f"{a['name']} Lv{a['level']}(공{a['atk']} 방{a['def']} 체{a['max_hp']}"

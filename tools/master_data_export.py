@@ -248,23 +248,37 @@ def export_monster(conn):
 
 
 def export_stage(conn):
+    # stage_spawn 은 일반 몬스터와 보스를 한 테이블에 담는다(is_boss). 클라 번들 StageMaster 는
+    # 둘을 나눠 들고 있으므로 여기서 spawns[] 와 bossMonsterCode/bossMonsterLevel 로 갈라 투영한다.
     stages = q(conn, "SELECT * FROM stage_master ORDER BY stage_id")
     spawns = q(conn, "SELECT * FROM stage_spawn ORDER BY stage_id, monster_code")
     by_stage = {}
+    boss_by_stage = {}
     for sp in spawns:
-        by_stage.setdefault(_i(sp["stage_id"]), []).append({
+        sid = _i(sp["stage_id"])
+        if _i(sp["is_boss"]):
+            boss_by_stage[sid] = (_i(sp["monster_code"]), _i(sp["monster_level"]))
+            continue
+        by_stage.setdefault(sid, []).append({
             "monsterCode": _i(sp["monster_code"]),
+            "monsterLevel": _i(sp["monster_level"]),
             "count": _i(sp["spawn_count"]),
         })
-    return [{
-        "stageId": _i(s["stage_id"]),
-        "act": _i(s["act"]),
-        "difficulty": _i(s["difficulty"]),
-        "stage": _i(s["stage"]),
-        "spawns": by_stage.get(_i(s["stage_id"]), []),
-        "bossMonsterCode": _i(s["boss_monster_code"]),
-        "backgroundType": _i(s["background_type"]),
-    } for s in stages]
+    result = []
+    for s in stages:
+        sid = _i(s["stage_id"])
+        boss_code, boss_level = boss_by_stage.get(sid, (0, 0))
+        result.append({
+            "stageId": sid,
+            "act": _i(s["act"]),
+            "difficulty": _i(s["difficulty"]),
+            "stage": _i(s["stage"]),
+            "spawns": by_stage.get(sid, []),
+            "bossMonsterCode": boss_code,
+            "bossMonsterLevel": boss_level,
+            "backgroundType": _i(s["background_type"]),
+        })
+    return result
 
 
 def export_stage_reward(conn):

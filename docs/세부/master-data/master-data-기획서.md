@@ -90,7 +90,7 @@ erDiagram
     rune_master { int rune_code PK }
     monster_master { int monster_code PK }
     stage_master { int stage_id PK }
-    stage_spawn { int stage_id PK }
+    stage_spawn { int stage_id PK int monster_code PK int monster_level int spawn_count int is_boss }
     stage_reward { int stage_id PK }
     cube_master { int cube_level PK }
     cube_recipe { int recipe_code PK }
@@ -113,7 +113,7 @@ erDiagram
 | `rune_master` | 룬(Rune Tree) 정의 | 트리 노드 수 |
 | `monster_master` | 몬스터 전투 스탯 | 50종 이상 |
 | `stage_master` | 스테이지 구성(보스) | 5 Act × 2 난이도 × 3 = 30 |
-| `stage_spawn` | 스테이지별 등장 일반 몬스터(스폰, `stage_master` 자식) | 스테이지 × 몬스터 |
+| `stage_spawn` | 스테이지별 등장 몬스터·레벨(스폰·보스, `stage_master` 자식) | 스테이지 × 몬스터 |
 | `stage_reward` | 스테이지 클리어 보상(골드·경험치·등급별 아이템 확률) | 스테이지 수만큼 |
 | `cube_master` | 큐브 레벨별 규칙·레시피 | 레벨 수만큼 |
 | `gacha_master` | 가챠 배너별 노출 조건·1연/10연 비용·등급 확률·지급 아이템 풀·천장 규칙 | 배너 종류 수만큼 |
@@ -374,8 +374,10 @@ erDiagram
 |---|---|---|
 | `monster_code` | int PK | 몬스터 코드 |
 | `name` | varchar | 몬스터 이름 |
-| `hp` | bigint | 체력 |
-| `attack` | bigint | 공격력 |
+| `hp` | bigint | 체력 — **레벨 1 기준값** |
+| `attack` | bigint | 공격력 — **레벨 1 기준값** |
+
+> **몬스터 레벨(신규)**: 레벨 컬럼은 여기 두지 않는다. 몬스터가 **몇 레벨로 등장하는가**는 등장 자리의 속성이므로 `stage_spawn.monster_level`(5.9)이 정하고, 실제 전투 스탯은 위 기준값에 **레벨 배율**을 곱해 클라이언트가 산출한다(`hp × 1.25^(level-1)` · `attack × 1.18^(level-1)`, 값 문서 §9.4). 같은 몬스터를 여러 스테이지에 다른 레벨로 재사용할 수 있다.
 
 **담기는 데이터 예시** (전체 12종은 [마스터 데이터 값](master-data-값.md) §9 정본)
 
@@ -397,29 +399,33 @@ erDiagram
 | `act` | int | Act 번호(1~5) |
 | `difficulty` | int | 난이도 티어(1~2) |
 | `stage` | int | 스테이지 번호(1~10, **10이 보스 스테이지**) |
-| `boss_monster_code` | int | **스테이지 보스 몬스터**(`monster_master`). 없으면 0 |
 | `background_type` | int | **스테이지 배경 타입(1~5)**. 클라이언트가 이 코드로 배경 아트(배경 세트 `dungeon_bg_1~5`)를 선택한다. 별도 마스터 테이블 없이 `coef_type`·`stat_type`처럼 int enum으로 둔다 |
 
 > **`background_type` enum(1~5)**: `1~5`=Act1~5 각각의 배경이다. 난이도는 무관하다(난이도 2는 난이도 1과 같은 지역·레이아웃). 값·매핑은 [마스터 데이터 값](master-data-값.md) §11 정본이며 학습용 임시값이다.
 
-> **스폰 분리(변경)**: 구 `spawns`(JSON 배열) 컬럼은 폐기했다. **JSON 문자열 컬럼을 두지 않는 설계 규칙**에 따라 등장 일반 몬스터는 아래 `stage_spawn` **자식 테이블**로 분리한다. 클라 번들 JSON은 전송 편의상 이를 `spawns` 배열로 묶어 내려줄 수 있다(DB↔번들, 7장).
+> **스폰 분리(변경)**: 구 `spawns`(JSON 배열) 컬럼은 폐기했다. **JSON 문자열 컬럼을 두지 않는 설계 규칙**에 따라 등장 몬스터는 아래 `stage_spawn` **자식 테이블**로 분리한다. 클라 번들 JSON은 전송 편의상 이를 `spawns` 배열로 묶어 내려줄 수 있다(DB↔번들, 7장).
+
+> **보스 통합(변경)**: 구 `stage_master.boss_monster_code` 컬럼도 폐기했다. **보스도 `stage_spawn` 행**(`is_boss = 1`)으로 둬서 일반 몬스터와 **같은 축(레벨·마리 수)** 으로 다룬다 — 보스에도 레벨을 주려면 스폰과 같은 자리에 있어야 하고, 클라이언트도 한 목록을 순회해 소환할 수 있다. 보스 행은 스테이지당 최대 1개이고 `spawn_count = 1`이다.
 
 **`stage_spawn` (stage_master 자식 테이블)**
 
 | 필드 | 타입 | 설명 |
 |---|---|---|
 | `stage_id` | int PK/FK | 스테이지(`stage_master`) |
-| `monster_code` | int PK/FK | 등장 일반 몬스터(`monster_master`) |
-| `spawn_count` | int | 등장 마리 수 |
+| `monster_code` | int PK/FK | 등장 몬스터(`monster_master`) |
+| `monster_level` | int | **등장 레벨(1 이상)**. `monster_master` 기준값에 레벨 배율을 곱해 전투 스탯을 만든다(5.8) |
+| `spawn_count` | int | 등장 마리 수(보스는 1) |
+| `is_boss` | tinyint | **보스 여부**(1=보스). 스테이지당 최대 1행 |
 
 **담기는 데이터 예시** (전체는 [마스터 데이터 값](master-data-값.md) §11 정본)
 
-| stage_id | act | difficulty | stage | boss_monster_code | background_type |  | stage_id | monster_code | spawn_count |
-|---|---|---|---|---|---|---|---|---|---|
-| 1010001 | 1 | 1 | 1 | 0 | 1 |  | 1010001 | 9001 | 8 |
-| 1010003 | 1 | 1 | 3 | 9099 | 1 |  | 1010001 | 9002 | 4 |
+| stage_id | act | difficulty | stage | background_type |  | stage_id | monster_code | monster_level | spawn_count | is_boss |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1010001 | 1 | 1 | 1 | 1 |  | 1010001 | 9001 | 1 | 8 | 0 |
+| 1010010 | 1 | 1 | 10 | 1 |  | 1010001 | 9002 | 1 | 4 | 0 |
+|  |  |  |  |  |  | 1010010 | 9099 | 1 | 1 | **1** |
 
-> 스테이지 진입 응답이 스폰(`stage_spawn`)·보스 정보를 그대로 내려준다([스테이지/전투 결과 기획서](../stage-battle-기획서.md) 5.1). 벽에 막히면 이전 스테이지를 재파밍할 수 있다(하드월 없음). 클리어 보상은 같은 `stage_id`로 `stage_reward`가 정의한다.
+> 스테이지 진입 응답이 스폰(`stage_spawn`)의 몬스터 코드·**레벨**·마리 수와 보스 정보를 그대로 내려준다([스테이지/전투 결과 기획서](../stage-battle-기획서.md) 5.1). 벽에 막히면 이전 스테이지를 재파밍할 수 있다(하드월 없음). 클리어 보상은 같은 `stage_id`로 `stage_reward`가 정의한다.
 
 ### 5.10 `stage_reward` — 스테이지 클리어 보상
 
@@ -598,7 +604,7 @@ erDiagram
 
 - **키 규칙**: `stage_master`는 `(act, difficulty, stage)`를 인코딩한 `stage_id`를 PK로 쓰고, `stage_reward`는 같은 `stage_id`를 PK/FK로 써 스테이지와 1:1 대응한다.
 - **enum 공유**: `item_type`(1:장비 2:재료 3:재화 4:소모품)·`buff_type`(1:경험치 획득량 2:골드 획득량)·`unlock_type`·`reward_type`·룬 `stat_type`(1:공격력 2:방어력 3:체력 4:치명확률 5:치명피해 6:이동속도 7:재사용 대기시간) 등 클라이언트와 공유하는 분류 코드는 `TaskbarHero.Common`에 enum으로 정의해 계약을 고정한다(값 변경 금지 대상, 신규 값 추가는 허용). 재화는 별도 `currency_type` enum 없이 `item_master`(item_type=3)의 `item_code`로 식별한다(골드=1).
-- **JSON 컬럼 금지(설계 규칙)**: DB 테이블에는 JSON 문자열 컬럼을 두지 않는다. 고정 스키마 값은 개별 컬럼(예: 스탯 `hp`~`cooldown`)으로, 배열·중첩 등 반복 구조는 **별도 자식 테이블**(예: `stage_master` 스폰 → `stage_spawn`, `skill_master`의 레벨별 계수 → `skill_coefficient`, `gacha_master`의 등급 가중치·아이템 풀·천장 규칙, `cube`의 레시피도 자식 테이블)로 분리한다. 단 **클라 번들 JSON·POCO는 예외**로, 전송 편의상 이 컬럼/자식 행들을 중첩 객체·배열로 직렬화한다(DB↔번들, 5.1·7장).
+- **JSON 컬럼 금지(설계 규칙)**: DB 테이블에는 JSON 문자열 컬럼을 두지 않는다. 고정 스키마 값은 개별 컬럼(예: 스탯 `hp`~`cooldown`)으로, 배열·중첩 등 반복 구조는 **별도 자식 테이블**(예: `stage_master` 스폰·보스 → `stage_spawn`, `skill_master`의 레벨별 계수 → `skill_coefficient`, `gacha_master`의 등급 가중치·아이템 풀·천장 규칙, `cube`의 레시피도 자식 테이블)로 분리한다. 단 **클라 번들 JSON·POCO는 예외**로, 전송 편의상 이 컬럼/자식 행들을 중첩 객체·배열로 직렬화한다(DB↔번들, 5.1·7장).
 
 ## 6. 클라이언트가 보유하는 데이터 범위
 
@@ -753,10 +759,11 @@ namespace TaskbarHero.Common.MasterData
         public int monsterCode;
         public string name;
         public long hp;
-        public long attack;          // 보상은 stage_reward가 담당(몬스터 개별 드롭 없음)
+        public long attack;          // 레벨 1 기준값. 보상은 stage_reward가 담당(몬스터 개별 드롭 없음)
     }
 
-    [Serializable] public struct Spawn { public int monsterCode; public int count; }
+    // 등장 레벨은 몬스터가 아니라 등장 자리가 갖는다(stage_spawn.monster_level).
+    [Serializable] public struct Spawn { public int monsterCode; public int monsterLevel; public int count; }
 
     [Serializable]
     public class StageMaster
@@ -765,8 +772,9 @@ namespace TaskbarHero.Common.MasterData
         public int act;
         public int difficulty;
         public int stage;
-        public Spawn[] spawns;        // DB는 stage_spawn 자식 테이블. 번들 JSON은 배열로 직렬화(전송 편의)
-        public int bossMonsterCode;   // 0=보스 없음
+        public Spawn[] spawns;        // DB는 stage_spawn 자식 테이블(is_boss=0). 번들 JSON은 배열로 직렬화(전송 편의)
+        public int bossMonsterCode;   // 0=보스 없음. DB는 stage_spawn 의 is_boss=1 행에서 투영
+        public int bossMonsterLevel;  // 보스 등장 레벨. 보스가 없으면 0
         public int backgroundType;    // 배경 타입(1~5). 클라 배경 아트 선택 코드
     }
 

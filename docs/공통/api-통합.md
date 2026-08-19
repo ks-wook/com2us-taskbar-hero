@@ -117,7 +117,7 @@
 | `POST /api/game/stage/enter` | 스테이지 진입(진행 가능 검증) | `{ act, difficulty, stage }` | `stageId`, `monsters[]`, `boss`, `enteredAt` | `StageNotFound(6001)`, `StageLocked(6002)` |
 | `POST /api/game/stage/clear` | 스테이지 클리어 → 보상 지급·진행도 갱신 | `{ act, difficulty, stage }` | `rewards`, `characters[]`(각 `isLevelUp`), `balance`, `progress`, `inventoryDelta` | `StageNotEntered(6003)` |
 
-- 진입 응답은 스테이지의 **몬스터 구성(`monsters`)·보스(`boss`)** 를 포함. 클리어 보상(골드·경험치·전리품)은 서버가 마스터로 산출, 경험치는 3캐릭터 동일 지급(캐릭터별 **`isLevelUp`**), 골드는 계정. 이미 클리어한 스테이지는 재파밍 가능(보상은 프런티어와 **동일**). 전리품이 인벤토리 용량을 초과하면 **전리품만 폐기하고 골드·경험치는 지급**하며 클리어는 성공한다(에러 없음, `rewards.items`·`inventoryDelta` 비움).
+- 진입 응답은 스테이지의 **몬스터 구성(`monsters`)·보스(`boss`)** 를 포함하며, 각 항목에 **등장 레벨(`monsterLevel`)** 이 실린다(스탯은 내려주지 않는다 — 클라가 `monster_master`의 레벨 1 기준값에 레벨 배율을 곱해 산출). 클리어 보상(골드·경험치·전리품)은 서버가 마스터로 산출, 경험치는 3캐릭터 동일 지급(캐릭터별 **`isLevelUp`**), 골드는 계정. 이미 클리어한 스테이지는 재파밍 가능(보상은 프런티어와 **동일**). 전리품이 인벤토리 용량을 초과하면 **전리품만 폐기하고 골드·경험치는 지급**하며 클리어는 성공한다(에러 없음, `rewards.items`·`inventoryDelta` 비움).
 
 ### 3.6 거래소 / 교역선
 

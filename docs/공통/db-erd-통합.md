@@ -391,6 +391,7 @@ erDiagram
 | `rune_master` | `rune_code` | `player_rune.rune_code` |
 | `monster_master` | `monster_code` | (전투 계산, 보상은 `stage_reward`) |
 | `stage_master` | `stage_id` | `game_player.act`/`stage`/`difficulty` |
+| `stage_spawn` | `(stage_id, monster_code)` | `stage_master.stage_id`·`monster_master.monster_code`(등장 몬스터·레벨·보스) |
 | `stage_reward` | `stage_id` | `stage_master.stage_id`와 1:1(스테이지 클리어 보상 스칼라) |
 | `stage_reward_drop` | `stage_id`+`grade` | `stage_reward.stage_id`의 자식(등급별 드롭 확률, 1:N) |
 | `cube_master` | `cube_level` | `player_cube.cube_level` |
@@ -455,11 +456,12 @@ erDiagram
 
 - **역할**: 몬스터 전투 스탯 정의. 전투 계산에서 사용하며 몬스터 개별 드롭은 없다(보상은 `stage_reward`로 일원화).
 - **정의 데이터**: 이름, hp, attack. 코드 규약 Act1 `90xx`/Act2 `91xx`/Act3 `92xx`, 각 Act 보스 `xx99`.
+- **hp·attack은 레벨 1 기준값이다.** 레벨 컬럼은 두지 않고 **등장 레벨은 `stage_spawn.monster_level`** 이 정하며, 실제 전투 스탯은 기준값 × 레벨 배율(`hp ×1.25^(L-1)` · `attack ×1.18^(L-1)`)로 클라이언트가 산출한다.
 
 ### stage_master
 
-- **역할**: 스테이지 **구성(스폰·보스)** 정의. `game_player`의 `act`/`stage`/`difficulty`가 가리킨다. 클리어 **보상은 분리**되어 `stage_reward`가 담당.
-- **정의 데이터**: `stage_id`(act·difficulty·stage 인코딩), 보스 몬스터 코드. 등장 일반 몬스터는 자식 테이블 `stage_spawn`(`(stage_id, monster_code, spawn_count)`)로 분리.
+- **역할**: 스테이지 **배경** 정의. `game_player`의 `act`/`stage`/`difficulty`가 가리킨다. 등장 몬스터는 자식 테이블 `stage_spawn`이, 클리어 **보상은** `stage_reward`가 담당.
+- **정의 데이터**: `stage_id`(act·difficulty·stage 인코딩), `background_type`. 등장 몬스터는 자식 테이블 `stage_spawn`(`(stage_id, monster_code, monster_level, spawn_count, is_boss)`)로 분리한다 — **보스도 이 자식 테이블의 `is_boss = 1` 행**이며, 구 `boss_monster_code` 컬럼은 폐기했다.
 
 ### stage_reward
 

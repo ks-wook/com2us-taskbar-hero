@@ -209,7 +209,8 @@ def parse_md_monsters(text):
     return rows, first, last
 
 
-SPAWN_ROW_RE = re.compile(r"^\s*\((\d+),\s*(\d+),\s*(\d+)\)\s*[,;]\s*$")
+SPAWN_ROW_RE = re.compile(
+    r"^\s*\((\d+),\s*(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\)\s*[,;]\s*$")
 
 
 def stage_id(act, difficulty, stage):
@@ -237,7 +238,9 @@ def parse_sql_spawns(text):
         m = SPAWN_ROW_RE.match(lines[i])
         if not m:
             raise ToolError(f"stage_spawn INSERT {i + 1}행을 해석하지 못했습니다: {lines[i]}")
-        rows.append({"stage_id": int(m.group(1)), "code": int(m.group(2)), "count": int(m.group(3))})
+        rows.append({"stage_id": int(m.group(1)), "code": int(m.group(2)),
+                     "level": int(m.group(3)), "count": int(m.group(4)),
+                     "is_boss": int(m.group(5))})
         end = i
         if stripped.endswith(";"):
             break
@@ -248,7 +251,8 @@ def parse_sql_spawns(text):
 
 def spawn_line(row, last):
     """스폰 값 줄 하나(기존 표기: 마리 수는 폭 2로 우측 정렬)."""
-    return f"    ({row['stage_id']}, {row['code']}, {row['count']:>2})" + (";" if last else ",")
+    return (f"    ({row['stage_id']}, {row['code']}, {row.get('level', 1)}, "
+            f"{row['count']:>2}, {row.get('is_boss', 0)})") + (";" if last else ",")
 
 
 def apply_spawn_rows(block, new_rows):
@@ -284,7 +288,7 @@ SPAWN_LIST_RE = re.compile(r"(일반 몬스터\()Act1 [^)]*(\)뿐이며)")
 
 def spawn_monster_list_text(monster_rows, spawn_rows):
     """"Act1 `9001`·`9002`, Act2 …" 형태의 스폰 몬스터 목록 문구."""
-    used = {r["code"] for r in spawn_rows}
+    used = {r["code"] for r in spawn_rows if not r.get("is_boss")}
     parts = []
     for act in range(1, ACT_COUNT + 1):
         codes = sorted(c for c in used if act_of_code(c) == act)
@@ -517,13 +521,29 @@ def verify(quiet=False):
     # stage_spawn (실제 전투 등장 여부가 여기서 갈린다)
     spawn_rows, _, _ = parse_sql_spawns(sql_text)
     spawned = set()
+    boss_rows_by_stage = {}
     for r in spawn_rows:
-        spawned.add(r["code"])
+        if not r["is_boss"]:
+            spawned.add(r["code"])
         if r["code"] not in sql_map:
             errors.append(f"stage_spawn {r['stage_id']}: 몬스터 {r['code']}가 monster_master 에 없습니다.")
-        elif is_boss_code(r["code"]):
-            errors.append(f"stage_spawn {r['stage_id']}: 보스 {r['code']}가 들어 있습니다 "
-                          "(보스는 stage_master.boss_monster_code 로 배치한다).")
+        if r["level"] < 1:
+            errors.append(f"stage_spawn {r['stage_id']}: 몬스터 {r['code']}의 monster_level 이 "
+                          f"{r['level']} 입니다(1 이상이어야 한다).")
+        # 보스 코드(xx99)와 is_boss 플래그는 서로 어긋나면 안 된다 — 클라가 이 플래그로
+        # 보스 연출·단독 스폰을 가르므로 불일치는 전투 구성 오류가 된다.
+        if r["is_boss"] and not is_boss_code(r["code"]):
+            errors.append(f"stage_spawn {r['stage_id']}: is_boss=1 인데 {r['code']}는 보스 코드(xx99)가 아닙니다.")
+        if is_boss_code(r["code"]) and not r["is_boss"]:
+            errors.append(f"stage_spawn {r['stage_id']}: 보스 {r['code']}가 is_boss=0 으로 들어 있습니다.")
+        if r["is_boss"]:
+            boss_rows_by_stage.setdefault(r["stage_id"], []).append(r["code"])
+            if r["count"] != 1:
+                errors.append(f"stage_spawn {r['stage_id']}: 보스 {r['code']}의 spawn_count 가 "
+                              f"{r['count']} 입니다(보스는 1마리다).")
+    for sid, codes in sorted(boss_rows_by_stage.items()):
+        if len(codes) > 1:
+            errors.append(f"stage_spawn {sid}: 보스 행이 {len(codes)}개입니다(스테이지당 최대 1개) — {codes}.")
     for code in sorted(sql_map):
         if not is_boss_code(code) and code not in spawned:
             warns.append(f"{code}: 어느 스테이지에도 배치되지 않아 전투에 등장하지 않습니다 "
@@ -673,17 +693,20 @@ def spawn_count_of(spawn_rows, sid, code):
 
 
 def stage_total(spawn_rows, sid, override=None):
-    """그 스테이지의 일반 몬스터 총 마리 수. override = {code: count} 로 일부를 바꿔 계산한다."""
-    counts = {r["code"]: r["count"] for r in spawn_rows if r["stage_id"] == sid}
+    """그 스테이지의 일반 몬스터 총 마리 수(보스 행 제외). override = {code: count} 로 일부를 바꿔 계산한다."""
+    counts = {r["code"]: r["count"] for r in spawn_rows
+              if r["stage_id"] == sid and not r.get("is_boss")}
     if override:
         counts.update(override)
     return sum(counts.values())
 
 
-def build_spawn_rows(code, stages, difficulties, spawn_rows=None):
+def build_spawn_rows(code, stages, difficulties, spawn_rows=None, level=1):
     """(스테이지, 마리 수, 증분여부) 목록을 난이도별 stage_spawn 행으로 펼친다.
 
     증분(`+N`)은 **난이도별 현재 값에 각각** 더한다(난이도 1·2가 다른 값일 수도 있으므로).
+    `level` 은 그 배치의 monster_level(기본 1)이다 — 몬스터 스탯은 monster_master 의
+    레벨 1 기준값에 이 레벨의 배율을 곱해 산출된다(값 문서 §9.4).
     """
     act = act_of_code(code)
     rows = []
@@ -699,7 +722,8 @@ def build_spawn_rows(code, stages, difficulties, spawn_rows=None):
                         "1 미만입니다. 배치를 없애려면 별도로 행을 지우세요.")
             else:
                 final = count
-            rows.append({"stage_id": sid, "code": code, "count": final})
+            rows.append({"stage_id": sid, "code": code, "level": level,
+                         "count": final, "is_boss": 0})
     return rows
 
 
@@ -729,8 +753,8 @@ def cmd_spawn(args):
     if args.code not in codes:
         raise ToolError(f"{args.code}는 monster_master 에 없습니다. 먼저 `add` 로 추가하세요.")
     if is_boss_code(args.code):
-        raise ToolError(f"{args.code}는 보스입니다 — 보스는 stage_spawn 이 아니라 "
-                        "stage_master.boss_monster_code 로 배치합니다(값 문서 §11).")
+        raise ToolError(f"{args.code}는 보스입니다 — 보스는 stage_spawn 의 is_boss=1 행으로 "
+                        "직접 배치합니다(스테이지당 1행, spawn_count=1, 값 문서 §11).")
     if act_of_code(args.code) == 0:
         raise ToolError(f"{args.code}는 코드 규약(9000~9499) 밖입니다.")
 
@@ -1017,7 +1041,7 @@ def cmd_add(args):
     # 스폰 배치 — "그 지역 그 스테이지에 등장"을 실제로 만드는 단계다(정본을 쓴 뒤에 얹는다).
     if args.spawn:
         if boss:
-            print("  · 보스는 stage_spawn 이 아니라 stage_master.boss_monster_code 로 배치합니다 "
+            print("  · 보스는 stage_spawn 의 is_boss=1 행으로 직접 배치합니다 "
                   "(--spawn 을 무시했습니다).")
         else:
             stages = parse_stages(args.spawn, args.spawn_count)

@@ -32,6 +32,7 @@
 ## 2. 기능 설명
 
 - **스테이지 구조**: 5 Act(지역) × 2 난이도 × **10 스테이지**(=100)([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master`). **한 지역(Act)은 10개 스테이지로 구성**되며 스테이지 1~9 일반, 스테이지 10 보스다. 파티(3인)가 함께 하나의 스테이지를 진행한다. 진행도(현재 act/stage/difficulty)는 **계정/파티 단위**다.
+- **등장 몬스터와 레벨**: 어느 스테이지에 **어떤 몬스터가 몇 레벨로 몇 마리** 나오는지는 `stage_spawn`이 정한다(보스도 같은 테이블의 `is_boss = 1` 행). **몬스터는 레벨을 가지며, 그 레벨은 몬스터가 아니라 등장 자리의 속성**이다 — `monster_master`의 `hp`·`attack`은 **레벨 1 기준값**이고, 실제 전투 스탯은 여기에 레벨 배율(`hp × 1.25^(level-1)` · `attack × 1.18^(level-1)`)을 곱해 얻는다([마스터 데이터 값](master-data/master-data-값.md) §9.4). 따라서 같은 몬스터를 여러 스테이지에 다른 레벨로 재사용할 수 있다.
 - **스테이지 진입**: 플레이어가 특정 스테이지에 진입해 자동 전투를 시작한다. 아직 도달하지 못한 스테이지(앞 스테이지 미클리어)로는 **건너뛸 수 없다**. 이미 클리어한 스테이지는 **재파밍**을 위해 다시 진입할 수 있다(하드월 없음, [개요](../서버-시스템-전체-개요.md) 3장).
 - **스테이지 클리어**: 자동 전투로 스테이지를 클리어하면 클라이언트가 서버에 클리어를 알린다. 서버는 타당성을 검증하고 **해당 스테이지의 보상(골드·경험치·드롭)을 산출·지급**하며, 최고 도달 스테이지(`max_stage_cleared`)와 현재 진행도를 갱신한다.
 - **보상**: `stage_reward`가 정의한 **골드·경험치**와 **등급별 아이템 드롭 확률**로 서버가 보상을 산출한다(스테이지 단위 일원화, 몬스터 개별 드롭 없음). 경험치는 오프라인 보상과 동일하게 **파티에 편성된 캐릭터(`player_character.slot`≠0) 모두에게 같은 값**으로 지급한다(미편성 캐릭터는 전투에 참가하지 않으므로 받지 않는다)([오프라인 보상 정산 기획서](offline-reward-기획서.md)와 동일 원칙).
@@ -104,10 +105,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
     "stage": 15,
     "stageId": 1020015,
     "monsters": [
-      { "monsterCode": 9001, "count": 8 },
-      { "monsterCode": 9010, "count": 3 }
+      { "monsterCode": 9001, "monsterLevel": 1, "count": 8 },
+      { "monsterCode": 9002, "monsterLevel": 3, "count": 3 }
     ],
-    "boss": { "monsterCode": 9099 },
+    "boss": { "monsterCode": 9099, "monsterLevel": 5 },
     "backgroundType": 3,
     "enteredAt": 1752343200
   }
@@ -115,14 +116,15 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 ```
 
 - `stageId`: `stage_master` 키.
-- `monsters`: 이 스테이지에 등장하는 **일반 몬스터와 등장 수량** 목록(`monsterCode`·`count`). `boss`: **스테이지 보스 몬스터**(보스가 없는 스테이지면 `null`).
+- `monsters`: 이 스테이지에 등장하는 **일반 몬스터와 등장 레벨·수량** 목록(`monsterCode`·`monsterLevel`·`count`). `boss`: **스테이지 보스 몬스터**와 그 레벨(보스가 없는 스테이지면 `null`).
+- `monsterLevel`(1 이상): 그 스테이지에서 이 몬스터가 등장하는 레벨. **서버는 레벨만 내려주고 스탯은 내려주지 않는다** — 클라이언트가 마스터 번들의 레벨 1 기준값(`monster_master.hp`·`attack`)에 레벨 배율을 곱해 소환할 몬스터의 실제 hp·attack을 산출한다([마스터 데이터 값](master-data/master-data-값.md) §9.4). 전투가 클라이언트 권위이므로(§1 범위 경계) 서버는 이 계산에 관여하지 않는다.
 - `backgroundType`: 스테이지 **배경 타입(1~5)**. `stage_master.background_type`을 그대로 내려주며, 클라이언트가 이 코드로 배경 아트를 선택한다([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master` 5.9).
 
 ![스테이지 일반 몬스터](../images/stage-battle-일반몬스터.png)
 
 ![스테이지 보스 몬스터](../images/stage-battle-보스.png)
 
-- 스폰 구성(어떤 몬스터가 몇 마리, 보스는 누구인지)은 `stage_master`가 정의하고, 각 몬스터의 스탯은 `monster_master`를 참조한다([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master` 5.9·`monster_master` 5.8).
+- 스폰 구성(어떤 몬스터가 **몇 레벨로** 몇 마리, 보스는 누구인지)은 `stage_spawn`이 정의하고, 각 몬스터의 레벨 1 기준 스탯은 `monster_master`를 참조한다([마스터 데이터 기획서](master-data/master-data-기획서.md) `stage_master`·`stage_spawn` 5.9·`monster_master` 5.8). 보스는 `stage_spawn`의 `is_boss = 1` 행이며(구 `stage_master.boss_monster_code` 폐기), 서버가 이를 갈라 `monsters`/`boss`로 내려준다.
 - 오류: `StageNotFound(6001)`(마스터에 없는 스테이지), `StageLocked(6002)`(아직 도달 못 한 스테이지 스킵).
 
 ### 5.2 스테이지 클리어 — `POST /api/game/stage/clear`
@@ -178,7 +180,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   2) 도달 검증: 대상이 max_stage_cleared 범위 내이거나 (프런티어+1)인가?
      아니면 StageLocked(6002)   # 앞 스테이지 미클리어 스킵 금지
   3) game_player.(act,difficulty,stage) = 대상
-COMMIT → { act, difficulty, stage, stageId, enteredAt }
+     # 스폰은 마스터 로드 시점에 stage_spawn을 is_boss로 갈라 둔 것을 그대로 내려준다.
+     monsters = st.spawns                            # (monsterCode, monsterLevel, count)[]
+     boss     = st.boss                              # (monsterCode, monsterLevel) 또는 null
+COMMIT → { act, difficulty, stage, stageId, monsters, boss, backgroundType, enteredAt }
 ```
 
 ### 6.2 스테이지 클리어 (의사코드)
@@ -238,7 +243,8 @@ COMMIT → { cleared, rewards, characters, balance, progress }
 
 - [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) — 도메인 4.6(스테이지/전투), 4.3(오프라인)
 - [세이브 데이터 기획서](save-data-기획서.md) — `game_player`(진행도)·`player_character`(경험치) 저장, 액션 단위 저장
-- [마스터 데이터 기획서](master-data/master-data-기획서.md) — `stage_master`·`stage_reward`·`monster_master`·`level_master`
+- [마스터 데이터 기획서](master-data/master-data-기획서.md) — `stage_master`·`stage_spawn`(등장 몬스터·레벨·보스)·`stage_reward`·`monster_master`·`level_master`
+- [마스터 데이터 값](master-data/master-data-값.md) — §9.4 몬스터 레벨 배율, §11-B 스테이지별 스폰·레벨
 - [인벤토리/아이템/큐브 기획서](inventory-item-cube-기획서.md) — 전리품 적재·스택/용량 규칙
 - [오프라인 보상 정산 기획서](offline-reward-기획서.md) — 오프라인 진행(경험치를 파티 편성 캐릭터에 동일 지급하는 원칙 공유)
 - [ErrorCode 통합 정의](../공통/error-code-정의.md) — 에러 코드 블록 규약(6000번대 스테이지/전투)

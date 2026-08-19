@@ -77,7 +77,9 @@ public sealed class StageService : IStageService
             stage = stage,
             stageId = stageDef.StageId,
             monsters = new List<StageSpawnDto>(stageDef.Spawns),
-            boss = stageDef.BossMonsterCode == 0 ? null : new StageBossDto { monsterCode = stageDef.BossMonsterCode },
+            boss = stageDef.BossMonsterCode == 0
+                ? null
+                : new StageBossDto { monsterCode = stageDef.BossMonsterCode, monsterLevel = stageDef.BossMonsterLevel },
             backgroundType = stageDef.BackgroundType,
             enteredAt = now,
         };

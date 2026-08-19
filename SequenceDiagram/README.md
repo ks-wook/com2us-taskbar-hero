@@ -359,7 +359,7 @@ sequenceDiagram
                 S-->>C: 실패 { errorCode: StageLocked(6002) }
             else 허용
                 S->>DB: 현재 진입 스테이지 데이터 갱신
-                S-->>C: 성공 { 스폰·보스·배경타입 }
+                S-->>C: 성공 { 스폰(코드·레벨·마리수)·보스(코드·레벨)·배경타입 }
             end
         end
     end

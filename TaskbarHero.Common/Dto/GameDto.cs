@@ -349,11 +349,12 @@ namespace TaskbarHero.Common.Dto
         public StageActionData data;
     }
 
-    /// <summary>스테이지 스폰(일반 몬스터 등장 수) 한 항목.</summary>
+    /// <summary>스테이지 스폰(일반 몬스터 등장 레벨·수) 한 항목.</summary>
     [Serializable]
     public class StageSpawnDto
     {
         public int monsterCode;
+        public int monsterLevel;  // 등장 레벨(1 이상). 클라이언트가 레벨 배율로 전투 스탯을 산출한다
         public int count;
     }
 
@@ -362,6 +363,7 @@ namespace TaskbarHero.Common.Dto
     public class StageBossDto
     {
         public int monsterCode;
+        public int monsterLevel;  // 보스 등장 레벨(1 이상)
     }
 
     /// <summary>진입 응답 데이터(5.1).</summary>

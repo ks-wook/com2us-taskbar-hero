@@ -1,4 +1,4 @@
-using GameServer.Data;
+﻿using GameServer.Data;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 using TaskbarHero.Common.MasterData;
@@ -6,10 +6,11 @@ using ZLogger;
 
 namespace GameServer.MasterData;
 
-/// <summary>스테이지 정의(구성). 스폰·보스·배경.</summary>
+/// <summary>스테이지 정의(구성). 스폰·보스·배경. 보스는 stage_spawn 의 is_boss=1 행에서 투영한다
+/// (보스가 없으면 BossMonsterCode·BossMonsterLevel 모두 0).</summary>
 public sealed record StageDef(
     int StageId, int Act, int Difficulty, int Stage,
-    int BossMonsterCode, int BackgroundType,
+    int BossMonsterCode, int BossMonsterLevel, int BackgroundType,
     IReadOnlyList<StageSpawnDto> Spawns);
 
 /// <summary>스테이지 클리어 보상 정의. GradeProbs[i] = 등급 (i+1) 드롭 확률(길이 = 최대 등급, stage_reward_drop 기준).</summary>
@@ -138,7 +139,6 @@ file sealed class StageMasterRow
     public int Act { get; set; }
     public int Difficulty { get; set; }
     public int Stage { get; set; }
-    public int BossMonsterCode { get; set; }
     public int BackgroundType { get; set; }
 }
 
@@ -146,7 +146,9 @@ file sealed class StageSpawnRow
 {
     public int StageId { get; set; }
     public int MonsterCode { get; set; }
+    public int MonsterLevel { get; set; }
     public int SpawnCount { get; set; }
+    public int IsBoss { get; set; }
 }
 
 file sealed class StageRewardScalarRow
@@ -767,17 +769,26 @@ public sealed class MasterDataProvider
     private static async Task<Dictionary<int, StageDef>> LoadStagesAsync(QueryFactory db)
     {
         var stageRows = await db.Query("stage_master")
-            .Select("stage_id", "act", "difficulty", "stage", "boss_monster_code", "background_type")
+            .Select("stage_id", "act", "difficulty", "stage", "background_type")
             .GetAsync<StageMasterRow>();
 
         var spawnRows = await db.Query("stage_spawn")
-            .Select("stage_id", "monster_code", "spawn_count")
+            .Select("stage_id", "monster_code", "monster_level", "spawn_count", "is_boss")
             .OrderBy("stage_id", "monster_code")
             .GetAsync<StageSpawnRow>();
 
+        // stage_spawn 은 일반 몬스터와 보스를 한 테이블에 담는다(is_boss). 스테이지 정의는 둘을
+        // 나눠 들고 있으므로 여기서 갈라 담는다 — 보스 행은 스테이지당 최대 1개다.
         var spawnsByStage = new Dictionary<int, List<StageSpawnDto>>();
+        var bossByStage = new Dictionary<int, (int Code, int Level)>();
         foreach (var sp in spawnRows)
         {
+            if (sp.IsBoss != 0)
+            {
+                bossByStage[sp.StageId] = (sp.MonsterCode, sp.MonsterLevel);
+                continue;
+            }
+
             if (!spawnsByStage.TryGetValue(sp.StageId, out var list))
             {
                 list = new List<StageSpawnDto>();
@@ -787,6 +798,7 @@ public sealed class MasterDataProvider
             list.Add(new StageSpawnDto
             {
                 monsterCode = sp.MonsterCode,
+                monsterLevel = sp.MonsterLevel,
                 count = sp.SpawnCount,
             });
         }
@@ -795,12 +807,14 @@ public sealed class MasterDataProvider
         foreach (var row in stageRows)
         {
             spawnsByStage.TryGetValue(row.StageId, out var spawns);
+            bossByStage.TryGetValue(row.StageId, out var boss);
             stages[row.StageId] = new StageDef(
                 row.StageId,
                 row.Act,
                 row.Difficulty,
                 row.Stage,
-                row.BossMonsterCode,
+                boss.Code,
+                boss.Level,
                 row.BackgroundType,
                 spawns ?? new List<StageSpawnDto>());
         }

@@ -160,11 +160,12 @@ namespace TaskbarHero.Common.MasterData
         public long attack;
     }
 
-    /// <summary>스테이지 스폰 1행(stage_spawn 자식). StageMaster.spawns 배열로 직렬화.</summary>
+    /// <summary>스테이지 스폰 1행(stage_spawn 자식, is_boss=0). StageMaster.spawns 배열로 직렬화.</summary>
     [Serializable]
     public struct Spawn
     {
         public int monsterCode;
+        public int monsterLevel;  // 등장 레벨(1 이상). MonsterMaster 기준값에 레벨 배율을 곱한다
         public int count;
     }
 
@@ -176,8 +177,9 @@ namespace TaskbarHero.Common.MasterData
         public int act;
         public int difficulty;
         public int stage;
-        public Spawn[] spawns;       // 등장 일반 몬스터(stage_spawn 자식)
-        public int bossMonsterCode;  // 0=보스 없음
+        public Spawn[] spawns;        // 등장 일반 몬스터(stage_spawn 의 is_boss=0 행)
+        public int bossMonsterCode;   // 0=보스 없음(stage_spawn 의 is_boss=1 행에서 투영)
+        public int bossMonsterLevel;  // 보스 등장 레벨. 보스가 없으면 0
     }
 
     /// <summary>스테이지 클리어 보상(stage_reward). stageId 로 StageMaster 와 1:1.</summary>
