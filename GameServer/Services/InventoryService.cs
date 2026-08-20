@@ -6,18 +6,9 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface IInventoryService
-{
-    Task<SaveResult> GetPageAsync(long userId, int cursor, int limit);
-    Task<SaveResult> EquipAsync(long userId, int characterId, long itemId);
-    Task<SaveResult> UnequipAsync(long userId, int characterId, int slot);
-    Task<SaveResult> MoveAsync(long userId, long itemId, int toSlot);
-    Task<SaveResult> EnhanceAsync(long userId, long itemId);
-    Task<SaveResult> ExpandAsync(long userId);
-}
 
 /// <summary>
 /// 인벤토리/아이템 액션 처리(inventory-item-cube 기획서 §5.1·5.2·5.3·5.4·5.5). 큐브·상자는 범위 밖.

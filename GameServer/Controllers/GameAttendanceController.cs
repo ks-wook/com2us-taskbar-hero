@@ -1,4 +1,5 @@
 using GameServer.Services;
+using GameServer.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GameServer.Controllers;

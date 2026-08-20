@@ -6,14 +6,9 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface IConsumableService
-{
-    Task<SaveResult> UseAsync(long userId, long itemId);
-    Task<SaveResult> GetActiveBuffsAsync(long userId);
-}
 
 /// <summary>
 /// 소모품(소모성 아이템) 사용·활성 버프 조회 처리(소모품/버프 기획서 §5.1·§5.2·§6.1).

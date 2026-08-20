@@ -6,15 +6,9 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface ICubeService
-{
-    Task<SaveResult> CombineAsync(long userId, IReadOnlyList<long> itemIds);
-    Task<SaveResult> DismantleAsync(long userId, IReadOnlyList<CubeDismantleItemDto> items);
-    Task<SaveResult> CraftAsync(long userId, int recipeCode);
-}
 
 /// <summary>
 /// 큐브(합성/분해/제작) 액션 처리(inventory-item-cube 기획서 §5.6·5.7·5.8). 결과·비용·보상은 서버가 마스터 데이터로

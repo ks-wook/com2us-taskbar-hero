@@ -6,14 +6,9 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface IAttendanceService
-{
-    Task<SaveResult> StatusAsync(long userId);
-    Task<SaveResult> ClaimAsync(long userId);
-}
 
 /// <summary>
 /// 출석부 보상 처리(attendance 기획서 §5·§6). "오늘"은 요청 수신 시점의 서버 시각을 KST(UTC+9) 자정 경계로

@@ -8,17 +8,9 @@ using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface IBossRushService
-{
-    Task<SaveResult> GetInfoAsync(long userId);
-    Task<SaveResult> EnterAsync(long userId);
-    Task<SaveResult> ClearAsync(long userId, BossRushClearData request);
-    Task<SaveResult> GetRankAsync(long userId, int seasonId, int offset, int limit);
-    Task<SaveResult> GetMyRankAsync(long userId, int seasonId);
-}
 
 /// <summary>
 /// 보스러시 / 랭킹 처리(보스러시 기획서 §5·6). 서버는 <b>도전 원장 관리와 보고된 기록의 형식 검증·등재·

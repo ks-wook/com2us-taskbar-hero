@@ -6,14 +6,9 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface IStageService
-{
-    Task<SaveResult> EnterAsync(long userId, int act, int difficulty, int stage);
-    Task<SaveResult> ClearAsync(long userId, int act, int difficulty, int stage);
-}
 
 /// <summary>
 /// 스테이지 진입·클리어 처리(stage-battle 기획서 §5·§6).

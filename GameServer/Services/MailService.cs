@@ -6,15 +6,9 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface IMailService
-{
-    Task<SaveResult> ListAsync(long userId);
-    Task<SaveResult> ClaimAsync(long userId, long mailId);
-    Task<SaveResult> ClaimAllAsync(long userId);
-}
 
 /// <summary>
 /// 메일(우편함) 처리(mail 기획서 §5·§6). 첨부 종류·수량은 발급 시점에 확정된 메일 원장(player_mail_reward)이 기준이며

@@ -6,15 +6,9 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface IGachaService
-{
-    Task<SaveResult> GetBannersAsync(long userId);
-    Task<SaveResult> PullAsync(long userId, int gachaCode, int pullType);
-    Task<SaveResult> GetHistoryAsync(long userId, int gachaCode, long cursor, int limit);
-}
 
 /// <summary>
 /// 가챠(뽑기) 처리(가챠 기획서 §5·6). 배너 노출 판정·등급/아이템 추첨·천장·10연 보장은 전부 서버가 확정하며

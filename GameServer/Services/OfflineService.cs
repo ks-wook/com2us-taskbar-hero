@@ -6,13 +6,9 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface IOfflineService
-{
-    Task<SaveResult> ClaimAsync(long userId);
-}
 
 /// <summary>
 /// 오프라인(방치) 보상 정산(offline-reward 기획서 §5·§6). last_active_at 기준 경과 시간을 서버 권위로 계산해

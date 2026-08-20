@@ -6,16 +6,9 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface IGrowthService
-{
-    Task<SaveResult> SkillLevelUpAsync(long userId, int characterId, int skillCode);
-    Task<SaveResult> SkillResetAsync(long userId, int characterId);
-    Task<SaveResult> SkillEquipAsync(long userId, int characterId, IReadOnlyList<int> skillCodes);
-    Task<SaveResult> RuneUpgradeAsync(long userId, int runeCode);
-}
 
 /// <summary>
 /// 성장(스킬·룬) 액션 처리(growth 기획서 §5). 스킬 포인트는 저장하지 않고 캐릭터 레벨(level_master.skill_points)에서

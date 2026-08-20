@@ -6,16 +6,9 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
-
-public interface ITradeService
-{
-    Task<SaveResult> ListAsync(long userId, int itemCode, bool mine, int page, int pageSize);
-    Task<SaveResult> RegisterAsync(long userId, long itemId, long price);
-    Task<SaveResult> BuyAsync(long userId, long listingId);
-    Task<SaveResult> CancelAsync(long userId, long listingId);
-}
 
 /// <summary>
 /// 거래소 처리(trade 기획서 §5·§6). <b>Redis를 쓰지 않는다</b> — 목록 조회는 전용 색인을 타는 MySQL 직접

@@ -8,6 +8,7 @@ using GameServer.Middleware;
 using GameServer.Repositories.GameDb;
 using GameServer.Repositories.GameDb.Interfaces;
 using GameServer.Services;
+using GameServer.Services.Interfaces;
 using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories.MemoryDb;
 using GameServer.Repositories.MasterDb.Interfaces;

@@ -7,19 +7,12 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Services.Interfaces;
 
 namespace GameServer.Services;
 
 /// <summary>세이브 API 처리 결과. 성공 메시지는 엔드포인트별로 다르므로 함께 담는다.</summary>
 public readonly record struct SaveResult(ErrorCode ErrorCode, string SuccessMessage, object? Data);
-
-public interface ISaveService
-{
-    Task<SaveResult> LoadAsync(long userId);
-    Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode, int gender);
-    Task<SaveResult> ArrangePartyAsync(long userId, IReadOnlyList<PartyMemberDto>? members);
-    Task<SaveResult> UpdateLastActiveAsync(long userId);
-}
 
 public sealed class SaveService : ISaveService
 {
