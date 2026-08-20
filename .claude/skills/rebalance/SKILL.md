@@ -110,7 +110,9 @@ python tools/master_monster_tool.py verify    # 오류 0 (경고 "클라 번들�
 | 〃 | `CODE_CONSTANTS` | **클라이언트 전투 코드가 바뀌었을 때**(항목마다 `파일:줄` 출처가 달려 있다) |
 | `tools/master_monster_tool.py` | `BASE_HP` · `BASE_ATTACK` · `SPAWN_LEVEL` · `BOSS_LEVEL` | 기준값이나 레벨 곡선을 바꿨을 때(`recommend`가 이 곡선으로 등장 레벨을 추천한다) |
 
-> ⚠️ 레벨 배율 상수(1.25·1.18)는 **클라이언트 `MonsterStats`(`Assets/Scripts/MasterData/MonsterStats.cs`)와 같은 값**이어야 한다. 배율을 바꾸면 클라이언트 세션에서 같은 값을 반영해야 한다는 사실을 사용자에게 알린다. 클라이언트의 몬스터 생성 추천 곡선(`MonsterStatCurve` in `CharacterDevRecipe.cs`)은 **몬스터별 hp·attack을 추천하던 옛 구조**를 따르므로, 기준값을 통일한 지금은 `CharacterDevScene`의 추천 표시가 정본과 갈린다 — 클라이언트 세션에서 "기준값 통일 + 등장 레벨 추천"으로 바꿀 필요가 있다.
+> ⚠️ 레벨 배율 상수(1.25·1.18)는 **클라이언트 `MonsterStats`(`Assets/Scripts/MasterData/MonsterStats.cs`)와 같은 값**이어야 한다. 배율을 바꾸면 클라이언트 세션에서 같은 값을 반영해야 한다는 사실을 사용자에게 알린다.
+>
+> **기준값·레벨 곡선을 바꿨을 때도 클라이언트에 짝이 있다** — `CharacterDevScene`의 추천 곡선(`MonsterStatCurve` in `CharacterDevRecipe.cs`)이 이 도구의 `BASE_HP`·`BASE_ATTACK`·`SPAWN_LEVEL`·`STRONG_LEVEL_GAP`·`BOSS_LEVEL`을 **그대로 옮겨 둔 것**이라(실제 스탯 환산은 `MonsterStats`에 위임한다), 한쪽만 고치면 씬의 등장 레벨 추천이 정본과 갈린다.
 
 ## ⑦ 클라이언트 데이터 최신화 — **반드시 실행한다**
 
