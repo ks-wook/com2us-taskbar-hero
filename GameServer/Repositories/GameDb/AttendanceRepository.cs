@@ -1,5 +1,4 @@
-﻿using GameServer.Data;
-using GameServer.Models;
+﻿using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using SqlKata.Execution;
 
@@ -15,20 +14,15 @@ public sealed record AttendanceClaimOutcome(AttendanceClaimStatus Status, int Da
 public sealed record AttendanceProgress(int AttendCount, int LastAttendDate);
 
 /// <summary>출석 진행도 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
-public sealed class AttendanceRepository : IAttendanceRepository
+public sealed class AttendanceRepository : GameDbBase, IAttendanceRepository
 {
-    private readonly GameDbFactory _dbFactory;
-
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public AttendanceRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
+    public AttendanceRepository(GameDbFactory dbFactory) : base(dbFactory) { }
 
     /// <summary>player_attendance 단일 행을 읽어 진행도로 돌려준다(행 없음 = 계정 세이브 없음 → null).</summary>
     public async Task<AttendanceProgress?> GetProgressAsync(long userId)
     {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-
-        var db = _dbFactory.Create(connection);
+        using var db = Db();
         var row = await db.Query("player_attendance")
             .Select("attend_count", "last_attend_date")
             .Where("user_id", userId)
@@ -51,19 +45,11 @@ public sealed class AttendanceRepository : IAttendanceRepository
     /// </remarks>
     public async Task<AttendanceClaimOutcome> ApplyClaimAsync(
         long userId, int attendDate, int maxDay, Func<int, MailDraft?> composeRewardMail, long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<AttendanceClaimOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             if (maxDay <= 0)
             {
-                await transaction.RollbackAsync();
-                return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.RewardNotFound);
+                return TxResult<AttendanceClaimOutcome>.Rollback(AttendanceClaimOutcome.Fail(AttendanceClaimStatus.RewardNotFound));
             }
 
             // 1) 진행도 관측. 행은 캐릭터 생성 시 함께 만들어지므로, 없으면 계정 세이브가 없는 것이다.
@@ -73,14 +59,12 @@ public sealed class AttendanceRepository : IAttendanceRepository
                 .FirstOrDefaultAsync<AttendanceProgressRow>(transaction);
             if (progress is null)
             {
-                await transaction.RollbackAsync();
-                return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.NoPlayer);
+                return TxResult<AttendanceClaimOutcome>.Rollback(AttendanceClaimOutcome.Fail(AttendanceClaimStatus.NoPlayer));
             }
 
             if (progress.LastAttendDate == attendDate)
             {
-                await transaction.RollbackAsync();
-                return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.AlreadyClaimed);
+                return TxResult<AttendanceClaimOutcome>.Rollback(AttendanceClaimOutcome.Fail(AttendanceClaimStatus.AlreadyClaimed));
             }
 
             // 2) 일차 산출 — 갱신 후 누적을 기준으로 하며 maxDay 주기로 순환한다(§2 사다리 순환).
@@ -92,8 +76,7 @@ public sealed class AttendanceRepository : IAttendanceRepository
             var rewardMail = composeRewardMail(day);
             if (rewardMail is null)
             {
-                await transaction.RollbackAsync();
-                return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.RewardNotFound, day);
+                return TxResult<AttendanceClaimOutcome>.Rollback(AttendanceClaimOutcome.Fail(AttendanceClaimStatus.RewardNotFound, day));
             }
 
             // 4) 진행도 선점(조건부 갱신): 관측한 last_attend_date일 때만 전이한다.
@@ -104,20 +87,12 @@ public sealed class AttendanceRepository : IAttendanceRepository
                 .UpdateAsync(new { attend_count = newCount, last_attend_date = attendDate }, transaction);
             if (updated == 0)
             {
-                await transaction.RollbackAsync();
-                return AttendanceClaimOutcome.Fail(AttendanceClaimStatus.AlreadyClaimed);
+                return TxResult<AttendanceClaimOutcome>.Rollback(AttendanceClaimOutcome.Fail(AttendanceClaimStatus.AlreadyClaimed));
             }
 
             // 5) 보상 메일 발급(같은 트랜잭션).
             var mailId = await MailRepository.InsertMailAsync(db, transaction, userId, rewardMail, nowUnix);
 
-            await transaction.CommitAsync();
-            return new AttendanceClaimOutcome(AttendanceClaimStatus.Ok, day, mailId);
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<AttendanceClaimOutcome>.Commit(new AttendanceClaimOutcome(AttendanceClaimStatus.Ok, day, mailId));
+        });
 }

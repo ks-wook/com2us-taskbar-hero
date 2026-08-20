@@ -1,5 +1,4 @@
-﻿using GameServer.Data;
-using GameServer.Models;
+﻿using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using MySqlConnector;
 using SqlKata.Execution;
@@ -41,15 +40,13 @@ public sealed record ConsumableUseOutcome(
 /// <summary>
 /// 소모품 사용·버프 조회 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).
 /// </summary>
-public sealed class ConsumableRepository : IConsumableRepository
+public sealed class ConsumableRepository : GameDbBase, IConsumableRepository
 {
     private const int RowTypeItem = 1;
     private const int ItemTypeConsumable = 4;
 
-    private readonly GameDbFactory _dbFactory;
-
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public ConsumableRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
+    public ConsumableRepository(GameDbFactory dbFactory) : base(dbFactory) { }
 
     /// <summary>
     /// 소모품 사용(아이템 1개 차감 → 버프 부여·연장)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -73,15 +70,8 @@ public sealed class ConsumableRepository : IConsumableRepository
         Func<int, ConsumableDecision> decide,
         Func<PlayerBuffRow?, int, (long startedAt, long expiresAt, bool overLimit)> plan,
         long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<ConsumableUseOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 대상 아이템 행 조회(소유·타입·수량).
             var item = await db.Query("player_item")
                 .Select("player_item_id", "item_code", "row_type", "quantity", "slot")
@@ -90,22 +80,19 @@ public sealed class ConsumableRepository : IConsumableRepository
 
             if (item is null || item.RowType != RowTypeItem)
             {
-                await transaction.RollbackAsync();
-                return ConsumableUseOutcome.Fail(ConsumableUseStatus.ItemNotFound);
+                return TxResult<ConsumableUseOutcome>.Rollback(ConsumableUseOutcome.Fail(ConsumableUseStatus.ItemNotFound));
             }
 
             if (item.Quantity < 1)
             {
-                await transaction.RollbackAsync();
-                return ConsumableUseOutcome.Fail(ConsumableUseStatus.InsufficientQuantity);
+                return TxResult<ConsumableUseOutcome>.Rollback(ConsumableUseOutcome.Fail(ConsumableUseStatus.InsufficientQuantity));
             }
 
             // 2) 마스터 검증(소모품 여부·효과 정의) — 서비스 델리게이트.
             var decision = decide(item.ItemCode);
             if (decision.Status != ConsumableUseStatus.Ok)
             {
-                await transaction.RollbackAsync();
-                return ConsumableUseOutcome.Fail(decision.Status);
+                return TxResult<ConsumableUseOutcome>.Rollback(ConsumableUseOutcome.Fail(decision.Status));
             }
 
             // 3) 같은 종류의 기존 버프를 조회한다(있으면 연장 기준, 없으면 신규 부여).
@@ -119,8 +106,7 @@ public sealed class ConsumableRepository : IConsumableRepository
             var (startedAt, expiresAt, overLimit) = plan(prevBuff, decision.DurationSec);
             if (overLimit)
             {
-                await transaction.RollbackAsync();
-                return ConsumableUseOutcome.Fail(ConsumableUseStatus.DurationLimitExceeded);
+                return TxResult<ConsumableUseOutcome>.Rollback(ConsumableUseOutcome.Fail(ConsumableUseStatus.DurationLimitExceeded));
             }
 
             // 5) 아이템 1개 차감(0이면 행 삭제 → 가방 칸 반납).
@@ -137,8 +123,7 @@ public sealed class ConsumableRepository : IConsumableRepository
 
             if (affected == 0)
             {
-                await transaction.RollbackAsync();
-                return ConsumableUseOutcome.Fail(ConsumableUseStatus.ItemNotFound);
+                return TxResult<ConsumableUseOutcome>.Rollback(ConsumableUseOutcome.Fail(ConsumableUseStatus.ItemNotFound));
             }
 
             // 가방 변경분(5.0): 수량이 남으면 그 행의 최종 상태, 0이면 행이 사라진다.
@@ -190,23 +175,16 @@ public sealed class ConsumableRepository : IConsumableRepository
                 .OrderBy("buff_type")
                 .GetAsync<BuffRow>(transaction);
 
-            await transaction.CommitAsync();
-
             var buff = new PlayerBuffRow(decision.BuffType, decision.BuffValue, startedAt, expiresAt);
             var active = activeRows.Select(r => ToBuff(r)!).ToList();
-            return new ConsumableUseOutcome(ConsumableUseStatus.Ok, item.ItemCode, remaining, buff, active) { Delta = delta };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<ConsumableUseOutcome>.Commit(
+                new ConsumableUseOutcome(ConsumableUseStatus.Ok, item.ItemCode, remaining, buff, active) { Delta = delta });
+        });
 
     /// <summary>계정의 활성 버프(expires_at > now)를 buff_type 순으로 조회한다. 만료 행은 제외한다.</summary>
     public async Task<List<PlayerBuffRow>> GetActiveBuffsAsync(long userId, long nowUnix)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("player_buff")
             .Select("buff_type", "buff_value", "started_at", "expires_at")
             .Where("user_id", userId).Where("expires_at", ">", nowUnix)

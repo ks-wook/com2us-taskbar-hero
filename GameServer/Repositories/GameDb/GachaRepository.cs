@@ -1,5 +1,4 @@
 ﻿using System.Data.Common;
-using GameServer.Data;
 using GameServer.MasterData;
 using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
@@ -56,18 +55,16 @@ public sealed record GachaHistoryPage(IReadOnlyList<GachaHistoryEntry> Entries, 
 /// 가챠 세이브 접근(player_gacha_counter·player_gacha_pull·player_gacha_pull_item + 비용 재화·지급 적재).
 /// 쿼리는 SqlKata 빌더로만 작성하고 결과는 제네릭 매핑으로 POCO에 받는다(프로젝트 규칙).
 /// </summary>
-public sealed class GachaRepository : IGachaRepository
+public sealed class GachaRepository : GameDbBase, IGachaRepository
 {
     private const int RowTypeItem = 1;
     private const int RowTypeCurrency = 2;
 
-    private readonly GameDbFactory _dbFactory;
     private readonly IItemLookup _itemLookup;
 
-    /// <summary>세이브 DB 팩토리를 주입받는다.</summary>
-    public GachaRepository(GameDbFactory dbFactory, IItemLookup itemLookup)
+    /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
+    public GachaRepository(GameDbFactory dbFactory, IItemLookup itemLookup) : base(dbFactory)
     {
-        _dbFactory = dbFactory;
         _itemLookup = itemLookup;
     }
 
@@ -86,7 +83,7 @@ public sealed class GachaRepository : IGachaRepository
             return result;
         }
 
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("player_gacha_counter")
             .Select("grade", "pity_count")
             .Where("user_id", userId).Where("gacha_code", gachaCode)
@@ -111,15 +108,8 @@ public sealed class GachaRepository : IGachaRepository
         long userId, GachaBannerDef banner, int pullType, long cost,
         Func<IDictionary<int, int>, IReadOnlyList<GachaPullEntry>?> rollAll,
         long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<GachaPullOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 비용 재화 조회·검증(차감 전이라 실패해도 상태 변화가 없다).
             var currencyRow = await db.Query("player_item")
                 .Select("player_item_id", "quantity")
@@ -130,8 +120,7 @@ public sealed class GachaRepository : IGachaRepository
             long held = currencyRow?.Quantity ?? 0;
             if (currencyRow is null || held < cost)
             {
-                await transaction.RollbackAsync();
-                return GachaPullOutcome.Fail(GachaPullStatus.InsufficientCurrency);
+                return TxResult<GachaPullOutcome>.Rollback(GachaPullOutcome.Fail(GachaPullStatus.InsufficientCurrency));
             }
 
             // 2) 비용 차감.
@@ -168,8 +157,7 @@ public sealed class GachaRepository : IGachaRepository
             var entries = rollAll(counters);
             if (entries is null || entries.Count == 0)
             {
-                await transaction.RollbackAsync();
-                return GachaPullOutcome.Fail(GachaPullStatus.PoolEmpty);
+                return TxResult<GachaPullOutcome>.Rollback(GachaPullOutcome.Fail(GachaPullStatus.PoolEmpty));
             }
 
             // 5) 지급. 같은 아이템이 여러 회차에 나오면 코드별로 합산해 한 번에 적재한다(스택 병합이 한 번에 이뤄진다).
@@ -190,8 +178,7 @@ public sealed class GachaRepository : IGachaRepository
                     db, transaction, userId, itemCode, quantity, stackMax, capacity, used, nowUnix, delta);
                 if (!stored)
                 {
-                    await transaction.RollbackAsync();
-                    return GachaPullOutcome.Fail(GachaPullStatus.InventoryFull);
+                    return TxResult<GachaPullOutcome>.Rollback(GachaPullOutcome.Fail(GachaPullStatus.InventoryFull));
                 }
             }
 
@@ -242,8 +229,7 @@ public sealed class GachaRepository : IGachaRepository
                 }, transaction);
             }
 
-            await transaction.CommitAsync();
-            return new GachaPullOutcome(GachaPullStatus.Ok)
+            return TxResult<GachaPullOutcome>.Commit(new GachaPullOutcome(GachaPullStatus.Ok)
             {
                 PullId = pullId,
                 PulledAt = nowUnix,
@@ -252,14 +238,8 @@ public sealed class GachaRepository : IGachaRepository
                 Entries = entries,
                 Counters = counters,
                 Delta = delta,
-            };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            });
+        });
 
     /// <summary>
     /// 기록을 최신순 커서 페이징으로 조회한다. `pull_id &lt; cursor` 조건이 (user_id, pull_id) 인덱스를 타므로
@@ -267,7 +247,7 @@ public sealed class GachaRepository : IGachaRepository
     /// </summary>
     public async Task<GachaHistoryPage> GetHistoryAsync(long userId, int gachaCode, long cursor, int limit)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
 
         var query = db.Query("player_gacha_pull")
             .Select("pull_id", "gacha_code", "pull_type", "cost_currency_code", "cost_amount", "pulled_at")

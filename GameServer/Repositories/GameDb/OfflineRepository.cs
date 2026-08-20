@@ -1,5 +1,4 @@
-﻿using GameServer.Data;
-using GameServer.MasterData;
+﻿using GameServer.MasterData;
 using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using SqlKata.Execution;
@@ -26,7 +25,7 @@ public sealed record OfflineClaimOutcome(
 }
 
 /// <summary>오프라인 보상 정산 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
-public sealed class OfflineRepository : IOfflineRepository
+public sealed class OfflineRepository : GameDbBase, IOfflineRepository
 {
     private const int RowTypeCurrency = 2;
     private const int GoldItemCode = 1;
@@ -34,15 +33,11 @@ public sealed class OfflineRepository : IOfflineRepository
     /// <summary>player_character.slot의 "미편성"(파티에 없어 전투에 참가하지 않음) 값.</summary>
     private const int PartySlotUnassigned = 0;
 
-    private readonly GameDbFactory _dbFactory;
     private readonly ILevelUpCalculator _levelUp;
 
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public OfflineRepository(GameDbFactory dbFactory, ILevelUpCalculator levelUp)
-    {
-        _dbFactory = dbFactory;
-        _levelUp = levelUp;
-    }
+    /// <summary>세이브 DB 커넥션 팩토리(기반 클래스로 전달)와 레벨업 계산기를 주입받는다.</summary>
+    public OfflineRepository(GameDbFactory dbFactory, ILevelUpCalculator levelUp) : base(dbFactory)
+        => _levelUp = levelUp;
 
     /// <summary>
     /// game_player에서 정산 기준 시각(last_active_at)과 파밍 스테이지 좌표를 단건 조회한다.
@@ -51,7 +46,7 @@ public sealed class OfflineRepository : IOfflineRepository
     /// </summary>
     public async Task<OfflinePlayerContext?> GetContextAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var row = await db.Query("game_player")
             .Select("last_active_at", "act", "difficulty", "stage")
             .Where("user_id", userId)
@@ -84,15 +79,8 @@ public sealed class OfflineRepository : IOfflineRepository
         long nowUnix,
         long minRewardSec,
         Func<long, (long effectiveSec, bool capped, long gold, long exp)> computeReward)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<OfflineClaimOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 기준 시각 재확인(트랜잭션 내부). 잠금 상태의 경과가 최소 기준 미만이면 이미 정산된 것으로 간주.
             var playerRow = await db.Query("game_player")
                 .Select("last_active_at")
@@ -101,16 +89,14 @@ public sealed class OfflineRepository : IOfflineRepository
 
             if (playerRow is null)
             {
-                await transaction.RollbackAsync();
-                return OfflineClaimOutcome.Fail(OfflineClaimStatus.NoPlayer);
+                return TxResult<OfflineClaimOutcome>.Rollback(OfflineClaimOutcome.Fail(OfflineClaimStatus.NoPlayer));
             }
 
             long observed = playerRow.LastActiveAt;
             long elapsed = Math.Max(0, nowUnix - observed);
             if (elapsed < minRewardSec)
             {
-                await transaction.RollbackAsync();
-                return OfflineClaimOutcome.Fail(OfflineClaimStatus.AlreadyClaimed);
+                return TxResult<OfflineClaimOutcome>.Rollback(OfflineClaimOutcome.Fail(OfflineClaimStatus.AlreadyClaimed));
             }
 
             // 2) 정산권 선점(CAS): last_active_at이 관측값 그대로일 때만 now로 리셋한다.
@@ -121,8 +107,7 @@ public sealed class OfflineRepository : IOfflineRepository
 
             if (claimed == 0)
             {
-                await transaction.RollbackAsync();
-                return OfflineClaimOutcome.Fail(OfflineClaimStatus.AlreadyClaimed);
+                return TxResult<OfflineClaimOutcome>.Rollback(OfflineClaimOutcome.Fail(OfflineClaimStatus.AlreadyClaimed));
             }
 
             // 3) 보상 산출(서버 권위): 상한 적용 후 골드·경험치.
@@ -155,16 +140,9 @@ public sealed class OfflineRepository : IOfflineRepository
                 });
             }
 
-            await transaction.CommitAsync();
-            return new OfflineClaimOutcome(
-                OfflineClaimStatus.Ok, effectiveSec, capped, gold, exp, goldBalance, characters, nowUnix);
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<OfflineClaimOutcome>.Commit(new OfflineClaimOutcome(
+                OfflineClaimStatus.Ok, effectiveSec, capped, gold, exp, goldBalance, characters, nowUnix));
+        });
 
     /// <summary>재화(골드) 행을 upsert하고 갱신 후 잔액을 반환한다(없으면 새 재화 행 생성).</summary>
     private static async Task<long> UpsertGoldAsync(

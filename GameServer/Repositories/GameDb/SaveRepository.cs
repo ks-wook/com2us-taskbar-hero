@@ -1,5 +1,4 @@
 ﻿using System.Data.Common;
-using GameServer.Data;
 using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using MySqlConnector;
@@ -30,7 +29,7 @@ public sealed record ArrangePartyOutcome(ArrangePartyStatus Status, List<Charact
 }
 
 /// <summary>세이브(taskbar_hero_game) 접근 계층. SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
-public sealed class SaveRepository : ISaveRepository
+public sealed class SaveRepository : GameDbBase, ISaveRepository
 {
     private const int RowTypeItem = 1;
     private const int RowTypeCurrency = 2;
@@ -46,10 +45,8 @@ public sealed class SaveRepository : ISaveRepository
     /// <summary>player_skill.equipped의 "장착됨" 값(1). 기본 스킬은 습득과 동시에 장착해 곧바로 전투에 쓰이게 한다.</summary>
     private const int SkillEquipped = 1;
 
-    private readonly GameDbFactory _dbFactory;
-
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public SaveRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
+    public SaveRepository(GameDbFactory dbFactory) : base(dbFactory) { }
 
     /// <summary>
     /// game_player 1행을 조회해 세이브 응답용 <see cref="PlayerDto"/>(닉네임·진행 좌표·최고 클리어·인벤 용량·마지막 활동 시각)로
@@ -57,7 +54,7 @@ public sealed class SaveRepository : ISaveRepository
     /// </summary>
     public async Task<PlayerDto?> GetPlayerAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var row = await db.Query("game_player").Where("user_id", userId).FirstOrDefaultAsync<GamePlayerRow>();
         if (row is null)
         {
@@ -84,7 +81,7 @@ public sealed class SaveRepository : ISaveRepository
     /// </summary>
     public async Task<List<CharacterDto>> GetCharactersAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("player_character").Where("user_id", userId)
             .OrderByRaw("CASE WHEN slot = 0 THEN 1 ELSE 0 END, slot, character_id")
             .GetAsync<PlayerCharacterRow>();
@@ -98,7 +95,7 @@ public sealed class SaveRepository : ISaveRepository
     /// </summary>
     public async Task<List<CurrencyDto>> GetCurrenciesAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("player_item")
             .Select("item_code", "quantity")
             .Where("user_id", userId).Where("row_type", RowTypeCurrency)
@@ -118,7 +115,7 @@ public sealed class SaveRepository : ISaveRepository
     /// </summary>
     public async Task<List<EquippedItemDto>> GetEquippedAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("player_item_equipped")
             .Where("user_id", userId)
             .OrderBy("equipped_character_id", "equipped_slot")
@@ -139,7 +136,7 @@ public sealed class SaveRepository : ISaveRepository
     /// </summary>
     public async Task<int> GetBagItemCountAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         return await db.Query("player_item")
             .Where("user_id", userId).Where("row_type", RowTypeItem).WhereNotNull("slot")
             .CountAsync<int>();
@@ -153,7 +150,7 @@ public sealed class SaveRepository : ISaveRepository
     /// </summary>
     public async Task<List<SkillDto>> GetSkillsAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("player_skill")
             .Where("user_id", userId).Where("level", ">", 0)
             .GetAsync<PlayerSkillRow>();
@@ -172,7 +169,7 @@ public sealed class SaveRepository : ISaveRepository
     /// </summary>
     public async Task<List<RuneDto>> GetRunesAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("player_rune").Where("user_id", userId).GetAsync<PlayerRuneRow>();
         return rows.Select(r => new RuneDto
         {
@@ -187,7 +184,7 @@ public sealed class SaveRepository : ISaveRepository
     /// </summary>
     public async Task<CubeDto?> GetCubeAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var row = await db.Query("player_cube").Where("user_id", userId).FirstOrDefaultAsync<PlayerCubeRow>();
         if (row is null)
         {
@@ -207,7 +204,7 @@ public sealed class SaveRepository : ISaveRepository
     /// </summary>
     public async Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("player_character").Select("character_id", "class_code", "slot").Where("user_id", userId)
             .GetAsync<PlayerCharacterRow>();
         return rows.Select(r => new CharacterSlot(r.CharacterId, r.ClassCode, r.Slot)).ToList();
@@ -235,15 +232,8 @@ public sealed class SaveRepository : ISaveRepository
     public async Task CreatePlayerWithFirstCharacterAsync(
         long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix,
         MailDraft? welcomeMail, StartingEquipment? startingEquipment, int? startingSkillCode)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             await db.Query("game_player").InsertAsync(new
             {
                 user_id = userId,
@@ -297,15 +287,7 @@ public sealed class SaveRepository : ISaveRepository
             {
                 await MailRepository.InsertMailAsync(db, transaction, userId, welcomeMail, nowUnix);
             }
-
-            await transaction.CommitAsync();
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+        });
 
     /// <summary>
     /// 기존 계정에 캐릭터 1개 추가(생성 비용 골드 차감)를 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -326,15 +308,8 @@ public sealed class SaveRepository : ISaveRepository
     public async Task<AddCharacterOutcome> AddCharacterAsync(
         long userId, int characterId, int classCode, int slot, int gender, long goldCost,
         StartingEquipment? startingEquipment, int? startingSkillCode, long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<AddCharacterOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 골드 잔액 확인(비용 > 0일 때). 재화 행(row_type=2, item_code=1)이 없으면 잔액 0.
             var goldRow = await db.Query("player_item")
                 .Select("player_item_id", "quantity")
@@ -344,8 +319,7 @@ public sealed class SaveRepository : ISaveRepository
             long gold = goldRow?.Quantity ?? 0;
             if (gold < goldCost)
             {
-                await transaction.RollbackAsync();
-                return AddCharacterOutcome.Fail(AddCharacterStatus.InsufficientCurrency);
+                return TxResult<AddCharacterOutcome>.Rollback(AddCharacterOutcome.Fail(AddCharacterStatus.InsufficientCurrency));
             }
 
             // 2) 골드 차감(비용 > 0일 때만 UPDATE).
@@ -372,8 +346,7 @@ public sealed class SaveRepository : ISaveRepository
             }
             catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
             {
-                await transaction.RollbackAsync();
-                return AddCharacterOutcome.Fail(AddCharacterStatus.DuplicateConflict);
+                return TxResult<AddCharacterOutcome>.Rollback(AddCharacterOutcome.Fail(AddCharacterStatus.DuplicateConflict));
             }
 
             // 4) 기본 무기 지급 + 장착(정의가 있을 때만).
@@ -388,15 +361,8 @@ public sealed class SaveRepository : ISaveRepository
                 await GrantEquippedStartingSkillAsync(db, transaction, userId, characterId, startingSkillCode.Value);
             }
 
-            await transaction.CommitAsync();
-            return new AddCharacterOutcome(AddCharacterStatus.Ok, goldCost, newBalance);
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<AddCharacterOutcome>.Commit(new AddCharacterOutcome(AddCharacterStatus.Ok, goldCost, newBalance));
+        });
 
     /// <summary>
     /// 캐릭터 생성 트랜잭션 안에서 기본 장비 1개를 지급하고 곧바로 그 캐릭터에 장착시킨다
@@ -468,15 +434,8 @@ public sealed class SaveRepository : ISaveRepository
     /// <para>4) player_character SELECT — 갱신된 보유 캐릭터 전체를 자리 순으로 다시 읽어 응답에 싣는다</para>
     /// </remarks>
     public async Task<ArrangePartyOutcome> SavePartyAsync(long userId, IReadOnlyList<PartyMemberDto> members)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<ArrangePartyOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 보유 캐릭터 확인 — 요청 목록에 보유하지 않은 캐릭터가 섞여 있으면 거부한다.
             var owned = (await db.Query("player_character").Where("user_id", userId)
                 .GetAsync<PlayerCharacterRow>(transaction)).ToList();
@@ -484,8 +443,7 @@ public sealed class SaveRepository : ISaveRepository
             var ownedIds = owned.Select(r => r.CharacterId).ToHashSet();
             if (members.Any(m => !ownedIds.Contains(m.characterId)))
             {
-                await transaction.RollbackAsync();
-                return ArrangePartyOutcome.Fail(ArrangePartyStatus.CharacterNotFound);
+                return TxResult<ArrangePartyOutcome>.Rollback(ArrangePartyOutcome.Fail(ArrangePartyStatus.CharacterNotFound));
             }
 
             // 2) 편성을 전부 비운다(중간 자리 충돌 방지).
@@ -505,15 +463,8 @@ public sealed class SaveRepository : ISaveRepository
             var updated = (await db.Query("player_character").Where("user_id", userId)
                 .GetAsync<PlayerCharacterRow>(transaction)).ToList();
 
-            await transaction.CommitAsync();
-            return new ArrangePartyOutcome(ArrangePartyStatus.Ok, SortCharactersForResponse(updated));
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<ArrangePartyOutcome>.Commit(new ArrangePartyOutcome(ArrangePartyStatus.Ok, SortCharactersForResponse(updated)));
+        });
 
     /// <summary>
     /// game_player의 last_active_at·updated_at을 현재 시각으로 갱신한다(오프라인 정산 기준 시각 리셋).
@@ -521,7 +472,7 @@ public sealed class SaveRepository : ISaveRepository
     /// </summary>
     public async Task<int> UpdateLastActiveAsync(long userId, long nowUnix)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         return await db.Query("game_player")
             .Where("user_id", userId)
             .UpdateAsync(new { last_active_at = nowUnix, updated_at = nowUnix });

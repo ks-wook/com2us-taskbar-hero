@@ -1,5 +1,4 @@
 ﻿using System.Data.Common;
-using GameServer.Data;
 using GameServer.MasterData;
 using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
@@ -47,7 +46,7 @@ public sealed record TradeCancelOutcome(TradeCloseStatus Status, TradeListingSna
 /// 상태 전이(구매·취소·만료)는 모두 <b>조건부 갱신(status=1일 때만 전이)</b>으로 선점해 이중 판매를 차단한다
 /// (trade 기획서 §7.2). 선점은 재화·아이템 이동보다 항상 앞에 둔다.
 /// </summary>
-public sealed class TradeRepository : ITradeRepository
+public sealed class TradeRepository : GameDbBase, ITradeRepository
 {
     private const int RowTypeItem = 1;
     private const int RowTypeCurrency = 2;
@@ -61,13 +60,11 @@ public sealed class TradeRepository : ITradeRepository
     /// <summary>기간 만료로 자동 종료(만료 배치). 수동 취소(3)와 구분해 사유를 남긴다.</summary>
     private const int StatusExpired = 4;
 
-    private readonly GameDbFactory _dbFactory;
     private readonly IItemLookup _itemLookup;
 
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public TradeRepository(GameDbFactory dbFactory, IItemLookup itemLookup)
+    /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
+    public TradeRepository(GameDbFactory dbFactory, IItemLookup itemLookup) : base(dbFactory)
     {
-        _dbFactory = dbFactory;
         _itemLookup = itemLookup;
     }
 
@@ -90,10 +87,7 @@ public sealed class TradeRepository : ITradeRepository
     public async Task<IReadOnlyList<TradeListingSnapshot>> GetActiveListingPageAsync(
         int itemCode, long viewerUserId, bool mine, int offset, int limit, long nowUnix)
     {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-
-        var db = _dbFactory.Create(connection);
+        using var db = Db();
         var query = db.Query("trade_listing")
             .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at", "expires_at")
             .Where("status", StatusOnSale).Where("expires_at", ">", nowUnix);
@@ -125,10 +119,7 @@ public sealed class TradeRepository : ITradeRepository
     /// </summary>
     public async Task<TradeListingSnapshot?> GetListingAsync(long listingId, long nowUnix)
     {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-
-        var db = _dbFactory.Create(connection);
+        using var db = Db();
         var row = await db.Query("trade_listing")
             .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at", "expires_at")
             .Where("listing_id", listingId).Where("status", StatusOnSale).Where("expires_at", ">", nowUnix)
@@ -154,15 +145,8 @@ public sealed class TradeRepository : ITradeRepository
     public async Task<TradeRegisterOutcome> ApplyRegisterAsync(
         long userId, long itemId, long price,
         int listingLimit, long nowUnix, long expiresAt)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<TradeRegisterOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 동시 등록 한도. 만료 시각이 지난 등록은 배치가 아직 정리하지 않았어도 한도에서 제외한다
             //    (읽기 시점 만료 판정 — 그렇지 않으면 하루 1회 배치가 돌기 전까지 판매자의 등록 칸이 묶인다).
             var active = await db.Query("trade_listing")
@@ -170,8 +154,7 @@ public sealed class TradeRepository : ITradeRepository
                 .CountAsync<int>(transaction: transaction);
             if (active >= listingLimit)
             {
-                await transaction.RollbackAsync();
-                return TradeRegisterOutcome.Fail(TradeRegisterStatus.ListingLimitExceeded);
+                return TxResult<TradeRegisterOutcome>.Rollback(TradeRegisterOutcome.Fail(TradeRegisterStatus.ListingLimitExceeded));
             }
 
             // 2) 소유 확인(본인 아이템 행만). 재화 행(row_type=2)은 거래 대상이 아니다.
@@ -181,8 +164,7 @@ public sealed class TradeRepository : ITradeRepository
                 .FirstOrDefaultAsync<TradePlayerItemRow>(transaction);
             if (item is null)
             {
-                await transaction.RollbackAsync();
-                return TradeRegisterOutcome.Fail(TradeRegisterStatus.ItemNotFound);
+                return TxResult<TradeRegisterOutcome>.Rollback(TradeRegisterOutcome.Fail(TradeRegisterStatus.ItemNotFound));
             }
 
             // 장착 중이면 등록 불가(장착 원장에 행이 있으면 장착 상태).
@@ -191,22 +173,19 @@ public sealed class TradeRepository : ITradeRepository
                 .FirstOrDefaultAsync<long?>(transaction);
             if (equipped is not null)
             {
-                await transaction.RollbackAsync();
-                return TradeRegisterOutcome.Fail(TradeRegisterStatus.ItemEquipped);
+                return TxResult<TradeRegisterOutcome>.Rollback(TradeRegisterOutcome.Fail(TradeRegisterStatus.ItemEquipped));
             }
 
             // 3) 마스터 검증: 판매 가능 여부 → 가격 범위.
             var info = _itemLookup.Attributes(item.ItemCode);
             if (info is null || info.Sellable != 1 || info.BasePrice <= 0)
             {
-                await transaction.RollbackAsync();
-                return TradeRegisterOutcome.Fail(TradeRegisterStatus.NotSellable);
+                return TxResult<TradeRegisterOutcome>.Rollback(TradeRegisterOutcome.Fail(TradeRegisterStatus.NotSellable));
             }
 
             if (!IsPriceInRange(price, info.BasePrice))
             {
-                await transaction.RollbackAsync();
-                return TradeRegisterOutcome.Fail(TradeRegisterStatus.PriceOutOfRange);
+                return TxResult<TradeRegisterOutcome>.Rollback(TradeRegisterOutcome.Fail(TradeRegisterStatus.PriceOutOfRange));
             }
 
             // 4) 에스크로 이동: 인벤토리 행 제거(스택형도 행 전체 — 부분 판매 없음).
@@ -216,8 +195,7 @@ public sealed class TradeRepository : ITradeRepository
                 .DeleteAsync(transaction);
             if (removed == 0)
             {
-                await transaction.RollbackAsync();
-                return TradeRegisterOutcome.Fail(TradeRegisterStatus.ItemNotFound);
+                return TxResult<TradeRegisterOutcome>.Rollback(TradeRegisterOutcome.Fail(TradeRegisterStatus.ItemNotFound));
             }
 
             // 5) 등록 생성.
@@ -240,21 +218,14 @@ public sealed class TradeRepository : ITradeRepository
             var delta = new InventoryDeltaDto();
             delta.removed.Add(itemId);
 
-            await transaction.CommitAsync();
-            return new TradeRegisterOutcome(
+            return TxResult<TradeRegisterOutcome>.Commit(new TradeRegisterOutcome(
                 TradeRegisterStatus.Ok,
                 new TradeListingSnapshot(
                     listingId, userId, item.ItemCode, item.EnhanceLevel, quantity, price, nowUnix, expiresAt))
             {
                 Delta = delta,
-            };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            });
+        });
 
     /// <summary>
     /// 구매를 단일 트랜잭션으로 적용한다(trade 기획서 §6.1). 상태 전이를 재화 이동보다 먼저 확정해,
@@ -273,15 +244,8 @@ public sealed class TradeRepository : ITradeRepository
         long buyerUserId, long listingId,
         Func<TradeListingSnapshot, MailDraft> composeItemMail,
         Func<TradeListingSnapshot, MailDraft> composeSettlementMail, long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<TradeBuyOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 등록 확인.
             var row = await db.Query("trade_listing")
                 .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price",
@@ -290,8 +254,7 @@ public sealed class TradeRepository : ITradeRepository
                 .FirstOrDefaultAsync<TradeListingStatusRow>(transaction);
             if (row is null)
             {
-                await transaction.RollbackAsync();
-                return TradeBuyOutcome.Fail(TradeCloseStatus.ListingNotFound);
+                return TxResult<TradeBuyOutcome>.Rollback(TradeBuyOutcome.Fail(TradeCloseStatus.ListingNotFound));
             }
 
             // 이미 닫힌 등록, 그리고 **만료 시각이 지난 등록**(배치가 아직 status를 4로 바꾸지 못한 상태)은 모두 거부한다.
@@ -300,22 +263,19 @@ public sealed class TradeRepository : ITradeRepository
             // 없으므로 같은 상태 코드(→ TradeAlreadyClosed)로 응답한다.
             if (row.Status != StatusOnSale || row.ExpiresAt <= nowUnix)
             {
-                await transaction.RollbackAsync();
-                return TradeBuyOutcome.Fail(TradeCloseStatus.AlreadyClosed);
+                return TxResult<TradeBuyOutcome>.Rollback(TradeBuyOutcome.Fail(TradeCloseStatus.AlreadyClosed));
             }
 
             if (row.SellerUserId == buyerUserId)
             {
-                await transaction.RollbackAsync();
-                return TradeBuyOutcome.Fail(TradeCloseStatus.SelfPurchase);
+                return TxResult<TradeBuyOutcome>.Rollback(TradeBuyOutcome.Fail(TradeCloseStatus.SelfPurchase));
             }
 
             // 2) 지불 능력·적재 여유 사전 확인.
             var gold = await LoadGoldAsync(db, transaction, buyerUserId);
             if (gold is null || gold.Value.Quantity < row.Price)
             {
-                await transaction.RollbackAsync();
-                return TradeBuyOutcome.Fail(TradeCloseStatus.InsufficientGold);
+                return TxResult<TradeBuyOutcome>.Rollback(TradeBuyOutcome.Fail(TradeCloseStatus.InsufficientGold));
             }
 
             // 3) 선점(CAS): 판매중일 때만 판매완료로 전이.
@@ -325,8 +285,7 @@ public sealed class TradeRepository : ITradeRepository
                     new { status = StatusSold, buyer_user_id = buyerUserId, closed_at = nowUnix }, transaction);
             if (claimed == 0)
             {
-                await transaction.RollbackAsync();
-                return TradeBuyOutcome.Fail(TradeCloseStatus.AlreadyClosed);
+                return TxResult<TradeBuyOutcome>.Rollback(TradeBuyOutcome.Fail(TradeCloseStatus.AlreadyClosed));
             }
 
             var snapshot = new TradeListingSnapshot(
@@ -347,15 +306,8 @@ public sealed class TradeRepository : ITradeRepository
             await MailRepository.InsertMailAsync(
                 db, transaction, row.SellerUserId, composeSettlementMail(snapshot), nowUnix);
 
-            await transaction.CommitAsync();
-            return new TradeBuyOutcome(TradeCloseStatus.Ok, snapshot, balance, itemMailId);
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<TradeBuyOutcome>.Commit(new TradeBuyOutcome(TradeCloseStatus.Ok, snapshot, balance, itemMailId));
+        });
 
     /// <summary>
     /// 판매 취소를 단일 트랜잭션으로 적용한다(trade 기획서 §6.2). 본인·판매중 확인 → 조건부 갱신 선점 →
@@ -363,15 +315,8 @@ public sealed class TradeRepository : ITradeRepository
     /// </summary>
     public async Task<TradeCancelOutcome> ApplyCancelAsync(
         long userId, long listingId, long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<TradeCancelOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             var row = await db.Query("trade_listing")
                 .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price",
                         "created_at", "expires_at", "status")
@@ -379,20 +324,17 @@ public sealed class TradeRepository : ITradeRepository
                 .FirstOrDefaultAsync<TradeListingStatusRow>(transaction);
             if (row is null)
             {
-                await transaction.RollbackAsync();
-                return TradeCancelOutcome.Fail(TradeCloseStatus.ListingNotFound);
+                return TxResult<TradeCancelOutcome>.Rollback(TradeCancelOutcome.Fail(TradeCloseStatus.ListingNotFound));
             }
 
             if (row.SellerUserId != userId)
             {
-                await transaction.RollbackAsync();
-                return TradeCancelOutcome.Fail(TradeCloseStatus.NotOwner);
+                return TxResult<TradeCancelOutcome>.Rollback(TradeCancelOutcome.Fail(TradeCloseStatus.NotOwner));
             }
 
             if (row.Status != StatusOnSale)
             {
-                await transaction.RollbackAsync();
-                return TradeCancelOutcome.Fail(TradeCloseStatus.AlreadyClosed);
+                return TxResult<TradeCancelOutcome>.Rollback(TradeCancelOutcome.Fail(TradeCloseStatus.AlreadyClosed));
             }
 
             var claimed = await db.Query("trade_listing")
@@ -400,8 +342,7 @@ public sealed class TradeRepository : ITradeRepository
                 .UpdateAsync(new { status = StatusCancelled, closed_at = nowUnix }, transaction);
             if (claimed == 0)
             {
-                await transaction.RollbackAsync();
-                return TradeCancelOutcome.Fail(TradeCloseStatus.AlreadyClosed);
+                return TxResult<TradeCancelOutcome>.Rollback(TradeCancelOutcome.Fail(TradeCloseStatus.AlreadyClosed));
             }
 
             var snapshot = new TradeListingSnapshot(
@@ -411,27 +352,16 @@ public sealed class TradeRepository : ITradeRepository
             var stored = await StoreTradeItemAsync(db, transaction, userId, snapshot, nowUnix, delta);
             if (!stored)
             {
-                await transaction.RollbackAsync();
-                return TradeCancelOutcome.Fail(TradeCloseStatus.InventoryFull);
+                return TxResult<TradeCancelOutcome>.Rollback(TradeCancelOutcome.Fail(TradeCloseStatus.InventoryFull));
             }
 
-            await transaction.CommitAsync();
-            return new TradeCancelOutcome(TradeCloseStatus.Ok, snapshot) { Delta = delta };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<TradeCancelOutcome>.Commit(new TradeCancelOutcome(TradeCloseStatus.Ok, snapshot) { Delta = delta });
+        });
 
     /// <summary>만료 대상(판매중 + expires_at 경과)을 listing_id 오름차순으로 최대 limit건 조회한다(idx_trade_expire).</summary>
     public async Task<IReadOnlyList<long>> GetExpiredListingIdsAsync(long nowUnix, int limit)
     {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-
-        var db = _dbFactory.Create(connection);
+        using var db = Db();
         var ids = await db.Query("trade_listing")
             .Select("listing_id")
             .Where("status", StatusOnSale).Where("expires_at", "<", nowUnix)
@@ -447,15 +377,8 @@ public sealed class TradeRepository : ITradeRepository
     /// </summary>
     public async Task<TradeListingSnapshot?> ApplyExpireAsync(
         long listingId, Func<TradeListingSnapshot, MailDraft> composeReturnMail, long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<TradeListingSnapshot?>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 선점(CAS): 아직 판매중이고 만료가 지난 등록만 만료로 전이(수동 취소 3과 구분되는 4).
             var closed = await db.Query("trade_listing")
                 .Where("listing_id", listingId).Where("status", StatusOnSale)
@@ -463,8 +386,7 @@ public sealed class TradeRepository : ITradeRepository
                 .UpdateAsync(new { status = StatusExpired, closed_at = nowUnix }, transaction);
             if (closed == 0)
             {
-                await transaction.RollbackAsync();
-                return null;
+                return TxResult<TradeListingSnapshot?>.Rollback(null);
             }
 
             // 2) 반송 스냅샷.
@@ -474,8 +396,7 @@ public sealed class TradeRepository : ITradeRepository
                 .FirstOrDefaultAsync<TradeListingRow>(transaction);
             if (row is null)
             {
-                await transaction.RollbackAsync();
-                return null;
+                return TxResult<TradeListingSnapshot?>.Rollback(null);
             }
 
             // 3) 반송 메일 발급(판매자). 인벤토리가 가득해도 안전하게 되돌리기 위해 메일을 쓴다.
@@ -485,15 +406,8 @@ public sealed class TradeRepository : ITradeRepository
             await MailRepository.InsertMailAsync(
                 db, transaction, snapshot.SellerUserId, composeReturnMail(snapshot), nowUnix);
 
-            await transaction.CommitAsync();
-            return snapshot;
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<TradeListingSnapshot?>.Commit(snapshot);
+        });
 
     // ── 내부 헬퍼 ──
 

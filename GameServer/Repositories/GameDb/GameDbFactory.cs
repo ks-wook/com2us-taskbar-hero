@@ -2,12 +2,14 @@ using MySqlConnector;
 using SqlKata.Compilers;
 using SqlKata.Execution;
 
-namespace GameServer.Data;
+namespace GameServer.Repositories.GameDb;
 
 /// <summary>
 /// 세이브 DB(taskbar_hero_game) 접근용 SqlKata QueryFactory 생성기.
 /// 원시 SQL을 조립하지 않고 SqlKata 쿼리 빌더로만 질의한다(프로젝트 규칙).
 /// 트랜잭션이 필요한 경우 CreateConnection()으로 커넥션을 직접 열어 Create(conn)에 넘긴다.
+/// <para>리포지토리는 이 팩토리를 직접 쓰지 않고 <see cref="GameDbBase"/>를 상속해
+/// 커넥션·트랜잭션 규약을 물려받는다.</para>
 /// </summary>
 public sealed class GameDbFactory
 {

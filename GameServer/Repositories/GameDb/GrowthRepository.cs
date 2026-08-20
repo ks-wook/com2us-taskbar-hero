@@ -1,6 +1,4 @@
-﻿using System.Data.Common;
-using GameServer.Data;
-using GameServer.Models;
+﻿using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using SqlKata.Execution;
 
@@ -31,15 +29,13 @@ public sealed record RuneUpgradeOutcome(RuneUpgradeStatus Status, int NewLevel, 
 }
 
 /// <summary>성장(스킬·룬) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
-public sealed class GrowthRepository : IGrowthRepository
+public sealed class GrowthRepository : GameDbBase, IGrowthRepository
 {
     private const int RowTypeCurrency = 2;
     private const int GoldItemCode = 1;
 
-    private readonly GameDbFactory _dbFactory;
-
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public GrowthRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
+    public GrowthRepository(GameDbFactory dbFactory) : base(dbFactory) { }
 
     /// <summary>
     /// 스킬 1레벨 상승을 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -56,15 +52,8 @@ public sealed class GrowthRepository : IGrowthRepository
     public async Task<SkillLevelUpOutcome> ApplySkillLevelUpAsync(
         long userId, int characterId, int skillCode,
         Func<int, int, int, int, (SkillLevelUpStatus status, int availableAfter)> decide)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<SkillLevelUpOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 대상 캐릭터 확인(직업·레벨은 검증에 사용).
             var charRow = await db.Query("player_character")
                 .Select("class_code", "level")
@@ -72,8 +61,7 @@ public sealed class GrowthRepository : IGrowthRepository
                 .FirstOrDefaultAsync<CharClassLevelRow>(transaction);
             if (charRow is null)
             {
-                await transaction.RollbackAsync();
-                return SkillLevelUpOutcome.Fail(SkillLevelUpStatus.InvalidCharacter);
+                return TxResult<SkillLevelUpOutcome>.Rollback(SkillLevelUpOutcome.Fail(SkillLevelUpStatus.InvalidCharacter));
             }
 
             // 2) 그 캐릭터의 보유 스킬 레벨 집계(대상 현재 레벨 + 사용 포인트 = 레벨 합).
@@ -90,8 +78,7 @@ public sealed class GrowthRepository : IGrowthRepository
             var (status, availableAfter) = decide(charRow.ClassCode, charRow.Level, curLevel, spent);
             if (status != SkillLevelUpStatus.Ok)
             {
-                await transaction.RollbackAsync();
-                return SkillLevelUpOutcome.Fail(status);
+                return TxResult<SkillLevelUpOutcome>.Rollback(SkillLevelUpOutcome.Fail(status));
             }
 
             // 4) 반영: 행이 있으면 레벨 +1, 없으면 INSERT(첫 습득).
@@ -114,15 +101,8 @@ public sealed class GrowthRepository : IGrowthRepository
                 }, transaction);
             }
 
-            await transaction.CommitAsync();
-            return new SkillLevelUpOutcome(SkillLevelUpStatus.Ok, newLevel, availableAfter);
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<SkillLevelUpOutcome>.Commit(new SkillLevelUpOutcome(SkillLevelUpStatus.Ok, newLevel, availableAfter));
+        });
 
     /// <summary>
     /// 대상 캐릭터의 스킬을 전부 초기화(무료)하는 작업을 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -135,15 +115,8 @@ public sealed class GrowthRepository : IGrowthRepository
     /// <para>3) totalPoints 델리게이트 — 캐릭터 레벨 기준 총 스킬 포인트 산출(DB 접근 없음)</para>
     /// </remarks>
     public async Task<SkillResetOutcome> ApplySkillResetAsync(long userId, int characterId, Func<int, int> totalPoints)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<SkillResetOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 대상 캐릭터 확인(레벨은 초기화 후 총 포인트 산출에 사용).
             var charRow = await db.Query("player_character")
                 .Select("class_code", "level")
@@ -151,8 +124,7 @@ public sealed class GrowthRepository : IGrowthRepository
                 .FirstOrDefaultAsync<CharClassLevelRow>(transaction);
             if (charRow is null)
             {
-                await transaction.RollbackAsync();
-                return SkillResetOutcome.Fail(SkillResetStatus.InvalidCharacter);
+                return TxResult<SkillResetOutcome>.Rollback(SkillResetOutcome.Fail(SkillResetStatus.InvalidCharacter));
             }
 
             // 2) 해당 캐릭터의 투자된 스킬 행을 레벨 0·미장착으로 되돌린다(행 삭제 없음, 포인트 전량 회수). 재화 변동 없음.
@@ -160,15 +132,8 @@ public sealed class GrowthRepository : IGrowthRepository
                 .Where("user_id", userId).Where("character_id", characterId).Where("level", ">", 0)
                 .UpdateAsync(new { level = 0, equipped = 0 }, transaction);
 
-            await transaction.CommitAsync();
-            return new SkillResetOutcome(SkillResetStatus.Ok, resetCount, totalPoints(charRow.Level));
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<SkillResetOutcome>.Commit(new SkillResetOutcome(SkillResetStatus.Ok, resetCount, totalPoints(charRow.Level)));
+        });
 
     /// <summary>
     /// 액티브 스킬 장착 목록을 통째로 교체하는 작업을 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -186,15 +151,8 @@ public sealed class GrowthRepository : IGrowthRepository
     public async Task<SkillEquipOutcome> ApplySkillEquipAsync(
         long userId, int characterId, IReadOnlyList<int> skillCodes,
         Func<int, IReadOnlyDictionary<int, int>, SkillEquipStatus> validate)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<SkillEquipOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 대상 캐릭터 확인.
             var charRow = await db.Query("player_character")
                 .Select("class_code", "level")
@@ -202,8 +160,7 @@ public sealed class GrowthRepository : IGrowthRepository
                 .FirstOrDefaultAsync<CharClassLevelRow>(transaction);
             if (charRow is null)
             {
-                await transaction.RollbackAsync();
-                return SkillEquipOutcome.Fail(SkillEquipStatus.InvalidCharacter);
+                return TxResult<SkillEquipOutcome>.Rollback(SkillEquipOutcome.Fail(SkillEquipStatus.InvalidCharacter));
             }
 
             // 2) 보유 스킬(code→level) 조회.
@@ -217,8 +174,7 @@ public sealed class GrowthRepository : IGrowthRepository
             var status = validate(charRow.ClassCode, levels);
             if (status != SkillEquipStatus.Ok)
             {
-                await transaction.RollbackAsync();
-                return SkillEquipOutcome.Fail(status);
+                return TxResult<SkillEquipOutcome>.Rollback(SkillEquipOutcome.Fail(status));
             }
 
             // 4) 반영: 전부 해제 후 요청 목록만 장착(통째 교체).
@@ -233,15 +189,8 @@ public sealed class GrowthRepository : IGrowthRepository
                     .UpdateAsync(new { equipped = 1 }, transaction);
             }
 
-            await transaction.CommitAsync();
-            return new SkillEquipOutcome(SkillEquipStatus.Ok, skillCodes.ToList());
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<SkillEquipOutcome>.Commit(new SkillEquipOutcome(SkillEquipStatus.Ok, skillCodes.ToList()));
+        });
 
     /// <summary>
     /// 룬 1레벨 업그레이드(골드 소모)를 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -259,15 +208,8 @@ public sealed class GrowthRepository : IGrowthRepository
     /// </remarks>
     public async Task<RuneUpgradeOutcome> ApplyRuneUpgradeAsync(
         long userId, int runeCode, int prereqCode, int maxLevel, Func<int, long> costOf)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<RuneUpgradeOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 대상 룬 현재 레벨(계정 공용). 없으면 0.
             var curLevel = await db.Query("player_rune")
                 .Select("level")
@@ -277,8 +219,7 @@ public sealed class GrowthRepository : IGrowthRepository
             // 2) 최대 레벨 확인.
             if (curLevel >= maxLevel)
             {
-                await transaction.RollbackAsync();
-                return RuneUpgradeOutcome.Fail(RuneUpgradeStatus.MaxLevel);
+                return TxResult<RuneUpgradeOutcome>.Rollback(RuneUpgradeOutcome.Fail(RuneUpgradeStatus.MaxLevel));
             }
 
             // 3) 선행 룬 해금(레벨 ≥ 1) 확인(루트면 prereqCode=0이라 생략).
@@ -290,8 +231,7 @@ public sealed class GrowthRepository : IGrowthRepository
                     .FirstOrDefaultAsync<int?>(transaction) ?? 0;
                 if (prereqLevel < 1)
                 {
-                    await transaction.RollbackAsync();
-                    return RuneUpgradeOutcome.Fail(RuneUpgradeStatus.PrereqNotMet);
+                    return TxResult<RuneUpgradeOutcome>.Rollback(RuneUpgradeOutcome.Fail(RuneUpgradeStatus.PrereqNotMet));
                 }
             }
 
@@ -305,8 +245,7 @@ public sealed class GrowthRepository : IGrowthRepository
             long gold = goldRow?.Quantity ?? 0;
             if (gold < cost)
             {
-                await transaction.RollbackAsync();
-                return RuneUpgradeOutcome.Fail(RuneUpgradeStatus.InsufficientCurrency);
+                return TxResult<RuneUpgradeOutcome>.Rollback(RuneUpgradeOutcome.Fail(RuneUpgradeStatus.InsufficientCurrency));
             }
 
             // 5) 골드 차감(재화 행 UPDATE) + 룬 레벨 +1(없으면 INSERT).
@@ -334,13 +273,6 @@ public sealed class GrowthRepository : IGrowthRepository
                     .UpdateAsync(new { level = newLevel }, transaction);
             }
 
-            await transaction.CommitAsync();
-            return new RuneUpgradeOutcome(RuneUpgradeStatus.Ok, newLevel, cost, newGold);
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<RuneUpgradeOutcome>.Commit(new RuneUpgradeOutcome(RuneUpgradeStatus.Ok, newLevel, cost, newGold));
+        });
 }

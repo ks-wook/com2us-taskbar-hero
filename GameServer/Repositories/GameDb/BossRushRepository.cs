@@ -1,6 +1,4 @@
-﻿using System.Data.Common;
-using GameServer.Data;
-using GameServer.Models;
+﻿using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using MySqlConnector;
 using SqlKata.Execution;
@@ -46,17 +44,15 @@ public sealed record BossRushSettleTarget(long UserId, int BestClearMs, long Rec
 /// 보스러시 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).
 /// 랭킹 캐시(Redis)는 <see cref="GameServer.Repositories.MemoryDb.Interfaces.IBossRushRankCache"/>가 담당하고 이 클래스는 MySQL 정본만 다룬다.
 /// </summary>
-public sealed class BossRushRepository : IBossRushRepository
+public sealed class BossRushRepository : GameDbBase, IBossRushRepository
 {
-    private readonly GameDbFactory _dbFactory;
-
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public BossRushRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
+    public BossRushRepository(GameDbFactory dbFactory) : base(dbFactory) { }
 
     /// <summary>진행 중(status=1) 시즌 1행을 읽는다. 정산 중이면 없는 것으로 다룬다.</summary>
     public async Task<BossRushSeason?> GetRunningSeasonAsync()
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var row = await db.Query("boss_rush_season")
             .Select("season_id", "start_at", "end_at", "status")
             .Where("status", (int)BossRushSeasonStatus.Running)
@@ -69,7 +65,7 @@ public sealed class BossRushRepository : IBossRushRepository
     /// <summary>지정 시즌 1행을 읽는다(종료 시즌 조회 포함). 없으면 null.</summary>
     public async Task<BossRushSeason?> GetSeasonAsync(int seasonId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var row = await db.Query("boss_rush_season")
             .Select("season_id", "start_at", "end_at", "status")
             .Where("season_id", seasonId)
@@ -85,7 +81,7 @@ public sealed class BossRushRepository : IBossRushRepository
     public async Task<BossRushInfoSnapshot?> GetInfoSnapshotAsync(
         long userId, int seasonId, long todayStartUnix, long tomorrowStartUnix)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
 
         var player = await db.Query("game_player")
             .Select("max_stage_cleared")
@@ -140,28 +136,19 @@ public sealed class BossRushRepository : IBossRushRepository
     public async Task<BossRushEnterOutcome> ApplyEnterAsync(
         long userId, int unlockStageSequence, int dailyEntryLimit,
         long todayStartUnix, long tomorrowStartUnix, long nowMs)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<BossRushEnterOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 진행도 관측 + user_id 행 잠금.
-            var maxStageCleared = await LockPlayerMaxStageAsync(connection, transaction, userId);
+            var maxStageCleared = await LockPlayerMaxStageAsync(transaction, userId);
             if (maxStageCleared is null)
             {
-                await transaction.RollbackAsync();
-                return BossRushEnterOutcome.Fail(BossRushEnterStatus.NoPlayer);
+                return TxResult<BossRushEnterOutcome>.Rollback(BossRushEnterOutcome.Fail(BossRushEnterStatus.NoPlayer));
             }
 
             // 2) 해금 검증.
             if (maxStageCleared.Value < unlockStageSequence)
             {
-                await transaction.RollbackAsync();
-                return BossRushEnterOutcome.Fail(BossRushEnterStatus.Locked);
+                return TxResult<BossRushEnterOutcome>.Rollback(BossRushEnterOutcome.Fail(BossRushEnterStatus.Locked));
             }
 
             // 3) 진행 중 시즌. enter·clear는 캐시가 아니라 정본을 직접 읽는다(4.3).
@@ -172,8 +159,7 @@ public sealed class BossRushRepository : IBossRushRepository
                 .FirstOrDefaultAsync<BossRushSeasonRow>(transaction);
             if (season is null)
             {
-                await transaction.RollbackAsync();
-                return BossRushEnterOutcome.Fail(BossRushEnterStatus.SeasonClosed);
+                return TxResult<BossRushEnterOutcome>.Rollback(BossRushEnterOutcome.Fail(BossRushEnterStatus.SeasonClosed));
             }
 
             // 4) 오늘 사용 횟수 — 잠금 안에서 세므로 동시 요청이 한도를 넘기지 못한다.
@@ -184,8 +170,7 @@ public sealed class BossRushRepository : IBossRushRepository
                 .CountAsync<int>(transaction: transaction);
             if (used >= dailyEntryLimit)
             {
-                await transaction.RollbackAsync();
-                return BossRushEnterOutcome.Fail(BossRushEnterStatus.DailyLimit);
+                return TxResult<BossRushEnterOutcome>.Rollback(BossRushEnterOutcome.Fail(BossRushEnterStatus.DailyLimit));
             }
 
             // 5) 남아 있는 진행 중 런을 정리한다(나이와 무관). 방치형 클라이언트의 강제 종료를
@@ -208,15 +193,8 @@ public sealed class BossRushRepository : IBossRushRepository
                 clear_ms = 0,
             }, transaction);
 
-            await transaction.CommitAsync();
-            return new BossRushEnterOutcome(BossRushEnterStatus.Ok, runId, season.SeasonId, used + 1);
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<BossRushEnterOutcome>.Commit(new BossRushEnterOutcome(BossRushEnterStatus.Ok, runId, season.SeasonId, used + 1));
+        });
 
     /// <summary>
     /// 클리어 보고를 단일 트랜잭션으로 적용한다. 만료 판정은 이 경로가 하며(lazy 만료), 만료된 런은
@@ -232,28 +210,19 @@ public sealed class BossRushRepository : IBossRushRepository
     public async Task<BossRushClearOutcome> ApplyClearAsync(
         long userId, long runId, int clearMs, IReadOnlyList<(int Round, int ElapsedMs)> roundTimes,
         long runLifetimeMs, long nowMs)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<BossRushClearOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 런 행 잠금 + 소유자·상태 확인.
-            var locked = await LockRunAsync(connection, transaction, runId);
+            var locked = await LockRunAsync(transaction, runId);
             if (locked is null || locked.Value.UserId != userId)
             {
-                await transaction.RollbackAsync();
-                return BossRushClearOutcome.Fail(BossRushClearStatus.RunNotFound);
+                return TxResult<BossRushClearOutcome>.Rollback(BossRushClearOutcome.Fail(BossRushClearStatus.RunNotFound));
             }
 
             var run = locked.Value;
             if (run.Status != (int)BossRushRunStatus.Running)
             {
-                await transaction.RollbackAsync();
-                return BossRushClearOutcome.Fail(BossRushClearStatus.AlreadyFinished);
+                return TxResult<BossRushClearOutcome>.Rollback(BossRushClearOutcome.Fail(BossRushClearStatus.AlreadyFinished));
             }
 
             // 2) 만료 판정(읽는 시점). 정리 배치를 두지 않고 이 경로가 status를 확정한다(6.2).
@@ -265,8 +234,7 @@ public sealed class BossRushRepository : IBossRushRepository
                     .UpdateAsync(
                         new { status = (int)BossRushRunStatus.Expired, finished_at = nowMs },
                         transaction);
-                await transaction.CommitAsync();
-                return BossRushClearOutcome.Fail(BossRushClearStatus.AlreadyFinished);
+                return TxResult<BossRushClearOutcome>.Commit(BossRushClearOutcome.Fail(BossRushClearStatus.AlreadyFinished));
             }
 
             // 3) 조건부 종결 — 동시 중복 보고는 여기서 0행이 되어 갈린다.
@@ -283,8 +251,7 @@ public sealed class BossRushRepository : IBossRushRepository
                     transaction);
             if (closed == 0)
             {
-                await transaction.RollbackAsync();
-                return BossRushClearOutcome.Fail(BossRushClearStatus.AlreadyFinished);
+                return TxResult<BossRushClearOutcome>.Rollback(BossRushClearOutcome.Fail(BossRushClearStatus.AlreadyFinished));
             }
 
             // 4) 라운드별 소요 기록(클라 측정). 몬스터 구성은 복사하지 않는다 — round로 마스터를 찾으면 된다.
@@ -355,21 +322,14 @@ public sealed class BossRushRepository : IBossRushRepository
                 }
             }
 
-            await transaction.CommitAsync();
-            return new BossRushClearOutcome(
-                BossRushClearStatus.Ok, run.SeasonId, isNewRecord, bestClearMs, recordedAt, rankEligible);
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<BossRushClearOutcome>.Commit(new BossRushClearOutcome(
+                BossRushClearStatus.Ok, run.SeasonId, isNewRecord, bestClearMs, recordedAt, rankEligible));
+        });
 
     /// <summary>시즌 등재 인원을 센다(랭킹 캐시를 쓸 수 없을 때의 totalEntries).</summary>
     public async Task<int> CountEntriesAsync(int seasonId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         return await db.Query("boss_rush_record").Where("season_id", seasonId).CountAsync<int>();
     }
 
@@ -380,7 +340,7 @@ public sealed class BossRushRepository : IBossRushRepository
     public async Task<IReadOnlyList<BossRushRankRow>> GetRankPageAsync(
         int seasonId, int offset, int limit, bool useFinalRank)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
 
         var query = db.Query("boss_rush_record")
             .Select("user_id", "best_clear_ms", "recorded_at", "final_rank")
@@ -410,7 +370,7 @@ public sealed class BossRushRepository : IBossRushRepository
     /// </summary>
     public async Task<BossRushRankRow?> GetMyRankAsync(int seasonId, long userId, bool useFinalRank)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
 
         var mine = await db.Query("boss_rush_record")
             .Select("user_id", "best_clear_ms", "recorded_at", "final_rank")
@@ -448,7 +408,7 @@ public sealed class BossRushRepository : IBossRushRepository
             return new Dictionary<long, string>();
         }
 
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("game_player")
             .Select("user_id", "nickname")
             .WhereIn("user_id", userIds)
@@ -466,7 +426,7 @@ public sealed class BossRushRepository : IBossRushRepository
     /// <summary>시즌 기록을 정렬 순서로 페이지 단위 스캔한다(랭킹 캐시 워밍업용).</summary>
     public async Task<IReadOnlyList<BossRushSettleTarget>> ScanRecordsAsync(int seasonId, int offset, int limit)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("boss_rush_record")
             .Select("user_id", "best_clear_ms", "recorded_at")
             .Where("season_id", seasonId)
@@ -484,7 +444,7 @@ public sealed class BossRushRepository : IBossRushRepository
     /// </summary>
     public async Task<BossRushSeason?> ClaimSeasonForSettlementAsync(long nowUnix)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
 
         var target = await db.Query("boss_rush_season")
             .Select("season_id", "start_at", "end_at", "status")
@@ -510,7 +470,7 @@ public sealed class BossRushRepository : IBossRushRepository
     /// <summary>순위 미확정(final_rank=0) 기록을 정렬 순서로 상한까지 읽는다.</summary>
     public async Task<IReadOnlyList<BossRushSettleTarget>> GetUnsettledRecordsAsync(int seasonId, int limit)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var rows = await db.Query("boss_rush_record")
             .Select("user_id", "best_clear_ms", "recorded_at")
             .Where("season_id", seasonId)
@@ -525,7 +485,7 @@ public sealed class BossRushRepository : IBossRushRepository
     /// <summary>이미 순위가 확정된 기록 수(정산 재진입 시 다음 페이지의 시작 순위를 잇는 데 쓴다).</summary>
     public async Task<int> CountSettledAsync(int seasonId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         return await db.Query("boss_rush_record")
             .Where("season_id", seasonId)
             .Where("final_rank", ">", 0)
@@ -538,15 +498,8 @@ public sealed class BossRushRepository : IBossRushRepository
     /// </summary>
     public async Task<bool> SettleRecordAsync(
         int seasonId, long userId, int finalRank, MailDraft? rewardMail, long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<bool>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             var mailId = rewardMail is null
                 ? 0L
                 : await MailRepository.InsertMailAsync(db, transaction, userId, rewardMail, nowUnix);
@@ -560,24 +513,16 @@ public sealed class BossRushRepository : IBossRushRepository
             if (updated == 0)
             {
                 // 이미 정산된 행 — 방금 만든 메일까지 함께 되돌린다(중복 발급 방지).
-                await transaction.RollbackAsync();
-                return false;
+                return TxResult<bool>.Rollback(false);
             }
 
-            await transaction.CommitAsync();
-            return true;
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<bool>.Commit(true);
+        });
 
     /// <summary>시즌을 종료 처리한다(status → 3, settled_at 기록).</summary>
     public async Task CloseSeasonAsync(int seasonId, long nowUnix)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         await db.Query("boss_rush_season")
             .Where("season_id", seasonId)
             .UpdateAsync(new { status = (int)BossRushSeasonStatus.Closed, settled_at = nowUnix });
@@ -589,7 +534,7 @@ public sealed class BossRushRepository : IBossRushRepository
     /// </summary>
     public async Task<BossRushSeason> StartNextSeasonAsync(long startAt, long endAt)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
 
         var existing = await db.Query("boss_rush_season")
             .Select("season_id", "start_at", "end_at", "status")
@@ -632,11 +577,10 @@ public sealed class BossRushRepository : IBossRushRepository
     /// game_player 행을 잠그고 진행도(max_stage_cleared)를 읽는다(SELECT ... FOR UPDATE). 행이 없으면 null.
     /// 잠금이 필요해 SqlKata가 아닌 원시 커맨드를 쓰지만, 반환은 스칼라라 dynamic 매핑이 없다.
     /// </summary>
-    private static async Task<int?> LockPlayerMaxStageAsync(
-        MySqlConnection connection, DbTransaction transaction, long userId)
+    private static async Task<int?> LockPlayerMaxStageAsync(MySqlTransaction transaction, long userId)
     {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction as MySqlTransaction;
+        await using var command = transaction.Connection!.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "SELECT max_stage_cleared FROM game_player WHERE user_id = @userId FOR UPDATE";
         command.Parameters.AddWithValue("@userId", userId);
 
@@ -646,10 +590,10 @@ public sealed class BossRushRepository : IBossRushRepository
 
     /// <summary>boss_rush_run 행을 잠그고 읽는다(SELECT ... FOR UPDATE). 행이 없으면 null.</summary>
     private static async Task<(long UserId, int SeasonId, long StartedAt, int Status)?> LockRunAsync(
-        MySqlConnection connection, DbTransaction transaction, long runId)
+        MySqlTransaction transaction, long runId)
     {
-        await using var command = connection.CreateCommand();
-        command.Transaction = transaction as MySqlTransaction;
+        await using var command = transaction.Connection!.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             "SELECT user_id, season_id, started_at, status FROM boss_rush_run WHERE run_id = @runId FOR UPDATE";
         command.Parameters.AddWithValue("@runId", runId);

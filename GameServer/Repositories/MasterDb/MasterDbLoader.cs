@@ -1,6 +1,7 @@
-﻿using GameServer.Data;
-using GameServer.Models;
+﻿using GameServer.Models;
 using GameServer.Repositories.MasterDb.Interfaces;
+using MySqlConnector;
+using SqlKata.Compilers;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 using TaskbarHero.Common.MasterData;
@@ -11,7 +12,7 @@ using GameServer.MasterData;
 namespace GameServer.Repositories.MasterDb;
 
 /// <summary>
-/// 마스터 DB 적재기. <c>MasterDbFactory</c>로 커넥션 하나를 열어 마스터 테이블 전부를 읽고,
+/// 마스터 DB 적재기. 커넥션 하나를 열어 마스터 테이블 전부를 읽고,
 /// 조회에 바로 쓸 수 있는 딕셔너리·파생값으로 바꿔 <see cref="MasterDbSnapshot"/>에 담는다.
 /// <para>행 매핑 POCO는 이 파일 안의 <c>file sealed class</c>로 둔다 — 적재 밖에서 쓸 일이 없다.</para>
 /// </summary>
@@ -33,20 +34,29 @@ public sealed class MasterDbLoader : IMasterDbLoader
     /// <summary>boss_rush_master는 콘텐츠 1행만 쓴다(보스러시 기획서 4.1).</summary>
     private const int BossRushContentId = 1;
 
-    private readonly MasterDbFactory _masterDbFactory;
+    /// <summary>마스터 DB 연결 문자열. 소비처가 이 클래스뿐이라 별도 팩토리를 두지 않는다.</summary>
+    private readonly string _connectionString;
+
+    /// <summary>SqlKata MySQL 컴파일러(원시 SQL 조립 금지 — 쿼리 빌더로만 질의한다).</summary>
+    private readonly Compiler _compiler = new MySqlCompiler();
+
     private readonly ILogger<MasterDbLoader> _logger;
 
-    /// <summary>마스터 DB 커넥션 팩토리와 로거를 주입받는다.</summary>
-    public MasterDbLoader(MasterDbFactory masterDbFactory, ILogger<MasterDbLoader> logger)
+    /// <summary>설정에서 마스터 DB 연결 문자열을 읽고 로거를 주입받는다.</summary>
+    public MasterDbLoader(IConfiguration configuration, ILogger<MasterDbLoader> logger)
     {
-        _masterDbFactory = masterDbFactory;
+        _connectionString = configuration.GetConnectionString("MasterDb")
+            ?? throw new InvalidOperationException("ConnectionStrings:MasterDb 설정이 없습니다.");
         _logger = logger;
     }
+
+    /// <summary>마스터 테이블 조회용 QueryFactory를 만든다. 적재는 기동 시 1회뿐이라 커넥션도 그때 하나만 연다.</summary>
+    private QueryFactory CreateQueryFactory() => new(new MySqlConnection(_connectionString), _compiler);
 
     /// <summary>커넥션 하나로 마스터 테이블 전부를 읽어 스냅샷을 만든다. 실패는 예외로 올린다.</summary>
     public async Task<MasterDbSnapshot> LoadAllAsync()
     {
-        using var db = _masterDbFactory.Create();
+        using var db = CreateQueryFactory();
 
         var stages = await LoadStagesAsync(db);
         var (levelExp, maxLevel, levelSkillPoints) = await LoadLevelsAsync(db);

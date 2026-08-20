@@ -3,7 +3,6 @@ using Utf8StringInterpolation;
 using ZLogger;
 using GameServer.Auth;
 using GameServer.Batch;
-using GameServer.Data;
 using GameServer.MasterData;
 using GameServer.Middleware;
 using GameServer.Repositories.GameDb;
@@ -11,6 +10,9 @@ using GameServer.Repositories.GameDb.Interfaces;
 using GameServer.Services;
 using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories.MemoryDb;
+using GameServer.Repositories.MasterDb.Interfaces;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 // DB 조회는 SqlKata 제네릭 매핑(.GetAsync<T>/.FirstOrDefaultAsync<T>)으로 POCO에 매핑한다(dynamic 금지, CLAUDE.md 규칙).
 // snake_case 컬럼 → PascalCase 프로퍼티 자동 매핑을 위해 Dapper 규칙을 켠다(SqlKata.Execution이 Dapper로 실행).
@@ -53,10 +55,10 @@ builder.Services.AddProblemDetails();
 
 // DB 접근 팩토리(SqlKata + MySqlConnector).
 builder.Services.AddSingleton<GameDbFactory>();
-builder.Services.AddSingleton<MasterDbFactory>();
 
 // 마스터 데이터 인메모리 캐시(기동 시 1회 적재).
-builder.Services.AddSingleton<MasterDataProvider>();
+builder.Services.AddSingleton<IMasterDbLoader, MasterDbLoader>();
+builder.Services.AddSingleton<MasterDbProvider>();
 
 // 마스터 데이터에서 파생되는 계산기. 리포지토리에 생성자 주입되어 **트랜잭션 안에서** 호출되므로
 // 계산 함수를 델리게이트 인자로 넘기지 않고도 트랜잭션 경계(잠금 읽기 → 결정 → 쓰기)가 유지된다.
@@ -184,7 +186,7 @@ builder.Services.AddHostedService<BossRushSeasonBatchService>();
 var app = builder.Build();
 
 // 마스터 데이터 기동 시 적재(실패 시 IsLoaded=false → 관련 요청은 MasterDataNotLoaded).
-await app.Services.GetRequiredService<MasterDataProvider>().LoadAsync();
+await app.Services.GetRequiredService<MasterDbProvider>().LoadAsync();
 
 // 파이프라인 최외곽: 접근 로그(요청 1줄) → 전역 예외 처리 순(로깅 규칙 §4·§6).
 // 접근 로그를 바깥에 두어야 예외 처리기가 500으로 확정한 상태코드까지 기록된다.

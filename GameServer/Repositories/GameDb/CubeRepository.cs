@@ -1,5 +1,4 @@
 ﻿using System.Data.Common;
-using GameServer.Data;
 using GameServer.MasterData;
 using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
@@ -72,20 +71,18 @@ public sealed record CraftOutcome(CraftStatus Status, int CubeLevel, long CubeEx
 }
 
 /// <summary>큐브(합성·분해·제작) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
-public sealed class CubeRepository : ICubeRepository
+public sealed class CubeRepository : GameDbBase, ICubeRepository
 {
     private const int RowTypeItem = 1;
     private const int RowTypeCurrency = 2;
     private const int GoldItemCode = 1;
     private const int ItemTypeMaterial = 2;
 
-    private readonly GameDbFactory _dbFactory;
     private readonly ICubeLevelCalculator _cubeLevel;
 
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public CubeRepository(GameDbFactory dbFactory, ICubeLevelCalculator cubeLevel)
+    /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
+    public CubeRepository(GameDbFactory dbFactory, ICubeLevelCalculator cubeLevel) : base(dbFactory)
     {
-        _dbFactory = dbFactory;
         _cubeLevel = cubeLevel;
     }
 
@@ -107,15 +104,8 @@ public sealed class CubeRepository : ICubeRepository
         long userId, IReadOnlyList<long> itemIds,
         Func<int, IReadOnlyList<CombineInput>, CombineDecision> decide,
         long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<CombineOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             var (cubeLevel, cubeExp, hasCube) = await LoadCubeAsync(db, transaction, userId);
 
             // 1) 입력 아이템 조회(계정 소유). 개수 불일치 = 일부 미보유.
@@ -127,8 +117,7 @@ public sealed class CubeRepository : ICubeRepository
 
             if (rowList.Count != itemIds.Count || rowList.Any(r => r.RowType != RowTypeItem))
             {
-                await transaction.RollbackAsync();
-                return CombineOutcome.Fail(CombineStatus.ItemNotFound);
+                return TxResult<CombineOutcome>.Rollback(CombineOutcome.Fail(CombineStatus.ItemNotFound));
             }
 
             // 2) 장착 중 아이템은 소모 불가.
@@ -138,8 +127,7 @@ public sealed class CubeRepository : ICubeRepository
                 .GetAsync<long>(transaction)).ToHashSet();
             if (rowList.Any(r => equippedIds.Contains(r.PlayerItemId)))
             {
-                await transaction.RollbackAsync();
-                return CombineOutcome.Fail(CombineStatus.ItemEquipped);
+                return TxResult<CombineOutcome>.Rollback(CombineOutcome.Fail(CombineStatus.ItemEquipped));
             }
 
             // 3) 마스터 검증 + 결과 산출(서비스).
@@ -147,8 +135,7 @@ public sealed class CubeRepository : ICubeRepository
             var decision = decide(cubeLevel, inputs);
             if (decision.Status != CombineStatus.Ok)
             {
-                await transaction.RollbackAsync();
-                return CombineOutcome.Fail(decision.Status);
+                return TxResult<CombineOutcome>.Rollback(CombineOutcome.Fail(decision.Status));
             }
 
             // 4) 입력 삭제.
@@ -190,18 +177,11 @@ public sealed class CubeRepository : ICubeRepository
                 enhanceLevel = 0,
             });
 
-            await transaction.CommitAsync();
-            return new CombineOutcome(CombineStatus.Ok, resultItemId, decision.ResultItemCode, decision.ResultGrade, newLevel, newExp)
+            return TxResult<CombineOutcome>.Commit(new CombineOutcome(CombineStatus.Ok, resultItemId, decision.ResultItemCode, decision.ResultGrade, newLevel, newExp)
             {
                 Delta = delta,
-            };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            });
+        });
 
     /// <summary>
     /// 아이템 분해(아이템 소모 → 골드·큐브 경험치 획득)를 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -222,15 +202,8 @@ public sealed class CubeRepository : ICubeRepository
         long userId, IReadOnlyList<(long itemId, int count)> items,
         Func<int, IReadOnlyList<DismantleInput>, DismantleReward> computeReward,
         long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<DismantleOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             var (cubeLevel, cubeExp, hasCube) = await LoadCubeAsync(db, transaction, userId);
 
             var ids = items.Select(i => i.itemId).ToList();
@@ -251,20 +224,17 @@ public sealed class CubeRepository : ICubeRepository
             {
                 if (!byId.TryGetValue(itemId, out var row) || row.RowType != RowTypeItem)
                 {
-                    await transaction.RollbackAsync();
-                    return DismantleOutcome.Fail(DismantleStatus.ItemNotFound);
+                    return TxResult<DismantleOutcome>.Rollback(DismantleOutcome.Fail(DismantleStatus.ItemNotFound));
                 }
 
                 if (equippedIds.Contains(itemId))
                 {
-                    await transaction.RollbackAsync();
-                    return DismantleOutcome.Fail(DismantleStatus.ItemEquipped);
+                    return TxResult<DismantleOutcome>.Rollback(DismantleOutcome.Fail(DismantleStatus.ItemEquipped));
                 }
 
                 if (count < 1 || count > row.Quantity)
                 {
-                    await transaction.RollbackAsync();
-                    return DismantleOutcome.Fail(DismantleStatus.InsufficientQuantity);
+                    return TxResult<DismantleOutcome>.Rollback(DismantleOutcome.Fail(DismantleStatus.InsufficientQuantity));
                 }
 
                 inputs.Add(new DismantleInput(itemId, row.ItemCode, count));
@@ -306,21 +276,14 @@ public sealed class CubeRepository : ICubeRepository
             var (newLevel, newExp) = _cubeLevel.Calculate(cubeLevel, cubeExp, reward.TotalCubeExp);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
 
-            await transaction.CommitAsync();
-            return new DismantleOutcome(DismantleStatus.Ok, reward.TotalGold, reward.TotalCubeExp)
+            return TxResult<DismantleOutcome>.Commit(new DismantleOutcome(DismantleStatus.Ok, reward.TotalGold, reward.TotalCubeExp)
             {
                 Delta = delta,
                 NewCubeLevel = newLevel,
                 NewCubeExp = newExp,
                 GoldBalance = goldBalance,
-            };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            });
+        });
 
     /// <summary>
     /// 아이템 제작(골드·재료 소모 → 결과 아이템 획득)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -341,22 +304,14 @@ public sealed class CubeRepository : ICubeRepository
     public async Task<CraftOutcome> ApplyCraftAsync(
         long userId, RecipeDef recipe, int resultItemType, int resultStackMax, long cubeExpGain,
         long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<CraftOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             var (cubeLevel, cubeExp, hasCube) = await LoadCubeAsync(db, transaction, userId);
 
             // 1) 큐브 레벨 요구치.
             if (cubeLevel < recipe.ReqCubeLevel)
             {
-                await transaction.RollbackAsync();
-                return CraftOutcome.Fail(CraftStatus.CubeLevelInsufficient);
+                return TxResult<CraftOutcome>.Rollback(CraftOutcome.Fail(CraftStatus.CubeLevelInsufficient));
             }
 
             // 2) 비용 골드.
@@ -367,8 +322,7 @@ public sealed class CubeRepository : ICubeRepository
             long gold = goldRow?.Quantity ?? 0;
             if (gold < recipe.CostGold)
             {
-                await transaction.RollbackAsync();
-                return CraftOutcome.Fail(CraftStatus.InsufficientCurrency);
+                return TxResult<CraftOutcome>.Rollback(CraftOutcome.Fail(CraftStatus.InsufficientCurrency));
             }
 
             // 3) 재료 보유 확인(재료 코드별 총 보유 수량 ≥ 요구).
@@ -381,8 +335,7 @@ public sealed class CubeRepository : ICubeRepository
                 long owned = matRows.Sum(m => m.Quantity);
                 if (owned < ing.Quantity)
                 {
-                    await transaction.RollbackAsync();
-                    return CraftOutcome.Fail(CraftStatus.RecipeNotMet);
+                    return TxResult<CraftOutcome>.Rollback(CraftOutcome.Fail(CraftStatus.RecipeNotMet));
                 }
             }
 
@@ -410,23 +363,15 @@ public sealed class CubeRepository : ICubeRepository
                 resultItemType, resultStackMax, capacity, used, nowUnix, delta);
             if (!stored)
             {
-                await transaction.RollbackAsync();
-                return CraftOutcome.Fail(CraftStatus.InventoryFull);
+                return TxResult<CraftOutcome>.Rollback(CraftOutcome.Fail(CraftStatus.InventoryFull));
             }
 
             // 7) 큐브 경험치 반영.
             var (newLevel, newExp) = _cubeLevel.Calculate(cubeLevel, cubeExp, cubeExpGain);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
 
-            await transaction.CommitAsync();
-            return new CraftOutcome(CraftStatus.Ok, newLevel, newExp) { Delta = delta, GoldBalance = goldBalance };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<CraftOutcome>.Commit(new CraftOutcome(CraftStatus.Ok, newLevel, newExp) { Delta = delta, GoldBalance = goldBalance });
+        });
 
     // ── 헬퍼 ──
 

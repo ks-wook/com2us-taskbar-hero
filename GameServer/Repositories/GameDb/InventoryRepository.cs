@@ -1,5 +1,4 @@
 ﻿using System.Data.Common;
-using GameServer.Data;
 using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using SqlKata.Execution;
@@ -64,16 +63,14 @@ public sealed record InventoryBagOutcome(InventoryPageStatus Status, IReadOnlyLi
 }
 
 /// <summary>인벤토리/아이템 액션 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
-public sealed class InventoryRepository : IInventoryRepository
+public sealed class InventoryRepository : GameDbBase, IInventoryRepository
 {
     private const int RowTypeItem = 1;
     private const int RowTypeCurrency = 2;
     private const int GoldItemCode = 1;
 
-    private readonly GameDbFactory _dbFactory;
-
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public InventoryRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
+    public InventoryRepository(GameDbFactory dbFactory) : base(dbFactory) { }
 
     /// <summary>
     /// 그 계정의 가방 아이템을 slot 커서 keyset 페이징으로 조회한다. 계정 세이브가 없으면 NoPlayer.
@@ -101,9 +98,7 @@ public sealed class InventoryRepository : IInventoryRepository
     /// </remarks>
     public async Task<InventoryBagOutcome> GetPageAsync(long userId, int cursor, int limit)
     {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        var db = _dbFactory.Create(connection);
+        using var db = Db();
 
         // 1) 요청 구간만(커서 다음부터 limit개). 한 건 더 읽어 호출측이 hasMore를 판정한다.
         var rows = await db.Query("player_item")
@@ -167,15 +162,8 @@ public sealed class InventoryRepository : IInventoryRepository
     public async Task<EquipOutcome> ApplyEquipAsync(
         long userId, int characterId, long itemId,
         Func<int, int, int, (bool ok, int slot)> validate)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<EquipOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 대상 캐릭터 존재 확인(클래스·레벨은 장착 검증에 사용).
             var charRow = await db.Query("player_character")
                 .Select("class_code", "level")
@@ -183,8 +171,7 @@ public sealed class InventoryRepository : IInventoryRepository
                 .FirstOrDefaultAsync<CharClassLevelRow>(transaction);
             if (charRow is null)
             {
-                await transaction.RollbackAsync();
-                return EquipOutcome.Fail(EquipStatus.InvalidCharacter);
+                return TxResult<EquipOutcome>.Rollback(EquipOutcome.Fail(EquipStatus.InvalidCharacter));
             }
 
             // 2) 대상 아이템 존재 확인(계정 소유). slot은 장착 시 반납할 가방 칸이다.
@@ -194,8 +181,7 @@ public sealed class InventoryRepository : IInventoryRepository
                 .FirstOrDefaultAsync<ItemCodeEnhanceSlotRow>(transaction);
             if (itemRow is null)
             {
-                await transaction.RollbackAsync();
-                return EquipOutcome.Fail(EquipStatus.ItemNotFound);
+                return TxResult<EquipOutcome>.Rollback(EquipOutcome.Fail(EquipStatus.ItemNotFound));
             }
 
             // 3) 이미 어딘가에 장착 중이면 거부(PK가 player_item_id).
@@ -205,8 +191,7 @@ public sealed class InventoryRepository : IInventoryRepository
                 .FirstOrDefaultAsync<long?>(transaction);
             if (alreadyEquippedId is not null)
             {
-                await transaction.RollbackAsync();
-                return EquipOutcome.Fail(EquipStatus.ItemEquipped);
+                return TxResult<EquipOutcome>.Rollback(EquipOutcome.Fail(EquipStatus.ItemEquipped));
             }
 
             int itemCode = itemRow.ItemCode;
@@ -218,8 +203,7 @@ public sealed class InventoryRepository : IInventoryRepository
             var (ok, slot) = validate(itemCode, classCode, level);
             if (!ok)
             {
-                await transaction.RollbackAsync();
-                return EquipOutcome.Fail(EquipStatus.NotEquippable);
+                return TxResult<EquipOutcome>.Rollback(EquipOutcome.Fail(EquipStatus.NotEquippable));
             }
 
             // 5) 같은 캐릭터-슬롯에 기존 장비가 있으면 해제(스왑).
@@ -250,8 +234,7 @@ public sealed class InventoryRepository : IInventoryRepository
                 prevBagSlot = freedSlot ?? await InventorySlotAllocator.FindFreeSlotAsync(db, transaction, userId);
                 if (prevBagSlot is null)
                 {
-                    await transaction.RollbackAsync();
-                    return EquipOutcome.Fail(EquipStatus.InventoryFull);
+                    return TxResult<EquipOutcome>.Rollback(EquipOutcome.Fail(EquipStatus.InventoryFull));
                 }
 
                 await db.Query("player_item").Where("player_item_id", prevItemId.Value)
@@ -277,15 +260,8 @@ public sealed class InventoryRepository : IInventoryRepository
                 delta.upserted.Add(await LoadBagItemAsync(db, transaction, prevItemId.Value, prevBagSlot.Value));
             }
 
-            await transaction.CommitAsync();
-            return new EquipOutcome(EquipStatus.Ok, slot, prevItemId, prevBagSlot) { Delta = delta };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<EquipOutcome>.Commit(new EquipOutcome(EquipStatus.Ok, slot, prevItemId, prevBagSlot) { Delta = delta });
+        });
 
     /// <summary>
     /// 지정 캐릭터·장착 슬롯의 장비 해제를 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -302,15 +278,8 @@ public sealed class InventoryRepository : IInventoryRepository
     /// <para>5) player_item_equipped DELETE — 장착 행 삭제</para>
     /// </remarks>
     public async Task<UnequipOutcome> ApplyUnequipAsync(long userId, int characterId, int slot)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<UnequipOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 대상 캐릭터 존재 확인.
             var charId = await db.Query("player_character")
                 .Select("character_id")
@@ -318,8 +287,7 @@ public sealed class InventoryRepository : IInventoryRepository
                 .FirstOrDefaultAsync<int?>(transaction);
             if (charId is null)
             {
-                await transaction.RollbackAsync();
-                return UnequipOutcome.Fail(UnequipStatus.InvalidCharacter);
+                return TxResult<UnequipOutcome>.Rollback(UnequipOutcome.Fail(UnequipStatus.InvalidCharacter));
             }
 
             // 해당 캐릭터-슬롯의 장착 행 조회.
@@ -329,16 +297,14 @@ public sealed class InventoryRepository : IInventoryRepository
                 .FirstOrDefaultAsync<long?>(transaction);
             if (itemId is null)
             {
-                await transaction.RollbackAsync();
-                return UnequipOutcome.Fail(UnequipStatus.NotEquipped);
+                return TxResult<UnequipOutcome>.Rollback(UnequipOutcome.Fail(UnequipStatus.NotEquipped));
             }
 
             // 가방에 되돌릴 빈 칸 확보. 장착 중에는 칸을 쓰지 않으므로 해제하려면 자리가 있어야 한다.
             var bagSlot = await InventorySlotAllocator.FindFreeSlotAsync(db, transaction, userId);
             if (bagSlot is null)
             {
-                await transaction.RollbackAsync();
-                return UnequipOutcome.Fail(UnequipStatus.InventoryFull);
+                return TxResult<UnequipOutcome>.Rollback(UnequipOutcome.Fail(UnequipStatus.InventoryFull));
             }
 
             await db.Query("player_item").Where("player_item_id", itemId.Value)
@@ -350,15 +316,8 @@ public sealed class InventoryRepository : IInventoryRepository
             var delta = new InventoryDeltaDto();
             delta.upserted.Add(await LoadBagItemAsync(db, transaction, itemId.Value, bagSlot.Value));
 
-            await transaction.CommitAsync();
-            return new UnequipOutcome(UnequipStatus.Ok, itemId.Value, bagSlot.Value) { Delta = delta };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<UnequipOutcome>.Commit(new UnequipOutcome(UnequipStatus.Ok, itemId.Value, bagSlot.Value) { Delta = delta });
+        });
 
     /// <summary>
     /// 인벤토리 칸 이동(목표 칸이 차 있으면 교환)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -374,15 +333,8 @@ public sealed class InventoryRepository : IInventoryRepository
     /// <para>4-b) 점유자 없음: 대상 slot을 목표 칸으로 UPDATE(1회)</para>
     /// </remarks>
     public async Task<MoveOutcome> ApplyMoveAsync(long userId, long itemId, int toSlot)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<MoveOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 용량 확인(toSlot 범위 검증용). game_player 없으면 인벤토리 자체가 없음.
             var capacityVal = await db.Query("game_player")
                 .Select("inventory_capacity")
@@ -390,15 +342,13 @@ public sealed class InventoryRepository : IInventoryRepository
                 .FirstOrDefaultAsync<int?>(transaction);
             if (capacityVal is null)
             {
-                await transaction.RollbackAsync();
-                return MoveOutcome.Fail(MoveStatus.ItemNotFound);
+                return TxResult<MoveOutcome>.Rollback(MoveOutcome.Fail(MoveStatus.ItemNotFound));
             }
 
             int capacity = capacityVal.Value;
             if (toSlot < 0 || toSlot >= capacity)
             {
-                await transaction.RollbackAsync();
-                return MoveOutcome.Fail(MoveStatus.InvalidSlot);
+                return TxResult<MoveOutcome>.Rollback(MoveOutcome.Fail(MoveStatus.InvalidSlot));
             }
 
             // 2) 이동 대상 아이템(계정 소유) 확인. item_code·quantity·enhance_level은 가방 변경분(5.0) 조립용.
@@ -408,23 +358,20 @@ public sealed class InventoryRepository : IInventoryRepository
                 .FirstOrDefaultAsync<ItemRowTypeSlotRow>(transaction);
             if (itemRow is null)
             {
-                await transaction.RollbackAsync();
-                return MoveOutcome.Fail(MoveStatus.ItemNotFound);
+                return TxResult<MoveOutcome>.Rollback(MoveOutcome.Fail(MoveStatus.ItemNotFound));
             }
 
             // 재화 행(row_type≠1)이나 미배치(slot NULL) 행은 이동 대상이 아니다.
             if (itemRow.RowType != RowTypeItem || itemRow.Slot is null)
             {
-                await transaction.RollbackAsync();
-                return MoveOutcome.Fail(MoveStatus.ItemNotFound);
+                return TxResult<MoveOutcome>.Rollback(MoveOutcome.Fail(MoveStatus.ItemNotFound));
             }
 
             int fromSlot = itemRow.Slot.Value;
             if (fromSlot == toSlot)
             {
                 // 같은 칸으로의 이동은 변경 없음(가방 변경분도 비어 있다).
-                await transaction.CommitAsync();
-                return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null);
+                return TxResult<MoveOutcome>.Commit(new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null));
             }
 
             // 3) 목표 칸 점유자 조회(변경분 조립을 위해 표시 정보까지 함께 읽는다).
@@ -460,22 +407,14 @@ public sealed class InventoryRepository : IInventoryRepository
                     enhanceLevel = occupant.EnhanceLevel,
                 });
 
-                await transaction.CommitAsync();
-                return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, occupant.PlayerItemId, fromSlot) { Delta = delta };
+                return TxResult<MoveOutcome>.Commit(new MoveOutcome(MoveStatus.Ok, itemId, toSlot, occupant.PlayerItemId, fromSlot) { Delta = delta });
             }
 
             // 빈 칸으로 이동.
             await db.Query("player_item").Where("player_item_id", itemId).UpdateAsync(new { slot = toSlot }, transaction);
 
-            await transaction.CommitAsync();
-            return new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null) { Delta = delta };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<MoveOutcome>.Commit(new MoveOutcome(MoveStatus.Ok, itemId, toSlot, null, null) { Delta = delta });
+        });
 
     /// <summary>
     /// 장비 강화(단계 +1)를 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -496,15 +435,8 @@ public sealed class InventoryRepository : IInventoryRepository
     public async Task<EnhanceOutcome> ApplyEnhanceAsync(
         long userId, long itemId,
         Func<int, int, (EnhancePlanStatus status, long cost, int currencyCode)> plan)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<EnhanceOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 대상 아이템 존재 확인(계정 소유).
             var itemRow = await db.Query("player_item")
                 .Select("row_type", "slot", "item_code", "quantity", "enhance_level")
@@ -512,25 +444,22 @@ public sealed class InventoryRepository : IInventoryRepository
                 .FirstOrDefaultAsync<ItemRowTypeSlotRow>(transaction);
             if (itemRow is null)
             {
-                await transaction.RollbackAsync();
-                return EnhanceOutcome.Fail(EnhanceStatus.ItemNotFound);
+                return TxResult<EnhanceOutcome>.Rollback(EnhanceOutcome.Fail(EnhanceStatus.ItemNotFound));
             }
 
             // 재화 행(row_type≠1)은 강화 대상이 아니다(마스터 판정 전에 걸러낸다).
             if (itemRow.RowType != RowTypeItem)
             {
-                await transaction.RollbackAsync();
-                return EnhanceOutcome.Fail(EnhanceStatus.NotEquippable);
+                return TxResult<EnhanceOutcome>.Rollback(EnhanceOutcome.Fail(EnhanceStatus.NotEquippable));
             }
 
             // 2) 마스터 검증: 장비 여부 · 다음 단계 존재 · 비용/소모 재화.
             var (planStatus, cost, currencyCode) = plan(itemRow.ItemCode, itemRow.EnhanceLevel);
             if (planStatus != EnhancePlanStatus.Ok)
             {
-                await transaction.RollbackAsync();
-                return EnhanceOutcome.Fail(planStatus == EnhancePlanStatus.MaxReached
+                return TxResult<EnhanceOutcome>.Rollback(EnhanceOutcome.Fail(planStatus == EnhancePlanStatus.MaxReached
                     ? EnhanceStatus.MaxEnhanceReached
-                    : EnhanceStatus.NotEquippable);
+                    : EnhanceStatus.NotEquippable));
             }
 
             // 3) 비용 재화 잔액 확인.
@@ -542,8 +471,7 @@ public sealed class InventoryRepository : IInventoryRepository
             long balance = currencyRow is null ? 0 : currencyRow.Quantity;
             if (balance < cost)
             {
-                await transaction.RollbackAsync();
-                return EnhanceOutcome.Fail(EnhanceStatus.InsufficientCurrency);
+                return TxResult<EnhanceOutcome>.Rollback(EnhanceOutcome.Fail(EnhanceStatus.InsufficientCurrency));
             }
 
             // 4) 비용 차감(재화 행 UPDATE).
@@ -563,16 +491,9 @@ public sealed class InventoryRepository : IInventoryRepository
             int equippedUpdated = await db.Query("player_item_equipped").Where("player_item_id", itemId)
                 .UpdateAsync(new { enhance_level = newLevel }, transaction);
 
-            await transaction.CommitAsync();
-            return new EnhanceOutcome(
-                EnhanceStatus.Ok, newLevel, cost, currencyCode, newBalance, equippedUpdated > 0);
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<EnhanceOutcome>.Commit(new EnhanceOutcome(
+                EnhanceStatus.Ok, newLevel, cost, currencyCode, newBalance, equippedUpdated > 0));
+        });
 
     /// <summary>
     /// 인벤토리 용량 1칸 확장(골드 소모)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -587,15 +508,8 @@ public sealed class InventoryRepository : IInventoryRepository
     /// <para>5) game_player UPDATE — inventory_capacity +1 및 updated_at 갱신</para>
     /// </remarks>
     public async Task<ExpandOutcome> ApplyExpandAsync(long userId, Func<int, (bool ok, long cost)> planOne, long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<ExpandOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 현재 용량 확인.
             var capacityVal = await db.Query("game_player")
                 .Select("inventory_capacity")
@@ -603,8 +517,7 @@ public sealed class InventoryRepository : IInventoryRepository
                 .FirstOrDefaultAsync<int?>(transaction);
             if (capacityVal is null)
             {
-                await transaction.RollbackAsync();
-                return ExpandOutcome.Fail(ExpandStatus.NoPlayer);
+                return TxResult<ExpandOutcome>.Rollback(ExpandOutcome.Fail(ExpandStatus.NoPlayer));
             }
 
             int capacity = capacityVal.Value;
@@ -613,8 +526,7 @@ public sealed class InventoryRepository : IInventoryRepository
             var (ok, cost) = planOne(capacity);
             if (!ok)
             {
-                await transaction.RollbackAsync();
-                return ExpandOutcome.Fail(ExpandStatus.CapacityMax);
+                return TxResult<ExpandOutcome>.Rollback(ExpandOutcome.Fail(ExpandStatus.CapacityMax));
             }
 
             // 3) 골드 잔액 확인.
@@ -626,8 +538,7 @@ public sealed class InventoryRepository : IInventoryRepository
             long gold = goldRow is null ? 0 : goldRow.Quantity;
             if (gold < cost)
             {
-                await transaction.RollbackAsync();
-                return ExpandOutcome.Fail(ExpandStatus.InsufficientCurrency);
+                return TxResult<ExpandOutcome>.Rollback(ExpandOutcome.Fail(ExpandStatus.InsufficientCurrency));
             }
 
             // 4) 골드 차감(재화 행 UPDATE) + 용량 +1.
@@ -642,15 +553,8 @@ public sealed class InventoryRepository : IInventoryRepository
             await db.Query("game_player").Where("user_id", userId)
                 .UpdateAsync(new { inventory_capacity = newCapacity, updated_at = nowUnix }, transaction);
 
-            await transaction.CommitAsync();
-            return new ExpandOutcome(ExpandStatus.Ok, newCapacity, cost, newGold);
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<ExpandOutcome>.Commit(new ExpandOutcome(ExpandStatus.Ok, newCapacity, cost, newGold));
+        });
 
     /// <summary>
     /// 가방 변경분(5.0)에 담을 행 1건을 조립한다. 아이템의 표시 정보(item_code·quantity·enhance_level)를

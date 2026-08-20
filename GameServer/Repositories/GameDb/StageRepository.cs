@@ -1,5 +1,4 @@
-﻿using GameServer.Data;
-using GameServer.MasterData;
+﻿using GameServer.MasterData;
 using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using SqlKata.Execution;
@@ -42,7 +41,7 @@ public sealed record ClearOutcome(
 }
 
 /// <summary>스테이지 진행/클리어 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
-public sealed class StageRepository : IStageRepository
+public sealed class StageRepository : GameDbBase, IStageRepository
 {
     private const int RowTypeItem = 1;
     private const int RowTypeCurrency = 2;
@@ -51,15 +50,11 @@ public sealed class StageRepository : IStageRepository
     /// <summary>player_character.slot의 "미편성"(파티에 없어 전투에 참가하지 않음) 값.</summary>
     private const int PartySlotUnassigned = 0;
 
-    private readonly GameDbFactory _dbFactory;
     private readonly ILevelUpCalculator _levelUp;
 
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public StageRepository(GameDbFactory dbFactory, ILevelUpCalculator levelUp)
-    {
-        _dbFactory = dbFactory;
-        _levelUp = levelUp;
-    }
+    /// <summary>세이브 DB 커넥션 팩토리(기반 클래스로 전달)와 레벨업 계산기를 주입받는다.</summary>
+    public StageRepository(GameDbFactory dbFactory, ILevelUpCalculator levelUp) : base(dbFactory)
+        => _levelUp = levelUp;
 
     /// <summary>
     /// game_player에서 스테이지 도메인용 진행도 스냅샷(현재 진입 좌표·최고 클리어 시퀀스·인벤토리 용량)을
@@ -67,7 +62,7 @@ public sealed class StageRepository : IStageRepository
     /// </summary>
     public async Task<StageProgressRow?> GetProgressAsync(long userId)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         var row = await db.Query("game_player")
             .Select("act", "difficulty", "stage", "max_stage_cleared", "inventory_capacity")
             .Where("user_id", userId)
@@ -87,7 +82,7 @@ public sealed class StageRepository : IStageRepository
     /// </summary>
     public async Task<int> SetCurrentStageAsync(long userId, int act, int difficulty, int stage, long nowUnix)
     {
-        using var db = _dbFactory.Create();
+        using var db = Db();
         return await db.Query("game_player")
             .Where("user_id", userId)
             .UpdateAsync(new { act, difficulty, stage, updated_at = nowUnix });
@@ -95,7 +90,8 @@ public sealed class StageRepository : IStageRepository
 
     /// <summary>
     /// 클리어 판정·보상 지급·진행도 전진을 단일 커넥션의 단일 트랜잭션으로 적용한다.
-    /// 검증 실패(NoPlayer·NotEntered)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// 검증 실패(NoPlayer·NotEntered)는 <see cref="TxResult{T}.Rollback"/>으로 되돌린 Fail 상태를 반환하고,
+    /// 예외는 <see cref="GameDbBase"/>가 롤백 후 전파한다.
     /// </summary>
     /// <remarks>
     /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 보상만 들어가고 진행도가 안 오르는 부분 반영을 막는다):
@@ -115,15 +111,8 @@ public sealed class StageRepository : IStageRepository
         int expectedAct, int expectedDifficulty, int expectedStage,
         long baseGold, long baseExp, DroppedItem? dropped,
         long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<ClearOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 현재 진입 스테이지 재검증(트랜잭션 내부에서 원자적으로).
             var player = await db.Query("game_player")
                 .Select("act", "difficulty", "stage", "max_stage_cleared", "inventory_capacity")
@@ -132,8 +121,7 @@ public sealed class StageRepository : IStageRepository
 
             if (player is null)
             {
-                await transaction.RollbackAsync();
-                return ClearOutcome.Fail(ClearStatus.NoPlayer);
+                return TxResult<ClearOutcome>.Rollback(ClearOutcome.Fail(ClearStatus.NoPlayer));
             }
 
             int curAct = player.Act;
@@ -144,8 +132,7 @@ public sealed class StageRepository : IStageRepository
 
             if (curAct != expectedAct || curDiff != expectedDifficulty || curStage != expectedStage)
             {
-                await transaction.RollbackAsync();
-                return ClearOutcome.Fail(ClearStatus.NotEntered);
+                return TxResult<ClearOutcome>.Rollback(ClearOutcome.Fail(ClearStatus.NotEntered));
             }
 
             // 2) 활성 획득량 버프 배율 판정. 지급과 같은 트랜잭션에서 읽어 배율 판정과 지급이 갈라지지 않게 한다.
@@ -237,22 +224,15 @@ public sealed class StageRepository : IStageRepository
                     .UpdateAsync(new { updated_at = nowUnix }, transaction);
             }
 
-            await transaction.CommitAsync();
-            return new ClearOutcome(
+            return TxResult<ClearOutcome>.Commit(new ClearOutcome(
                 ClearStatus.Ok, characters, goldBalance,
                 gold, exp, goldMultiplier, expMultiplier,
                 newAct, newDiff, newStage, newMax)
             {
                 Delta = delta,
                 LootStored = lootStored,
-            };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            });
+        });
 
     /// <summary>활성 버프 배율 목록에서 지정 종류의 획득량 배율을 얻는다. 해당 종류의 활성 버프가 없으면 1.0(배율 없음).</summary>
     private static decimal MultiplierOf(IReadOnlyDictionary<int, decimal> multipliers, BuffType buffType)

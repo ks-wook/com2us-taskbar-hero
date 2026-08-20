@@ -1,5 +1,4 @@
 ﻿using System.Data.Common;
-using GameServer.Data;
 using GameServer.MasterData;
 using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
@@ -56,7 +55,7 @@ public sealed record MailClaimAllOutcome(
 }
 
 /// <summary>메일(우편함) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
-public sealed class MailRepository : IMailRepository
+public sealed class MailRepository : GameDbBase, IMailRepository
 {
     private const int RowTypeItem = 1;
     private const int RowTypeCurrency = 2;
@@ -64,13 +63,11 @@ public sealed class MailRepository : IMailRepository
 
     private const int RewardTypeGold = 1;
 
-    private readonly GameDbFactory _dbFactory;
     private readonly IItemLookup _itemLookup;
 
-    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public MailRepository(GameDbFactory dbFactory, IItemLookup itemLookup)
+    /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
+    public MailRepository(GameDbFactory dbFactory, IItemLookup itemLookup) : base(dbFactory)
     {
-        _dbFactory = dbFactory;
         _itemLookup = itemLookup;
     }
 
@@ -79,15 +76,8 @@ public sealed class MailRepository : IMailRepository
     /// 만료·수령 완료 메일도 목록에 포함한다(정리 배치 미도입, 상태는 클라이언트가 표시).
     /// </summary>
     public async Task<IReadOnlyList<MailSummary>> GetMailboxAndMarkReadAsync(long userId)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<IReadOnlyList<MailSummary>>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             var mails = (await db.Query("player_mail")
                 .Select("mail_id", "category", "title", "body", "is_read", "claimed", "created_at", "expires_at")
                 .Where("user_id", userId)
@@ -104,18 +94,10 @@ public sealed class MailRepository : IMailRepository
                     .UpdateAsync(new { is_read = 1 }, transaction);
             }
 
-            await transaction.CommitAsync();
-
-            return mails.Select(m => new MailSummary(
+            return TxResult<IReadOnlyList<MailSummary>>.Commit(mails.Select(m => new MailSummary(
                 m.MailId, m.Category, m.Title, m.Body, m.IsRead, m.Claimed, m.CreatedAt, m.ExpiresAt,
-                rewardsByMail.TryGetValue(m.MailId, out var list) ? list : Array.Empty<MailAttachment>())).ToList();
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+                rewardsByMail.TryGetValue(m.MailId, out var list) ? list : Array.Empty<MailAttachment>())).ToList());
+        });
 
     /// <summary>
     /// 메일 단건 수령(첨부 지급 + 수령 플래그 갱신)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -132,15 +114,8 @@ public sealed class MailRepository : IMailRepository
     /// </remarks>
     public async Task<MailClaimOutcome> ApplyClaimAsync(
         long userId, long mailId, long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<MailClaimOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 존재·소유 확인. 타인 메일은 MailNotFound(존재 노출 안 함).
             var mail = await db.Query("player_mail")
                 .Select("mail_id", "category", "title", "body", "is_read", "claimed", "created_at", "expires_at")
@@ -148,21 +123,18 @@ public sealed class MailRepository : IMailRepository
                 .FirstOrDefaultAsync<MailRow>(transaction);
             if (mail is null)
             {
-                await transaction.RollbackAsync();
-                return MailClaimOutcome.Fail(MailClaimStatus.MailNotFound);
+                return TxResult<MailClaimOutcome>.Rollback(MailClaimOutcome.Fail(MailClaimStatus.MailNotFound));
             }
 
             // 2) 미수령·미만료 검증.
             if (mail.Claimed == 1)
             {
-                await transaction.RollbackAsync();
-                return MailClaimOutcome.Fail(MailClaimStatus.MailAlreadyClaimed);
+                return TxResult<MailClaimOutcome>.Rollback(MailClaimOutcome.Fail(MailClaimStatus.MailAlreadyClaimed));
             }
 
             if (mail.ExpiresAt != 0 && nowUnix > mail.ExpiresAt)
             {
-                await transaction.RollbackAsync();
-                return MailClaimOutcome.Fail(MailClaimStatus.MailExpired);
+                return TxResult<MailClaimOutcome>.Rollback(MailClaimOutcome.Fail(MailClaimStatus.MailExpired));
             }
 
             // 3) 수령권 선점(조건부 갱신): claimed=0일 때만 1로 전이. 0행이면 동시 요청이 먼저 수령.
@@ -171,8 +143,7 @@ public sealed class MailRepository : IMailRepository
                 .UpdateAsync(new { claimed = 1, claimed_at = nowUnix, is_read = 1 }, transaction);
             if (claimed == 0)
             {
-                await transaction.RollbackAsync();
-                return MailClaimOutcome.Fail(MailClaimStatus.MailAlreadyClaimed);
+                return TxResult<MailClaimOutcome>.Rollback(MailClaimOutcome.Fail(MailClaimStatus.MailAlreadyClaimed));
             }
 
             // 4) 첨부 원장 로드 + 5) 지급.
@@ -180,19 +151,11 @@ public sealed class MailRepository : IMailRepository
             var grant = await GrantAttachmentsAsync(db, transaction, userId, rewards, _itemLookup, nowUnix);
             if (!grant.stored)
             {
-                await transaction.RollbackAsync();
-                return MailClaimOutcome.Fail(MailClaimStatus.InventoryFull);
+                return TxResult<MailClaimOutcome>.Rollback(MailClaimOutcome.Fail(MailClaimStatus.InventoryFull));
             }
 
-            await transaction.CommitAsync();
-            return new MailClaimOutcome(MailClaimStatus.Ok, grant.gold, grant.items, grant.goldBalance) { Delta = grant.delta };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<MailClaimOutcome>.Commit(new MailClaimOutcome(MailClaimStatus.Ok, grant.gold, grant.items, grant.goldBalance) { Delta = grant.delta });
+        });
 
     /// <summary>
     /// 일괄 수령을 단일 커넥션의 단일 트랜잭션으로 적용한다. 미수령·미만료 메일 전건을 조건부 갱신으로 선점한 뒤
@@ -208,15 +171,8 @@ public sealed class MailRepository : IMailRepository
     /// </remarks>
     public async Task<MailClaimAllOutcome> ApplyClaimAllAsync(
         long userId, long nowUnix)
-    {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
-
-        try
+        => await TransactionAsync<MailClaimAllOutcome>(async (db, transaction) =>
         {
-            var db = _dbFactory.Create(connection);
-
             // 1) 수령 가능(미수령·미만료) 메일.
             var candidates = (await db.Query("player_mail")
                 .Select("mail_id")
@@ -245,19 +201,11 @@ public sealed class MailRepository : IMailRepository
             var grant = await GrantAttachmentsAsync(db, transaction, userId, rewards, _itemLookup, nowUnix);
             if (!grant.stored)
             {
-                await transaction.RollbackAsync();
-                return MailClaimAllOutcome.Fail(MailClaimStatus.InventoryFull);
+                return TxResult<MailClaimAllOutcome>.Rollback(MailClaimAllOutcome.Fail(MailClaimStatus.InventoryFull));
             }
 
-            await transaction.CommitAsync();
-            return new MailClaimAllOutcome(MailClaimStatus.Ok, claimedIds, grant.gold, grant.items, grant.goldBalance) { Delta = grant.delta };
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
+            return TxResult<MailClaimAllOutcome>.Commit(new MailClaimAllOutcome(MailClaimStatus.Ok, claimedIds, grant.gold, grant.items, grant.goldBalance) { Delta = grant.delta });
+        });
 
     /// <summary>
     /// 보관 기한이 지난 메일을 mail_id 오름차순으로 최대 limit건 삭제한다(GC 배치 전용).
@@ -269,10 +217,7 @@ public sealed class MailRepository : IMailRepository
     /// </summary>
     public async Task<int> DeleteRetentionExpiredAsync(long createdBefore, int limit)
     {
-        await using var connection = _dbFactory.CreateConnection();
-        await connection.OpenAsync();
-
-        var db = _dbFactory.Create(connection);
+        using var db = Db();
 
         var targets = (await db.Query("player_mail")
             .Select("mail_id")
