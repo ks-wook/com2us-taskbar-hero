@@ -1,3 +1,5 @@
+﻿using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 namespace GameServer.MasterData;
 
 /// <summary>경험치 지급 후 캐릭터 상태. NewExp는 "현재 레벨 내 누적치"다(레벨업 시 요구치를 차감한 잔여).</summary>
@@ -20,10 +22,10 @@ public interface ILevelUpCalculator
 /// </summary>
 public sealed class LevelUpCalculator : ILevelUpCalculator
 {
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
 
     /// <summary>레벨 곡선을 읽을 마스터 데이터를 주입받는다.</summary>
-    public LevelUpCalculator(MasterDataProvider masterData) => _masterData = masterData;
+    public LevelUpCalculator(MasterDbProvider masterData) => _masterData = masterData;
 
     /// <summary>
     /// 경험치를 더하고 요구치를 넘는 동안 레벨을 올린다. 요구치가 0 이하면(정의 없음) 그 자리에서 멈춘다 —

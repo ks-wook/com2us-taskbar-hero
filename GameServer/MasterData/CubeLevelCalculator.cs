@@ -1,3 +1,5 @@
+﻿using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 namespace GameServer.MasterData;
 
 /// <summary>큐브 경험치 적립 후 상태. NewExp는 "현재 큐브 레벨 내 누적치"다.</summary>
@@ -19,10 +21,10 @@ public interface ICubeLevelCalculator
 /// </summary>
 public sealed class CubeLevelCalculator : ICubeLevelCalculator
 {
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
 
     /// <summary>큐브 레벨 곡선을 읽을 마스터 데이터를 주입받는다.</summary>
-    public CubeLevelCalculator(MasterDataProvider masterData) => _masterData = masterData;
+    public CubeLevelCalculator(MasterDbProvider masterData) => _masterData = masterData;
 
     /// <summary>
     /// 경험치를 더하고 요구치를 넘는 동안 레벨을 올린다. 요구치 0 이하는 "다음 레벨 없음"을 뜻하므로

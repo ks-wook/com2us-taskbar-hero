@@ -1,3 +1,5 @@
+﻿using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 namespace GameServer.MasterData;
 
 /// <summary>
@@ -30,10 +32,10 @@ public sealed class ItemLookup : IItemLookup
     private const int UnknownItemType = 1;
     private const int UnknownStackMax = 1;
 
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
 
     /// <summary>아이템 정의를 읽을 마스터 데이터를 주입받는다.</summary>
-    public ItemLookup(MasterDataProvider masterData) => _masterData = masterData;
+    public ItemLookup(MasterDbProvider masterData) => _masterData = masterData;
 
     /// <summary>적재 규칙용 속성을 돌려준다. StackMax는 1 미만이면 1로 올린다(0칸 적재 방지).</summary>
     public ItemStacking Stacking(int itemCode)
