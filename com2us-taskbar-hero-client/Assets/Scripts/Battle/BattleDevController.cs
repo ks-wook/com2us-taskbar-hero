@@ -1256,10 +1256,37 @@ namespace TaskbarHero.Client.Battle
             //  전멸로 리셋되기 전까지 다음 스테이지들에 계속 나타나지 않는다.)
             RestoreFallenMembers();
             HealPartyFull(); // 스테이지 시작 시 파티 전원 체력 회복(부활한 멤버와 생존 멤버의 체력을 같은 기준으로 맞춘다)
+            _defeated = false;
+            SetupServerWave(plan, prefabResolver, onAllCleared, bossCode, onDefeat);
+            Log($"서버 전투 시작 — 총 {_serverTotal}마리 예정");
+        }
+
+        /// <summary>
+        /// <b>회복·부활 없이</b> 다음 웨이브만 스폰 큐에 채운다(보스러시 라운드 전환 전용).
+        /// <para><see cref="BeginServerBattle"/>는 진입할 때마다 전사자를 되살리고 체력을 채우는데
+        /// (스테이지 전환 규약), 보스러시는 <b>5라운드 내내 체력·쿨다운이 이어지고 부활이 없다</b>
+        /// (보스러시 기획서 2장). 그래서 파티는 그대로 두고 스폰 큐·진행도·콜백만 새 라운드 것으로 바꾼다.</para>
+        /// <para>기존 스테이지 경로(<see cref="BeginServerBattle"/>·<see cref="RestartServerBattle"/>)의
+        /// 동작은 건드리지 않는다.</para>
+        /// </summary>
+        public void QueueServerWave(List<Spawn> plan,
+                                    System.Func<int, GameObject> prefabResolver, System.Action onAllCleared,
+                                    int bossCode = 0, System.Action onDefeat = null)
+        {
+            serverMode = true;
+            SetupServerWave(plan, prefabResolver, onAllCleared, bossCode, onDefeat);
+            Log($"라운드 웨이브 교체 — 총 {_serverTotal}마리 예정(회복 없음)");
+        }
+
+        /// <summary>스폰 큐·진행도 카운터·콜백을 새 웨이브 것으로 채운다(파티 상태는 건드리지 않는다).
+        /// 마리 수만큼 큐에 풀어 두므로 이후 <see cref="TickServerWave"/>가 순서대로 스폰한다.</summary>
+        private void SetupServerWave(List<Spawn> plan,
+                                     System.Func<int, GameObject> prefabResolver, System.Action onAllCleared,
+                                     int bossCode, System.Action onDefeat)
+        {
             _prefabResolver = prefabResolver;
             _onAllCleared = onAllCleared;
             _onDefeat = onDefeat;
-            _defeated = false;
             _bossCode = bossCode;
             _serverQueue = new Queue<QueuedMonster>();
             if (plan != null)
@@ -1278,7 +1305,6 @@ namespace TaskbarHero.Client.Battle
             _serverCleared = false;
             _spawnTimer = enemySpawnInterval; // 곧 첫 스폰
             _nextSpawnDelay = 0f;
-            Log($"서버 전투 시작 — 총 {_serverQueue.Count}마리 예정");
         }
 
         /// <summary>카메라 우측 바깥(보이지 않는 지점)에 적 1기를 생성·배선한다.
@@ -1498,6 +1524,64 @@ namespace TaskbarHero.Client.Battle
         {
             ResetBattlefield();
             BeginServerBattle(plan, prefabResolver, onAllCleared, bossCode, onDefeat);
+        }
+
+        /// <summary>파티 스폰 앵커(<c>playerSpawn</c>)의 월드 위치. 미배선 시 <see cref="ResetBattlefield"/>와 같은 폴백 좌표.</summary>
+        public Vector3 PartySpawnPoint =>
+            playerSpawn != null ? playerSpawn.position : new Vector3(-4.5f, -1.6f, 0f);
+
+        /// <summary>파티 최전방 x(외부 관찰용 — 보스러시 포탈을 파티 앞에 세우는 기준).</summary>
+        public float PartyFrontX => FrontX();
+
+        /// <summary>
+        /// 파티를 지정 위치로 <b>즉시 옮긴다</b> — 체력·쿨다운·전사 상태는 그대로 두고 자리만 바꾼다
+        /// (보스러시 포탈 이동: 포탈로 들어간 파티가 다음 지역 시작 지점에 나타난다).
+        /// <para><see cref="ResetBattlefield"/>와 달리 <b>파티를 다시 스폰하지 않는다</b> — 재스폰하면
+        /// 체력이 가득 찬 새 유닛이 되어 "라운드 사이 회복 없음" 규칙이 깨진다.</para>
+        /// <para>카메라도 함께 스냅하므로, 호출 직후 배경을 다시 구축하면(<c>ScrollingBackground.SetSprite</c>)
+        /// 타일이 새 위치 기준으로 만들어진다.</para>
+        /// </summary>
+        public void RelocateParty(Vector3 start)
+        {
+            _pathY = start.y;
+            _partyX = start.x;
+            _phase = Phase.Advancing;
+
+            // 대형 목표를 새 자리로 다시 계산해 그 자리에 바로 세운다(걸어오는 중간 과정 없이).
+            ComputeFormation();
+            for (int i = 0; i < _members.Count; i++)
+            {
+                var m = _members[i];
+                if (m == null) continue;
+                float tx = _partyX - (_rowIndex != null && i < _rowIndex.Length ? _rowIndex[i] : 0) * rowSpacingX;
+                float ty = _pathY + (_formY != null && i < _formY.Length ? _formY[i] : 0f);
+                var pos = m.transform.position;
+                m.transform.position = new Vector3(tx, ty, pos.z);
+                m.SetFormationTarget(new Vector2(tx, ty));
+            }
+
+            if (_cam != null)
+            {
+                Vector3 cc = _cam.transform.position;
+                cc.x = start.x;
+                _cam.transform.position = cc;
+                if (_baseOrtho > 0f) _cam.orthographicSize = _baseOrtho;
+            }
+        }
+
+        /// <summary>진행 중인 서버 웨이브를 중단한다 — 남은 스폰 예정분을 버리고 살아 있는 적을 모두 정리한다.
+        /// 전멸 콜백은 호출하지 않는다(보스러시 제한 시간 초과처럼 <b>전투를 실패로 끊는</b> 경로에서 쓴다).</summary>
+        public void AbortServerBattle()
+        {
+            _serverQueue = null;
+            _serverCleared = true;   // 남은 적 정리 뒤 전멸 콜백이 뒤늦게 울리지 않도록 막는다
+            _serverTotal = 0;        // 진행도 바를 숨긴다(진행 중인 스테이지가 없다)
+            _serverKilled = 0;
+            _onAllCleared = null;
+            _onDefeat = null;
+            if (_om != null) _om.Clear(CatEnemy);
+            _phase = Phase.Advancing;
+            Log("서버 전투 중단 — 남은 웨이브 폐기");
         }
 
         // ---- 파티 멤버(PlayerCombatant)가 사용하는 공유 훅 ----

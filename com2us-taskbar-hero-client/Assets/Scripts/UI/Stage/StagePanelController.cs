@@ -788,6 +788,19 @@ namespace TaskbarHero.Client.UI
                 return;
             }
 
+            // 보스러시 도전 중에는 스테이지를 옮길 수 없다 — 라운드 진행·체력·기록이 이어지는 도전이라
+            // 중간에 다른 전투로 나가면 도전이 무의미해진다(보스러시 UI 기획서 4장).
+            var bossRush = BossRushBattleFlow.Find();
+            if (bossRush != null && bossRush.IsRunning)
+            {
+                SoundManager.Sfx(SoundId.UiError);
+                if (ModalManager.Instance != null)
+                {
+                    ModalManager.Instance.ShowConfirm("스테이지", "보스 러시 도전 중에는 스테이지를 이동할 수 없습니다.");
+                }
+                return;
+            }
+
             var flow = FindAnyObjectByType<DungeonBattleFlow>();
             if (flow == null)
             {

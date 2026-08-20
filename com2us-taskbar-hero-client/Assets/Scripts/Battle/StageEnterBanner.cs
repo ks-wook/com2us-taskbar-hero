@@ -63,6 +63,27 @@ namespace TaskbarHero.Client.Battle
             banner.Play(act, difficulty, stage);
         }
 
+        /// <summary>임의 문구(윗줄·아랫줄)로 입장 배너를 재생한다 — 보스러시 라운드 전환이
+        /// <c>ROUND 3</c> / <c>5 ROUNDS</c> 처럼 스테이지 좌표가 아닌 표기를 쓰기 위해 쓰는 진입점이다.
+        /// 연출(페이드·떠오름)·사운드는 스테이지 입장과 같다.</summary>
+        public void PlayText(string topLine, string bottomLine)
+        {
+            SoundManager.Sfx(SoundId.StageEnter);
+            if (!AlreadyBuilt)
+            {
+                Construct();
+            }
+            if (_regionText != null)
+            {
+                _regionText.text = topLine;
+            }
+            if (_stageText != null)
+            {
+                _stageText.text = bottomLine;
+            }
+            BeginPlay();
+        }
+
         /// <summary>이미 생성된(프리팹) 배너에 스테이지 문구를 채우고 페이드 연출을 시작한다.</summary>
         public void Play(int act, int difficulty, int stage)
         {
@@ -82,6 +103,12 @@ namespace TaskbarHero.Client.Battle
                 _stageText.text = $"STAGE {act}-{stage}";
             }
 
+            BeginPlay();
+        }
+
+        /// <summary>문구가 채워진 배너의 페이드 연출을 처음부터 시작한다(Play·PlayText 공용).</summary>
+        private void BeginPlay()
+        {
             _baseY = _content != null ? _content.anchoredPosition.y : -560f;
             _t = 0f;
             _playing = true;

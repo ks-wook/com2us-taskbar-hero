@@ -9,7 +9,7 @@ using TaskbarHero.Common.Dto;
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// GameScene 상시 HUD. <b>화면 하단 가로 중앙</b>에 기능 버튼(뽑기·거래소·출석부·메일·편성·스테이지·가방·환경설정)을
+    /// GameScene 상시 HUD. <b>화면 하단 가로 중앙</b>에 기능 버튼(보스러시·뽑기·거래소·출석부·메일·편성·스테이지·가방·환경설정)을
     /// 한 줄로 노출하고, ESC 메뉴(타이틀로 돌아가기)를 코드로 구성한다.
     /// 아이콘 줄은 던전 배경 띠보다 아래에 놓여 배경 아트에 묻히지 않는다(화면 최하단에서
     /// <see cref="MenuRowY"/>만큼 띄운 자리) —
@@ -38,6 +38,8 @@ namespace TaskbarHero.Client.UI
         [SerializeField] private Sprite tradeIcon;      // 거래소
         [Tooltip("뽑기 아이콘(Assets/Art/Icon/뽑기.png).")]
         [SerializeField] private Sprite gachaIcon;      // 뽑기(가챠)
+        [Tooltip("보스 러시 아이콘(Assets/Art/UI/BossRush/ranking.png).")]
+        [SerializeField] private Sprite bossRushIcon;   // 보스 러시
         [Tooltip("환경설정 아이콘(Assets/Art/Icon/환경설정.png).")]
         [SerializeField] private Sprite settingsIcon;   // 환경설정
         [Tooltip("하단 아이콘 줄 뒷배경 프레임(Assets/Art/UI/ui_bg_3.png, 9-slice). 없으면 배경 없이 아이콘만 표시.")]
@@ -70,11 +72,12 @@ namespace TaskbarHero.Client.UI
 
         // 하단 버튼 줄: 바 안에서 오른쪽 끝부터 왼쪽으로 한 칸씩. 바는 전투 화면 밴드
         // (GameViewLayout.GameWidth = 1440) 안에 놓이므로 칸 수 × 간격이 그 폭을 넘지 않아야 한다 —
-        // 뽑기를 더해 8칸이 되면서 종전 간격(180)으로는 1468이 되어 넘치므로 간격·버튼 폭을 함께 줄였다
-        // (7 × 164 + 152 + 48 = 1348 ≤ 1440).
-        private const int MenuSlotCount = 8;
-        private const float MenuSlotStep = 164f;
-        private const float MenuButtonWidth = 152f;
+        // 상한식은 (칸수 - 1) × MenuSlotStep + MenuButtonWidth + 좌우 여백(UiBackSidePadding × 2 = 48) ≤ 1440.
+        // 보스 러시를 더해 9칸이 되면서 종전 간격(164)으로는 1512가 되어 넘치므로 간격·버튼 폭을 함께 줄였다
+        // (8 × 148 + 136 + 48 = 1368 ≤ 1440). 버튼 사이 간격(Step − Width = 12)과 아이콘·라벨 크기는 그대로다.
+        private const int MenuSlotCount = 9;
+        private const float MenuSlotStep = 148f;
+        private const float MenuButtonWidth = 136f;
         // 아이콘(104) + 라벨(40)을 여백 없이 붙인 높이. 이 둘 사이·위아래에 빈 칸을 두지 않는다.
         private const float MenuButtonHeight = MenuIconSize + MenuLabelHeight;
         private const float MenuIconSize = 104f;
@@ -312,7 +315,7 @@ namespace TaskbarHero.Client.UI
             _menuArea = CreateMenuArea(bar);
             BuildMenuBackground(_menuArea);      // 아이콘보다 먼저 만들어 뒤에 깔리게 한다(자식 순서 = 그리기 순서)
 
-            // 한 줄로: 오른쪽부터 [환경설정] [가방] [스테이지] [편성] [메일] [출석부] [거래소] [뽑기].
+            // 한 줄로: 오른쪽부터 [환경설정] [가방] [스테이지] [편성] [메일] [출석부] [거래소] [뽑기] [보스러시].
             _menuButtons = new RectTransform[MenuSlotCount];
             CreateMenuButton(font, "SettingsButton", "환경설정", settingsIcon, 0, OnSettingsButton);
             var inventoryBtn = CreateMenuButton(font, "InventoryButton", "가방", inventoryIcon, 1, OnInventoryButton);
@@ -322,6 +325,7 @@ namespace TaskbarHero.Client.UI
             CreateMenuButton(font, "AttendanceButton", "출석부", attendanceIcon, 5, OnAttendanceButton);
             CreateMenuButton(font, "TradeButton", "거래소", tradeIcon, 6, OnTradeButton);
             CreateMenuButton(font, "GachaButton", "뽑기", gachaIcon, 7, OnGachaButton);
+            CreateMenuButton(font, "BossRushButton", "보스러시", bossRushIcon, 8, OnBossRushButton);
 
             // 메일 버튼 우측 상단 레드닷: 아직 수령하지 않은 보상 첨부가 남은 메일이 있으면 표시(만료 전 수령 유도).
             RedDot.AttachTopRight((RectTransform)mailBtn.transform).Bind(RedDotConditions.HasUnclaimedMailReward);
@@ -447,13 +451,15 @@ namespace TaskbarHero.Client.UI
             }
         }
 
-        /// <summary>기능 버튼 하나를 바 안 <paramref name="slot"/>번째 칸(0 = 맨 오른쪽)에 만든다.</summary>
+        /// <summary>기능 버튼 하나를 바 안 <paramref name="slot"/>번째 칸(0 = 맨 오른쪽)에 만든다.
+        /// <paramref name="iconSize"/>를 기본값보다 크게 주면 그 칸만 아이콘이 커지고, 커진 높이는
+        /// <b>바 위로 삐져나간다</b>(아래변·라벨 자리는 그대로).</summary>
         private GameObject CreateMenuButton(Font font, string name, string label, Sprite icon,
-            int slot, UnityEngine.Events.UnityAction onClick)
+            int slot, UnityEngine.Events.UnityAction onClick, float iconSize = MenuIconSize)
         {
             // 영역의 오른쪽 끝에서 좌우 여백만큼 들어온 지점이 첫 칸(0)의 오른쪽 끝이다.
             var pos = new Vector2(-UiBackSidePadding - slot * MenuSlotStep, UiBackPadding);
-            var go = CreateButton(_menuArea, font, name, label, icon, pos, onClick);
+            var go = CreateButton(_menuArea, font, name, label, icon, pos, onClick, iconSize);
 
             // 클릭 피드백(punch)이 아이콘 '제자리'에서 커지도록 피벗을 칸 중앙으로 옮긴다.
             // CreateButton의 피벗(1,0 = 우측 하단)을 그대로 두면 확대가 우측 하단으로 쏠려 아이콘이 바닥에 몰려 보인다.
@@ -474,7 +480,8 @@ namespace TaskbarHero.Client.UI
         /// <summary>우하단 앵커 HUD 버튼 하나를 생성·배선하고 생성한 버튼 오브젝트를 반환한다.
         /// 아이콘이 있으면 아이콘을 상단에, 작아진 텍스트를 그 아래에 배치한다(아이콘 없으면 텍스트만 중앙).</summary>
         private static GameObject CreateButton(Transform parent, Font font, string name, string label,
-            Sprite icon, Vector2 anchoredPos, UnityEngine.Events.UnityAction onClick)
+            Sprite icon, Vector2 anchoredPos, UnityEngine.Events.UnityAction onClick,
+            float iconSize = MenuIconSize)
         {
             var btnGo = new GameObject(name, typeof(RectTransform), typeof(Image));
             btnGo.transform.SetParent(parent, false);
@@ -509,8 +516,10 @@ namespace TaskbarHero.Client.UI
                 var irt = iconImg.rectTransform;
                 irt.anchorMin = irt.anchorMax = new Vector2(0.5f, 1f);
                 irt.pivot = new Vector2(0.5f, 1f);
-                irt.anchoredPosition = Vector2.zero;            // 버튼 위쪽에 딱 붙인다(상단 여백 없음)
-                irt.sizeDelta = new Vector2(MenuIconSize, MenuIconSize);
+                // 기본 크기면 버튼 위쪽에 딱 붙는다(상단 여백 없음). 기본보다 큰 아이콘은 아래변을 기본 자리에
+                // 맞추고 남는 높이를 위로 올려, 라벨을 밀지 않고 바 위로 삐져나가게 한다.
+                irt.anchoredPosition = new Vector2(0f, iconSize - MenuIconSize);
+                irt.sizeDelta = new Vector2(iconSize, iconSize);
 
                 // 텍스트(아이콘 바로 아래) — 버튼 아래쪽에 딱 붙인다(하단 여백 없음)
                 t.fontSize = 28;
@@ -566,6 +575,19 @@ namespace TaskbarHero.Client.UI
             if (UIManager.Instance != null)
             {
                 UIManager.Instance.ToggleSettings();
+            }
+            else
+            {
+                Debug.LogWarning("[HUD] UIManager 인스턴스를 찾을 수 없습니다.");
+            }
+        }
+
+        /// <summary>보스 러시 패널 토글(UIManager 위임).</summary>
+        private void OnBossRushButton()
+        {
+            if (UIManager.Instance != null)
+            {
+                UIManager.Instance.ToggleBossRush();
             }
             else
             {

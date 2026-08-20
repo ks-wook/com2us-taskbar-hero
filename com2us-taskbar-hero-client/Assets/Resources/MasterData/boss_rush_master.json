@@ -1,0 +1,12 @@
+[
+  {
+    "contentId": 1,
+    "roundCount": 5,
+    "timeLimitSec": 600,
+    "dailyEntryLimit": 3,
+    "unlockStageSequence": 10,
+    "seasonPeriodDays": 7,
+    "expireGraceSec": 300,
+    "rankPageLimit": 100
+  }
+]

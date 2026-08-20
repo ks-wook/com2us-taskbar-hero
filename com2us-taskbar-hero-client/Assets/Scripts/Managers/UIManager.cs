@@ -26,6 +26,7 @@ namespace TaskbarHero.Client.Managers
             Attendance,
             Trade,
             Gacha,
+            BossRush,
             Settings,
         }
 
@@ -54,6 +55,8 @@ namespace TaskbarHero.Client.Managers
         [SerializeField] private GameObject tradePanelPrefab;
         [Tooltip("Assets/Prefabs/UI/GachaPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject gachaPanelPrefab;
+        [Tooltip("Assets/Prefabs/UI/BossRushPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
+        [SerializeField] private GameObject bossRushPanelPrefab;
         [Tooltip("Assets/Prefabs/UI/SettingsPanel 프리팹을 배선한다(Title·GameScene 양쪽 UIManager).")]
         [SerializeField] private GameObject settingsPanelPrefab;
 
@@ -259,6 +262,22 @@ namespace TaskbarHero.Client.Managers
             else
             {
                 Show(PanelType.Gacha);
+            }
+        }
+
+        /// <summary>보스 러시 패널을 표시한다.</summary>
+        public void ShowBossRush() => Show(PanelType.BossRush);
+
+        /// <summary>보스 러시 패널을 열려 있으면 닫고, 닫혀 있으면 연다(On/Off 토글).</summary>
+        public void ToggleBossRush()
+        {
+            if (Current == PanelType.BossRush)
+            {
+                Hide(PanelType.BossRush);
+            }
+            else
+            {
+                Show(PanelType.BossRush);
             }
         }
 
@@ -483,6 +502,8 @@ namespace TaskbarHero.Client.Managers
                     return attendancePanelPrefab;
                 case PanelType.Trade:
                     return tradePanelPrefab;
+                case PanelType.BossRush:
+                    return bossRushPanelPrefab;
                 case PanelType.Gacha:
                     return gachaPanelPrefab;
                 case PanelType.Settings:

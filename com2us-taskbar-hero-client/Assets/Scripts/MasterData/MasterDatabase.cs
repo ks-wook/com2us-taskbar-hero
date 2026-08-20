@@ -32,6 +32,9 @@ namespace TaskbarHero.Client.MasterData
         public const string TableCharacterCreateCost = "character_create_cost";
         public const string TableGacha = "gacha_master";
         public const string TableEnhance = "enhance_master";
+        public const string TableBossRushMaster = "boss_rush_master";
+        public const string TableBossRushRound = "boss_rush_round";
+        public const string TableBossRushRankReward = "boss_rush_rank_reward";
 
         /// <summary>신규 계정 기본 인벤토리 용량(서버 BaseInventoryCapacity와 동일 계약). 확장 단계 산출에 사용.</summary>
         public const int BaseInventoryCapacity = 100;
@@ -42,7 +45,7 @@ namespace TaskbarHero.Client.MasterData
             TableEquipSlot, TableGrade, TableClass, TableLevel, TableSkill, TableRune,
             TableItem, TableMonster, TableStage, TableStageReward, TableCube,
             TableCubeRecipe, TableAttendance, TableInventoryExpand, TableCharacterCreateCost,
-            TableGacha, TableEnhance,
+            TableGacha, TableEnhance, TableBossRushMaster, TableBossRushRound, TableBossRushRankReward,
         };
 
         public readonly Dictionary<int, EquipSlotMaster> EquipSlots = new Dictionary<int, EquipSlotMaster>();
@@ -67,6 +70,14 @@ namespace TaskbarHero.Client.MasterData
         // 장비 강화 단계별 비용·스탯 배율(enhance_master, key = 강화 단계 1~10). 서버는 단계만 권위로 확정하고
         // 배율은 응답에 담지 않으므로(§5.3), 표시·전투 계산에 쓰는 배율은 이 표에서 읽는다.
         public readonly Dictionary<int, EnhanceMaster> Enhances = new Dictionary<int, EnhanceMaster>();
+        // 보스러시 라운드 정의(round → 배경·일반 몬스터 스폰·보스). 진입 화면의 라운드 보스 줄은 서버 호출 없이
+        // 이 표로 그린다 — 실제 전투 스폰은 enter 응답을 따른다(보스러시 UI 기획서 2.1).
+        public readonly Dictionary<int, BossRushRoundMaster> BossRushRounds = new Dictionary<int, BossRushRoundMaster>();
+        // 보스러시 시즌 순위 보상(rankGroup → 구간·골드). 현재 1~3위 3행뿐이며 4위 이하는 행이 없다.
+        public readonly Dictionary<int, BossRushRankReward> BossRushRankRewards = new Dictionary<int, BossRushRankReward>();
+
+        /// <summary>보스러시 전역 규칙(boss_rush_master, 단일 행). 번들에 없으면 null.</summary>
+        public BossRushMaster BossRush { get; private set; }
 
         /// <summary>파싱해 캐싱한 총 행 수(로드 검증·로그용).</summary>
         public int TotalRows { get; private set; }
@@ -102,13 +113,18 @@ namespace TaskbarHero.Client.MasterData
             Fill(CharacterCreateCosts, Parse<CharacterCreateCost>(jsonForTable, TableCharacterCreateCost), x => x.characterId);
             Fill(Gachas, Parse<GachaMaster>(jsonForTable, TableGacha), x => x.gachaCode);
             Fill(Enhances, Parse<EnhanceMaster>(jsonForTable, TableEnhance), x => x.enhanceLevel);
+            Fill(BossRushRounds, Parse<BossRushRoundMaster>(jsonForTable, TableBossRushRound), x => x.round);
+            Fill(BossRushRankRewards, Parse<BossRushRankReward>(jsonForTable, TableBossRushRankReward), x => x.rankGroup);
+            var bossRushRows = Parse<BossRushMaster>(jsonForTable, TableBossRushMaster);
+            BossRush = bossRushRows != null && bossRushRows.Length > 0 ? bossRushRows[0] : null;
 
             TotalRows =
                 EquipSlots.Count + Grades.Count + Classes.Count + Levels.Count + Skills.Count +
                 Runes.Count + Items.Count + Monsters.Count + Stages.Count + StageRewards.Count +
                 Cubes.Count + CubeRecipes.Count + Attendances.Count +
                 InventoryExpandCosts.Count + CharacterCreateCosts.Count + Gachas.Count +
-                Enhances.Count;
+                Enhances.Count + BossRushRounds.Count + BossRushRankRewards.Count +
+                (BossRush != null ? 1 : 0);
         }
 
         /// <summary>모든 캐시를 비운다.</summary>
@@ -131,6 +147,9 @@ namespace TaskbarHero.Client.MasterData
             CharacterCreateCosts.Clear();
             Gachas.Clear();
             Enhances.Clear();
+            BossRushRounds.Clear();
+            BossRushRankRewards.Clear();
+            BossRush = null;
             TotalRows = 0;
         }
 
@@ -254,6 +273,36 @@ namespace TaskbarHero.Client.MasterData
                 }
             }
             return 0;
+        }
+
+        /// <summary>
+        /// 보스러시 라운드 정의를 <b>라운드 번호 오름차순</b>으로 돌려준다(진입 화면의 보스 5칸은 왼쪽이 라운드 1).
+        /// 번들에 표가 없으면 빈 목록이다.
+        /// </summary>
+        public List<BossRushRoundMaster> BossRushRoundsOrdered()
+        {
+            var list = new List<BossRushRoundMaster>(BossRushRounds.Count);
+            foreach (var row in BossRushRounds.Values)
+            {
+                list.Add(row);
+            }
+            list.Sort((a, b) => a.round.CompareTo(b.round));
+            return list;
+        }
+
+        /// <summary>
+        /// 시즌 순위 보상 구간을 <b>상위 구간부터</b> 돌려준다(현재 1위·2위·3위 3행). 4위 이하는 행이 없어
+        /// 보상을 받지 않으므로 목록에 나타나지 않는다(보스러시 기획서 4.1).
+        /// </summary>
+        public List<BossRushRankReward> BossRushRankRewardsOrdered()
+        {
+            var list = new List<BossRushRankReward>(BossRushRankRewards.Count);
+            foreach (var row in BossRushRankRewards.Values)
+            {
+                list.Add(row);
+            }
+            list.Sort((a, b) => a.rankGroup.CompareTo(b.rankGroup));
+            return list;
         }
 
         /// <summary>

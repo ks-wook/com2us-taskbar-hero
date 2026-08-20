@@ -39,13 +39,28 @@ namespace TaskbarHero.Client.Battle
         private bool _dismissed;
         private float _t;
         private Action _onClosed;
+        private string _headline;   // 타이틀 이미지 아래 한 줄(없으면 표시하지 않음)
+        private string _hint = DefaultHint;
+
+        private const string DefaultHint = "스테이지를 처음부터 다시 시작합니다";
 
         /// <summary>패배 오버레이를 생성·표시한다. onClosed는 닫힐 때(클릭/자동) 1회 호출된다.</summary>
         public static void Show(Action onClosed = null)
         {
+            Show(null, null, onClosed);
+        }
+
+        /// <summary>문구를 지정해 패배 오버레이를 띄운다(보스러시 도전 실패처럼 <b>같은 연출에 다른 사유</b>를
+        /// 적어야 하는 경우 — 별도 오버레이를 만들지 않고 이 진입점을 쓴다).
+        /// <paramref name="headline"/>은 타이틀 이미지 아래 굵은 한 줄(비우면 생략),
+        /// <paramref name="hint"/>는 그 아래 안내 줄(비우면 기본 문구).</summary>
+        public static void Show(string headline, string hint, Action onClosed = null)
+        {
             var go = new GameObject("BattleDefeatOverlay");
             var overlay = go.AddComponent<BattleDefeatOverlay>();
             overlay._onClosed = onClosed;
+            overlay._headline = headline;
+            overlay._hint = string.IsNullOrEmpty(hint) ? DefaultHint : hint;
             overlay.Build();
         }
 
@@ -102,13 +117,26 @@ namespace TaskbarHero.Client.Battle
                 _title.anchoredPosition = new Vector2(0f, 60f);
             }
 
-            // 안내 문구.
-            var hint = CreateText("Hint", transform, font, "스테이지를 처음부터 다시 시작합니다", 40, TextAnchor.MiddleCenter);
+            // 사유 한 줄(지정된 경우에만) — 타이틀 이미지 바로 아래에 굵게 적는다.
+            bool hasHeadline = !string.IsNullOrEmpty(_headline);
+            if (hasHeadline)
+            {
+                var head = CreateText("Headline", transform, font, _headline, 52, TextAnchor.MiddleCenter);
+                head.color = new Color(1f, 0.86f, 0.5f);
+                head.fontStyle = FontStyle.Bold;
+                var hdrt = (RectTransform)head.transform;
+                hdrt.anchorMin = hdrt.anchorMax = new Vector2(0.5f, 0.5f);
+                hdrt.sizeDelta = new Vector2(900f, 76f);
+                hdrt.anchoredPosition = new Vector2(0f, -30f);
+            }
+
+            // 안내 문구(사유 줄이 있으면 그만큼 아래로 내린다).
+            var hint = CreateText("Hint", transform, font, _hint, 40, TextAnchor.MiddleCenter);
             hint.color = new Color(1f, 1f, 1f, 0.85f);
             var hrt = (RectTransform)hint.transform;
             hrt.anchorMin = hrt.anchorMax = new Vector2(0.5f, 0.5f);
             hrt.sizeDelta = new Vector2(900f, 70f);
-            hrt.anchoredPosition = new Vector2(0f, -80f);
+            hrt.anchoredPosition = new Vector2(0f, hasHeadline ? -110f : -80f);
 
             StartCoroutine(AutoCloseAfter(AutoCloseSeconds));
         }

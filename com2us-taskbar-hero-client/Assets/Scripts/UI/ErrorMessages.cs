@@ -115,6 +115,20 @@ namespace TaskbarHero.Client.UI
                     return "지금은 진행 중인 뽑기가 아닙니다.";
                 case ErrorCode.GachaPoolEmpty:
                     return "뽑기 데이터에 문제가 있어 취소되었습니다(골드는 차감되지 않습니다).";
+                // 보스러시/랭킹 도메인(boss-rush 기획서 §7)
+                case ErrorCode.BossRushLocked:
+                    return "보스 러시가 아직 열리지 않았습니다. 스테이지를 더 진행해 주세요.";
+                case ErrorCode.BossRushDailyLimitExceeded:
+                    return "오늘 도전 횟수를 모두 사용했습니다.";
+                case ErrorCode.BossRushSeasonClosed:
+                    return "시즌 정산 중입니다. 잠시 후 다시 시도해 주세요.";
+                case ErrorCode.BossRushRunNotFound:
+                case ErrorCode.BossRushRunAlreadyFinished:
+                    return "도전 기록을 등록하지 못했습니다.";
+                case ErrorCode.BossRushTimeout:
+                    return "제한 시간을 넘겨 기록이 등록되지 않았습니다.";
+                case ErrorCode.BossRushInvalidProgress:
+                    return "도전 기록이 올바르지 않아 등록되지 않았습니다.";
                 default:
                     return string.IsNullOrEmpty(fallback) ? ("오류가 발생했습니다. (" + code + ")") : fallback;
             }

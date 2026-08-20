@@ -32,6 +32,9 @@ namespace TaskbarHero.ClientEditor
         private const string HpBarFramePath = "Assets/Art/Icon/Combat/체력바.png";
         /// <summary>보스 등장 경고 이미지(중앙에서 커졌다 작아지는 연출에 쓴다).</summary>
         private const string BossWarningPath = "Assets/Art/UI/System/boss_warning.png";
+        /// <summary>보스러시 라운드 전환 포탈 프레임 폴더(TravelPortal_01~30).</summary>
+        private const string PortalDir = "Assets/Art/Effect/Object/Portal/TravelPortal";
+        private const int PortalFrameCount = 30;
 
         /// <summary>
         /// GameScene 전용 전투 띠 상향 오프셋(월드 단위). BattleDevScene은 배경 띠가 화면 바닥에 붙어 있는데,
@@ -250,6 +253,32 @@ namespace TaskbarHero.ClientEditor
                       $"보스 아이콘 {(progressBoss != null ? "배선" : "없음")}.");
 
             fso.ApplyModifiedPropertiesWithoutUndo();
+
+            // ── 7-1) 보스러시 도전 흐름(BossRushBattleFlow) 배선 ──
+            //   같은 오브젝트에 붙여 던전 전투와 컨트롤러·몬스터 프리팹 표·배경·배너를 공유한다
+            //   (씬에 같은 표를 두 벌 두지 않는다 — 보스러시 UI 기획서 8장).
+            //   BattleDevScene에는 두지 않는다: 서버 연동 흐름이라 하네스 씬의 정본 대상이 아니다.
+            var bossRush = go.AddComponent<BossRushBattleFlow>();
+            var brso = new SerializedObject(bossRush);
+            brso.FindProperty("battle").objectReferenceValue = battle;
+            brso.FindProperty("dungeon").objectReferenceValue = flow;
+
+            var portalProp = brso.FindProperty("portalFrames");
+            portalProp.ClearArray();
+            int portalCount = 0;
+            for (int i = 1; i <= PortalFrameCount; i++)
+            {
+                var sp = LoadSprite($"{PortalDir}/TravelPortal_{i:00}.png");
+                if (sp == null)
+                {
+                    continue;
+                }
+                portalProp.InsertArrayElementAtIndex(portalCount);
+                portalProp.GetArrayElementAtIndex(portalCount).objectReferenceValue = sp;
+                portalCount++;
+            }
+            brso.ApplyModifiedPropertiesWithoutUndo();
+            Debug.Log($"[DungeonBattleBuilder] 보스러시 흐름 배선 — 포탈 프레임 {portalCount}장.");
 
             // ── 8) 전투 UI(초상화·아군 스킬 슬롯·아군 HP바) 복제: BattleDevScene의 SkillUICanvas를 그대로 GameScene에 ──
             //     (적 HP바는 BattleDevController.OnGUI가 serverMode에서도 그린다.)

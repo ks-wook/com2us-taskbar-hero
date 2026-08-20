@@ -1,0 +1,20 @@
+[
+  {
+    "rankGroup": 1,
+    "rankFrom": 1,
+    "rankTo": 1,
+    "rewardGold": 30000000
+  },
+  {
+    "rankGroup": 2,
+    "rankFrom": 2,
+    "rankTo": 2,
+    "rewardGold": 15000000
+  },
+  {
+    "rankGroup": 3,
+    "rankFrom": 3,
+    "rankTo": 3,
+    "rewardGold": 7000000
+  }
+]

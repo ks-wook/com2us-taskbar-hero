@@ -1,0 +1,77 @@
+[
+  {
+    "round": 1,
+    "backgroundType": 1,
+    "spawns": [
+      {
+        "monsterCode": 9001,
+        "monsterLevel": 3,
+        "count": 6
+      },
+      {
+        "monsterCode": 9002,
+        "monsterLevel": 4,
+        "count": 2
+      }
+    ],
+    "bossMonsterCode": 9099,
+    "bossMonsterLevel": 14
+  },
+  {
+    "round": 2,
+    "backgroundType": 2,
+    "spawns": [
+      {
+        "monsterCode": 9101,
+        "monsterLevel": 10,
+        "count": 6
+      },
+      {
+        "monsterCode": 9102,
+        "monsterLevel": 11,
+        "count": 1
+      }
+    ],
+    "bossMonsterCode": 9199,
+    "bossMonsterLevel": 24
+  },
+  {
+    "round": 3,
+    "backgroundType": 3,
+    "spawns": [
+      {
+        "monsterCode": 9201,
+        "monsterLevel": 17,
+        "count": 10
+      }
+    ],
+    "bossMonsterCode": 9299,
+    "bossMonsterLevel": 28
+  },
+  {
+    "round": 4,
+    "backgroundType": 4,
+    "spawns": [
+      {
+        "monsterCode": 9301,
+        "monsterLevel": 21,
+        "count": 8
+      }
+    ],
+    "bossMonsterCode": 9399,
+    "bossMonsterLevel": 31
+  },
+  {
+    "round": 5,
+    "backgroundType": 5,
+    "spawns": [
+      {
+        "monsterCode": 9401,
+        "monsterLevel": 26,
+        "count": 5
+      }
+    ],
+    "bossMonsterCode": 9499,
+    "bossMonsterLevel": 34
+  }
+]

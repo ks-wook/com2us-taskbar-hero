@@ -80,6 +80,17 @@ namespace TaskbarHero.Client.Battle
         public int CurrentDifficulty => _difficulty;
         public int CurrentStage => _stage;
 
+        // ── 보스러시가 공유하는 참조(같은 아트·프리팹을 씬에 두 벌 배선하지 않는다) ──
+
+        /// <summary>스테이지 입장 배너 프리팹(보스러시 라운드 배너도 이것을 쓴다).</summary>
+        public GameObject StageEnterBannerPrefab => stageEnterBannerPrefab;
+        /// <summary>진행도 바의 현재 위치 화살표 스프라이트.</summary>
+        public Sprite StageProgressArrow => stageProgressArrow;
+        /// <summary>진행도 바 우측 끝의 목표(보스) 아이콘 스프라이트.</summary>
+        public Sprite StageProgressBoss => stageProgressBoss;
+        /// <summary>클리어 순간 슬로우모션 배율(보스러시 완주 연출도 같은 값을 쓴다).</summary>
+        public float ClearSlowMotionScale => clearSlowMotionScale;
+
         private void Awake()
         {
             foreach (var e in monsterPrefabs)
@@ -243,8 +254,9 @@ namespace TaskbarHero.Client.Battle
             Debug.LogWarning($"[Dungeon] 입장 실패: {error}");
         }
 
-        /// <summary>backgroundType(1~5)에 맞는 전투 배경으로 교체한다.</summary>
-        private void ApplyBackground(int backgroundType)
+        /// <summary>backgroundType(1~5)에 맞는 전투 배경으로 교체한다(BGM도 그 Act 것으로 바꾼다).
+        /// 보스러시 라운드 전환(<see cref="BossRushBattleFlow"/>)도 같은 배경 교체를 쓴다.</summary>
+        public void ApplyBackground(int backgroundType)
         {
             if (background == null || backgrounds == null || backgrounds.Length == 0)
             {
@@ -260,7 +272,7 @@ namespace TaskbarHero.Client.Battle
 
         /// <summary>배경 타입(1~5 = Act)에 대응하는 전투 BGM으로 바꾼다. 같은 곡이면 SoundManager가 무시하므로
         /// 같은 Act 안에서 스테이지를 넘겨도 음악이 끊기지 않는다.</summary>
-        private static void PlayActBgm(int backgroundType)
+        public static void PlayActBgm(int backgroundType)
         {
             SoundId id = backgroundType switch
             {
@@ -274,8 +286,9 @@ namespace TaskbarHero.Client.Battle
             SoundManager.Bgm(id);
         }
 
-        /// <summary>코드로 몬스터 프리팹을 조회(없으면 null → 컨트롤러가 폴백/건너뜀).</summary>
-        private GameObject ResolvePrefab(int code)
+        /// <summary>코드로 몬스터 프리팹을 조회(없으면 null → 컨트롤러가 폴백/건너뜀).
+        /// 보스러시도 <b>같은 표</b>를 쓰므로(씬에 프리팹 목록을 두 벌 두지 않는다) 공개한다.</summary>
+        public GameObject ResolvePrefab(int code)
         {
             return _prefabByCode.TryGetValue(code, out var p) ? p : null;
         }

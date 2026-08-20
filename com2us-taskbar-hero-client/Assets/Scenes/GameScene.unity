@@ -130,6 +130,7 @@ GameObject:
   - component: {fileID: 212299912}
   - component: {fileID: 212299911}
   - component: {fileID: 212299910}
+  - component: {fileID: 212299913}
   m_Layer: 0
   m_Name: DungeonBattle
   m_TagString: Untagged
@@ -485,6 +486,54 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &212299913
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 212299909}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e3b9a3c60a858f34c909e13802fe2da2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: TaskbarHero.Client.Battle::TaskbarHero.Client.Battle.BossRushBattleFlow
+  battle: {fileID: 212299911}
+  dungeon: {fileID: 212299910}
+  portalFrames:
+  - {fileID: 5874311196480104868, guid: 4790feb7c97e2ad45aa8d5b2183f5d5d, type: 3}
+  - {fileID: 1303260731998748977, guid: f39c1c08980ef5e468ac3a3a41a72684, type: 3}
+  - {fileID: 6356961098816210782, guid: faba831dccb22a844b998155cab1ea93, type: 3}
+  - {fileID: -7361131115257595051, guid: f0280a7ccd0bb1c46be20e5bd0a34e1b, type: 3}
+  - {fileID: 6426760157559246884, guid: 1f65efbc96df3114ca7e9afad98244da, type: 3}
+  - {fileID: 3230273193087327708, guid: f01b7581266a0694cbc9c6affb01fcc8, type: 3}
+  - {fileID: -2141694572315755621, guid: ee5948dd1f123814eb51bb8b793ff71d, type: 3}
+  - {fileID: 8170431175015343574, guid: 9af3533bb606c42459abc51a8cb8076c, type: 3}
+  - {fileID: -3836398668019187853, guid: 37931a63cd2fb7644ac403fb6c35532b, type: 3}
+  - {fileID: 7763962674242253655, guid: 4ac6452862f0a2246b77b0a8391cffb4, type: 3}
+  - {fileID: 6694403644945153639, guid: 7c110949b00123e48828c69181937f70, type: 3}
+  - {fileID: 8256317206463790631, guid: 12ceac0fa11a834489d0e71e5ab3a5de, type: 3}
+  - {fileID: 3719108416002039116, guid: 5a9219cf1323cb04bb14899988f3fd11, type: 3}
+  - {fileID: -1170357253049065230, guid: d1bac7eccceb8b047bf29444ec7d3c94, type: 3}
+  - {fileID: 1722654265867078856, guid: 7b3eb23e39a5b124a9d0479063867746, type: 3}
+  - {fileID: -2337324974125315740, guid: 1ca8c9ecd1c5e6d48b1a442c11596bf4, type: 3}
+  - {fileID: 1978308630607936374, guid: 400f335ee4d78b249abfad33b6065769, type: 3}
+  - {fileID: -5228984298112116750, guid: 0a071e33a146c6d49af0ac60a5bd1128, type: 3}
+  - {fileID: 7352835035049997446, guid: 4431423bcf726764da180394795b5afb, type: 3}
+  - {fileID: 5975842763079964472, guid: 59ca219ecdbcd414da918cb777418a51, type: 3}
+  - {fileID: 1848794287120599655, guid: 2518b0987297b38408e6cd1680a74297, type: 3}
+  - {fileID: -566069537340205990, guid: 09c0fb503ce7b5b4f80834e2831fa773, type: 3}
+  - {fileID: -3436916065205307660, guid: 586517aa1b6fd1041bcdf002580d95fa, type: 3}
+  - {fileID: -3992595921067601805, guid: d5f92a9803703234b8f8778f18695a29, type: 3}
+  - {fileID: 1570874636149529945, guid: e923e73d06a2d2147b3f4d1b36abe990, type: 3}
+  - {fileID: 2004848740461513114, guid: 294e7973374e36348b2d1f4d80f416d2, type: 3}
+  - {fileID: -3914529899032448907, guid: 25bd76541338a5348a02595f4b0f41a5, type: 3}
+  - {fileID: -5869928425266618467, guid: 7d1670a9f638ab3418e159197652b5fb, type: 3}
+  - {fileID: 976832629018020502, guid: 2690f40cfae1c1d4bad589913e16c08a, type: 3}
+  - {fileID: -1240419385173645271, guid: b17d82b26a9d86d48b30e2f5d73a1630, type: 3}
+  portalFps: 20
+  portalWorldHeight: 3.2
+  portalAheadDistance: 4
 --- !u!1 &323932727
 GameObject:
   m_ObjectHideFlags: 0
@@ -753,9 +802,9 @@ MonoBehaviour:
   attendanceIcon: {fileID: 21300000, guid: ab51841b0e3ef8a41bb6f10fe2cd74bd, type: 3}
   tradeIcon: {fileID: 21300000, guid: a851c259d51f9204fac1993594ca9f4f, type: 3}
   gachaIcon: {fileID: -8783460471149758233, guid: 5a391ccb41c0c564fa7f07937ad6bd0a, type: 3}
+  bossRushIcon: {fileID: -8801098943995042482, guid: 0d55cf740a8f7794192a89938bcd03ba, type: 3}
   settingsIcon: {fileID: 21300000, guid: e96efdf00edbc62438e3eeaa98707ae3, type: 3}
   uiBackgroundSprite: {fileID: 21300000, guid: 848ed24b50435714b82c54a24d609005, type: 3}
-  menuToggleIconTexture: {fileID: 2800000, guid: ce01d1d1f3221da4cac316a6834af773, type: 3}
   activeBuffIcon: {fileID: -3656246144031661519, guid: 69f1776e65ef4684492a00ae526bed9d, type: 3}
   buffTooltipBackground: {fileID: -5635248910431450665, guid: 94bd4fa3940cf8c409294f431ef55e25, type: 3}
   escMenuFrameSprite: {fileID: -6919774509020925252, guid: bc1135afb46c4864d9be5d855a2bbe3e, type: 3}
@@ -1764,6 +1813,7 @@ MonoBehaviour:
   attendancePanelPrefab: {fileID: 1145327173041529558, guid: 8e9b1c934473d6d4f885167f9adbdf7d, type: 3}
   tradePanelPrefab: {fileID: 3281263510454333301, guid: cbe47ea4bf92c7d44bd641e48defd342, type: 3}
   gachaPanelPrefab: {fileID: 1055090032571380420, guid: 5756dfa0faaaba0489158b6f47b240b5, type: 3}
+  bossRushPanelPrefab: {fileID: 7802758914212833860, guid: 4e805b3953a30da448732e633dedaf32, type: 3}
   settingsPanelPrefab: {fileID: 6153933301113318958, guid: cfde72febb76d0b45884e1d1db6a2556, type: 3}
   showOnStart: 0
   startPanel: 0
