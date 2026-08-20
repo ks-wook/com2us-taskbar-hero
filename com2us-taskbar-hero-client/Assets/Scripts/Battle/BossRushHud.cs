@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
@@ -10,14 +11,17 @@ namespace TaskbarHero.Client.Battle
     /// <para>경과 기록은 <b>그대로 서버에 보고되는 값</b>이며(<see cref="BossRushBattleFlow"/>가 측정),
     /// HUD는 받은 값을 그리기만 한다. 계층은 런타임에 코드로 구성하고 도전이 끝나면 파괴한다.</para>
     /// <para>그 라운드의 처치 진행도는 <see cref="StageProgressBar"/>를 그대로 재사용하므로 여기서 다루지 않는다.
-    /// 제한 시간(10분)은 초과 시 <see cref="BossRushBattleFlow"/>가 도전을 실패로 끝내는 규칙으로만 남아 있고
-    /// HUD에는 표시하지 않는다 — 잔여 게이지가 전투 화면 위쪽을 가려 라운드·기록보다 눈에 먼저 들어왔다.</para>
+    /// <b>제한 시간은 없다</b> — 경과 기록은 랭킹 점수일 뿐이고 전투를 끊는 상한이 아니다.</para>
+    /// <para><b>타이머는 픽셀 폰트 + 글자별 고정 칸(등폭)</b>으로 그린다. 기본 UI 폰트는 자릿폭이 달라
+    /// 밀리초가 바뀔 때마다 문자열 폭이 흔들리는데, 타이머는 매 프레임 갱신되므로 그 흔들림이 그대로 보인다.
+    /// 그래서 글자를 한 칸씩 나눠 숫자 칸 폭을 고정하고(구분자 <c>:</c>·<c>.</c>는 좁은 칸) 전체를 가운데 정렬한다.
+    /// 폰트는 <see cref="BossRushBattleFlow"/>가 배선해 넘겨주며, 없으면 기본 폰트로 같은 등폭 배치를 쓴다.</para>
     /// </summary>
     public class BossRushHud : MonoBehaviour
     {
         private const float PanelWidth = 620f;
         private const float RoundHeight = 56f;
-        private const float RecordGap = 2f;        // 라운드와 경과 기록 사이 간격
+        private const float RecordGap = 20f;       // 라운드와 경과 기록 사이 간격(타이머를 조금 아래로 내렸다)
         private const float RecordHeight = 52f;
         /// <summary>표시 요소가 실제로 차지하는 높이(라운드 + 간격 + 기록).</summary>
         private const float ContentHeight = RoundHeight + RecordGap + RecordHeight;   // 110
@@ -29,11 +33,21 @@ namespace TaskbarHero.Client.Battle
         /// </summary>
         private const float PanelTopY = 353f;
 
-        private Text _roundText;
-        private Text _recordText;
+        /// <summary>타이머 글자 크기(px). 픽셀 폰트의 획이 고르게 나오는 크기로 잡았다.</summary>
+        private const int RecordFontSize = 40;
+        /// <summary>숫자 한 칸의 폭(글자 크기 대비). 픽셀 폰트 숫자 자폭(0.68em)에 약간의 자간을 더한 값.</summary>
+        private const float RecordDigitCellRatio = 0.72f;
+        /// <summary>구분자(<c>:</c>·<c>.</c>) 한 칸의 폭(글자 크기 대비) — 숫자보다 좁게 둔다.</summary>
+        private const float RecordSepCellRatio = 0.34f;
 
-        /// <summary>HUD를 생성한다(이미 떠 있으면 그것을 돌려준다).</summary>
-        public static BossRushHud Show()
+        private Text _roundText;
+        private RectTransform _recordRow;
+        private Font _recordFont;
+        private readonly List<Text> _recordCells = new List<Text>();
+
+        /// <summary>HUD를 생성한다(이미 떠 있으면 그것을 돌려준다).
+        /// <paramref name="timerFont"/>는 타이머에 쓸 픽셀 폰트로, null이면 기본 UI 폰트를 쓴다.</summary>
+        public static BossRushHud Show(Font timerFont = null)
         {
             var existing = FindAnyObjectByType<BossRushHud>();
             if (existing != null)
@@ -42,7 +56,7 @@ namespace TaskbarHero.Client.Battle
             }
             var go = new GameObject("BossRushHud");
             var hud = go.AddComponent<BossRushHud>();
-            hud.Build();
+            hud.Build(timerFont);
             return hud;
         }
 
@@ -59,16 +73,14 @@ namespace TaskbarHero.Client.Battle
             {
                 _roundText.text = $"ROUND {round} / {roundCount}";
             }
-            if (_recordText != null)
-            {
-                _recordText.text = BossRushFormat.Record(Mathf.Max(1, elapsedMs));
-            }
+            SetRecord(BossRushFormat.Record(Mathf.Max(1, elapsedMs)));
         }
 
         /// <summary>캔버스와 표시 요소(라운드 · 경과 기록)를 코드로 구성한다.</summary>
-        private void Build()
+        private void Build(Font timerFont)
         {
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            _recordFont = timerFont != null ? timerFont : font;
 
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -91,10 +103,68 @@ namespace TaskbarHero.Client.Battle
             _roundText.fontStyle = FontStyle.Bold;
             PlaceTop(_roundText.rectTransform, 0f, PanelWidth, RoundHeight);
 
-            // 경과(= 그대로 보고될 기록)
-            _recordText = NewText("Record", panel, font, "0:00.000", 38, TextAnchor.MiddleCenter);
-            _recordText.color = new Color(1f, 1f, 1f, 0.92f);
-            PlaceTop(_recordText.rectTransform, RoundHeight + RecordGap, PanelWidth, RecordHeight);
+            // 경과(= 그대로 보고될 기록). 글자별 칸으로 그리므로 여기서는 담을 행만 만든다.
+            _recordRow = NewRect("Record", panel);
+            PlaceTop(_recordRow, RoundHeight + RecordGap, PanelWidth, RecordHeight);
+            SetRecord(BossRushFormat.Record(1));
+        }
+
+        // ── 타이머(등폭 배치) ──
+
+        /// <summary>타이머 문자열을 글자별 고정 칸에 채운다 — 숫자 칸 폭이 고정이라 값이 바뀌어도 흔들리지 않는다.
+        /// 자리 수가 늘어나면(<c>10:00.000</c>) 칸을 더 만들고, 줄어들면 남는 칸을 끈다.</summary>
+        private void SetRecord(string record)
+        {
+            if (_recordRow == null || string.IsNullOrEmpty(record))
+            {
+                return;
+            }
+
+            float total = 0f;
+            for (int i = 0; i < record.Length; i++)
+            {
+                total += CellWidth(record[i]);
+            }
+
+            float cursor = -total * 0.5f;
+            for (int i = 0; i < record.Length; i++)
+            {
+                float w = CellWidth(record[i]);
+                var cell = CellAt(i);
+                cell.text = record[i].ToString();
+                var rt = cell.rectTransform;
+                rt.sizeDelta = new Vector2(w, RecordHeight);
+                rt.anchoredPosition = new Vector2(cursor + w * 0.5f, 0f);
+                cell.gameObject.SetActive(true);
+                cursor += w;
+            }
+
+            for (int i = record.Length; i < _recordCells.Count; i++)
+            {
+                _recordCells[i].gameObject.SetActive(false);
+            }
+        }
+
+        /// <summary>글자 한 칸의 폭 — 숫자는 같은 폭, 구분자(<c>:</c>·<c>.</c>)는 좁은 폭.</summary>
+        private static float CellWidth(char c)
+        {
+            return char.IsDigit(c) ? RecordFontSize * RecordDigitCellRatio : RecordFontSize * RecordSepCellRatio;
+        }
+
+        /// <summary>i번째 글자 칸을 얻는다(없으면 만들어 붙인다).</summary>
+        private Text CellAt(int i)
+        {
+            while (_recordCells.Count <= i)
+            {
+                var cell = NewText($"Cell{_recordCells.Count}", _recordRow, _recordFont, "0",
+                                   RecordFontSize, TextAnchor.MiddleCenter);
+                cell.color = new Color(1f, 1f, 1f, 0.92f);
+                var rt = cell.rectTransform;
+                rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                _recordCells.Add(cell);
+            }
+            return _recordCells[i];
         }
 
         // ── UI 헬퍼 ──

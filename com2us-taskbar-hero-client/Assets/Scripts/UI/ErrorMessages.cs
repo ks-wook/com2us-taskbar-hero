@@ -118,6 +118,7 @@ namespace TaskbarHero.Client.UI
                 // 보스러시/랭킹 도메인(boss-rush 기획서 §7)
                 case ErrorCode.BossRushLocked:
                     return "보스 러시가 아직 열리지 않았습니다. 스테이지를 더 진행해 주세요.";
+                // 폐기 코드(도전 횟수 제한 제거). 서버는 반환하지 않지만 옛 서버와 붙었을 때를 위해 문구는 남긴다.
                 case ErrorCode.BossRushDailyLimitExceeded:
                     return "오늘 도전 횟수를 모두 사용했습니다.";
                 case ErrorCode.BossRushSeasonClosed:
@@ -125,6 +126,7 @@ namespace TaskbarHero.Client.UI
                 case ErrorCode.BossRushRunNotFound:
                 case ErrorCode.BossRushRunAlreadyFinished:
                     return "도전 기록을 등록하지 못했습니다.";
+                // 폐기 코드(제한 시간 제거 — 런 수명 초과는 BossRushInvalidProgress로 온다).
                 case ErrorCode.BossRushTimeout:
                     return "제한 시간을 넘겨 기록이 등록되지 않았습니다.";
                 case ErrorCode.BossRushInvalidProgress:

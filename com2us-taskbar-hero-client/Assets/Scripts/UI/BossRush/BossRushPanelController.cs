@@ -15,8 +15,8 @@ namespace TaskbarHero.Client.UI.BossRush
     /// <see cref="PanelFrame"/> 콘텐츠 영역(802.9 × 956.9)에만 놓는다. 전투를 가리지 않도록 전투 화면
     /// <b>왼쪽</b>에 도킹한다(<see cref="SidePanel.Side.Left"/>).</para>
     /// <para><b>닫기(X) 버튼은 두지 않는다</b> — 다른 패널과 같이 창 밖(딤) 클릭으로 닫는다.</para>
-    /// <para><b>화면 값은 서버(<c>/api/game/boss-rush/*</c>)와 마스터 번들에서 온다.</b> 시즌·내 기록·일일 잔여
-    /// 횟수는 <c>info</c>, 랭킹 목록은 <c>rank</c>, 내 순위는 <c>my-rank</c>가 채운다. 라운드 보스 5칸과 시즌
+    /// <para><b>화면 값은 서버(<c>/api/game/boss-rush/*</c>)와 마스터 번들에서 온다.</b> 시즌·내 기록·해금 여부는
+    /// <c>info</c>, 랭킹 목록은 <c>rank</c>, 내 순위는 <c>my-rank</c>가 채운다. 라운드 보스 5칸과 시즌
     /// 순위 보상처럼 <b>정적인 값은 서버를 부르지 않고 번들</b>(<c>boss_rush_round</c>·
     /// <c>boss_rush_rank_reward</c>)로 그린다(보스러시 UI 기획서 2.1).</para>
     /// <para><b>[도전 시작]은 <c>enter</c>로 런을 열고 전투를 <see cref="BossRushBattleFlow"/>에 넘긴다</b> —
@@ -211,7 +211,6 @@ namespace TaskbarHero.Client.UI.BossRush
         [SerializeField] private Button _challengeButton;
         [SerializeField] private Image _challengeButtonImage;
         [SerializeField] private Text _challengeButtonLabel;
-        [SerializeField] private Text _entryCountText;
         [SerializeField] private BossCellView[] _bossCells = new BossCellView[0];
         [Tooltip("라운드 보스 프리팹 표(monster_9099~9499). 에디터 빌더가 Assets/Prefabs/Character/Monster에서 배선한다.")]
         [SerializeField] private BossPrefabEntry[] _bossPrefabs = new BossPrefabEntry[0];
@@ -277,7 +276,7 @@ namespace TaskbarHero.Client.UI.BossRush
         private float _seasonFetchRealtime;        // 그 시점의 Time.unscaledTime
         private bool _seasonExpiredHandled;        // 카운트다운이 0에 닿아 info를 한 번 다시 받았는지
         private bool _infoRequestInFlight;
-        private bool _enterRequestInFlight;   // [도전 시작] 중복 클릭 방지(enter는 일일 횟수를 차감한다)
+        private bool _enterRequestInFlight;   // [도전 시작] 중복 클릭 방지(런이 두 개 열리지 않게)
         private CharacterPortrait[] _portraits;   // 칸마다 하나(런타임 생성)
         private GameObject[] _portraitStages;
         private int[] _portraitMonsterCode;       // 칸에 이미 세워 둔 프리팹의 코드(중복 재생성 방지)
@@ -661,20 +660,16 @@ namespace TaskbarHero.Client.UI.BossRush
             PlaceTopCenter(_seasonText.rectTransform, SeasonTextY, SeasonTextWidth, SeasonTextHeight);
         }
 
-        /// <summary>하단 도전 바: 제한 시간 안내 · 잔여 횟수 · [도전 시작] 버튼.</summary>
+        /// <summary>하단 도전 바: 규칙 안내 한 줄 · [도전 시작] 버튼.
+        /// <para>제한 시간도 도전 횟수도 없으므로 잔여 횟수 줄을 두지 않는다 — 도전은 완주하거나 전멸할 때 끝난다.</para></summary>
         private void BuildChallengeBar(RectTransform root)
         {
             var bar = NewChild("ChallengeBar", root);
             PlaceTopCenter(bar, ChallengeBarY, RowWidth, ChallengeBarHeight);
 
-            var hint = NewText("Hint", bar, "10분 안에 5라운드를 모두 클리어해야 기록이 남습니다", 24, TextAnchor.UpperCenter);
+            var hint = NewText("Hint", bar, "5라운드를 회복 없이 이어 클리어해야 기록이 남습니다", 24, TextAnchor.UpperCenter);
             hint.color = TextDim;
             PlaceTopCenter(hint.rectTransform, -ChallengeHintY, RowWidth, 28f);
-
-            _entryCountText = NewText("EntryCount", bar, string.Empty, 26, TextAnchor.UpperCenter);
-            _entryCountText.fontStyle = FontStyle.Bold;
-            _entryCountText.color = TextPrimary;
-            PlaceTopCenter(_entryCountText.rectTransform, 26f, RowWidth, 30f);
 
             _challengeButtonImage = NewImage("ChallengeButton", bar, FallbackButtonGold);
             ApplySliced(_challengeButtonImage, _btnGold, Color.white);
@@ -983,7 +978,7 @@ namespace TaskbarHero.Client.UI.BossRush
             }
         }
 
-        /// <summary>진입 화면을 다시 그린다 — 서버에서 <c>info</c>(시즌·내 기록·일일 잔여 횟수)와
+        /// <summary>진입 화면을 다시 그린다 — 서버에서 <c>info</c>(시즌·내 기록·해금 여부)와
         /// <c>my-rank</c>(내 순위·등재 인원)를 받고, 정적인 값(라운드 보스·순위 보상)은 번들로 채운다.
         /// <para><c>my-rank</c>를 패널을 열 때 함께 받는 이유는 두 가지다 — 내 기록 카드의 <c>N명 중 M위</c>에
         /// 필요한 <c>totalEntries</c>가 <c>info</c> 응답에 없고, 랭킹 탭의 고정 영역이 탭을 여는 즉시 채워진다.</para></summary>
@@ -1026,7 +1021,7 @@ namespace TaskbarHero.Client.UI.BossRush
 
         /// <summary>
         /// <c>info</c> 응답으로 시즌·내 기록·도전 버튼을 채운다. <paramref name="data"/>가 null이면 조회 실패이며,
-        /// 이때는 값을 지우고 버튼을 잠근다 — 옛 값을 남겨 두면 없는 횟수로 도전을 시도하게 된다.
+        /// 이때는 값을 지우고 버튼을 잠근다 — 옛 값을 남겨 두면 잠긴 콘텐츠에 도전을 시도하게 된다.
         /// </summary>
         private void ApplyInfo(BossRushInfoResultData data)
         {
@@ -1328,32 +1323,24 @@ namespace TaskbarHero.Client.UI.BossRush
             return null;
         }
 
-        /// <summary>[도전 시작] 버튼의 표시·활성 상태와 잔여 횟수 문구를 상태에 맞춘다.
-        /// <para>조회 실패(<c>_info == null</c>)도 하나의 상태로 다룬다 — 버튼을 잠그고 그 사실을 적는다.</para></summary>
+        /// <summary>[도전 시작] 버튼의 표시·활성 상태를 상태에 맞춘다.
+        /// <para>조회 실패(<c>_info == null</c>)도 하나의 상태로 다룬다 — 버튼을 잠그고 그 사실을 적는다.</para>
+        /// <para>도전 횟수 제한이 없으므로 막는 조건은 <b>해금 미달 · 시즌 정산 중 · 도전 진행 중</b> 셋뿐이다.</para></summary>
         private void ApplyChallengeButton()
         {
             bool loaded = _info != null;
-            int left = loaded ? Mathf.Max(0, _info.dailyEntryLimit - _info.dailyEntryUsed) : 0;
             bool locked = loaded && !_info.unlocked;
             bool settling = loaded && SeasonRemainingSeconds <= 0f;
             var flow = BossRushBattleFlow.Find();
             bool running = flow != null && flow.IsRunning;   // 전투 중에는 다시 도전할 수 없다
-            bool canChallenge = loaded && !locked && !settling && !running && left > 0;
+            bool canChallenge = loaded && !locked && !settling && !running;
 
-            if (_entryCountText != null)
-            {
-                _entryCountText.text = !loaded ? string.Empty
-                    : left > 0 ? $"오늘 {_info.dailyEntryUsed} / {_info.dailyEntryLimit}회"
-                    : $"오늘 {_info.dailyEntryUsed} / {_info.dailyEntryLimit}회 · {BossRushFormat.LocalClock(_info.dailyResetAt)} 초기화";
-                _entryCountText.color = left > 0 ? TextPrimary : TextDim;
-            }
             if (_challengeButtonLabel != null)
             {
                 _challengeButtonLabel.text = !loaded ? "정보를 불러오지 못했습니다"
                     : running ? "도전 진행 중"
                     : locked ? $"스테이지 {_info.unlockStageSequence} 클리어 후 해금"
                     : settling ? "시즌 정산 중"
-                    : left <= 0 ? "오늘 도전을 모두 사용"
                     : "도전 시작";
                 _challengeButtonLabel.fontSize = canChallenge ? 34 : locked || !loaded ? 24 : 28;
             }
@@ -1369,10 +1356,10 @@ namespace TaskbarHero.Client.UI.BossRush
         }
 
         /// <summary>
-        /// [도전 시작] — <c>enter</c>로 런을 열고(일일 횟수 1회 차감) 응답의 5라운드 구성으로
+        /// [도전 시작] — <c>enter</c>로 런을 열고 응답의 5라운드 구성으로
         /// <see cref="BossRushBattleFlow"/>에 전투를 넘긴 뒤 패널을 닫는다.
         /// <para><b>응답을 받기 전에는 전투를 시작하지 않는다</b> — <c>runId</c>가 있어야 완주 시 기록을 보고할 수 있고,
-        /// 잠금·잔여 횟수·시즌 상태 판정은 서버가 정본이기 때문이다. 실패하면 문구를 안내하고
+        /// 잠금·시즌 상태 판정은 서버가 정본이기 때문이다. 실패하면 문구를 안내하고
         /// <c>info</c>를 다시 받아 화면 상태를 서버 값으로 되돌린다.</para>
         /// </summary>
         private void OnChallengeButton()
@@ -1413,14 +1400,7 @@ namespace TaskbarHero.Client.UI.BossRush
                     return;
                 }
 
-                // 응답이 알려 준 일일 사용 횟수를 화면에 반영해 둔다(다시 조회하지 않는다).
-                if (_info != null)
-                {
-                    _info.dailyEntryUsed = data.dailyEntryUsed;
-                    _info.dailyEntryLimit = data.dailyEntryLimit;
-                }
-                Debug.Log($"[BossRush] 도전 시작 run={data.runId} 시즌={data.seasonId} " +
-                          $"라운드={data.rounds.Count} 오늘 {data.dailyEntryUsed}/{data.dailyEntryLimit}회");
+                Debug.Log($"[BossRush] 도전 시작 run={data.runId} 시즌={data.seasonId} 라운드={data.rounds.Count}");
 
                 flow.StartRun(data, ErrorMessages.ToKorean);
                 Close();   // 전투가 시작되므로 패널은 자동으로 닫는다
@@ -1430,7 +1410,7 @@ namespace TaskbarHero.Client.UI.BossRush
                 _enterRequestInFlight = false;
                 Debug.LogWarning($"[BossRush] 도전 시작 실패: {error}");
                 ShowModal("보스 러시", ErrorMessages.ToKorean(error));
-                RequestInfo();   // 해금·잔여 횟수·시즌 상태를 서버 값으로 되돌린다
+                RequestInfo();   // 해금·시즌 상태를 서버 값으로 되돌린다
             });
         }
 

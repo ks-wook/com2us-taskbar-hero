@@ -125,6 +125,14 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("보스의 이동속도 배율(일반 몹 대비). 1보다 작으면 더 느리게 전진한다.")]
         public float bossMoveSpeedFactor = 0.6f;
 
+        [Header("데미지 숫자")]
+        [Tooltip("데미지 숫자에 쓸 폰트(Assets/Thirdparty/SPUM/Core/Basic_Resources/Font/PixelFont.ttf). " +
+                 "비우면 빌트인 기본 폰트를 쓴다. 던전 배선 빌더가 자동으로 배선한다.")]
+        [SerializeField] private Font damageNumberFont;
+        [Tooltip("데미지 숫자 글자 크기 보정. 폰트마다 em 대비 숫자 높이가 달라(픽셀 폰트는 기본 폰트의 0.66배) " +
+                 "그대로 두면 숫자가 작아진다. 픽셀 폰트 기준 1.5.")]
+        [SerializeField] private float damageNumberFontScale = 1.5f;
+
         [Header("몬스터 체력바")]
         [Tooltip("몬스터 머리 위 HP바의 프레임 아트(Assets/Art/Icon/Combat/체력바.png). " +
                  "없으면 단색 반투명 배경으로 대체한다. 던전 배선 빌더가 BattleDevScene 값을 그대로 복사한다.")]
@@ -1581,7 +1589,7 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>진행 중인 서버 웨이브를 중단한다 — 남은 스폰 예정분을 버리고 살아 있는 적을 모두 정리한다.
-        /// 전멸 콜백은 호출하지 않는다(보스러시 제한 시간 초과처럼 <b>전투를 실패로 끊는</b> 경로에서 쓴다).</summary>
+        /// 전멸 콜백은 호출하지 않는다(보스러시 도전 실패처럼 <b>전투를 밖에서 끊는</b> 경로에서 쓴다).</summary>
         public void AbortServerBattle()
         {
             _serverQueue = null;
@@ -1661,7 +1669,7 @@ namespace TaskbarHero.Client.Battle
                 RequestShake(isBoss ? ShakeHeavy : ShakeLight);
             }
             // 피격 데미지를 숫자로 표시(치명타는 노란색). 크기는 대상 최대 체력 대비 피해 비중으로 정한다.
-            DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f),
+            DamageNumbers().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f),
                 crit, DamageSizeMul(dmg, target.MaxHp));
             Log($"{label} → -{dmg}{(crit ? " (치명타)" : string.Empty)} (HP {Mathf.Max(0, (int)target.Hp)}/{target.MaxHp})");
         }
@@ -1732,7 +1740,7 @@ namespace TaskbarHero.Client.Battle
                         mu.PlayHitReaction(heavy: heavy, knockback: heavy ? knockback : 0f);
                     }
                     // 광역은 대상마다 숫자가 동시에 떠 한 덩어리로 보이므로 대상 순서대로 시차를 준다.
-                    DamageNumberPool.GetOrCreate().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f),
+                    DamageNumbers().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f),
                         crit, DamageSizeMul(dmg, mu.MaxHp), hit * AreaNumberStagger);
                     hit++;
                 }
@@ -1876,7 +1884,7 @@ namespace TaskbarHero.Client.Battle
                         // 넉백·피격 모션은 대표(첫) 대상만 — 전원을 밀면 한 번의 스킬에 화면이 찢어진다.
                         mu.PlayHitReaction(heavy: batch == 0, knockback: batch == 0 ? knockback : 0f);
                     }
-                    DamageNumberPool.GetOrCreate().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f),
+                    DamageNumbers().Spawn(dmg, mu.transform.position + Vector3.up * (effectYOffset + 0.5f),
                         crit, DamageSizeMul(dmg, mu.MaxHp), batch * AreaNumberStagger);
                     batch++;
                     hitTotal++;
@@ -1961,7 +1969,7 @@ namespace TaskbarHero.Client.Battle
             long dmg = MitigatedDamage(raw, target.Defense);
             target.TakeDamage(dmg);
             // 아군 피격 데미지를 붉은 숫자로 표시(오브젝트 풀 재사용).
-            DamageNumberPool.GetOrCreate().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f));
+            DamageNumbers().Spawn(dmg, target.transform.position + Vector3.up * (effectYOffset + 0.5f));
             return true;
         }
 
@@ -2414,6 +2422,11 @@ namespace TaskbarHero.Client.Battle
             img.color = color;
             img.raycastTarget = false;
             return img;
+        }
+        /// <summary>데미지 숫자 풀을 얻는다 — 씬에 배선된 폰트·크기 보정을 함께 넘겨 풀이 그 폰트로 그리게 한다.</summary>
+        private DamageNumberPool DamageNumbers()
+        {
+            return DamageNumberPool.GetOrCreate(damageNumberFont, damageNumberFontScale);
         }
     }
 }

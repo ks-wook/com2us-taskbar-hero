@@ -23,7 +23,9 @@ namespace TaskbarHero.Client.Battle
     /// 기록이 줄어들지 않게), 포탈 이동·결과/실패 연출·<c>clear</c> 응답 대기 구간에서는 멈춘다. 라운드별 소요는
     /// 같은 타이머에서 라운드 경계마다 스냅샷하므로 <b>합이 항상 보고 값(clearMs)과 일치</b>한다
     /// (불일치는 서버에서 <c>BossRushInvalidProgress(13006)</c>가 된다).</para>
-    /// <para>실패(전멸·시간 초과)는 <b>서버에 아무것도 보내지 않는다</b> — 그 런은 제한 시간이 지나 만료된다.</para>
+    /// <para><b>제한 시간은 없다</b> — 타이머는 기록을 <b>재기만 하고 전투를 끊지 않는다</b>. 도전은
+    /// 5라운드를 다 깨거나(완주) 파티가 전멸할 때 끝난다. 실패는 <b>서버에 아무것도 보내지 않는다</b> —
+    /// 그 런은 서버가 보는 런 수명(<c>runExpireSec</c>)이 지나면 만료된다.</para>
     /// </summary>
     public class BossRushBattleFlow : MonoBehaviour
     {
@@ -52,6 +54,14 @@ namespace TaskbarHero.Client.Battle
         [Tooltip("보스 처치 지점에서 포탈을 세울 거리(월드 단위, 파티 최전방 기준 오른쪽).")]
         [SerializeField] private float portalAheadDistance = 4f;
 
+        [Header("라운드 배너 아트(에디터 빌더가 배선)")]
+        [Tooltip("'ROUND' 명판(Assets/Art/UI/BossRush/boss_rush_round.png).")]
+        [SerializeField] private Sprite roundWordSprite;
+        [Tooltip("라운드 숫자 아트(Assets/Art/UI/BossRush/digit_N.png). 인덱스 0 = 1라운드.")]
+        [SerializeField] private Sprite[] roundDigitSprites = new Sprite[0];
+        [Tooltip("HUD 타이머용 픽셀 폰트(비우면 기본 UI 폰트).")]
+        [SerializeField] private Font timerFont;
+
         // 포탈 진입·전환 타이밍(전부 unscaled).
         private const float PortalTouchGap = 0.3f;    // 파티원이 포탈 x에 이만큼 다가오면 "닿았다"로 본다
         private const float VanishSeconds = 0.22f;    // 닿은 파티원이 포탈로 빨려 들어가 사라지는 데 걸리는 시간
@@ -61,11 +71,9 @@ namespace TaskbarHero.Client.Battle
         private const float FadeHoldSeconds = 0.08f;
         private const float FadeInSeconds = 0.35f;
 
-        private const int DefaultTimeLimitMs = 600000;   // 마스터 미로드 시 폴백(10분)
 
         private Phase _phase = Phase.Idle;
         private long _runId;
-        private int _timeLimitMs = DefaultTimeLimitMs;
         private List<BossRushRoundDto> _rounds = new List<BossRushRoundDto>();
         private int _roundIndex;                       // 0-based
         private float _elapsedSec;                     // 순수 전투 시간 누적(unscaled)
@@ -123,7 +131,6 @@ namespace TaskbarHero.Client.Battle
 
             _errorText = errorText;
             _runId = data.runId;
-            _timeLimitMs = data.timeLimitMs > 0 ? data.timeLimitMs : DefaultTimeLimitMs;
             _rounds = SortedRounds(data.rounds);
             _roundIndex = 0;
             _elapsedSec = 0f;
@@ -138,9 +145,9 @@ namespace TaskbarHero.Client.Battle
                 _returnStage = dungeon.CurrentStage;
             }
 
-            _hud = BossRushHud.Show();
+            _hud = BossRushHud.Show(timerFont);
             Time.timeScale = 1f;   // 직전 전투의 슬로우모션이 남아 있을 수 있다
-            Debug.Log($"[BossRush] 도전 시작 run={_runId} 라운드 {_rounds.Count}개, 제한 {_timeLimitMs}ms");
+            Debug.Log($"[BossRush] 도전 시작 run={_runId} 라운드 {_rounds.Count}개");
             StartRound(0, restartField: true, applyBackground: true);
         }
 
@@ -236,11 +243,16 @@ namespace TaskbarHero.Client.Battle
             dungeon.ApplyBackground(_rounds[index].backgroundType);
         }
 
-        /// <summary>라운드 배너를 띄운다(스테이지 입장 배너 재사용, 문구만 <c>ROUND n / 5</c>).</summary>
+        /// <summary>라운드 배너를 띄운다(스테이지 입장 배너 재사용). 문구가 아니라 <b>아트 조합</b>이다 —
+        /// 'ROUND' 명판(<c>boss_rush_round</c>) 중앙 하단에 라운드 숫자 아트(<c>digit_N</c>)를 걸친다.
+        /// 아트가 없으면 예전 문구 표기(<c>ROUND n / 5</c>)로 폴백한다.</summary>
         private void ShowRoundBanner(int index)
         {
-            string top = $"ROUND {RoundNumber(index)} / {_rounds.Count}";
-            const string bottom = "BOSS RUSH";
+            int round = RoundNumber(index);
+            string fallbackTop = $"ROUND {round} / {_rounds.Count}";
+            var digit = DigitSprite(round);
+            // 첫 라운드 배너는 콘텐츠 진입 신호이므로 보스러시 시작음, 이후 라운드는 스테이지 입장음을 쓴다.
+            SoundId sfx = index == 0 ? SoundId.BossRushStart : SoundId.StageEnter;
 
             var prefab = dungeon != null ? dungeon.StageEnterBannerPrefab : null;
             if (prefab != null)
@@ -250,14 +262,21 @@ namespace TaskbarHero.Client.Battle
                 var banner = go.GetComponent<StageEnterBanner>();
                 if (banner != null)
                 {
-                    banner.PlayText(top, bottom);
+                    banner.PlayRoundArt(roundWordSprite, digit, fallbackTop, sfx);
                     return;
                 }
                 Destroy(go); // StageEnterBanner가 없는 잘못된 프리팹 → 폴백
             }
 
             var fallback = new GameObject("BossRushRoundBanner").AddComponent<StageEnterBanner>();
-            fallback.PlayText(top, bottom);
+            fallback.PlayRoundArt(roundWordSprite, digit, fallbackTop, sfx);
+        }
+
+        /// <summary>라운드 번호(1-based)에 해당하는 숫자 아트. 배선되지 않았거나 범위를 벗어나면 null(문구 폴백).</summary>
+        private Sprite DigitSprite(int round)
+        {
+            int i = round - 1;
+            return i >= 0 && i < roundDigitSprites.Length ? roundDigitSprites[i] : null;
         }
 
         /// <summary>몬스터 코드 → 프리팹(던전 전투가 들고 있는 표를 그대로 쓴다).</summary>
@@ -281,11 +300,6 @@ namespace TaskbarHero.Client.Battle
             }
             UpdateHud();
 
-            if (_timerRunning && ElapsedMs() >= _timeLimitMs)
-            {
-                FailRun("시간 초과", $"제한 시간 {BossRushFormat.Remaining(_timeLimitMs)}을 넘겨 도전이 끝났습니다");
-                return;
-            }
 
             if (_phase == Phase.PortalWalk)
             {
@@ -293,7 +307,7 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
-        /// <summary>HUD에 현재 라운드·경과를 넘긴다(제한 시간은 HUD에 표시하지 않는다).</summary>
+        /// <summary>HUD에 현재 라운드·경과를 넘긴다.</summary>
         private void UpdateHud()
         {
             if (_hud == null)
@@ -347,6 +361,10 @@ namespace TaskbarHero.Client.Battle
             _portalX = battle.PartyFrontX + Mathf.Max(1f, portalAheadDistance);
             _portal = PortalEffect.Spawn(portalFrames, new Vector3(_portalX, battle.PathY, 0f),
                                          portalWorldHeight, portalFps);
+            if (_portal != null)
+            {
+                SoundManager.Sfx(SoundId.PortalOpen);   // 포탈이 열리는 순간(라운드 클리어 신호도 겸한다)
+            }
             battle.ResumeAdvance();   // 적이 없어도 계속 걷게 한다(포탈까지 이동하는 연출)
             if (_portal == null)
             {
@@ -383,6 +401,11 @@ namespace TaskbarHero.Client.Battle
                     {
                         allGone = false;   // 아직 걸어오는 중
                         continue;
+                    }
+                    if (_vanishing.Count == 0)
+                    {
+                        // 흡입음은 첫 파티원이 닿을 때 한 번만 — 4명마다 울리면 같은 소리가 겹쳐 뭉갠다.
+                        SoundManager.Sfx(SoundId.PortalTravel);
                     }
                     v = new PortalVanish(m);   // 포탈에 닿았다 — 지금부터 사라진다
                     _vanishing.Add(v);
@@ -495,7 +518,7 @@ namespace TaskbarHero.Client.Battle
             BossRushResultOverlay.Show(shown, new List<BossRushRoundTimeDto>(_roundTimes), () => EndRun(returnToDungeon: true));
         }
 
-        /// <summary>아군 전멸 — 실패 처리(서버에는 아무것도 보내지 않는다).</summary>
+        /// <summary>아군 전멸 — 실패 처리(유일한 실패 경로다. 서버에는 아무것도 보내지 않는다).</summary>
         private void OnDefeat()
         {
             if (_phase == Phase.Idle || _phase == Phase.Finished)
@@ -505,8 +528,8 @@ namespace TaskbarHero.Client.Battle
             FailRun("보스 러시 도전 실패", $"ROUND {RoundNumber(_roundIndex)}에서 쓰러졌습니다");
         }
 
-        /// <summary>도전 실패(전멸·시간 초과) — 전투를 끊고 패배 연출을 띄운 뒤 던전으로 돌아간다.
-        /// <b>서버에 보고하지 않는다</b> — 그 런은 제한 시간이 지나 만료된다(서버 기획서 6.2).</summary>
+        /// <summary>도전 실패(파티 전멸) — 전투를 끊고 패배 연출을 띄운 뒤 던전으로 돌아간다.
+        /// <b>서버에 보고하지 않는다</b> — 그 런은 런 수명이 지나면 서버가 만료로 처리한다(서버 기획서 6.2).</summary>
         private void FailRun(string headline, string hint)
         {
             _timerRunning = false;
@@ -518,7 +541,7 @@ namespace TaskbarHero.Client.Battle
                 _portal = null;
             }
             RestoreVanished();            // 포탈 연출 중 실패해도 파티가 보이지 않는 채로 남지 않게 한다
-            battle.AbortServerBattle();   // 남은 웨이브·적을 정리(시간 초과 시 전투 즉시 중단)
+            battle.AbortServerBattle();   // 남은 웨이브·적을 정리한다
             float slow = dungeon != null ? dungeon.ClearSlowMotionScale : 0.25f;
             Time.timeScale = Mathf.Clamp(slow, 0.01f, 1f);
 

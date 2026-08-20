@@ -131,6 +131,11 @@ namespace TaskbarHero.Client.Battle
             PlaceCenter(hint.rectTransform, rowY - 30f, 900f, 52f);
 
             SoundManager.Jingle(SoundId.JingleStageClear);
+            if (isNew)
+            {
+                // 신기록음은 완주 팡파레와 겹치지 않도록 배지가 다 커지는 시점에 얹는다.
+                StartCoroutine(PlayNewRecordAfter(BadgePopDuration));
+            }
             StartCoroutine(AutoCloseAfter(AutoCloseSeconds));
         }
 
@@ -159,6 +164,13 @@ namespace TaskbarHero.Client.Battle
             float u = k - 1f;
             float ease = 1f + (BadgePopOvershoot + 1f) * u * u * u + BadgePopOvershoot * u * u;
             return Mathf.LerpUnclamped(BadgePopStartScale, 1f, ease);
+        }
+
+        /// <summary>신기록 배지가 제 크기가 되는 순간에 신기록음을 울린다(완주 팡파레와 시점을 어긋나게 둔다).</summary>
+        private IEnumerator PlayNewRecordAfter(float seconds)
+        {
+            yield return new WaitForSecondsRealtime(seconds);
+            SoundManager.Sfx(SoundId.NewRecord);
         }
 
         private IEnumerator AutoCloseAfter(float seconds)

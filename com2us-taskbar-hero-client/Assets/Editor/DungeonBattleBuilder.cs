@@ -35,6 +35,11 @@ namespace TaskbarHero.ClientEditor
         /// <summary>보스러시 라운드 전환 포탈 프레임 폴더(TravelPortal_01~30).</summary>
         private const string PortalDir = "Assets/Art/Effect/Object/Portal/TravelPortal";
         private const int PortalFrameCount = 30;
+        /// <summary>보스러시 라운드 진입 배너 아트 폴더('ROUND' 명판 + 라운드 숫자 1~5).</summary>
+        private const string BossRushArtDir = "Assets/Art/UI/BossRush";
+        private const int BossRushRoundCount = 5;
+        /// <summary>보스러시 HUD 타이머용 픽셀 폰트(숫자 획이 픽셀아트와 같은 하드 엣지로 떨어진다).</summary>
+        private const string PixelFontPath = "Assets/Thirdparty/SPUM/Core/Basic_Resources/Font/PixelFont.ttf";
 
         /// <summary>
         /// GameScene 전용 전투 띠 상향 오프셋(월드 단위). BattleDevScene은 배경 띠가 화면 바닥에 붙어 있는데,
@@ -162,6 +167,9 @@ namespace TaskbarHero.ClientEditor
             // 보스 등장 경고 이미지 배선(미배선 시 붉은 "Warning!!" 문구로 폴백된다).
             var bossWarning = LoadSprite(BossWarningPath);
             battleSo.FindProperty("bossWarningImage").objectReferenceValue = bossWarning;
+            // 데미지 숫자 폰트 배선 — HUD 타이머와 같은 픽셀 폰트로 그린다(미배선 시 빌트인 기본 폰트).
+            var damageFont = AssetDatabase.LoadAssetAtPath<Font>(PixelFontPath);
+            battleSo.FindProperty("damageNumberFont").objectReferenceValue = damageFont;
             battleSo.ApplyModifiedPropertiesWithoutUndo();
             Debug.Log($"[DungeonBattleBuilder] 보스 왕관 아이콘 {(bossIcon != null ? "배선" : "없음")}, "
                       + $"몬스터 체력바 프레임 {(hpBarFrame != null ? "배선" : "없음")}, "
@@ -277,8 +285,29 @@ namespace TaskbarHero.ClientEditor
                 portalProp.GetArrayElementAtIndex(portalCount).objectReferenceValue = sp;
                 portalCount++;
             }
+            // 라운드 진입 배너 아트 — 'ROUND' 명판 + 라운드 숫자(digit_1~5). 배너는 이 아트를 조합해 띄운다.
+            var roundWord = LoadSprite($"{BossRushArtDir}/boss_rush_round.png");
+            brso.FindProperty("roundWordSprite").objectReferenceValue = roundWord;
+
+            var digitProp = brso.FindProperty("roundDigitSprites");
+            digitProp.ClearArray();
+            int digitCount = 0;
+            for (int i = 1; i <= BossRushRoundCount; i++)
+            {
+                var sp = LoadSprite($"{BossRushArtDir}/digit_{i}.png");
+                digitProp.InsertArrayElementAtIndex(digitCount);
+                digitProp.GetArrayElementAtIndex(digitCount).objectReferenceValue = sp;
+                digitCount++;
+            }
+
+            // HUD 타이머 폰트 — 밀리초가 매 프레임 바뀌므로 등폭 픽셀 폰트로 그린다(없으면 기본 폰트 폴백).
+            var timerFont = AssetDatabase.LoadAssetAtPath<Font>(PixelFontPath);
+            brso.FindProperty("timerFont").objectReferenceValue = timerFont;
+
             brso.ApplyModifiedPropertiesWithoutUndo();
-            Debug.Log($"[DungeonBattleBuilder] 보스러시 흐름 배선 — 포탈 프레임 {portalCount}장.");
+            Debug.Log($"[DungeonBattleBuilder] 보스러시 흐름 배선 — 포탈 프레임 {portalCount}장, " +
+                      $"라운드 명판 {(roundWord != null ? "배선" : "없음")}, 숫자 아트 {digitCount}장, " +
+                      $"타이머 폰트 {(timerFont != null ? "배선" : "없음")}.");
 
             // ── 8) 전투 UI(초상화·아군 스킬 슬롯·아군 HP바) 복제: BattleDevScene의 SkillUICanvas를 그대로 GameScene에 ──
             //     (적 HP바는 BattleDevController.OnGUI가 serverMode에서도 그린다.)

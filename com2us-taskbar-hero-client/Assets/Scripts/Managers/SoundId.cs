@@ -97,6 +97,16 @@ namespace TaskbarHero.Client.Managers
         EnhanceHammer,
         EnhanceSuccess,
 
+        // ── SFX/BossRush (사운드 리소스 정의서 §7.5) ──
+        // 포탈은 보스러시 라운드 전환에서만 쓰고, 시작·신기록·시간 경고는 이 콘텐츠에만 있는 사건이다.
+        PortalOpen,
+        PortalTravel,
+        BossRushStart,
+        NewRecord,
+        // 제한 시간이 없어져(도전은 완주·전멸로만 끝난다) 재생 지점이 사라진 소리다. 파일과 매핑은
+        // 남겨 두되 호출부는 없다 — 제한 시간이 다시 도입되면 그때 배선한다(사운드 리소스 정의서 §7.5).
+        TimeWarning,
+
         // ── SFX/Gacha (사운드 리소스 정의서 §7) ──
         // 등급 연출음은 3·4·5등급만 둔다 — 노말·고급은 연출 영상이 없어 슬롯 공개음으로 끝난다.
         GachaPullSingle,

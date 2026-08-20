@@ -96,6 +96,12 @@ namespace TaskbarHero.ClientEditor
             { SoundId.EnhanceHammer, "sfx_enhance_hammer" },
             { SoundId.EnhanceSuccess, "sfx_enhance_success" },
 
+            { SoundId.PortalOpen, "sfx_portal_open" },
+            { SoundId.PortalTravel, "sfx_portal_travel" },
+            { SoundId.BossRushStart, "sfx_boss_rush_start" },
+            { SoundId.NewRecord, "sfx_new_record" },
+            { SoundId.TimeWarning, "sfx_time_warning" },
+
             { SoundId.GachaPullSingle, "sfx_gacha_pull_single" },
             { SoundId.GachaPullMulti, "sfx_gacha_pull_multi" },
             { SoundId.GachaSlotReveal, "sfx_gacha_slot_reveal" },

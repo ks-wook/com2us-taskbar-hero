@@ -456,6 +456,8 @@ MonoBehaviour:
   bossIcon: {fileID: 0}
   bossWarningImage: {fileID: 3684577684066637465, guid: fdb8ccc67f83a2941bcb5fa7a0ca834e, type: 3}
   bossMoveSpeedFactor: 0.6
+  damageNumberFont: {fileID: 12800000, guid: 3e53c1bee5e5e43219f0342dc04f5be0, type: 3}
+  damageNumberFontScale: 1.5
   enemyHpBarFrame: {fileID: 3003013052192031213, guid: 92b7c1ec371896349b22006e2ae7a29c, type: 3}
 --- !u!4 &223499211
 Transform:

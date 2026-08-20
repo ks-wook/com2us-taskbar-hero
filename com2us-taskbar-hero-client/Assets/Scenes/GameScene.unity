@@ -470,6 +470,8 @@ MonoBehaviour:
   bossIcon: {fileID: -6753380774007211227, guid: 54aeed7af3e5d434db29f1091619b085, type: 3}
   bossWarningImage: {fileID: 3684577684066637465, guid: fdb8ccc67f83a2941bcb5fa7a0ca834e, type: 3}
   bossMoveSpeedFactor: 0.6
+  damageNumberFont: {fileID: 12800000, guid: 3e53c1bee5e5e43219f0342dc04f5be0, type: 3}
+  damageNumberFontScale: 1.5
   enemyHpBarFrame: {fileID: 3003013052192031213, guid: 92b7c1ec371896349b22006e2ae7a29c, type: 3}
 --- !u!4 &212299912
 Transform:
@@ -534,6 +536,14 @@ MonoBehaviour:
   portalFps: 20
   portalWorldHeight: 3.2
   portalAheadDistance: 4
+  roundWordSprite: {fileID: -3310893176511029504, guid: 1b12f86f8fa7cdb4ba496b64ea3df21b, type: 3}
+  roundDigitSprites:
+  - {fileID: -6244271672462960734, guid: 00674db387da2b84194ef4beee76fb32, type: 3}
+  - {fileID: 2656119433488817130, guid: 305a40bfa4cf3a94abba60c26538ab06, type: 3}
+  - {fileID: 3555329787707669762, guid: 0045792c7fdf2424fa4ba8cbf9a2fe98, type: 3}
+  - {fileID: 1495110002126967644, guid: cac17ee03b79ff94fb32f2b839587959, type: 3}
+  - {fileID: 7177872504576074100, guid: 0ca3ebc8807ee924a84a56077ece82af, type: 3}
+  timerFont: {fileID: 12800000, guid: 3e53c1bee5e5e43219f0342dc04f5be0, type: 3}
 --- !u!1 &323932727
 GameObject:
   m_ObjectHideFlags: 0

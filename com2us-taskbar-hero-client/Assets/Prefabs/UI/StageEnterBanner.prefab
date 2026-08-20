@@ -251,6 +251,7 @@ MonoBehaviour:
   riseDistance: 40
   _cg: {fileID: 3943227655681592742}
   _content: {fileID: 7551847140034507956}
+  _bar: {fileID: 1880077368075720361}
   _regionText: {fileID: 7019006059359383957}
   _stageText: {fileID: 5918331997827190065}
 --- !u!223 &7983800969787028143

@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 
 namespace TaskbarHero.Client.Managers
@@ -21,13 +20,6 @@ namespace TaskbarHero.Client.Managers
             return $"{minutes}:{seconds:00}.{millis:000}";
         }
 
-        /// <summary>제한 시간 잔여(ms) → <c>06:12</c>(분:초). 음수는 <c>00:00</c>으로 바닥을 친다.</summary>
-        public static string Remaining(int totalMs)
-        {
-            int total = Mathf.Max(0, totalMs) / 1000;
-            return $"{total / 60:00}:{total % 60:00}";
-        }
-
         /// <summary>시즌 남은 시간(초) → <c>3일 04:12</c> / <c>04:12:33</c>(하루 미만).</summary>
         public static string Countdown(float seconds)
         {
@@ -43,18 +35,5 @@ namespace TaskbarHero.Client.Managers
             return days > 0 ? $"{days}일 {hours:00}:{minutes:00}" : $"{hours:00}:{minutes:00}:{secs:00}";
         }
 
-        /// <summary>
-        /// 서버가 준 유닉스 시각(초)을 <b>기기 로컬 시각</b> <c>HH:mm</c>으로 바꾼다(일일 도전 횟수 초기화 안내용).
-        /// <para>날짜 경계는 서버 KST 자정이지만 표시는 플레이어가 보는 시계를 따른다 — 서버가 시각 자체를
-        /// 내려주므로(<c>dailyResetAt</c>) 클라이언트가 시간대를 계산하지 않는다.</para>
-        /// </summary>
-        public static string LocalClock(long unixSeconds)
-        {
-            if (unixSeconds <= 0L)
-            {
-                return "-";
-            }
-            return DateTimeOffset.FromUnixTimeSeconds(unixSeconds).ToLocalTime().ToString("HH:mm");
-        }
     }
 }
