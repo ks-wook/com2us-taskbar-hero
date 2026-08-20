@@ -1,4 +1,5 @@
 ﻿using GameServer.Repositories.MemoryDb;
+using GameServer.Models;
 
 namespace GameServer.Repositories.MemoryDb.Interfaces;
 

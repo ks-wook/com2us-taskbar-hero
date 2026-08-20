@@ -1,4 +1,5 @@
 ﻿using GameServer.Repositories.GameDb;
+using GameServer.Models;
 
 namespace GameServer.Repositories.GameDb.Interfaces;
 

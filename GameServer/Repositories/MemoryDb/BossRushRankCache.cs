@@ -2,6 +2,7 @@ using CloudStructures;
 using CloudStructures.Structures;
 using GameServer.Repositories.MemoryDb.Interfaces;
 using TaskbarHero.Common;
+using GameServer.Models;
 
 namespace GameServer.Repositories.MemoryDb;
 

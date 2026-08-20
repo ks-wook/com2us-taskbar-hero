@@ -1,5 +1,15 @@
 ﻿namespace GameServer.Models;
 
+// ── 도메인 모델 — 저장소 계층 사이를 오가는 반환 타입(행 매핑 POCO가 아니다) ──
+/// <summary>
+/// 진행 중 시즌 스냅샷(<c>boss_rush_season</c>). <b>GameDb와 MemoryDb가 함께 쓰는 도메인 모델</b>이라
+/// 어느 한쪽 저장소 계층에도 두지 않는다 — 정본은 MySQL(<c>boss_rush_season</c>)이고
+/// 캐시(<c>bossrush:season:current</c>)는 같은 모양을 Redis Hash에 복사해 둔 것이다.
+/// <para>행 매핑용 POCO는 아래 <see cref="BossRushSeasonRow"/>이며, 이쪽은 그것을 투영해 계층 밖으로
+/// 내보내는 타입이다.</para>
+/// </summary>
+public sealed record BossRushSeason(int SeasonId, long StartAt, long EndAt, int Status);
+
 // BossRushRepository 전용 DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지).
 // Dapper.MatchNamesWithUnderscores=true(Program.cs)로 snake_case 컬럼 → PascalCase 프로퍼티 매핑.
 
