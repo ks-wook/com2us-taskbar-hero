@@ -14,9 +14,11 @@ namespace TaskbarHero.Client.Battle
     /// <see cref="BattleDevController.BeginServerBattle"/>(진입 때마다 전원 회복·부활)가 아니라
     /// 스폰 큐만 갈아 끼우는 <see cref="BattleDevController.QueueServerWave"/>를 쓴다.
     /// 첫 라운드만 <see cref="BattleDevController.RestartServerBattle"/>로 필드를 리셋하고 시작한다.</para>
-    /// <para><b>라운드 전환은 포탈 이동</b>이다 — 보스를 처치하면 길 앞에 포탈(<see cref="PortalEffect"/>)이 생기고,
-    /// 파티가 걸어 들어가면 화면이 잠깐 덮이는 사이 <b>배경이 다음 라운드의 지역으로 바뀌고</b>(서버가 내려준
-    /// <c>backgroundType</c>) 파티가 그 지역 시작 지점에 나타난다. 체력·쿨다운은 그대로 이어진다.</para>
+    /// <para><b>라운드 전환은 포탈 이동</b>이다 — 보스를 처치하면 길 앞에 포탈(<see cref="PortalEffect"/>)이 열리고
+    /// <b>파티가 그쪽으로 걸어간다</b>. 포탈에 <b>닿은 파티원부터 빨려 들어가듯 사라지고</b>, 전원이 들어가면
+    /// 화면이 잠깐 덮이며, 그 사이
+    /// <b>배경이 다음 라운드의 지역으로 바뀌고</b>(서버가 내려준 <c>backgroundType</c>) 파티가 그 지역 시작 지점에
+    /// 나타난다. 체력·쿨다운은 그대로 이어진다.</para>
     /// <para><b>시간 측정은 클라이언트 권위</b>다. <c>Time.unscaledDeltaTime</c>을 누적하며(히트스톱·슬로우모션에
     /// 기록이 줄어들지 않게), 포탈 이동·결과/실패 연출·<c>clear</c> 응답 대기 구간에서는 멈춘다. 라운드별 소요는
     /// 같은 타이머에서 라운드 경계마다 스냅샷하므로 <b>합이 항상 보고 값(clearMs)과 일치</b>한다
@@ -51,12 +53,13 @@ namespace TaskbarHero.Client.Battle
         [SerializeField] private float portalAheadDistance = 4f;
 
         // 포탈 진입·전환 타이밍(전부 unscaled).
-        private const float AbsorbEnterGap = 0.35f;   // 포탈 x에 이만큼 다가오면 그 멤버가 빨려 들어가기 시작
-        private const float AbsorbSeconds = 0.40f;    // 한 멤버가 사라지는 데 걸리는 시간
-        private const float PortalWalkTimeout = 8f;   // 안전장치: 이 시간이 지나면 걸어 들어간 것으로 본다
-        private const float FadeOutSeconds = 0.35f;
-        private const float FadeHoldSeconds = 0.15f;
-        private const float FadeInSeconds = 0.45f;
+        private const float PortalTouchGap = 0.3f;    // 파티원이 포탈 x에 이만큼 다가오면 "닿았다"로 본다
+        private const float VanishSeconds = 0.22f;    // 닿은 파티원이 포탈로 빨려 들어가 사라지는 데 걸리는 시간
+        private const float PortalWalkTimeout = 8f;   // 안전장치: 이 시간이 지나면 전원이 들어간 것으로 처리한다
+        // 사라지는 연출 뒤 곧바로 넘어가므로 페이드는 짧게 둔다 — 걸어가서 사라지는 구간이 이동의 본 연출이다.
+        private const float FadeOutSeconds = 0.22f;
+        private const float FadeHoldSeconds = 0.08f;
+        private const float FadeInSeconds = 0.35f;
 
         private const int DefaultTimeLimitMs = 600000;   // 마스터 미로드 시 폴백(10분)
 
@@ -74,7 +77,7 @@ namespace TaskbarHero.Client.Battle
         private PortalEffect _portal;
         private float _portalX;
         private float _portalWalkTimer;
-        private readonly List<AbsorbState> _absorbing = new List<AbsorbState>();
+        private readonly List<PortalVanish> _vanishing = new List<PortalVanish>();   // 포탈에 닿아 사라지는 중인 파티원
 
         // 도전 시작 시점의 던전 스테이지(끝나면 이 자리로 돌아간다).
         private int _returnAct = 1;
@@ -126,7 +129,7 @@ namespace TaskbarHero.Client.Battle
             _elapsedSec = 0f;
             _accountedMs = 0;
             _roundTimes.Clear();
-            _absorbing.Clear();
+            _vanishing.Clear();
 
             if (dungeon != null)
             {
@@ -290,16 +293,14 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
-        /// <summary>HUD에 현재 라운드·경과·잔여를 넘긴다.</summary>
+        /// <summary>HUD에 현재 라운드·경과를 넘긴다(제한 시간은 HUD에 표시하지 않는다).</summary>
         private void UpdateHud()
         {
             if (_hud == null)
             {
                 return;
             }
-            int elapsed = ElapsedMs();
-            _hud.SetState(RoundNumber(_roundIndex), _rounds.Count, elapsed,
-                          Mathf.Max(0, _timeLimitMs - elapsed), _timeLimitMs);
+            _hud.SetState(RoundNumber(_roundIndex), _rounds.Count, ElapsedMs());
         }
 
         /// <summary>지금까지의 순수 전투 시간(ms).</summary>
@@ -332,16 +333,21 @@ namespace TaskbarHero.Client.Battle
             OpenPortal();
         }
 
-        /// <summary>보스를 처치한 자리 앞에 포탈을 세우고, 파티가 걸어 들어가기를 기다린다.</summary>
+        /// <summary>
+        /// 보스를 처치한 자리 앞에 포탈을 세우고 <b>파티가 그쪽으로 걸어가게</b> 한다.
+        /// <para>마지막 한 마리를 잡은 직후에는 전투 컨트롤러가 교전 상태 그대로여서 파티가 제자리에 서 있으므로,
+        /// <see cref="BattleDevController.ResumeAdvance"/>로 전진을 재개해야 포탈까지 걸어간다.</para>
+        /// </summary>
         private void OpenPortal()
         {
             _phase = Phase.PortalWalk;
             _portalWalkTimer = 0f;
-            _absorbing.Clear();
+            _vanishing.Clear();
 
             _portalX = battle.PartyFrontX + Mathf.Max(1f, portalAheadDistance);
             _portal = PortalEffect.Spawn(portalFrames, new Vector3(_portalX, battle.PathY, 0f),
                                          portalWorldHeight, portalFps);
+            battle.ResumeAdvance();   // 적이 없어도 계속 걷게 한다(포탈까지 이동하는 연출)
             if (_portal == null)
             {
                 // 프레임이 배선되지 않았으면 연출 없이 곧바로 전환한다(진행이 막히지 않게).
@@ -349,13 +355,20 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
-        /// <summary>포탈에 닿은 파티원부터 빨려 들어가게 하고, 전원이 들어가면 화면 전환을 시작한다.</summary>
+        /// <summary>
+        /// 파티가 포탈까지 걸어가는 구간 — <b>포탈에 닿은 파티원부터 그 자리에서 빨려 들어가듯 사라지고</b>
+        /// (<see cref="VanishSeconds"/>), <b>전원이 들어가면 곧바로</b> 다음 라운드로 넘어간다.
+        /// <para>사라지는 것은 <b>보이기만 감추는</b> 처리다 — 오브젝트를 파괴하지 않고 크기·색만 눌러 두었다가
+        /// 다음 지역에서 되돌리므로 <b>체력·쿨다운·스킬 상태가 그대로 이어진다</b>.</para>
+        /// <para>안전장치: <see cref="PortalWalkTimeout"/>이 지나도록 닿지 못하면 그대로 넘어간다.</para>
+        /// </summary>
         private void TickPortalWalk()
         {
             _portalWalkTimer += Time.unscaledDeltaTime;
+            float dt = Time.unscaledDeltaTime;
 
+            bool allGone = true;
             var party = battle.Party;
-            bool allIn = true;
             for (int i = 0; i < party.Count; i++)
             {
                 var m = party[i];
@@ -363,40 +376,37 @@ namespace TaskbarHero.Client.Battle
                 {
                     continue;
                 }
-                var st = FindAbsorb(m);
-                if (st == null)
+                var v = FindVanish(m);
+                if (v == null)
                 {
-                    if (m.transform.position.x >= _portalX - AbsorbEnterGap)
+                    if (m.transform.position.x < _portalX - PortalTouchGap)
                     {
-                        st = new AbsorbState(m);
-                        _absorbing.Add(st);
-                    }
-                    else
-                    {
-                        allIn = false;
+                        allGone = false;   // 아직 걸어오는 중
                         continue;
                     }
+                    v = new PortalVanish(m);   // 포탈에 닿았다 — 지금부터 사라진다
+                    _vanishing.Add(v);
                 }
-                if (!st.Tick(Time.unscaledDeltaTime))
+                if (!v.Tick(dt))
                 {
-                    allIn = false;
+                    allGone = false;   // 사라지는 중
                 }
             }
 
-            if (allIn || _portalWalkTimer >= PortalWalkTimeout)
+            if (allGone || _portalWalkTimer >= PortalWalkTimeout)
             {
                 BeginTransition();
             }
         }
 
-        /// <summary>이 멤버의 진입 상태를 찾는다(없으면 null).</summary>
-        private AbsorbState FindAbsorb(PlayerCombatant m)
+        /// <summary>그 파티원이 이미 사라지는 중인지 찾는다(아니면 null).</summary>
+        private PortalVanish FindVanish(PlayerCombatant m)
         {
-            foreach (var st in _absorbing)
+            for (int i = 0; i < _vanishing.Count; i++)
             {
-                if (st.Owner == m)
+                if (_vanishing[i].Owner == m)
                 {
-                    return st;
+                    return _vanishing[i];
                 }
             }
             return null;
@@ -424,12 +434,7 @@ namespace TaskbarHero.Client.Battle
                 Destroy(_portal.gameObject);
                 _portal = null;
             }
-            foreach (var st in _absorbing)
-            {
-                st.Restore();
-            }
-            _absorbing.Clear();
-
+            RestoreVanished();   // 포탈로 사라진 파티원을 다음 지역에서 다시 보이게 한다(상태는 그대로)
             battle.RelocateParty(battle.PartySpawnPoint);   // 다음 지역 시작 지점(카메라도 함께 스냅)
             ApplyRoundBackground(_roundIndex + 1);          // 배경 타일은 재배치된 카메라 기준으로 다시 만들어진다
         }
@@ -512,12 +517,7 @@ namespace TaskbarHero.Client.Battle
                 Destroy(_portal.gameObject);
                 _portal = null;
             }
-            foreach (var st in _absorbing)
-            {
-                st.Restore();
-            }
-            _absorbing.Clear();
-
+            RestoreVanished();            // 포탈 연출 중 실패해도 파티가 보이지 않는 채로 남지 않게 한다
             battle.AbortServerBattle();   // 남은 웨이브·적을 정리(시간 초과 시 전투 즉시 중단)
             float slow = dungeon != null ? dungeon.ClearSlowMotionScale : 0.25f;
             Time.timeScale = Mathf.Clamp(slow, 0.01f, 1f);
@@ -542,7 +542,7 @@ namespace TaskbarHero.Client.Battle
                 Destroy(_portal.gameObject);
                 _portal = null;
             }
-            _absorbing.Clear();
+            RestoreVanished();
             Time.timeScale = 1f;
 
             if (returnToDungeon && dungeon != null)
@@ -550,6 +550,16 @@ namespace TaskbarHero.Client.Battle
                 Debug.Log($"[BossRush] 던전 복귀 {_returnAct}-{_returnDifficulty}-{_returnStage}");
                 dungeon.EnterSelectedStage(_returnAct, _returnDifficulty, _returnStage);
             }
+        }
+
+        /// <summary>포탈로 사라진 파티원들의 크기·색을 원래대로 되돌린다(다음 지역에 다시 나타나는 시점).</summary>
+        private void RestoreVanished()
+        {
+            for (int i = 0; i < _vanishing.Count; i++)
+            {
+                _vanishing[i].Restore();
+            }
+            _vanishing.Clear();
         }
 
         /// <summary>안내·오류는 공용 모달로 띄운다(패널과 같은 규칙).</summary>
@@ -566,11 +576,13 @@ namespace TaskbarHero.Client.Battle
         }
 
         /// <summary>
-        /// 포탈로 빨려 들어가는 파티원 1명의 연출 상태 — 원래 크기·색을 기억해 두고 줄어들며 사라지게 한 뒤,
-        /// 다음 지역에 다시 나타날 때 <see cref="Restore"/>로 되돌린다(오브젝트를 파괴하지 않으므로
-        /// 체력·쿨다운·스킬 상태가 그대로 이어진다).
+        /// 포탈에 닿아 <b>빨려 들어가듯 사라지는</b> 파티원 1명의 연출 상태.
+        /// <para>발밑을 축으로 <b>줄어들면서 함께 옅어진다</b> — 캐릭터의 원점이 발이라 스케일을 줄이면
+        /// 포탈 바닥으로 빨려 드는 것처럼 보인다. 좌우 반전(바라보는 방향)이 유지되도록 원래 스케일에 비례해 줄인다.</para>
+        /// <para><b>오브젝트를 파괴하지 않는다</b> — 파괴하면 그 파티원이 전사한 것으로 처리되어 다음 라운드에
+        /// 돌아오지 못한다. 원래 크기·색을 기억해 두었다가 <see cref="Restore"/>로 되돌린다.</para>
         /// </summary>
-        private class AbsorbState
+        private class PortalVanish
         {
             public readonly PlayerCombatant Owner;
 
@@ -580,7 +592,7 @@ namespace TaskbarHero.Client.Battle
             private readonly Color[] _colors;
             private float _t;
 
-            public AbsorbState(PlayerCombatant owner)
+            public PortalVanish(PlayerCombatant owner)
             {
                 Owner = owner;
                 _tr = owner.transform;
@@ -597,10 +609,10 @@ namespace TaskbarHero.Client.Battle
             public bool Tick(float dt)
             {
                 _t += dt;
-                float k = Mathf.Clamp01(_t / AbsorbSeconds);
+                float k = Mathf.Clamp01(_t / VanishSeconds);
                 if (_tr != null)
                 {
-                    _tr.localScale = _baseScale * (1f - k);   // 좌우 반전 부호가 유지되도록 원래 스케일에 비례
+                    _tr.localScale = _baseScale * (1f - k);
                 }
                 for (int i = 0; i < _renderers.Length; i++)
                 {

@@ -7,8 +7,9 @@ namespace TaskbarHero.Client.Battle
     /// <para>보스러시에서 <b>라운드 보스를 처치하면 길 앞에 생성</b>되고, 파티가 걸어 들어가면
     /// 다음 라운드의 지역으로 넘어간다(보스러시 UI 기획서 4장). 프레임은 반복 재생하며,
     /// 등장·퇴장은 바닥을 축으로 커졌다 작아지는 스케일 연출이다.</para>
-    /// <para>스프라이트 피벗이 <b>좌하단</b>이라(TravelPortal_NN_0) 좌우 중심은 코드가 보정하고,
-    /// 오브젝트 위치는 <b>포탈이 서는 바닥 지점</b>(길 y)을 그대로 쓴다.</para>
+    /// <para>오브젝트 위치는 <b>포탈이 서는 바닥 지점</b>(길 y)이고, 스프라이트는 그 지점에 <b>아랫변이 닿도록</b>
+    /// 코드가 정렬한다 — 이 아트의 피벗은 <b>가운데</b>(TravelPortal_NN_0)라 그대로 두면 포탈의 아래 절반이
+    /// 바닥 아래로 묻힌다. 피벗이 어떤 값이어도 맞도록 스프라이트 bounds로 오프셋을 계산한다.</para>
     /// <para>시간은 전부 <c>unscaled</c>다 — 보스 처치 직후의 슬로우모션·히트스톱에 연출이 끌려가지 않게 한다.</para>
     /// </summary>
     public class PortalEffect : MonoBehaviour
@@ -24,7 +25,7 @@ namespace TaskbarHero.Client.Battle
         private float _t;
         private bool _closing;
         private float _baseScale = 1f;
-        private float _artOffsetX;   // 좌하단 피벗을 좌우 중심으로 당기는 보정(스케일에 비례해 적용)
+        private Vector2 _artOffset;  // 피벗을 "가로 중앙·아랫변이 바닥" 기준으로 옮기는 보정(스케일에 비례해 적용)
 
         /// <summary>포탈이 선 바닥 지점(월드).</summary>
         public Vector3 GroundPosition => transform.position;
@@ -55,11 +56,16 @@ namespace TaskbarHero.Client.Battle
             float h = Mathf.Max(0.01f, first.bounds.size.y);
             _baseScale = worldHeight / h;
 
+            // 프레임을 배정하기 <b>전에</b> 활성 상태로 두면 SpriteSequenceEffect의 OnEnable → Play()가
+            // 빈 프레임 배열로 실행돼 재생이 시작되지 않는다(첫 장만 멈춘 채로 보인다).
+            // 그래서 꺼진 채로 구성한 뒤 마지막에 켠다(레벨업 글로우와 같은 방식).
             var art = new GameObject("Art");
+            art.SetActive(false);
             art.transform.SetParent(transform, false);
-            // 좌하단 피벗 → 가로만 중심으로 당긴다(세로는 바닥에 서야 하므로 그대로).
-            _artOffsetX = -first.bounds.center.x * _baseScale;
-            art.transform.localPosition = new Vector3(_artOffsetX, 0f, 0f);
+            // 피벗 위치와 무관하게 "가로는 가운데, 세로는 아랫변이 바닥(오브젝트 y)"에 오도록 보정한다.
+            var c = first.bounds.center;
+            _artOffset = new Vector2(-c.x * _baseScale, (-c.y + first.bounds.size.y * 0.5f) * _baseScale);
+            art.transform.localPosition = new Vector3(_artOffset.x, _artOffset.y, 0f);
             art.transform.localScale = Vector3.one * _baseScale;
 
             _sr = art.AddComponent<SpriteRenderer>();
@@ -73,7 +79,9 @@ namespace TaskbarHero.Client.Battle
             seq.destroyOnFinish = false;
 
             _art = art.transform;
-            ApplyScale(0f); // 등장 연출 시작 크기(첫 프레임 튐 방지)
+            ApplyScale(0f);      // 등장 연출 시작 크기(첫 프레임 튐 방지)
+            art.SetActive(true); // 프레임이 채워진 상태로 OnEnable → Play()가 돌아 반복 재생이 시작된다
+            seq.Play();          // 활성화 순서에 기대지 않도록 한 번 더 명시적으로 시작한다
         }
 
         /// <summary>포탈을 닫는다 — 작아지며 사라진 뒤 자동 파괴된다(중복 호출 무시).</summary>
@@ -119,8 +127,8 @@ namespace TaskbarHero.Client.Battle
             float k0 = Mathf.Max(0f, k);
             float s = _baseScale * k0;
             _art.localScale = new Vector3(s, s, 1f);
-            // 중심 보정도 배율에 비례해야 커지는 동안 좌우로 흔들리지 않는다.
-            _art.localPosition = new Vector3(_artOffsetX * k0, 0f, 0f);
+            // 보정도 배율에 비례해야 <b>바닥을 축으로</b> 커진다(위치가 흔들리지 않는다).
+            _art.localPosition = new Vector3(_artOffset.x * k0, _artOffset.y * k0, 0f);
         }
     }
 }
