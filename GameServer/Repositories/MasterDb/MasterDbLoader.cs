@@ -351,16 +351,16 @@ public sealed class MasterDbLoader : IMasterDbLoader
     private static async Task<BossRushRuleDef?> LoadBossRushRuleAsync(QueryFactory db)
     {
         var row = await db.Query("boss_rush_master")
-            .Select("round_count", "time_limit_sec", "daily_entry_limit", "unlock_stage_sequence",
-                    "season_period_days", "expire_grace_sec", "rank_page_limit")
+            .Select("round_count", "unlock_stage_sequence",
+                    "season_period_days", "run_expire_sec", "rank_page_limit")
             .Where("content_id", BossRushContentId)
             .FirstOrDefaultAsync<BossRushMasterRow>();
 
         return row is null
             ? null
             : new BossRushRuleDef(
-                row.RoundCount, row.TimeLimitSec, row.DailyEntryLimit, row.UnlockStageSequence,
-                row.SeasonPeriodDays, row.ExpireGraceSec, row.RankPageLimit);
+                row.RoundCount, row.UnlockStageSequence,
+                row.SeasonPeriodDays, row.RunExpireSec, row.RankPageLimit);
     }
 
     /// <summary>

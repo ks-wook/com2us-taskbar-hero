@@ -21,7 +21,6 @@ public enum BossRushEnterStatus
     Ok,
     NoPlayer,       // game_player 행 없음 = 계정 세이브 미생성
     Locked,         // 해금 조건 미달(max_stage_cleared < unlock_stage_sequence)
-    DailyLimit,     // 오늘 도전 횟수 소진
     SeasonClosed,   // 진행 중 시즌 없음(정산 중)
 }
 

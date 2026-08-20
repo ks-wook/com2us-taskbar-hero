@@ -28,9 +28,6 @@ public interface IBossRushService
 /// </summary>
 public sealed class BossRushService : IBossRushService
 {
-    /// <summary>KST(UTC+9) — 일일 도전 횟수의 날짜 경계(출석부와 같은 규약).</summary>
-    private static readonly TimeSpan KstOffset = TimeSpan.FromHours(9);
-
     /// <summary>랭킹 목록 기본 페이지 크기(요청이 limit을 생략했을 때).</summary>
     private const int RankDefaultLimit = 50;
 
@@ -51,10 +48,12 @@ public sealed class BossRushService : IBossRushService
     }
 
     /// <summary>
-    /// 보스러시 진입 화면에 필요한 <b>서버만 아는 값</b>을 한 번에 반환한다(§5.1) — 해금 여부·일일 잔여 횟수·
-    /// 현 시즌·내 최고 기록·진행 중 런. 라운드 스폰 구성은 담지 않는다(도전 시작이 내려준다).
-    /// <para><c>activeRun</c>은 <b>아직 만료되지 않은</b> 런만 담는다 — 제한 시간 + 그레이스가 지난 런은
-    /// 만료로 보고 null로 내린다(만료 판정을 읽는 시점에 하는 규약, §6.2).</para>
+    /// 보스러시 진입 화면에 필요한 <b>서버만 아는 값</b>을 한 번에 반환한다(§5.1) — 해금 여부·현 시즌·
+    /// 내 최고 기록·진행 중 런. 라운드 스폰 구성은 담지 않는다(도전 시작이 내려준다).
+    /// <para>도전 횟수 제한도 제한 시간도 없으므로 잔여 횟수·제한 시간 필드가 없다(§5.1).</para>
+    /// <para><c>activeRun</c>은 <b>아직 만료되지 않은</b> 런만 담는다 — 런 수명이 지난 런은 만료로 보고
+    /// null로 내린다(만료 판정을 읽는 시점에 하는 규약, §6.2). 이 값은 전투를 끊는 타이머가 아니라
+    /// 보고가 아직 받아들여지는 구간을 알린다.</para>
     /// </summary>
     public async Task<SaveResult> GetInfoAsync(long userId)
     {
@@ -66,11 +65,9 @@ public sealed class BossRushService : IBossRushService
 
         var now = DateTimeOffset.UtcNow;
         var nowUnix = now.ToUnixTimeSeconds();
-        var (todayStart, tomorrowStart) = KstDayRange(now);
 
         var season = await CurrentSeasonAsync();
-        var snapshot = await _repository.GetInfoSnapshotAsync(
-            userId, season?.SeasonId ?? 0, todayStart, tomorrowStart);
+        var snapshot = await _repository.GetInfoSnapshotAsync(userId, season?.SeasonId ?? 0);
         if (snapshot is null)
         {
             return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
@@ -92,7 +89,7 @@ public sealed class BossRushService : IBossRushService
         if (snapshot.ActiveRun is not null)
         {
             var startedAtUnix = snapshot.ActiveRun.StartedAtMs / 1000;
-            var expiresAt = startedAtUnix + rule.TimeLimitSec + rule.ExpireGraceSec;
+            var expiresAt = startedAtUnix + rule.RunExpireSec;
             if (expiresAt > nowUnix)
             {
                 activeRun = new BossRushActiveRunDto
@@ -110,10 +107,6 @@ public sealed class BossRushService : IBossRushService
             unlocked = snapshot.MaxStageCleared >= rule.UnlockStageSequence,
             unlockStageSequence = rule.UnlockStageSequence,
             maxStageCleared = snapshot.MaxStageCleared,
-            dailyEntryLimit = rule.DailyEntryLimit,
-            dailyEntryUsed = snapshot.DailyEntryUsed,
-            dailyResetAt = tomorrowStart,
-            timeLimitMs = rule.TimeLimitMs,
             season = season is null ? null : ToSeasonDto(season),
             myRecord = myRecord,
             activeRun = activeRun,
@@ -123,11 +116,11 @@ public sealed class BossRushService : IBossRushService
     }
 
     /// <summary>
-    /// 도전을 개시한다(§5.2). 일일 횟수를 차감하고 런을 만든 뒤 <b>5라운드 전부의 스폰 구성</b>을 내려준다 —
-    /// 라운드 전환이 전투 중에 일어나므로 라운드마다 서버를 다시 부르지 않는다.
+    /// 도전을 개시한다(§5.2). 런을 만든 뒤 <b>5라운드 전부의 스폰 구성</b>을 내려준다 — 라운드 전환이
+    /// 전투 중에 일어나므로 라운드마다 서버를 다시 부르지 않는다. <b>차감할 횟수가 없다</b>(도전 무제한).
     /// <para>기존 진행 중 런이 있으면 자동으로 만료 종결한 뒤 새 런을 시작한다(방치형 클라이언트의 강제
-    /// 종료를 유저가 스스로 복구할 수 있게 한다). 이미 소모된 일일 횟수는 돌려주지 않는다.</para>
-    /// <para>요청에 파라미터가 없다 — 라운드 구성·제한 시간·난이도는 전부 마스터 값이며 클라이언트가 고를 수 없다.</para>
+    /// 종료를 유저가 스스로 복구할 수 있게 한다). 잃는 것은 그 런의 진행뿐이다.</para>
+    /// <para>요청에 파라미터가 없다 — 라운드 구성·난이도는 전부 마스터 값이며 클라이언트가 고를 수 없다.</para>
     /// </summary>
     public async Task<SaveResult> EnterAsync(long userId)
     {
@@ -139,11 +132,9 @@ public sealed class BossRushService : IBossRushService
         }
 
         var now = DateTimeOffset.UtcNow;
-        var (todayStart, tomorrowStart) = KstDayRange(now);
 
         var outcome = await _repository.ApplyEnterAsync(
-            userId, rule.UnlockStageSequence, rule.DailyEntryLimit,
-            todayStart, tomorrowStart, now.ToUnixTimeMilliseconds());
+            userId, rule.UnlockStageSequence, now.ToUnixTimeMilliseconds());
 
         switch (outcome.Status)
         {
@@ -151,8 +142,6 @@ public sealed class BossRushService : IBossRushService
                 return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
             case BossRushEnterStatus.Locked:
                 return new SaveResult(ErrorCode.BossRushLocked, string.Empty, null);
-            case BossRushEnterStatus.DailyLimit:
-                return new SaveResult(ErrorCode.BossRushDailyLimitExceeded, string.Empty, null);
             case BossRushEnterStatus.SeasonClosed:
                 return new SaveResult(ErrorCode.BossRushSeasonClosed, string.Empty, null);
         }
@@ -161,10 +150,7 @@ public sealed class BossRushService : IBossRushService
         {
             runId = outcome.RunId,
             seasonId = outcome.SeasonId,
-            timeLimitMs = rule.TimeLimitMs,
             rounds = rounds.Select(ToRoundDto).ToList(),
-            dailyEntryUsed = outcome.DailyEntryUsed,
-            dailyEntryLimit = rule.DailyEntryLimit,
         };
 
         return new SaveResult(ErrorCode.Success, "BossRushStarted", data);
@@ -173,8 +159,9 @@ public sealed class BossRushService : IBossRushService
     /// <summary>
     /// 클리어 보고를 처리한다(§5.3). 형식·자기정합성만 검증한 뒤 <b>클라이언트가 측정한 clearMs를 그대로</b>
     /// 기록하고, 시즌 최고를 갱신했으면 랭킹 캐시에 반영한 다음 그 상태에서 순위를 산출해 응답에 담는다.
-    /// <para>검증 순서: 제한 시간 상한(BossRushTimeout) → 라운드 목록 형식·합계 일치(BossRushInvalidProgress).
-    /// 기록의 진위는 판정하지 않는다 — 전투를 재현하지 않기 때문이다.</para>
+    /// <para>검증은 형식·자기정합성뿐이며 모두 BossRushInvalidProgress로 묶인다 — clearMs가 런 수명을
+    /// 넘거나(런이 열려 있던 시간보다 긴 클리어는 자기모순), 라운드 목록이 빠지거나 겹치거나 합계가
+    /// clearMs와 어긋나는 경우다. 기록의 진위는 판정하지 않는다 — 전투를 재현하지 않기 때문이다.</para>
     /// <para>보상 지급은 없다. 이 호출이 바꾸는 것은 런 상태와 시즌 최고 기록뿐이다.</para>
     /// </summary>
     public async Task<SaveResult> ClearAsync(long userId, BossRushClearData request)
@@ -191,13 +178,12 @@ public sealed class BossRushService : IBossRushService
             return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
         }
 
-        // 제한 시간 상한 — 이 검사는 런을 종결시키지 않는다(그레이스 안에서는 재보고가 통해야 한다).
-        if (request.clearMs > rule.TimeLimitMs)
-        {
-            return new SaveResult(ErrorCode.BossRushTimeout, string.Empty, null);
-        }
-
-        var roundTimes = NormalizeRoundTimes(request.rounds, rule.RoundCount, request.clearMs);
+        // 자기정합성 상한 — 런이 열려 있던 시간(런 수명)보다 긴 클리어 시간은 앞뒤가 맞지 않는다.
+        // 이 검사는 런을 종결시키지 않는다(런 수명 안에서는 재보고가 통해야 한다). 동시에 이 상한이
+        // 랭킹 점수 인코딩의 안전 여유를 보장한다(§4.3).
+        var roundTimes = request.clearMs > rule.RunLifetimeMs
+            ? null
+            : NormalizeRoundTimes(request.rounds, rule.RoundCount, request.clearMs);
         if (roundTimes is null)
         {
             _logger.ZLogWarning($"보스러시 라운드 보고 정합성 실패: userId {userId:@UserId} runId {request.runId:@RunId} clearMs {request.clearMs:@ClearMs} — 클라이언트 보고값이 앞뒤가 맞지 않습니다.");
@@ -223,7 +209,8 @@ public sealed class BossRushService : IBossRushService
         {
             if (outcome.IsNewRecord)
             {
-                await _rankCache.UpsertAsync(outcome.SeasonId, userId, outcome.BestClearMs, outcome.RecordedAt);
+                await _rankCache.UpsertAsync(
+                    outcome.SeasonId, outcome.SeasonStartAt, userId, outcome.BestClearMs, outcome.RecordedAt);
             }
 
             // 기록을 갱신하지 못했어도 순위는 내려준다 — 다른 유저가 올라와 순위가 밀렸을 수 있다.
@@ -268,7 +255,7 @@ public sealed class BossRushService : IBossRushService
         var safeLimit = limit <= 0 ? RankDefaultLimit : Math.Min(limit, rule.RankPageLimit);
 
         var source = BossRushRankSource.RankCache;
-        var cached = await _rankCache.GetPageAsync(season.SeasonId, safeOffset, safeLimit);
+        var cached = await _rankCache.GetPageAsync(season.SeasonId, season.StartAt, safeOffset, safeLimit);
         var total = await _rankCache.CountAsync(season.SeasonId);
 
         List<BossRushRankRow> rows;
@@ -315,7 +302,7 @@ public sealed class BossRushService : IBossRushService
         }
 
         var source = BossRushRankSource.RankCache;
-        var cachedEntry = await _rankCache.GetMyEntryAsync(season.SeasonId, userId);
+        var cachedEntry = await _rankCache.GetMyEntryAsync(season.SeasonId, season.StartAt, userId);
         var total = await _rankCache.CountAsync(season.SeasonId);
 
         BossRushRankRow? row;
@@ -452,14 +439,6 @@ public sealed class BossRushService : IBossRushService
         }
 
         return Enumerable.Range(1, roundCount).Select(r => (r, byRound[r])).ToList();
-    }
-
-    /// <summary>KST 자정 경계로 "오늘"의 [시작, 다음날 시작) 유닉스초 범위를 구한다(일일 횟수 집계 기준).</summary>
-    private static (long TodayStart, long TomorrowStart) KstDayRange(DateTimeOffset utcNow)
-    {
-        var kstNow = utcNow.ToOffset(KstOffset);
-        var todayStart = new DateTimeOffset(kstNow.Year, kstNow.Month, kstNow.Day, 0, 0, 0, KstOffset);
-        return (todayStart.ToUnixTimeSeconds(), todayStart.AddDays(1).ToUnixTimeSeconds());
     }
 
     /// <summary>시즌 레코드를 응답 DTO로 변환한다.</summary>

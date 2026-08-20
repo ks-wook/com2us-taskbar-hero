@@ -59,20 +59,20 @@ class BossRushNicknameRow
 
 // ── 마스터 데이터 정의(불변). Repositories/MasterDb 가 적재하고 MasterDbProvider 가 조회한다. ──
 /// <summary>
-/// 보스러시 전역 규칙(boss_rush_master, 단일 행). 제한 시간·일일 횟수·해금 조건은 밸런스 값이고
+/// 보스러시 전역 규칙(boss_rush_master, 단일 행). 라운드 수·해금 조건은 밸런스 값이고
 /// 클라이언트가 같은 값으로 판정해야 하므로 마스터에 둔다(보스러시 기획서 4.1).
-/// <para><see cref="TimeLimitSec"/>은 랭킹 점수 인코딩의 전제이기도 하다 — 클리어 시간 상한이
-/// double 정밀도(2^53) 안에 들어가야 한다(같은 문서 4.3).</para>
+/// <para><b>제한 시간과 일일 도전 횟수를 두지 않는다</b> — 전자는 실플레이에서 파티가 완주하거나
+/// 전멸하거나 둘 중 하나라 판정에 관여한 적이 없고, 후자는 도전 보상이 사라진 뒤로 조일 대상이
+/// 없어졌다(도전은 재화·아이템을 만들지 않는다).</para>
+/// <para><see cref="RunExpireSec"/>은 게임 룰이 아니라 <b>버려진 런을 정리하는 원장 규칙</b>이며,
+/// 동시에 보고 가능한 clearMs의 형식 상한이자 랭킹 점수 인코딩의 안전 여유다(같은 문서 4.3).</para>
 /// </summary>
 public sealed record BossRushRuleDef(
-    int RoundCount, int TimeLimitSec, int DailyEntryLimit, int UnlockStageSequence,
-    int SeasonPeriodDays, int ExpireGraceSec, int RankPageLimit)
+    int RoundCount, int UnlockStageSequence,
+    int SeasonPeriodDays, int RunExpireSec, int RankPageLimit)
 {
-    /// <summary>클리어 시간 상한(ms). 보고된 clearMs가 이 값을 넘으면 기록으로 받지 않는다.</summary>
-    public int TimeLimitMs => TimeLimitSec * 1000;
-
-    /// <summary>런이 만료로 취급되기까지의 총 수명(ms) = 제한 시간 + 그레이스(6.2 lazy 만료).</summary>
-    public long RunLifetimeMs => (long)(TimeLimitSec + ExpireGraceSec) * 1000;
+    /// <summary>런이 만료로 취급되기까지의 수명(ms). clearMs의 형식 상한이기도 하다(6.2 lazy 만료).</summary>
+    public long RunLifetimeMs => (long)RunExpireSec * 1000;
 }
 /// <summary>보스러시 라운드 스폰 1건(boss_rush_spawn, is_boss=0). 레벨은 등장 자리의 속성이다.</summary>
 public sealed record BossRushSpawnEntry(int MonsterCode, int MonsterLevel, int Count);
@@ -99,11 +99,9 @@ public sealed record BossRushRankRewardDef(int RankGroup, int RankFrom, int Rank
 class BossRushMasterRow
 {
     public int RoundCount { get; set; }
-    public int TimeLimitSec { get; set; }
-    public int DailyEntryLimit { get; set; }
     public int UnlockStageSequence { get; set; }
     public int SeasonPeriodDays { get; set; }
-    public int ExpireGraceSec { get; set; }
+    public int RunExpireSec { get; set; }
     public int RankPageLimit { get; set; }
 }
 /// <summary>boss_rush_round 행 매핑용 POCO.</summary>

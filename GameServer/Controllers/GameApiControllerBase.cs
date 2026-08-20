@@ -126,10 +126,8 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.GachaNotAvailable => "Gacha banner is not available",
         // 보스러시 / 랭킹
         ErrorCode.BossRushLocked => "Boss rush locked",
-        ErrorCode.BossRushDailyLimitExceeded => "Boss rush daily limit exceeded",
         ErrorCode.BossRushRunNotFound => "Boss rush run not found",
         ErrorCode.BossRushRunAlreadyFinished => "Boss rush run already finished",
-        ErrorCode.BossRushTimeout => "Boss rush clear time exceeds the limit",
         ErrorCode.BossRushInvalidProgress => "Boss rush round report is inconsistent",
         ErrorCode.BossRushSeasonClosed => "Boss rush season is not open",
         ErrorCode.MasterDataNotLoaded => "Master data not loaded",

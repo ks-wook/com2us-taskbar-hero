@@ -104,9 +104,12 @@ namespace TaskbarHero.Common
 
         // 보스러시 / 랭킹 (13000번대 — 도메인 4.12이나 12000번대를 가챠가 선점해 13000번대 할당)
         BossRushLocked = 13001,
+        // 폐기: 도전 횟수 제한을 없애 발생 경로가 사라졌다. 숫자 값이 클라이언트와 공유하는 계약이라
+        // 지우지 않고 남기며, 번호를 재사용하지 않는다(서버는 더 이상 이 값을 반환하지 않는다).
         BossRushDailyLimitExceeded = 13002,
         BossRushRunNotFound = 13003,
         BossRushRunAlreadyFinished = 13004,
+        // 폐기: 제한 시간을 없애 발생 경로가 사라졌다(런 수명 초과는 BossRushInvalidProgress에 흡수).
         BossRushTimeout = 13005,
         BossRushInvalidProgress = 13006,
         BossRushSeasonClosed = 13007,

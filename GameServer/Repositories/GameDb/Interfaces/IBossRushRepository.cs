@@ -10,18 +10,16 @@ public interface IBossRushRepository
     /// <summary>시즌 1건을 조회한다(종료 시즌 메타 조회용). 없으면 null.</summary>
     Task<BossRushSeason?> GetSeasonAsync(int seasonId);
 
-    /// <summary>정보 조회용 스냅샷(진행도·오늘 사용 횟수·진행 중 런·내 최고 기록). 세이브가 없으면 null.</summary>
-    Task<BossRushInfoSnapshot?> GetInfoSnapshotAsync(long userId, int seasonId, long todayStartUnix, long tomorrowStartUnix);
+    /// <summary>정보 조회용 스냅샷(진행도·진행 중 런·내 최고 기록). 세이브가 없으면 null.</summary>
+    Task<BossRushInfoSnapshot?> GetInfoSnapshotAsync(long userId, int seasonId);
 
     /// <summary>
     /// 도전 시작을 한 트랜잭션으로 적용한다(기획서 6.1): 진행도 확인 → 해금 검증 → 진행 중 시즌 확인 →
-    /// 오늘 사용 횟수 검증 → 진행 중 런 자동 만료 종결 → 새 런 INSERT.
-    /// <b>일일 횟수 차감의 정본은 런 INSERT 그 자체</b>이며, 카운트와 INSERT가 같은 트랜잭션·같은 user_id
-    /// 잠금 안에 있어 동시 요청이 한도를 넘기지 못한다.
+    /// 진행 중 런 자동 만료 종결 → 새 런 INSERT. <b>도전 횟수 제한이 없어 세거나 차감하는 단계가 없다.</b>
+    /// user_id 잠금은 유지한다 — 자동 종결과 INSERT가 같은 잠금 안에 있어야 동시 요청이 진행 중 런을
+    /// 두 개 만들지 않는다.
     /// </summary>
-    Task<BossRushEnterOutcome> ApplyEnterAsync(
-        long userId, int unlockStageSequence, int dailyEntryLimit,
-        long todayStartUnix, long tomorrowStartUnix, long nowMs);
+    Task<BossRushEnterOutcome> ApplyEnterAsync(long userId, int unlockStageSequence, long nowMs);
 
     /// <summary>
     /// 클리어 보고를 한 트랜잭션으로 적용한다(기획서 6.2): 런 행 잠금 → 만료 판정(lazy) → 조건부 종결 →

@@ -1578,8 +1578,10 @@ namespace TaskbarHero.Common.Dto
         public int rank;
     }
 
-    /// <summary>진행 중인 도전 런. expiresAt = startedAt + timeLimitSec + expireGraceSec이며,
-    /// 이 시각이 지난 런은 서버가 만료로 보고 info 응답에서 null로 내려간다(§5.1).</summary>
+    /// <summary>진행 중인 도전 런. expiresAt = startedAt + runExpireSec이며, 이 시각이 지난 런은
+    /// 서버가 만료로 보고 info 응답에서 null로 내려간다(§5.1).
+    /// <para>expiresAt은 <b>전투를 끊는 타이머가 아니라</b> 클리어 보고가 아직 받아들여지는 구간이다 —
+    /// 제한 시간이 없으므로 도전은 5라운드를 다 깨거나 파티가 전멸할 때 끝난다.</para></summary>
     [Serializable]
     public class BossRushActiveRunDto
     {
@@ -1588,7 +1590,8 @@ namespace TaskbarHero.Common.Dto
         public long expiresAt;
     }
 
-    /// <summary>보스러시 정보 조회 응답 데이터(§5.1). 라운드 스폰 구성은 여기 없다 — 도전 시작(enter)이 내려준다.</summary>
+    /// <summary>보스러시 정보 조회 응답 데이터(§5.1). 라운드 스폰 구성은 여기 없다 — 도전 시작(enter)이 내려준다.
+    /// <para>도전 횟수 제한도 제한 시간도 없으므로 잔여 횟수·제한 시간 필드가 없다.</para></summary>
     [Serializable]
     public class BossRushInfoResultData
     {
@@ -1596,10 +1599,6 @@ namespace TaskbarHero.Common.Dto
         public bool unlocked;
         public int unlockStageSequence;
         public int maxStageCleared;
-        public int dailyEntryLimit;
-        public int dailyEntryUsed;
-        public long dailyResetAt;
-        public int timeLimitMs;
         public BossRushSeasonDto season;
         public BossRushMyRecordDto myRecord;
         public BossRushActiveRunDto activeRun;
@@ -1646,16 +1645,14 @@ namespace TaskbarHero.Common.Dto
     /// <summary>
     /// 도전 시작 응답 데이터(§5.2). rounds는 <b>5라운드 전부</b>를 담는다 — 라운드 전환이 전투 중에
     /// 일어나므로 라운드마다 서버를 다시 부르지 않는다. startedAt은 내려주지 않는다(서버 내부 값).
+    /// <para>timeLimitMs도, 차감된 도전 횟수도 없다 — 제한 시간과 횟수 제한이 모두 없어졌다.</para>
     /// </summary>
     [Serializable]
     public class BossRushEnterResultData
     {
         public long runId;
         public int seasonId;
-        public int timeLimitMs;
         public List<BossRushRoundDto> rounds = new List<BossRushRoundDto>();
-        public int dailyEntryUsed;
-        public int dailyEntryLimit;
     }
 
     /// <summary>도전 시작 응답 { success, errorCode, message, data(BossRushEnterResultData) }.</summary>
@@ -1680,6 +1677,8 @@ namespace TaskbarHero.Common.Dto
     /// 클리어 보고 요청 데이터. { runId, clearMs, rounds }
     /// <para>clearMs는 <b>클라이언트가 측정한 순수 전투 시간</b>(첫 라운드 전투 시작 ~ 마지막 보스 처치,
     /// 라운드 전환 연출 제외)이며 <b>이 값이 곧 랭킹 점수</b>다. 서버는 형식만 검증하고 진위는 판정하지 않는다(§5.3).</para>
+    /// <para>게임 룰상의 상한이 없다 — 서버가 보는 유일한 상한은 런 수명(run_expire_sec)이며, 그보다 긴
+    /// clearMs는 자기모순이라 BossRushInvalidProgress로 거부된다.</para>
     /// </summary>
     [Serializable]
     public class BossRushClearData

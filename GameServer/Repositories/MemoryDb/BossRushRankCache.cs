@@ -16,14 +16,17 @@ public sealed record BossRushCachedRank(int Rank, long UserId, int ClearMs, long
 /// 닉네임·시즌 메타도 각각 <c>game_player.nickname</c>·<c>boss_rush_season</c>의 캐시다. 그래서 모든 접근을
 /// <see cref="MemoryDbBase.SafeAsync{T}"/>로 감싸 실패 시 null·기본값을 돌려주고 호출측이 MySQL로 폴백한다
 /// (축소 운전) — 예외를 밖으로 던지지 않는다.</para>
-/// <para><b>점수 인코딩</b>: <c>score = clearMs × 10^10 + recordedAt(초)</c>. 오름차순이 곧 순위이며
-/// 동점은 먼저 달성한 쪽이 상위다. 제한 시간 10분(600,000ms)이 상한이라 6 × 10^15 &lt; 2^53으로
-/// double 정밀도 안에 들어간다.</para>
+/// <para><b>점수 인코딩</b>: <c>score = clearMs × 10^7 + (recordedAt − season.start_at)(초)</c>.
+/// 오름차순이 곧 순위이며 동점은 먼저 달성한 쪽이 상위다. tie-break 축을 유닉스초가 아니라
+/// <b>시즌 시작 기준 상대 초</b>로 두는 이유는 리더보드 키가 시즌마다 분리돼 있어 한 키 안의 비교가
+/// 전부 같은 시즌이기 때문이다 — 시즌 길이(7일 = 604,800초)가 10^7보다 한참 작아 하위 자리를 넘치지
+/// 않는다. 그래서 배수가 10^7로 내려가 clearMs는 약 9.0 × 10^8 ms까지 안전하며(2^53 ≈ 9.007e15),
+/// <b>이 인코딩은 더 이상 클리어 시간 상한에 기대지 않는다</b>(제한 시간을 없앤 근거, 기획서 4.3).</para>
 /// </summary>
 public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
 {
-    /// <summary>점수 인코딩 배수 — 하위 10자리를 recordedAt(초, 서기 2286년까지 10^10 미만)에 내준다.</summary>
-    private const long ScoreScale = 10_000_000_000L;
+    /// <summary>점수 인코딩 배수 — 하위 7자리를 시즌 상대 초(시즌 7일 = 604,800초 &lt; 10^7)에 내준다.</summary>
+    private const long ScoreScale = 10_000_000L;
 
     /// <summary>닉네임 캐시 키(시즌·콘텐츠 무관 전역 Hash, TTL 없음).</summary>
     private const string NicknameKey = "player:nickname";
@@ -38,11 +41,11 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
     }
 
     /// <summary>개인 최고 기록을 리더보드에 반영한다(ZADD). 실패는 Warning만 남기고 false를 돌려준다.</summary>
-    public Task<bool> UpsertAsync(int seasonId, long userId, int bestClearMs, long recordedAt)
+    public Task<bool> UpsertAsync(int seasonId, long seasonStartAt, long userId, int bestClearMs, long recordedAt)
         // 기록·보상은 이미 MySQL에 확정되어 있다 — 캐시 반영 실패는 순위 표시만 미룬다.
         => SafeAsync(async () =>
         {
-            await Board(seasonId).AddAsync(userId, Encode(bestClearMs, recordedAt));
+            await Board(seasonId).AddAsync(userId, Encode(bestClearMs, recordedAt, seasonStartAt));
             return true;
         }, false, "리더보드 갱신");
 
@@ -55,7 +58,7 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
         }, null, "내 순위 조회");
 
     /// <summary>ZRANK + ZSCORE로 본인 순위 1행을 만든다. 미등재·실패는 null.</summary>
-    public Task<BossRushCachedRank?> GetMyEntryAsync(int seasonId, long userId)
+    public Task<BossRushCachedRank?> GetMyEntryAsync(int seasonId, long seasonStartAt, long userId)
         => SafeAsync(async () =>
         {
             var board = Board(seasonId);
@@ -71,7 +74,7 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
                 return null;
             }
 
-            var (clearMs, recordedAt) = Decode(score.Value);
+            var (clearMs, recordedAt) = Decode(score.Value, seasonStartAt);
             return new BossRushCachedRank((int)(rank.Value + 1), userId, clearMs, recordedAt);
         }, null, "내 순위 조회");
 
@@ -83,14 +86,14 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
     /// ZRANGE로 한 페이지를 읽는다. Sorted Set은 skiplist의 span으로 시작 지점을 O(log N)에 찾으므로
     /// 오프셋이 깊어져도 비용이 반환 크기(M)에만 비례한다 — 그래서 순위 범위에 상한을 두지 않는다(4.3).
     /// </summary>
-    public Task<IReadOnlyList<BossRushCachedRank>?> GetPageAsync(int seasonId, int offset, int limit)
+    public Task<IReadOnlyList<BossRushCachedRank>?> GetPageAsync(int seasonId, long seasonStartAt, int offset, int limit)
         => SafeAsync(async () =>
         {
             var entries = await Board(seasonId).RangeByRankWithScoresAsync(offset, offset + limit - 1);
             var result = new List<BossRushCachedRank>(entries.Length);
             for (var i = 0; i < entries.Length; i++)
             {
-                var (clearMs, recordedAt) = Decode(entries[i].Score);
+                var (clearMs, recordedAt) = Decode(entries[i].Score, seasonStartAt);
                 result.Add(new BossRushCachedRank(offset + i + 1, entries[i].Value, clearMs, recordedAt));
             }
 
@@ -190,14 +193,24 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
     private RedisDictionary<string, string> CurrentSeason()
         => new(Connection, CurrentSeasonKey, null);
 
-    /// <summary>기록·달성 시각을 정렬 가능한 단일 점수로 인코딩한다(4.3).</summary>
-    private static double Encode(int clearMs, long recordedAt)
-        => (double)((long)clearMs * ScoreScale + recordedAt);
+    /// <summary>
+    /// 기록·달성 시각을 정렬 가능한 단일 점수로 인코딩한다(4.3). tie-break 자리는 시즌 시작 기준
+    /// 상대 초이며, 시즌 시작보다 이른 시각이 들어와도 음수가 되지 않도록 0으로 clamp한다.
+    /// </summary>
+    private static double Encode(int clearMs, long recordedAt, long seasonStartAt)
+        => (double)((long)clearMs * ScoreScale + SeasonOffset(recordedAt, seasonStartAt));
 
     /// <summary>점수에서 기록(ms)과 달성 시각(초)을 복원한다 — 별도 조회 없이 표시값을 만든다.</summary>
-    private static (int ClearMs, long RecordedAt) Decode(double score)
+    private static (int ClearMs, long RecordedAt) Decode(double score, long seasonStartAt)
     {
         var raw = (long)score;
-        return ((int)(raw / ScoreScale), raw % ScoreScale);
+        return ((int)(raw / ScoreScale), seasonStartAt + raw % ScoreScale);
+    }
+
+    /// <summary>달성 시각을 시즌 시작 기준 상대 초로 바꾼다(0 이상, 배수 미만으로 clamp).</summary>
+    private static long SeasonOffset(long recordedAt, long seasonStartAt)
+    {
+        var offset = recordedAt - seasonStartAt;
+        return offset < 0 ? 0 : offset >= ScoreScale ? ScoreScale - 1 : offset;
     }
 }

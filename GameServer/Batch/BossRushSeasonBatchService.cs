@@ -162,7 +162,7 @@ public sealed class BossRushSeasonBatchService : PeriodicBatchService
             foreach (var record in page)
             {
                 await rankCache.UpsertAsync(
-                    season.SeasonId, record.UserId, record.BestClearMs, record.RecordedAt);
+                    season.SeasonId, season.StartAt, record.UserId, record.BestClearMs, record.RecordedAt);
                 restored++;
             }
 

@@ -12,26 +12,29 @@ public sealed record BossRushActiveRun(long RunId, int SeasonId, long StartedAtM
 /// <summary>시즌 개인 최고 기록(boss_rush_record). 기록이 없으면 null로 다룬다.</summary>
 public sealed record BossRushRecord(int BestClearMs, long RecordedAt);
 
-/// <summary>보스러시 정보 조회용 스냅샷 — 진행도·오늘 사용 횟수·진행 중 런·내 최고 기록을 한 번에 읽는다.</summary>
+/// <summary>보스러시 정보 조회용 스냅샷 — 진행도·진행 중 런·내 최고 기록을 한 번에 읽는다.</summary>
 public sealed record BossRushInfoSnapshot(
-    int MaxStageCleared, int DailyEntryUsed, BossRushActiveRun? ActiveRun, BossRushRecord? MyRecord);
+    int MaxStageCleared, BossRushActiveRun? ActiveRun, BossRushRecord? MyRecord);
 
-/// <summary>도전 시작 트랜잭션 결과. 성공 시 RunId·SeasonId와 갱신된 오늘 사용 횟수를 담는다.</summary>
+/// <summary>도전 시작 트랜잭션 결과. 성공 시 RunId·SeasonId를 담는다(차감할 횟수가 없다).</summary>
 public sealed record BossRushEnterOutcome(
-    BossRushEnterStatus Status, long RunId, int SeasonId, int DailyEntryUsed)
+    BossRushEnterStatus Status, long RunId, int SeasonId)
 {
-    public static BossRushEnterOutcome Fail(BossRushEnterStatus status) => new(status, 0, 0, 0);
+    public static BossRushEnterOutcome Fail(BossRushEnterStatus status) => new(status, 0, 0);
 }
 
 /// <summary>
 /// 클리어 보고 트랜잭션 결과. IsNewRecord = 이번 보고가 시즌 최고를 갱신했는지,
 /// BestClearMs = 갱신 후 최고 기록, RecordedAt = 그 기록의 달성 시각(랭킹 tie-break 축).
 /// <para>RankEligible이 false면 런의 시즌이 더 이상 진행 중이 아니어서 기록 등재를 생략한 경우다(6.5).</para>
+/// <para>SeasonStartAt은 랭킹 점수 인코딩의 기준점이다 — 점수의 tie-break 자리가 시즌 시작 기준
+/// 상대 초라(4.3) 커밋 이후 ZADD에 시즌 시작 시각이 함께 필요하다.</para>
 /// </summary>
 public sealed record BossRushClearOutcome(
-    BossRushClearStatus Status, int SeasonId, bool IsNewRecord, int BestClearMs, long RecordedAt, bool RankEligible)
+    BossRushClearStatus Status, int SeasonId, long SeasonStartAt,
+    bool IsNewRecord, int BestClearMs, long RecordedAt, bool RankEligible)
 {
-    public static BossRushClearOutcome Fail(BossRushClearStatus status) => new(status, 0, false, 0, 0, false);
+    public static BossRushClearOutcome Fail(BossRushClearStatus status) => new(status, 0, 0, false, 0, 0, false);
 }
 
 /// <summary>랭킹 목록 1행(MySQL 폴백·종료 시즌 조회 결과). 닉네임은 별도 조회로 채운다.</summary>
@@ -75,11 +78,10 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
     }
 
     /// <summary>
-    /// 정보 조회에 필요한 값을 한 커넥션에서 읽는다 — 진행도(max_stage_cleared), 오늘(KST) 사용 횟수,
-    /// 진행 중 런, 현 시즌 개인 최고 기록. 세이브 행이 없으면 null(계정 미생성).
+    /// 정보 조회에 필요한 값을 한 커넥션에서 읽는다 — 진행도(max_stage_cleared), 진행 중 런,
+    /// 현 시즌 개인 최고 기록. 세이브 행이 없으면 null(계정 미생성).
     /// </summary>
-    public async Task<BossRushInfoSnapshot?> GetInfoSnapshotAsync(
-        long userId, int seasonId, long todayStartUnix, long tomorrowStartUnix)
+    public async Task<BossRushInfoSnapshot?> GetInfoSnapshotAsync(long userId, int seasonId)
     {
         using var db = Db();
 
@@ -91,13 +93,6 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
         {
             return null;
         }
-
-        // 오늘 사용 횟수 — started_at(ms)이 오늘 KST 범위인 런 수. 별도 카운터 컬럼을 두지 않는다(4.2).
-        var used = await db.Query("boss_rush_run")
-            .Where("user_id", userId)
-            .Where("started_at", ">=", todayStartUnix * 1000)
-            .Where("started_at", "<", tomorrowStartUnix * 1000)
-            .CountAsync<int>();
 
         var activeRow = await db.Query("boss_rush_run")
             .Select("run_id", "season_id", "started_at")
@@ -116,7 +111,6 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
 
         return new BossRushInfoSnapshot(
             player.MaxStageCleared,
-            used,
             activeRow is null ? null : new BossRushActiveRun(activeRow.RunId, activeRow.SeasonId, activeRow.StartedAt),
             recordRow is null ? null : new BossRushRecord(recordRow.BestClearMs, recordRow.RecordedAt));
     }
@@ -129,13 +123,13 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
     /// <para>1) game_player SELECT ... FOR UPDATE — 진행도 관측 + user_id 잠금(동시 요청 직렬화)</para>
     /// <para>2) 해금 검증 — max_stage_cleared &gt;= unlock_stage_sequence</para>
     /// <para>3) 진행 중 시즌 확인 — 없으면(정산 중) SeasonClosed</para>
-    /// <para>4) 오늘 사용 횟수 검증 — 잠금 안에서 세므로 한도를 넘길 수 없다</para>
-    /// <para>5) 진행 중 런 자동 만료 종결 — 나이와 무관하게 정리(보상 없음, 일일 횟수도 회복하지 않는다)</para>
-    /// <para>6) boss_rush_run INSERT — started_at은 서버 시각(ms)</para>
+    /// <para>4) 진행 중 런 자동 만료 종결 — 나이와 무관하게 정리(보상 없음)</para>
+    /// <para>5) boss_rush_run INSERT — started_at은 서버 시각(ms)</para>
+    /// <para>도전 횟수 제한이 없어 세거나 차감하는 단계가 없다. 그래도 user_id 잠금은 유지한다 —
+    /// 4)와 5)가 같은 잠금 안에 있어야 동시 enter 두 건이 진행 중 런을 두 개 만들지 않는다.</para>
     /// </remarks>
     public async Task<BossRushEnterOutcome> ApplyEnterAsync(
-        long userId, int unlockStageSequence, int dailyEntryLimit,
-        long todayStartUnix, long tomorrowStartUnix, long nowMs)
+        long userId, int unlockStageSequence, long nowMs)
         => await TransactionAsync<BossRushEnterOutcome>(async (db, transaction) =>
         {
             // 1) 진행도 관측 + user_id 행 잠금.
@@ -162,19 +156,8 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
                 return TxResult<BossRushEnterOutcome>.Rollback(BossRushEnterOutcome.Fail(BossRushEnterStatus.SeasonClosed));
             }
 
-            // 4) 오늘 사용 횟수 — 잠금 안에서 세므로 동시 요청이 한도를 넘기지 못한다.
-            var used = await db.Query("boss_rush_run")
-                .Where("user_id", userId)
-                .Where("started_at", ">=", todayStartUnix * 1000)
-                .Where("started_at", "<", tomorrowStartUnix * 1000)
-                .CountAsync<int>(transaction: transaction);
-            if (used >= dailyEntryLimit)
-            {
-                return TxResult<BossRushEnterOutcome>.Rollback(BossRushEnterOutcome.Fail(BossRushEnterStatus.DailyLimit));
-            }
-
-            // 5) 남아 있는 진행 중 런을 정리한다(나이와 무관). 방치형 클라이언트의 강제 종료를
-            //    유저가 스스로 복구할 수 있게 하는 장치이며, 소모된 일일 횟수는 돌려주지 않는다.
+            // 4) 남아 있는 진행 중 런을 정리한다(나이와 무관). 방치형 클라이언트의 강제 종료를
+            //    유저가 스스로 복구할 수 있게 하는 장치다.
             await db.Query("boss_rush_run")
                 .Where("user_id", userId)
                 .Where("status", (int)BossRushRunStatus.Running)
@@ -182,7 +165,7 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
                     new { status = (int)BossRushRunStatus.Expired, finished_at = nowMs },
                     transaction);
 
-            // 6) 새 런 개시. INSERT 자체가 일일 횟수 차감이다.
+            // 5) 새 런 개시.
             var runId = await db.Query("boss_rush_run").InsertGetIdAsync<long>(new
             {
                 user_id = userId,
@@ -193,7 +176,7 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
                 clear_ms = 0,
             }, transaction);
 
-            return TxResult<BossRushEnterOutcome>.Commit(new BossRushEnterOutcome(BossRushEnterStatus.Ok, runId, season.SeasonId, used + 1));
+            return TxResult<BossRushEnterOutcome>.Commit(new BossRushEnterOutcome(BossRushEnterStatus.Ok, runId, season.SeasonId));
         });
 
     /// <summary>
@@ -266,12 +249,14 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
             }
 
             // 5) 시즌 최고 기록 갱신. 런의 시즌이 더 이상 진행 중이 아니면 등재를 생략한다(6.5).
-            var seasonStatus = await db.Query("boss_rush_season")
-                .Select("status")
+            //    start_at도 함께 읽는다 — 랭킹 점수의 tie-break 자리가 시즌 상대 초라(4.3)
+            //    커밋 이후 ZADD가 이 값을 필요로 한다.
+            var seasonRow = await db.Query("boss_rush_season")
+                .Select("season_id", "start_at", "end_at", "status")
                 .Where("season_id", run.SeasonId)
-                .FirstOrDefaultAsync<int?>(transaction);
+                .FirstOrDefaultAsync<BossRushSeasonRow>(transaction);
 
-            var rankEligible = seasonStatus == (int)BossRushSeasonStatus.Running;
+            var rankEligible = seasonRow?.Status == (int)BossRushSeasonStatus.Running;
             var isNewRecord = false;
             var bestClearMs = clearMs;
             var recordedAt = nowMs / 1000;
@@ -323,7 +308,8 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
             }
 
             return TxResult<BossRushClearOutcome>.Commit(new BossRushClearOutcome(
-                BossRushClearStatus.Ok, run.SeasonId, isNewRecord, bestClearMs, recordedAt, rankEligible));
+                BossRushClearStatus.Ok, run.SeasonId, seasonRow?.StartAt ?? 0,
+                isNewRecord, bestClearMs, recordedAt, rankEligible));
         });
 
     /// <summary>시즌 등재 인원을 센다(랭킹 캐시를 쓸 수 없을 때의 totalEntries).</summary>

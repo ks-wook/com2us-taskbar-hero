@@ -7,20 +7,23 @@ public interface IBossRushRankCache
     /// <summary>
     /// 리더보드에 개인 최고 기록을 반영한다(ZADD). 반드시 <b>MySQL 커밋 이후</b>에 호출한다 —
     /// 트랜잭션 안에서 넣으면 롤백된 기록이 랭킹에 남고 Redis에는 롤백이 없다(기획서 6.2·6.3).
+    /// <para>점수의 tie-break 자리가 <b>시즌 시작 기준 상대 초</b>라 seasonStartAt이 함께 필요하다(4.3).</para>
     /// </summary>
-    Task<bool> UpsertAsync(int seasonId, long userId, int bestClearMs, long recordedAt);
+    Task<bool> UpsertAsync(int seasonId, long seasonStartAt, long userId, int bestClearMs, long recordedAt);
 
     /// <summary>본인 순위(ZRANK + 1)를 조회한다. 등재되지 않았거나 캐시를 쓸 수 없으면 null.</summary>
     Task<int?> GetRankAsync(int seasonId, long userId);
 
-    /// <summary>본인 순위 1행(순위·기록·달성 시각)을 조회한다. 등재되지 않았거나 캐시를 쓸 수 없으면 null.</summary>
-    Task<BossRushCachedRank?> GetMyEntryAsync(int seasonId, long userId);
+    /// <summary>본인 순위 1행(순위·기록·달성 시각)을 조회한다. 등재되지 않았거나 캐시를 쓸 수 없으면 null.
+    /// 달성 시각 복원에 시즌 시작 시각이 필요하다(점수 인코딩, 4.3).</summary>
+    Task<BossRushCachedRank?> GetMyEntryAsync(int seasonId, long seasonStartAt, long userId);
 
     /// <summary>시즌 등재 인원(ZCARD). 캐시를 쓸 수 없으면 null.</summary>
     Task<int?> CountAsync(int seasonId);
 
-    /// <summary>랭킹 목록 한 페이지(ZRANGE). 캐시를 쓸 수 없으면 null(호출측이 MySQL 폴백).</summary>
-    Task<IReadOnlyList<BossRushCachedRank>?> GetPageAsync(int seasonId, int offset, int limit);
+    /// <summary>랭킹 목록 한 페이지(ZRANGE). 캐시를 쓸 수 없으면 null(호출측이 MySQL 폴백).
+    /// 달성 시각 복원에 시즌 시작 시각이 필요하다(점수 인코딩, 4.3).</summary>
+    Task<IReadOnlyList<BossRushCachedRank>?> GetPageAsync(int seasonId, long seasonStartAt, int offset, int limit);
 
     /// <summary>시즌 리더보드 키가 존재하는지(워밍업 필요 판단). 캐시를 쓸 수 없으면 null.</summary>
     Task<bool?> ExistsAsync(int seasonId);

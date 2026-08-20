@@ -1338,8 +1338,9 @@ sequenceDiagram
 > 인코딩), 표시 이름은 `player:nickname` 해시, 시즌 메타는 `bossrush:season:current` 해시에서 나온다.
 > MySQL은 캐시 미스·폴백·종료 시즌 조회에서만 개입한다.
 >
-> **실패 보고 엔드포인트가 없다.** 5라운드를 못 깨면 클라이언트는 아무것도 보내지 않고, 그 런은 제한 시간
-> + 그레이스가 지나 만료된다. 만료 판정은 정리 배치가 아니라 **런을 읽는 경로**(`clear`·`info`·`enter`)가 한다.
+> **제한 시간도 도전 횟수 제한도 없다.** 도전은 5라운드를 다 깨거나 파티가 전멸할 때 끝나고, 실패는 서버로
+> 보고하지 않는다 — 그 런은 **런 수명(`run_expire_sec` 30분)** 이 지나 만료된다. 만료 판정은 정리 배치가
+> 아니라 **런을 읽는 경로**(`clear`·`info`·`enter`)가 한다. 런 수명은 게임 룰이 아니라 원장 정리 규칙이다.
 
 ### 보스러시 정보 조회 — `POST /api/game/boss-rush/info`
 
@@ -1360,14 +1361,14 @@ sequenceDiagram
             S->>DB: 진행 중 시즌 조회(status=1)
             S->>R: 시즌 메타 캐시 채움
         end
-        S->>DB: 진행도·오늘(KST) 사용 횟수·진행 중 런·내 최고 기록 조회
+        S->>DB: 진행도·진행 중 런·내 최고 기록 조회
         alt 세이브 없음
             S-->>C: 실패 { errorCode: SaveNotFound(2001) }
         else 정상
             S->>R: 내 순위 조회(ZRANK + 1)
             S->>S: 해금 판정(max_stage_cleared >= unlock_stage_sequence)
-            S->>S: 진행 중 런 나이 검사 — 제한 시간+그레이스 지났으면 activeRun을 null로
-            S-->>C: 성공 { serverTime, unlocked, dailyEntryUsed/Limit, dailyResetAt, timeLimitMs, season, myRecord, activeRun }
+            S->>S: 진행 중 런 나이 검사 — 런 수명 지났으면 activeRun을 null로
+            S-->>C: 성공 { serverTime, unlocked, unlockStageSequence, maxStageCleared, season, myRecord, activeRun }
         end
     end
 ```
@@ -1382,7 +1383,7 @@ sequenceDiagram
 
     C->>S: POST /api/game/boss-rush/enter { userId, token }
     S->>S: 마스터 규칙·라운드 구성 확인(boss_rush_master · boss_rush_round + boss_rush_spawn)
-    Note over S,DB: 트랜잭션 시작(game_player 행 잠금 — 일일 횟수 검증과 런 INSERT를 직렬화)
+    Note over S,DB: 트랜잭션 시작(game_player 행 잠금 — 진행 중 런 정리와 INSERT를 직렬화)
     S->>DB: 진행도 조회(SELECT ... FOR UPDATE)
     alt 세이브 없음
         S-->>C: 실패 { errorCode: SaveNotFound(2001) }
@@ -1390,13 +1391,11 @@ sequenceDiagram
         S-->>C: 실패 { errorCode: BossRushLocked(13001) }
     else 진행 중 시즌 없음(정산 중)
         S-->>C: 실패 { errorCode: BossRushSeasonClosed(13007) }
-    else 오늘 도전 횟수 소진
-        S-->>C: 실패 { errorCode: BossRushDailyLimitExceeded(13002) }
     else 정상
-        S->>DB: 남아 있는 진행 중 런을 만료 종결(status=3, 보상 없음 — 일일 횟수는 회복하지 않음)
+        S->>DB: 남아 있는 진행 중 런을 만료 종결(status=3, 보상 없음)
         S->>DB: 새 런 INSERT(started_at = 서버 시각(ms), status=1)
-        Note over S,DB: 커밋 — 런 INSERT 자체가 일일 횟수 차감이다(별도 카운터 없음)
-        S-->>C: 성공 { runId, seasonId, timeLimitMs, rounds[5](round·backgroundType·monsters[]·boss), dailyEntryUsed/Limit }
+        Note over S,DB: 커밋 — 도전 횟수 제한이 없어 차감할 것이 없다
+        S-->>C: 성공 { runId, seasonId, rounds[5](round·backgroundType·monsters[]·boss) }
     end
     Note over C: 5라운드 스폰을 한 번에 받아 연속 진행(라운드 전환은 포탈 이동 연출, 서버 호출 없음)
 ```
@@ -1411,36 +1410,31 @@ sequenceDiagram
     participant R as Redis
 
     C->>S: POST /api/game/boss-rush/clear { runId, clearMs, rounds[5] }
-    S->>S: 제한 시간 상한 검사(clearMs <= time_limit_sec × 1000)
-    alt 상한 초과
-        S-->>C: 실패 { errorCode: BossRushTimeout(13005) } (런은 종결하지 않음 — 그레이스 안이면 재보고 가능)
+    S->>S: 형식·자기정합성 검증(clearMs <= run_expire_sec × 1000 · 라운드 1..5 빠짐없이·중복 없음 · 합계 == clearMs)
+    alt 어긋남(클라이언트 버그)
+        S-->>C: 실패 { errorCode: BossRushInvalidProgress(13006) } + Warning 로그 (런은 종결하지 않음 — 런 수명 안이면 재보고 가능)
     else 통과
-        S->>S: 라운드 형식·자기정합성 검증(1..5 빠짐없이·중복 없음·합계 == clearMs)
-        alt 어긋남(클라이언트 버그)
-            S-->>C: 실패 { errorCode: BossRushInvalidProgress(13006) } + Warning 로그
-        else 통과
-            Note over S,DB: 트랜잭션 시작(boss_rush_run 행 잠금)
-            S->>DB: 런 조회(SELECT ... FOR UPDATE)
-            alt 런 없음 또는 타인 런
-                S-->>C: 실패 { errorCode: BossRushRunNotFound(13003) }
-            else 이미 종결된 런
+        Note over S,DB: 트랜잭션 시작(boss_rush_run 행 잠금)
+        S->>DB: 런 조회(SELECT ... FOR UPDATE)
+        alt 런 없음 또는 타인 런
+            S-->>C: 실패 { errorCode: BossRushRunNotFound(13003) }
+        else 이미 종결된 런
+            S-->>C: 실패 { errorCode: BossRushRunAlreadyFinished(13004) }
+        else 런 수명 경과(lazy 만료)
+            S->>DB: status=3으로 종결
+            S-->>C: 실패 { errorCode: BossRushRunAlreadyFinished(13004) }
+        else 정상
+            S->>DB: 런 조건부 종결(status=1일 때만 → 2, clear_ms 기록)
+            alt 0행(동시 중복 보고의 패자)
                 S-->>C: 실패 { errorCode: BossRushRunAlreadyFinished(13004) }
-            else 제한 시간+그레이스 경과(lazy 만료)
-                S->>DB: status=3으로 종결
-                S-->>C: 실패 { errorCode: BossRushRunAlreadyFinished(13004) }
-            else 정상
-                S->>DB: 런 조건부 종결(status=1일 때만 → 2, clear_ms 기록)
-                alt 0행(동시 중복 보고의 패자)
-                    S-->>C: 실패 { errorCode: BossRushRunAlreadyFinished(13004) }
-                else 선점 성공
-                    S->>DB: 라운드별 소요 INSERT(boss_rush_run_round)
-                    S->>S: 사후 관측 로그(서버 왕복 경과 vs 보고 clearMs 괴리 — 판정에는 쓰지 않음)
-                    S->>DB: 시즌 최고 기록 조건부 UPSERT(개선된 경우만. 시즌이 진행 중이 아니면 생략)
-                    Note over S,DB: 커밋 — 보상 지급 없음(런 상태와 최고 기록만 바뀐다)
-                    S->>R: 기록 갱신 시 ZADD(커밋 이후에만 — Redis에는 롤백이 없다)
-                    S->>R: ZRANK로 순위 산출(미갱신이어도 현재 순위를 내려준다)
-                    S-->>C: 성공 { runId, seasonId, clearMs, isNewRecord, bestClearMs, rank }
-                end
+            else 선점 성공
+                S->>DB: 라운드별 소요 INSERT(boss_rush_run_round)
+                S->>S: 사후 관측 로그(서버 왕복 경과 vs 보고 clearMs 괴리 — 판정에는 쓰지 않음)
+                S->>DB: 시즌 최고 기록 조건부 UPSERT(개선된 경우만. 시즌이 진행 중이 아니면 생략)
+                Note over S,DB: 커밋 — 보상 지급 없음(런 상태와 최고 기록만 바뀐다)
+                S->>R: 기록 갱신 시 ZADD(커밋 이후에만 — Redis에는 롤백이 없다. 점수 = clearMs × 10^7 + 시즌 상대 초)
+                S->>R: ZRANK로 순위 산출(미갱신이어도 현재 순위를 내려준다)
+                S-->>C: 성공 { runId, seasonId, clearMs, isNewRecord, bestClearMs, rank }
             end
         end
     end

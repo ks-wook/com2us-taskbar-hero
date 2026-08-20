@@ -316,20 +316,20 @@ namespace TaskbarHero.Common.MasterData
     }
 
     /// <summary>
-    /// 보스러시 전역 규칙(boss_rush_master, 단일 행). 제한 시간·일일 횟수·해금 조건은 밸런스 값이고
-    /// <b>클라이언트가 같은 값으로 판정</b>해야 하므로(시간 측정이 클라 측이라 초과 판정도 클라에 있다)
-    /// 마스터에 둔다(보스러시 기획서 4.1).
+    /// 보스러시 전역 규칙(boss_rush_master, 단일 행). 라운드 수·해금 조건은 밸런스 값이고
+    /// <b>클라이언트가 같은 값으로 판정</b>해야 하므로 마스터에 둔다(보스러시 기획서 4.1).
+    /// <para><b>제한 시간과 일일 도전 횟수는 없다</b> — 전자는 실플레이에서 파티가 완주하거나 전멸하거나
+    /// 둘 중 하나라 판정에 관여한 적이 없고, 후자는 도전 보상이 사라진 뒤로 조일 대상이 없어졌다.
+    /// 클라이언트는 전투 시간을 <b>재기만 하고 끊지 않는다</b>.</para>
     /// </summary>
     [Serializable]
     public class BossRushMaster
     {
         public int contentId;             // 고정 1(콘텐츠 단일)
         public int roundCount;            // 라운드 수(현재 5 = Act 수)
-        public int timeLimitSec;          // 클리어 시간 상한(초). 이 값을 넘는 보고는 기록으로 받지 않는다
-        public int dailyEntryLimit;       // 일일 도전 횟수
         public int unlockStageSequence;   // 해금 요구 진행 순번(max_stage_cleared 기준)
         public int seasonPeriodDays;      // 시즌 길이(일)
-        public int expireGraceSec;        // 제한 시간 경과 후 클리어 보고를 받아 주는 여유(초)
+        public int runExpireSec;          // 런 수명(초) — 서버의 만료 판정·clearMs 형식 상한(게임 룰 아님)
         public int rankPageLimit;         // 랭킹 조회 1페이지 크기 상한(순위 범위에는 상한이 없다)
     }
 
