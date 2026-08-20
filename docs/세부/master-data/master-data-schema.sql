@@ -1716,35 +1716,38 @@ INSERT INTO newbie_reward_master (seq, reward_type, reward_code, quantity) VALUE
 
 -- ══════════════════════════════════════════════════════════════════════════════════════════════
 -- 보스러시 / 랭킹 마스터 (보스러시 기획서 4.1)
---   * 네 테이블 모두 클라이언트 번들에 포함된다 — 몬스터 소환·순위 보상 안내·제한 시간 판정이
---     모두 클라 측에서 필요하다(시간 측정이 클라 권위라 제한 시간 초과 판정도 클라에 있다).
+--   * 네 테이블 모두 클라이언트 번들에 포함된다 — 몬스터 소환·라운드 배경·순위 보상 안내가
+--     모두 클라 측에서 필요하다. 제한 시간은 없다(클라이언트는 전투 시간을 재기만 하고 끊지 않는다).
 --   * 아래 시드의 **스폰 구성(등장 레벨·마리 수)과 순위 보상 골드는 잠정값**이다.
---     기획서 8장 미결 — tools/balance_sim.py로 "최종 스테이지를 깬 기준 파티가 5라운드를 4~6분에
---     클리어"하도록 측정해 확정한 뒤 이 파일과 master-data-값.md를 함께 고치고 클라 번들을 재생성한다.
+--     기획서 8장 미결 — tools/balance_sim.py로 "최종 스테이지를 깬 기준 파티가 5라운드를 완주"하도록
+--     측정해 확정한 뒤 이 파일과 master-data-값.md를 함께 고치고 클라 번들을 재생성한다.
 -- ══════════════════════════════════════════════════════════════════════════════════════════════
 
 -- boss_rush_master — 콘텐츠 전역 규칙(단일 행).
---   * 제한 시간·일일 횟수·해금 조건은 밸런스 값이고 클라이언트가 같은 값으로 판정해야 하므로
---     appsettings가 아니라 마스터에 둔다. 배치 주기 같은 운영 파라미터만 appsettings에 남긴다.
---   * time_limit_sec은 랭킹 점수 인코딩의 전제다 — score = clearMs × 10^10 + recordedAt(초)이므로
---     600,000ms × 10^10 = 6e15 < 2^53(≈9.007e15)로 double 정밀도 안에 들어간다.
+--   * 해금 조건·라운드 수는 밸런스 값이고 클라이언트가 같은 값으로 판정해야 하므로 appsettings가
+--     아니라 마스터에 둔다. 배치 주기 같은 운영 파라미터만 appsettings에 남긴다.
+--   * 제한 시간(time_limit_sec)과 일일 도전 횟수(daily_entry_limit)를 두지 않는다 — 전자는 실플레이에서
+--     파티가 완주하거나 전멸하거나 둘 중 하나라 판정에 관여한 적이 없고, 후자는 도전 보상이 없어진 뒤로
+--     조일 대상이 사라졌다(도전은 재화·아이템을 만들지 않는다).
+--   * run_expire_sec은 게임 룰이 아니라 버려진 런을 정리하는 원장 규칙이며, 동시에 보고 가능한
+--     clearMs의 형식 상한이자 랭킹 점수 인코딩의 안전 여유다 —
+--     score = clearMs × 10^7 + (recordedAt − season.start_at)(초)이므로 clearMs는 약 9.0e8ms까지
+--     안전하고, 실제 상한 1,800,000ms의 500배다(2^53 ≈ 9.007e15).
 DROP TABLE IF EXISTS boss_rush_master;
 CREATE TABLE boss_rush_master (
     content_id            INT NOT NULL          COMMENT '고정 1(콘텐츠 단일)',
     round_count           INT NOT NULL          COMMENT '라운드 수(현재 5 = Act 수)',
-    time_limit_sec        INT NOT NULL          COMMENT '클리어 시간 상한(초). 넘는 보고는 기록으로 받지 않는다',
-    daily_entry_limit     INT NOT NULL          COMMENT '일일 도전 횟수(KST 자정 리셋)',
     unlock_stage_sequence INT NOT NULL          COMMENT '해금 요구 진행 순번(game_player.max_stage_cleared 기준)',
     season_period_days    INT NOT NULL          COMMENT '시즌 길이(일)',
-    expire_grace_sec      INT NOT NULL          COMMENT '제한 시간 경과 후 클리어 보고를 받아 주는 여유(초) = 만료 판정 기준',
+    run_expire_sec        INT NOT NULL          COMMENT '런 수명(초). started_at + 이 값을 넘긴 런은 만료 = clearMs 형식 상한',
     rank_page_limit       INT NOT NULL          COMMENT '랭킹 조회 1페이지 크기 상한(순위 범위에는 상한이 없다)',
     PRIMARY KEY (content_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 전역 규칙(단일 행)';
 
 INSERT INTO boss_rush_master
-    (content_id, round_count, time_limit_sec, daily_entry_limit, unlock_stage_sequence,
-     season_period_days, expire_grace_sec, rank_page_limit) VALUES
-    (1, 5, 600, 3, 10, 7, 300, 100);
+    (content_id, round_count, unlock_stage_sequence,
+     season_period_days, run_expire_sec, rank_page_limit) VALUES
+    (1, 5, 10, 7, 1800, 100);
 
 
 -- boss_rush_round — 라운드 정의. 라운드 r은 Act r에 대응한다.

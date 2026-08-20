@@ -1,4 +1,4 @@
-# 소모품 아이템 / 계정 버프 기획서
+﻿# 소모품 아이템 / 계정 버프 기획서
 
 > 상위 문서: [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) · 관련 도메인 4.4(인벤토리/아이템)의 확장
 >
@@ -150,7 +150,7 @@ newExpiresAt = max(now, 기존 expires_at) + consumable_master.duration_sec
 
 **(3) 마스터 로더 적재 기준 분리 (구현 시 필수)**
 
-소모품을 `item_master`에 통합하면 **아이템 정의 조회**와 **등급 추첨 후보 풀**의 적재 기준이 갈라진다. 현재 `GameServer/MasterData/MasterDataProvider.cs`의 `LoadItemsAsync`는 하나의 쿼리(`item_type IN (1,2)`)로 두 사전(`_itemsByCode`·`_itemsByGrade`)을 동시에 만들므로, 그대로 두거나 단순히 `4`를 더하기만 하면 어느 쪽이든 결함이 된다.
+소모품을 `item_master`에 통합하면 **아이템 정의 조회**와 **등급 추첨 후보 풀**의 적재 기준이 갈라진다. 현재 `GameServer/Repositories/MasterDb/MasterDbLoader.cs`의 `LoadItemsAsync`는 하나의 쿼리(`item_type IN (1,2)`)로 두 사전(`_itemsByCode`·`_itemsByGrade`)을 동시에 만들므로, 그대로 두거나 단순히 `4`를 더하기만 하면 어느 쪽이든 결함이 된다.
 
 | 적재 대상 | 용도 | 기준 | 상태 |
 |---|---|---|---|

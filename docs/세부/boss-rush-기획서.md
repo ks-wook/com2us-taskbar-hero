@@ -49,10 +49,10 @@
 - **배경은 그 Act의 스테이지 배경을 재활용한다.** 라운드 `r`은 Act `r`의 전투이므로 배경도 그 지역 것을 그대로 쓴다(전용 배경을 만들지 않는다). `boss_rush_round.background_type`에 Act `r`의 `stage_master.background_type`과 **같은 값**을 넣는다(4.1).
 - **라운드 전환은 포탈 이동 연출로 표현하며, 이는 클라이언트 영역이다.** 한 라운드를 깨면 포탈을 타고 다음 지역으로 넘어가는 연출을 클라이언트가 재생한다. 서버 계약에 영향이 없다 — `enter`가 5라운드 스폰 구성을 한 번에 내려주므로 **라운드 전환에 서버 호출이 없다**(5.2). 이 연출 시간은 **`clearMs`에 포함되지 않는다**(순수 전투 시간만 측정).
 - **클리어 시간은 클라이언트가 잰다.** "첫 라운드 전투 시작"부터 "마지막 보스 처치"까지의 **순수 전투 시간**(라운드 전환 연출 제외)을 측정해 클리어 보고에 담고, 서버는 그 값을 기록으로 삼는다.
-- **제한 시간 10분.** 보고된 클리어 시간이 10분을 넘으면 기록으로 받지 않는다(랭킹 점수 인코딩의 상한 전제 — 4.3).
+- **제한 시간이 없다.** 5라운드를 깨는 데 걸리는 시간에 상한을 두지 않는다 — 실플레이에서 파티는 시간을 다 쓰기 전에 **완주하거나 전멸하거나 둘 중 하나**라 제한 시간이 판정에 관여한 적이 없다. 서버가 보는 시간 상한은 **런 수명(`run_expire_sec`)** 하나뿐이며, 이것은 게임 룰이 아니라 버려진 런을 정리하는 원장 규칙이다(4.1·6.2).
 - **해금**: **Act1 보스 스테이지(진행 순번 10) 클리어 이후** 열린다.
-- **일일 3회 도전.** 날짜 경계는 **서버 KST(UTC+9) 자정**으로 출석부와 같다([출석부 기획서](attendance-기획서.md)). 남은 횟수는 정보 조회로 확인한다.
-- **실패는 보고하지 않는다.** 5라운드를 다 깨지 못하면 클라이언트는 아무것도 보내지 않는다. 그 런은 제한 시간이 지나면 **만료된 것으로 취급**되어 보고할 수 없다(6.2).
+- **도전 횟수에 제한이 없다.** 원하는 만큼 다시 도전해 기록을 갱신할 수 있다 — 도전 자체로는 재화·아이템이 늘지 않으므로(보상이 시즌 순위 보상뿐이라, 아래) 횟수를 조여 얻을 것이 없다.
+- **실패는 보고하지 않는다.** 5라운드를 다 깨지 못하면 클라이언트는 아무것도 보내지 않는다. 그 런은 런 수명이 지나면 **만료된 것으로 취급**되어 보고할 수 없다(6.2).
 - **랭킹**: **주간 시즌**(KST 월요일 00:00 ~ 다음 월요일 00:00)마다 **개인 최고 기록 1건**이 등재된다. 같은 기록이면 **먼저 달성한 쪽이 상위**다. 시즌이 끝나면 **1~3위에게만** 순위 보상이 메일로 발급되고 다음 시즌이 자동으로 시작된다.
 - **보상은 시즌 순위 보상뿐이다.** 라운드별·완주 보상이 없으므로 도전 자체로는 재화·아이템이 늘지 않는다. 1~3위가 받는 것은 **골드**뿐이다(4.1).
 
@@ -60,16 +60,16 @@
 
 **기능 요구사항**
 
-- 보스러시 해금 여부·일일 잔여 횟수·현 시즌·내 최고 기록·진행 중 런을 한 번에 조회한다.
-- 도전 시작 요청은 일일 횟수를 차감하고 런을 개시한다. 5라운드 스폰 구성(몬스터 코드·레벨·마리 수)을 응답에 담는다.
+- 보스러시 해금 여부·현 시즌·내 최고 기록·진행 중 런을 한 번에 조회한다.
+- 도전 시작 요청은 런을 개시한다(횟수 차감이 없다). 5라운드 스폰 구성(몬스터 코드·레벨·마리 수)을 응답에 담는다.
 - 클리어 보고 요청은 **클라이언트가 측정한 시간**을 받아 형식을 검증한 뒤 그대로 기록하고 개인 최고 기록을 갱신한다(보상 지급 없음).
 - 랭킹 조회는 **목록(페이지)** 과 **내 순위**를 별도 엔드포인트로 제공한다.
 - 시즌이 끝나면 **1~3위에게 순위 보상 메일을 발급**하고 다음 시즌을 개시한다.
-- 제한 시간(+그레이스)이 지난 런은 **만료된 것으로 취급**해 클리어 보고를 거부한다(보상 없음).
+- 런 수명(`run_expire_sec`)이 지난 런은 **만료된 것으로 취급**해 클리어 보고를 거부한다(보상 없음).
 
 **비기능 요구사항**
 
-- **기록의 정본은 클라이언트 보고값**이다. 서버는 형식 검증(라운드 누락·중복·합계 일치·제한 시간 상한)만 거쳐 기록하며 **진위를 판정하지 않는다.** 조작 방어는 ①일일 3회 총량 상한 ②사후 관측 로그(`finished_at − started_at`과 보고 기록의 괴리)에 맡긴다.
+- **기록의 정본은 클라이언트 보고값**이다. 서버는 형식 검증(`clearMs` 범위·라운드 누락·중복·합계 일치)만 거쳐 기록하며 **진위를 판정하지 않는다.** 조작 방어는 **사후 관측 로그**(`finished_at − started_at`과 보고 기록의 괴리)에만 맡긴다 — 도전 횟수 상한을 없앴으므로 총량으로 조이는 방어가 없다. 보상이 시즌 순위 보상(골드)뿐이고 순위는 정산 시점에 고정되므로, 이 축소가 재화 경제에 파급되지 않는다.
 - **보상은 시즌 정산에서만 나간다.** 클리어 보고는 기록만 남기므로 보고 내용이 재화·아이템에 영향을 주지 않는다. 순위 보상의 품목·수량은 서버가 마스터로 확정한다.
 - **원자성**: "런 종결 + 최고 기록 갱신"은 하나의 `user_id` 단위 트랜잭션이다. 랭킹 캐시(Redis) 반영은 **커밋 이후**에 한다 — 캐시가 정본을 앞서면 롤백된 기록이 순위에 남는다.
 - **랭킹 정본은 MySQL**, Redis Sorted Set은 **순위 조회 전용 캐시**다. Redis가 비었거나 죽어도 기록은 손실되지 않고, 조회는 MySQL 폴백으로 축소 운전한다(4.3·6.3).
@@ -82,7 +82,7 @@
 
 ### 4.1 마스터 테이블
 
-정적·읽기 전용 정의이며 [마스터 데이터 기획서](master-data/master-data-기획서.md)의 파이프라인(원천 → 서버 인메모리 + 클라 번들)을 그대로 따른다. **아래 테이블 모두 클라이언트 번들에 포함**한다(몬스터 소환·순위 보상 안내·제한 시간 판정이 모두 클라 측에서 필요하다).
+정적·읽기 전용 정의이며 [마스터 데이터 기획서](master-data/master-data-기획서.md)의 파이프라인(원천 → 서버 인메모리 + 클라 번들)을 그대로 따른다. **아래 테이블 모두 클라이언트 번들에 포함**한다(몬스터 소환·라운드 배경·순위 보상 안내가 모두 클라 측에서 필요하다).
 
 #### `boss_rush_master` — 콘텐츠 전역 규칙 (단일 행)
 
@@ -90,14 +90,14 @@
 |---|---|---|
 | `content_id` | int PK | 고정 `1`(콘텐츠 단일) |
 | `round_count` | int | 라운드 수(현재 5 = Act 수) |
-| `time_limit_sec` | int | 클리어 시간 상한(초). **600**(10분). 이 값을 넘는 보고는 기록으로 받지 않는다 |
-| `daily_entry_limit` | int | 일일 도전 횟수. **3** |
 | `unlock_stage_sequence` | int | 해금 요구 진행 순번(`max_stage_cleared` 기준). **10**(Act1 난이도1 보스) |
 | `season_period_days` | int | 시즌 길이(일). **7** |
-| `expire_grace_sec` | int | 제한 시간 경과 후 클리어 보고를 받아 주는 여유(초). **300**. `started_at + time_limit_sec + expire_grace_sec`을 넘긴 런은 만료로 본다(6.2) |
+| `run_expire_sec` | int | **런 수명(초). 1800**(30분). `started_at + run_expire_sec`을 넘긴 런은 만료로 보고 클리어 보고를 거부한다(6.2). 게임 룰로서의 제한 시간이 아니라 **버려진 런을 정리하는 원장 규칙**이며, 동시에 보고 가능한 `clearMs`의 형식 상한이다 |
 | `rank_page_limit` | int | 랭킹 조회 **1페이지 크기 상한**(행). **100**. 조회 가능한 **순위 범위에는 상한이 없다**(5.4) |
 
 > 배치 주기처럼 **운영 파라미터**인 값은 마스터가 아니라 `appsettings`에 둔다(6.4).
+>
+> **제한 시간(`time_limit_sec`)과 일일 도전 횟수(`daily_entry_limit`)를 두지 않는다.** 전자는 실플레이에서 파티가 완주하거나 전멸하거나 둘 중 하나라 판정에 관여한 적이 없고, 후자는 **도전 보상이 없어진 뒤로 조일 대상이 사라졌다**(도전은 재화·아이템을 만들지 않는다). 남은 `run_expire_sec`은 원장 정리용이라 **클라이언트가 이 값으로 전투를 끊지 않는다** — 클라이언트는 전투 시간을 재기만 한다.
 
 #### `boss_rush_round` — 라운드 정의
 
@@ -122,7 +122,7 @@
 - `(round, monster_code)` 복합 PK이며 `round`→`boss_rush_round`, `monster_code`→`monster_master`를 참조한다. **마리 수가 0인 조합은 행을 두지 않는다**(sparse).
 - **보스도 같은 테이블의 `is_boss = 1` 행**이다(`stage_spawn`과 동일 방식).
 - **마스터 검증 대상**: 라운드마다 `is_boss = 1` 행이 **정확히 1개**이고 그 코드는 해당 Act의 보스 코드(`9N99`)여야 하며, 일반 몬스터(`is_boss = 0`)는 그 Act 대역(`9N01`~`9N98`)의 코드여야 한다. `monster_level ≥ 1`·`spawn_count ≥ 1`.
-- **난이도 기준(확정)**: 라운드 `r`은 **Act `r`의 보스 스테이지 한 판**과 같은 세기다. 그래서 **등장 레벨도 그 Act 보스 스테이지(`N-x-10`)와 같은 값**을 쓴다 — 일반 몬스터는 그 지역 `s7~10` 구간 레벨, 보스는 그 Act 보스 레벨([마스터 데이터 값](master-data/master-data-값.md) §9.4·§11-B). **마리 수만** 라운드 총 체력이 유지되도록 따로 잡는다(보스러시는 5라운드를 600초 안에 미는 콘텐츠라 총 체력이 곧 클리어 가능성이다).
+- **난이도 기준(확정)**: 라운드 `r`은 **Act `r`의 보스 스테이지 한 판**과 같은 세기다. 그래서 **등장 레벨도 그 Act 보스 스테이지(`N-x-10`)와 같은 값**을 쓴다 — 일반 몬스터는 그 지역 `s7~10` 구간 레벨, 보스는 그 Act 보스 레벨([마스터 데이터 값](master-data/master-data-값.md) §9.4·§11-B). **마리 수만** 라운드 총 체력이 유지되도록 따로 잡는다(보스러시는 회복 없이 5라운드를 연속으로 미는 콘텐츠라 총 체력이 곧 클리어 가능성이다).
 
   | 라운드 | 구성 | 총 체력 | 최대 공격력 | 그 Act 보스 스테이지 대비 |
   |---|---|---|---|---|
@@ -170,7 +170,7 @@ erDiagram
         bigint  run_id PK "AUTO_INCREMENT"
         bigint  user_id FK "game_player.user_id"
         int     season_id FK "시작 시점 시즌(고정)"
-        bigint  started_at "런 개시 시각(ms) — 일일 횟수·만료 판정 기준"
+        bigint  started_at "런 개시 시각(ms) — 만료 판정·사후 관측 기준"
         bigint  finished_at "종결 시각(ms, 진행 중 0)"
         int     status "1:진행 2:클리어 3:만료"
         int     clear_ms "클라 보고 클리어 시간(ms). 클리어만 유효"
@@ -198,14 +198,14 @@ erDiagram
 | 테이블 | PK / 인덱스 | 범위 |
 |---|---|---|
 | `boss_rush_season` | `season_id` PK, `start_at` 유니크, `(status, end_at)` 인덱스(정산 대상 탐색) | 전역(콘텐츠 시즌) |
-| `boss_rush_run` | `run_id` PK, `(user_id, started_at)` 인덱스(일일 횟수 집계·진행 중 런 조회·내 이력) | 계정 도전 원장 |
+| `boss_rush_run` | `run_id` PK, `(user_id, started_at)` 인덱스(진행 중 런 조회·내 이력) | 계정 도전 원장 |
 | `boss_rush_run_round` | `(run_id, round)` PK | 런의 라운드 기록(자식, 클리어 시 5행) |
 | `boss_rush_record` | `(season_id, user_id)` PK, `(season_id, best_clear_ms, recorded_at)` 인덱스(랭킹 MySQL 폴백·정산 정렬), `(season_id, final_rank)` 인덱스(종료 시즌 랭킹 조회) | 시즌별 계정 최고 기록(랭킹 정본) |
 
 **테이블별 역할**
 
 - **`boss_rush_season`** — 시즌의 정본. `status`를 조건부 갱신으로 전이시켜 정산 배치의 선점 단위로도 쓴다(6.4).
-- **`boss_rush_run`** — 도전 1회의 원장. **일일 횟수 카운터 컬럼을 두지 않는다** — `started_at`이 오늘(KST) 범위인 행 수가 곧 오늘 사용 횟수다. `status`는 3값뿐이며(클리어 보고가 오면 `2`, 만료 판정에 걸리면 `3`) 실패 보고 경로가 없어 "실패" 상태를 두지 않는다. **`3`은 런을 읽는 경로가 lazy하게 기록**하므로 아무도 건드리지 않은 만료 런은 `1`로 남을 수 있는데, 모든 조회 경로가 나이를 함께 보기 때문에 기능상 차이가 없다(6.2). `started_at`·`finished_at`은 **일일 횟수·만료 판정·사후 관측**용 서버 시각이고, 랭킹에 쓰이는 시간은 `clear_ms`(클라 보고)다. 자동 삭제하지 않는다.
+- **`boss_rush_run`** — 도전 1회의 원장. **도전 횟수 제한이 없으므로 카운터 컬럼도, 날짜 경계 개념도 없다** — 행은 그저 "언제 누가 도전했는지"의 기록이다. `status`는 3값뿐이며(클리어 보고가 오면 `2`, 만료 판정에 걸리면 `3`) 실패 보고 경로가 없어 "실패" 상태를 두지 않는다. **`3`은 런을 읽는 경로가 lazy하게 기록**하므로 아무도 건드리지 않은 만료 런은 `1`로 남을 수 있는데, 모든 조회 경로가 나이를 함께 보기 때문에 기능상 차이가 없다(6.2). `started_at`·`finished_at`은 **만료 판정·사후 관측**용 서버 시각이고, 랭킹에 쓰이는 시간은 `clear_ms`(클라 보고)다. 자동 삭제하지 않는다.
 - **`boss_rush_run_round`** — 라운드별 소요 시간(클라 측정). 합계가 `clear_ms`와 일치해야 한다(6.2). **몬스터 구성은 복사하지 않는다** — 그 라운드의 구성(보스 포함)은 `boss_rush_spawn`(마스터)이 정본이고 `round`로 언제든 찾을 수 있으므로, 보스 코드도 원장에 남기지 않는다.
 - **`boss_rush_record`** — 시즌별 개인 최고 기록(랭킹 정본). 기록이 개선될 때만 UPSERT하고 `recorded_at`이 동점 tie-break 축이다. 정산 시 `final_rank`·`rank_reward_mail_id`를 채워 **재정산 멱등성**을 확보한다(채워진 행은 스킵). 행을 삭제하지 않으므로 **지난 시즌 랭킹을 기간 제한 없이 조회**할 수 있고, 그 순위는 `final_rank`로 고정돼 있다(6.3).
 
@@ -221,11 +221,13 @@ erDiagram
 **리더보드** — `rank:bossrush:{seasonId}` (Sorted Set)
 
 - **키**: `rank:bossrush:{seasonId}` — 시즌마다 별도 키. Sorted Set(CloudStructures `RedisSortedSet<long>`), **member = `userId`**.
-- **점수 인코딩**: `score = best_clear_ms × 10^10 + recorded_at(초)`
-  - **오름차순이 곧 순위**다(빠른 기록이 상위). 동점이면 `recorded_at`이 작은 쪽 = **먼저 달성한 쪽이 상위**.
+- **점수 인코딩**: `score = best_clear_ms × 10^7 + (recorded_at − season.start_at)(초)`
+  - **오름차순이 곧 순위**다(빠른 기록이 상위). 동점이면 하위 자리가 작은 쪽 = **먼저 달성한 쪽이 상위**.
   - 인코딩이 필요한 이유: Redis Sorted Set은 점수가 같으면 member(`userId`) 문자열 사전순으로 정렬하므로, tie-break를 점수 안에 넣지 않으면 "먼저 달성한 쪽이 상위"를 표현할 수 없다.
-  - **정밀도 검증**: Redis 점수는 IEEE 754 double이라 정수를 **2^53 ≈ 9.007 × 10^15** 까지 오차 없이 표현한다. `best_clear_ms`는 클리어 시간 상한(600,000ms)을 넘지 않으므로 `6 × 10^5 × 10^10 = 6 × 10^15 < 9.007 × 10^15` ✓. `recorded_at`(초)은 `10^10` 미만이므로 하위 자리를 침범하지 않는다(서기 2286년까지 유효) ✓. **`time_limit_sec`(10분)이 이 인코딩의 전제**이며, 상한을 늘리려면 인코딩 배수를 함께 재검토해야 한다.
-  - **복원**: 표시용 기록 = `floor(score / 10^10)` (ms). 별도 조회 없이 점수만으로 시간을 되돌릴 수 있다.
+  - **tie-break 축은 유닉스초가 아니라 시즌 시작 기준 상대 초**다. 리더보드 키가 시즌마다 분리돼 있어 한 키 안의 비교는 전부 같은 시즌이고, 시즌 길이(7일 = 604,800초)가 `10^7`보다 한참 작아 하위 자리를 넘치지 않는다(정산이 밀려 시즌이 늘어져도 `10^7`초 ≈ 115일까지 여유) ✓.
+  - **정밀도 검증**: Redis 점수는 IEEE 754 double이라 정수를 **2^53 ≈ 9.007 × 10^15** 까지 오차 없이 표현한다. 배수가 `10^7`이므로 `best_clear_ms`는 **약 9.0 × 10^8 ms(≈ 10일)** 까지 안전하며, 실제 상한인 런 수명(`run_expire_sec` 1800초 = 1,800,000ms)의 **500배**다 ✓.
+  - **이 인코딩은 더 이상 클리어 시간 상한에 기대지 않는다.** 종전에는 배수가 `10^10`이라(하위 10자리를 유닉스초에 내줬다) `best_clear_ms`가 600,000ms를 넘으면 정밀도가 깨졌고, **그 제약이 곧 제한 시간의 근거**였다. tie-break를 시즌 상대 초로 바꿔 배수를 `10^7`로 낮추면서 그 결합을 끊었다.
+  - **복원**: 표시용 기록 = `floor(score / 10^7)` (ms), 달성 시각 = `season.start_at + (score mod 10^7)` (초). 별도 조회 없이 점수만으로 되돌릴 수 있으며, 복원에 시즌 시작 시각이 필요하므로 **조회 경로가 리더보드와 시즌 메타를 항상 함께 다룬다**(아래 시즌 메타 캐시).
 - **전 순위 구간을 페이징으로 노출한다**(5.4). `ZRANGE key start stop`은 **O(log N + M)** 이라(N=등재 인원, M=반환 행 수) 오프셋이 깊어져도 비용이 반환 크기에만 비례한다.
 - **정본이 아니다.** Redis는 순위 조회를 위한 **파생 인덱스**이며, 유실되면 MySQL `boss_rush_record`에서 재구축한다(6.3).
 - **TTL**: 진행 중 시즌 키에는 TTL을 두지 않는다. 시즌이 종료되면 정산 배치가 **7일 TTL**을 걸어 과거 키가 무한히 쌓이지 않게 한다(지난 시즌 조회는 그 기간 동안만 캐시로, 이후는 MySQL 폴백).
@@ -261,7 +263,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 > **경로 규약**: 도메인 세그먼트는 kebab-case(`boss-rush`), 액션은 스테이지 도메인과 같은 `enter`/`clear` 짝을 쓴다.
 >
-> **실패 보고 엔드포인트를 두지 않는다.** 5라운드를 못 깨면 클라이언트는 아무것도 보내지 않고, 그 런은 제한 시간이 지나 만료된다(6.2).
+> **실패 보고 엔드포인트를 두지 않는다.** 5라운드를 못 깨면 클라이언트는 아무것도 보내지 않고, 그 런은 런 수명이 지나 만료된다(6.2).
 
 ### 5.1 보스러시 정보 조회 — `POST /api/game/boss-rush/info`
 
@@ -283,33 +285,29 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
     "unlocked": true,
     "unlockStageSequence": 10,
     "maxStageCleared": 73,
-    "dailyEntryLimit": 3,
-    "dailyEntryUsed": 1,
-    "dailyResetAt": 1755576000,
-    "timeLimitMs": 600000,
     "season": { "seasonId": 12, "startAt": 1755450000, "endAt": 1756054800, "status": 1 },
     "myRecord": { "bestClearMs": 214380, "recordedAt": 1755470912, "rank": 37 },
-    "activeRun": { "runId": 9912, "startedAt": 1755561240, "expiresAt": 1755562140 }
+    "activeRun": { "runId": 9912, "startedAt": 1755561240, "expiresAt": 1755563040 }
   }
 }
 ```
 
 - `unlocked`: `maxStageCleared >= unlockStageSequence`. `false`면 클라이언트는 진입 버튼을 잠그고 해금 조건을 안내한다.
-- `dailyEntryUsed`: 오늘(KST) `started_at`이 찍힌 런 수. `dailyResetAt`은 다음 KST 자정.
+- **도전 횟수·제한 시간 필드가 없다.** 횟수 제한이 없어졌으므로 잔여 횟수(`dailyEntryUsed`·`dailyEntryLimit`·`dailyResetAt`)를 내려줄 것이 없고, 제한 시간(`timeLimitMs`)도 없다 — 진입 화면은 해금 여부와 내 기록만 그린다.
 - `myRecord`: 현 시즌 개인 최고 기록. 기록이 없으면 `null`. `rank`는 랭킹 캐시(`ZRANK`+1)로 얻으며, Redis 폴백 시에는 `null`로 내려 UI가 "순위 계산 불가"를 표시한다.
-- `activeRun`: **아직 만료되지 않은** 진행 중 런(없으면 `null`). `expiresAt = startedAt + time_limit_sec + expire_grace_sec`이며, 이 시각이 지난 런은 서버가 만료로 보고 `null`로 내려준다.
+- `activeRun`: **아직 만료되지 않은** 진행 중 런(없으면 `null`). `expiresAt = startedAt + run_expire_sec`이며, 이 시각이 지난 런은 서버가 만료로 보고 `null`로 내려준다. 이 값은 **전투를 끊는 타이머가 아니라** 보고가 아직 받아들여지는 구간을 알리는 값이다.
 - 오류: `SaveNotFound(2001)`(세이브 없음), `MasterDataNotLoaded(10001)`.
 
 ### 5.2 도전 시작 — `POST /api/game/boss-rush/enter`
 
-일일 횟수를 차감하고 런을 개시한다. 응답의 `runId`가 이후 클리어 보고의 키다.
+런을 개시한다(차감할 횟수가 없다). 응답의 `runId`가 이후 클리어 보고의 키다.
 
 **Request**
 ```json
 { "userId": 1, "token": "...", "data": {} }
 ```
 
-- 요청에 **파라미터가 없다.** 라운드 구성·제한 시간·난이도는 전부 마스터 값이며 클라이언트가 고를 수 없다.
+- 요청에 **파라미터가 없다.** 라운드 구성·난이도는 전부 마스터 값이며 클라이언트가 고를 수 없다.
 
 **Response (성공, 200 OK)**
 ```json
@@ -320,7 +318,6 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
   "data": {
     "runId": 9913,
     "seasonId": 12,
-    "timeLimitMs": 600000,
     "rounds": [
       {
         "round": 1,
@@ -340,9 +337,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
         ],
         "boss": { "monsterCode": 9199, "monsterLevel": 1 }
       }
-    ],
-    "dailyEntryUsed": 2,
-    "dailyEntryLimit": 3
+    ]
   }
 }
 ```
@@ -351,10 +346,10 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - `monsters[]`: 그 라운드의 **일반 몬스터와 등장 레벨·마리 수**(`monsterCode`·`monsterLevel`·`count`). `boss`: 그 라운드의 **보스와 등장 레벨**. 서버가 `boss_rush_spawn`을 `is_boss`로 갈라 두 필드로 내려준다(스테이지 진입의 `monsters`/`boss` 규약과 동일).
 - **스탯은 내려주지 않는다** — 클라이언트가 마스터 번들의 레벨 1 기준값(`monster_master.hp`·`attack`)에 레벨 배율을 곱해 산출한다.
 - `backgroundType`: 그 라운드의 배경 타입(`boss_rush_round.background_type`) — Act `r`의 스테이지 배경과 같은 값이다. 라운드 전환의 포탈 이동 연출은 클라이언트가 이 목록만으로 재생한다(2장).
-- `timeLimitMs`: 클라이언트가 제한 시간 게이지를 그리고 **초과 판정을 직접** 하는 기준. 서버는 보고된 값이 이 상한을 넘는지만 다시 본다.
-- **`startedAt`은 내려주지 않는다.** `started_at`은 서버가 일일 횟수 집계·만료 판정·사후 관측에 쓰는 내부 값이며(4.2), 진행 중 런의 잔여 시간은 `info`(5.1)의 `activeRun`이 알려 준다.
-- **기존 진행 중 런이 있으면 자동으로 만료 종결**한 뒤 새 런을 시작한다(6.5). 종결된 런은 보상 없이 `status=3`이 되고 **이미 소모된 일일 횟수는 돌려주지 않는다.**
-- 오류: `BossRushLocked(13001)`, `BossRushDailyLimitExceeded(13002)`, `BossRushSeasonClosed(13007)`, `SaveNotFound(2001)`, `MasterDataNotLoaded(10001)`.
+- **`timeLimitMs`를 내려주지 않는다.** 제한 시간이 없으므로 클라이언트는 시간을 **재기만 하고 끊지 않는다** — 도전은 5라운드를 다 깨거나 파티가 전멸할 때 끝난다.
+- **`startedAt`은 내려주지 않는다.** `started_at`은 서버가 만료 판정·사후 관측에 쓰는 내부 값이며(4.2), 진행 중 런이 언제까지 보고 가능한지는 `info`(5.1)의 `activeRun.expiresAt`이 알려 준다.
+- **기존 진행 중 런이 있으면 자동으로 만료 종결**한 뒤 새 런을 시작한다(6.5). 종결된 런은 보상 없이 `status=3`이 되며, 잃는 것은 그 런의 진행뿐이다(차감된 횟수가 없다).
+- 오류: `BossRushLocked(13001)`, `BossRushSeasonClosed(13007)`, `SaveNotFound(2001)`, `MasterDataNotLoaded(10001)`.
 
 ### 5.3 클리어 보고 — `POST /api/game/boss-rush/clear`
 
@@ -380,6 +375,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 - `clearMs`: **클라이언트가 측정한 총 클리어 시간**(ms). 첫 라운드 전투 시작부터 마지막 보스 처치까지의 순수 전투 시간이며, **이 값이 곧 랭킹 점수**다.
 - `rounds[].elapsedMs`: 라운드별 소요(누적이 아니라 라운드별). `round_count`(5)개가 1~5 전부 있어야 하고, **합계가 `clearMs`와 일치해야 한다.**
+- **`clearMs`에 게임 룰상의 상한이 없다.** 서버가 보는 유일한 상한은 **런 수명(`run_expire_sec`)** 이며, 런이 열려 있던 시간보다 긴 클리어 시간은 자기모순이라 형식 검증에서 걸러진다(6.2).
 
 **Response (성공, 200 OK)**
 ```json
@@ -400,7 +396,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 - `isNewRecord`: 이번 기록이 시즌 개인 최고를 갱신했는지. `bestClearMs`는 갱신 후 최고 기록, `rank`는 갱신 후 순위(Redis 폴백 시 `null`).
 - **재화·아이템을 지급하지 않으므로 `rewards`·`characters`·`balance`·`inventoryDelta`가 없다.** 이 호출이 바꾸는 것은 런 상태와 시즌 최고 기록뿐이다.
-- 오류: `BossRushRunNotFound(13003)`, `BossRushRunAlreadyFinished(13004)`, `BossRushTimeout(13005)`, `BossRushInvalidProgress(13006)`, `InvalidRequest(1006)`(`clearMs`·`rounds` 형식 오류).
+- 오류: `BossRushRunNotFound(13003)`, `BossRushRunAlreadyFinished(13004)`, `BossRushInvalidProgress(13006)`, `InvalidRequest(1006)`(`clearMs`·`rounds` 형식 오류).
 
 ### 5.4 랭킹 목록 조회 — `POST /api/game/boss-rush/rank`
 
@@ -497,14 +493,12 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
      if gp.max_stage_cleared < m.unlock_stage_sequence: BossRushLocked(13001)
   3) season = boss_rush_season[status = 1]          # 진행 중 시즌
      if season is null: BossRushSeasonClosed(13007) # 정산 중이면 잠시 후 재시도
-  4) 오늘(KST) 사용 횟수 = count(boss_rush_run where user_id = ? and started_at in [오늘0시, 내일0시))
-     if 사용 횟수 >= m.daily_entry_limit: BossRushDailyLimitExceeded(13002)
-  5) 진행 중 런이 있으면 자동 만료 종결(status = 3, 보상 없음)   # 나이와 무관하게 정리
-  6) INSERT boss_rush_run(user_id, season_id, started_at = now_ms, status = 1)
-COMMIT → { runId, seasonId, timeLimitMs, rounds(boss_rush_round + boss_rush_spawn), dailyEntryUsed }
+  4) 진행 중 런이 있으면 자동 만료 종결(status = 3, 보상 없음)   # 나이와 무관하게 정리
+  5) INSERT boss_rush_run(user_id, season_id, started_at = now_ms, status = 1)
+COMMIT → { runId, seasonId, rounds(boss_rush_round + boss_rush_spawn) }
 ```
 
-- **일일 횟수 차감의 정본은 런 INSERT 그 자체**다(별도 카운터 없음). 4)의 카운트와 6)의 INSERT가 같은 트랜잭션·같은 `user_id` 잠금 안에 있어 동시 요청이 한도를 넘기지 못한다.
+- **횟수 검증 단계가 없다.** 도전 횟수에 상한이 없으므로 세는 것도, 차감하는 것도 없다. 그래도 `user_id` 잠금은 유지한다 — 4)의 자동 만료 종결과 5)의 INSERT가 같은 잠금 안에 있어야 **동시 `enter` 두 건이 진행 중 런을 두 개 만들지 않는다.**
 
 ### 6.2 클리어 보고 처리
 
@@ -513,13 +507,13 @@ COMMIT → { runId, seasonId, timeLimitMs, rounds(boss_rush_round + boss_rush_sp
   1) run = boss_rush_run[runId]  (SELECT ... FOR UPDATE)
      if run is null or run.user_id != userId: BossRushRunNotFound(13003)
      if run.status != 1:                      BossRushRunAlreadyFinished(13004)
-     # 만료 판정(읽는 시점) — 제한 시간 + 그레이스를 넘긴 런은 더 이상 보고할 수 없다
-     if run.started_at + (m.time_limit_sec + m.expire_grace_sec) × 1000 < now_ms:
+     # 만료 판정(읽는 시점) — 런 수명을 넘긴 런은 더 이상 보고할 수 없다
+     if run.started_at + m.run_expire_sec × 1000 < now_ms:
          UPDATE boss_rush_run SET status = 3, finished_at = now_ms WHERE run_id = ? AND status = 1
          COMMIT; return BossRushRunAlreadyFinished(13004)
   2) 형식 검증(진위 판정 아님):
      - clearMs > 0                                                아니면 InvalidRequest(1006)
-     - clearMs <= m.time_limit_sec × 1000                          아니면 BossRushTimeout(13005)
+     - clearMs <= m.run_expire_sec × 1000                          아니면 BossRushInvalidProgress(13006)
      - rounds가 1..round_count 전부, 중복 없음, elapsedMs > 0       아니면 BossRushInvalidProgress(13006)
      - sum(rounds.elapsedMs) == clearMs                            아니면 BossRushInvalidProgress(13006)
   3) 종결(조건부 갱신): UPDATE boss_rush_run SET status = 2, finished_at = now_ms, clear_ms = clearMs
@@ -534,15 +528,15 @@ COMMIT → { runId, seasonId, timeLimitMs, rounds(boss_rush_round + boss_rush_sp
            # 런의 시즌이 더 이상 진행 중이 아니면 이 단계를 생략한다(6.5)
 COMMIT
   5) 커밋 이후(랭킹 반영·순위 산출):                                    # ★ 커밋 후
-     if isNewRecord: ZADD rank:bossrush:{seasonId} score(bestClearMs, recordedAt) userId
+     if isNewRecord: ZADD rank:bossrush:{seasonId} score(bestClearMs, recordedAt − season.start_at) userId
      rank = ZRANK rank:bossrush:{seasonId} userId + 1                  # 갱신 후 상태에서 순위 계산
      (Redis 접근 실패 시 rank = null — 기록은 이미 확정되어 있다)
 → { clearMs, isNewRecord, bestClearMs, rank }
 ```
 
 - **2)는 형식·자기정합성 검증뿐이다.** 보고된 시간의 진위는 판정하지 않는다. 합계 불일치는 클라이언트 버그로 보고 기록을 남기지 않는다.
-- **`BossRushTimeout(13005)`은 런을 종결시키지 않는다** — 클라이언트가 값을 잘못 계산했다면 그레이스 구간 안에서는 재보고가 통해야 한다.
-- **만료 판정은 배치가 아니라 이 경로(1단계)가 한다.** 제한 시간 + 그레이스를 넘긴 런은 여기서 `status = 3`으로 종결하고 보고를 거부한다(**lazy 만료**) — 만료된 런에는 반송할 자산이 없어 배치가 할 일이 컬럼 정리뿐이고, 오래된 런으로 보상을 청구하는 경로만 막으면 충분하다(거래소의 만료 판정 규약과 동일, [거래소 기획서](trade-기획서.md) 7.6). `enter`(6.1 5단계)와 `info`(5.1 `activeRun`)도 같은 기준으로 나이를 본다.
+- **`clearMs` 상한은 게임 룰이 아니라 자기정합성 검사다.** 런이 열려 있던 시간(`run_expire_sec`)보다 긴 클리어 시간은 그 자체로 앞뒤가 맞지 않으므로 `BossRushInvalidProgress(13006)`로 묶는다. 이 검사는 **런을 종결시키지 않는다** — 클라이언트가 값을 잘못 계산했다면 런 수명 안에서는 재보고가 통해야 한다. 동시에 이 상한이 **랭킹 점수 인코딩의 안전 여유**를 보장한다(4.3).
+- **만료 판정은 배치가 아니라 이 경로(1단계)가 한다.** 런 수명을 넘긴 런은 여기서 `status = 3`으로 종결하고 보고를 거부한다(**lazy 만료**) — 만료된 런에는 반송할 자산이 없어 배치가 할 일이 컬럼 정리뿐이고, 오래된 런으로 보상을 청구하는 경로만 막으면 충분하다(거래소의 만료 판정 규약과 동일, [거래소 기획서](trade-기획서.md) 7.6). `enter`(6.1 5단계)와 `info`(5.1 `activeRun`)도 같은 기준으로 나이를 본다.
 - **3)의 사후 관측은 판정에 쓰이지 않는다.** `finished_at − started_at`(서버가 본 왕복 경과)과 `clearMs`의 괴리를 로그로 남겨 이상치 분포를 관측한다.
 - **순위 산출 순서는 "MySQL 확정 → Redis 갱신 → `ZRANK`"** 다. **5)는 반드시 커밋 이후**여야 한다(트랜잭션 안에서 ZADD하면 롤백된 기록이 랭킹에 남고 Redis에는 롤백이 없다).
 - **기록을 갱신하지 못했어도 `rank`는 내려준다.** `isNewRecord`가 `false`면 ZADD만 건너뛰고 `ZRANK`는 수행하므로 `rank`는 항상 **기존 최고 기록 기준 현재 순위**다.
@@ -552,7 +546,7 @@ COMMIT
 - **정본은 MySQL `boss_rush_record`.** 기록 등재는 클리어 트랜잭션 안에서 조건부 UPSERT로 확정되므로, Redis가 죽어 있어도 기록이 유실되지 않는다.
 - **Redis Sorted Set은 순위 조회 전용 파생 인덱스.** MySQL로 순위를 세면 `COUNT(*) WHERE best_clear_ms < ?` 스캔이 등재 인원에 비례해 무거워지지만 `ZRANK`는 O(log N)이다.
 - **정상 경로의 랭킹 조회는 Redis 단독이다.** 목록(5.4)은 `ZRANGE ... WITHSCORES` + `ZCARD` + `HMGET player:nickname`, 내 순위(5.5)는 `ZRANK` + `ZSCORE` + `ZCARD` + `HMGET`(1 field)로 끝난다. 시즌 메타는 `bossrush:season:current`에서 읽는다(4.3). **MySQL은 캐시 미스·폴백·종료 시즌 조회에서만** 개입한다.
-- **캐시 워밍업**: GameServer 기동 시(그리고 시즌 전환 직후) `EXISTS rank:bossrush:{현시즌}`을 확인하고 없으면 `boss_rush_record`를 페이지 단위로 읽어 ZADD로 재구축하며, `bossrush:season:current`도 같은 시점에 `boss_rush_season`에서 적재한다. 이 작업은 **Redis 리더 락**으로 1인스턴스만 수행한다(scale-out 시 중복 재구축 방지). **닉네임 캐시는 워밍업 대상이 아니다** — lazy로 채워진다(4.3).
+- **캐시 워밍업**: GameServer 기동 시(그리고 시즌 전환 직후) `EXISTS rank:bossrush:{현시즌}`을 확인하고 없으면 `boss_rush_record`를 페이지 단위로 읽어 ZADD로 재구축하며(점수 인코딩에 그 시즌의 `start_at`이 필요하므로 시즌 행을 함께 들고 있는다, 4.3), `bossrush:season:current`도 같은 시점에 `boss_rush_season`에서 적재한다. 이 작업은 **Redis 리더 락**으로 1인스턴스만 수행한다(scale-out 시 중복 재구축 방지). **닉네임 캐시는 워밍업 대상이 아니다** — lazy로 채워진다(4.3).
 - **폴백(축소 운전)**: Redis 접근이 실패하면 랭킹 조회를 MySQL로 처리한다 — `SELECT ... ORDER BY best_clear_ms, recorded_at LIMIT ? OFFSET ?`가 `(season_id, best_clear_ms, recorded_at)` 인덱스를 그대로 타므로 정렬·필터가 인덱스 안에서 끝난다. 내 순위는 `COUNT(*) WHERE (best_clear_ms, recorded_at) < (내 값)` + 1로 계산한다. 응답 `source=2`로 알린다.
 - **종료된 시즌은 순위를 재계산하지 않는다.** 정산이 `final_rank`를 확정해 뒀으므로 `ORDER BY final_rank`로 그대로 읽는다(`(season_id, final_rank)` 인덱스). 그래서 지난 시즌 랭킹은 **캐시 TTL이 지난 뒤에도 기간 제한 없이** 조회되며, 값은 정산 시점에 고정된 최종 순위다.
   - **폴백에서만 깊은 오프셋이 비싸다**(`OFFSET`은 건너뛸 행을 실제로 읽는다). 그래도 조회 범위를 제한하지 않으며, 규모가 커져 문제가 되면 **폴백 경로에만** keyset 페이징을 얹는다.
@@ -592,9 +586,9 @@ COMMIT
 
 ### 6.5 예외 / 엣지 케이스
 
-- **진행 중 런이 남은 상태로 재접속**: 정보 조회의 `activeRun`으로 상태를 알린다. 유저는 이어서 도전하거나(제한 시간 안이면) 그냥 새로 `enter`를 부르면 되고, 후자의 경우 남은 런이 자동 만료 종결된다(일일 횟수는 회복되지 않는다).
-- **클리어했는데 보고가 실패(네트워크 끊김)**: `expire_grace_sec`(300초) 안이면 **재시도가 그대로 성공한다**. 그 구간을 넘기면 만료 판정에 걸려 기록·보상이 남지 않는다.
-- **시즌 경계에 걸친 런**: 런의 `season_id`는 **시작 시점 시즌으로 고정**된다. `clear` 시 그 시즌이 이미 진행 중이 아니면 **기록 등재를 생략**한다(응답의 `isNewRecord`는 `false`, `rank`는 `null`). 제한 시간 + 그레이스가 10분 15초라 이 경합은 시즌 경계 직전에 시작한 런에만 생긴다.
+- **진행 중 런이 남은 상태로 재접속**: 정보 조회의 `activeRun`으로 상태를 알린다. 유저는 이어서 도전하거나(런 수명 안이면) 그냥 새로 `enter`를 부르면 되고, 후자의 경우 남은 런이 자동 만료 종결된다 — 횟수 차감이 없으므로 유저가 잃는 것이 없다.
+- **클리어했는데 보고가 실패(네트워크 끊김)**: 런 수명(`run_expire_sec` 30분) 안이면 **재시도가 그대로 성공한다**. 그 구간을 넘기면 만료 판정에 걸려 기록이 남지 않는다 — 다시 도전하면 되고, 횟수를 잃지도 않는다.
+- **시즌 경계에 걸친 런**: 런의 `season_id`는 **시작 시점 시즌으로 고정**된다. `clear` 시 그 시즌이 이미 진행 중이 아니면 **기록 등재를 생략**한다(응답의 `isNewRecord`는 `false`, `rank`는 `null`). 런 수명이 30분이라 이 경합은 시즌 경계 30분 전 이후에 시작한 런에만 생긴다.
 - **동시 중복 `clear`**: 조건부 상태 전이(`status=1`일 때만)의 행 잠금으로 직렬화 — 뒤에 온 요청은 0행을 받아 `BossRushRunAlreadyFinished(13004)`가 되고 기록이 이중 처리되지 않는다.
 - **파티 구성 변경**: 런 도중 파티를 바꿔도 서버는 막지 않는다(전투는 클라 권위). 보상이 없으므로 파티 구성이 서버 처리에 영향을 주지 않는다.
 - **페이징 중 랭킹이 갱신되는 경우**: 리더보드의 변화는 **기록 개선(score 감소 = 상위 이동)** 과 **신규 등재**뿐이라(기록 악화·삭제가 없다) 언제나 "누군가 위로 올라가고 그 사이가 한 칸 밀리는" 형태다. 예를 들어 1~50위를 본 뒤 60위 유저가 20위로 올라가면, 50위였던 유저가 51위로 밀려 **다음 페이지에 다시 나오고**(중복) 20위가 된 유저는 이미 지나친 구간에 있어 **한 번도 보이지 않는다**(누락). 서버는 페이지 간 스냅샷을 보장하지 않는다 — 각 페이지는 `ZRANGE` 단일 명령의 원자적 결과이지만 페이지끼리 시점이 다르다. **페이지 교체형 UI**(5.4)에서는 순위 번호가 항상 연속이라 이 불일치가 사용자에게 드러나지 않으며, 반드시 정확해야 하는 내 순위는 `my-rank`(5.5)가 따로 보장한다.
@@ -607,16 +601,18 @@ COMMIT
 | 이름 | 값 | 의미 |
 |---|---|---|
 | BossRushLocked | 13001 | 해금 조건 미달(`max_stage_cleared < unlock_stage_sequence`) |
-| BossRushDailyLimitExceeded | 13002 | 오늘 도전 횟수를 모두 사용함 |
+| ~~BossRushDailyLimitExceeded~~ | ~~13002~~ | **폐기** — 도전 횟수 제한을 없애 발생 경로가 사라졌다. **번호는 재사용하지 않는다** |
 | BossRushRunNotFound | 13003 | 그 `runId`의 런이 없거나 본인 런이 아님 |
 | BossRushRunAlreadyFinished | 13004 | 이미 종결된 런(중복 보고 · 동시 요청의 패자 · 만료된 런) |
-| BossRushTimeout | 13005 | 보고된 `clearMs`가 제한 시간(10분)을 넘음 |
-| BossRushInvalidProgress | 13006 | 라운드 보고가 형식·자기정합성 검증에 실패(누락·중복·합계가 `clearMs`와 불일치) |
+| ~~BossRushTimeout~~ | ~~13005~~ | **폐기** — 제한 시간을 없애 발생 경로가 사라졌다(런 수명 초과는 자기정합성 실패로 13006에 흡수). **번호는 재사용하지 않는다** |
+| BossRushInvalidProgress | 13006 | 클리어 보고가 형식·자기정합성 검증에 실패(`clearMs`가 런 수명 초과 · 라운드 누락·중복 · 합계가 `clearMs`와 불일치) |
 | BossRushSeasonClosed | 13007 | 진행 중 시즌이 없음(정산 중) 또는 존재하지 않는 `seasonId` |
+
+- **폐기한 두 코드는 `ErrorCode.cs`에서 지우지 않고 남긴다.** 숫자 값이 클라이언트와 공유하는 계약이라 번호를 비워 두는 편이 안전하고, 지우면 옛 클라이언트가 받은 값을 해석할 수 없다. 서버는 더 이상 이 값을 반환하지 않는다.
 
 - **재사용하는 기존 코드**: `SaveNotFound(2001)`, `InvalidRequest(1006)`, `MasterDataNotLoaded(10001)`. 보스러시 API는 재화·아이템을 지급하지도 소모하지도 않으므로 `InventoryFull(4002)`·`InsufficientCurrency(4005)`를 쓰지 않는다.
 - **순위 보상 수령 실패는 메일 도메인 코드**(`MailNotFound(8001)`·`MailAlreadyClaimed(8002)`·`MailExpired(8003)`)를 따른다. 순위 보상은 **골드뿐**이라 가방 칸을 쓰지 않으므로 수령 단계에서도 `InventoryFull(4002)`은 발생하지 않는다.
-- **클라이언트 대응**: `BossRushTimeout(13005)`은 정상적인 실패(다시 도전 안내), `BossRushInvalidProgress(13006)`은 클라이언트 버그(재시도 안내 없이 오류 표시 + 서버 Warning 로그).
+- **클라이언트 대응**: `BossRushInvalidProgress(13006)`은 **클라이언트 버그**다(보고값이 내부적으로 앞뒤가 안 맞음) — 재시도 안내 없이 오류를 표시하고 서버는 Warning 로그를 남긴다. 도전 실패(전멸)는 애초에 서버로 보고하지 않으므로 에러 코드가 없다.
 
 ## 8. 미결 사항 / TODO
 

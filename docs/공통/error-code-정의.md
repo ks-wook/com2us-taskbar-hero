@@ -190,17 +190,18 @@
 | 이름 | 값 | 의미 |
 |---|---|---|
 | BossRushLocked | 13001 | 해금 조건 미달(`max_stage_cleared < unlock_stage_sequence`) |
-| BossRushDailyLimitExceeded | 13002 | 오늘 도전 횟수를 모두 사용함 |
+| ~~BossRushDailyLimitExceeded~~ | ~~13002~~ | **폐기** — 도전 횟수 제한 제거로 발생 경로 소멸. 번호 재사용 금지 |
 | BossRushRunNotFound | 13003 | 그 `runId`의 런이 없거나 본인 런이 아님 |
 | BossRushRunAlreadyFinished | 13004 | 이미 종결된 런(중복 보고 · 동시 요청의 패자 · 만료된 런) |
-| BossRushTimeout | 13005 | 보고된 `clearMs`가 제한 시간(10분)을 넘음 |
-| BossRushInvalidProgress | 13006 | 라운드 보고가 형식·자기정합성 검증에 실패(누락·중복·합계가 `clearMs`와 불일치) |
+| ~~BossRushTimeout~~ | ~~13005~~ | **폐기** — 제한 시간 제거로 발생 경로 소멸(런 수명 초과는 13006에 흡수). 번호 재사용 금지 |
+| BossRushInvalidProgress | 13006 | 클리어 보고가 형식·자기정합성 검증에 실패(`clearMs`가 런 수명 초과 · 라운드 누락·중복 · 합계가 `clearMs`와 불일치) |
 | BossRushSeasonClosed | 13007 | 진행 중 시즌이 없음(시즌 정산 중) 또는 존재하지 않는 `seasonId` |
 
 - 보스러시는 **도메인 4.12**이지만 블록 규약(도메인 4.N → N000)의 `12000`번대를 가챠가 이미 쓰고 있어(가챠는 4.11이나 `11000`번대를 공통/시스템이 선점해 12000으로 밀렸다) **13000번대**를 할당했다.
 - 재사용: 세이브 없음은 `SaveNotFound(2001)`, 요청 필드 형식 오류는 `InvalidRequest(1006)`, 마스터 미로드는 `MasterDataNotLoaded(10001)`.
 - **보스러시는 아이템을 지급하지도 재화를 소모하지도 않는다** — 클리어 보상이 골드·경험치뿐이라 `InventoryFull(4002)`·`InsufficientCurrency(4005)`가 발생하지 않는다. 아이템은 **시즌 순위 보상 메일**로만 지급되므로, 그 수령 단계의 오류는 메일 도메인 코드(`MailNotFound(8001)`·`MailAlreadyClaimed(8002)`·`MailExpired(8003)`·`InventoryFull(4002)`)를 따른다.
-- **`BossRushTimeout(13005)`과 `BossRushInvalidProgress(13006)`은 대응이 다르다.** 전자는 정상적인 실패(제한 시간을 넘겼으니 다시 도전 안내), 후자는 **클라이언트 버그**(보고값이 내부적으로 앞뒤가 안 맞음)이므로 재시도 안내 없이 오류를 표시하고 서버는 Warning 로그를 남긴다.
+- **`BossRushInvalidProgress(13006)`은 클라이언트 버그다.** 보고값이 내부적으로 앞뒤가 안 맞는 경우(런이 열려 있던 시간보다 긴 `clearMs`, 라운드 누락·중복, 합계 불일치)이므로 재시도 안내 없이 오류를 표시하고 서버는 Warning 로그를 남긴다. 도전 실패(전멸)는 애초에 서버로 보고하지 않아 에러 코드가 없다.
+- **폐기한 `13002`·`13005`는 `ErrorCode.cs`에서 지우지 않는다.** 숫자 값이 클라이언트와 공유하는 계약이라 번호를 비워 두는 편이 안전하며(지우면 옛 클라이언트가 받은 값을 해석할 수 없다), 서버는 더 이상 이 값을 반환하지 않는다.
 
 ## 3. `TaskbarHero.Common/ErrorCode.cs` 반영안
 
@@ -308,10 +309,10 @@ namespace TaskbarHero.Common
 
         // 보스러시 / 랭킹 (13000번대 — 도메인 4.12이나 12000번대를 가챠가 선점해 13000번대 할당)
         BossRushLocked = 13001,
-        BossRushDailyLimitExceeded = 13002,
+        BossRushDailyLimitExceeded = 13002,   // 폐기: 도전 횟수 제한 제거로 발생 경로 소멸(번호 재사용 금지)
         BossRushRunNotFound = 13003,
         BossRushRunAlreadyFinished = 13004,
-        BossRushTimeout = 13005,
+        BossRushTimeout = 13005,              // 폐기: 제한 시간 제거로 발생 경로 소멸(번호 재사용 금지)
         BossRushInvalidProgress = 13006,
         BossRushSeasonClosed = 13007,
     }

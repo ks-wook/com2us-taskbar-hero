@@ -422,11 +422,9 @@ def export_boss_rush(conn):
     return [{
         "contentId": _i(r["content_id"]),
         "roundCount": _i(r["round_count"]),
-        "timeLimitSec": _i(r["time_limit_sec"]),
-        "dailyEntryLimit": _i(r["daily_entry_limit"]),
         "unlockStageSequence": _i(r["unlock_stage_sequence"]),
         "seasonPeriodDays": _i(r["season_period_days"]),
-        "expireGraceSec": _i(r["expire_grace_sec"]),
+        "runExpireSec": _i(r["run_expire_sec"]),
         "rankPageLimit": _i(r["rank_page_limit"]),
     } for r in rows]
 

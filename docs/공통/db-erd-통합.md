@@ -70,7 +70,7 @@
 | MySQL (Account DB) | `AccountServer` | 계정·인증 토큰 영속 저장 |
 | Redis | `AccountServer` 발급 / `GameServer` 검증 | 인증 토큰 캐시(`auth:token:{userId}`) — **필수 의존**(없으면 인증 불가) |
 | Redis | `GameServer` | 배치 리더 락(`batch:lock:{배치키}`) — 거래 만료·메일 GC·보스러시 시즌 정산 등 주기 배치의 중복 실행 방지 |
-| Redis | `GameServer` | **보스러시 랭킹 리더보드**(`rank:bossrush:{seasonId}`, Sorted Set) — 시즌 순위 조회 전용 **파생 인덱스**. 정본은 MySQL `boss_rush_record`이며 ZADD는 커밋 이후에만 하고, 유실 시 기동 워밍업으로 재구축·장애 시 MySQL 정렬 조회로 폴백한다. `ZRANK`(내 순위)·`ZRANGE`(페이지)가 O(log N + M)이라 **전체 등재 유저를 순위 상한 없이 페이징**할 수 있다([보스러시 기획서](../세부/boss-rush-기획서.md) 4.3·6.3) |
+| Redis | `GameServer` | **보스러시 랭킹 리더보드**(`rank:bossrush:{seasonId}`, Sorted Set, 점수 = `clearMs × 10^7 + (recordedAt − season.start_at)`) — 시즌 순위 조회 전용 **파생 인덱스**. 정본은 MySQL `boss_rush_record`이며 ZADD는 커밋 이후에만 하고, 유실 시 기동 워밍업으로 재구축·장애 시 MySQL 정렬 조회로 폴백한다. `ZRANK`(내 순위)·`ZRANGE`(페이지)가 O(log N + M)이라 **전체 등재 유저를 순위 상한 없이 페이징**할 수 있다([보스러시 기획서](../세부/boss-rush-기획서.md) 4.3·6.3) |
 | Redis | `GameServer` | **보스러시 조회 캐시 2종** — `player:nickname`(Hash, `userId`→`nickname`, TTL 없음, **lazy 채움**·정본은 `game_player.nickname`)과 `bossrush:season:current`(Hash, `seasonId`·`startAt`·`endAt`·`status`, 시즌 정산 배치가 갱신·정본은 `boss_rush_season`). 이 둘이 있어 **현재 시즌 랭킹 조회는 정상 경로에서 MySQL을 건드리지 않는다**(같은 문서 4.3) |
 | MySQL (Game DB) | `GameServer` | 플레이어 진행 세이브 데이터. **가방 조회(`inventory/list`)를 포함한 개인 데이터 읽기에는 캐시를 두지 않는다** — `(user_id, slot)` 인덱스 keyset 질의로 직접 읽는다([인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 6.5). **유일한 캐시 예외는 보스러시 랭킹**이다 — 순위는 "정렬된 전체 집합에서의 위치"라 개인 행 조회로 답할 수 없어 Redis Sorted Set을 파생 인덱스로 둔다 |
 | 인메모리 캐시(원천 CSV/JSON) | `GameServer` | 마스터(정적 기획) 데이터. 관계형 영속 테이블이 아닌 읽기 전용 정의 |
@@ -297,7 +297,7 @@ erDiagram
         bigint  run_id PK "AUTO_INCREMENT"
         bigint  user_id FK "game_player.user_id"
         int     season_id FK "시작 시점 시즌(고정)"
-        bigint  started_at "런 개시 시각(ms) — 일일 횟수·만료 판정 기준"
+        bigint  started_at "런 개시 시각(ms) — 만료 판정·사후 관측 기준"
         bigint  finished_at "종결 시각(ms, 진행 중 0)"
         int     status "1:진행 2:클리어 3:만료"
         int     clear_ms "클라 보고 클리어 시간(ms). 클리어만 유효"
@@ -340,7 +340,7 @@ erDiagram
 | `player_gacha_pull` | `pull_id` PK, `(user_id, pull_id)` 인덱스(전체 기록 최신순 커서 페이징), `(user_id, gacha_code, pull_id)` 인덱스(가챠별 필터) | 계정 뽑기 원장(부모) |
 | `player_gacha_pull_item` | `(pull_id, seq)` PK | 뽑기 결과(자식, 1연 1행·10연 10행) |
 | `boss_rush_season` | `season_id` PK, `start_at` 유니크, `(status, end_at)` 인덱스(정산 대상 탐색) | 전역(콘텐츠 시즌) |
-| `boss_rush_run` | `run_id` PK, `(user_id, started_at)` 인덱스(일일 횟수 집계·진행 중 런 조회·내 이력) | 계정 도전 원장 |
+| `boss_rush_run` | `run_id` PK, `(user_id, started_at)` 인덱스(진행 중 런 조회·내 이력) | 계정 도전 원장 |
 | `boss_rush_run_round` | `(run_id, round)` PK | 런의 라운드 기록(자식, 클리어 시 5행) |
 | `boss_rush_record` | `(season_id, user_id)` PK, `(season_id, best_clear_ms, recorded_at)` 인덱스(랭킹 MySQL 폴백·정산 정렬), `(season_id, final_rank)` 인덱스(종료 시즌 랭킹 조회) | 시즌별 계정 최고 기록(랭킹 정본) |
 
@@ -434,10 +434,10 @@ erDiagram
 
 ### boss_rush_run
 
-- **역할**: 보스러시 도전 1회의 원장. **일일 횟수 집계와 만료 판정**을 담당하며, 랭킹에 쓰이는 시간은 여기서 계산되지 않는다 — `clear_ms`는 **클라이언트가 측정해 보고한 값**이다(전투를 실제로 돌린 쪽이 순수 전투 시간을 재야 라운드 전환 연출·로딩·네트워크 지연이 기록에 섞이지 않는다).
-- **저장 데이터**: `run_id`(PK), `user_id`, `season_id`(시작 시점 시즌으로 고정), `started_at`·`finished_at`(**밀리초**, 서버 시각 — 일일 횟수·만료 판정과 **사후 관측**(`finished_at − started_at`과 보고 `clear_ms`의 괴리)에 쓴다), `status`(1:진행 2:클리어 3:만료 — 실패 보고 경로가 없어 "실패" 상태를 두지 않는다), `clear_ms`(클라 보고 기록).
-- **만료는 배치가 아니라 런을 읽는 경로가 lazy하게 기록한다**(거래소의 만료 판정 규약과 동일) — `clear`·`info`·`enter`가 `started_at + time_limit_sec + expire_grace_sec` 나이를 함께 검사하므로, 아무도 건드리지 않은 만료 런은 `status`가 `1`로 남을 수 있고 기능상 차이가 없다. 정리 전용 배치를 두지 않는 이유는 만료된 런에 반송할 자산이 없어 배치가 할 일이 컬럼 정리뿐이기 때문이다.
-- **일일 횟수 카운터 컬럼을 따로 두지 않는다** — `started_at`이 오늘(KST) 범위인 행 수가 곧 오늘 사용 횟수다. 카운터를 이중으로 두면 원장과 어긋날 여지가 생기고, 런 INSERT 자체가 차감이므로 "차감했는데 런이 없음"이 구조적으로 불가능하다. 자동 삭제하지 않는다(재화가 오간 원장).
+- **역할**: 보스러시 도전 1회의 원장. **만료 판정과 사후 관측**을 담당하며, 랭킹에 쓰이는 시간은 여기서 계산되지 않는다 — `clear_ms`는 **클라이언트가 측정해 보고한 값**이다(전투를 실제로 돌린 쪽이 순수 전투 시간을 재야 라운드 전환 연출·로딩·네트워크 지연이 기록에 섞이지 않는다).
+- **저장 데이터**: `run_id`(PK), `user_id`, `season_id`(시작 시점 시즌으로 고정), `started_at`·`finished_at`(**밀리초**, 서버 시각 — 만료 판정과 **사후 관측**(`finished_at − started_at`과 보고 `clear_ms`의 괴리)에 쓴다), `status`(1:진행 2:클리어 3:만료 — 실패 보고 경로가 없어 "실패" 상태를 두지 않는다), `clear_ms`(클라 보고 기록).
+- **만료는 배치가 아니라 런을 읽는 경로가 lazy하게 기록한다**(거래소의 만료 판정 규약과 동일) — `clear`·`info`·`enter`가 `started_at + run_expire_sec`(30분) 나이를 함께 검사하므로, 아무도 건드리지 않은 만료 런은 `status`가 `1`로 남을 수 있고 기능상 차이가 없다. 정리 전용 배치를 두지 않는 이유는 만료된 런에 반송할 자산이 없어 배치가 할 일이 컬럼 정리뿐이기 때문이다.
+- **도전 횟수 제한이 없으므로 카운터 컬럼도, 날짜 경계 개념도 없다** — 행은 "언제 누가 도전했는지"의 기록일 뿐이다. 도전은 재화·아이템을 만들지 않고 보상은 시즌 순위 보상뿐이라 총량을 조일 대상이 없다([보스러시 기획서](../세부/boss-rush-기획서.md) 2장). 자동 삭제하지 않는다(사후 관측의 근거).
 
 ### boss_rush_run_round
 
@@ -479,7 +479,7 @@ erDiagram
 | `character_create_cost` | `character_id` | 캐릭터 추가 생성 골드(생성 순번별) · `player_character` 생성 시 차감 |
 | `mail_master` | `mail_template_code` | `player_mail.category`/`title`/`body`/`expires_at`의 원천(발급 시 렌더링해 스냅샷 저장) · **서버 전용** |
 | `newbie_reward_master` | `seq` | 계정 초기화 시 발급하는 환영 메일의 `player_mail_reward` 첨부 목록 · **서버 전용** |
-| `boss_rush_master` | `content_id`(고정 1) | 보스러시 전역 규칙 — 제한 시간·일일 횟수·해금 순번·시즌 길이·랭킹 페이지 크기 상한 (`game_player.max_stage_cleared`가 해금 판정에 참조) |
+| `boss_rush_master` | `content_id`(고정 1) | 보스러시 전역 규칙 — 라운드 수·해금 순번·시즌 길이·런 수명·랭킹 페이지 크기 상한 (`game_player.max_stage_cleared`가 해금 판정에 참조) |
 | `boss_rush_round` | `round`(1~5) | (라운드 정의 — 배경 타입. 등장 몬스터는 자식 `boss_rush_spawn`) |
 | `boss_rush_spawn` | `(round, monster_code)` | `boss_rush_round.round`·`monster_master.monster_code`(라운드별 등장 몬스터·레벨·마리 수·보스) |
 | `boss_rush_rank_reward` | `rank_group` | (시즌 순위 구간·지급 골드 정의 · `boss_rush_record.final_rank`가 이 구간에 매칭돼 보상 메일이 발급된다) |
@@ -605,8 +605,9 @@ erDiagram
 
 ### boss_rush_master
 
-- **역할**: 보스러시 **콘텐츠 전역 규칙**(단일 행). 제한 시간·일일 횟수·해금 조건은 밸런스 값이고 **클라이언트가 같은 값으로 판정**해야 하므로(시간 측정이 클라 측이라 제한 시간 초과 판정도 클라에 있다) `appsettings`가 아니라 마스터에 둔다 — `appsettings`에는 배치 주기처럼 **운영 파라미터**만 남긴다.
-- **정의 데이터**: `content_id`(PK, 고정 `1`), `round_count`(5), `time_limit_sec`(600 = 10분 — 보고된 클리어 시간의 상한), `daily_entry_limit`(3), `unlock_stage_sequence`(10 = Act1 보스), `season_period_days`(7), `expire_grace_sec`(300 — 제한 시간 경과 후 클리어 보고를 받아 주는 여유이자 만료 판정 기준), `rank_page_limit`(100 — 랭킹 조회 **1페이지 크기** 상한이며 조회 가능한 순위 범위에는 상한이 없다). **`time_limit_sec`은 랭킹 점수 인코딩의 전제**이기도 하다(클리어 시간 상한이 double 정밀도 안에 들어가야 한다, [보스러시 기획서](../세부/boss-rush-기획서.md) 4.3).
+- **역할**: 보스러시 **콘텐츠 전역 규칙**(단일 행). 라운드 수·해금 조건은 밸런스 값이고 **클라이언트가 같은 값으로 판정**해야 하므로 `appsettings`가 아니라 마스터에 둔다 — `appsettings`에는 배치 주기처럼 **운영 파라미터**만 남긴다.
+- **정의 데이터**: `content_id`(PK, 고정 `1`), `round_count`(5), `unlock_stage_sequence`(10 = Act1 보스), `season_period_days`(7), `run_expire_sec`(1800 = 30분 — **런 수명**), `rank_page_limit`(100 — 랭킹 조회 **1페이지 크기** 상한이며 조회 가능한 순위 범위에는 상한이 없다).
+- **제한 시간(`time_limit_sec`)과 일일 도전 횟수(`daily_entry_limit`)를 두지 않는다.** 전자는 실플레이에서 파티가 완주하거나 전멸하거나 둘 중 하나라 판정에 관여한 적이 없고, 후자는 도전 보상이 사라진 뒤로 조일 대상이 없어졌다. 남은 `run_expire_sec`은 **게임 룰이 아니라 버려진 런을 정리하는 원장 규칙**이며, 동시에 보고 가능한 `clearMs`의 형식 상한이자 **랭킹 점수 인코딩의 안전 여유**다([보스러시 기획서](../세부/boss-rush-기획서.md) 4.1·4.3).
 
 ### boss_rush_round
 

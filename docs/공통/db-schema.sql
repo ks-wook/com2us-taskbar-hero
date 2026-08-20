@@ -380,23 +380,23 @@ CREATE TABLE boss_rush_season (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 랭킹 시즌(전역)';
 
 
--- 보스러시 도전 1회의 원장. 일일 횟수 집계와 만료 판정의 근거다.
---   **일일 횟수 카운터 컬럼을 두지 않는다** — started_at이 오늘(KST) 범위인 행 수가 곧 오늘 사용 횟수이며,
---   런 INSERT 자체가 차감이라 "차감했는데 런이 없음"이 구조적으로 불가능하다.
+-- 보스러시 도전 1회의 원장. 만료 판정과 사후 관측의 근거다.
+--   **도전 횟수 제한이 없으므로 카운터 컬럼도, 날짜 경계 개념도 없다** — 행은 "언제 누가 도전했는지"의
+--   기록일 뿐이다(도전은 재화·아이템을 만들지 않아 총량을 조일 대상이 없다).
 --   clear_ms는 **클라이언트가 측정해 보고한 클리어 시간**이고(랭킹 점수), started_at·finished_at은
---   일일 횟수·만료 판정·사후 관측용 서버 시각이다(밀리초 — 시간 경쟁 콘텐츠라 초 단위로는 순위가 뭉친다).
+--   만료 판정·사후 관측용 서버 시각이다(밀리초 — 시간 경쟁 콘텐츠라 초 단위로는 순위가 뭉친다).
 --   만료(status=3)는 배치가 아니라 런을 읽는 경로(clear·info·enter)가 lazy하게 기록한다.
 DROP TABLE IF EXISTS boss_rush_run;
 CREATE TABLE boss_rush_run (
     run_id      BIGINT  NOT NULL AUTO_INCREMENT COMMENT '도전 런 식별자',
     user_id     BIGINT  NOT NULL          COMMENT '도전한 계정(game_player.user_id)',
     season_id   INT     NOT NULL          COMMENT '시작 시점 시즌(고정, boss_rush_season.season_id)',
-    started_at  BIGINT  NOT NULL          COMMENT '런 개시 시각(Unix 밀리초) — 일일 횟수·만료 판정 기준',
+    started_at  BIGINT  NOT NULL          COMMENT '런 개시 시각(Unix 밀리초) — 만료 판정·사후 관측 기준',
     finished_at BIGINT  NOT NULL DEFAULT 0 COMMENT '종결 시각(Unix 밀리초, 진행 중 0)',
     status      TINYINT NOT NULL DEFAULT 1 COMMENT '1:진행 2:클리어 3:만료(BossRushRunStatus)',
     clear_ms    INT     NOT NULL DEFAULT 0 COMMENT '클라 보고 클리어 시간(ms). 클리어만 유효',
     PRIMARY KEY (run_id),
-    KEY idx_bossrush_run_user (user_id, started_at) COMMENT '일일 횟수 집계·진행 중 런 조회·내 이력',
+    KEY idx_bossrush_run_user (user_id, started_at) COMMENT '진행 중 런 조회·내 이력',
     CONSTRAINT fk_bossrushrun_player FOREIGN KEY (user_id)
         REFERENCES game_player (user_id) ON DELETE CASCADE,
     CONSTRAINT fk_bossrushrun_season FOREIGN KEY (season_id)

@@ -213,7 +213,7 @@ python tools/master_monster_tool.py adopt-bundle                    # 씬(F12)�
 ```
 
 - **코드 자동 채번**: 일반은 그 Act 대역(`9{act-1}01`~`98`)의 빈 번호, 보스는 `xx99`. 기존 몬스터를 고칠 때만 `--code`로 지정한다(이때 외형 레시피는 보존되며, 덮어쓰려면 `--replace-recipe`).
-- **능력치 자동 산출**: 클라이언트 `MonsterStatCurve`(`CharacterDevRecipe.cs`)와 **같은 산식**을 옮겨 둔 것이다 — 일반(1~9)은 그 Act 하한에서 다음 Act 하한까지 9칸 기하 보간, 보스(10)는 그 Act 보스 실측값. **한쪽을 고치면 다른 쪽도 고쳐야 한다**(추천값이 갈리면 씬 표시와 정본이 어긋난다).
+- **등장 레벨 자동 산출**: 추천하는 것은 hp·attack이 **아니다** — 기준값은 역할별 통일값(일반 50/5 · 보스 50/1)뿐이라 고를 것이 없고, 세기는 `stage_spawn.monster_level`이 만든다(값 문서 §9.4·§11-B). 그래서 `recommend`는 **그 자리의 등장 레벨**과 그 레벨의 실제 스탯을 낸다. 이 산식(`BASE_HP`·`BASE_ATTACK`·`SPAWN_LEVEL`·`STRONG_LEVEL_GAP`·`BOSS_LEVEL`)은 클라이언트 `MonsterStatCurve`(`CharacterDevRecipe.cs`)에 **그대로 옮겨져 있으므로 한쪽을 고치면 다른 쪽도 고쳐야 한다**(추천이 갈리면 씬 표시와 정본이 어긋난다).
 - **삽입 방식**: SQL 값 블록을 **재포맷하지 않고** 새 줄만 코드 순으로 끼워 넣는다(기존 12줄은 손으로 맞춘 정렬이라 어떤 규칙으로도 재현되지 않아, 재포맷하면 값이 그대로인 줄까지 diff에 섞인다). 새 줄의 열 위치는 기존 줄들의 최빈 열을 흉내 낸다.
 - 「규모/현황」 문장(값.md)과 머리 주석 종수 목록(schema.sql)을 함께 갱신하고, **반영 직후 `verify`를 자동 실행**한다.
 - `spawn` — **전투 등장 여부와 마리 수를 정하는 단계**. `stage_spawn`에 `(stage_id, monster_code, monster_level, spawn_count, is_boss)` 행을 넣고 값.md §11의 총 행수·스폰 몬스터 목록 문장을 갱신한다(레벨은 1, `is_boss`는 0으로 넣는다). 난이도 1·2 **양쪽에 넣는 것이 기본**이다(현행 데이터가 동일 구성 — `--difficulty`로 한쪽만 지정 가능). 보스는 `stage_spawn`의 `is_boss=1` 행으로 직접 배치하므로 이 명령에서는 거부한다. `add --spawn "5:4,6:5"`로 추가와 동시에 배치할 수도 있다.
