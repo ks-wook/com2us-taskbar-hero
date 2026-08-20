@@ -1460,6 +1460,17 @@ namespace TaskbarHero.Client.Battle
             Log($"교전 시작 — {_monsterName} 웨이브와 마주침");
         }
 
+        /// <summary>
+        /// 파티를 <b>다시 전진 상태로</b> 되돌린다. <see cref="UpdatePhase"/>는 최전방 몬스터가 있을 때만
+        /// 교전 ↔ 전진을 오가므로, <b>마지막 한 마리를 처치하면 교전 상태가 그대로 남아 파티가 제자리에 선다</b>.
+        /// 스테이지 전투는 그 직후 클리어로 끝나 문제가 없지만, 보스러시는 그 자리에서 포탈까지 걸어가야 하므로
+        /// 이 호출로 전진을 재개한다.
+        /// </summary>
+        public void ResumeAdvance()
+        {
+            _phase = Phase.Advancing;
+        }
+
         /// <summary>멤버(돌진 등)가 몬스터에 도달했음을 알릴 때 교전으로 전환.</summary>
         public void RequestFighting()
         {

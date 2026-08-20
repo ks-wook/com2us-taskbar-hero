@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using TaskbarHero.Client.MasterData;
 
 /// <summary>
 /// CharacterDevScene(몬스터 유닛 자동생성)이 쓰는 순수 데이터·계산부
@@ -206,9 +207,21 @@ public static class MonsterRecipeBook
 }
 
 /// <summary>
-/// 지역(Act)·스테이지에서 추천 능력치를 뽑는 산출식(§4.4).
-/// <para>일반(1~9)은 그 Act 하한에서 다음 Act 하한까지 9칸 기하 보간, 보스(10)는 실측값을 그대로 쓴다.
-/// 추천은 <b>확정값이 아니라 시작점</b>이며(§4.3), 값 자체의 조정은 서버 밸런스 결정 사항이다(§8 M9).</para>
+/// 지역(Act)·스테이지에서 <b>그 자리의 등장 레벨</b>을 추천하는 산출식(§4.4).
+///
+/// <para><b>추천 대상은 hp·attack이 아니다.</b> <c>monster_master</c>의 <c>hp</c>·<c>attack</c>은
+/// <b>역할별 통일 기준값</b>(일반 50/5 · 보스 50/1)이라 몬스터마다 고를 값이 아니고, 세기는 전부
+/// <c>stage_spawn.monster_level</c>이 만든다(값 문서 §9 · §9.4 · §11-B). 그래서 이 씬이 고를 것은
+/// <b>등장 레벨</b>이며, 실제 전투 스탯은 기준값에 <see cref="MonsterStats"/>의 레벨 배율을 곱해 얻는다
+/// — <b>배율(1.25·1.18)을 여기서 다시 정의하지 않는다.</b></para>
+///
+/// <para>산식의 정본은 서버 도구 <c>tools/master_monster_tool.py</c>의
+/// <c>BASE_HP</c>·<c>BASE_ATTACK</c>·<c>SPAWN_LEVEL</c>·<c>STRONG_LEVEL_GAP</c>·<c>BOSS_LEVEL</c>·
+/// <c>spawn_level()</c>·<c>stats_at()</c>·<c>recommend()</c>이고 이 클래스는 그것을 그대로 옮긴 것이다.
+/// 한쪽만 고치면 씬의 추천이 정본과 갈라진다.</para>
+///
+/// <para>난이도(1·2) 축은 <b>없다</b> — 난이도 2는 난이도 1과 스폰 구성이 같고 보상만 다르므로(값 문서 §11)
+/// 몬스터 레벨도 같다. 옛 <c>difficultyMultiplier</c> 자리는 제거했다.</para>
 /// </summary>
 public static class MonsterStatCurve
 {
@@ -216,38 +229,101 @@ public static class MonsterStatCurve
     public const int StagePerAct = 10;
     public const int BossStage = 10;
 
-    // Act별 일반 몬스터 하한(§2.5 실측).
-    private static readonly int[] HpFloor = { 38, 100, 150, 300, 625 };
-    private static readonly int[] AtkFloor = { 3, 10, 28, 36, 52 };
+    /// <summary>레벨 1 기준 HP. <b>12종 전부 이 값</b>이며 역할로도 갈리지 않는다(값 문서 §9).</summary>
+    public const long BaseHp = 50L;
 
-    // Act5는 다음 Act가 없어 실측 Act 간 평균 배율로 외삽한다(§4.4).
-    private const float Act5HpGrowth = 2.0f;
-    private const float Act5AtkGrowth = 1.44f;
+    /// <summary>레벨 1 기준 공격력(일반 몬스터).</summary>
+    public const long NormalBaseAttack = 5L;
 
-    // 보스(스테이지 10) 실측값 — 보간하지 않고 그대로 추천한다.
-    private static readonly int[] BossHp = { 500, 1000, 2000, 5000, 10000 };
-    private static readonly int[] BossAtk = { 7, 22, 39, 50, 75 };
+    /// <summary>레벨 1 기준 공격력(보스). 같은 레벨 일반 몬스터의 1/5 — 보스는 "한 방이 아픈 적"이 아니라
+    /// "오래 버티는 적"이고, 그 버팀은 <c>attack</c>이 아니라 레벨(=체력)이 만든다(값 문서 §9).</summary>
+    public const long BossBaseAttack = 1L;
+
+    /// <summary>Act1·2 강몹이 같은 자리 약몹보다 갖는 레벨 차(+1 — 체력 ×1.25 · 공격 ×1.18).</summary>
+    public const int StrongLevelGap = 1;
+
+    /// <summary>약몹/강몹이 갈리는 마지막 Act. 일반 몬스터가 2종인 구간(Act1·2)뿐이다.</summary>
+    public const int StrongMaxAct = 2;
+
+    /// <summary>일반 몬스터 등장 레벨 — <c>[act-1]</c> = { s1~3, s4~6, s7~10 }.
+    /// 지역 안 3스테이지마다 +1, 지역 간 +3~4(값 문서 §11-B).</summary>
+    private static readonly int[,] SpawnLevelTable =
+    {
+        { 1, 2, 3 },
+        { 8, 9, 10 },
+        { 15, 16, 17 },
+        { 19, 20, 21 },
+        { 24, 25, 26 },
+    };
+
+    /// <summary>보스 등장 레벨(Act1~5). 그 지역 잡몹보다 8~13 위다(값 문서 §11-B).</summary>
+    private static readonly int[] BossLevelTable = { 14, 24, 28, 31, 34 };
+
+    /// <summary>역할별 통일 기준 공격력.</summary>
+    public static long BaseAttackOf(bool boss) => boss ? BossBaseAttack : NormalBaseAttack;
+
+    /// <summary>그 Act에 약몹/강몹 구분이 있는지(일반 몬스터가 2종인 Act1·2만).</summary>
+    public static bool SupportsStrong(int act) => act >= 1 && act <= StrongMaxAct;
+
+    /// <summary>스테이지가 속한 레벨 구간(0 = s1~3 · 1 = s4~6 · 2 = s7~10).</summary>
+    public static int BandOf(int stage)
+    {
+        stage = Mathf.Clamp(stage, 1, StagePerAct);
+        return stage <= 3 ? 0 : (stage <= 6 ? 1 : 2);
+    }
 
     /// <summary>
-    /// Act(1~5)·스테이지(1~10)의 추천 hp·attack.
-    /// <paramref name="difficultyMultiplier"/>는 난이도 배율 자리(기본 1.0)이며, 현재 난이도는 몬스터를
-    /// 재사용해 값이 같으므로 UI에 축이 없다(§4.3 · §8 M8).
+    /// 그 자리(Act · 스테이지 · 역할)의 등장 레벨. 보스는 스테이지와 무관하게 그 Act의 보스 레벨이고,
+    /// 일반은 구간 레벨 + (Act1·2 강몹이면 <see cref="StrongLevelGap"/>)이다.
     /// </summary>
-    public static void Recommend(int act, int stage, float difficultyMultiplier, out long hp, out long attack)
+    public static int SpawnLevel(int act, int stage, bool boss, bool strong)
     {
         act = Mathf.Clamp(act, 1, ActCount);
-        stage = Mathf.Clamp(stage, 1, StagePerAct);
-        float mult = difficultyMultiplier > 0f ? difficultyMultiplier : 1f;
-
-        if (stage == BossStage)
+        if (boss)
         {
-            hp = Scale(BossHp[act - 1], mult);
-            attack = Scale(BossAtk[act - 1], mult);
+            return BossLevelTable[act - 1];
+        }
+        int level = SpawnLevelTable[act - 1, BandOf(stage)];
+        return level + (strong && SupportsStrong(act) ? StrongLevelGap : 0);
+    }
+
+    /// <summary>
+    /// 통일 기준값에 그 레벨의 배율을 적용한 실제 전투 스탯.
+    /// <para>배율은 <see cref="MonsterStats.Scale(long,long,int,out long,out long)"/>가 정본이다 —
+    /// 전투에서 실제로 쓰이는 것과 <b>같은 코드</b>라야 씬이 보여 주는 숫자가 게임 안 값과 일치한다.</para>
+    /// </summary>
+    public static void StatsAt(int level, bool boss, out long hp, out long attack)
+    {
+        MonsterStats.Scale(BaseHp, BaseAttackOf(boss), Mathf.Max(1, level), out hp, out attack);
+    }
+
+    /// <summary>
+    /// 그 자리의 추천 — <paramref name="level"/>(고를 값)과 통일 기준값, 그 레벨에서의 실제 스탯.
+    /// <para>기준값은 언제나 통일값이므로 새 몬스터를 추가할 때 사람이 고를 것은 <b>등장 레벨뿐</b>이고,
+    /// <paramref name="hp"/>·<paramref name="attack"/>은 "그래서 전투에서 얼마가 되는가"를 보여 주는
+    /// 읽기 전용 결과다(마스터 행에 넣는 값이 아니다).</para>
+    /// </summary>
+    public static void Recommend(int act, int stage, bool boss, bool strong,
+                                 out int level, out long baseHp, out long baseAttack,
+                                 out long hp, out long attack)
+    {
+        level = SpawnLevel(act, stage, boss, strong);
+        baseHp = BaseHp;
+        baseAttack = BaseAttackOf(boss);
+        StatsAt(level, boss, out hp, out attack);
+    }
+
+    /// <summary>그 Act에서 이 역할이 등장할 수 있는 레벨 범위(목록 표시용). 보스는 한 값이라 min = max다.</summary>
+    public static void LevelRange(int act, bool boss, out int min, out int max)
+    {
+        act = Mathf.Clamp(act, 1, ActCount);
+        if (boss)
+        {
+            min = max = BossLevelTable[act - 1];
             return;
         }
-
-        hp = Scale(Interpolate(HpFloor, act, stage, Act5HpGrowth), mult);
-        attack = Scale(Interpolate(AtkFloor, act, stage, Act5AtkGrowth), mult);
+        min = SpawnLevelTable[act - 1, 0];
+        max = SpawnLevelTable[act - 1, 2] + (SupportsStrong(act) ? StrongLevelGap : 0);
     }
 
     /// <summary>몬스터 코드에서 Act를 읽는다(90xx=1 … 94xx=5). 규약 밖 코드는 0(§2.5).</summary>
@@ -261,6 +337,16 @@ public static class MonsterStatCurve
     public static bool IsBossCode(int monsterCode)
     {
         return ActOfCode(monsterCode) > 0 && monsterCode % 100 == 99;
+    }
+
+    /// <summary>
+    /// 코드만 보고 강몹으로 추정한다 — Act1·2의 두 번째 일반 코드부터가 강몹이다(9002·9102).
+    /// <b>산식이 아니라 UI 기본값</b>이며(마스터 데이터에 약/강 컬럼은 없다) 씬에서 토글로 바꿀 수 있다.
+    /// </summary>
+    public static bool GuessStrongFromCode(int monsterCode)
+    {
+        int act = ActOfCode(monsterCode);
+        return SupportsStrong(act) && !IsBossCode(monsterCode) && monsterCode % 100 >= 2;
     }
 
     /// <summary>
@@ -289,38 +375,19 @@ public static class MonsterStatCurve
         return 0;
     }
 
-    /// <summary>추천값 대비 차이를 "+9.7%" 형태로 표기한다(추천이 0이면 "-").</summary>
-    public static string DiffText(long value, long recommended)
+    /// <summary>입력한 hp·attack이 그 역할의 통일 기준값과 같은지(§9 — 어긋나면 레벨이 무의미해진다).</summary>
+    public static bool MatchesBase(long hp, long attack, bool boss)
     {
-        if (recommended <= 0)
-        {
-            return "-";
-        }
-        float ratio = (value - recommended) / (float)recommended * 100f;
-        if (Mathf.Abs(ratio) < 0.05f)
-        {
-            return "±0%";
-        }
-        return (ratio > 0f ? "+" : "") + ratio.ToString("0.#") + "%";
+        return hp == BaseHp && attack == BaseAttackOf(boss);
     }
 
-    /// <summary>그 Act 하한에서 다음 Act 하한까지 9칸 기하 보간(s = 1..9).</summary>
-    private static float Interpolate(int[] floors, int act, int stage, float lastActGrowth)
+    /// <summary>기준값 일치 여부를 한 줄로 적는다(목록·우측 패널 공용).</summary>
+    public static string BaseMatchText(long hp, long attack, bool boss)
     {
-        float current = floors[act - 1];
-        float next = act < ActCount ? floors[act] : current * lastActGrowth;
-        if (current <= 0f || next <= 0f)
+        if (MatchesBase(hp, attack, boss))
         {
-            return current;
+            return "기준값 일치";
         }
-        float r = Mathf.Pow(next / current, 1f / 9f);
-        return current * Mathf.Pow(r, stage - 1);
-    }
-
-    /// <summary>난이도 배율을 곱해 정수로 반올림한다(0 이하가 되지 않게 1로 보정).</summary>
-    private static long Scale(float value, float multiplier)
-    {
-        long rounded = (long)Mathf.Floor(value * multiplier + 0.5f);
-        return rounded < 1 ? 1 : rounded;
+        return $"기준값 어긋남(→ {BaseHp}/{BaseAttackOf(boss)})";
     }
 }

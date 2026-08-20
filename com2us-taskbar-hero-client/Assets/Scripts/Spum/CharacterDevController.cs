@@ -54,11 +54,7 @@ public partial class CharacterDevController : MonoBehaviour
     [SerializeField] private string masterJsonPath = "Assets/Resources/MasterData/monster_master.json";
     [SerializeField] private string battleDevScenePath = "Assets/Scenes/BattleDevScene.unity";
 
-    [Header("추천 산출식")]
-    [Tooltip("난이도 배율 자리(§4.3 · §8 M8). 현재 난이도는 몬스터를 재사용해 값이 같으므로 1.0으로 둔다.")]
-    [SerializeField] private float difficultyMultiplier = 1f;
-
-    /// <summary>목록 한 행 — 마스터 데이터 값 + 산출물 존재 여부 + 추천 대비 차이(§5 좌측 패널).</summary>
+    /// <summary>목록 한 행 — 마스터 데이터 값 + 산출물 존재 여부 + 기준값·등장 레벨 진단(§5 좌측 패널).</summary>
     private sealed class MonsterRow
     {
         public int Code;
@@ -68,8 +64,8 @@ public partial class CharacterDevController : MonoBehaviour
         public bool HasPrefab;
         public bool HasRecipe;
         public bool Orphan;      // monster_master에 없는데 프리팹만 있는 경우(§6.4)
-        public string HpDiff = "-";
-        public string AtkDiff = "-";
+        public string BaseNote = "-";    // 통일 기준값과 같은지(§4.3)
+        public string LevelNote = "-";   // 그 Act에서 이 몬스터가 등장하는 레벨 범위(§4.4)
     }
 
     // ── 조합 엔진 · 프리뷰 캐릭터 ──
@@ -98,6 +94,8 @@ public partial class CharacterDevController : MonoBehaviour
     private int _selectedCode;
     private int _act = 1;
     private int _stage = 1;
+    // Act1·2는 일반 몬스터가 2종이고 강몹이 약몹보다 +1 레벨이다(값 문서 §11-B). Act3~5에는 구분이 없다.
+    private bool _strong;
     // 무기 스윙 이펙트(궤적·불티)의 기준색. null이면 기본 불티색이다.
     // 몬스터를 고를 때 레시피·저장된 프리팹에서 읽어 채우고, 저장 시 프리팹에 심는다.
     private Color? _effectColor;
@@ -277,14 +275,14 @@ public partial class CharacterDevController : MonoBehaviour
                 Orphan = master == null,
             };
 
-            // 추천 대비 차이(읽기 전용 진단 — §6.3). 코드 규약 밖이면 계산하지 않는다.
+            // 기준값·등장 레벨 진단(읽기 전용 — §6.3). 코드 규약 밖이면 계산하지 않는다.
             int act = MonsterStatCurve.ActOfCode(code);
             if (act > 0 && master != null)
             {
-                int stage = MonsterStatCurve.IsBossCode(code) ? MonsterStatCurve.BossStage : 1;
-                MonsterStatCurve.Recommend(act, stage, difficultyMultiplier, out long rhp, out long ratk);
-                row.HpDiff = MonsterStatCurve.DiffText(master.hp, rhp);
-                row.AtkDiff = MonsterStatCurve.DiffText(master.attack, ratk);
+                bool boss = MonsterStatCurve.IsBossCode(code);
+                row.BaseNote = MonsterStatCurve.BaseMatchText(master.hp, master.attack, boss);
+                MonsterStatCurve.LevelRange(act, boss, out int minLevel, out int maxLevel);
+                row.LevelNote = minLevel == maxLevel ? $"Lv{minLevel}" : $"Lv{minLevel}~{maxLevel}";
             }
 
             _monsterRows.Add(row);
@@ -621,12 +619,21 @@ public partial class CharacterDevController : MonoBehaviour
 #endif
     }
 
-    /// <summary>서버 정본 반영용 스니펫(JSON 한 줄 + master-data-값.md 표 한 줄) — §4.5·§7.4.</summary>
-    private static string BuildSnippet(int code, string name, long hp, long attack)
+    /// <summary>
+    /// 서버 정본 반영용 스니펫 — §4.5·§7.4.
+    /// <para>세 줄이다: ① 번들 JSON 한 줄 ② <c>master-data-값.md</c> §9 표 한 줄 ③ <b>배치 명령</b>.
+    /// hp·attack은 통일 기준값이라 몬스터끼리 다르지 않으므로, 실제로 세기를 정하는 값인
+    /// <b>등장 레벨</b>은 <c>monster_master</c>가 아니라 <c>stage_spawn</c>에 들어간다(값 문서 §9.4·§11-B).
+    /// 그래서 ③이 없으면 스니펫만 반영해도 그 몬스터는 전투에 나오지 않는다.</para>
+    /// </summary>
+    private static string BuildSnippet(int code, string name, long hp, long attack,
+                                       int act, int stage, int level)
     {
         string json = $"{{ \"monsterCode\": {code}, \"name\": \"{EscapeJson(name)}\", \"hp\": {hp}, \"attack\": {attack} }}";
         string table = $"| {code} | {name} | {hp} | {attack} |";
-        return json + "\n" + table;
+        string spawn = $"# 배치(등장 레벨은 도구가 레벨 곡선에서 넣는다 — Act{act} s{stage} → Lv{level}):\n"
+                       + $"python tools/master_monster_tool.py spawn --code {code} --stages \"{stage}:6\"";
+        return json + "\n" + table + "\n" + spawn;
     }
 
     private static int ToInt(Dictionary<string, object> dict, string key)

@@ -56,7 +56,8 @@ public partial class CharacterDevController
     private InputField _nameInput;
     private InputField _hpInput;
     private InputField _atkInput;
-    private Text _diffText;
+    private Text _levelText;
+    private Text _baseNoteText;
     private Text _codeText;
     private Text _recipeText;
     private Text _appearanceText;
@@ -67,6 +68,8 @@ public partial class CharacterDevController
     private readonly List<(int Code, Image Bg)> _listRows = new List<(int, Image)>();
     private readonly List<(int Value, Image Bg)> _actRows = new List<(int, Image)>();
     private readonly List<(int Value, Image Bg)> _stageRows = new List<(int, Image)>();
+    // 약몹/강몹 토글(Act1·2만 의미가 있다 — 강몹은 +1 레벨). Value: false = 약몹, true = 강몹
+    private readonly List<(bool Value, Image Bg)> _strongRows = new List<(bool, Image)>();
     // 무기 스윙 이펙트 색 프리셋 버튼(Value: -1 = 기본색, 1~5 = 지역 색)
     private readonly List<(int Value, Image Bg)> _effectColorRows = new List<(int, Image)>();
     private Image _effectColorSwatch;   // 현재 색 견본 막대
@@ -229,7 +232,22 @@ public partial class CharacterDevController
             _stageRows.Add((stage, image));
         }
 
-        MakeButton(content, "추천값 채우기", FillRecommended);
+        MakeText(content, "약몹 / 강몹 (Act1·2만 — 강몹은 +1 레벨)", 12, FontStyle.Normal, HintColor, 18f);
+        var strongRow = MakeRow(content, 26f);
+        foreach (bool strong in new[] { false, true })
+        {
+            bool captured = strong;
+            var image = MakeChoice(strongRow, strong ? "강몹 (+1)" : "약몹", () =>
+            {
+                _strong = captured;
+                RefreshRightPanel();
+            });
+            _strongRows.Add((strong, image));
+        }
+
+        _levelText = MakeText(content, "등장 레벨 추천: -", 12, FontStyle.Bold, WarnColor, 32f);
+
+        MakeButton(content, "통일 기준값 채우기 (hp 50 / atk 5·1)", FillBaseStats);
 
         _nameInput = MakeInput(content, "이름", string.Empty, InputField.ContentType.Standard);
         MakeText(content, "이름 후보(계열 기준 — 고르면 채워집니다)", 11, FontStyle.Normal, HintColor, 16f);
@@ -237,9 +255,9 @@ public partial class CharacterDevController
 
         _hpInput = MakeInput(content, "hp", string.Empty, InputField.ContentType.IntegerNumber);
         _atkInput = MakeInput(content, "attack", string.Empty, InputField.ContentType.IntegerNumber);
-        _hpInput.onValueChanged.AddListener(_ => RefreshDiff());
-        _atkInput.onValueChanged.AddListener(_ => RefreshDiff());
-        _diffText = MakeText(content, "추천 대비: -", 12, FontStyle.Normal, HintColor, 18f);
+        _hpInput.onValueChanged.AddListener(_ => RefreshRecommendation());
+        _atkInput.onValueChanged.AddListener(_ => RefreshRecommendation());
+        _baseNoteText = MakeText(content, "기준값 대비: -", 12, FontStyle.Normal, HintColor, 18f);
 
         _codeText = MakeText(content, "제안 코드: -", 12, FontStyle.Bold, Color.white, 18f);
         MakeButton(content, "제안 코드로 신규 작업", () =>
@@ -258,7 +276,7 @@ public partial class CharacterDevController
             }
             _selectedCode = suggested;
             _nameInput.text = string.Empty;
-            FillRecommended();
+            FillBaseStats();
             RefreshList();
             RefreshRightPanel();
             Log($"신규 코드 {suggested}로 작업을 시작합니다.");
@@ -357,9 +375,14 @@ public partial class CharacterDevController
             if (ApplyStatsToMaster(_selectedCode, _nameInput.text, hp, attack, out string error))
             {
                 Log($"monster_master 반영 — {_selectedCode} {_nameInput.text} hp {hp} / atk {attack}");
+                if (!MonsterStatCurve.MatchesBase(hp, attack, IsBossSelection()))
+                {
+                    Log($"※ 통일 기준값({MonsterStatCurve.BaseHp}/{MonsterStatCurve.BaseAttackOf(IsBossSelection())})과 다릅니다 — "
+                        + "세기는 monster_master가 아니라 stage_spawn.monster_level이 만든다(값 문서 §9.4).");
+                }
                 Log("※ 서버 정본 반영은 별도 작업이다(§7.4) — [스니펫 복사]로 넘길 것.");
                 RefreshList();
-                RefreshDiff();
+                RefreshRecommendation();
             }
             else
             {
@@ -374,7 +397,8 @@ public partial class CharacterDevController
                 Log("hp·attack을 확인하세요.");
                 return;
             }
-            string snippet = BuildSnippet(_selectedCode, _nameInput.text, hp, attack);
+            string snippet = BuildSnippet(_selectedCode, _nameInput.text, hp, attack,
+                                          _act, _stage, RecommendedLevel());
             GUIUtility.systemCopyBuffer = snippet;
             Log("스니펫을 클립보드에 복사했습니다:");
             foreach (var line in snippet.Split('\n'))
@@ -558,7 +582,7 @@ public partial class CharacterDevController
             string marks = (row.HasPrefab ? "P" : "·") + (row.HasRecipe ? "R" : "·");
             string label = row.Orphan
                 ? $"{code}  (고아 프리팹 — 마스터 없음)   [{marks}]"
-                : $"{code}  {row.Name}\n      hp {row.Hp} ({row.HpDiff}) / atk {row.Attack} ({row.AtkDiff})   [{marks}]";
+                : $"{code}  {row.Name}\n      hp {row.Hp} / atk {row.Attack} — {row.BaseNote} · 등장 {row.LevelNote}   [{marks}]";
 
             var rt = NewUi("Row", _listContent, out Image bg);
             bg.color = code == _selectedCode ? RowSelected : RowNormal;
@@ -592,6 +616,8 @@ public partial class CharacterDevController
         {
             _act = act;
             _stage = MonsterStatCurve.IsBossCode(code) ? MonsterStatCurve.BossStage : 1;
+            // 마스터에 약/강 컬럼은 없다 — 코드 관례로 초기값만 잡고, 씬에서 토글로 바꾼다.
+            _strong = MonsterStatCurve.GuessStrongFromCode(code);
         }
 
         LoadEffectColorFor(code);
@@ -683,6 +709,12 @@ public partial class CharacterDevController
         {
             bg.color = value == _stage ? RowSelected : ButtonColor;
         }
+        // 보스 스테이지와 Act3~5에는 약/강 구분이 없다 — 그 자리에서는 선택 자체가 레벨을 바꾸지 않는다(§4.4).
+        bool strongUsable = !IsBossSelection() && MonsterStatCurve.SupportsStrong(_act);
+        foreach (var (value, bg) in _strongRows)
+        {
+            bg.color = value == _strong && strongUsable ? RowSelected : ButtonColor;
+        }
         RefreshEffectColorUi();
 
         if (_codeText != null)
@@ -708,7 +740,7 @@ public partial class CharacterDevController
         }
 
         RefreshNameCandidates();
-        RefreshDiff();
+        RefreshRecommendation();
     }
 
     /// <summary>선택된 레시피의 계열에 맞는 이름 후보 버튼을 다시 만든다(§4.3).</summary>
@@ -737,33 +769,70 @@ public partial class CharacterDevController
         }
     }
 
-    /// <summary>입력값과 추천값의 차이를 함께 보여 준다(§4.3).</summary>
-    private void RefreshDiff()
+    /// <summary>지금 고른 자리가 보스 자리인지(스테이지 10 또는 보스 코드를 고른 상태).</summary>
+    private bool IsBossSelection()
     {
-        if (_diffText == null)
-        {
-            return;
-        }
-
-        MonsterStatCurve.Recommend(_act, _stage, difficultyMultiplier, out long rhp, out long ratk);
-        if (!ReadStatInputs(out long hp, out long attack))
-        {
-            _diffText.text = $"추천(Act{_act} s{_stage}): hp {rhp} / atk {ratk}";
-            return;
-        }
-
-        _diffText.text = $"hp {hp} (추천 {rhp}, {MonsterStatCurve.DiffText(hp, rhp)})   "
-                         + $"atk {attack} (추천 {ratk}, {MonsterStatCurve.DiffText(attack, ratk)})";
+        return _stage == MonsterStatCurve.BossStage
+               || (_selectedCode != 0 && MonsterStatCurve.IsBossCode(_selectedCode));
     }
 
-    /// <summary>지역·스테이지 추천값을 입력란에 채운다(그 뒤에도 계속 편집할 수 있다 — F10·F11).</summary>
-    private void FillRecommended()
+    /// <summary>지금 고른 자리의 추천 등장 레벨(§4.4).</summary>
+    private int RecommendedLevel()
     {
-        MonsterStatCurve.Recommend(_act, _stage, difficultyMultiplier, out long hp, out long attack);
+        return MonsterStatCurve.SpawnLevel(_act, _stage, IsBossSelection(), _strong);
+    }
+
+    /// <summary>
+    /// 그 자리의 <b>추천 등장 레벨</b>과 그 레벨에서의 실제 전투 스탯, 그리고 입력한 기준값이
+    /// 통일 기준값과 같은지를 보여 준다(F10·F11 · §4.3).
+    /// <para>추천되는 것은 hp·attack이 아니다 — 마스터에 넣는 값은 언제나 통일 기준값이고,
+    /// 세기는 <c>stage_spawn.monster_level</c>이 만든다(값 문서 §9.4).</para>
+    /// </summary>
+    private void RefreshRecommendation()
+    {
+        bool boss = IsBossSelection();
+        MonsterStatCurve.Recommend(_act, _stage, boss, _strong,
+                                   out int level, out long baseHp, out long baseAttack,
+                                   out long hp, out long attack);
+
+        if (_levelText != null)
+        {
+            string role = boss ? "보스" : (MonsterStatCurve.SupportsStrong(_act) ? (_strong ? "강몹" : "약몹") : "일반");
+            _levelText.text = $"등장 레벨 추천 — Act{_act} s{_stage} {role}: Lv{level}"
+                              + $"\n  그 레벨의 실제 전투 스탯: hp {hp} / atk {attack}";
+        }
+
+        if (_baseNoteText == null)
+        {
+            return;
+        }
+
+        if (!ReadStatInputs(out long inputHp, out long inputAttack))
+        {
+            _baseNoteText.text = $"통일 기준값: hp {baseHp} / atk {baseAttack} ({(boss ? "보스" : "일반")})";
+            _baseNoteText.color = HintColor;
+            return;
+        }
+
+        bool matches = MonsterStatCurve.MatchesBase(inputHp, inputAttack, boss);
+        _baseNoteText.text = $"hp {inputHp} / atk {inputAttack} — {MonsterStatCurve.BaseMatchText(inputHp, inputAttack, boss)}";
+        _baseNoteText.color = matches ? HintColor : WarnColor;
+    }
+
+    /// <summary>
+    /// 역할별 <b>통일 기준값</b>을 입력란에 채운다(일반 50/5 · 보스 50/1 — §4.3 · 값 문서 §9).
+    /// 채운 뒤에도 편집은 되지만, 기준값을 벗어나면 레벨이 세기를 만들지 못하므로 경고가 뜬다.
+    /// </summary>
+    private void FillBaseStats()
+    {
+        bool boss = IsBossSelection();
+        long hp = MonsterStatCurve.BaseHp;
+        long attack = MonsterStatCurve.BaseAttackOf(boss);
         _hpInput.text = hp.ToString();
         _atkInput.text = attack.ToString();
-        RefreshDiff();
-        Log($"추천값 채움 — Act{_act} 스테이지{_stage}: hp {hp} / atk {attack}");
+        RefreshRecommendation();
+        Log($"통일 기준값 채움 — {(boss ? "보스" : "일반")}: hp {hp} / atk {attack} "
+            + $"(Act{_act} s{_stage} 추천 등장 레벨 Lv{RecommendedLevel()})");
     }
 
     /// <summary>SPUM 준비 상태·진행 중 여부에 따라 버튼 잠금과 안내 문구를 갱신한다.</summary>

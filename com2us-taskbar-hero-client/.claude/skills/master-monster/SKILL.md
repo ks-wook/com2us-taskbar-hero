@@ -59,14 +59,14 @@ description: 몬스터를 능력치·외형·프리팹·전투 등장까지 한 
 
 ## ② 능력치·외형 결정
 
-**능력치** — 도구가 클라이언트 `MonsterStatCurve`와 같은 산식으로 뽑는다.
+**능력치** — 고를 것은 hp·attack이 아니라 **등장 레벨**이다. `monster_master`의 기준값은 역할별 통일값(일반 50/5 · 보스 50/1)이고, 세기는 `stage_spawn.monster_level`이 만든다(값 문서 §9.4·§11-B). 도구가 클라이언트 `MonsterStatCurve`와 같은 산식으로 그 레벨을 뽑는다.
 
 ```bash
-python tools/master_monster_tool.py recommend --act 2 --stage 5     # → hp 120 / attack 16
+python tools/master_monster_tool.py recommend --act 2 --stage 5     # → 등장 레벨 9 (기준 50/5 → 실제 298/19)
 python tools/master_monster_tool.py list                            # 기존 몬스터·프리팹 현황
 ```
 
-추천을 그대로 쓰는 것이 기본이다. 조정은 두 경우만 — 사용자가 방향을 준 경우(±10~30%), 같은 Act에서 역전이 생기는 경우. **보스 `attack`은 그 Act 최강 일반의 1.3~1.45배를 넘기지 않는다**(아군 즉사 방지 — 값 문서 §9).
+**기준값은 그대로 쓴다** — 몬스터별로 hp·attack을 손대면 `monster_level`이 무의미해지고 같은 레벨끼리 능력치가 갈린다(값 문서 §9). 세기 조정이 필요하면 그것은 이 단계가 아니라 **배치(레벨·마리 수)** 의 몫이고, 목표 클리어 시간에 맞는지는 밸런스 시뮬레이터로 판정한다(`.claude/skills/rebalance`).
 
 **외형** — SPUM 태그로 정한다. `--race` 1개 + `--classes` 콤마 구분(AND).
 
