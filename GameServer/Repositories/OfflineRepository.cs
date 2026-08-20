@@ -1,4 +1,7 @@
-using GameServer.Data;
+﻿using GameServer.Data;
+using GameServer.MasterData;
+using GameServer.Models;
+using GameServer.Repositories.Interfaces;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 
@@ -6,14 +9,6 @@ namespace GameServer.Repositories;
 
 /// <summary>오프라인 정산 대상 계정의 기준 시각·파밍 스테이지 좌표(game_player 스냅샷).</summary>
 public sealed record OfflinePlayerContext(long LastActiveAt, int Act, int Difficulty, int Stage);
-
-/// <summary>오프라인 정산 트랜잭션 결과 상태.</summary>
-public enum OfflineClaimStatus
-{
-    Ok,
-    NoPlayer,       // game_player 없음(세이브 미생성)
-    AlreadyClaimed, // 잠금 후 재확인 시 경과가 최소 기준 미만이거나 CAS 실패(동시 중복 요청으로 이미 정산됨)
-}
 
 /// <summary>오프라인 정산 트랜잭션 결과.</summary>
 public sealed record OfflineClaimOutcome(
@@ -30,53 +25,6 @@ public sealed record OfflineClaimOutcome(
         => new(status, 0, false, 0, 0, 0, new List<OfflineCharacterState>(), 0);
 }
 
-public interface IOfflineRepository
-{
-    /// <summary>정산 기준 시각·파밍 스테이지 좌표를 읽는다(계정 없으면 null).</summary>
-    Task<OfflinePlayerContext?> GetContextAsync(long userId);
-
-    /// <summary>
-    /// 오프라인 보상을 한 트랜잭션으로 적용한다: 잠금 상태의 last_active_at으로 경과를 재계산하고
-    /// (최소 기준 미만이면 AlreadyClaimed) last_active_at을 CAS(관측값 조건부)로 now로 리셋해 정산권을 선점한 뒤,
-    /// computeReward로 보상을 산출해 골드 적립·전 캐릭터 경험치 지급·레벨 재계산을 수행한다.
-    /// CAS가 0행이면(동시 요청이 먼저 정산) 롤백하고 AlreadyClaimed를 반환한다.
-    /// 경험치→레벨 계산은 주입된 applyExp 델리게이트(현재 level·exp + 지급 exp → 반영 후 상태)로 처리한다.
-    /// </summary>
-    Task<OfflineClaimOutcome> ClaimAsync(
-        long userId,
-        long nowUnix,
-        long minRewardSec,
-        Func<long, (long effectiveSec, bool capped, long gold, long exp)> computeReward,
-        Func<int, long, long, (int newLevel, long newExp)> applyExp);
-}
-
-// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑. ──
-file sealed class OfflineContextRow
-{
-    public long LastActiveAt { get; set; }
-    public int Act { get; set; }
-    public int Difficulty { get; set; }
-    public int Stage { get; set; }
-}
-
-file sealed class LastActiveRow
-{
-    public long LastActiveAt { get; set; }
-}
-
-file sealed class CharProgressRow
-{
-    public int CharacterId { get; set; }
-    public int Level { get; set; }
-    public long Exp { get; set; }
-}
-
-file sealed class ItemIdQtyRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-}
-
 /// <summary>오프라인 보상 정산 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class OfflineRepository : IOfflineRepository
 {
@@ -87,9 +35,14 @@ public sealed class OfflineRepository : IOfflineRepository
     private const int PartySlotUnassigned = 0;
 
     private readonly GameDbFactory _dbFactory;
+    private readonly ILevelUpCalculator _levelUp;
 
     /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public OfflineRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    public OfflineRepository(GameDbFactory dbFactory, ILevelUpCalculator levelUp)
+    {
+        _dbFactory = dbFactory;
+        _levelUp = levelUp;
+    }
 
     /// <summary>
     /// game_player에서 정산 기준 시각(last_active_at)과 파밍 스테이지 좌표를 단건 조회한다.
@@ -130,8 +83,7 @@ public sealed class OfflineRepository : IOfflineRepository
         long userId,
         long nowUnix,
         long minRewardSec,
-        Func<long, (long effectiveSec, bool capped, long gold, long exp)> computeReward,
-        Func<int, long, long, (int newLevel, long newExp)> applyExp)
+        Func<long, (long effectiveSec, bool capped, long gold, long exp)> computeReward)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -190,7 +142,7 @@ public sealed class OfflineRepository : IOfflineRepository
             var characters = new List<OfflineCharacterState>();
             foreach (var c in charRows)
             {
-                var (newLevel, newExp) = applyExp(c.Level, c.Exp, exp);
+                var (newLevel, newExp, _) = _levelUp.Calculate(c.Level, c.Exp, exp);
                 await db.Query("player_character")
                     .Where("user_id", userId).Where("character_id", c.CharacterId)
                     .UpdateAsync(new { level = newLevel, exp = newExp }, transaction);

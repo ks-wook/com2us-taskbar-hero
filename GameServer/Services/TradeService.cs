@@ -1,5 +1,6 @@
-using GameServer.MasterData;
+﻿using GameServer.MasterData;
 using GameServer.Repositories;
+using GameServer.Repositories.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
@@ -122,7 +123,7 @@ public sealed class TradeService : ITradeService
 
         var now = NowUnix();
         var outcome = await _tradeRepository.ApplyRegisterAsync(
-            userId, itemId, price, LookupItem, ListingLimit, now, now + ListingDurationSeconds);
+            userId, itemId, price, ListingLimit, now, now + ListingDurationSeconds);
 
         switch (outcome.Status)
         {
@@ -241,7 +242,7 @@ public sealed class TradeService : ITradeService
             return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
         }
 
-        var outcome = await _tradeRepository.ApplyCancelAsync(userId, listingId, LookupItem, NowUnix());
+        var outcome = await _tradeRepository.ApplyCancelAsync(userId, listingId, NowUnix());
 
         switch (outcome.Status)
         {
@@ -279,14 +280,6 @@ public sealed class TradeService : ITradeService
     private int RewardTypeFor(int itemCode)
         => _masterData.GetItem(itemCode)?.ItemType == ItemTypeMaterial ? RewardTypeMaterial : RewardTypeItem;
 
-    /// <summary>아이템 코드 → 거래 검증용 마스터 정보(없으면 null → 판매 불가 처리).</summary>
-    private TradeItemInfo? LookupItem(int itemCode)
-    {
-        var item = _masterData.GetItem(itemCode);
-        return item is null
-            ? null
-            : new TradeItemInfo(item.ItemType, item.StackMax, item.Sellable, item.BasePrice);
-    }
 
     /// <summary>메일 문구(`{0}`)에 넣을 아이템 이름. 마스터에 없으면 코드를 문자열로 폴백한다.</summary>
     private string ItemLabel(int itemCode)

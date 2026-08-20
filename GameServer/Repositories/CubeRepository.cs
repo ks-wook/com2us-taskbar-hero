@@ -1,19 +1,14 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using GameServer.Data;
 using GameServer.MasterData;
+using GameServer.Models;
+using GameServer.Repositories.Interfaces;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories;
 
 // ── 합성(combine) ──
-public enum CombineStatus
-{
-    Ok,
-    ItemNotFound,   // 입력 아이템 일부가 계정에 없음(또는 재화 행)
-    ItemEquipped,   // 입력 중 장착 중인 아이템
-    RecipeNotMet,   // 등급/슬롯/클래스 불일치·개수·등급 상한 등 조건 미충족
-}
 
 /// <summary>합성 입력(리포지토리가 DB에서 채운 아이템 코드). 마스터 검증은 서비스 델리게이트가 수행.</summary>
 public sealed record CombineInput(long ItemId, int ItemCode);
@@ -37,13 +32,6 @@ public sealed record CombineOutcome(
 }
 
 // ── 분해(dismantle) ──
-public enum DismantleStatus
-{
-    Ok,
-    ItemNotFound,         // 대상 아이템 없음(또는 재화 행)
-    ItemEquipped,         // 장착 중이라 분해 불가
-    InsufficientQuantity, // 요청 수량이 보유 수량 초과
-}
 
 /// <summary>분해 입력(아이템 코드 + 분해 수량). 골드·경험치 산출은 서비스 델리게이트가 수행.</summary>
 public sealed record DismantleInput(long ItemId, int ItemCode, int Count);
@@ -70,14 +58,6 @@ public sealed record DismantleOutcome(DismantleStatus Status, long Gold, long Cu
 }
 
 // ── 제작(craft) ──
-public enum CraftStatus
-{
-    Ok,
-    CubeLevelInsufficient, // 큐브 레벨이 요구치 미만
-    InsufficientCurrency,  // 비용 골드 부족
-    RecipeNotMet,          // 소모 재료 부족
-    InventoryFull,         // 결과 아이템 적재 용량 부족
-}
 
 /// <summary>제작 트랜잭션 결과. CubeLevel·CubeExp는 갱신 후 큐브 상태.</summary>
 public sealed record CraftOutcome(CraftStatus Status, int CubeLevel, long CubeExp)
@@ -91,68 +71,6 @@ public sealed record CraftOutcome(CraftStatus Status, int CubeLevel, long CubeEx
     public static CraftOutcome Fail(CraftStatus status) => new(status, 0, 0);
 }
 
-public interface ICubeRepository
-{
-    /// <summary>
-    /// 합성을 한 트랜잭션으로 적용한다: 입력 아이템 소유·미장착 확인 → decide(마스터 검증: 등급/슬롯/클래스/개수, 결과 산출)
-    /// → 입력 삭제 + 상위 등급 결과 아이템 생성 + 큐브 경험치 반영. advanceCube는 (level,exp,gain)→(newLevel,newExp).
-    /// </summary>
-    Task<CombineOutcome> ApplyCombineAsync(
-        long userId, IReadOnlyList<long> itemIds,
-        Func<int, IReadOnlyList<CombineInput>, CombineDecision> decide,
-        Func<int, long, long, (int newLevel, long newExp)> advanceCube,
-        long nowUnix);
-
-    /// <summary>
-    /// 분해를 한 트랜잭션으로 적용한다: 각 아이템 소유·미장착·수량 확인 → computeReward(마스터 등급으로 골드·경험치 산출)
-    /// → 아이템 차감/삭제 + 골드 적립 + 큐브 경험치 반영.
-    /// </summary>
-    Task<DismantleOutcome> ApplyDismantleAsync(
-        long userId, IReadOnlyList<(long itemId, int count)> items,
-        Func<int, IReadOnlyList<DismantleInput>, DismantleReward> computeReward,
-        Func<int, long, long, (int newLevel, long newExp)> advanceCube,
-        long nowUnix);
-
-    /// <summary>
-    /// 제작을 한 트랜잭션으로 적용한다: 큐브 레벨·골드·재료 확인 → 골드·재료 차감 + 결과 아이템 지급 + 큐브 경험치 반영.
-    /// recipe 존재 여부는 호출 전(서비스, 마스터)에서 검증한다. resultItemType/resultStackMax는 결과 아이템 마스터 값.
-    /// </summary>
-    Task<CraftOutcome> ApplyCraftAsync(
-        long userId, RecipeDef recipe, int resultItemType, int resultStackMax, long cubeExpGain,
-        Func<int, long, long, (int newLevel, long newExp)> advanceCube,
-        long nowUnix);
-}
-
-// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑. ──
-file sealed class PlayerItemBriefRow
-{
-    public long PlayerItemId { get; set; }
-    public int ItemCode { get; set; }
-    public int RowType { get; set; }
-    public long Quantity { get; set; }
-    public int? Slot { get; set; }
-}
-
-file sealed class CubeStateRow
-{
-    public int CubeLevel { get; set; }
-    public long CubeExp { get; set; }
-}
-
-file sealed class ItemIdQtyRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-}
-
-/// <summary>가방 변경분(5.0) 조립에 배치 칸이 필요한 조회용(재료 차감·스택 병합).</summary>
-file sealed class ItemIdQtySlotRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-    public int? Slot { get; set; }
-}
-
 /// <summary>큐브(합성·분해·제작) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class CubeRepository : ICubeRepository
 {
@@ -162,9 +80,14 @@ public sealed class CubeRepository : ICubeRepository
     private const int ItemTypeMaterial = 2;
 
     private readonly GameDbFactory _dbFactory;
+    private readonly ICubeLevelCalculator _cubeLevel;
 
     /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public CubeRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    public CubeRepository(GameDbFactory dbFactory, ICubeLevelCalculator cubeLevel)
+    {
+        _dbFactory = dbFactory;
+        _cubeLevel = cubeLevel;
+    }
 
     /// <summary>
     /// 아이템 합성(입력 여러 개 → 상위 등급 결과 1개)을 단일 커넥션의 단일 트랜잭션으로 적용한다.
@@ -183,7 +106,6 @@ public sealed class CubeRepository : ICubeRepository
     public async Task<CombineOutcome> ApplyCombineAsync(
         long userId, IReadOnlyList<long> itemIds,
         Func<int, IReadOnlyList<CombineInput>, CombineDecision> decide,
-        Func<int, long, long, (int newLevel, long newExp)> advanceCube,
         long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -253,7 +175,7 @@ public sealed class CubeRepository : ICubeRepository
             }, transaction);
 
             // 6) 큐브 경험치 반영.
-            var (newLevel, newExp) = advanceCube(cubeLevel, cubeExp, decision.CubeExpGain);
+            var (newLevel, newExp) = _cubeLevel.Calculate(cubeLevel, cubeExp, decision.CubeExpGain);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
 
             // 7) 가방 변경분(5.0): 입력 전량이 사라지고 결과 아이템 1개가 slot 칸에 생긴다.
@@ -299,7 +221,6 @@ public sealed class CubeRepository : ICubeRepository
     public async Task<DismantleOutcome> ApplyDismantleAsync(
         long userId, IReadOnlyList<(long itemId, int count)> items,
         Func<int, IReadOnlyList<DismantleInput>, DismantleReward> computeReward,
-        Func<int, long, long, (int newLevel, long newExp)> advanceCube,
         long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -382,7 +303,7 @@ public sealed class CubeRepository : ICubeRepository
             long goldBalance = await CreditGoldAsync(db, transaction, userId, reward.TotalGold, nowUnix);
 
             // 5) 큐브 경험치 반영.
-            var (newLevel, newExp) = advanceCube(cubeLevel, cubeExp, reward.TotalCubeExp);
+            var (newLevel, newExp) = _cubeLevel.Calculate(cubeLevel, cubeExp, reward.TotalCubeExp);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
 
             await transaction.CommitAsync();
@@ -419,7 +340,6 @@ public sealed class CubeRepository : ICubeRepository
     /// </remarks>
     public async Task<CraftOutcome> ApplyCraftAsync(
         long userId, RecipeDef recipe, int resultItemType, int resultStackMax, long cubeExpGain,
-        Func<int, long, long, (int newLevel, long newExp)> advanceCube,
         long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -495,7 +415,7 @@ public sealed class CubeRepository : ICubeRepository
             }
 
             // 7) 큐브 경험치 반영.
-            var (newLevel, newExp) = advanceCube(cubeLevel, cubeExp, cubeExpGain);
+            var (newLevel, newExp) = _cubeLevel.Calculate(cubeLevel, cubeExp, cubeExpGain);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
 
             await transaction.CommitAsync();

@@ -1,5 +1,6 @@
-using GameServer.MasterData;
+﻿using GameServer.MasterData;
 using GameServer.Repositories;
+using GameServer.Repositories.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
@@ -122,7 +123,6 @@ public sealed class StageService : IStageService
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var outcome = await _stageRepository.ApplyClearAsync(
             userId, act, difficulty, stage, reward.Gold, reward.Exp, dropped,
-            ApplyExp,
             now);
 
         switch (outcome.Status)
@@ -170,25 +170,4 @@ public sealed class StageService : IStageService
         return new SaveResult(ErrorCode.Success, "Stage cleared", data);
     }
 
-    /// <summary>레벨당 요구 경험치(level_master)로 경험치 지급 후 레벨을 재계산한다.
-    /// exp는 "현재 레벨 내 누적치"로 다루며, 요구치를 넘으면 차감하며 레벨업한다(최대 레벨에서 정지).</summary>
-    private (int newLevel, long newExp, bool leveledUp) ApplyExp(int level, long exp, long rewardExp)
-    {
-        var newLevel = level;
-        var newExp = exp + rewardExp;
-
-        while (newLevel < _masterData.MaxLevel)
-        {
-            var required = _masterData.LevelRequiredExp(newLevel);
-            if (required <= 0 || newExp < required)
-            {
-                break;
-            }
-
-            newExp -= required;
-            newLevel++;
-        }
-
-        return (newLevel, newExp, newLevel > level);
-    }
 }

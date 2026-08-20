@@ -1,5 +1,7 @@
-using GameServer.Data;
+﻿using GameServer.Data;
 using GameServer.MasterData;
+using GameServer.Models;
+using GameServer.Repositories.Interfaces;
 using SqlKata.Execution;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
@@ -8,14 +10,6 @@ namespace GameServer.Repositories;
 
 /// <summary>game_player 진행도 스냅샷(스테이지 도메인에서 필요한 필드만).</summary>
 public sealed record StageProgressRow(int Act, int Difficulty, int Stage, int MaxStageCleared, int InventoryCapacity);
-
-/// <summary>클리어 트랜잭션 결과 상태.</summary>
-public enum ClearStatus
-{
-    Ok,
-    NoPlayer,      // game_player 없음(세이브 미생성)
-    NotEntered,    // 현재 진입 스테이지와 요청 불일치
-}
 
 /// <summary>
 /// 클리어 트랜잭션 결과. GrantedGold·GrantedExp는 <b>활성 획득량 버프 배율을 적용한 최종 지급액</b>이며
@@ -47,64 +41,6 @@ public sealed record ClearOutcome(
         => new(status, new List<CharacterProgressDto>(), 0, 0, 0, 1.0m, 1.0m, 0, 0, 0, 0);
 }
 
-public interface IStageRepository
-{
-    Task<StageProgressRow?> GetProgressAsync(long userId);
-
-    /// <summary>현재 진입 스테이지를 설정한다(game_player.act/difficulty/stage). 갱신 행 수 반환.</summary>
-    Task<int> SetCurrentStageAsync(long userId, int act, int difficulty, int stage, long nowUnix);
-
-    /// <summary>
-    /// 클리어를 한 트랜잭션으로 적용한다: 진입 스테이지 재검증 → 활성 획득량 버프 배율 판정 →
-    /// 골드/경험치 지급·전리품 적재 → 진행도 갱신. baseGold·baseExp는 마스터의 기본 보상이며 배율은 이 안에서 곱한다.
-    /// 경험치→레벨 계산은 주입된 levelUp 델리게이트(현재 level·exp·배율 적용된 지급 경험치 → 지급 후 상태)로 처리한다.
-    /// 인벤토리 용량이 부족하면 전리품만 폐기하고(<see cref="ClearOutcome.LootStored"/>=false) 클리어는 성공시킨다.
-    /// </summary>
-    Task<ClearOutcome> ApplyClearAsync(
-        long userId,
-        int expectedAct, int expectedDifficulty, int expectedStage,
-        long baseGold, long baseExp, DroppedItem? dropped,
-        Func<int, long, long, (int newLevel, long newExp, bool leveledUp)> levelUp,
-        long nowUnix);
-}
-
-// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑. ──
-file sealed class PlayerProgressRow
-{
-    public int Act { get; set; }
-    public int Difficulty { get; set; }
-    public int Stage { get; set; }
-    public int MaxStageCleared { get; set; }
-    public int InventoryCapacity { get; set; }
-}
-
-file sealed class CharProgressRow
-{
-    public int CharacterId { get; set; }
-    public int Level { get; set; }
-    public long Exp { get; set; }
-}
-
-file sealed class ItemIdQtyRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-}
-
-/// <summary>가방 변경분(5.0) 조립에 배치 칸이 필요한 스택 병합 조회용.</summary>
-file sealed class ItemIdQtySlotRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-    public int? Slot { get; set; }
-}
-
-file sealed class BuffMultiplierRow
-{
-    public int BuffType { get; set; }
-    public decimal BuffValue { get; set; } // DECIMAL(5,3) → decimal로 받아 그대로 곱한다(부동소수 오차 없이 내림).
-}
-
 /// <summary>스테이지 진행/클리어 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class StageRepository : IStageRepository
 {
@@ -116,9 +52,14 @@ public sealed class StageRepository : IStageRepository
     private const int PartySlotUnassigned = 0;
 
     private readonly GameDbFactory _dbFactory;
+    private readonly ILevelUpCalculator _levelUp;
 
     /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public StageRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    public StageRepository(GameDbFactory dbFactory, ILevelUpCalculator levelUp)
+    {
+        _dbFactory = dbFactory;
+        _levelUp = levelUp;
+    }
 
     /// <summary>
     /// game_player에서 스테이지 도메인용 진행도 스냅샷(현재 진입 좌표·최고 클리어 시퀀스·인벤토리 용량)을
@@ -173,7 +114,6 @@ public sealed class StageRepository : IStageRepository
         long userId,
         int expectedAct, int expectedDifficulty, int expectedStage,
         long baseGold, long baseExp, DroppedItem? dropped,
-        Func<int, long, long, (int newLevel, long newExp, bool leveledUp)> levelUp,
         long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -238,7 +178,7 @@ public sealed class StageRepository : IStageRepository
             {
                 int characterId = c.CharacterId;
 
-                var (newLevel, newExp, leveledUp) = levelUp(c.Level, c.Exp, exp);
+                var (newLevel, newExp, leveledUp) = _levelUp.Calculate(c.Level, c.Exp, exp);
                 await db.Query("player_character")
                     .Where("user_id", userId).Where("character_id", characterId)
                     .UpdateAsync(new { level = newLevel, exp = newExp }, transaction);

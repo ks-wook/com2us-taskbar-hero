@@ -1,5 +1,7 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using GameServer.Data;
+using GameServer.Models;
+using GameServer.Repositories.Interfaces;
 using MySqlConnector;
 using SqlKata.Execution;
 using TaskbarHero.Common;
@@ -19,27 +21,11 @@ public sealed record BossRushRecord(int BestClearMs, long RecordedAt);
 public sealed record BossRushInfoSnapshot(
     int MaxStageCleared, int DailyEntryUsed, BossRushActiveRun? ActiveRun, BossRushRecord? MyRecord);
 
-public enum BossRushEnterStatus
-{
-    Ok,
-    NoPlayer,       // game_player 행 없음 = 계정 세이브 미생성
-    Locked,         // 해금 조건 미달(max_stage_cleared < unlock_stage_sequence)
-    DailyLimit,     // 오늘 도전 횟수 소진
-    SeasonClosed,   // 진행 중 시즌 없음(정산 중)
-}
-
 /// <summary>도전 시작 트랜잭션 결과. 성공 시 RunId·SeasonId와 갱신된 오늘 사용 횟수를 담는다.</summary>
 public sealed record BossRushEnterOutcome(
     BossRushEnterStatus Status, long RunId, int SeasonId, int DailyEntryUsed)
 {
     public static BossRushEnterOutcome Fail(BossRushEnterStatus status) => new(status, 0, 0, 0);
-}
-
-public enum BossRushClearStatus
-{
-    Ok,
-    RunNotFound,      // runId 없음 또는 타인 런
-    AlreadyFinished,  // 이미 종결된 런(중복 보고·동시 요청의 패자·만료 판정에 걸린 런)
 }
 
 /// <summary>
@@ -58,81 +44,6 @@ public sealed record BossRushRankRow(int Rank, long UserId, int ClearMs, long Re
 
 /// <summary>시즌 정산 대상 1건(순위 미확정 기록).</summary>
 public sealed record BossRushSettleTarget(long UserId, int BestClearMs, long RecordedAt);
-
-public interface IBossRushRepository
-{
-    /// <summary>진행 중(status=1) 시즌을 조회한다. 정산 중이거나 시즌이 없으면 null.</summary>
-    Task<BossRushSeason?> GetRunningSeasonAsync();
-
-    /// <summary>시즌 1건을 조회한다(종료 시즌 메타 조회용). 없으면 null.</summary>
-    Task<BossRushSeason?> GetSeasonAsync(int seasonId);
-
-    /// <summary>정보 조회용 스냅샷(진행도·오늘 사용 횟수·진행 중 런·내 최고 기록). 세이브가 없으면 null.</summary>
-    Task<BossRushInfoSnapshot?> GetInfoSnapshotAsync(long userId, int seasonId, long todayStartUnix, long tomorrowStartUnix);
-
-    /// <summary>
-    /// 도전 시작을 한 트랜잭션으로 적용한다(기획서 6.1): 진행도 확인 → 해금 검증 → 진행 중 시즌 확인 →
-    /// 오늘 사용 횟수 검증 → 진행 중 런 자동 만료 종결 → 새 런 INSERT.
-    /// <b>일일 횟수 차감의 정본은 런 INSERT 그 자체</b>이며, 카운트와 INSERT가 같은 트랜잭션·같은 user_id
-    /// 잠금 안에 있어 동시 요청이 한도를 넘기지 못한다.
-    /// </summary>
-    Task<BossRushEnterOutcome> ApplyEnterAsync(
-        long userId, int unlockStageSequence, int dailyEntryLimit,
-        long todayStartUnix, long tomorrowStartUnix, long nowMs);
-
-    /// <summary>
-    /// 클리어 보고를 한 트랜잭션으로 적용한다(기획서 6.2): 런 행 잠금 → 만료 판정(lazy) → 조건부 종결 →
-    /// 라운드 기록 INSERT → 시즌 최고 기록 조건부 UPSERT. 보상 지급은 없다.
-    /// </summary>
-    /// <param name="roundTimes">라운드 번호 → 소요(ms). 형식 검증은 서비스가 이미 마쳤다.</param>
-    /// <param name="bossByRound">라운드 번호 → 그 라운드 보스 코드(원장에 남길 참고값).</param>
-    Task<BossRushClearOutcome> ApplyClearAsync(
-        long userId, long runId, int clearMs, IReadOnlyList<(int Round, int ElapsedMs)> roundTimes,
-        IReadOnlyDictionary<int, int> bossByRound, long runLifetimeMs, long nowMs);
-
-    /// <summary>시즌 등재 인원(ZCARD 폴백).</summary>
-    Task<int> CountEntriesAsync(int seasonId);
-
-    /// <summary>
-    /// 랭킹 목록 한 페이지를 MySQL에서 읽는다. 종료 시즌(<paramref name="useFinalRank"/> true)은 정산이
-    /// 확정한 final_rank로 그대로 읽고, 진행 중 시즌은 (best_clear_ms, recorded_at) 정렬로 순위를 매긴다.
-    /// </summary>
-    Task<IReadOnlyList<BossRushRankRow>> GetRankPageAsync(int seasonId, int offset, int limit, bool useFinalRank);
-
-    /// <summary>본인 순위 1건을 MySQL에서 계산한다(폴백). 기록이 없으면 null.</summary>
-    Task<BossRushRankRow?> GetMyRankAsync(int seasonId, long userId, bool useFinalRank);
-
-    /// <summary>지정 userId들의 닉네임을 조회한다(랭킹 표시 이름 백필용).</summary>
-    Task<IReadOnlyDictionary<long, string>> GetNicknamesAsync(IReadOnlyCollection<long> userIds);
-
-    /// <summary>랭킹 캐시 워밍업용 — 시즌 기록을 정렬 순서로 페이지 단위 스캔한다.</summary>
-    Task<IReadOnlyList<BossRushSettleTarget>> ScanRecordsAsync(int seasonId, int offset, int limit);
-
-    // ── 시즌 정산 배치(6.4) ──
-
-    /// <summary>정산 대상 시즌을 조건부 갱신으로 선점한다(status 1 → 2). 선점하지 못하면 null.</summary>
-    Task<BossRushSeason?> ClaimSeasonForSettlementAsync(long nowUnix);
-
-    /// <summary>순위가 아직 확정되지 않은 기록을 정렬 순서로 상한까지 읽는다(정산 대상).</summary>
-    Task<IReadOnlyList<BossRushSettleTarget>> GetUnsettledRecordsAsync(int seasonId, int limit);
-
-    /// <summary>해당 시즌에서 이미 순위가 확정된 기록 수(다음 페이지의 시작 순위를 잇는 데 쓴다).</summary>
-    Task<int> CountSettledAsync(int seasonId);
-
-    /// <summary>
-    /// 기록 1건의 순위를 확정하고 보상 메일을 발급한다(같은 트랜잭션, 멱등). final_rank가 0일 때만
-    /// 전이하므로 재진입 시 이미 처리한 행은 0행이 되어 스킵된다.
-    /// </summary>
-    /// <param name="composeRewardMail">지급 골드 → 메일 초안. null이면 보상 없이 순위만 확정한다.</param>
-    Task<bool> SettleRecordAsync(
-        int seasonId, long userId, int finalRank, MailDraft? composeRewardMail, long nowUnix);
-
-    /// <summary>시즌을 종료 처리한다(status → 3, settled_at 기록).</summary>
-    Task CloseSeasonAsync(int seasonId, long nowUnix);
-
-    /// <summary>다음 시즌을 개시한다(start_at 유니크로 중복 삽입 방지). 이미 있으면 기존 시즌을 돌려준다.</summary>
-    Task<BossRushSeason> StartNextSeasonAsync(long startAt, long endAt);
-}
 
 /// <summary>
 /// 보스러시 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).
@@ -631,7 +542,7 @@ public sealed class BossRushRepository : IBossRushRepository
     /// 갱신이라 재진입 시 이미 처리한 행은 0행이 되어 스킵된다 — "보상은 갔는데 순위 기록이 없음"이 생기지 않는다.
     /// </summary>
     public async Task<bool> SettleRecordAsync(
-        int seasonId, long userId, int finalRank, MailDraft? composeRewardMail, long nowUnix)
+        int seasonId, long userId, int finalRank, MailDraft? rewardMail, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -641,9 +552,9 @@ public sealed class BossRushRepository : IBossRushRepository
         {
             var db = _dbFactory.Create(connection);
 
-            var mailId = composeRewardMail is null
+            var mailId = rewardMail is null
                 ? 0L
-                : await MailRepository.InsertMailAsync(db, transaction, userId, composeRewardMail, nowUnix);
+                : await MailRepository.InsertMailAsync(db, transaction, userId, rewardMail, nowUnix);
 
             var updated = await db.Query("boss_rush_record")
                 .Where("season_id", seasonId)
@@ -756,58 +667,4 @@ public sealed class BossRushRepository : IBossRushRepository
 
         return (reader.GetInt64(0), reader.GetInt32(1), reader.GetInt64(2), reader.GetInt32(3));
     }
-}
-
-/// <summary>boss_rush_season 행 매핑용 POCO.</summary>
-file sealed class BossRushSeasonRow
-{
-    public int SeasonId { get; set; }
-    public long StartAt { get; set; }
-    public long EndAt { get; set; }
-    public int Status { get; set; }
-}
-
-/// <summary>game_player 진행도 조회용 POCO(보스러시 해금 판정·정보 조회).</summary>
-file sealed class BossRushPlayerRow
-{
-    public int MaxStageCleared { get; set; }
-}
-
-/// <summary>boss_rush_run 조회용 POCO(진행 중 런).</summary>
-file sealed class BossRushRunRow
-{
-    public long RunId { get; set; }
-    public int SeasonId { get; set; }
-    public long StartedAt { get; set; }
-}
-
-/// <summary>boss_rush_record 최고 기록 조회용 POCO.</summary>
-file sealed class BossRushRecordRow
-{
-    public int BestClearMs { get; set; }
-    public long RecordedAt { get; set; }
-}
-
-/// <summary>boss_rush_record 랭킹 조회용 POCO(final_rank 포함).</summary>
-file sealed class BossRushRankRecordRow
-{
-    public long UserId { get; set; }
-    public int BestClearMs { get; set; }
-    public long RecordedAt { get; set; }
-    public int FinalRank { get; set; }
-}
-
-/// <summary>boss_rush_record 정산·워밍업 스캔용 POCO.</summary>
-file sealed class BossRushSettleRow
-{
-    public long UserId { get; set; }
-    public int BestClearMs { get; set; }
-    public long RecordedAt { get; set; }
-}
-
-/// <summary>game_player 닉네임 조회용 POCO(랭킹 표시 이름).</summary>
-file sealed class BossRushNicknameRow
-{
-    public long UserId { get; set; }
-    public string? Nickname { get; set; }
 }

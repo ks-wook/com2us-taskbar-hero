@@ -1,5 +1,6 @@
-using GameServer.MasterData;
+﻿using GameServer.MasterData;
 using GameServer.Repositories;
+using GameServer.Repositories.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
@@ -113,7 +114,6 @@ public sealed class GachaService : IGachaService
         var outcome = await _gachaRepository.ApplyPullAsync(
             userId, banner, pullType, cost,
             counters => RollAll(banner, drawCount, multi, counters),
-            ItemLookup,
             now);
 
         switch (outcome.Status)
@@ -277,10 +277,4 @@ public sealed class GachaService : IGachaService
             };
         }).ToList();
 
-    /// <summary>item_code → (itemType, stackMax) 마스터 조회. 미정의 코드는 장비처럼(스택 1) 취급한다.</summary>
-    private (int itemType, int stackMax) ItemLookup(int itemCode)
-    {
-        var def = _masterData.GetItem(itemCode);
-        return def is null ? (1, 1) : (def.ItemType, Math.Max(def.StackMax, 1));
-    }
 }

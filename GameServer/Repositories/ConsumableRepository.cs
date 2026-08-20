@@ -1,19 +1,11 @@
-using GameServer.Data;
+﻿using GameServer.Data;
+using GameServer.Models;
+using GameServer.Repositories.Interfaces;
 using MySqlConnector;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories;
-
-public enum ConsumableUseStatus
-{
-    Ok,
-    ItemNotFound,          // 대상 행이 계정에 없음(또는 재화 행)
-    NotConsumable,         // item_type이 소모품(4)이 아님
-    InsufficientQuantity,  // 보유 수량 0
-    MasterNotDefined,      // consumable_master에 효과 정의가 없음
-    DurationLimitExceeded, // 누적 지속시간 상한 초과
-}
 
 /// <summary>버프 1건(활성/만료 무관). BuffValue는 획득량 배율, 시각은 Unix ts(초).</summary>
 public sealed record PlayerBuffRow(int BuffType, float BuffValue, long StartedAt, long ExpiresAt);
@@ -44,49 +36,6 @@ public sealed record ConsumableUseOutcome(
 
     public static ConsumableUseOutcome Fail(ConsumableUseStatus status)
         => new(status, 0, 0, null, Array.Empty<PlayerBuffRow>());
-}
-
-public interface IConsumableRepository
-{
-    /// <summary>
-    /// 소모품 1개 사용을 한 트랜잭션으로 적용한다: 대상 행 소유·수량 확인 → decide(마스터 검증: 소모품 여부·배율·
-    /// 지속시간·누적 상한) → 아이템 1개 차감(0이면 행 삭제) + player_buff upsert. plan은
-    /// (기존 버프, 지속시간) → (새 started_at, 새 expires_at, 상한 초과 여부)를 산출한다.
-    /// </summary>
-    Task<ConsumableUseOutcome> ApplyUseAsync(
-        long userId, long itemId,
-        Func<int, ConsumableDecision> decide,
-        Func<PlayerBuffRow?, int, (long startedAt, long expiresAt, bool overLimit)> plan,
-        long nowUnix);
-
-    /// <summary>계정의 활성 버프(expires_at > now)를 조회한다. 코어 세이브 로드의 activeBuffs 항목이 사용한다.</summary>
-    Task<List<PlayerBuffRow>> GetActiveBuffsAsync(long userId, long nowUnix);
-}
-
-// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑. ──
-file sealed class PlayerItemRow
-{
-    public long PlayerItemId { get; set; }
-    public int ItemCode { get; set; }
-    public int RowType { get; set; }
-    public long Quantity { get; set; }
-    public int? Slot { get; set; } // 가방 변경분(5.0) 조립용 배치 칸
-}
-
-file sealed class BuffRow
-{
-    public int BuffType { get; set; }
-    public decimal BuffValue { get; set; } // DECIMAL(5,3) → decimal로 받아 float로 캐스팅
-    public long StartedAt { get; set; }
-    public long ExpiresAt { get; set; }
-}
-
-/// <summary>행 매핑 POCO → 공개 레코드 변환. 파일 로컬 타입은 공개 멤버 시그니처에 못 쓰므로 별도 파일 로컬 클래스에 둔다.</summary>
-file static class BuffRowMapper
-{
-    /// <summary>DB 행 → 버프 레코드. DECIMAL(5,3)인 buff_value를 float로 캐스팅한다. 행이 없으면 null.</summary>
-    public static PlayerBuffRow? ToBuff(this BuffRow? row)
-        => row is null ? null : new PlayerBuffRow(row.BuffType, (float)row.BuffValue, row.StartedAt, row.ExpiresAt);
 }
 
 /// <summary>
@@ -137,7 +86,7 @@ public sealed class ConsumableRepository : IConsumableRepository
             var item = await db.Query("player_item")
                 .Select("player_item_id", "item_code", "row_type", "quantity", "slot")
                 .Where("user_id", userId).Where("player_item_id", itemId)
-                .FirstOrDefaultAsync<PlayerItemRow>(transaction);
+                .FirstOrDefaultAsync<ConsumablePlayerItemRow>(transaction);
 
             if (item is null || item.RowType != RowTypeItem)
             {
@@ -164,7 +113,7 @@ public sealed class ConsumableRepository : IConsumableRepository
                 .Select("buff_type", "buff_value", "started_at", "expires_at")
                 .Where("user_id", userId).Where("buff_type", decision.BuffType)
                 .FirstOrDefaultAsync<BuffRow>(transaction);
-            var prevBuff = prev.ToBuff();
+            var prevBuff = ToBuff(prev);
 
             // 4) 새 구간 산출 + 누적 상한 검사. 초과면 아이템을 차감하지 않는다.
             var (startedAt, expiresAt, overLimit) = plan(prevBuff, decision.DurationSec);
@@ -244,7 +193,7 @@ public sealed class ConsumableRepository : IConsumableRepository
             await transaction.CommitAsync();
 
             var buff = new PlayerBuffRow(decision.BuffType, decision.BuffValue, startedAt, expiresAt);
-            var active = activeRows.Select(r => r.ToBuff()!).ToList();
+            var active = activeRows.Select(r => ToBuff(r)!).ToList();
             return new ConsumableUseOutcome(ConsumableUseStatus.Ok, item.ItemCode, remaining, buff, active) { Delta = delta };
         }
         catch
@@ -264,6 +213,10 @@ public sealed class ConsumableRepository : IConsumableRepository
             .OrderBy("buff_type")
             .GetAsync<BuffRow>();
 
-        return rows.Select(r => r.ToBuff()!).ToList();
+        return rows.Select(r => ToBuff(r)!).ToList();
     }
+
+    /// <summary>DB 행 → 버프 레코드. DECIMAL(5,3)인 buff_value를 float로 캐스팅한다. 행이 없으면 null.</summary>
+    private static PlayerBuffRow? ToBuff(BuffRow? row)
+        => row is null ? null : new PlayerBuffRow(row.BuffType, (float)row.BuffValue, row.StartedAt, row.ExpiresAt);
 }

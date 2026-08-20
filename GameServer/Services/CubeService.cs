@@ -1,5 +1,6 @@
-using GameServer.MasterData;
+﻿using GameServer.MasterData;
 using GameServer.Repositories;
+using GameServer.Repositories.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
@@ -57,7 +58,7 @@ public sealed class CubeService : ICubeService
         }
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var outcome = await _cubeRepository.ApplyCombineAsync(userId, ids, DecideCombine, AdvanceCube, now);
+        var outcome = await _cubeRepository.ApplyCombineAsync(userId, ids, DecideCombine, now);
 
         switch (outcome.Status)
         {
@@ -106,7 +107,7 @@ public sealed class CubeService : ICubeService
         }
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var outcome = await _cubeRepository.ApplyDismantleAsync(userId, pairs, ComputeDismantleReward, AdvanceCube, now);
+        var outcome = await _cubeRepository.ApplyDismantleAsync(userId, pairs, ComputeDismantleReward, now);
 
         switch (outcome.Status)
         {
@@ -159,7 +160,7 @@ public sealed class CubeService : ICubeService
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var outcome = await _cubeRepository.ApplyCraftAsync(
-            userId, recipe, resultItem.ItemType, resultItem.StackMax, CraftExp, AdvanceCube, now);
+            userId, recipe, resultItem.ItemType, resultItem.StackMax, CraftExp, now);
 
         switch (outcome.Status)
         {
@@ -247,24 +248,4 @@ public sealed class CubeService : ICubeService
         return new DismantleReward(gold, exp);
     }
 
-    /// <summary>큐브 경험치를 반영해 새 레벨·잔여 경험치를 산출한다(초과분 이월, 최대 레벨에서 정지). cube_master.required_exp 기준.</summary>
-    private (int newLevel, long newExp) AdvanceCube(int level, long exp, long gain)
-    {
-        int newLevel = level;
-        long newExp = exp + gain;
-
-        while (true)
-        {
-            long required = _masterData.CubeRequiredExp(newLevel);
-            if (required <= 0 || newExp < required)
-            {
-                break;
-            }
-
-            newExp -= required;
-            newLevel++;
-        }
-
-        return (newLevel, newExp);
-    }
 }

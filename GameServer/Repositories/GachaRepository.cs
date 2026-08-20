@@ -1,21 +1,14 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using GameServer.Data;
 using GameServer.MasterData;
+using GameServer.Models;
+using GameServer.Repositories.Interfaces;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories;
 
 // ── 뽑기(pull) ──
-
-/// <summary>뽑기 처리 결과 상태(가챠 기획서 §6.5·6.7).</summary>
-public enum GachaPullStatus
-{
-    Ok,
-    InsufficientCurrency, // 비용 재화 부족(차감 전 검증이라 상태 변화 없음)
-    PoolEmpty,            // 추첨된 등급 슬롯에 후보가 없음(마스터 결함) → 전체 롤백
-    InventoryFull,        // 지급 아이템을 적재할 빈 칸 부족 → 전체 롤백(골드도 돌아온다)
-}
 
 /// <summary>회차별 뽑기 결과 1건(서버가 확정한 값). Quantity는 gacha_item_pool.quantity.</summary>
 public sealed record GachaPullEntry(int Seq, int Grade, int ItemCode, int Quantity, bool PityApplied, bool Guaranteed);
@@ -59,76 +52,6 @@ public sealed record GachaHistoryEntry(
 /// <summary>기록 페이지(커서 페이징). HasMore는 limit+1번째 행의 존재로 판정한다.</summary>
 public sealed record GachaHistoryPage(IReadOnlyList<GachaHistoryEntry> Entries, long NextCursor, bool HasMore);
 
-public interface IGachaRepository
-{
-    /// <summary>
-    /// 배너별 천장 진행도(등급 → 누적 미획득 횟수)를 읽는다. 행이 없는 등급은 0으로 채운다(lazy 생성 전 상태).
-    /// 배너 조회(§5.1)가 쓰는 읽기 전용 경로다.
-    /// </summary>
-    Task<IReadOnlyDictionary<int, int>> LoadCountersAsync(long userId, int gachaCode, IReadOnlyList<int> grades);
-
-    /// <summary>
-    /// 뽑기를 하나의 트랜잭션으로 처리한다(기획서 §6.5): 비용 검증·차감 → 카운터 조회 → 추첨(델리게이트) →
-    /// 지급 → 카운터 UPSERT → 원장 적재. 중간 실패 시 전체 롤백하므로 골드만 빠지는 상태가 생기지 않는다.
-    /// </summary>
-    /// <param name="rollAll">
-    /// 추첨 델리게이트. 입력은 현재 천장 카운터(등급 → 누적 미획득 횟수)이며, 회차별 결과 목록을 반환한다.
-    /// null을 반환하면 후보 풀 부재(PoolEmpty)로 전체 롤백한다. 카운터 갱신도 이 델리게이트가 함께 수행한다.
-    /// </param>
-    /// <param name="itemLookup">item_code → (itemType, stackMax) 마스터 조회(적재 규칙 판정용).</param>
-    Task<GachaPullOutcome> ApplyPullAsync(
-        long userId, GachaBannerDef banner, int pullType, long cost,
-        Func<IDictionary<int, int>, IReadOnlyList<GachaPullEntry>?> rollAll,
-        Func<int, (int itemType, int stackMax)> itemLookup,
-        long nowUnix);
-
-    /// <summary>
-    /// 뽑기 기록을 최신순 커서 페이징으로 조회한다(기획서 §6.6). gachaCode 0이면 전체,
-    /// cursor 0이면 최신부터. 부모 페이지를 먼저 뽑고 자식은 pull_id 집합으로 한 번에 가져온다(쿼리 2회 고정).
-    /// </summary>
-    Task<GachaHistoryPage> GetHistoryAsync(long userId, int gachaCode, long cursor, int limit);
-}
-
-file sealed class ItemIdQtyRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-}
-
-file sealed class ItemIdQtySlotRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-    public int? Slot { get; set; }
-}
-
-file sealed class GachaCounterRow
-{
-    public int Grade { get; set; }
-    public int PityCount { get; set; }
-}
-
-file sealed class GachaPullRow
-{
-    public long PullId { get; set; }
-    public int GachaCode { get; set; }
-    public int PullType { get; set; }
-    public int CostCurrencyCode { get; set; }
-    public long CostAmount { get; set; }
-    public long PulledAt { get; set; }
-}
-
-file sealed class GachaPullItemRow
-{
-    public long PullId { get; set; }
-    public int Seq { get; set; }
-    public int ItemCode { get; set; }
-    public int Grade { get; set; }
-    public int Quantity { get; set; }
-    public int PityApplied { get; set; }
-    public int Guaranteed { get; set; }
-}
-
 /// <summary>
 /// 가챠 세이브 접근(player_gacha_counter·player_gacha_pull·player_gacha_pull_item + 비용 재화·지급 적재).
 /// 쿼리는 SqlKata 빌더로만 작성하고 결과는 제네릭 매핑으로 POCO에 받는다(프로젝트 규칙).
@@ -139,9 +62,14 @@ public sealed class GachaRepository : IGachaRepository
     private const int RowTypeCurrency = 2;
 
     private readonly GameDbFactory _dbFactory;
+    private readonly IItemLookup _itemLookup;
 
     /// <summary>세이브 DB 팩토리를 주입받는다.</summary>
-    public GachaRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    public GachaRepository(GameDbFactory dbFactory, IItemLookup itemLookup)
+    {
+        _dbFactory = dbFactory;
+        _itemLookup = itemLookup;
+    }
 
     /// <summary>배너별·등급별 천장 진행도를 읽는다(행이 없는 등급은 0). 읽기 전용이므로 트랜잭션을 쓰지 않는다.</summary>
     public async Task<IReadOnlyDictionary<int, int>> LoadCountersAsync(
@@ -182,7 +110,6 @@ public sealed class GachaRepository : IGachaRepository
     public async Task<GachaPullOutcome> ApplyPullAsync(
         long userId, GachaBannerDef banner, int pullType, long cost,
         Func<IDictionary<int, int>, IReadOnlyList<GachaPullEntry>?> rollAll,
-        Func<int, (int itemType, int stackMax)> itemLookup,
         long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -258,7 +185,7 @@ public sealed class GachaRepository : IGachaRepository
 
             foreach (var (itemCode, quantity) in grouped)
             {
-                var (_, stackMax) = itemLookup(itemCode);
+                var stackMax = _itemLookup.Stacking(itemCode).StackMax;
                 bool stored = await StoreItemAsync(
                     db, transaction, userId, itemCode, quantity, stackMax, capacity, used, nowUnix, delta);
                 if (!stored)

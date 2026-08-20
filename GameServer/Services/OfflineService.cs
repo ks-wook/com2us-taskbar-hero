@@ -1,5 +1,6 @@
-using GameServer.MasterData;
+﻿using GameServer.MasterData;
 using GameServer.Repositories;
+using GameServer.Repositories.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
@@ -69,8 +70,7 @@ public sealed class OfflineService : IOfflineService
 
         var outcome = await _offlineRepository.ClaimAsync(
             userId, now, MinRewardSec,
-            lockedElapsed => ComputeReward(lockedElapsed, rewardGold, rewardExp),
-            ApplyExp);
+            lockedElapsed => ComputeReward(lockedElapsed, rewardGold, rewardExp));
 
         switch (outcome.Status)
         {
@@ -126,25 +126,4 @@ public sealed class OfflineService : IOfflineService
         return (effective, capped, gold, exp);
     }
 
-    /// <summary>레벨당 요구 경험치(level_master)로 지급 경험치를 반영하고 레벨을 재계산한다.
-    /// exp는 "현재 레벨 내 누적치"로 다루며, 요구치를 넘으면 차감하며 레벨업한다(최대 레벨에서 정지, 초과분 이월).</summary>
-    private (int newLevel, long newExp) ApplyExp(int level, long curExp, long addExp)
-    {
-        var newLevel = level;
-        var newExp = curExp + addExp;
-
-        while (newLevel < _masterData.MaxLevel)
-        {
-            var required = _masterData.LevelRequiredExp(newLevel);
-            if (required <= 0 || newExp < required)
-            {
-                break;
-            }
-
-            newExp -= required;
-            newLevel++;
-        }
-
-        return (newLevel, newExp);
-    }
 }

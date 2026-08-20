@@ -1,20 +1,11 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using GameServer.Data;
+using GameServer.Models;
+using GameServer.Repositories.Interfaces;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories;
-
-/// <summary>장착 트랜잭션 결과 상태.</summary>
-public enum EquipStatus
-{
-    Ok,
-    InvalidCharacter, // player_character 슬롯 없음
-    ItemNotFound,     // 인벤토리에 해당 아이템 없음
-    ItemEquipped,     // 이미 어딘가에 장착 중
-    NotEquippable,    // 장비 아님·슬롯/클래스/레벨 부적합
-    InventoryFull,    // 스왑으로 밀려난 기존 장비를 되돌릴 빈 칸이 없음(방어적, 통상 발생하지 않음)
-}
 
 /// <summary>
 /// 장착 트랜잭션 결과. Slot=장착 슬롯, UnequippedItemId=스왑으로 밀려난 기존 장비(없으면 null),
@@ -28,15 +19,6 @@ public sealed record EquipOutcome(EquipStatus Status, int Slot, long? Unequipped
     public static EquipOutcome Fail(EquipStatus status) => new(status, 0, null, null);
 }
 
-/// <summary>장착 해제 트랜잭션 결과 상태.</summary>
-public enum UnequipStatus
-{
-    Ok,
-    InvalidCharacter, // player_character 슬롯 없음
-    NotEquipped,      // 해당 캐릭터-슬롯에 장착된 장비 없음
-    InventoryFull,    // 가방에 되돌릴 빈 칸이 없음
-}
-
 /// <summary>장착 해제 트랜잭션 결과. BagSlot=장비가 되돌아간 가방 칸.</summary>
 public sealed record UnequipOutcome(UnequipStatus Status, long ItemId, int BagSlot)
 {
@@ -46,14 +28,6 @@ public sealed record UnequipOutcome(UnequipStatus Status, long ItemId, int BagSl
     public static UnequipOutcome Fail(UnequipStatus status) => new(status, 0, 0);
 }
 
-/// <summary>배치 이동 트랜잭션 결과 상태.</summary>
-public enum MoveStatus
-{
-    Ok,
-    ItemNotFound, // 대상 아이템이 인벤토리에 없음(또는 재화 행)
-    InvalidSlot,  // toSlot이 용량 범위 밖
-}
-
 /// <summary>배치 이동 트랜잭션 결과. Swapped*는 목표 칸에 있던 아이템(비어 있었으면 null).</summary>
 public sealed record MoveOutcome(MoveStatus Status, long MovedItemId, int MovedSlot, long? SwappedItemId, int? SwappedSlot)
 {
@@ -61,24 +35,6 @@ public sealed record MoveOutcome(MoveStatus Status, long MovedItemId, int MovedS
     public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
 
     public static MoveOutcome Fail(MoveStatus status) => new(status, 0, 0, null, null);
-}
-
-/// <summary>강화 판정(마스터) 결과 상태. 리포지토리가 델리게이트로 받아 트랜잭션 안에서 사용한다.</summary>
-public enum EnhancePlanStatus
-{
-    Ok,
-    NotEquippable, // 장비가 아님(재료·소모품·재화 등)
-    MaxReached,    // 다음 강화 단계가 enhance_master에 없음
-}
-
-/// <summary>장비 강화 트랜잭션 결과 상태.</summary>
-public enum EnhanceStatus
-{
-    Ok,
-    ItemNotFound,         // 계정 소유 아이템이 아님
-    NotEquippable,        // 장비가 아님
-    MaxEnhanceReached,    // 최대 강화 단계 도달
-    InsufficientCurrency, // 비용 재화 부족
 }
 
 /// <summary>
@@ -91,26 +47,10 @@ public sealed record EnhanceOutcome(
     public static EnhanceOutcome Fail(EnhanceStatus status) => new(status, 0, 0, 0, 0, false);
 }
 
-/// <summary>인벤토리 용량 확장 트랜잭션 결과 상태.</summary>
-public enum ExpandStatus
-{
-    Ok,
-    NoPlayer,             // game_player 없음(세이브 미생성)
-    CapacityMax,          // 이미 상한이라 더 확장 불가
-    InsufficientCurrency, // 골드 부족
-}
-
 /// <summary>인벤토리 확장 트랜잭션 결과. Cost=차감 골드, GoldBalance=차감 후 잔액.</summary>
 public sealed record ExpandOutcome(ExpandStatus Status, int InventoryCapacity, long Cost, long GoldBalance)
 {
     public static ExpandOutcome Fail(ExpandStatus status) => new(status, 0, 0, 0);
-}
-
-/// <summary>인벤토리 조회 결과 상태.</summary>
-public enum InventoryPageStatus
-{
-    Ok,
-    NoPlayer, // game_player 없음(세이브 미생성)
 }
 
 /// <summary>
@@ -121,83 +61,6 @@ public sealed record InventoryBagOutcome(InventoryPageStatus Status, IReadOnlyLi
 {
     public static InventoryBagOutcome Fail(InventoryPageStatus status) =>
         new(status, Array.Empty<InventoryItemDto>(), 0);
-}
-
-public interface IInventoryRepository
-{
-    /// <summary>
-    /// 그 계정의 가방 아이템을 <b>slot 커서 keyset 페이징</b>으로 조회한다(<c>slot &gt; cursor</c>, slot 오름차순,
-    /// 최대 limit개) — 다음 페이지 존재 판정을 위해 한 건 더 읽어 돌려주므로 호출측이 잘라 쓴다.
-    /// 총 점유 칸 수(<c>Total</c>)를 함께 반환한다.
-    /// </summary>
-    Task<InventoryBagOutcome> GetPageAsync(long userId, int cursor, int limit);
-
-    /// <summary>
-    /// 장착을 한 트랜잭션으로 적용한다: 캐릭터·아이템 존재/미장착 확인 → validate(마스터 검증)로 장착 가능 여부·대상 슬롯 판정
-    /// → 같은 슬롯 기존 장비 해제(스왑) → 장착 행 INSERT. validate는 (itemCode, classCode, level)→(ok, slot).
-    /// </summary>
-    Task<EquipOutcome> ApplyEquipAsync(
-        long userId, int characterId, long itemId,
-        Func<int, int, int, (bool ok, int slot)> validate);
-
-    /// <summary>지정 캐릭터-장착 슬롯의 장비를 해제(장착 행 DELETE)한다.</summary>
-    Task<UnequipOutcome> ApplyUnequipAsync(long userId, int characterId, int slot);
-
-    /// <summary>아이템을 목표 칸으로 이동한다. 목표 칸이 차 있으면 두 칸을 교환(swap)하며, 한 트랜잭션으로 처리한다.</summary>
-    Task<MoveOutcome> ApplyMoveAsync(long userId, long itemId, int toSlot);
-
-    /// <summary>
-    /// 장비 강화를 한 트랜잭션으로 적용한다: 아이템 소유 확인 → plan(마스터 검증)으로 강화 가능 여부·비용 판정
-    /// → 비용 재화 확인·차감 → enhance_level += 1(장착 중이면 장착 행의 강화 단계도 함께 갱신).
-    /// plan은 (itemCode, 현재 강화 단계)→(status, cost, currencyCode).
-    /// </summary>
-    Task<EnhanceOutcome> ApplyEnhanceAsync(
-        long userId, long itemId,
-        Func<int, int, (EnhancePlanStatus status, long cost, int currencyCode)> plan);
-
-    /// <summary>
-    /// 인벤토리 용량을 1칸 확장한다: 현재 용량으로 planOne(비용·가능 여부)을 산출 → 골드 확인·차감 → inventory_capacity += 1.
-    /// planOne은 (currentCapacity)→(ok, cost). 한 트랜잭션으로 처리하며 실패 시 전체 롤백한다.
-    /// </summary>
-    Task<ExpandOutcome> ApplyExpandAsync(long userId, Func<int, (bool ok, long cost)> planOne, long nowUnix);
-}
-
-// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑. ──
-file sealed class CharClassLevelRow
-{
-    public int ClassCode { get; set; }
-    public int Level { get; set; }
-}
-
-file sealed class ItemCodeEnhanceSlotRow
-{
-    public int ItemCode { get; set; }
-    public int EnhanceLevel { get; set; }
-    public int? Slot { get; set; } // 장착 중이면 NULL(가방 칸 미점유)
-}
-
-file sealed class ItemRowTypeSlotRow
-{
-    public int RowType { get; set; }
-    public int? Slot { get; set; }
-    public int ItemCode { get; set; }
-    public long Quantity { get; set; }
-    public int EnhanceLevel { get; set; }
-}
-
-file sealed class ItemIdQtyRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-}
-
-file sealed class BagItemRow
-{
-    public long PlayerItemId { get; set; }
-    public int Slot { get; set; }
-    public int ItemCode { get; set; }
-    public long Quantity { get; set; }
-    public int EnhanceLevel { get; set; }
 }
 
 /// <summary>인벤토리/아이템 액션 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>

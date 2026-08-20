@@ -1,5 +1,6 @@
-using GameServer.MasterData;
+﻿using GameServer.MasterData;
 using GameServer.Repositories;
+using GameServer.Repositories.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
@@ -85,7 +86,7 @@ public sealed class MailService : IMailService
         }
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var outcome = await _mailRepository.ApplyClaimAsync(userId, mailId, LookupItemStacking, now);
+        var outcome = await _mailRepository.ApplyClaimAsync(userId, mailId, now);
 
         if (outcome.Status != MailClaimStatus.Ok)
         {
@@ -117,7 +118,7 @@ public sealed class MailService : IMailService
         }
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var outcome = await _mailRepository.ApplyClaimAllAsync(userId, LookupItemStacking, now);
+        var outcome = await _mailRepository.ApplyClaimAllAsync(userId, now);
 
         if (outcome.Status != MailClaimStatus.Ok)
         {
@@ -136,15 +137,6 @@ public sealed class MailService : IMailService
         return new SaveResult(ErrorCode.Success, "Claimed all", data);
     }
 
-    /// <summary>
-    /// 첨부 아이템 적재 규칙 조회(리포지토리 델리게이트): item_code로 마스터에서 (itemType, stackMax)를 찾는다.
-    /// 마스터에 없는 코드(발급 데이터 결함)는 비스택 장비(1, 1)로 안전하게 적재한다.
-    /// </summary>
-    private (int itemType, int stackMax) LookupItemStacking(int itemCode)
-    {
-        var def = _masterData.GetItem(itemCode);
-        return def is null ? (1, 1) : (def.ItemType, def.StackMax);
-    }
 
     /// <summary>리포지토리 수령 상태를 공유 ErrorCode로 변환한다.</summary>
     private static ErrorCode ToErrorCode(MailClaimStatus status) => status switch

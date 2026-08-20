@@ -1,6 +1,7 @@
-using CloudStructures;
+﻿using CloudStructures;
 using GameServer.MasterData;
 using GameServer.Repositories;
+using GameServer.Repositories.Interfaces;
 using GameServer.Services;
 using TaskbarHero.Common;
 using ZLogger;

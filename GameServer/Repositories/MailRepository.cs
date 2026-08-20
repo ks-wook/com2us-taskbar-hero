@@ -1,5 +1,8 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using GameServer.Data;
+using GameServer.MasterData;
+using GameServer.Models;
+using GameServer.Repositories.Interfaces;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 
@@ -29,15 +32,6 @@ public sealed record MailDraft(
 
 // ── 수령(claim) ──
 
-public enum MailClaimStatus
-{
-    Ok,
-    MailNotFound,       // 메일 없음 또는 타인 메일(존재 노출 안 함)
-    MailAlreadyClaimed, // 이미 수령(동시 요청 경합 포함)
-    MailExpired,        // 만료되어 수령 불가
-    InventoryFull,      // 첨부 아이템 적재 용량 부족
-}
-
 /// <summary>단건 수령 트랜잭션 결과. Gold = 지급 골드 합, Items = 지급 아이템(코드별 합산), GoldBalance = 지급 후 잔액.</summary>
 public sealed record MailClaimOutcome(
     MailClaimStatus Status, long Gold, IReadOnlyList<MailAttachment> Items, long GoldBalance)
@@ -61,72 +55,6 @@ public sealed record MailClaimAllOutcome(
         => new(status, Array.Empty<long>(), 0, Array.Empty<MailAttachment>(), 0);
 }
 
-public interface IMailRepository
-{
-    /// <summary>
-    /// 우편함 전체(첨부 포함)를 조회하고, 미열람 메일을 읽음 처리한다(조회 = 열람, mail 기획서 §8 확정).
-    /// 반환 스냅샷의 IsRead는 조회 시점 값이므로 클라이언트가 신규 메일 표시에 쓸 수 있다.
-    /// </summary>
-    Task<IReadOnlyList<MailSummary>> GetMailboxAndMarkReadAsync(long userId);
-
-    /// <summary>
-    /// 단건 수령을 한 트랜잭션으로 적용한다: 소유·미수령·미만료 검증 → 조건부 갱신(claimed 0→1)으로 수령권 선점 →
-    /// 첨부 지급(골드 적립·아이템 적재). itemLookup은 item_code → (itemType, stackMax) 마스터 조회 델리게이트.
-    /// </summary>
-    Task<MailClaimOutcome> ApplyClaimAsync(
-        long userId, long mailId, Func<int, (int itemType, int stackMax)> itemLookup, long nowUnix);
-
-    /// <summary>
-    /// 일괄 수령을 한 트랜잭션으로 적용한다: 미수령·미만료 메일 전건을 6.1과 같은 규칙으로 수령한다.
-    /// 용량 초과 시 전체 롤백(InventoryFull) — 부분 수령하지 않는다(mail 기획서 §8 확정).
-    /// </summary>
-    Task<MailClaimAllOutcome> ApplyClaimAllAsync(
-        long userId, Func<int, (int itemType, int stackMax)> itemLookup, long nowUnix);
-
-    /// <summary>
-    /// 보관 기한이 지난(발급 시각 &lt; createdBefore) 메일을 최대 limit건 삭제한다(GC 배치 전용, mail 기획서 §6.5).
-    /// 열람·수령 여부와 무관하며, 첨부(player_mail_reward)는 FK CASCADE로 함께 삭제된다. 삭제된 메일 수를 반환한다.
-    /// </summary>
-    Task<int> DeleteRetentionExpiredAsync(long createdBefore, int limit);
-}
-
-// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑. ──
-file sealed class MailRow
-{
-    public long MailId { get; set; }
-    public int Category { get; set; }
-    public string Title { get; set; } = string.Empty;
-    public string Body { get; set; } = string.Empty;
-    public int IsRead { get; set; }
-    public int Claimed { get; set; }
-    public long CreatedAt { get; set; }
-    public long ExpiresAt { get; set; }
-}
-
-file sealed class MailRewardRow
-{
-    public long MailId { get; set; }
-    public int Seq { get; set; }
-    public int RewardType { get; set; }
-    public int RewardCode { get; set; }
-    public long Quantity { get; set; }
-    public int EnhanceLevel { get; set; }
-}
-
-file sealed class ItemIdQtyRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-}
-
-/// <summary>가방 변경분(5.0) 조립에 배치 칸이 필요한 스택 병합 조회용.</summary>
-file sealed class ItemIdQtySlotRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-    public int? Slot { get; set; }
-}
-
 /// <summary>메일(우편함) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class MailRepository : IMailRepository
 {
@@ -137,9 +65,14 @@ public sealed class MailRepository : IMailRepository
     private const int RewardTypeGold = 1;
 
     private readonly GameDbFactory _dbFactory;
+    private readonly IItemLookup _itemLookup;
 
     /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public MailRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    public MailRepository(GameDbFactory dbFactory, IItemLookup itemLookup)
+    {
+        _dbFactory = dbFactory;
+        _itemLookup = itemLookup;
+    }
 
     /// <summary>
     /// 우편함 메일 전건과 첨부를 조회해 스냅샷으로 반환하고, 같은 트랜잭션에서 미열람(is_read=0) 메일을 읽음 처리한다.
@@ -198,7 +131,7 @@ public sealed class MailRepository : IMailRepository
     /// <para>5) player_item — 골드 적립(재화 행 upsert) + 아이템/재료 적재(스택 병합·빈 칸, 부족 시 InventoryFull 롤백)</para>
     /// </remarks>
     public async Task<MailClaimOutcome> ApplyClaimAsync(
-        long userId, long mailId, Func<int, (int itemType, int stackMax)> itemLookup, long nowUnix)
+        long userId, long mailId, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -244,7 +177,7 @@ public sealed class MailRepository : IMailRepository
 
             // 4) 첨부 원장 로드 + 5) 지급.
             var rewards = await LoadRewardsForMailAsync(db, transaction, mailId);
-            var grant = await GrantAttachmentsAsync(db, transaction, userId, rewards, itemLookup, nowUnix);
+            var grant = await GrantAttachmentsAsync(db, transaction, userId, rewards, _itemLookup, nowUnix);
             if (!grant.stored)
             {
                 await transaction.RollbackAsync();
@@ -274,7 +207,7 @@ public sealed class MailRepository : IMailRepository
     /// <para>4) player_item — 골드 합계 적립 + 아이템/재료 적재(부족 시 전체 롤백 → InventoryFull)</para>
     /// </remarks>
     public async Task<MailClaimAllOutcome> ApplyClaimAllAsync(
-        long userId, Func<int, (int itemType, int stackMax)> itemLookup, long nowUnix)
+        long userId, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -309,7 +242,7 @@ public sealed class MailRepository : IMailRepository
             var rewards = claimedIds.Count > 0
                 ? (await LoadRewardsAsync(db, transaction, claimedIds)).Values.SelectMany(r => r).ToList()
                 : new List<MailAttachment>();
-            var grant = await GrantAttachmentsAsync(db, transaction, userId, rewards, itemLookup, nowUnix);
+            var grant = await GrantAttachmentsAsync(db, transaction, userId, rewards, _itemLookup, nowUnix);
             if (!grant.stored)
             {
                 await transaction.RollbackAsync();
@@ -439,7 +372,7 @@ public sealed class MailRepository : IMailRepository
     private static async Task<(bool stored, long gold, IReadOnlyList<MailAttachment> items, long goldBalance, InventoryDeltaDto delta)>
         GrantAttachmentsAsync(
             QueryFactory db, DbTransaction tx, long userId,
-            IReadOnlyList<MailAttachment> rewards, Func<int, (int itemType, int stackMax)> itemLookup, long nowUnix)
+            IReadOnlyList<MailAttachment> rewards, IItemLookup itemLookup, long nowUnix)
     {
         long gold = rewards.Where(r => r.RewardType == RewardTypeGold).Sum(r => r.Quantity);
 
@@ -456,7 +389,7 @@ public sealed class MailRepository : IMailRepository
         foreach (var item in itemGroups)
         {
             // 적재 규칙은 스택 상한(stack_max)만으로 결정되므로 itemType은 쓰지 않는다(소모품·재료 모두 스택 병합 대상).
-            var (_, stackMax) = itemLookup(item.RewardCode);
+            var stackMax = itemLookup.Stacking(item.RewardCode).StackMax;
             bool stored = await StoreItemAsync(
                 db, tx, userId, item.RewardCode, item.Quantity, stackMax,
                 item.EnhanceLevel, capacity, used, nowUnix, delta);

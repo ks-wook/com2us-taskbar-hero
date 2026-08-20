@@ -1,4 +1,4 @@
-using CloudStructures;
+﻿using CloudStructures;
 using Utf8StringInterpolation;
 using ZLogger;
 using GameServer.Auth;
@@ -7,6 +7,7 @@ using GameServer.Data;
 using GameServer.MasterData;
 using GameServer.Middleware;
 using GameServer.Repositories;
+using GameServer.Repositories.Interfaces;
 using GameServer.Services;
 
 // DB 조회는 SqlKata 제네릭 매핑(.GetAsync<T>/.FirstOrDefaultAsync<T>)으로 POCO에 매핑한다(dynamic 금지, CLAUDE.md 규칙).
@@ -54,6 +55,18 @@ builder.Services.AddSingleton<MasterDbFactory>();
 
 // 마스터 데이터 인메모리 캐시(기동 시 1회 적재).
 builder.Services.AddSingleton<MasterDataProvider>();
+
+// 마스터 데이터에서 파생되는 계산기. 리포지토리에 생성자 주입되어 **트랜잭션 안에서** 호출되므로
+// 계산 함수를 델리게이트 인자로 넘기지 않고도 트랜잭션 경계(잠금 읽기 → 결정 → 쓰기)가 유지된다.
+//   · ILevelUpCalculator  — 경험치→레벨 재계산(level_master). 스테이지 클리어·오프라인 정산이 같은 계산을
+//     쓰므로 정본을 하나로 둔다(두 서비스가 각자 들고 있던 ApplyExp 사본을 제거했다).
+//   · ICubeLevelCalculator — 큐브 경험치→레벨 재계산(cube_master). 합성·분해·제작 세 연산이 공유한다.
+//   · IItemLookup         — 적재 규칙·거래 검증에 필요한 item_master 속성. 메일·가챠·거래가 한 곳을 쓴다
+//     (세 서비스의 조회 헬퍼가 StackMax 보정에서 서로 달랐던 문제를 없앤다).
+// 셋 다 무상태이고 마스터가 싱글턴이라 싱글턴으로 둔다.
+builder.Services.AddSingleton<ILevelUpCalculator, LevelUpCalculator>();
+builder.Services.AddSingleton<IItemLookup, ItemLookup>();
+builder.Services.AddSingleton<ICubeLevelCalculator, CubeLevelCalculator>();
 
 // Redis 토큰 조회기(CloudStructures) — 인증 미들웨어가 사용.
 builder.Services.AddSingleton(_ =>

@@ -1,5 +1,6 @@
-using CloudStructures;
+﻿using CloudStructures;
 using GameServer.Repositories;
+using GameServer.Repositories.Interfaces;
 using ZLogger;
 
 namespace GameServer.Batch;

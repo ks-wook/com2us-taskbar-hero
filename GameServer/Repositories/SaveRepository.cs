@@ -1,5 +1,7 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using GameServer.Data;
+using GameServer.Models;
+using GameServer.Repositories.Interfaces;
 using MySqlConnector;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
@@ -15,173 +17,16 @@ public sealed record CharacterSlot(int CharacterId, int ClassCode, int Slot);
 /// </summary>
 public sealed record StartingEquipment(int ItemCode, int EquipSlot);
 
-/// <summary>캐릭터 추가 생성 트랜잭션 결과 상태.</summary>
-public enum AddCharacterStatus
-{
-    Ok,
-    InsufficientCurrency, // 생성 비용 골드 부족
-    DuplicateConflict,    // 식별자/직업 유니크 경합(동시 생성)
-}
-
 /// <summary>캐릭터 추가 생성 트랜잭션 결과. Cost=차감 골드, GoldBalance=차감 후 잔액.</summary>
 public sealed record AddCharacterOutcome(AddCharacterStatus Status, long Cost, long GoldBalance)
 {
     public static AddCharacterOutcome Fail(AddCharacterStatus status) => new(status, 0, 0);
 }
 
-/// <summary>파티 편성 저장 트랜잭션 결과 상태.</summary>
-public enum ArrangePartyStatus
-{
-    Ok,
-    CharacterNotFound, // 편성 목록에 계정이 보유하지 않은 캐릭터가 있음
-}
-
 /// <summary>파티 편성 저장 트랜잭션 결과. Characters=갱신된 보유 캐릭터 전체(파티 자리 순).</summary>
 public sealed record ArrangePartyOutcome(ArrangePartyStatus Status, List<CharacterDto> Characters)
 {
     public static ArrangePartyOutcome Fail(ArrangePartyStatus status) => new(status, new List<CharacterDto>());
-}
-
-public interface ISaveRepository
-{
-    /// <summary>game_player 1행을 세이브 응답용 DTO로 조회한다(계정 세이브 없으면 null).</summary>
-    Task<PlayerDto?> GetPlayerAsync(long userId);
-
-    /// <summary>계정의 보유 캐릭터 목록(편성된 파티 자리 순 → 미편성 순)을 조회한다.</summary>
-    Task<List<CharacterDto>> GetCharactersAsync(long userId);
-
-    /// <summary>코어 로드용 재화 목록(player_item의 row_type=2 행)을 조회한다.</summary>
-    Task<List<CurrencyDto>> GetCurrenciesAsync(long userId);
-
-    /// <summary>코어 로드용 장착 장비 목록(player_item_equipped 전 행, 최대 18개)을 조회한다.</summary>
-    Task<List<EquippedItemDto>> GetEquippedAsync(long userId);
-
-    /// <summary>가방 아이템(row_type=1, 배치된 행) 총 개수를 센다. 페이징 진행률 표시용.</summary>
-    Task<int> GetBagItemCountAsync(long userId);
-
-    /// <summary>계정의 전 캐릭터 보유 스킬(레벨·장착 여부)을 조회한다.</summary>
-    Task<List<SkillDto>> GetSkillsAsync(long userId);
-
-    /// <summary>계정 공용 룬 목록(코드·레벨)을 조회한다.</summary>
-    Task<List<RuneDto>> GetRunesAsync(long userId);
-
-    /// <summary>계정의 큐브 상태(레벨·경험치)를 조회한다(행 없으면 null).</summary>
-    Task<CubeDto?> GetCubeAsync(long userId);
-
-    /// <summary>캐릭터 추가 생성 시 식별자·파티 자리 배정과 직업 중복 검사에 쓸 보유 캐릭터 목록(식별자 + 직업 + 파티 자리)을 조회한다.</summary>
-    Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId);
-
-    /// <summary>최초 접속: game_player + 첫 캐릭터(직업·성별, 파티 1번 자리) + 기본 무기(장착 상태) + 기본 액티브 스킬(습득·장착) +
-    /// 큐브 + 신규 가입 지원금 메일을 한 트랜잭션으로 초기화한다. welcomeMail·startingEquipment·startingSkillCode가 null이면 그 항목은 건너뛴다.</summary>
-    Task CreatePlayerWithFirstCharacterAsync(
-        long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix,
-        MailDraft? welcomeMail, StartingEquipment? startingEquipment, int? startingSkillCode);
-
-    /// <summary>기존 계정에 캐릭터 1개 추가. 생성 비용(goldCost)을 골드에서 확인·차감하고 지정 파티 자리(slot, 빈 자리 없으면 0)로 삽입하며,
-    /// startingEquipment가 있으면 기본 무기를 지급해 장착까지, startingSkillCode가 있으면 기본 액티브 스킬을 습득·장착까지 마치는 한 트랜잭션.</summary>
-    Task<AddCharacterOutcome> AddCharacterAsync(
-        long userId, int characterId, int classCode, int slot, int gender, long goldCost,
-        StartingEquipment? startingEquipment, int? startingSkillCode, long nowUnix);
-
-    /// <summary>클라이언트가 보낸 파티 편성 스냅샷(자리별 캐릭터)을 그대로 저장한다.
-    /// 목록에 없는 보유 캐릭터는 미편성(slot 0)이 되는 한 트랜잭션.</summary>
-    Task<ArrangePartyOutcome> SavePartyAsync(long userId, IReadOnlyList<PartyMemberDto> members);
-
-    /// <summary>last_active_at 갱신. 갱신된 행 수(0이면 계정 없음) 반환.</summary>
-    Task<int> UpdateLastActiveAsync(long userId, long nowUnix);
-}
-
-// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지) ──
-// Dapper.MatchNamesWithUnderscores=true(Program.cs)로 snake_case 컬럼 → PascalCase 프로퍼티 매핑.
-file sealed class GamePlayerRow
-{
-    public string Nickname { get; set; } = string.Empty;
-    public int Act { get; set; }
-    public int Stage { get; set; }
-    public int Difficulty { get; set; }
-    public int MaxStageCleared { get; set; }
-    public int InventoryCapacity { get; set; }
-    public long LastActiveAt { get; set; }
-}
-
-file sealed class PlayerCharacterRow
-{
-    public int CharacterId { get; set; }
-    public int ClassCode { get; set; }
-    public int Slot { get; set; }
-    public int Gender { get; set; }
-    public int Level { get; set; }
-    public long Exp { get; set; }
-}
-
-/// <summary>
-/// player_character 행 → 응답 DTO 변환. 행 POCO가 file 로컬 타입이라 리포지토리(공개 타입)의 메서드 시그니처에
-/// 그대로 쓸 수 없어(CS9051) 변환 로직을 이 file 로컬 헬퍼로 분리한다.
-/// </summary>
-file static class PlayerCharacterMapper
-{
-    private const int PartySlotUnassigned = 0;
-
-    /// <summary>행 하나를 캐릭터 DTO로 변환한다(파티 자리 slot 포함).</summary>
-    public static CharacterDto ToDto(PlayerCharacterRow row) => new CharacterDto
-    {
-        characterId = row.CharacterId,
-        classCode = row.ClassCode,
-        slot = row.Slot,
-        gender = row.Gender,
-        level = row.Level,
-        exp = row.Exp,
-    };
-
-    /// <summary>보유 캐릭터 행을 응답 순서(편성된 자리 1~3 순 → 미편성은 식별자 순)로 정렬해 DTO 목록으로 만든다.</summary>
-    public static List<CharacterDto> SortForResponse(IEnumerable<PlayerCharacterRow> rows)
-        => rows
-            .OrderBy(r => r.Slot == PartySlotUnassigned ? 1 : 0)
-            .ThenBy(r => r.Slot)
-            .ThenBy(r => r.CharacterId)
-            .Select(ToDto)
-            .ToList();
-}
-
-file sealed class CurrencyRow
-{
-    public int ItemCode { get; set; }
-    public long Quantity { get; set; }
-}
-
-file sealed class PlayerItemEquippedRow
-{
-    public long PlayerItemId { get; set; }
-    public int ItemCode { get; set; }
-    public int EnhanceLevel { get; set; }
-    public int EquippedCharacterId { get; set; }
-    public int EquippedSlot { get; set; }
-}
-
-file sealed class PlayerSkillRow
-{
-    public int CharacterId { get; set; }
-    public int SkillCode { get; set; }
-    public int Level { get; set; }
-    public int Equipped { get; set; }
-}
-
-file sealed class PlayerRuneRow
-{
-    public int RuneCode { get; set; }
-    public int Level { get; set; }
-}
-
-file sealed class PlayerCubeRow
-{
-    public int CubeLevel { get; set; }
-    public long CubeExp { get; set; }
-}
-
-file sealed class ItemIdQtyRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
 }
 
 /// <summary>세이브(taskbar_hero_game) 접근 계층. SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
@@ -243,7 +88,7 @@ public sealed class SaveRepository : ISaveRepository
         var rows = await db.Query("player_character").Where("user_id", userId)
             .OrderByRaw("CASE WHEN slot = 0 THEN 1 ELSE 0 END, slot, character_id")
             .GetAsync<PlayerCharacterRow>();
-        return PlayerCharacterMapper.SortForResponse(rows);
+        return SortCharactersForResponse(rows);
     }
 
     /// <summary>
@@ -661,7 +506,7 @@ public sealed class SaveRepository : ISaveRepository
                 .GetAsync<PlayerCharacterRow>(transaction)).ToList();
 
             await transaction.CommitAsync();
-            return new ArrangePartyOutcome(ArrangePartyStatus.Ok, PlayerCharacterMapper.SortForResponse(updated));
+            return new ArrangePartyOutcome(ArrangePartyStatus.Ok, SortCharactersForResponse(updated));
         }
         catch
         {
@@ -681,4 +526,24 @@ public sealed class SaveRepository : ISaveRepository
             .Where("user_id", userId)
             .UpdateAsync(new { last_active_at = nowUnix, updated_at = nowUnix });
     }
+
+    /// <summary>player_character 행 하나를 캐릭터 DTO로 변환한다(파티 자리 slot 포함).</summary>
+    private static CharacterDto ToCharacterDto(PlayerCharacterRow row) => new CharacterDto
+    {
+        characterId = row.CharacterId,
+        classCode = row.ClassCode,
+        slot = row.Slot,
+        gender = row.Gender,
+        level = row.Level,
+        exp = row.Exp,
+    };
+
+    /// <summary>보유 캐릭터 행을 응답 순서(편성된 자리 1~3 순 → 미편성은 식별자 순)로 정렬해 DTO 목록으로 만든다.</summary>
+    private static List<CharacterDto> SortCharactersForResponse(IEnumerable<PlayerCharacterRow> rows)
+        => rows
+            .OrderBy(r => r.Slot == PartySlotUnassigned ? 1 : 0)
+            .ThenBy(r => r.Slot)
+            .ThenBy(r => r.CharacterId)
+            .Select(ToCharacterDto)
+            .ToList();
 }

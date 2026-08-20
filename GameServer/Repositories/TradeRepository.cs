@@ -1,5 +1,8 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using GameServer.Data;
+using GameServer.MasterData;
+using GameServer.Models;
+using GameServer.Repositories.Interfaces;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
 
@@ -13,27 +16,6 @@ namespace GameServer.Repositories;
 public sealed record TradeListingSnapshot(
     long ListingId, long SellerUserId, int ItemCode, int EnhanceLevel, int Quantity, long Price,
     long CreatedAt, long ExpiresAt);
-
-public enum TradeRegisterStatus
-{
-    Ok,
-    ItemNotFound,        // 인벤토리에 없음(타인 아이템·이미 등록 중 포함)
-    ItemEquipped,        // 장착 중
-    NotSellable,         // item_master.sellable=0
-    PriceOutOfRange,     // 기준가 ±20% 밖
-    ListingLimitExceeded, // 계정 동시 등록 한도 초과
-}
-
-public enum TradeCloseStatus
-{
-    Ok,
-    ListingNotFound, // 등록 없음
-    AlreadyClosed,   // 이미 판매/취소(동시 경합 포함)
-    NotOwner,        // 본인 등록 아님(취소)
-    SelfPurchase,    // 자기 등록 구매
-    InsufficientGold,
-    InventoryFull,
-}
 
 /// <summary>판매 등록 결과. 성공 시 등록된 스냅샷을 함께 돌려준다.</summary>
 public sealed record TradeRegisterOutcome(TradeRegisterStatus Status, TradeListingSnapshot? Listing)
@@ -60,50 +42,6 @@ public sealed record TradeCancelOutcome(TradeCloseStatus Status, TradeListingSna
     public static TradeCancelOutcome Fail(TradeCloseStatus status) => new(status, null);
 }
 
-/// <summary>거래 아이템의 마스터 정보(판매 가능 여부·기준가·타입·스택). 서비스가 마스터에서 조회해 주입한다.</summary>
-public sealed record TradeItemInfo(int ItemType, int StackMax, int Sellable, long BasePrice);
-
-public interface ITradeRepository
-{
-    /// <summary>
-    /// 해당 itemCode(0이면 전체)의 판매중 등록 <b>한 페이지</b>를 가격 오름차순·listing_id 보조 정렬로 조회한다.
-    /// <b>뷰어 필터와 페이징을 모두 쿼리에서 처리</b>하므로(<c>WHERE → ORDER BY → LIMIT</c>) 페이지 크기가 정확하다.
-    /// <paramref name="limit"/>에 <b>페이지 크기 + 1</b>을 넘기면 호출측이 hasMore를 판정할 수 있다(trade 기획서 §7.3).
-    /// <para><b>만료 시각이 지난 등록은 제외한다</b>(<c>expires_at &gt; nowUnix</c>) — 만료는 배치를 기다리지 않고
-    /// 읽는 순간 효력을 갖는다(trade 기획서 §7.6).</para>
-    /// </summary>
-    Task<IReadOnlyList<TradeListingSnapshot>> GetActiveListingPageAsync(
-        int itemCode, long viewerUserId, bool mine, int offset, int limit, long nowUnix);
-
-    /// <summary>등록 스냅샷 1건(판매중 + 미만료). 없거나 이미 닫혔거나 만료 시각이 지났으면 null.</summary>
-    Task<TradeListingSnapshot?> GetListingAsync(long listingId, long nowUnix);
-
-    /// <summary>판매 등록(에스크로): 한도·아이템·가격 검증 → player_item 제거 → trade_listing 생성을 한 트랜잭션으로 적용한다.</summary>
-    Task<TradeRegisterOutcome> ApplyRegisterAsync(
-        long userId, long itemId, long price, Func<int, TradeItemInfo?> itemLookup,
-        int listingLimit, long nowUnix, long expiresAt);
-
-    /// <summary>
-    /// 구매: 조건부 갱신 선점 → 골드 차감 → <b>구매 아이템 메일 발급(구매자)</b> → 판매 대금 메일 발급(판매자)을
-    /// 한 트랜잭션으로 적용한다. 아이템은 인벤토리에 직접 넣지 않고 우편함으로 보낸다.
-    /// </summary>
-    Task<TradeBuyOutcome> ApplyBuyAsync(
-        long buyerUserId, long listingId,
-        Func<TradeListingSnapshot, MailDraft> composeItemMail,
-        Func<TradeListingSnapshot, MailDraft> composeSettlementMail, long nowUnix);
-
-    /// <summary>판매 취소: 본인·판매중 확인 → 조건부 갱신 선점 → 아이템 인벤토리 복원을 한 트랜잭션으로 적용한다.</summary>
-    Task<TradeCancelOutcome> ApplyCancelAsync(
-        long userId, long listingId, Func<int, TradeItemInfo?> itemLookup, long nowUnix);
-
-    /// <summary>만료 배치 대상(판매중 + 만료 시각 경과) listing_id를 오름차순 최대 limit건 조회한다.</summary>
-    Task<IReadOnlyList<long>> GetExpiredListingIdsAsync(long nowUnix, int limit);
-
-    /// <summary>만료 처리: 조건부 갱신으로 취소 확정 → 아이템을 판매자에게 메일로 반송한다. 이미 닫혔으면 null.</summary>
-    Task<TradeListingSnapshot?> ApplyExpireAsync(
-        long listingId, Func<TradeListingSnapshot, MailDraft> composeReturnMail, long nowUnix);
-}
-
 /// <summary>
 /// 거래소 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).
 /// 상태 전이(구매·취소·만료)는 모두 <b>조건부 갱신(status=1일 때만 전이)</b>으로 선점해 이중 판매를 차단한다
@@ -124,9 +62,14 @@ public sealed class TradeRepository : ITradeRepository
     private const int StatusExpired = 4;
 
     private readonly GameDbFactory _dbFactory;
+    private readonly IItemLookup _itemLookup;
 
     /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
-    public TradeRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+    public TradeRepository(GameDbFactory dbFactory, IItemLookup itemLookup)
+    {
+        _dbFactory = dbFactory;
+        _itemLookup = itemLookup;
+    }
 
     /// <summary>
     /// 판매중 등록 <b>한 페이지</b>를 가격 오름차순·listing_id 보조 정렬로 조회한다
@@ -209,7 +152,7 @@ public sealed class TradeRepository : ITradeRepository
     /// <para>5) trade_listing INSERT — status=1, expires_at = now + 3일</para>
     /// </remarks>
     public async Task<TradeRegisterOutcome> ApplyRegisterAsync(
-        long userId, long itemId, long price, Func<int, TradeItemInfo?> itemLookup,
+        long userId, long itemId, long price,
         int listingLimit, long nowUnix, long expiresAt)
     {
         await using var connection = _dbFactory.CreateConnection();
@@ -235,7 +178,7 @@ public sealed class TradeRepository : ITradeRepository
             var item = await db.Query("player_item")
                 .Select("player_item_id", "item_code", "quantity", "enhance_level")
                 .Where("player_item_id", itemId).Where("user_id", userId).Where("row_type", RowTypeItem)
-                .FirstOrDefaultAsync<PlayerItemRow>(transaction);
+                .FirstOrDefaultAsync<TradePlayerItemRow>(transaction);
             if (item is null)
             {
                 await transaction.RollbackAsync();
@@ -253,7 +196,7 @@ public sealed class TradeRepository : ITradeRepository
             }
 
             // 3) 마스터 검증: 판매 가능 여부 → 가격 범위.
-            var info = itemLookup(item.ItemCode);
+            var info = _itemLookup.Attributes(item.ItemCode);
             if (info is null || info.Sellable != 1 || info.BasePrice <= 0)
             {
                 await transaction.RollbackAsync();
@@ -419,7 +362,7 @@ public sealed class TradeRepository : ITradeRepository
     /// 아이템을 판매자 인벤토리에 복원한다. 복원 칸이 없으면 전체 롤백(InventoryFull).
     /// </summary>
     public async Task<TradeCancelOutcome> ApplyCancelAsync(
-        long userId, long listingId, Func<int, TradeItemInfo?> itemLookup, long nowUnix)
+        long userId, long listingId, long nowUnix)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -465,7 +408,7 @@ public sealed class TradeRepository : ITradeRepository
                 row.ListingId, row.SellerUserId, row.ItemCode, row.EnhanceLevel,
                 row.Quantity, row.Price, row.CreatedAt, row.ExpiresAt);
             var delta = new InventoryDeltaDto();
-            var stored = await StoreTradeItemAsync(db, transaction, userId, snapshot, itemLookup, nowUnix, delta);
+            var stored = await StoreTradeItemAsync(db, transaction, userId, snapshot, nowUnix, delta);
             if (!stored)
             {
                 await transaction.RollbackAsync();
@@ -582,11 +525,11 @@ public sealed class TradeRepository : ITradeRepository
     /// 재료(스택형)는 기존 스택의 여유부터 채우고 남으면 새 칸, 장비는 1개당 1행으로 새 칸에 넣는다.
     /// 빈 칸이 부족하면 false(호출측 롤백).
     /// </summary>
-    private static async Task<bool> StoreTradeItemAsync(
+    private async Task<bool> StoreTradeItemAsync(
         QueryFactory db, DbTransaction tx, long userId, TradeListingSnapshot listing,
-        Func<int, TradeItemInfo?> itemLookup, long nowUnix, InventoryDeltaDto delta)
+        long nowUnix, InventoryDeltaDto delta)
     {
-        var info = itemLookup(listing.ItemCode);
+        var info = _itemLookup.Attributes(listing.ItemCode);
         var itemType = info?.ItemType ?? 1;
         var stackMax = Math.Max(1, info?.StackMax ?? 1);
 
@@ -661,53 +604,4 @@ public sealed class TradeRepository : ITradeRepository
         return true;
     }
 
-}
-
-// ── DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지) ──
-
-file sealed class TradeListingRow
-{
-    public long ListingId { get; set; }
-    public long SellerUserId { get; set; }
-    public int ItemCode { get; set; }
-    public int EnhanceLevel { get; set; }
-    public int Quantity { get; set; }
-    public long Price { get; set; }
-    public long CreatedAt { get; set; }
-    public long ExpiresAt { get; set; }
-}
-
-file sealed class TradeListingStatusRow
-{
-    public long ListingId { get; set; }
-    public long SellerUserId { get; set; }
-    public int ItemCode { get; set; }
-    public int EnhanceLevel { get; set; }
-    public int Quantity { get; set; }
-    public long Price { get; set; }
-    public long CreatedAt { get; set; }
-    public long ExpiresAt { get; set; }
-    public int Status { get; set; }
-}
-
-file sealed class PlayerItemRow
-{
-    public long PlayerItemId { get; set; }
-    public int ItemCode { get; set; }
-    public long Quantity { get; set; }
-    public int EnhanceLevel { get; set; }
-}
-
-file sealed class ItemIdQtyRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-}
-
-/// <summary>가방 변경분(5.0) 조립에 배치 칸이 필요한 스택 병합 조회용.</summary>
-file sealed class ItemIdQtySlotRow
-{
-    public long PlayerItemId { get; set; }
-    public long Quantity { get; set; }
-    public int? Slot { get; set; }
 }
