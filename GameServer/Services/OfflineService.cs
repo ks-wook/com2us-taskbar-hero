@@ -4,6 +4,8 @@ using GameServer.Repositories.GameDb.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -27,11 +29,11 @@ public sealed class OfflineService : IOfflineService
     private const long OfflineEfficiencyDivisor = 2;  // 온라인 대비 50% = ÷2 (기획서 확정)
 
     private readonly IOfflineRepository _offlineRepository;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<OfflineService> _logger;
 
     /// <summary>의존성(오프라인 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
-    public OfflineService(IOfflineRepository offlineRepository, MasterDataProvider masterData, ILogger<OfflineService> logger)
+    public OfflineService(IOfflineRepository offlineRepository, MasterDbProvider masterData, ILogger<OfflineService> logger)
     {
         _offlineRepository = offlineRepository;
         _masterData = masterData;

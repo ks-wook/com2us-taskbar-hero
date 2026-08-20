@@ -4,6 +4,8 @@ using GameServer.Repositories.GameDb.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -27,12 +29,12 @@ public sealed class GachaService : IGachaService
     private const int HistoryMaxLimit = 50;
 
     private readonly IGachaRepository _gachaRepository;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<GachaService> _logger;
 
     /// <summary>의존성(가챠 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
     public GachaService(
-        IGachaRepository gachaRepository, MasterDataProvider masterData,
+        IGachaRepository gachaRepository, MasterDbProvider masterData,
         ILogger<GachaService> logger)
     {
         _gachaRepository = gachaRepository;

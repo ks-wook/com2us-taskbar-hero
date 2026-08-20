@@ -4,6 +4,8 @@ using GameServer.Repositories.GameDb.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -36,12 +38,12 @@ public sealed class InventoryService : IInventoryService
     private const int MaxPageLimit = 500;
 
     private readonly IInventoryRepository _inventoryRepository;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<InventoryService> _logger;
 
     /// <summary>의존성(인벤토리 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
     public InventoryService(
-        IInventoryRepository inventoryRepository, MasterDataProvider masterData,
+        IInventoryRepository inventoryRepository, MasterDbProvider masterData,
         ILogger<InventoryService> logger)
     {
         _inventoryRepository = inventoryRepository;

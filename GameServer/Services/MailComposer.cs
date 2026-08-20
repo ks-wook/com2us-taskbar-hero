@@ -1,5 +1,6 @@
 ﻿using GameServer.MasterData;
 using GameServer.Repositories.GameDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 

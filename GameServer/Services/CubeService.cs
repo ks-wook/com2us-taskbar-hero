@@ -4,6 +4,8 @@ using GameServer.Repositories.GameDb.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -26,12 +28,12 @@ public sealed class CubeService : ICubeService
     private const int GoldCurrencyType = 1;       // 응답 balance의 재화 종류(골드)
 
     private readonly ICubeRepository _cubeRepository;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<CubeService> _logger;
 
     /// <summary>의존성(큐브 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
     public CubeService(
-        ICubeRepository cubeRepository, MasterDataProvider masterData,
+        ICubeRepository cubeRepository, MasterDbProvider masterData,
         ILogger<CubeService> logger)
     {
         _cubeRepository = cubeRepository;

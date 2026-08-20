@@ -4,6 +4,8 @@ using GameServer.Repositories.GameDb.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -29,12 +31,12 @@ public sealed class AttendanceService : IAttendanceService
     private static readonly TimeSpan KstOffset = TimeSpan.FromHours(9);
 
     private readonly IAttendanceRepository _attendanceRepository;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<AttendanceService> _logger;
 
     /// <summary>의존성(출석 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
     public AttendanceService(
-        IAttendanceRepository attendanceRepository, MasterDataProvider masterData, ILogger<AttendanceService> logger)
+        IAttendanceRepository attendanceRepository, MasterDbProvider masterData, ILogger<AttendanceService> logger)
     {
         _attendanceRepository = attendanceRepository;
         _masterData = masterData;

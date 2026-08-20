@@ -4,6 +4,8 @@ using GameServer.Repositories.GameDb.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -30,13 +32,13 @@ public sealed class ConsumableService : IConsumableService
     private const long BuffDurationCapSec = 86400;
 
     private readonly IConsumableRepository _consumableRepository;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<ConsumableService> _logger;
 
     /// <summary>리포지토리·마스터 데이터·가방 조회 캐시·로거를 주입받는다.</summary>
     public ConsumableService(
         IConsumableRepository consumableRepository,
-        MasterDataProvider masterData,
+        MasterDbProvider masterData,
         ILogger<ConsumableService> logger)
     {
         _consumableRepository = consumableRepository;

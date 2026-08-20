@@ -5,6 +5,8 @@ using MySqlConnector;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -35,14 +37,14 @@ public sealed class SaveService : ISaveService
 
     private readonly ISaveRepository _saveRepository;
     private readonly IConsumableRepository _consumableRepository;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<SaveService> _logger;
 
     /// <summary>의존성(세이브·소모품 버프 리포지토리, 마스터 데이터, 로거)을 주입받는다.</summary>
     public SaveService(
         ISaveRepository saveRepository,
         IConsumableRepository consumableRepository,
-        MasterDataProvider masterData,
+        MasterDbProvider masterData,
         ILogger<SaveService> logger)
     {
         _saveRepository = saveRepository;
@@ -173,7 +175,7 @@ public sealed class SaveService : ISaveService
             try
             {
                 await _saveRepository.CreatePlayerWithFirstCharacterAsync(
-                    userId, nickname.Trim(), classCode, gender, MasterDataProvider.BaseInventoryCapacity,
+                    userId, nickname.Trim(), classCode, gender, MasterDbProvider.BaseInventoryCapacity,
                     nowUnix, welcomeMail, startingWeapon, startingSkillCode);
             }
             catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)

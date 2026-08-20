@@ -4,6 +4,8 @@ using GameServer.Repositories.GameDb.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -28,11 +30,11 @@ public sealed class GrowthService : IGrowthService
     private const int GoldCurrencyType = 1;   // 골드 item_code
 
     private readonly IGrowthRepository _growthRepository;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<GrowthService> _logger;
 
     /// <summary>의존성(성장 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
-    public GrowthService(IGrowthRepository growthRepository, MasterDataProvider masterData, ILogger<GrowthService> logger)
+    public GrowthService(IGrowthRepository growthRepository, MasterDbProvider masterData, ILogger<GrowthService> logger)
     {
         _growthRepository = growthRepository;
         _masterData = masterData;

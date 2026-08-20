@@ -4,6 +4,8 @@ using GameServer.Repositories.GameDb.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -23,12 +25,12 @@ public sealed class StageService : IStageService
     private const int GoldCurrencyType = 1;
 
     private readonly IStageRepository _stageRepository;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<StageService> _logger;
 
     /// <summary>의존성(스테이지 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
     public StageService(
-        IStageRepository stageRepository, MasterDataProvider masterData,
+        IStageRepository stageRepository, MasterDbProvider masterData,
         ILogger<StageService> logger)
     {
         _stageRepository = stageRepository;

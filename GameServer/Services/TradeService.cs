@@ -4,6 +4,8 @@ using GameServer.Repositories.GameDb.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -58,12 +60,12 @@ public sealed class TradeService : ITradeService
     private const int GoldItemCode = 1;
 
     private readonly ITradeRepository _tradeRepository;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<TradeService> _logger;
 
     /// <summary>의존성(거래 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
     public TradeService(
-        ITradeRepository tradeRepository, MasterDataProvider masterData,
+        ITradeRepository tradeRepository, MasterDbProvider masterData,
         ILogger<TradeService> logger)
     {
         _tradeRepository = tradeRepository;

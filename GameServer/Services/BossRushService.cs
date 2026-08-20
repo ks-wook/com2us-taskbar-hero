@@ -6,6 +6,8 @@ using TaskbarHero.Common.Dto;
 using ZLogger;
 using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories;
+using GameServer.Repositories.MasterDb;
+using GameServer.Models;
 
 namespace GameServer.Services;
 
@@ -34,13 +36,13 @@ public sealed class BossRushService : IBossRushService
 
     private readonly IBossRushRepository _repository;
     private readonly IBossRushRankCache _rankCache;
-    private readonly MasterDataProvider _masterData;
+    private readonly MasterDbProvider _masterData;
     private readonly ILogger<BossRushService> _logger;
 
     /// <summary>의존성(보스러시 리포지토리·랭킹 캐시·마스터 데이터·로거)을 주입받는다.</summary>
     public BossRushService(
         IBossRushRepository repository, IBossRushRankCache rankCache,
-        MasterDataProvider masterData, ILogger<BossRushService> logger)
+        MasterDbProvider masterData, ILogger<BossRushService> logger)
     {
         _repository = repository;
         _rankCache = rankCache;
