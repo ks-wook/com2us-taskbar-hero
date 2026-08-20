@@ -307,14 +307,14 @@ namespace TaskbarHero.Client.Battle
             }
         }
 
-        /// <summary>HUD에 현재 라운드·경과를 넘긴다.</summary>
+        /// <summary>HUD에 경과 기록을 넘긴다(HUD는 라운드를 표시하지 않는다).</summary>
         private void UpdateHud()
         {
             if (_hud == null)
             {
                 return;
             }
-            _hud.SetState(RoundNumber(_roundIndex), _rounds.Count, ElapsedMs());
+            _hud.SetElapsed(ElapsedMs());
         }
 
         /// <summary>지금까지의 순수 전투 시간(ms).</summary>

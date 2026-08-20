@@ -276,6 +276,10 @@ namespace TaskbarHero.Client.UI.BossRush
         private float _seasonFetchRealtime;        // 그 시점의 Time.unscaledTime
         private bool _seasonExpiredHandled;        // 카운트다운이 0에 닿아 info를 한 번 다시 받았는지
         private bool _infoRequestInFlight;
+        /// <summary>지역당 스테이지 수. 해금 순번을 <c>지역-스테이지</c>로 풀 때 쓴다
+        /// (스테이지 선택 화면 <c>StagePanelController.StagesPerRegion</c>과 같은 값).</summary>
+        private const int StagesPerRegion = 10;
+
         private bool _enterRequestInFlight;   // [도전 시작] 중복 클릭 방지(런이 두 개 열리지 않게)
         private CharacterPortrait[] _portraits;   // 칸마다 하나(런타임 생성)
         private GameObject[] _portraitStages;
@@ -1339,7 +1343,7 @@ namespace TaskbarHero.Client.UI.BossRush
             {
                 _challengeButtonLabel.text = !loaded ? "정보를 불러오지 못했습니다"
                     : running ? "도전 진행 중"
-                    : locked ? $"스테이지 {_info.unlockStageSequence} 클리어 후 해금"
+                    : locked ? $"{StageLabel(_info.unlockStageSequence)} 스테이지 클리어 후 해금"
                     : settling ? "시즌 정산 중"
                     : "도전 시작";
                 _challengeButtonLabel.fontSize = canChallenge ? 34 : locked || !loaded ? 24 : 28;
@@ -1353,6 +1357,20 @@ namespace TaskbarHero.Client.UI.BossRush
                 // 비활성은 색을 눌러 표시한다(전용 disabled 아트를 따로 쓰지 않는다).
                 _challengeButtonImage.color = canChallenge ? Color.white : new Color(0.55f, 0.55f, 0.55f, 1f);
             }
+        }
+
+        /// <summary>해금 요구 진행 순번(<c>unlockStageSequence</c>)을 <c>지역-스테이지</c> 표기로 바꾼다 —
+        /// "스테이지 10"처럼 순번만 적으면 어느 지역인지 알 수 없어 "1-10 스테이지"로 보여 준다.
+        /// <para>순번 규칙은 스테이지 선택 화면과 같다(난이도1 기준 <c>(지역-1)×10 + 스테이지</c>).</para></summary>
+        private static string StageLabel(int sequence)
+        {
+            if (sequence <= 0)
+            {
+                return "-";
+            }
+            int region = (sequence - 1) / StagesPerRegion + 1;
+            int stage = (sequence - 1) % StagesPerRegion + 1;
+            return $"{region}-{stage}";
         }
 
         /// <summary>

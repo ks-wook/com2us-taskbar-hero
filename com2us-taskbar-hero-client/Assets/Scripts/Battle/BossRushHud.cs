@@ -7,7 +7,9 @@ namespace TaskbarHero.Client.Battle
 {
     /// <summary>
     /// 보스러시 도전 중 전투 화면 <b>상단 중앙</b>에 띄우는 HUD(보스러시 UI 기획서 4장) —
-    /// <c>ROUND 3 / 5</c>와 경과 기록(<c>03:47.912</c>) 두 줄만 보여 준다.
+    /// <c>RECORD</c> 제목과 경과 기록(<c>03:47.912</c>) 두 줄만 보여 준다.
+    /// <para><b>라운드 번호는 표시하지 않는다</b> — 라운드는 진입 배너(명판 + 숫자 아트)가 알려 주고,
+    /// 전투 중 상단에 남겨 두는 값은 <b>기록</b> 하나로 좁혔다.</para>
     /// <para>경과 기록은 <b>그대로 서버에 보고되는 값</b>이며(<see cref="BossRushBattleFlow"/>가 측정),
     /// HUD는 받은 값을 그리기만 한다. 계층은 런타임에 코드로 구성하고 도전이 끝나면 파괴한다.</para>
     /// <para>그 라운드의 처치 진행도는 <see cref="StageProgressBar"/>를 그대로 재사용하므로 여기서 다루지 않는다.
@@ -20,11 +22,16 @@ namespace TaskbarHero.Client.Battle
     public class BossRushHud : MonoBehaviour
     {
         private const float PanelWidth = 620f;
-        private const float RoundHeight = 56f;
-        private const float RecordGap = 20f;       // 라운드와 경과 기록 사이 간격(타이머를 조금 아래로 내렸다)
+        private const float LabelHeight = 60f;     // 'RECORD' 제목 줄(픽셀 폰트가 들어갈 여유를 둔 높이)
+        private const float RecordGap = 16f;       // 제목과 기록 사이 간격(합이 76 — 타이머 위치는 그대로 유지)
         private const float RecordHeight = 52f;
-        /// <summary>표시 요소가 실제로 차지하는 높이(라운드 + 간격 + 기록).</summary>
-        private const float ContentHeight = RoundHeight + RecordGap + RecordHeight;   // 110
+        /// <summary>표시 요소가 실제로 차지하는 높이(제목 + 간격 + 기록).</summary>
+        private const float ContentHeight = LabelHeight + RecordGap + RecordHeight;   // 128
+        /// <summary>제목 글자 크기(픽셀 폰트 기준). 픽셀 폰트는 em 대비 글자가 작아(기본 폰트의 0.66배)
+        /// 같은 수치로 두면 작아 보이므로 키운다. 줄 높이가 <see cref="LabelHeight"/>를 넘지 않게 4px 여유를 남긴다.</summary>
+        private const int LabelFontSizePixel = 56;
+        /// <summary>제목 글자 크기(기본 폰트 폴백). 픽셀 폰트가 배선되지 않았을 때 쓴다.</summary>
+        private const int LabelFontSizeFallback = 40;
         /// <summary>
         /// 화면 위쪽 끝에서 패널 상단까지(캔버스 단위). GameScene 캔버스는 높이 기준 매칭(match=1)이라
         /// 논리 세로 길이가 창 크기와 무관하게 항상 1440이므로, 이 값 하나로 세로 위치가 고정된다.
@@ -40,7 +47,7 @@ namespace TaskbarHero.Client.Battle
         /// <summary>구분자(<c>:</c>·<c>.</c>) 한 칸의 폭(글자 크기 대비) — 숫자보다 좁게 둔다.</summary>
         private const float RecordSepCellRatio = 0.34f;
 
-        private Text _roundText;
+        private Text _labelText;
         private RectTransform _recordRow;
         private Font _recordFont;
         private readonly List<Text> _recordCells = new List<Text>();
@@ -66,21 +73,22 @@ namespace TaskbarHero.Client.Battle
             Destroy(gameObject);
         }
 
-        /// <summary>표시값을 한 번에 갱신한다 — 라운드 번호·총 라운드 수·경과(ms).</summary>
-        public void SetState(int round, int roundCount, int elapsedMs)
+        /// <summary>표시값을 갱신한다 — 경과(ms). 제목(<c>RECORD</c>)은 고정이라 갱신할 것이 없다.</summary>
+        public void SetElapsed(int elapsedMs)
         {
-            if (_roundText != null)
-            {
-                _roundText.text = $"ROUND {round} / {roundCount}";
-            }
             SetRecord(BossRushFormat.Record(Mathf.Max(1, elapsedMs)));
         }
 
-        /// <summary>캔버스와 표시 요소(라운드 · 경과 기록)를 코드로 구성한다.</summary>
+        /// <summary>캔버스와 표시 요소(RECORD 제목 · 경과 기록)를 코드로 구성한다.</summary>
         private void Build(Font timerFont)
         {
             var font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             _recordFont = timerFont != null ? timerFont : font;
+            if (timerFont != null)
+            {
+                // 픽셀 폰트는 아틀라스 필터가 Bilinear면 획이 뭉개진다 — Point로 고정한다.
+                PixelFontAtlas.KeepCrisp(timerFont);
+            }
 
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -97,15 +105,18 @@ namespace TaskbarHero.Client.Battle
             panel.sizeDelta = new Vector2(PanelWidth, ContentHeight);
             panel.anchoredPosition = new Vector2(0f, -PanelTopY);
 
-            // 라운드
-            _roundText = NewText("Round", panel, font, "ROUND 1 / 5", 40, TextAnchor.MiddleCenter);
-            _roundText.color = Color.white;
-            _roundText.fontStyle = FontStyle.Bold;
-            PlaceTop(_roundText.rectTransform, 0f, PanelWidth, RoundHeight);
+            // 제목(RECORD) — 기록과 같은 픽셀 폰트로 쓴다. 픽셀 폰트에는 볼드를 쓰지 않는다
+            // (합성 볼드가 글리프를 밀어 겹쳐 그려 획이 뭉개진다 — 데미지 숫자와 같은 이유).
+            bool pixel = timerFont != null;
+            _labelText = NewText("RecordLabel", panel, _recordFont, "RECORD",
+                                 pixel ? LabelFontSizePixel : LabelFontSizeFallback, TextAnchor.MiddleCenter);
+            _labelText.color = Color.white;
+            _labelText.fontStyle = pixel ? FontStyle.Normal : FontStyle.Bold;
+            PlaceTop(_labelText.rectTransform, 0f, PanelWidth, LabelHeight);
 
             // 경과(= 그대로 보고될 기록). 글자별 칸으로 그리므로 여기서는 담을 행만 만든다.
             _recordRow = NewRect("Record", panel);
-            PlaceTop(_recordRow, RoundHeight + RecordGap, PanelWidth, RecordHeight);
+            PlaceTop(_recordRow, LabelHeight + RecordGap, PanelWidth, RecordHeight);
             SetRecord(BossRushFormat.Record(1));
         }
 
