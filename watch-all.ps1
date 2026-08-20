@@ -1,7 +1,8 @@
 ﻿# 계정 서버 + 게임 서버를 각각 dotnet watch(핫 리로드)로 동시에 실행한다.
 #   사용법:  ./watch-all.ps1
 #   dotnet watch는 프로젝트 1개 대상이라, 두 서버를 각자 새 콘솔 창으로 띄운다.
-#   실행 전 의존 서비스(MySQL·Redis)가 꺼져 있으면 자동으로 켠다.
+#   실행 전 Docker 엔진이 꺼져 있으면 Docker Desktop을 띄우고,
+#   의존 서비스(MySQL·Redis) 컨테이너가 꺼져 있으면 자동으로 켠다.
 #
 #   ※ 이 파일은 반드시 UTF-8 with BOM으로 저장한다(Windows PowerShell 5.1이 한글 리터럴을
 #      올바르게 파싱하도록). 아래 인코딩 설정과 함께 콘솔 한글 출력 깨짐을 방지한다.
@@ -11,6 +12,62 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 $root = $PSScriptRoot
+
+# ── Docker 엔진 확인/기동 ──────────────────────────────────────────────
+#   엔진이 꺼져 있으면 아래 docker ps·docker compose가 전부 실패하는데, 그 실패를 그냥
+#   지나치면 헬스체크 루프가 "뜨지도 않은 컨테이너"를 컨테이너마다 60초씩 기다린다.
+#   그래서 컨테이너를 건드리기 전에 엔진부터 확인하고, 꺼져 있으면 Docker Desktop을 띄운다.
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+    Write-Host "docker CLI를 찾을 수 없습니다. Docker Desktop 설치 또는 PATH를 확인하세요." -ForegroundColor Red
+    exit 1
+}
+
+function Test-DockerEngine {
+    # CLI가 있어도 엔진(데몬)이 죽어 있으면 0이 아닌 코드로 끝난다 — 그 차이를 보는 게 목적이다.
+    docker info --format '{{.ServerVersion}}' 2>$null | Out-Null
+    return ($LASTEXITCODE -eq 0)
+}
+
+if (Test-DockerEngine) {
+    Write-Host "Docker 엔진 실행 중." -ForegroundColor DarkGray
+}
+else {
+    Write-Host "Docker 엔진이 꺼져 있습니다. Docker Desktop을 시작합니다..." -ForegroundColor Yellow
+
+    # 이미 프로세스가 떠 있으면 기동 중인 것이므로 새로 띄우지 않고 기다리기만 한다.
+    if (-not (Get-Process -Name "Docker Desktop" -ErrorAction SilentlyContinue)) {
+        $candidates = @()
+        # docker.exe 위치에서 역산(Docker Desktop 설치 폴더의 resources/bin 아래에 있다).
+        $cli = (Get-Command docker -ErrorAction SilentlyContinue).Source
+        if ($cli) {
+            $candidates += (Join-Path (Split-Path (Split-Path (Split-Path $cli -Parent) -Parent) -Parent) "Docker Desktop.exe")
+        }
+        if ($env:ProgramFiles) { $candidates += (Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe") }
+        if (${env:ProgramFiles(x86)}) { $candidates += (Join-Path ${env:ProgramFiles(x86)} "Docker\Docker\Docker Desktop.exe") }
+        if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA "Docker\Docker Desktop.exe") }
+
+        $desktop = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+        if (-not $desktop) {
+            Write-Host "Docker Desktop 실행 파일을 찾지 못했습니다. 직접 실행한 뒤 다시 시도하세요." -ForegroundColor Red
+            exit 1
+        }
+        Start-Process -FilePath $desktop
+    }
+
+    # 콜드 스타트는 WSL2 백엔드 기동까지 포함해 1~2분 걸린다. 3분까지 기다린다.
+    $ready = $false
+    for ($i = 0; $i -lt 60; $i++) {
+        Start-Sleep -Seconds 3
+        if (Test-DockerEngine) { $ready = $true; break }
+        if ($i % 5 -eq 4) { Write-Host "  엔진 기동 대기 중... ($(($i + 1) * 3)초)" -ForegroundColor DarkGray }
+    }
+
+    if (-not $ready) {
+        Write-Host "Docker 엔진이 3분 안에 준비되지 않았습니다. Docker Desktop 상태를 확인하세요." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "Docker 엔진 준비 완료." -ForegroundColor Green
+}
 
 # ── 의존 서비스(MySQL·Redis) — docker-compose ──────────────────────────
 #   Redis는 컨테이너(taskbar-hero-redis)로 띄운다. 단, 저장소 내 Windows 바이너리
@@ -29,6 +86,12 @@ elseif ([string]::IsNullOrWhiteSpace($redisContainerUp)) {
 
 Write-Host "의존 서비스 확인/기동: $($services -join ', ')" -ForegroundColor DarkGray
 docker compose -f $composeFile up -d @services | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    # 여기서 멈춰야 한다 — 컨테이너가 없는데 아래 헬스체크로 넘어가면 뜨지 않을 컨테이너를
+    # 60초씩 기다린 뒤 서버만 올라가 "DB 없이 도는" 상태가 된다.
+    Write-Host "docker compose up 실패(위 출력을 확인하세요)." -ForegroundColor Red
+    exit 1
+}
 
 # 헬스체크가 붙은 서비스만 healthy를 기다린다(위에서 건너뛴 redis는 제외).
 foreach ($c in @("taskbar-hero-mysql") + $(if ($services -contains "redis" -or -not [string]::IsNullOrWhiteSpace($redisContainerUp)) { @("taskbar-hero-redis") } else { @() })) {
