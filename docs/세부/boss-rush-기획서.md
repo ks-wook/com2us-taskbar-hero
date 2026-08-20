@@ -122,6 +122,17 @@
 - `(round, monster_code)` 복합 PK이며 `round`→`boss_rush_round`, `monster_code`→`monster_master`를 참조한다. **마리 수가 0인 조합은 행을 두지 않는다**(sparse).
 - **보스도 같은 테이블의 `is_boss = 1` 행**이다(`stage_spawn`과 동일 방식).
 - **마스터 검증 대상**: 라운드마다 `is_boss = 1` 행이 **정확히 1개**이고 그 코드는 해당 Act의 보스 코드(`9N99`)여야 하며, 일반 몬스터(`is_boss = 0`)는 그 Act 대역(`9N01`~`9N98`)의 코드여야 한다. `monster_level ≥ 1`·`spawn_count ≥ 1`.
+- **난이도 기준(확정)**: 라운드 `r`은 **Act `r`의 보스 스테이지 한 판**과 같은 세기다. 그래서 **등장 레벨도 그 Act 보스 스테이지(`N-x-10`)와 같은 값**을 쓴다 — 일반 몬스터는 그 지역 `s7~10` 구간 레벨, 보스는 그 Act 보스 레벨([마스터 데이터 값](master-data/master-data-값.md) §9.4·§11-B). **마리 수만** 라운드 총 체력이 유지되도록 따로 잡는다(보스러시는 5라운드를 600초 안에 미는 콘텐츠라 총 체력이 곧 클리어 가능성이다).
+
+  | 라운드 | 구성 | 총 체력 | 최대 공격력 | 그 Act 보스 스테이지 대비 |
+  |---|---|---|---|---|
+  | R1 | `9001` Lv3×6 · `9002` Lv4×2 · `9099` Lv14×1 | 1,573 | 9 | 0.83배 |
+  | R2 | `9101` Lv10×6 · `9102` Lv11×1 · `9199` Lv24×1 | 11,174 | 45 | 0.82배 |
+  | R3 | `9201` Lv17×10 · `9299` Lv28×1 | 38,440 | 87 | 1.00배 |
+  | R4 | `9301` Lv21×8 · `9399` Lv31×1 | 75,086 | 143 | 1.00배 |
+  | R5 | `9401` Lv26×5 · `9499` Lv34×1 | 145,061 | 313 | 0.85배 |
+
+  - **레벨을 손으로 올리지 말 것** — 배율이 지수(hp ×1.25^(L−1) · atk ×1.18^(L−1))라 한 레벨이 체력 25%다. 레벨을 바꾸면 **같은 작업에서 마리 수를 다시 맞춰 총 체력을 유지**하고, 시뮬레이터로 재측정한다(`.claude/skills/rebalance`).
 
 #### `boss_rush_rank_reward` — 시즌 순위 보상
 
@@ -315,19 +326,19 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
         "round": 1,
         "backgroundType": 1,
         "monsters": [
-          { "monsterCode": 9001, "monsterLevel": 14, "count": 6 },
-          { "monsterCode": 9002, "monsterLevel": 14, "count": 3 }
+          { "monsterCode": 9001, "monsterLevel": 1, "count": 6 },
+          { "monsterCode": 9002, "monsterLevel": 1, "count": 3 }
         ],
-        "boss": { "monsterCode": 9099, "monsterLevel": 16 }
+        "boss": { "monsterCode": 9099, "monsterLevel": 1 }
       },
       {
         "round": 2,
         "backgroundType": 2,
         "monsters": [
-          { "monsterCode": 9101, "monsterLevel": 28, "count": 6 },
-          { "monsterCode": 9102, "monsterLevel": 28, "count": 3 }
+          { "monsterCode": 9101, "monsterLevel": 1, "count": 6 },
+          { "monsterCode": 9102, "monsterLevel": 1, "count": 3 }
         ],
-        "boss": { "monsterCode": 9199, "monsterLevel": 30 }
+        "boss": { "monsterCode": 9199, "monsterLevel": 1 }
       }
     ],
     "dailyEntryUsed": 2,
@@ -609,7 +620,7 @@ COMMIT
 
 ## 8. 미결 사항 / TODO
 
-- **라운드 스폰 구성(`boss_rush_spawn`)**: 라운드별 **일반 몬스터 종류·마리 수·레벨**과 **보스 레벨**. 목표는 최종 스테이지(5-2-10)를 깬 기준 파티의 **5라운드 4~6분 클리어**다. `tools/balance_sim.py`로 측정해 확정하고 정본 두 곳(`master-data-값.md`·`master-data-schema.sql`)에 반영한 뒤 클라 JSON 번들을 재생성한다(리밸런싱 규칙).
+- **유입 난이도**: 라운드 하나는 그 지역 보스 스테이지와 같은 세기이고 레벨은 이미 하한(1)이므로, **해금 직후 계정(진행 순번 10 클리어)이 5라운드를 완주하지는 못한다** — R1은 통과하지만 R2의 Act2 몬스터(최대 공격력 31)에게 무너진다. 완주 가능선은 시뮬레이터 측정으로 **만렙·완전투자 3인 파티(132.7초 완주, 최저 체력 52%)**, 중간 투자(Lv50·등급3·+3)는 R4에서 전멸이다. 유입 계정까지 완주시키려면 **레벨 밖의 레버**(라운드 구성 몬스터 교체 또는 보스러시 전용 스탯 배율 컬럼)가 필요하다 — 도입 여부는 미결이다.
 
 ## 9. 참고
 

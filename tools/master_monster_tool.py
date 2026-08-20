@@ -13,15 +13,16 @@ CharacterDevScene(몬스터 유닛 자동생성)에서 만든 몬스터를 **정
   - SQL:   docs/세부/master-data/master-data-schema.sql  monster_master INSERT
   - 외형:  com2us-taskbar-hero-client/Assets/Dev/monster-appearance-recipe.json  (클라 개발 씬 전용)
 
-산식·채번 규약은 클라이언트 `MonsterStatCurve`(CharacterDevRecipe.cs)와 **같은 값을 내도록** 옮겨 둔 것이다.
-한쪽을 고치면 다른 쪽도 고쳐야 한다(추천값이 갈리면 씬 표시와 정본이 어긋난다).
+기준값은 역할별 통일값(일반 hp 50/attack 5 · 보스 hp 50/attack 1)이고 세기는 `stage_spawn.monster_level`이
+만든다(값 문서 §9.4). 그래서 이 도구가 추천하는 것은 hp·attack 이 아니라 **그 자리의 등장 레벨**이다.
+레벨 배율(1.25·1.18)은 클라이언트 `MonsterStats`(MasterData/MonsterStats.cs)와 같은 값이어야 한다.
 
 사용:
   python tools/master_monster_tool.py verify
   python tools/master_monster_tool.py recommend --act 2 --stage 5
   python tools/master_monster_tool.py next-code --act 2 [--boss]
   python tools/master_monster_tool.py add --name "스켈레톤 궁수" --act 2 --stage 5 \
-      --race undead --classes ranged,physical [--boss] [--hp 130 --attack 16] [--dry-run]
+      --race undead --classes ranged,physical [--boss] [--dry-run]
 """
 import argparse
 import json
@@ -50,13 +51,17 @@ ACT_COUNT = 5
 STAGE_PER_ACT = 10
 BOSS_STAGE = 10
 
-# MonsterStatCurve 와 동일한 앵커(§4.4). 값 문서 §9 실측에서 온다.
-HP_FLOOR = [42, 240, 2150, 4300, 8400]
-ATK_FLOOR = [5, 15, 61, 148, 347]
-ACT5_HP_GROWTH = 2.0
-ACT5_ATK_GROWTH = 2.3
-BOSS_HP = [1000, 7900, 20800, 40600, 80000]
-BOSS_ATK = [7, 31, 77, 241, 522]
+# ── 기준값·레벨 곡선 (값 문서 §9 · §9.4 · §11-B) ──
+# 기준값은 **역할별 한 벌**뿐이다 — 새 몬스터도 이 값을 그대로 쓴다. 세기는 monster_master 가 아니라
+# stage_spawn.monster_level 이 만든다. 그래서 이 도구의 "추천"은 hp·attack 이 아니라 **등장 레벨**이다.
+BASE_HP = 50
+BASE_ATTACK = {False: 5, True: 1}          # False = 일반, True = 보스(같은 레벨 일반의 1/5)
+HP_GROWTH = 1.25                            # 레벨당 체력 배율(정본: 값 문서 §9.4)
+ATK_GROWTH = 1.18                           # 레벨당 공격력 배율
+# 일반 몬스터 등장 레벨 — [Act] = (s1~3, s4~6, s7~10). 지역 안 3스테이지마다 +1, 지역 간 +3~4.
+SPAWN_LEVEL = {1: (1, 2, 3), 2: (8, 9, 10), 3: (15, 16, 17), 4: (19, 20, 21), 5: (24, 25, 26)}
+STRONG_LEVEL_GAP = 1                        # Act1·2의 강몹은 약몹보다 +1 레벨
+BOSS_LEVEL = {1: 14, 2: 24, 3: 28, 4: 31, 5: 34}
 
 
 class ToolError(Exception):
@@ -65,31 +70,37 @@ class ToolError(Exception):
 
 # ── 산식·채번 (MonsterStatCurve 이식) ──
 
-def interpolate(floors, act, stage, last_growth):
-    """그 Act 하한에서 다음 Act 하한까지 9칸 기하 보간(s = 1..9)."""
-    current = float(floors[act - 1])
-    nxt = float(floors[act]) if act < ACT_COUNT else current * last_growth
-    if current <= 0 or nxt <= 0:
-        return current
-    r = (nxt / current) ** (1.0 / 9.0)
-    return current * (r ** (stage - 1))
-
-
-def scale(value, multiplier):
-    """난이도 배율을 곱해 정수로 반올림(0 이하가 되지 않게 1로 보정)."""
-    rounded = int((value * multiplier) + 0.5)
-    return max(1, rounded)
-
-
-def recommend(act, stage, multiplier=1.0):
-    """Act(1~5)·스테이지(1~10)의 추천 hp·attack. 스테이지 10은 보스 실측값을 그대로 쓴다."""
-    act = min(max(act, 1), ACT_COUNT)
+def band_of(stage):
+    """스테이지가 속한 레벨 구간(0 = s1~3 · 1 = s4~6 · 2 = s7~10)."""
     stage = min(max(stage, 1), STAGE_PER_ACT)
-    mult = multiplier if multiplier > 0 else 1.0
-    if stage == BOSS_STAGE:
-        return scale(BOSS_HP[act - 1], mult), scale(BOSS_ATK[act - 1], mult)
-    return (scale(interpolate(HP_FLOOR, act, stage, ACT5_HP_GROWTH), mult),
-            scale(interpolate(ATK_FLOOR, act, stage, ACT5_ATK_GROWTH), mult))
+    return 0 if stage <= 3 else (1 if stage <= 6 else 2)
+
+
+def spawn_level(act, stage, boss=False, strong=False):
+    """그 자리(Act·스테이지·역할)의 등장 레벨. 값 문서 §11-B의 레벨 곡선이 정본이다."""
+    act = min(max(act, 1), ACT_COUNT)
+    if boss:
+        return BOSS_LEVEL[act]
+    level = SPAWN_LEVEL[act][band_of(stage)]
+    return level + (STRONG_LEVEL_GAP if strong and act <= 2 else 0)
+
+
+def stats_at(level, boss=False):
+    """레벨 1 기준값에 레벨 배율을 적용한 (hp, attack) — 클라 MonsterStats.Scale 과 같은 식."""
+    e = max(1, int(level)) - 1
+    return (max(1, round(BASE_HP * HP_GROWTH ** e)),
+            max(1, round(BASE_ATTACK[bool(boss)] * ATK_GROWTH ** e)))
+
+
+def recommend(act, stage, boss=False, strong=False):
+    """(기준 hp, 기준 attack, 추천 등장 레벨, 그 레벨의 실제 hp, 실제 attack).
+
+    기준값은 항상 통일값이므로 새 몬스터를 추가할 때 고를 것은 **등장 레벨**뿐이다.
+    """
+    boss = bool(boss)
+    level = spawn_level(act, stage, boss, strong)
+    hp, attack = stats_at(level, boss)
+    return BASE_HP, BASE_ATTACK[boss], level, hp, attack
 
 
 def act_of_code(code):
@@ -701,12 +712,12 @@ def stage_total(spawn_rows, sid, override=None):
     return sum(counts.values())
 
 
-def build_spawn_rows(code, stages, difficulties, spawn_rows=None, level=1):
+def build_spawn_rows(code, stages, difficulties, spawn_rows=None, level=None, strong=False):
     """(스테이지, 마리 수, 증분여부) 목록을 난이도별 stage_spawn 행으로 펼친다.
 
     증분(`+N`)은 **난이도별 현재 값에 각각** 더한다(난이도 1·2가 다른 값일 수도 있으므로).
-    `level` 은 그 배치의 monster_level(기본 1)이다 — 몬스터 스탯은 monster_master 의
-    레벨 1 기준값에 이 레벨의 배율을 곱해 산출된다(값 문서 §9.4).
+    `level` 을 주지 않으면 **그 Act·스테이지의 레벨 곡선 값**(§11-B)을 쓴다 — 기준값이 통일돼
+    있으므로 세기를 정하는 것은 이 레벨이다(값 문서 §9.4). `strong`이면 Act1·2에서 +1 레벨.
     """
     act = act_of_code(code)
     rows = []
@@ -722,7 +733,8 @@ def build_spawn_rows(code, stages, difficulties, spawn_rows=None, level=1):
                         "1 미만입니다. 배치를 없애려면 별도로 행을 지우세요.")
             else:
                 final = count
-            rows.append({"stage_id": sid, "code": code, "level": level,
+            lv = level if level is not None else spawn_level(act, stage, False, strong)
+            rows.append({"stage_id": sid, "code": code, "level": lv,
                          "count": final, "is_boss": 0})
     return rows
 
@@ -741,9 +753,10 @@ def print_spawn_plan(code, stages, difficulties, spawn_rows, new_rows):
         total = stage_total(spawn_rows, sid, {code: after})
         before_total = stage_total(spawn_rows, sid)
         arrow = f"{before} → {after}마리" if before else f"{after}마리"
-        print(f"  · 스테이지 {stage}: {arrow}  (그 스테이지 총 {before_total} → {total}마리)")
-        if not 8 <= total <= 16:
-            print(f"    ! 총 {total}마리는 값 문서 §11-B의 통상 범위(8~19)를 벗어납니다 — 의도한 값인지 확인하세요.")
+        lv = next(r["level"] for r in new_rows if r["stage_id"] == sid)
+        print(f"  · 스테이지 {stage}: {arrow} (Lv{lv})  (그 스테이지 총 {before_total} → {total}마리)")
+        if not 8 <= total <= 23:
+            print(f"    ! 총 {total}마리는 값 문서 §11-B의 통상 범위(8~23)를 벗어납니다 — 의도한 값인지 확인하세요.")
 
 
 def cmd_spawn(args):
@@ -975,9 +988,13 @@ def cmd_add(args):
         code = next_code(args.act, boss, used)
 
     stage = BOSS_STAGE if boss else (args.stage or 1)
-    rec_hp, rec_atk = recommend(args.act, stage, args.difficulty_multiplier)
-    hp = args.hp if args.hp is not None else rec_hp
-    attack = args.attack if args.attack is not None else rec_atk
+    base_hp, base_atk, rec_level, lv_hp, lv_atk = recommend(args.act, stage, boss)
+    hp = args.hp if args.hp is not None else base_hp
+    attack = args.attack if args.attack is not None else base_atk
+    print(f"[레벨] Act{args.act} 스테이지 {stage} 추천 등장 레벨 {rec_level} "
+          f"→ 실제 전투 스탯 hp {lv_hp} / attack {lv_atk} "
+          f"(기준값 {hp}/{attack} × 레벨 배율, 값 문서 §9.4). "
+          f"배치는 `spawn --code {code} --stages \"...\"` 가 이 레벨로 넣는다.")
     if hp < 1 or attack < 1:
         raise ToolError("hp·attack 은 1 이상의 정수여야 합니다.")
 
@@ -1079,8 +1096,15 @@ def cmd_verify(args):
 
 
 def cmd_recommend(args):
-    hp, attack = recommend(args.act, args.stage, args.difficulty_multiplier)
-    print(f"Act{args.act} 스테이지 {args.stage} 추천 — hp {hp} / attack {attack}")
+    for boss, strong, label in ((False, False, "일반(약몹)"),
+                                (False, True, "일반(강몹, Act1·2)"),
+                                (True, False, "보스")):
+        base_hp, base_atk, level, hp, attack = recommend(args.act, args.stage, boss, strong)
+        if strong and args.act > 2:
+            continue
+        print(f"Act{args.act} 스테이지 {args.stage} {label}: 등장 레벨 {level} "
+              f"— 기준값 hp {base_hp} / attack {base_atk} → 실제 hp {hp} / attack {attack}")
+    print("  ※ 기준값은 역할별 통일값이다 — 세기는 stage_spawn.monster_level 이 만든다(값 문서 §9.4·§11-B).")
     return 0
 
 
@@ -1112,10 +1136,9 @@ def main():
     li = sub.add_parser("list", help="현재 몬스터 목록과 레시피·프리팹 보유 현황")
     li.set_defaults(func=cmd_list)
 
-    r = sub.add_parser("recommend", help="Act·스테이지의 추천 hp·attack 출력")
+    r = sub.add_parser("recommend", help="Act·스테이지의 추천 등장 레벨·실제 스탯 출력")
     r.add_argument("--act", type=int, required=True)
     r.add_argument("--stage", type=int, default=1)
-    r.add_argument("--difficulty-multiplier", type=float, default=1.0)
     r.set_defaults(func=cmd_recommend)
 
     n = sub.add_parser("next-code", help="다음으로 쓸 monster_code 출력")
@@ -1161,9 +1184,8 @@ def main():
     a.add_argument("--stage", type=int, default=1, help="추천 산출 기준 스테이지 1~10 (10 = 보스)")
     a.add_argument("--boss", action="store_true", help="보스로 채번(xx99)")
     a.add_argument("--code", type=int, help="코드를 직접 지정(기존 몬스터 갱신용). 없으면 자동 채번")
-    a.add_argument("--hp", type=int, help="추천값 대신 쓸 hp")
-    a.add_argument("--attack", type=int, help="추천값 대신 쓸 attack")
-    a.add_argument("--difficulty-multiplier", type=float, default=1.0)
+    a.add_argument("--hp", type=int, help="통일 기준값 대신 쓸 hp(권장하지 않음)")
+    a.add_argument("--attack", type=int, help="통일 기준값 대신 쓸 attack(권장하지 않음)")
     a.add_argument("--race", help="외형 Race 태그 (human·undead·devil·orc·elf·highelf 등)")
     a.add_argument("--gender", help="외형 Gender 태그 (male·female). 생략 시 무제한")
     a.add_argument("--theme", default="fantasy", help="외형 Theme 태그 (기본 fantasy)")
