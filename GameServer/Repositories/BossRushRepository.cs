@@ -234,7 +234,7 @@ public sealed class BossRushRepository : IBossRushRepository
     /// </remarks>
     public async Task<BossRushClearOutcome> ApplyClearAsync(
         long userId, long runId, int clearMs, IReadOnlyList<(int Round, int ElapsedMs)> roundTimes,
-        IReadOnlyDictionary<int, int> bossByRound, long runLifetimeMs, long nowMs)
+        long runLifetimeMs, long nowMs)
     {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
@@ -290,15 +290,13 @@ public sealed class BossRushRepository : IBossRushRepository
                 return BossRushClearOutcome.Fail(BossRushClearStatus.AlreadyFinished);
             }
 
-            // 4) 라운드별 소요 기록(클라 측정). 몬스터 구성은 복사하지 않고 그 라운드 보스만 참고로 남긴다.
+            // 4) 라운드별 소요 기록(클라 측정). 몬스터 구성은 복사하지 않는다 — round로 마스터를 찾으면 된다.
             foreach (var (round, elapsedMs) in roundTimes)
             {
-                bossByRound.TryGetValue(round, out var monsterCode);
                 await db.Query("boss_rush_run_round").InsertAsync(new
                 {
                     run_id = runId,
                     round,
-                    monster_code = monsterCode,
                     elapsed_ms = elapsedMs,
                 }, transaction);
             }

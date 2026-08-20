@@ -28,10 +28,9 @@ public interface IBossRushRepository
     /// 라운드 기록 INSERT → 시즌 최고 기록 조건부 UPSERT. 보상 지급은 없다.
     /// </summary>
     /// <param name="roundTimes">라운드 번호 → 소요(ms). 형식 검증은 서비스가 이미 마쳤다.</param>
-    /// <param name="bossByRound">라운드 번호 → 그 라운드 보스 코드(원장에 남길 참고값).</param>
     Task<BossRushClearOutcome> ApplyClearAsync(
         long userId, long runId, int clearMs, IReadOnlyList<(int Round, int ElapsedMs)> roundTimes,
-        IReadOnlyDictionary<int, int> bossByRound, long runLifetimeMs, long nowMs);
+        long runLifetimeMs, long nowMs);
 
     /// <summary>시즌 등재 인원(ZCARD 폴백).</summary>
     Task<int> CountEntriesAsync(int seasonId);

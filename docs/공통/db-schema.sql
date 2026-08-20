@@ -405,13 +405,12 @@ CREATE TABLE boss_rush_run (
 
 
 -- 도전 런의 라운드별 소요 시간(클라 측정, boss_rush_run의 자식). 합계가 clear_ms와 일치해야 보고가 통과한다.
---   **몬스터 구성은 복사하지 않는다** — 그 라운드의 구성은 boss_rush_spawn(마스터)이 정본이고,
---   여기에는 어느 라운드에서 시간이 갈렸는지 분석할 참고값(그 라운드 보스)만 남긴다.
+--   **몬스터 구성은 복사하지 않는다** — 그 라운드의 구성(보스 포함)은 boss_rush_spawn(마스터)이
+--   정본이므로, 어느 라운드에서 시간이 갈렸는지는 round로 마스터를 찾아 보면 된다.
 DROP TABLE IF EXISTS boss_rush_run_round;
 CREATE TABLE boss_rush_run_round (
     run_id       BIGINT NOT NULL          COMMENT '소속 런(boss_rush_run.run_id)',
     round        INT    NOT NULL          COMMENT '라운드 번호(1~round_count)',
-    monster_code INT    NOT NULL DEFAULT 0 COMMENT '그 라운드 보스(monster_master, 참고값)',
     elapsed_ms   INT    NOT NULL          COMMENT '그 라운드 소요(ms, 클라 측정)',
     PRIMARY KEY (run_id, round),
     CONSTRAINT fk_bossrushrunround_run FOREIGN KEY (run_id)

@@ -200,11 +200,10 @@ public sealed class BossRushService : IBossRushService
             return new SaveResult(ErrorCode.BossRushInvalidProgress, string.Empty, null);
         }
 
-        var bossByRound = rounds.ToDictionary(r => r.Round, r => r.BossMonsterCode);
         var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         var outcome = await _repository.ApplyClearAsync(
-            userId, request.runId, request.clearMs, roundTimes, bossByRound, rule.RunLifetimeMs, nowMs);
+            userId, request.runId, request.clearMs, roundTimes, rule.RunLifetimeMs, nowMs);
 
         switch (outcome.Status)
         {

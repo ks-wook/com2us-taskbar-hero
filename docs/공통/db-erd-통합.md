@@ -442,7 +442,7 @@ erDiagram
 ### boss_rush_run_round
 
 - **역할**: **라운드별 소요 시간**(클라 측정, `boss_rush_run`의 자식). 반복 구조를 JSON이 아니라 자식 테이블로 분리하는 공통 규칙을 따른다.
-- **저장 데이터**: `(run_id, round)` 키, `monster_code`, `elapsed_ms`. 합계가 `boss_rush_run.clear_ms`와 **일치해야** 클리어 보고가 통과하며(자기정합성 검증), 이후에는 어느 라운드에서 시간이 갈리는지 분석하는 근거가 된다.
+- **저장 데이터**: `(run_id, round)` 키, `elapsed_ms`. 합계가 `boss_rush_run.clear_ms`와 **일치해야** 클리어 보고가 통과하며(자기정합성 검증), 이후에는 어느 라운드에서 시간이 갈리는지 분석하는 근거가 된다. **그 라운드의 몬스터 구성은 복사하지 않는다** — `round`로 `boss_rush_spawn`(마스터)을 찾으면 되므로 보스 코드조차 남기지 않는다.
 
 ### boss_rush_record
 
