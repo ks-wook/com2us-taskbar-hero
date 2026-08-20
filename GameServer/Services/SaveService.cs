@@ -1,6 +1,6 @@
 ﻿using GameServer.MasterData;
-using GameServer.Repositories;
-using GameServer.Repositories.Interfaces;
+using GameServer.Repositories.GameDb;
+using GameServer.Repositories.GameDb.Interfaces;
 using MySqlConnector;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;

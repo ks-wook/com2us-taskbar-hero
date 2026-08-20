@@ -1,11 +1,12 @@
-using AccountServer.Auth;
+﻿using AccountServer.Auth;
 using AccountServer.Data;
 using AccountServer.Middleware;
-using AccountServer.Repositories;
+using AccountServer.Repositories.AccountDb;
 using AccountServer.Services;
 using CloudStructures;
 using Utf8StringInterpolation;
 using ZLogger;
+using AccountServer.Repositories.MemoryDb;
 
 // DB 조회는 SqlKata 제네릭 매핑(.GetAsync<T>/.FirstOrDefaultAsync<T>)으로 POCO에 매핑한다(dynamic 금지, CLAUDE.md 규칙).
 // snake_case 컬럼 → PascalCase 프로퍼티 자동 매핑을 위해 Dapper 규칙을 켠다(SqlKata.Execution이 Dapper로 실행).
@@ -58,7 +59,7 @@ builder.Services.AddSingleton(sp =>
     var connectionString = builder.Configuration.GetValue("Redis:ConnectionString", "127.0.0.1:6379")!;
     return new RedisConnection(new RedisConfig("account", connectionString));
 });
-builder.Services.AddSingleton<IAuthTokenCache, RedisAuthTokenCache>();
+builder.Services.AddSingleton<IAuthTokenCache, AuthTokenCache>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 

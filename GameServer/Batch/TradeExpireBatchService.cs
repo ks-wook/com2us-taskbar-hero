@@ -1,9 +1,9 @@
-﻿using CloudStructures;
-using GameServer.MasterData;
-using GameServer.Repositories;
-using GameServer.Repositories.Interfaces;
+﻿using GameServer.MasterData;
+using GameServer.Repositories.GameDb;
+using GameServer.Repositories.GameDb.Interfaces;
 using GameServer.Services;
 using ZLogger;
+using GameServer.Repositories.MemoryDb.Interfaces;
 
 namespace GameServer.Batch;
 
@@ -47,9 +47,9 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
 
     /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터를 주입받는다.</summary>
     public TradeExpireBatchService(
-        IServiceScopeFactory scopeFactory, RedisConnection redis, IConfiguration configuration,
+        IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
         MasterDataProvider masterData, ILogger<TradeExpireBatchService> logger)
-        : base(scopeFactory, redis, logger)
+        : base(scopeFactory, batchLock, logger)
     {
         var interval = configuration.GetValue("TradeExpireBatch:IntervalSeconds", DefaultIntervalSeconds);
         var batchSize = configuration.GetValue("TradeExpireBatch:BatchSize", DefaultBatchSize);
@@ -147,3 +147,4 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
     private int RewardTypeFor(int itemCode)
         => _masterData.GetItem(itemCode)?.ItemType == ItemTypeMaterial ? RewardTypeMaterial : RewardTypeItem;
 }
+

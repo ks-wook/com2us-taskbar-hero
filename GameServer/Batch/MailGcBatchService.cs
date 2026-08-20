@@ -1,7 +1,7 @@
-﻿using CloudStructures;
-using GameServer.Repositories;
-using GameServer.Repositories.Interfaces;
+﻿using GameServer.Repositories.GameDb;
+using GameServer.Repositories.GameDb.Interfaces;
 using ZLogger;
+using GameServer.Repositories.MemoryDb.Interfaces;
 
 namespace GameServer.Batch;
 
@@ -27,9 +27,9 @@ public sealed class MailGcBatchService : PeriodicBatchService
 
     /// <summary>설정에서 실행 주기·1회 처리 상한을 읽는다(없거나 0 이하이면 기본값).</summary>
     public MailGcBatchService(
-        IServiceScopeFactory scopeFactory, RedisConnection redis, IConfiguration configuration,
+        IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
         ILogger<MailGcBatchService> logger)
-        : base(scopeFactory, redis, logger)
+        : base(scopeFactory, batchLock, logger)
     {
         var interval = configuration.GetValue("MailGcBatch:IntervalSeconds", DefaultIntervalSeconds);
         var batchSize = configuration.GetValue("MailGcBatch:BatchSize", DefaultBatchSize);
@@ -61,3 +61,4 @@ public sealed class MailGcBatchService : PeriodicBatchService
         }
     }
 }
+

@@ -1,10 +1,11 @@
-﻿using CloudStructures;
-using GameServer.MasterData;
-using GameServer.Repositories;
-using GameServer.Repositories.Interfaces;
+﻿using GameServer.MasterData;
+using GameServer.Repositories.GameDb;
+using GameServer.Repositories.GameDb.Interfaces;
 using GameServer.Services;
 using TaskbarHero.Common;
 using ZLogger;
+using GameServer.Repositories.MemoryDb.Interfaces;
+using GameServer.Repositories;
 
 namespace GameServer.Batch;
 
@@ -48,9 +49,9 @@ public sealed class BossRushSeasonBatchService : PeriodicBatchService
 
     /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터를 주입받는다.</summary>
     public BossRushSeasonBatchService(
-        IServiceScopeFactory scopeFactory, RedisConnection redis, IConfiguration configuration,
+        IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
         MasterDataProvider masterData, ILogger<BossRushSeasonBatchService> logger)
-        : base(scopeFactory, redis, logger)
+        : base(scopeFactory, batchLock, logger)
     {
         var interval = configuration.GetValue("BossRushSeasonBatch:IntervalSeconds", DefaultIntervalSeconds);
         var batchSize = configuration.GetValue("BossRushSeasonBatch:BatchSize", DefaultBatchSize);

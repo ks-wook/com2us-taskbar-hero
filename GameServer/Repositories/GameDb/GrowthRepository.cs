@@ -1,0 +1,346 @@
+﻿using System.Data.Common;
+using GameServer.Data;
+using GameServer.Models;
+using GameServer.Repositories.GameDb.Interfaces;
+using SqlKata.Execution;
+
+namespace GameServer.Repositories.GameDb;
+
+/// <summary>스킬 레벨업 트랜잭션 결과. NewLevel=올린 뒤 레벨, AvailablePoints=갱신 후 사용 가능 스킬 포인트.</summary>
+public sealed record SkillLevelUpOutcome(SkillLevelUpStatus Status, int NewLevel, int AvailablePoints)
+{
+    public static SkillLevelUpOutcome Fail(SkillLevelUpStatus status) => new(status, 0, 0);
+}
+
+/// <summary>스킬 초기화 트랜잭션 결과. ResetCount=레벨 0으로 되돌린 스킬 수, AvailablePoints=초기화 후 사용 가능 포인트(전액).</summary>
+public sealed record SkillResetOutcome(SkillResetStatus Status, int ResetCount, int AvailablePoints)
+{
+    public static SkillResetOutcome Fail(SkillResetStatus status) => new(status, 0, 0);
+}
+
+/// <summary>액티브 스킬 장착 트랜잭션 결과. Equipped=설정 후 장착된 스킬 코드 목록.</summary>
+public sealed record SkillEquipOutcome(SkillEquipStatus Status, List<int> Equipped)
+{
+    public static SkillEquipOutcome Fail(SkillEquipStatus status) => new(status, new List<int>());
+}
+
+/// <summary>룬 업그레이드 트랜잭션 결과. NewLevel=올린 뒤 레벨, Cost=차감 골드, GoldBalance=차감 후 잔액.</summary>
+public sealed record RuneUpgradeOutcome(RuneUpgradeStatus Status, int NewLevel, long Cost, long GoldBalance)
+{
+    public static RuneUpgradeOutcome Fail(RuneUpgradeStatus status) => new(status, 0, 0, 0);
+}
+
+/// <summary>성장(스킬·룬) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
+public sealed class GrowthRepository : IGrowthRepository
+{
+    private const int RowTypeCurrency = 2;
+    private const int GoldItemCode = 1;
+
+    private readonly GameDbFactory _dbFactory;
+
+    /// <summary>세이브 DB 커넥션 팩토리를 주입받는다.</summary>
+    public GrowthRepository(GameDbFactory dbFactory) => _dbFactory = dbFactory;
+
+    /// <summary>
+    /// 스킬 1레벨 상승을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(InvalidCharacter·SkillNotFound·ClassMismatch·MaxLevel·InsufficientPoint)는 즉시 롤백 후
+    /// Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 포인트 계산의 근거가 된 스냅샷과 반영이 어긋나지 않게 한다):
+    /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인 및 직업·레벨 확보(검증 입력)</para>
+    /// <para>2) player_skill SELECT — 해당 캐릭터의 보유 스킬 레벨 집계(대상 스킬 현재 레벨 + 사용한 총 포인트)</para>
+    /// <para>3) decide 델리게이트 — 마스터 검증(스킬 존재·직업 소속·최대 레벨·잔여 포인트)과 반영 후 잔여 포인트 산출(DB 접근 없음)</para>
+    /// <para>4) player_skill UPDATE 또는 INSERT — 기존 행(초기화로 레벨 0이 된 행 포함)이면 레벨 +1, 행 자체가 없으면 레벨 1·미장착으로 새 행 생성</para>
+    /// </remarks>
+    public async Task<SkillLevelUpOutcome> ApplySkillLevelUpAsync(
+        long userId, int characterId, int skillCode,
+        Func<int, int, int, int, (SkillLevelUpStatus status, int availableAfter)> decide)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var db = _dbFactory.Create(connection);
+
+            // 1) 대상 캐릭터 확인(직업·레벨은 검증에 사용).
+            var charRow = await db.Query("player_character")
+                .Select("class_code", "level")
+                .Where("user_id", userId).Where("character_id", characterId)
+                .FirstOrDefaultAsync<CharClassLevelRow>(transaction);
+            if (charRow is null)
+            {
+                await transaction.RollbackAsync();
+                return SkillLevelUpOutcome.Fail(SkillLevelUpStatus.InvalidCharacter);
+            }
+
+            // 2) 그 캐릭터의 보유 스킬 레벨 집계(대상 현재 레벨 + 사용 포인트 = 레벨 합).
+            var skillRows = await db.Query("player_skill")
+                .Select("skill_code", "level")
+                .Where("user_id", userId).Where("character_id", characterId)
+                .GetAsync<SkillCodeLevelRow>(transaction);
+
+            var levels = skillRows.ToDictionary(r => r.SkillCode, r => r.Level);
+            int curLevel = levels.GetValueOrDefault(skillCode, 0);
+            int spent = levels.Values.Sum();
+
+            // 3) 마스터 검증(직업 소속·최대 레벨·포인트 충족).
+            var (status, availableAfter) = decide(charRow.ClassCode, charRow.Level, curLevel, spent);
+            if (status != SkillLevelUpStatus.Ok)
+            {
+                await transaction.RollbackAsync();
+                return SkillLevelUpOutcome.Fail(status);
+            }
+
+            // 4) 반영: 행이 있으면 레벨 +1, 없으면 INSERT(첫 습득).
+            int newLevel = curLevel + 1;
+            if (levels.ContainsKey(skillCode))
+            {
+                await db.Query("player_skill")
+                    .Where("user_id", userId).Where("character_id", characterId).Where("skill_code", skillCode)
+                    .UpdateAsync(new { level = newLevel }, transaction);
+            }
+            else
+            {
+                await db.Query("player_skill").InsertAsync(new
+                {
+                    user_id = userId,
+                    character_id = characterId,
+                    skill_code = skillCode,
+                    level = newLevel,
+                    equipped = 0,
+                }, transaction);
+            }
+
+            await transaction.CommitAsync();
+            return new SkillLevelUpOutcome(SkillLevelUpStatus.Ok, newLevel, availableAfter);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 대상 캐릭터의 스킬을 전부 초기화(무료)하는 작업을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 캐릭터가 없으면 롤백 후 InvalidCharacter를 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(재화 변동은 없다):
+    /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인 및 레벨 확보(회수 후 총 포인트 산출 입력)</para>
+    /// <para>2) player_skill UPDATE — 레벨 1 이상인 스킬 행을 level=0·equipped=0으로 갱신(포인트 전액 회수 + 장착 해제). 행은 삭제하지 않고 남기며, 레벨 0 행은 미습득으로 보아 세이브 조회에서 제외한다(SaveRepository.GetSkillsAsync)</para>
+    /// <para>3) totalPoints 델리게이트 — 캐릭터 레벨 기준 총 스킬 포인트 산출(DB 접근 없음)</para>
+    /// </remarks>
+    public async Task<SkillResetOutcome> ApplySkillResetAsync(long userId, int characterId, Func<int, int> totalPoints)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var db = _dbFactory.Create(connection);
+
+            // 1) 대상 캐릭터 확인(레벨은 초기화 후 총 포인트 산출에 사용).
+            var charRow = await db.Query("player_character")
+                .Select("class_code", "level")
+                .Where("user_id", userId).Where("character_id", characterId)
+                .FirstOrDefaultAsync<CharClassLevelRow>(transaction);
+            if (charRow is null)
+            {
+                await transaction.RollbackAsync();
+                return SkillResetOutcome.Fail(SkillResetStatus.InvalidCharacter);
+            }
+
+            // 2) 해당 캐릭터의 투자된 스킬 행을 레벨 0·미장착으로 되돌린다(행 삭제 없음, 포인트 전량 회수). 재화 변동 없음.
+            int resetCount = await db.Query("player_skill")
+                .Where("user_id", userId).Where("character_id", characterId).Where("level", ">", 0)
+                .UpdateAsync(new { level = 0, equipped = 0 }, transaction);
+
+            await transaction.CommitAsync();
+            return new SkillResetOutcome(SkillResetStatus.Ok, resetCount, totalPoints(charRow.Level));
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 액티브 스킬 장착 목록을 통째로 교체하는 작업을 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(InvalidCharacter·SkillNotFound·ClassMismatch·NotActive·NotLearned·LimitExceeded)는 즉시 롤백 후
+    /// Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(전량 해제와 재장착을 함께 커밋해 "아무것도 장착되지 않은" 중간 상태가 보이지 않게 한다):
+    /// <para>1) player_character SELECT — 대상 캐릭터 존재 확인 및 직업 확보(검증 입력)</para>
+    /// <para>2) player_skill SELECT — 보유 스킬 code→level 사전 확보</para>
+    /// <para>3) validate 델리게이트 — 마스터 검증(스킬 존재·직업 소속·액티브 여부·습득 여부·장착 한도)(DB 접근 없음)</para>
+    /// <para>4) player_skill UPDATE — 해당 캐릭터의 equipped를 전부 0으로 해제</para>
+    /// <para>5) player_skill UPDATE(요청 코드별) — 요청 목록의 스킬만 equipped=1로 재설정</para>
+    /// </remarks>
+    public async Task<SkillEquipOutcome> ApplySkillEquipAsync(
+        long userId, int characterId, IReadOnlyList<int> skillCodes,
+        Func<int, IReadOnlyDictionary<int, int>, SkillEquipStatus> validate)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var db = _dbFactory.Create(connection);
+
+            // 1) 대상 캐릭터 확인.
+            var charRow = await db.Query("player_character")
+                .Select("class_code", "level")
+                .Where("user_id", userId).Where("character_id", characterId)
+                .FirstOrDefaultAsync<CharClassLevelRow>(transaction);
+            if (charRow is null)
+            {
+                await transaction.RollbackAsync();
+                return SkillEquipOutcome.Fail(SkillEquipStatus.InvalidCharacter);
+            }
+
+            // 2) 보유 스킬(code→level) 조회.
+            var skillRows = await db.Query("player_skill")
+                .Select("skill_code", "level")
+                .Where("user_id", userId).Where("character_id", characterId)
+                .GetAsync<SkillCodeLevelRow>(transaction);
+            var levels = skillRows.ToDictionary(r => r.SkillCode, r => r.Level);
+
+            // 3) 마스터 검증(존재·직업·액티브·습득·한도).
+            var status = validate(charRow.ClassCode, levels);
+            if (status != SkillEquipStatus.Ok)
+            {
+                await transaction.RollbackAsync();
+                return SkillEquipOutcome.Fail(status);
+            }
+
+            // 4) 반영: 전부 해제 후 요청 목록만 장착(통째 교체).
+            await db.Query("player_skill")
+                .Where("user_id", userId).Where("character_id", characterId)
+                .UpdateAsync(new { equipped = 0 }, transaction);
+
+            foreach (var code in skillCodes)
+            {
+                await db.Query("player_skill")
+                    .Where("user_id", userId).Where("character_id", characterId).Where("skill_code", code)
+                    .UpdateAsync(new { equipped = 1 }, transaction);
+            }
+
+            await transaction.CommitAsync();
+            return new SkillEquipOutcome(SkillEquipStatus.Ok, skillCodes.ToList());
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// 룬 1레벨 업그레이드(골드 소모)를 단일 커넥션의 단일 트랜잭션으로 적용한다.
+    /// 검증 실패(MaxLevel·PrereqNotMet·InsufficientCurrency)는 즉시 롤백 후 Fail 상태로 반환하고, 예외는 롤백 후 전파한다.
+    /// 룬 존재 여부는 호출 전(서비스·마스터)에서 검증한다.
+    /// </summary>
+    /// <remarks>
+    /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 골드만 차감되고 레벨이 안 오르는 상태를 막는다):
+    /// <para>1) player_rune SELECT — 대상 룬 현재 레벨(계정 공용, 행이 없으면 0) 확인 후 최대 레벨 도달 검사</para>
+    /// <para>2) player_rune SELECT — 선행 룬(prereqCode≠0일 때) 해금 여부 확인(레벨 &lt; 1 → PrereqNotMet)</para>
+    /// <para>3) costOf 델리게이트 — 현재 레벨 기준 골드 비용 산출(서버 권위, DB 접근 없음)</para>
+    /// <para>4) player_item(재화 행) SELECT — 골드 잔액 확인(부족 → InsufficientCurrency)</para>
+    /// <para>5) player_item UPDATE — 비용 골드 차감</para>
+    /// <para>6) player_rune UPDATE 또는 INSERT — 기존 행이면 레벨 +1, 첫 해금이면 레벨 1로 새 행 생성</para>
+    /// </remarks>
+    public async Task<RuneUpgradeOutcome> ApplyRuneUpgradeAsync(
+        long userId, int runeCode, int prereqCode, int maxLevel, Func<int, long> costOf)
+    {
+        await using var connection = _dbFactory.CreateConnection();
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            var db = _dbFactory.Create(connection);
+
+            // 1) 대상 룬 현재 레벨(계정 공용). 없으면 0.
+            var curLevel = await db.Query("player_rune")
+                .Select("level")
+                .Where("user_id", userId).Where("rune_code", runeCode)
+                .FirstOrDefaultAsync<int?>(transaction) ?? 0;
+
+            // 2) 최대 레벨 확인.
+            if (curLevel >= maxLevel)
+            {
+                await transaction.RollbackAsync();
+                return RuneUpgradeOutcome.Fail(RuneUpgradeStatus.MaxLevel);
+            }
+
+            // 3) 선행 룬 해금(레벨 ≥ 1) 확인(루트면 prereqCode=0이라 생략).
+            if (prereqCode != 0)
+            {
+                var prereqLevel = await db.Query("player_rune")
+                    .Select("level")
+                    .Where("user_id", userId).Where("rune_code", prereqCode)
+                    .FirstOrDefaultAsync<int?>(transaction) ?? 0;
+                if (prereqLevel < 1)
+                {
+                    await transaction.RollbackAsync();
+                    return RuneUpgradeOutcome.Fail(RuneUpgradeStatus.PrereqNotMet);
+                }
+            }
+
+            // 4) 골드 비용 산출(서버 권위) + 잔액 확인.
+            long cost = costOf(curLevel);
+            var goldRow = await db.Query("player_item")
+                .Select("player_item_id", "quantity")
+                .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
+
+            long gold = goldRow?.Quantity ?? 0;
+            if (gold < cost)
+            {
+                await transaction.RollbackAsync();
+                return RuneUpgradeOutcome.Fail(RuneUpgradeStatus.InsufficientCurrency);
+            }
+
+            // 5) 골드 차감(재화 행 UPDATE) + 룬 레벨 +1(없으면 INSERT).
+            long newGold = gold - cost;
+            if (goldRow is not null)
+            {
+                await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
+                    .UpdateAsync(new { quantity = newGold }, transaction);
+            }
+
+            int newLevel = curLevel + 1;
+            if (curLevel == 0)
+            {
+                await db.Query("player_rune").InsertAsync(new
+                {
+                    user_id = userId,
+                    rune_code = runeCode,
+                    level = newLevel,
+                }, transaction);
+            }
+            else
+            {
+                await db.Query("player_rune")
+                    .Where("user_id", userId).Where("rune_code", runeCode)
+                    .UpdateAsync(new { level = newLevel }, transaction);
+            }
+
+            await transaction.CommitAsync();
+            return new RuneUpgradeOutcome(RuneUpgradeStatus.Ok, newLevel, cost, newGold);
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+}

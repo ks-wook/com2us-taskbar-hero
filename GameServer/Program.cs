@@ -6,9 +6,11 @@ using GameServer.Batch;
 using GameServer.Data;
 using GameServer.MasterData;
 using GameServer.Middleware;
-using GameServer.Repositories;
-using GameServer.Repositories.Interfaces;
+using GameServer.Repositories.GameDb;
+using GameServer.Repositories.GameDb.Interfaces;
 using GameServer.Services;
+using GameServer.Repositories.MemoryDb.Interfaces;
+using GameServer.Repositories.MemoryDb;
 
 // DB 조회는 SqlKata 제네릭 매핑(.GetAsync<T>/.FirstOrDefaultAsync<T>)으로 POCO에 매핑한다(dynamic 금지, CLAUDE.md 규칙).
 // snake_case 컬럼 → PascalCase 프로퍼티 자동 매핑을 위해 Dapper 규칙을 켠다(SqlKata.Execution이 Dapper로 실행).
@@ -74,7 +76,7 @@ builder.Services.AddSingleton(_ =>
     var connectionString = builder.Configuration.GetValue("Redis:ConnectionString", "127.0.0.1:6379")!;
     return new RedisConnection(new RedisConfig("game", connectionString));
 });
-builder.Services.AddSingleton<IAuthTokenReader, RedisAuthTokenReader>();
+builder.Services.AddSingleton<IAuthTokenReader, AuthTokenReader>();
 
 // 세이브 계층: Controller → Service → Repository.
 builder.Services.AddScoped<ISaveRepository, SaveRepository>();
@@ -125,6 +127,10 @@ builder.Services.AddScoped<IGachaService, GachaService>();
 // bossrush:season:current 해시에서 나온다. MySQL은 캐시 미스·폴백·종료 시즌 조회에서만 개입한다(기획서 4.3·6.3).
 builder.Services.AddScoped<IBossRushRepository, BossRushRepository>();
 builder.Services.AddScoped<IBossRushRankCache, BossRushRankCache>();
+
+// 배치 리더 락(batch:lock:{배치키}) — 주기 배치가 scale-out 환경에서 중복 실행되지 않게 한다.
+//   PeriodicBatchService(싱글턴 BackgroundService)가 주입받으므로 싱글턴으로 등록한다.
+builder.Services.AddSingleton<IBatchLock, BatchLock>();
 builder.Services.AddScoped<IBossRushService, BossRushService>();
 
 // 거래소(교역선) 계층(목록·등록·구매·취소). Redis를 쓰지 않는다 — 목록은 전용 색인을 타는 MySQL 직접 조회,

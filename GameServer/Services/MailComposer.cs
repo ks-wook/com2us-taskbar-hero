@@ -1,5 +1,5 @@
-using GameServer.MasterData;
-using GameServer.Repositories;
+﻿using GameServer.MasterData;
+using GameServer.Repositories.GameDb;
 
 namespace GameServer.Services;
 

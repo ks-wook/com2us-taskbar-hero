@@ -1,7 +1,8 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using TaskbarHero.Common;
 using ZLogger;
+using GameServer.Repositories.MemoryDb.Interfaces;
 
 namespace GameServer.Auth;
 
