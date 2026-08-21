@@ -446,6 +446,12 @@ public static class Constants
             /// 어느 단계에서 골드가 막히는지가 강화 곡선을 조정하는 근거다(5.5).
             /// </summary>
             public const string ItemEnhance = "item.enhance";
+
+            /// <summary>
+            /// 뽑기 결과 <b>1개당 1행</b> → <c>gacha_pull_item_logs</c>. 요청 단위 값(1연/10연·비용)은
+            /// 컬럼으로 두지 않고 같은 <c>pull_id</c>의 행 수와 원장에서 파생한다(5.6).
+            /// </summary>
+            public const string GachaPullItem = "gacha.pull_item";
         }
     }
 }

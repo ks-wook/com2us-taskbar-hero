@@ -8,6 +8,7 @@ using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
 using GameServer.Util;
+using GameServer.Logging;
 
 namespace GameServer.Services;
 
@@ -20,15 +21,17 @@ public sealed class GachaService : IGachaService
     private readonly IGachaRepository _gachaRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<GachaService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(가챠 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
+    /// <summary>의존성(가챠 리포지토리·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
     public GachaService(
         IGachaRepository gachaRepository, MasterDbProvider masterData,
-        ILogger<GachaService> logger)
+        ILogger<GachaService> logger, IEventLogger eventLogger)
     {
         _gachaRepository = gachaRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -143,7 +146,27 @@ public sealed class GachaService : IGachaService
             inventoryDelta = outcome.Delta,
         };
 
+        // 지급 트랜잭션이 커밋된 뒤에 방출한다(4.2). 회차마다 1행이라 10연이면 10행이 같은 pull_id로 묶인다.
+        EmitPullItems(userId, banner.GachaCode, outcome.PullId, outcome.Entries);
+
         return new SaveResult(ErrorCode.Success, "GachaPulled", data);
+    }
+
+    /// <summary>
+    /// 뽑기 결과를 <b>회차 1건당 1행</b>으로 방출한다(5.6). 확률 검증은 표본이 쌓여야 가능하므로
+    /// 결과를 요약하지 않고 개별 사실로 남긴다 — 이 행들의 등급 분포가 곧 기획 확률의 검증 대상이다.
+    /// </summary>
+    private void EmitPullItems(
+        long userId, int gachaCode, long pullId, IReadOnlyList<GachaPullEntry> entries)
+    {
+        foreach (var entry in entries)
+        {
+            _eventLogger.Action(
+                Constants.EventLog.Tags.GachaPullItem, userId,
+                new GachaPullItemEvent(
+                    pullId, entry.Seq, gachaCode, entry.ItemCode, entry.Grade,
+                    entry.PityApplied, entry.Guaranteed));
+        }
     }
 
     /// <summary>

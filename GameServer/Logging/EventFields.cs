@@ -88,6 +88,24 @@ public sealed record CharacterLevelUpEvent(
 public sealed record ItemEnhanceEvent(
     long ItemId, int ItemCode, int Grade, int FromLevel, int ToLevel, long Cost) : IEventFields;
 
+// ── 5.6 가챠 ──
+
+/// <summary>
+/// <c>gacha.pull_item</c> — 뽑기 결과 <b>1개당 1행</b>(10연이면 10행). <b>등급 실측 분포가 기획 확률과 맞는가</b>를
+/// 검증하는 표본이고, 천장 발동률·배너별 소비량도 여기서 나온다.
+/// <para><b>요청 단위 값은 컬럼으로 두지 않는다</b> — 1연/10연은 같은 <see cref="PullId"/>의 행 수(1 또는 10)로,
+/// 비용은 원장(<c>spend</c>/<c>gacha_pull</c>, <c>ref_id</c> = pull_id)으로 파생한다. 같은 사실을 두 곳에
+/// 적지 않기 위해서다(5.6).</para>
+/// <para>지급된 아이템 자체는 <c>item_flow_logs</c>에도 남는다 — <b>등급 분포는 이쪽, 아이템 유통량은 그쪽</b>이다.</para>
+/// </summary>
+/// <param name="PullId">뽑기 요청 1건의 식별자. 10연 10행이 이 값으로 묶인다.</param>
+/// <param name="Seq">그 요청 안의 회차(1부터). 10연 보장은 마지막 회차에 걸린다.</param>
+/// <param name="IsPity">하드 천장이 발동해 등급이 보정된 결과인지.</param>
+/// <param name="IsGuaranteed">10연 보장으로 마지막 회차가 대체된 결과인지.</param>
+public sealed record GachaPullItemEvent(
+    long PullId, int Seq, int GachaCode, int ItemCode, int Grade,
+    bool IsPity, bool IsGuaranteed) : IEventFields;
+
 // ── 5.4 오프라인 보상 ──
 
 /// <summary>
