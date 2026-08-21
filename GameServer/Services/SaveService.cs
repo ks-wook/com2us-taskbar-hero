@@ -18,18 +18,6 @@ public readonly record struct SaveResult(ErrorCode ErrorCode, string SuccessMess
 
 public sealed class SaveService : ISaveService
 {
-    /// <summary>파티에 세울 수 있는 인원(전투 참가 인원). 보유 캐릭터 수 상한이 아니다 — 보유는 직업 수만큼 가능하다.</summary>
-    private const int MaxPartySlots = 3;
-
-    /// <summary>player_character.slot의 "미편성"(보유하지만 파티에 없음) 값.</summary>
-    private const int PartySlotUnassigned = 0;
-
-    private const int MySqlDuplicateEntry = 1062;
-    private const int GoldCurrencyType = 1;
-
-    /// <summary>신규 가입 지원금 메일의 문구 템플릿(mail_master). 계정 초기화 시 1회 발급한다.</summary>
-    private const int NewbieRewardMailTemplateCode = 101;
-
     private readonly ISaveRepository _saveRepository;
     private readonly IConsumableRepository _consumableRepository;
     private readonly MasterDbProvider _masterData;
@@ -78,7 +66,7 @@ public sealed class SaveService : ISaveService
         if (player is null)
         {
             // 세션 개시 이벤트(로그 이벤트 정의 5.2). 아직 세이브가 없으므로 경과 시간은 0이다.
-            _eventLogger.Action(EventLogTags.SaveLoad, userId, new SaveLoadEvent(IsNew: true, OfflineElapsedSec: 0));
+            _eventLogger.Action(Constants.EventLog.Tags.SaveLoad, userId, new SaveLoadEvent(IsNew: true, OfflineElapsedSec: 0));
             return new SaveResult(ErrorCode.Success, "New player", new { isNew = true });
         }
 
@@ -120,7 +108,7 @@ public sealed class SaveService : ISaveService
 
         // 세션 개시 이벤트(로그 이벤트 정의 5.2). 계정 로그를 남기지 않으므로 접속·리텐션 분석이 전부 이 행에서 나온다.
         _eventLogger.Action(
-            EventLogTags.SaveLoad, userId, new SaveLoadEvent(IsNew: false, OfflineElapsedSec: offlineElapsed));
+            Constants.EventLog.Tags.SaveLoad, userId, new SaveLoadEvent(IsNew: false, OfflineElapsedSec: offlineElapsed));
 
         return new SaveResult(ErrorCode.Success, "Load successful", data);
     }
@@ -179,10 +167,10 @@ public sealed class SaveService : ISaveService
             try
             {
                 await _saveRepository.CreatePlayerWithFirstCharacterAsync(
-                    userId, nickname.Trim(), classCode, gender, MasterDbProvider.BaseInventoryCapacity,
+                    userId, nickname.Trim(), classCode, gender, Constants.Inventory.BaseCapacity,
                     nowUnix, welcomeMail, startingWeapon, startingSkillCode);
             }
-            catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
+            catch (MySqlException ex) when (ex.Number == Constants.MySqlError.DuplicateEntry)
             {
                 // 동시 초기화 경합.
                 _logger.ZLogWarning($"계정 초기화 경합 감지: user {userId:@UserId}");
@@ -194,7 +182,7 @@ public sealed class SaveService : ISaveService
             // 최초 생성만 이벤트로 남긴다(로그 이벤트 정의 5.2) — 답하는 질문이 첫 직업 선호와
             // 가입 → 플레이 전환이라, 두 번째 이후의 캐릭터 추가는 이 축에 들어가지 않는다.
             // 커밋이 끝난 뒤 방출한다(롤백된 사실을 로그에 남기지 않는다, 4.2).
-            _eventLogger.Action(EventLogTags.PlayerCreate, userId, new PlayerCreateEvent(classCode, gender));
+            _eventLogger.Action(Constants.EventLog.Tags.PlayerCreate, userId, new PlayerCreateEvent(classCode, gender));
             // 최초 생성은 계정 초기화라 무료이며 파티 1번 자리에 편성된다.
             return SuccessCharacter(userId, 1, classCode, 1, gender, 0, null);
         }
@@ -266,7 +254,7 @@ public sealed class SaveService : ISaveService
             return ErrorCode.CannotRemoveLastCharacter;
         }
 
-        if (members.Count > MaxPartySlots)
+        if (members.Count > Constants.Party.MaxSlots)
         {
             return ErrorCode.PartySlotOccupied;
         }
@@ -276,7 +264,7 @@ public sealed class SaveService : ISaveService
         foreach (var member in members)
         {
             // 미편성(0)은 "목록에 담지 않는 것"으로 표현하므로 자리 값은 1~3만 허용한다.
-            if (member.slot < 1 || member.slot > MaxPartySlots || !usedSlots.Add(member.slot))
+            if (member.slot < 1 || member.slot > Constants.Party.MaxSlots || !usedSlots.Add(member.slot))
             {
                 return ErrorCode.PartySlotOccupied;
             }
@@ -317,9 +305,10 @@ public sealed class SaveService : ISaveService
             slot = slot,
             gender = gender,
             level = 1,
-            cost = new CurrencyDto { currencyType = GoldCurrencyType, amount = cost },
+            cost = new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = cost },
             balance = goldBalance.HasValue
-                ? new List<CurrencyDto> { new CurrencyDto { currencyType = GoldCurrencyType, amount = goldBalance.Value } }
+                ? new List<CurrencyDto>
+                { new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = goldBalance.Value } }
                 : new List<CurrencyDto>(),
         };
         return new SaveResult(ErrorCode.Success, "Character created", data);
@@ -339,10 +328,10 @@ public sealed class SaveService : ISaveService
             return null; // 지급 정의 없음 = 지원금 미운영
         }
 
-        var template = _masterData.GetMailTemplate(NewbieRewardMailTemplateCode);
+        var template = _masterData.GetMailTemplate(Constants.MailTemplate.NewbieReward);
         if (template is null)
         {
-            _logger.ZLogError($"신규 가입 지원금 메일 템플릿 미정의: templateCode {NewbieRewardMailTemplateCode:@TemplateCode} — mail_master 확인 필요");
+            _logger.ZLogError($"신규 가입 지원금 메일 템플릿 미정의: templateCode {Constants.MailTemplate.NewbieReward:@TemplateCode} — mail_master 확인 필요");
             return null;
         }
 
@@ -411,7 +400,7 @@ public sealed class SaveService : ISaveService
     private static int FirstFreePartySlot(IReadOnlyCollection<CharacterSlot> owned)
     {
         var used = owned.Select(c => c.Slot).ToHashSet();
-        for (var slot = 1; slot <= MaxPartySlots; slot++)
+        for (var slot = 1; slot <= Constants.Party.MaxSlots; slot++)
         {
             if (!used.Contains(slot))
             {
@@ -419,6 +408,6 @@ public sealed class SaveService : ISaveService
             }
         }
 
-        return PartySlotUnassigned;
+        return Constants.Party.SlotUnassigned;
     }
 }

@@ -18,15 +18,6 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class ConsumableService : IConsumableService
 {
-    /// <summary>item_master.item_type 4:소모품. 이 타입만 사용 대상이다.</summary>
-    private const int ItemTypeConsumable = 4;
-
-    /// <summary>
-    /// 버프 누적 지속시간 상한(초, 24시간). 같은 종류를 반복 사용해 무한히 쌓는 것을 막는다(기획서 §4.2).
-    /// 초과하는 요청은 아이템을 차감하지 않고 거부한다.
-    /// </summary>
-    private const long BuffDurationCapSec = 24 * DateTimeUtil.SecondsPerHour;
-
     private readonly IConsumableRepository _consumableRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<ConsumableService> _logger;
@@ -113,7 +104,7 @@ public sealed class ConsumableService : IConsumableService
     private ConsumableDecision Decide(int itemCode)
     {
         var item = _masterData.GetItem(itemCode);
-        if (item is null || item.ItemType != ItemTypeConsumable)
+        if (item is null || item.ItemType != Constants.ItemType.Consumable)
         {
             return ConsumableDecision.Reject(ConsumableUseStatus.NotConsumable);
         }
@@ -143,7 +134,7 @@ public sealed class ConsumableService : IConsumableService
         var expiresAt = baseAt + durationSec;
         var startedAt = isActive ? prev!.StartedAt : now;
 
-        return (startedAt, expiresAt, expiresAt - now > BuffDurationCapSec);
+        return (startedAt, expiresAt, expiresAt - now > Constants.Consumable.BuffDurationCapSec);
     }
 
     /// <summary>리포지토리 사용 상태를 공유 ErrorCode로 변환한다.</summary>

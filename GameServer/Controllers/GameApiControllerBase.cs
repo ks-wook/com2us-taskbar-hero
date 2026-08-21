@@ -14,7 +14,7 @@ public abstract class GameApiControllerBase : ControllerBase
 {
     /// <summary>인증 미들웨어가 검증·주입한 userId(HttpContext.Items).</summary>
     protected long AuthenticatedUserId()
-        => (long)HttpContext.Items[GameAuthMiddleware.UserIdItemKey]!;
+        => (long)HttpContext.Items[Constants.Auth.UserIdItemKey]!;
 
     /// <summary>ErrorCode·성공 메시지·데이터를 공통 응답 형식 { success, errorCode, message, data } + HTTP 상태로 변환한다.</summary>
     protected IActionResult ApiResult(ErrorCode errorCode, string successMessage, object? data = null)

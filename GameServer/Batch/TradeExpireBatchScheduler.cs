@@ -26,23 +26,6 @@ namespace GameServer.Batch;
 /// </summary>
 public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
 {
-    /// <summary>기본 실행 주기 1시간. 만료 효력은 읽기 경로가 즉시 내므로 이 주기는 <b>반송 지연 상한</b>일 뿐이다.</summary>
-    private const int DefaultIntervalSeconds = 60 * 60;
-
-    /// <summary>
-    /// 1주기 처리 상한. 주기(1시간)보다 넉넉히 잡아, 서버가 한동안 내려가 있다 올라왔을 때 밀린 만료 물량을
-    /// 한 주기에 소화하게 한다. 초과분은 다음 주기로 이월된다.
-    /// </summary>
-    private const int DefaultBatchSize = 1000;
-
-    /// <summary>만료 반송 메일 템플릿(mail_master 202, {0} = 아이템 표시값).</summary>
-    private const int ReturnMailTemplateCode = 202;
-
-    /// <summary>메일 첨부 reward_type — 1:골드 2:아이템 3:재료. 반송 아이템은 마스터 item_type으로 결정한다.</summary>
-    private const int RewardTypeItem = 2;
-    private const int RewardTypeMaterial = 3;
-    private const int ItemTypeMaterial = 2;
-
     private readonly int _intervalSeconds;
     private readonly int _batchSize;
     private readonly MasterDbProvider _masterData;
@@ -54,10 +37,11 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
         MasterDbProvider masterData, ILogger<TradeExpireBatchScheduler> logger)
         : base(scopeFactory, batchLock, logger)
     {
-        var interval = configuration.GetValue("TradeExpireBatch:IntervalSeconds", DefaultIntervalSeconds);
-        var batchSize = configuration.GetValue("TradeExpireBatch:BatchSize", DefaultBatchSize);
-        _intervalSeconds = interval > 0 ? interval : DefaultIntervalSeconds;
-        _batchSize = batchSize > 0 ? batchSize : DefaultBatchSize;
+        var interval = configuration.GetValue(
+            "TradeExpireBatch:IntervalSeconds", Constants.Batch.TradeExpire.DefaultIntervalSeconds);
+        var batchSize = configuration.GetValue("TradeExpireBatch:BatchSize", Constants.Batch.TradeExpire.DefaultBatchSize);
+        _intervalSeconds = interval > 0 ? interval : Constants.Batch.TradeExpire.DefaultIntervalSeconds;
+        _batchSize = batchSize > 0 ? batchSize : Constants.Batch.TradeExpire.DefaultBatchSize;
         _masterData = masterData;
         _logger = logger;
     }
@@ -80,10 +64,10 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
             return; // 마스터 미적재면 반송 메일 문구를 만들 수 없다 — 다음 주기에 재시도.
         }
 
-        var template = _masterData.GetMailTemplate(ReturnMailTemplateCode);
+        var template = _masterData.GetMailTemplate(Constants.MailTemplate.TradeReturn);
         if (template is null)
         {
-            _logger.ZLogError($"거래소 만료 반송 메일 템플릿 미정의: templateCode {ReturnMailTemplateCode:@TemplateCode} — mail_master 확인 필요");
+            _logger.ZLogError($"거래소 만료 반송 메일 템플릿 미정의: templateCode {Constants.MailTemplate.TradeReturn:@TemplateCode} — mail_master 확인 필요");
             return;
         }
 
@@ -148,6 +132,7 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
 
     /// <summary>반송 아이템의 메일 첨부 종류. 재료(item_type=2)면 3(재료), 그 외(장비)는 2(아이템).</summary>
     private int RewardTypeFor(int itemCode)
-        => _masterData.GetItem(itemCode)?.ItemType == ItemTypeMaterial ? RewardTypeMaterial : RewardTypeItem;
+        => _masterData.GetItem(itemCode)?.ItemType == Constants.ItemType.Material
+            ? Constants.RewardType.Material
+            : Constants.RewardType.Item;
 }
-

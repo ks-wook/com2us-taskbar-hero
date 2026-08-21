@@ -28,12 +28,6 @@ public sealed record OfflineClaimOutcome(
 /// <summary>오프라인 보상 정산 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class OfflineRepository : GameDbBase, IOfflineRepository
 {
-    private const int RowTypeCurrency = 2;
-    private const int GoldItemCode = 1;
-
-    /// <summary>player_character.slot의 "미편성"(파티에 없어 전투에 참가하지 않음) 값.</summary>
-    private const int PartySlotUnassigned = 0;
-
     private readonly ILevelUpCalculator _levelUp;
 
     /// <summary>세이브 DB 커넥션 팩토리(기반 클래스로 전달)와 레벨업 계산기를 주입받는다.</summary>
@@ -121,7 +115,7 @@ public sealed class OfflineRepository : GameDbBase, IOfflineRepository
             //    미편성(slot=0) 캐릭터는 방치 전투에 참가하지 않았으므로 경험치를 받지 않는다(세이브 데이터 기획서 5.5).
             var charRows = await db.Query("player_character")
                 .Select("character_id", "level", "exp")
-                .Where("user_id", userId).Where("slot", "!=", PartySlotUnassigned)
+                .Where("user_id", userId).Where("slot", "!=", Constants.Party.SlotUnassigned)
                 .OrderBy("slot")
                 .GetAsync<CharProgressRow>(transaction);
 
@@ -151,7 +145,9 @@ public sealed class OfflineRepository : GameDbBase, IOfflineRepository
     {
         var goldRow = await db.Query("player_item")
             .Select("player_item_id", "quantity")
-            .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", Constants.Currency.GoldItemCode)
             .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
 
         if (goldRow is null)
@@ -159,8 +155,8 @@ public sealed class OfflineRepository : GameDbBase, IOfflineRepository
             await db.Query("player_item").InsertAsync(new
             {
                 user_id = userId,
-                row_type = RowTypeCurrency,
-                item_code = GoldItemCode,
+                row_type = Constants.PlayerItemRow.Currency,
+                item_code = Constants.Currency.GoldItemCode,
                 quantity = gold,
                 slot = (int?)null,
                 enhance_level = 0,

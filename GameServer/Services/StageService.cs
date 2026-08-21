@@ -18,8 +18,6 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class StageService : IStageService
 {
-    private const int GoldCurrencyType = 1;
-
     private readonly IStageRepository _stageRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<StageService> _logger;
@@ -152,7 +150,7 @@ public sealed class StageService : IStageService
             characters = outcome.Characters,
             balance = new List<CurrencyDto>
             {
-                new CurrencyDto { currencyType = GoldCurrencyType, amount = outcome.GoldBalance },
+                new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
             },
             progress = new StageProgressDto
             {

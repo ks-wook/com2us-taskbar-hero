@@ -17,12 +17,6 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class GachaService : IGachaService
 {
-    /// <summary>기록 조회 기본 페이지 크기(뽑기 건수).</summary>
-    private const int HistoryDefaultLimit = 20;
-
-    /// <summary>기록 조회 페이지 크기 상한. 과대 응답 방어를 위해 서버가 강제한다(기획서 §5.4).</summary>
-    private const int HistoryMaxLimit = 50;
-
     private readonly IGachaRepository _gachaRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<GachaService> _logger;
@@ -159,7 +153,7 @@ public sealed class GachaService : IGachaService
     /// </summary>
     public async Task<SaveResult> GetHistoryAsync(long userId, int gachaCode, long cursor, int limit)
     {
-        int size = limit <= 0 ? HistoryDefaultLimit : Math.Min(limit, HistoryMaxLimit);
+        int size = limit <= 0 ? Constants.Gacha.HistoryDefaultLimit : Math.Min(limit, Constants.Gacha.HistoryMaxLimit);
         long safeCursor = cursor < 0 ? 0 : cursor;
 
         var page = await _gachaRepository.GetHistoryAsync(userId, Math.Max(gachaCode, 0), safeCursor, size);

@@ -17,11 +17,6 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class CubeService : ICubeService
 {
-    private const int CombineExpPerGrade = 50;   // 합성: 입력 등급 × 이 값 = 획득 큐브 경험치
-    private const int DismantleExpPerGrade = 20;  // 분해: 아이템당 등급 × 이 값 × 개수
-    private const int CraftExp = 20;              // 제작: 1회 고정 획득 경험치
-    private const int GoldCurrencyType = 1;       // 응답 balance의 재화 종류(골드)
-
     private readonly ICubeRepository _cubeRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<CubeService> _logger;
@@ -123,7 +118,7 @@ public sealed class CubeService : ICubeService
             cube = new CubeDto { cubeLevel = outcome.NewCubeLevel, cubeExp = outcome.NewCubeExp },
             balance = new List<CurrencyDto>
             {
-                new CurrencyDto { currencyType = GoldCurrencyType, amount = outcome.GoldBalance },
+                new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
             },
             inventoryDelta = outcome.Delta,
         };
@@ -157,7 +152,7 @@ public sealed class CubeService : ICubeService
 
         var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _cubeRepository.ApplyCraftAsync(
-            userId, recipe, resultItem.ItemType, resultItem.StackMax, CraftExp, now);
+            userId, recipe, resultItem.ItemType, resultItem.StackMax, Constants.Cube.CraftExp, now);
 
         switch (outcome.Status)
         {
@@ -186,7 +181,7 @@ public sealed class CubeService : ICubeService
             cube = new CubeDto { cubeLevel = outcome.CubeLevel, cubeExp = outcome.CubeExp },
             balance = new List<CurrencyDto>
             {
-                new CurrencyDto { currencyType = GoldCurrencyType, amount = outcome.GoldBalance },
+                new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
             },
             inventoryDelta = outcome.Delta,
         };
@@ -226,7 +221,7 @@ public sealed class CubeService : ICubeService
             return CombineDecision.Reject();
         }
 
-        return CombineDecision.Accept(resultCode.Value, first.Grade + 1, (long)CombineExpPerGrade * first.Grade);
+        return CombineDecision.Accept(resultCode.Value, first.Grade + 1, (long)Constants.Cube.CombineExpPerGrade * first.Grade);
     }
 
     /// <summary>분해 보상 산출(리포지토리 트랜잭션 델리게이트): 현재 큐브 레벨의 gold_per_scrap과 아이템 등급으로 골드·경험치 합계를 계산한다.</summary>
@@ -239,7 +234,7 @@ public sealed class CubeService : ICubeService
         {
             int grade = _masterData.GetItem(input.ItemCode)?.Grade ?? 1;
             gold += rate * grade * input.Count;
-            exp += (long)DismantleExpPerGrade * grade * input.Count;
+            exp += (long)Constants.Cube.DismantleExpPerGrade * grade * input.Count;
         }
 
         return new DismantleReward(gold, exp);

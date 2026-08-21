@@ -31,20 +31,6 @@ public sealed record ArrangePartyOutcome(ArrangePartyStatus Status, List<Charact
 /// <summary>세이브(taskbar_hero_game) 접근 계층. SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class SaveRepository : GameDbBase, ISaveRepository
 {
-    private const int RowTypeItem = 1;
-    private const int RowTypeCurrency = 2;
-    private const int GoldItemCode = 1;
-    private const int MySqlDuplicateEntry = 1062;
-
-    /// <summary>player_character.slot의 "미편성"(파티에 속하지 않음) 값. 1~3은 파티 자리다.</summary>
-    private const int PartySlotUnassigned = 0;
-
-    /// <summary>캐릭터 생성 시 함께 습득시키는 기본 액티브 스킬의 레벨(1레벨 = 스킬 포인트 1을 미리 투자한 상태).</summary>
-    private const int StartingSkillLevel = 1;
-
-    /// <summary>player_skill.equipped의 "장착됨" 값(1). 기본 스킬은 습득과 동시에 장착해 곧바로 전투에 쓰이게 한다.</summary>
-    private const int SkillEquipped = 1;
-
     /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
     public SaveRepository(GameDbFactory dbFactory) : base(dbFactory) { }
 
@@ -98,7 +84,7 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
         using var db = Db();
         var rows = await db.Query("player_item")
             .Select("item_code", "quantity")
-            .Where("user_id", userId).Where("row_type", RowTypeCurrency)
+            .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Currency)
             .GetAsync<CurrencyRow>();
         return rows.Select(r => new CurrencyDto
         {
@@ -138,7 +124,7 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
     {
         using var db = Db();
         return await db.Query("player_item")
-            .Where("user_id", userId).Where("row_type", RowTypeItem).WhereNotNull("slot")
+            .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).WhereNotNull("slot")
             .CountAsync<int>();
     }
 
@@ -313,7 +299,9 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
             // 1) 골드 잔액 확인(비용 > 0일 때). 재화 행(row_type=2, item_code=1)이 없으면 잔액 0.
             var goldRow = await db.Query("player_item")
                 .Select("player_item_id", "quantity")
-                .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+                .Where("user_id", userId)
+                .Where("row_type", Constants.PlayerItemRow.Currency)
+                .Where("item_code", Constants.Currency.GoldItemCode)
                 .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
 
             long gold = goldRow?.Quantity ?? 0;
@@ -344,7 +332,7 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
                     exp = 0,
                 }, transaction);
             }
-            catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
+            catch (MySqlException ex) when (ex.Number == Constants.MySqlError.DuplicateEntry)
             {
                 return TxResult<AddCharacterOutcome>.Rollback(AddCharacterOutcome.Fail(AddCharacterStatus.DuplicateConflict));
             }
@@ -377,7 +365,7 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
         long playerItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
         {
             user_id = userId,
-            row_type = RowTypeItem,
+            row_type = Constants.PlayerItemRow.Item,
             item_code = equipment.ItemCode,
             quantity = 1,
             slot = (int?)null, // 장착 중이라 가방 칸을 점유하지 않는다
@@ -412,8 +400,8 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
             user_id = userId,
             character_id = characterId,
             skill_code = skillCode,
-            level = StartingSkillLevel,
-            equipped = SkillEquipped,
+            level = Constants.Skill.StartingLevel,
+            equipped = Constants.Skill.Equipped,
         }, transaction);
     }
 
@@ -448,8 +436,8 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
 
             // 2) 편성을 전부 비운다(중간 자리 충돌 방지).
             await db.Query("player_character")
-                .Where("user_id", userId).Where("slot", "!=", PartySlotUnassigned)
-                .UpdateAsync(new { slot = PartySlotUnassigned }, transaction);
+                .Where("user_id", userId).Where("slot", "!=", Constants.Party.SlotUnassigned)
+                .UpdateAsync(new { slot = Constants.Party.SlotUnassigned }, transaction);
 
             // 3) 스냅샷대로 자리를 다시 부여한다.
             foreach (var member in members)
@@ -492,7 +480,7 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
     /// <summary>보유 캐릭터 행을 응답 순서(편성된 자리 1~3 순 → 미편성은 식별자 순)로 정렬해 DTO 목록으로 만든다.</summary>
     private static List<CharacterDto> SortCharactersForResponse(IEnumerable<PlayerCharacterRow> rows)
         => rows
-            .OrderBy(r => r.Slot == PartySlotUnassigned ? 1 : 0)
+            .OrderBy(r => r.Slot == Constants.Party.SlotUnassigned ? 1 : 0)
             .ThenBy(r => r.Slot)
             .ThenBy(r => r.CharacterId)
             .Select(ToCharacterDto)

@@ -28,10 +28,6 @@ public interface IItemLookup
 /// </summary>
 public sealed class ItemLookup : IItemLookup
 {
-    /// <summary>마스터에 없는 코드의 기본 취급 — 장비(item_type 1)·스택 1.</summary>
-    private const int UnknownItemType = 1;
-    private const int UnknownStackMax = 1;
-
     private readonly MasterDbProvider _masterData;
 
     /// <summary>아이템 정의를 읽을 마스터 데이터를 주입받는다.</summary>
@@ -42,7 +38,7 @@ public sealed class ItemLookup : IItemLookup
     {
         var def = _masterData.GetItem(itemCode);
         return def is null
-            ? new ItemStacking(UnknownItemType, UnknownStackMax)
+            ? new ItemStacking(Constants.MasterFallback.UnknownItemType, Constants.MasterFallback.UnknownStackMax)
             : new ItemStacking(def.ItemType, Math.Max(def.StackMax, 1));
     }
 

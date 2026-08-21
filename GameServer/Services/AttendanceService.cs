@@ -21,9 +21,6 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class AttendanceService : IAttendanceService
 {
-    /// <summary>출석 보상 메일 템플릿 코드(mail_master 301, {0} = 출석 일차).</summary>
-    private const int AttendanceMailTemplateCode = 301;
-
     private readonly IAttendanceRepository _attendanceRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<AttendanceService> _logger;
@@ -112,10 +109,10 @@ public sealed class AttendanceService : IAttendanceService
         var today = DateTimeUtil.ToDateKey(DateTimeUtil.ToKst(now));
 
         // 메일 템플릿은 일차와 무관하므로 먼저 확인한다(없으면 마스터 결함 → 10001, §6.2).
-        var template = _masterData.GetMailTemplate(AttendanceMailTemplateCode);
+        var template = _masterData.GetMailTemplate(Constants.MailTemplate.Attendance);
         if (template is null)
         {
-            _logger.ZLogError($"출석 보상 메일 템플릿 미정의: templateCode {AttendanceMailTemplateCode:@TemplateCode} — mail_master 확인 필요");
+            _logger.ZLogError($"출석 보상 메일 템플릿 미정의: templateCode {Constants.MailTemplate.Attendance:@TemplateCode} — mail_master 확인 필요");
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 

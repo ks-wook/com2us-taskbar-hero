@@ -73,11 +73,6 @@ public sealed record CraftOutcome(CraftStatus Status, int CubeLevel, long CubeEx
 /// <summary>큐브(합성·분해·제작) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class CubeRepository : GameDbBase, ICubeRepository
 {
-    private const int RowTypeItem = 1;
-    private const int RowTypeCurrency = 2;
-    private const int GoldItemCode = 1;
-    private const int ItemTypeMaterial = 2;
-
     private readonly ICubeLevelCalculator _cubeLevel;
 
     /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
@@ -115,7 +110,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
                 .GetAsync<PlayerItemBriefRow>(transaction);
             var rowList = rows.ToList();
 
-            if (rowList.Count != itemIds.Count || rowList.Any(r => r.RowType != RowTypeItem))
+            if (rowList.Count != itemIds.Count || rowList.Any(r => r.RowType != Constants.PlayerItemRow.Item))
             {
                 return TxResult<CombineOutcome>.Rollback(CombineOutcome.Fail(CombineStatus.ItemNotFound));
             }
@@ -153,7 +148,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
             long resultItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
             {
                 user_id = userId,
-                row_type = RowTypeItem,
+                row_type = Constants.PlayerItemRow.Item,
                 item_code = decision.ResultItemCode,
                 quantity = 1,
                 slot = slot,
@@ -222,7 +217,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
             var inputs = new List<DismantleInput>();
             foreach (var (itemId, count) in items)
             {
-                if (!byId.TryGetValue(itemId, out var row) || row.RowType != RowTypeItem)
+                if (!byId.TryGetValue(itemId, out var row) || row.RowType != Constants.PlayerItemRow.Item)
                 {
                     return TxResult<DismantleOutcome>.Rollback(DismantleOutcome.Fail(DismantleStatus.ItemNotFound));
                 }
@@ -317,7 +312,9 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
             // 2) 비용 골드.
             var goldRow = await db.Query("player_item")
                 .Select("player_item_id", "quantity")
-                .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+                .Where("user_id", userId)
+                .Where("row_type", Constants.PlayerItemRow.Currency)
+                .Where("item_code", Constants.Currency.GoldItemCode)
                 .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
             long gold = goldRow?.Quantity ?? 0;
             if (gold < recipe.CostGold)
@@ -330,7 +327,9 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
             {
                 var matRows = await db.Query("player_item")
                     .Select("player_item_id", "quantity")
-                    .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", ing.MaterialCode)
+                    .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Item)
+            .Where("item_code", ing.MaterialCode)
                     .GetAsync<ItemIdQtyRow>(transaction);
                 long owned = matRows.Sum(m => m.Quantity);
                 if (owned < ing.Quantity)
@@ -401,7 +400,9 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
     private static async Task<long> CreditGoldAsync(QueryFactory db, DbTransaction tx, long userId, long amount, long nowUnix)
     {
         var goldRow = await db.Query("player_item").Select("player_item_id", "quantity")
-            .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", Constants.Currency.GoldItemCode)
             .FirstOrDefaultAsync<ItemIdQtyRow>(tx);
 
         if (amount <= 0)
@@ -414,8 +415,8 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
             await db.Query("player_item").InsertAsync(new
             {
                 user_id = userId,
-                row_type = RowTypeCurrency,
-                item_code = GoldItemCode,
+                row_type = Constants.PlayerItemRow.Currency,
+                item_code = Constants.Currency.GoldItemCode,
                 quantity = amount,
                 slot = (int?)null,
                 enhance_level = 0,
@@ -438,7 +439,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
         QueryFactory db, DbTransaction tx, long userId, int materialCode, long need, InventoryDeltaDto delta)
     {
         var rows = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
-            .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", materialCode)
+            .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).Where("item_code", materialCode)
             .OrderBy("player_item_id")
             .GetAsync<ItemIdQtySlotRow>(tx);
 
@@ -486,10 +487,10 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
         long remaining = quantity;
 
         // 재료(스택 가능): 기존 스택의 여유부터 채운다(새 칸 불필요).
-        if (itemType == ItemTypeMaterial && stackMax > 1)
+        if (itemType == Constants.ItemType.Material && stackMax > 1)
         {
             var stacks = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
-                .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", itemCode)
+                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).Where("item_code", itemCode)
                 .Where("quantity", "<", stackMax)
                 .GetAsync<ItemIdQtySlotRow>(tx);
 
@@ -518,7 +519,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
         }
 
         // 남은 수량은 새 행으로. 장비는 1개당 1행, 재료는 stackMax씩 묶는다.
-        int perRow = itemType == ItemTypeMaterial ? Math.Max(stackMax, 1) : 1;
+        int perRow = itemType == Constants.ItemType.Material ? Math.Max(stackMax, 1) : 1;
         while (remaining > 0)
         {
             if (!InventorySlotAllocator.TryFirstFree(used, capacity, out int slot))
@@ -530,7 +531,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
             long newItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
             {
                 user_id = userId,
-                row_type = RowTypeItem,
+                row_type = Constants.PlayerItemRow.Item,
                 item_code = itemCode,
                 quantity = put,
                 slot = slot,

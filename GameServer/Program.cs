@@ -1,4 +1,5 @@
 ﻿using CloudStructures;
+using GameServer;
 using Utf8StringInterpolation;
 using ZLogger;
 using GameServer.Auth;
@@ -65,9 +66,9 @@ builder.Logging.AddZLoggerRollingFile(options =>
 });
 
 // sink 라우팅: 이벤트 로그는 파일에만, 운영 로그는 콘솔에만 간다.
-builder.Logging.AddFilter<ZLoggerConsoleLoggerProvider>(EventLogger.Category, LogLevel.None);
+builder.Logging.AddFilter<ZLoggerConsoleLoggerProvider>(Constants.EventLog.Category, LogLevel.None);
 builder.Logging.AddFilter<ZLoggerRollingFileLoggerProvider>(null, LogLevel.None);
-builder.Logging.AddFilter<ZLoggerRollingFileLoggerProvider>(EventLogger.Category, LogLevel.Information);
+builder.Logging.AddFilter<ZLoggerRollingFileLoggerProvider>(Constants.EventLog.Category, LogLevel.Information);
 
 
 // MVC 컨트롤러 + OpenAPI.

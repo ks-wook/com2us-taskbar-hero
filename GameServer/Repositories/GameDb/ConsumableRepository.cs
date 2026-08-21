@@ -42,9 +42,6 @@ public sealed record ConsumableUseOutcome(
 /// </summary>
 public sealed class ConsumableRepository : GameDbBase, IConsumableRepository
 {
-    private const int RowTypeItem = 1;
-    private const int ItemTypeConsumable = 4;
-
     /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
     public ConsumableRepository(GameDbFactory dbFactory) : base(dbFactory) { }
 
@@ -78,7 +75,7 @@ public sealed class ConsumableRepository : GameDbBase, IConsumableRepository
                 .Where("user_id", userId).Where("player_item_id", itemId)
                 .FirstOrDefaultAsync<ConsumablePlayerItemRow>(transaction);
 
-            if (item is null || item.RowType != RowTypeItem)
+            if (item is null || item.RowType != Constants.PlayerItemRow.Item)
             {
                 return TxResult<ConsumableUseOutcome>.Rollback(ConsumableUseOutcome.Fail(ConsumableUseStatus.ItemNotFound));
             }

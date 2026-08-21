@@ -17,8 +17,6 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class MailService : IMailService
 {
-    private const int GoldCurrencyType = 1;
-
     private readonly IMailRepository _mailRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<MailService> _logger;
@@ -134,7 +132,6 @@ public sealed class MailService : IMailService
         return new SaveResult(ErrorCode.Success, "Claimed all", data);
     }
 
-
     /// <summary>리포지토리 수령 상태를 공유 ErrorCode로 변환한다.</summary>
     private static ErrorCode ToErrorCode(MailClaimStatus status) => status switch
     {
@@ -150,12 +147,12 @@ public sealed class MailService : IMailService
         => new MailGainedDto
         {
             currencies = gold > 0
-                ? new List<CurrencyDto> { new CurrencyDto { currencyType = GoldCurrencyType, amount = gold } }
+                ? new List<CurrencyDto> { new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = gold } }
                 : new List<CurrencyDto>(),
             items = items.Select(i => new ItemQuantityDto { itemCode = i.RewardCode, quantity = i.Quantity }).ToList(),
         };
 
     /// <summary>지급 후 재화 잔액 DTO를 만든다(현재는 골드 1종).</summary>
     private static List<CurrencyDto> BuildBalance(long goldBalance)
-        => new List<CurrencyDto> { new CurrencyDto { currencyType = GoldCurrencyType, amount = goldBalance } };
+        => new List<CurrencyDto> { new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = goldBalance } };
 }

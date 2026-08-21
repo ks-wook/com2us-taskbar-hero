@@ -17,11 +17,6 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class GrowthService : IGrowthService
 {
-    private const int ActiveSkillType = 1;   // skill_master.skill_type 1:액티브 2:패시브
-    private const int MaxActiveSkills = 2;    // 캐릭터당 액티브 장착 한도
-    private const int SkillPointPerLevel = 1; // 스킬 1레벨당 소모 포인트(확정)
-    private const int GoldCurrencyType = 1;   // 골드 item_code
-
     private readonly IGrowthRepository _growthRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<GrowthService> _logger;
@@ -66,12 +61,12 @@ public sealed class GrowthService : IGrowthService
                 }
 
                 var available = _masterData.SkillPointsForLevel(charLevel) - spent;
-                if (available < SkillPointPerLevel)
+                if (available < Constants.Skill.PointPerLevel)
                 {
                     return (SkillLevelUpStatus.InsufficientPoint, 0);
                 }
 
-                return (SkillLevelUpStatus.Ok, available - SkillPointPerLevel);
+                return (SkillLevelUpStatus.Ok, available - Constants.Skill.PointPerLevel);
             });
 
         switch (outcome.Status)
@@ -93,7 +88,7 @@ public sealed class GrowthService : IGrowthService
             characterId = characterId,
             skillCode = skillCode,
             level = outcome.NewLevel,
-            cost = new SkillPointCostDto { skillPoint = SkillPointPerLevel },
+            cost = new SkillPointCostDto { skillPoint = Constants.Skill.PointPerLevel },
             skillPoint = outcome.AvailablePoints,
         };
 
@@ -147,7 +142,7 @@ public sealed class GrowthService : IGrowthService
         var outcome = await _growthRepository.ApplySkillEquipAsync(userId, characterId, codes,
             (classCode, levels) =>
             {
-                if (codes.Count > MaxActiveSkills)
+                if (codes.Count > Constants.Skill.MaxActiveEquipped)
                 {
                     return SkillEquipStatus.LimitExceeded;
                 }
@@ -165,7 +160,7 @@ public sealed class GrowthService : IGrowthService
                         return SkillEquipStatus.ClassMismatch;
                     }
 
-                    if (skill.SkillType != ActiveSkillType)
+                    if (skill.SkillType != Constants.SkillType.Active)
                     {
                         return SkillEquipStatus.NotActive;
                     }
@@ -240,10 +235,10 @@ public sealed class GrowthService : IGrowthService
         {
             runeCode = runeCode,
             level = outcome.NewLevel,
-            cost = new CurrencyDto { currencyType = GoldCurrencyType, amount = outcome.Cost },
+            cost = new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.Cost },
             balance = new List<CurrencyDto>
             {
-                new CurrencyDto { currencyType = GoldCurrencyType, amount = outcome.GoldBalance },
+                new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
             },
         };
 

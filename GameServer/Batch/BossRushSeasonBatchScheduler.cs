@@ -32,31 +32,6 @@ namespace GameServer.Batch;
 /// </summary>
 public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 {
-    /// <summary>
-    /// 기본 주기 10분. 이 배치는 <b>정상 경로에서 이 주기로 돌지 않는다</b> — 진행 중 시즌이 있으면 그
-    /// 종료 시각까지, 없으면 무기한 자기 때문이다. 남은 쓰임은 ①리더 락 TTL 산정과 ②주기가 실제로 돌지
-    /// 못했을 때(리더 락 스킵·예외)의 재시도 간격이다.
-    /// </summary>
-    private const int DefaultIntervalSeconds = 10 * 60;
-
-    /// <summary>1주기(정산 페이지) 처리 상한. 페이지 단위 트랜잭션으로 쪼개 긴 잠금을 만들지 않는다.</summary>
-    private const int DefaultBatchSize = 500;
-
-    /// <summary>순위 보상 메일 템플릿(mail_master 501, {0} = 시즌 번호 · {1} = 최종 순위).</summary>
-    private const int RankRewardMailTemplateCode = 501;
-
-    /// <summary>메일 첨부 reward_type 1:골드. 순위 보상은 골드뿐이라 이 값만 쓴다(기획서 4.1).</summary>
-    private const int RewardTypeGold = 1;
-
-    /// <summary>
-    /// 종료 시각이 이미 지났는데도 정산되지 않은 시즌이 남아 있을 때(다른 인스턴스가 정산 중이라 리더 락을
-    /// 놓쳤거나 직전 주기가 실패한 경우)의 재시도 간격. 그 상황에서만 쓰이므로 짧게 잡아도 안전하다.
-    /// </summary>
-    private static readonly TimeSpan PastDueRetryDelay = TimeSpan.FromMinutes(1);
-
-    /// <summary>종료된 시즌 리더보드에 거는 TTL(7일). 과거 키가 무한히 쌓이지 않게 한다(기획서 4.3).</summary>
-    private static readonly TimeSpan ClosedSeasonTtl = TimeSpan.FromDays(7);
-
     private readonly int _intervalSeconds;
     private readonly int _batchSize;
     private readonly MasterDbProvider _masterData;
@@ -68,10 +43,12 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         MasterDbProvider masterData, ILogger<BossRushSeasonBatchScheduler> logger)
         : base(scopeFactory, batchLock, logger)
     {
-        var interval = configuration.GetValue("BossRushSeasonBatch:IntervalSeconds", DefaultIntervalSeconds);
-        var batchSize = configuration.GetValue("BossRushSeasonBatch:BatchSize", DefaultBatchSize);
-        _intervalSeconds = interval > 0 ? interval : DefaultIntervalSeconds;
-        _batchSize = batchSize > 0 ? batchSize : DefaultBatchSize;
+        var interval = configuration.GetValue(
+            "BossRushSeasonBatch:IntervalSeconds", Constants.Batch.BossRushSeason.DefaultIntervalSeconds);
+        var batchSize = configuration.GetValue(
+            "BossRushSeasonBatch:BatchSize", Constants.Batch.BossRushSeason.DefaultBatchSize);
+        _intervalSeconds = interval > 0 ? interval : Constants.Batch.BossRushSeason.DefaultIntervalSeconds;
+        _batchSize = batchSize > 0 ? batchSize : Constants.Batch.BossRushSeason.DefaultBatchSize;
         _masterData = masterData;
         _logger = logger;
     }
@@ -95,7 +72,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     /// 상한을 주기(10분)로 두면 아는 시각까지 자려던 대기가 매번 잘려 결국 폴링이 된다.
     /// 7일은 시즌 길이보다 길어 실질적인 제약이 아니면서 <c>Task.Delay</c>의 한계 안에 안전하게 든다.
     /// </summary>
-    protected override TimeSpan MaxDelay => TimeSpan.FromDays(7);
+    protected override TimeSpan MaxDelay => Constants.Batch.BossRushSeason.MaxDelay;
 
     protected override TimeSpan NextDelay()
     {
@@ -107,7 +84,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         }
 
         var remainingSeconds = _nextWakeUnix - DateTimeUtil.NowUnixSeconds();
-        return remainingSeconds > 0 ? TimeSpan.FromSeconds(remainingSeconds) : PastDueRetryDelay;
+        return remainingSeconds > 0 ? TimeSpan.FromSeconds(remainingSeconds) : Constants.Batch.BossRushSeason.PastDueRetryDelay;
     }
 
     protected override string BatchName => "보스러시 시즌 정산 배치";
@@ -157,11 +134,11 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 
         _logger.ZLogInformation($"보스러시 시즌 정산 시작: seasonId {season.SeasonId:@SeasonId} (종료 {season.EndAt:@EndAt})");
 
-        var template = _masterData.GetMailTemplate(RankRewardMailTemplateCode);
+        var template = _masterData.GetMailTemplate(Constants.MailTemplate.BossRushRankReward);
         if (template is null)
         {
             // 보상 없이 순위만 확정한다 — 시즌을 정산중(2)에 묶어 두면 새 런을 계속 받지 못한다.
-            _logger.ZLogError($"보스러시 순위 보상 메일 템플릿 미정의: templateCode {RankRewardMailTemplateCode:@TemplateCode} — mail_master 확인 필요(순위만 확정합니다)");
+            _logger.ZLogError($"보스러시 순위 보상 메일 템플릿 미정의: templateCode {Constants.MailTemplate.BossRushRankReward:@TemplateCode} — mail_master 확인 필요(순위만 확정합니다)");
         }
 
         // ④ 순위 확정 + 보상 메일 발급.
@@ -169,7 +146,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 
         // ⑤ 시즌 종료 + 리더보드 TTL.
         await repository.CloseSeasonAsync(season.SeasonId, nowUnix);
-        await rankCache.ExpireAsync(season.SeasonId, ClosedSeasonTtl);
+        await rankCache.ExpireAsync(season.SeasonId, Constants.Batch.BossRushSeason.ClosedSeasonTtl);
 
         // ⑥ 다음 시즌 개시 + 시즌 메타 캐시 갱신(정산의 마지막 단계, 기획서 6.4).
         var next = await repository.StartNextSeasonAsync(
@@ -257,7 +234,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
                 {
                     mail = MailComposer.Compose(
                         template, season.SeasonId.ToString(), rank.ToString(), nowUnix,
-                        new[] { new MailAttachment(RewardTypeGold, 0, reward.RewardGold) });
+                        new[] { new MailAttachment(Constants.RewardType.Gold, 0, reward.RewardGold) });
                 }
 
                 try

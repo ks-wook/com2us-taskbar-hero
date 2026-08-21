@@ -13,9 +13,6 @@ namespace GameServer.Auth;
 /// </summary>
 public sealed class GameAuthMiddleware
 {
-    /// <summary>인증된 userId를 컨트롤러로 전달하는 HttpContext.Items 키.</summary>
-    public const string UserIdItemKey = "userId";
-
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     private readonly RequestDelegate _next;
@@ -60,7 +57,7 @@ public sealed class GameAuthMiddleware
             return;
         }
 
-        context.Items[UserIdItemKey] = userId;
+        context.Items[Constants.Auth.UserIdItemKey] = userId;
         await _next(context);
     }
 

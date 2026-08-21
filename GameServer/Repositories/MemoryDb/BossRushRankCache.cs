@@ -26,15 +26,6 @@ public sealed record BossRushCachedRank(int Rank, long UserId, int ClearMs, long
 /// </summary>
 public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
 {
-    /// <summary>점수 인코딩 배수 — 하위 7자리를 시즌 상대 초(시즌 7일 = 604,800초 &lt; 10^7)에 내준다.</summary>
-    private const long ScoreScale = 10_000_000L;
-
-    /// <summary>닉네임 캐시 키(시즌·콘텐츠 무관 전역 Hash, TTL 없음).</summary>
-    private const string NicknameKey = "player:nickname";
-
-    /// <summary>현재 시즌 메타 캐시 키(Hash).</summary>
-    private const string CurrentSeasonKey = "bossrush:season:current";
-
     /// <summary>Redis 연결과 로거를 주입받는다.</summary>
     public BossRushRankCache(RedisConnection connection, ILogger<BossRushRankCache> logger)
         : base(connection, logger, "보스러시 랭킹 캐시")
@@ -188,30 +179,30 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
 
     /// <summary>닉네임 캐시 구조체(field = userId 문자열).</summary>
     private RedisDictionary<string, string> Nicknames()
-        => new(Connection, NicknameKey, null);
+        => new(Connection, Constants.RedisKey.PlayerNickname, null);
 
     /// <summary>현재 시즌 메타 캐시 구조체.</summary>
     private RedisDictionary<string, string> CurrentSeason()
-        => new(Connection, CurrentSeasonKey, null);
+        => new(Connection, Constants.RedisKey.BossRushCurrentSeason, null);
 
     /// <summary>
     /// 기록·달성 시각을 정렬 가능한 단일 점수로 인코딩한다(4.3). tie-break 자리는 시즌 시작 기준
     /// 상대 초이며, 시즌 시작보다 이른 시각이 들어와도 음수가 되지 않도록 0으로 clamp한다.
     /// </summary>
     private static double Encode(int clearMs, long recordedAt, long seasonStartAt)
-        => (double)((long)clearMs * ScoreScale + SeasonOffset(recordedAt, seasonStartAt));
+        => (double)((long)clearMs * Constants.BossRush.ScoreScale + SeasonOffset(recordedAt, seasonStartAt));
 
     /// <summary>점수에서 기록(ms)과 달성 시각(초)을 복원한다 — 별도 조회 없이 표시값을 만든다.</summary>
     private static (int ClearMs, long RecordedAt) Decode(double score, long seasonStartAt)
     {
         var raw = (long)score;
-        return ((int)(raw / ScoreScale), seasonStartAt + raw % ScoreScale);
+        return ((int)(raw / Constants.BossRush.ScoreScale), seasonStartAt + raw % Constants.BossRush.ScoreScale);
     }
 
     /// <summary>달성 시각을 시즌 시작 기준 상대 초로 바꾼다(0 이상, 배수 미만으로 clamp).</summary>
     private static long SeasonOffset(long recordedAt, long seasonStartAt)
     {
         var offset = recordedAt - seasonStartAt;
-        return offset < 0 ? 0 : offset >= ScoreScale ? ScoreScale - 1 : offset;
+        return offset < 0 ? 0 : offset >= Constants.BossRush.ScoreScale ? Constants.BossRush.ScoreScale - 1 : offset;
     }
 }

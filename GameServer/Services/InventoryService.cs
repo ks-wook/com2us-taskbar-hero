@@ -20,15 +20,6 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class InventoryService : IInventoryService
 {
-    private const int ItemTypeEquip = 1;
-    private const int GoldCurrencyType = 1;
-
-    /// <summary>가방 페이지 크기 기본값(요청이 0 이하일 때).</summary>
-    private const int DefaultPageLimit = 200;
-
-    /// <summary>가방 페이지 크기 상한. 한 요청이 인벤토리 전체를 끌어오지 못하게 막는다.</summary>
-    private const int MaxPageLimit = 500;
-
     private readonly IInventoryRepository _inventoryRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<InventoryService> _logger;
@@ -52,7 +43,9 @@ public sealed class InventoryService : IInventoryService
     public async Task<SaveResult> GetPageAsync(long userId, int cursor, int limit)
     {
         // 클라 버전 차이로 로드가 아예 실패하지 않도록 거부하지 않고 클램프한다(기획서 5.2).
-        int effectiveLimit = limit <= 0 ? DefaultPageLimit : Math.Min(limit, MaxPageLimit);
+        int effectiveLimit = limit <= 0
+            ? Constants.Inventory.DefaultPageLimit
+            : Math.Min(limit, Constants.Inventory.MaxPageLimit);
 
         // 다음 페이지 존재 판정을 위해 한 건 더 읽는다.
         var outcome = await _inventoryRepository.GetPageAsync(userId, cursor, effectiveLimit + 1);
@@ -248,10 +241,10 @@ public sealed class InventoryService : IInventoryService
         var data = new ExpandResultData
         {
             inventoryCapacity = outcome.InventoryCapacity,
-            cost = new CurrencyDto { currencyType = GoldCurrencyType, amount = outcome.Cost },
+            cost = new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.Cost },
             balance = new List<CurrencyDto>
             {
-                new CurrencyDto { currencyType = GoldCurrencyType, amount = outcome.GoldBalance },
+                new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
             },
         };
 
@@ -267,7 +260,7 @@ public sealed class InventoryService : IInventoryService
     private (EnhancePlanStatus status, long cost, int currencyCode) PlanEnhance(int itemCode, int currentLevel)
     {
         var def = _masterData.GetItem(itemCode);
-        if (def is null || def.ItemType != ItemTypeEquip)
+        if (def is null || def.ItemType != Constants.ItemType.Equip)
         {
             return (EnhancePlanStatus.NotEquippable, 0, 0);
         }
@@ -288,7 +281,7 @@ public sealed class InventoryService : IInventoryService
     private (bool ok, int slot) ValidateEquip(int itemCode, int classCode, int level)
     {
         var def = _masterData.GetItem(itemCode);
-        if (def is null || def.ItemType != ItemTypeEquip || def.EquipSlot == 0)
+        if (def is null || def.ItemType != Constants.ItemType.Equip || def.EquipSlot == 0)
         {
             return (false, 0);
         }

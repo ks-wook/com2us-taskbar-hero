@@ -19,40 +19,6 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class TradeService : ITradeService
 {
-    /// <summary>거래 수수료 20% — 판매자는 판매가의 80%를 받는다(trade 기획서 §4 확정).</summary>
-    private const double SellerShare = 0.8;
-
-    /// <summary>계정당 동시 등록(판매중) 한도.</summary>
-    private const int ListingLimit = 10;
-
-    /// <summary>등록 유효기간 3일.</summary>
-    private const long ListingDurationSeconds = 3 * DateTimeUtil.SecondsPerDay;
-
-    /// <summary>목록 페이지 크기 기본·상한(§7.2 — 과대 응답 방어).</summary>
-    private const int DefaultPageSize = 50;
-    private const int MaxPageSize = 100;
-
-    /// <summary>
-    /// 목록 페이징의 OFFSET 상한. OFFSET 은 건너뛸 행을 실제로 세므로, 깊은 페이지 요청이 색인을 통째로
-    /// 훑지 않도록 막는다(pageSize 100 기준 100페이지). 상한을 넘는 page 는 거부하지 않고 clamp 한다.
-    /// </summary>
-    private const int MaxOffset = 10_000;
-
-    /// <summary>판매 대금 메일 템플릿(mail_master 201, {0} = 아이템 표시값) — 판매자 수령.</summary>
-    private const int SettlementMailTemplateCode = 201;
-
-    /// <summary>구매 아이템 메일 템플릿(mail_master 203, {0} = 아이템 표시값) — 구매자 수령.</summary>
-    private const int PurchaseMailTemplateCode = 203;
-
-    /// <summary>메일 첨부 종류 — 1:골드 2:아이템 3:재료. 구매 아이템은 마스터 item_type으로 가른다.</summary>
-    private const int RewardTypeGold = 1;
-    private const int RewardTypeItem = 2;
-    private const int RewardTypeMaterial = 3;
-    private const int ItemTypeMaterial = 2;
-
-    /// <summary>골드 재화 코드(player_item 재화 행 item_code).</summary>
-    private const int GoldItemCode = 1;
-
     private readonly ITradeRepository _tradeRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<TradeService> _logger;
@@ -80,9 +46,11 @@ public sealed class TradeService : ITradeService
     public async Task<SaveResult> ListAsync(long userId, int itemCode, bool mine, int page, int pageSize)
     {
         var normalizedItem = Math.Max(0, itemCode);
-        var normalizedSize = pageSize <= 0 ? DefaultPageSize : Math.Min(pageSize, MaxPageSize);
+        var normalizedSize = pageSize <= 0
+            ? Constants.Trade.DefaultPageSize
+            : Math.Min(pageSize, Constants.Trade.MaxPageSize);
         // 깊은 페이지 방어: OFFSET 은 앞의 행을 세어 버리므로 상한을 둔다. 넘으면 빈 페이지로 응답한다.
-        var normalizedPage = Math.Clamp(page, 0, MaxOffset / normalizedSize);
+        var normalizedPage = Math.Clamp(page, 0, Constants.Trade.MaxOffset / normalizedSize);
 
         var now = DateTimeUtil.NowUnixSeconds();
         var pageItems = await _tradeRepository.GetActiveListingPageAsync(
@@ -119,7 +87,7 @@ public sealed class TradeService : ITradeService
 
         var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _tradeRepository.ApplyRegisterAsync(
-            userId, itemId, price, ListingLimit, now, now + ListingDurationSeconds);
+            userId, itemId, price, Constants.Trade.ListingLimit, now, now + Constants.Trade.ListingDurationSeconds);
 
         switch (outcome.Status)
         {
@@ -170,8 +138,8 @@ public sealed class TradeService : ITradeService
             return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
         }
 
-        var settlementTemplate = _masterData.GetMailTemplate(SettlementMailTemplateCode);
-        var purchaseTemplate = _masterData.GetMailTemplate(PurchaseMailTemplateCode);
+        var settlementTemplate = _masterData.GetMailTemplate(Constants.MailTemplate.TradeSettlement);
+        var purchaseTemplate = _masterData.GetMailTemplate(Constants.MailTemplate.TradePurchase);
         if (settlementTemplate is null || purchaseTemplate is null)
         {
             _logger.ZLogError($"거래소 메일 템플릿 미정의: 대금 {settlementTemplate is not null:@HasSettlement}, 구매 아이템 {purchaseTemplate is not null:@HasPurchase} — mail_master 확인 필요");
@@ -191,7 +159,7 @@ public sealed class TradeService : ITradeService
                 }),
             listing => MailComposer.Compose(
                 settlementTemplate, ItemLabel(listing.ItemCode), now,
-                new[] { new MailAttachment(RewardTypeGold, 0, SettlementAmount(listing.Price)) }),
+                new[] { new MailAttachment(Constants.RewardType.Gold, 0, SettlementAmount(listing.Price)) }),
             now);
 
         switch (outcome.Status)
@@ -213,7 +181,7 @@ public sealed class TradeService : ITradeService
         var data = new TradeBuyResultData
         {
             listingId = bought.ListingId,
-            cost = new CurrencyDto { currencyType = GoldItemCode, amount = bought.Price },
+            cost = new CurrencyDto { currencyType = Constants.Currency.GoldItemCode, amount = bought.Price },
             mailId = outcome.ItemMailId,
         };
         data.gained.items.Add(new TradeItemDto
@@ -222,7 +190,7 @@ public sealed class TradeService : ITradeService
             enhanceLevel = bought.EnhanceLevel,
             quantity = bought.Quantity,
         });
-        data.balance.Add(new CurrencyDto { currencyType = GoldItemCode, amount = outcome.GoldBalance });
+        data.balance.Add(new CurrencyDto { currencyType = Constants.Currency.GoldItemCode, amount = outcome.GoldBalance });
         return new SaveResult(ErrorCode.Success, "Purchased", data);
     }
 
@@ -270,12 +238,13 @@ public sealed class TradeService : ITradeService
     }
 
     /// <summary>판매 대금(수수료 20% 차감 후 판매자 수령액). 소수점은 버린다.</summary>
-    public static long SettlementAmount(long price) => (long)Math.Floor(price * SellerShare);
+    public static long SettlementAmount(long price) => (long)Math.Floor(price * Constants.Trade.SellerShare);
 
     /// <summary>구매 아이템의 메일 첨부 종류. 재료(item_type=2)면 3(재료), 그 외(장비)는 2(아이템).</summary>
     private int RewardTypeFor(int itemCode)
-        => _masterData.GetItem(itemCode)?.ItemType == ItemTypeMaterial ? RewardTypeMaterial : RewardTypeItem;
-
+        => _masterData.GetItem(itemCode)?.ItemType == Constants.ItemType.Material
+            ? Constants.RewardType.Material
+            : Constants.RewardType.Item;
 
     /// <summary>메일 문구(`{0}`)에 넣을 아이템 이름. 마스터에 없으면 코드를 문자열로 폴백한다.</summary>
     private string ItemLabel(int itemCode)

@@ -8,7 +8,6 @@ using GameServer.MasterData;
 
 namespace GameServer.Repositories.MasterDb;
 
-
 /// <summary>
 /// 마스터(정적) 데이터 인메모리 캐시. 서버 기동 시 마스터 DB에서 코드→정의 딕셔너리로 적재한다.
 /// class_master(직업)에 더해 스테이지 진행/전투(스테이지 진입·클리어)에 필요한 마스터를 적재한다:
@@ -17,22 +16,6 @@ namespace GameServer.Repositories.MasterDb;
 /// </summary>
 public sealed class MasterDbProvider
 {
-    /// <summary>신규 계정 기본 인벤토리 용량(점유 slot 수). 골드로 1칸씩 확장(inventory_expand_master).</summary>
-    public const int BaseInventoryCapacity = 100;
-
-    private const int ItemTypeEquip = 1;      // item_master.item_type 1:장비
-    private const int ItemTypeMaterial = 2;   // 2:재료
-    private const int ItemTypeConsumable = 4; // 4:소모품(효과는 consumable_master)
-
-    /// <summary>equip_slot_master의 무기 슬롯. 캐릭터 생성 시 지급하는 기본 장비가 이 슬롯이다.</summary>
-    private const int EquipSlotWeapon = 1;
-
-    /// <summary>기본 무기가 만족해야 하는 레벨 제한 상한. 갓 생성한 캐릭터는 레벨 1이므로 그 이하만 장착할 수 있다.</summary>
-    private const int StartingCharacterLevel = 1;
-
-    /// <summary>skill_master.skill_type의 액티브 값(1:액티브 2:패시브). 기본 습득 스킬은 액티브 중에서 고른다.</summary>
-    private const int SkillTypeActive = 1;
-
     private readonly IMasterDbLoader _loader;
     private readonly ILogger<MasterDbProvider> _logger;
 
@@ -95,9 +78,6 @@ public sealed class MasterDbProvider
 
     // 가챠 배너: gacha_code → 정의(gacha_master + 자식 가중치·후보·천장). 적재 시 유효성 검증을 통과한 배너만 담는다.
     private IReadOnlyDictionary<int, GachaBannerDef> _gachaByCode = new Dictionary<int, GachaBannerDef>();
-
-    /// <summary>보스러시 전역 규칙(boss_rush_master 단일 행 키). 콘텐츠가 하나라 고정 1이다.</summary>
-    private const int BossRushContentId = 1;
 
     /// <summary>보스러시 전역 규칙. 마스터에 행이 없으면 null(콘텐츠 미구성).</summary>
     private BossRushRuleDef? _bossRushRule;
@@ -191,7 +171,7 @@ public sealed class MasterDbProvider
     /// 확장할 칸의 step = currentCapacity - 기본 용량 + 1이며, 상한(=기본 용량 + 확장 정의 수)을 넘으면 불가(false).</summary>
     public (bool ok, long cost) PlanExpandOne(int currentCapacity)
     {
-        var step = currentCapacity - BaseInventoryCapacity + 1; // 이번에 열 칸의 순번(1-based)
+        var step = currentCapacity - Constants.Inventory.BaseCapacity + 1; // 이번에 열 칸의 순번(1-based)
         if (step < 1 || step > _expandCosts.Count)
         {
             return (false, 0); // 상한 도달(또는 확장 정의 없음)
@@ -269,7 +249,7 @@ public sealed class MasterDbProvider
     public int? PickCombineResultCode(int inputGrade)
     {
         var candidates = _itemsByCode.Values
-            .Where(d => d.ItemType == ItemTypeEquip && d.Grade == inputGrade + 1)
+            .Where(d => d.ItemType == Constants.ItemType.Equip && d.Grade == inputGrade + 1)
             .Select(d => d.ItemCode)
             .ToList();
 
@@ -307,7 +287,7 @@ public sealed class MasterDbProvider
 
         // 1) 하드 천장 — 도달했으면 추첨 없이 등급 확정(동시 도달 시 가장 높은 등급).
         var hard = banner.PityRules
-            .Where(r => r.PityType == GachaPityTypes.Hard && PullNo(r.Grade) >= r.Threshold)
+            .Where(r => r.PityType == Constants.Gacha.PityTypeHard && PullNo(r.Grade) >= r.Threshold)
             .OrderByDescending(r => r.Grade)
             .FirstOrDefault();
         if (hard is not null)
@@ -325,7 +305,7 @@ public sealed class MasterDbProvider
         }
 
         long baseTotal = banner.GradeWeights.Values.Sum();
-        foreach (var rule in banner.PityRules.Where(r => r.PityType == GachaPityTypes.Soft))
+        foreach (var rule in banner.PityRules.Where(r => r.PityType == Constants.Gacha.PityTypeSoft))
         {
             int k = PullNo(rule.Grade) - rule.Threshold + 1;
             if (k <= 0 || rule.ProbStep <= 0 || !banner.GradeWeights.TryGetValue(rule.Grade, out int baseWeight))

@@ -67,17 +67,10 @@ public sealed record GachaBannerDef(
 
     /// <summary>등급의 하드 천장 발동 회차. 하드 규칙이 없으면 0(클라이언트 게이지 표시용).</summary>
     public int HardThreshold(int grade)
-        => PityRules.FirstOrDefault(r => r.Grade == grade && r.PityType == GachaPityTypes.Hard)?.Threshold ?? 0;
+        => PityRules.FirstOrDefault(r => r.Grade == grade && r.PityType == Constants.Gacha.PityTypeHard)?.Threshold ?? 0;
 }
 /// <summary>가챠 1회 추첨 결과(서버 RNG 확정). PityApplied는 하드 천장으로 등급이 확정된 회차임을 뜻한다.</summary>
 public sealed record GachaRoll(int Grade, int ItemCode, int Quantity, bool PityApplied, bool Guaranteed);
-
-/// <summary>gacha_pity_rule.pity_type 값(마스터 enum). 서버 내부 판정용이라 공유 계약에는 두지 않는다.</summary>
-public static class GachaPityTypes
-{
-    public const int Soft = 1;
-    public const int Hard = 2;
-}
 
 // ── 마스터 적재용 DB 행 매핑 POCO(제네릭 매핑 전용, dynamic 금지). snake_case→PascalCase는 Dapper 규칙으로 매핑.
 //    DECIMAL 컬럼은 decimal로 받아 float/double로 캐스팅한다. 적재는 Repositories/MasterDb/MasterDbLoader. ──

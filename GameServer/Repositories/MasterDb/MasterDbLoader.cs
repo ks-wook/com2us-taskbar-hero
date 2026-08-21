@@ -18,22 +18,6 @@ namespace GameServer.Repositories.MasterDb;
 /// </summary>
 public sealed class MasterDbLoader : IMasterDbLoader
 {
-    private const int ItemTypeEquip = 1;      // item_master.item_type 1:장비
-    private const int ItemTypeMaterial = 2;   // 2:재료
-    private const int ItemTypeConsumable = 4; // 4:소모품(효과는 consumable_master)
-
-    /// <summary>equip_slot_master의 무기 슬롯. 캐릭터 생성 시 지급하는 기본 장비가 이 슬롯이다.</summary>
-    private const int EquipSlotWeapon = 1;
-
-    /// <summary>기본 무기가 만족해야 하는 레벨 제한 상한. 갓 생성한 캐릭터는 레벨 1이므로 그 이하만 장착할 수 있다.</summary>
-    private const int StartingCharacterLevel = 1;
-
-    /// <summary>skill_master.skill_type의 액티브 값(1:액티브 2:패시브). 기본 습득 스킬은 액티브 중에서 고른다.</summary>
-    private const int SkillTypeActive = 1;
-
-    /// <summary>boss_rush_master는 콘텐츠 1행만 쓴다(보스러시 기획서 4.1).</summary>
-    private const int BossRushContentId = 1;
-
     /// <summary>마스터 DB 연결 문자열. 소비처가 이 클래스뿐이라 별도 팩토리를 두지 않는다.</summary>
     private readonly string _connectionString;
 
@@ -353,7 +337,7 @@ public sealed class MasterDbLoader : IMasterDbLoader
         var row = await db.Query("boss_rush_master")
             .Select("round_count", "unlock_stage_sequence",
                     "season_period_days", "run_expire_sec", "rank_page_limit")
-            .Where("content_id", BossRushContentId)
+            .Where("content_id", Constants.BossRush.ContentId)
             .FirstOrDefaultAsync<BossRushMasterRow>();
 
         return row is null
@@ -559,7 +543,7 @@ public sealed class MasterDbLoader : IMasterDbLoader
             }
 
             // ③ 소프트는 하드보다 앞서야 한다(뒤면 상승 구간 없이 하드만 동작한다).
-            var soft = b.PityRules.FirstOrDefault(r => r.Grade == grade && r.PityType == GachaPityTypes.Soft);
+            var soft = b.PityRules.FirstOrDefault(r => r.Grade == grade && r.PityType == Constants.Gacha.PityTypeSoft);
             if (soft is not null && hard > 0 && soft.Threshold >= hard)
             {
                 return $"등급 {grade} 소프트 threshold({soft.Threshold}) >= 하드 threshold({hard})";
@@ -635,7 +619,8 @@ public sealed class MasterDbLoader : IMasterDbLoader
         var rows = await db.Query("item_master")
             .Select("item_code", "name", "item_type", "grade", "stack_max", "equip_slot", "class_req", "level_req",
                     "sellable", "base_price")
-            .WhereIn("item_type", new[] { ItemTypeEquip, ItemTypeMaterial, ItemTypeConsumable })
+            .WhereIn("item_type", new[]
+                { Constants.ItemType.Equip, Constants.ItemType.Material, Constants.ItemType.Consumable })
             .GetAsync<ItemMasterRow>();
 
         var byGrade = new Dictionary<int, List<int>>();
@@ -655,7 +640,7 @@ public sealed class MasterDbLoader : IMasterDbLoader
                 row.BasePrice);
 
             // 드롭 후보는 장비·재료만(소모품 제외).
-            if (row.ItemType != ItemTypeEquip && row.ItemType != ItemTypeMaterial)
+            if (row.ItemType != Constants.ItemType.Equip && row.ItemType != Constants.ItemType.Material)
             {
                 continue;
             }
@@ -680,10 +665,10 @@ public sealed class MasterDbLoader : IMasterDbLoader
     /// </summary>
     private static Dictionary<int, ItemDef> BuildStartingWeapons(IReadOnlyDictionary<int, ItemDef> itemsByCode)
         => itemsByCode.Values
-            .Where(i => i.ItemType == ItemTypeEquip
-                        && i.EquipSlot == EquipSlotWeapon
+            .Where(i => i.ItemType == Constants.ItemType.Equip
+                        && i.EquipSlot == Constants.EquipSlot.Weapon
                         && i.ClassReq != 0
-                        && i.LevelReq <= StartingCharacterLevel)
+                        && i.LevelReq <= Constants.Character.StartingLevel)
             .GroupBy(i => i.ClassReq)
             .ToDictionary(
                 g => g.Key,
@@ -696,7 +681,7 @@ public sealed class MasterDbLoader : IMasterDbLoader
     /// </summary>
     private static Dictionary<int, SkillDef> BuildStartingSkills(IReadOnlyDictionary<int, SkillDef> skillsByCode)
         => skillsByCode.Values
-            .Where(s => s.SkillType == SkillTypeActive)
+            .Where(s => s.SkillType == Constants.SkillType.Active)
             .GroupBy(s => s.ClassCode)
             .ToDictionary(
                 g => g.Key,

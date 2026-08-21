@@ -543,7 +543,7 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
 
             return new BossRushSeason(seasonId, startAt, endAt, (int)BossRushSeasonStatus.Running);
         }
-        catch (MySqlException ex) when (ex.Number == MySqlDuplicateKey)
+        catch (MySqlException ex) when (ex.Number == Constants.MySqlError.DuplicateEntry)
         {
             // 다른 인스턴스가 그 사이에 개시했다 — 그 시즌을 읽어 돌려준다.
             var raced = await db.Query("boss_rush_season")
@@ -555,9 +555,6 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
                 : new BossRushSeason(raced.SeasonId, raced.StartAt, raced.EndAt, raced.Status);
         }
     }
-
-    /// <summary>MySQL 중복 키 에러 번호(1062). 시즌 개시 경합을 구분하는 데 쓴다.</summary>
-    private const int MySqlDuplicateKey = 1062;
 
     /// <summary>
     /// game_player 행을 잠그고 진행도(max_stage_cleared)를 읽는다(SELECT ... FOR UPDATE). 행이 없으면 null.

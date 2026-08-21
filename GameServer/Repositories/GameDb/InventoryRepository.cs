@@ -65,10 +65,6 @@ public sealed record InventoryBagOutcome(InventoryPageStatus Status, IReadOnlyLi
 /// <summary>인벤토리/아이템 액션 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class InventoryRepository : GameDbBase, IInventoryRepository
 {
-    private const int RowTypeItem = 1;
-    private const int RowTypeCurrency = 2;
-    private const int GoldItemCode = 1;
-
     /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
     public InventoryRepository(GameDbFactory dbFactory) : base(dbFactory) { }
 
@@ -103,14 +99,14 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
         // 1) 요청 구간만(커서 다음부터 limit개). 한 건 더 읽어 호출측이 hasMore를 판정한다.
         var rows = await db.Query("player_item")
             .Select("player_item_id", "slot", "item_code", "quantity", "enhance_level")
-            .Where("user_id", userId).Where("row_type", RowTypeItem).Where("slot", ">", cursor)
+            .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).Where("slot", ">", cursor)
             .OrderBy("slot")
             .Limit(limit)
             .GetAsync<BagItemRow>();
 
         // 2) 총 점유 칸 수(페이지와 무관한 전체 집계).
         var total = await db.Query("player_item")
-            .Where("user_id", userId).Where("row_type", RowTypeItem).WhereNotNull("slot")
+            .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).WhereNotNull("slot")
             .CountAsync<int>();
 
         // 3) 가방이 완전히 비었을 때만 계정 세이브를 확인한다. FK(ON DELETE CASCADE) 때문에 세이브 없이
@@ -362,7 +358,7 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
             }
 
             // 재화 행(row_type≠1)이나 미배치(slot NULL) 행은 이동 대상이 아니다.
-            if (itemRow.RowType != RowTypeItem || itemRow.Slot is null)
+            if (itemRow.RowType != Constants.PlayerItemRow.Item || itemRow.Slot is null)
             {
                 return TxResult<MoveOutcome>.Rollback(MoveOutcome.Fail(MoveStatus.ItemNotFound));
             }
@@ -448,7 +444,7 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
             }
 
             // 재화 행(row_type≠1)은 강화 대상이 아니다(마스터 판정 전에 걸러낸다).
-            if (itemRow.RowType != RowTypeItem)
+            if (itemRow.RowType != Constants.PlayerItemRow.Item)
             {
                 return TxResult<EnhanceOutcome>.Rollback(EnhanceOutcome.Fail(EnhanceStatus.NotEquippable));
             }
@@ -465,7 +461,7 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
             // 3) 비용 재화 잔액 확인.
             var currencyRow = await db.Query("player_item")
                 .Select("player_item_id", "quantity")
-                .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", currencyCode)
+                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Currency).Where("item_code", currencyCode)
                 .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
 
             long balance = currencyRow is null ? 0 : currencyRow.Quantity;
@@ -532,7 +528,9 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
             // 3) 골드 잔액 확인.
             var goldRow = await db.Query("player_item")
                 .Select("player_item_id", "quantity")
-                .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+                .Where("user_id", userId)
+                .Where("row_type", Constants.PlayerItemRow.Currency)
+                .Where("item_code", Constants.Currency.GoldItemCode)
                 .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
 
             long gold = goldRow is null ? 0 : goldRow.Quantity;

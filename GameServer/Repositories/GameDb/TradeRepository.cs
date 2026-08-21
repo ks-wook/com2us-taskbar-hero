@@ -48,18 +48,6 @@ public sealed record TradeCancelOutcome(TradeCloseStatus Status, TradeListingSna
 /// </summary>
 public sealed class TradeRepository : GameDbBase, ITradeRepository
 {
-    private const int RowTypeItem = 1;
-    private const int RowTypeCurrency = 2;
-    private const int GoldItemCode = 1;
-    private const int ItemTypeMaterial = 2;
-
-    private const int StatusOnSale = 1;
-    private const int StatusSold = 2;
-    private const int StatusCancelled = 3;
-
-    /// <summary>기간 만료로 자동 종료(만료 배치). 수동 취소(3)와 구분해 사유를 남긴다.</summary>
-    private const int StatusExpired = 4;
-
     private readonly IItemLookup _itemLookup;
 
     /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
@@ -90,7 +78,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
         using var db = Db();
         var query = db.Query("trade_listing")
             .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at", "expires_at")
-            .Where("status", StatusOnSale).Where("expires_at", ">", nowUnix);
+            .Where("status", Constants.Trade.StatusOnSale).Where("expires_at", ">", nowUnix);
         if (itemCode > 0)
         {
             query = query.Where("item_code", itemCode);
@@ -122,7 +110,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
         using var db = Db();
         var row = await db.Query("trade_listing")
             .Select("listing_id", "seller_user_id", "item_code", "enhance_level", "quantity", "price", "created_at", "expires_at")
-            .Where("listing_id", listingId).Where("status", StatusOnSale).Where("expires_at", ">", nowUnix)
+            .Where("listing_id", listingId).Where("status", Constants.Trade.StatusOnSale).Where("expires_at", ">", nowUnix)
             .FirstOrDefaultAsync<TradeListingRow>();
         return row is null
             ? null
@@ -150,7 +138,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
             // 1) 동시 등록 한도. 만료 시각이 지난 등록은 배치가 아직 정리하지 않았어도 한도에서 제외한다
             //    (읽기 시점 만료 판정 — 그렇지 않으면 하루 1회 배치가 돌기 전까지 판매자의 등록 칸이 묶인다).
             var active = await db.Query("trade_listing")
-                .Where("seller_user_id", userId).Where("status", StatusOnSale).Where("expires_at", ">", nowUnix)
+                .Where("seller_user_id", userId).Where("status", Constants.Trade.StatusOnSale).Where("expires_at", ">", nowUnix)
                 .CountAsync<int>(transaction: transaction);
             if (active >= listingLimit)
             {
@@ -160,7 +148,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
             // 2) 소유 확인(본인 아이템 행만). 재화 행(row_type=2)은 거래 대상이 아니다.
             var item = await db.Query("player_item")
                 .Select("player_item_id", "item_code", "quantity", "enhance_level")
-                .Where("player_item_id", itemId).Where("user_id", userId).Where("row_type", RowTypeItem)
+                .Where("player_item_id", itemId).Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item)
                 .FirstOrDefaultAsync<TradePlayerItemRow>(transaction);
             if (item is null)
             {
@@ -207,7 +195,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
                 enhance_level = item.EnhanceLevel,
                 quantity,
                 price,
-                status = StatusOnSale,
+                status = Constants.Trade.StatusOnSale,
                 buyer_user_id = 0,
                 created_at = nowUnix,
                 expires_at = expiresAt,
@@ -261,7 +249,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
             // 만료 판정을 배치 시점이 아니라 읽기 시점으로 두는 규칙이며(거래소 기획서 7.6), 판매 기간 3일이
             // 배치 주기(하루 1회)만큼 늘어나 보이는 문제를 없앤다. 사용자에게는 "이미 닫힌 등록"과 구분할 이유가
             // 없으므로 같은 상태 코드(→ TradeAlreadyClosed)로 응답한다.
-            if (row.Status != StatusOnSale || row.ExpiresAt <= nowUnix)
+            if (row.Status != Constants.Trade.StatusOnSale || row.ExpiresAt <= nowUnix)
             {
                 return TxResult<TradeBuyOutcome>.Rollback(TradeBuyOutcome.Fail(TradeCloseStatus.AlreadyClosed));
             }
@@ -280,9 +268,9 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
 
             // 3) 선점(CAS): 판매중일 때만 판매완료로 전이.
             var claimed = await db.Query("trade_listing")
-                .Where("listing_id", listingId).Where("status", StatusOnSale)
+                .Where("listing_id", listingId).Where("status", Constants.Trade.StatusOnSale)
                 .UpdateAsync(
-                    new { status = StatusSold, buyer_user_id = buyerUserId, closed_at = nowUnix }, transaction);
+                    new { status = Constants.Trade.StatusSold, buyer_user_id = buyerUserId, closed_at = nowUnix }, transaction);
             if (claimed == 0)
             {
                 return TxResult<TradeBuyOutcome>.Rollback(TradeBuyOutcome.Fail(TradeCloseStatus.AlreadyClosed));
@@ -332,14 +320,14 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
                 return TxResult<TradeCancelOutcome>.Rollback(TradeCancelOutcome.Fail(TradeCloseStatus.NotOwner));
             }
 
-            if (row.Status != StatusOnSale)
+            if (row.Status != Constants.Trade.StatusOnSale)
             {
                 return TxResult<TradeCancelOutcome>.Rollback(TradeCancelOutcome.Fail(TradeCloseStatus.AlreadyClosed));
             }
 
             var claimed = await db.Query("trade_listing")
-                .Where("listing_id", listingId).Where("status", StatusOnSale)
-                .UpdateAsync(new { status = StatusCancelled, closed_at = nowUnix }, transaction);
+                .Where("listing_id", listingId).Where("status", Constants.Trade.StatusOnSale)
+                .UpdateAsync(new { status = Constants.Trade.StatusCancelled, closed_at = nowUnix }, transaction);
             if (claimed == 0)
             {
                 return TxResult<TradeCancelOutcome>.Rollback(TradeCancelOutcome.Fail(TradeCloseStatus.AlreadyClosed));
@@ -364,7 +352,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
         using var db = Db();
         var ids = await db.Query("trade_listing")
             .Select("listing_id")
-            .Where("status", StatusOnSale).Where("expires_at", "<", nowUnix)
+            .Where("status", Constants.Trade.StatusOnSale).Where("expires_at", "<", nowUnix)
             .OrderBy("listing_id").Limit(limit)
             .GetAsync<long>();
         return ids.ToList();
@@ -381,9 +369,9 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
         {
             // 1) 선점(CAS): 아직 판매중이고 만료가 지난 등록만 만료로 전이(수동 취소 3과 구분되는 4).
             var closed = await db.Query("trade_listing")
-                .Where("listing_id", listingId).Where("status", StatusOnSale)
+                .Where("listing_id", listingId).Where("status", Constants.Trade.StatusOnSale)
                 .Where("expires_at", "<", nowUnix)
-                .UpdateAsync(new { status = StatusExpired, closed_at = nowUnix }, transaction);
+                .UpdateAsync(new { status = Constants.Trade.StatusExpired, closed_at = nowUnix }, transaction);
             if (closed == 0)
             {
                 return TxResult<TradeListingSnapshot?>.Rollback(null);
@@ -429,7 +417,9 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
         QueryFactory db, DbTransaction tx, long userId)
     {
         var row = await db.Query("player_item").Select("player_item_id", "quantity")
-            .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", Constants.Currency.GoldItemCode)
             .FirstOrDefaultAsync<ItemIdQtyRow>(tx);
         return row is null ? null : (row.PlayerItemId, row.Quantity);
     }
@@ -453,10 +443,10 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
         long remaining = listing.Quantity;
 
         // 재료(스택 가능): 기존 스택의 여유부터 채운다(새 칸 불필요). 강화 단계가 없는 종류다.
-        if (itemType == ItemTypeMaterial && stackMax > 1)
+        if (itemType == Constants.ItemType.Material && stackMax > 1)
         {
             var stacks = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
-                .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", listing.ItemCode)
+                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).Where("item_code", listing.ItemCode)
                 .Where("quantity", "<", stackMax)
                 .GetAsync<ItemIdQtySlotRow>(tx);
 
@@ -484,7 +474,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
             }
         }
 
-        var perRow = itemType == ItemTypeMaterial ? stackMax : 1;
+        var perRow = itemType == Constants.ItemType.Material ? stackMax : 1;
         while (remaining > 0)
         {
             if (!InventorySlotAllocator.TryFirstFree(used, capacity, out int slot))
@@ -496,7 +486,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
             var newItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
             {
                 user_id = userId,
-                row_type = RowTypeItem,
+                row_type = Constants.PlayerItemRow.Item,
                 item_code = listing.ItemCode,
                 quantity = put,
                 slot,

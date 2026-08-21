@@ -102,14 +102,14 @@ public abstract class PeriodicBatchScheduler : BackgroundService
     /// 재시도를 얼마나 늦출지는 <see cref="NextDelay"/>를 재정의한 쪽이 정한다 — 여기서 크게 잡으면
     /// 발화 시각이 코앞인 정상 대기까지 뒤로 밀려 정확도가 깨진다.
     /// </summary>
-    protected virtual TimeSpan MinDelay => TimeSpan.FromSeconds(1);
+    protected virtual TimeSpan MinDelay => Constants.Batch.MinDelay;
 
     /// <summary>
     /// 리더 락 TTL의 상한(기본 5분). 1주기 실행 시간의 상한으로 잡는다 — 두 배치 모두 1주기가
     /// <c>BatchSize</c>로 제한된 짧은 트랜잭션의 반복이라 수 초 규모이므로 5분은 충분한 여유다.
     /// 실제 TTL은 <see cref="LeaseDuration"/>이며, 주기가 이보다 짧으면 주기를 쓴다.
     /// </summary>
-    protected virtual TimeSpan MaxLockTtl => TimeSpan.FromMinutes(5);
+    protected virtual TimeSpan MaxLockTtl => Constants.Batch.MaxLockTtl;
 
     /// <summary>
     /// 락 TTL = min(<see cref="Interval"/>, <see cref="MaxLockTtl"/>). 주기가 짧은 배치에서는 TTL이 주기를 넘지

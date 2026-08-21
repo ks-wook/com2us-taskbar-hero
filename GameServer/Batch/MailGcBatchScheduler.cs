@@ -16,12 +16,6 @@ namespace GameServer.Batch;
 /// </summary>
 public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
 {
-    /// <summary>보관 기간(발급 후 7일, mail 기획서 6.5 확정) — 이 시간이 지난 메일이 삭제 대상이다.</summary>
-    private const long RetentionSeconds = 7 * DateTimeUtil.SecondsPerDay;
-
-    private const int DefaultIntervalSeconds = 3600;
-    private const int DefaultBatchSize = 500;
-
     private readonly int _intervalSeconds;
     private readonly int _batchSize;
     private readonly ILogger<MailGcBatchScheduler> _logger;
@@ -32,10 +26,10 @@ public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
         ILogger<MailGcBatchScheduler> logger)
         : base(scopeFactory, batchLock, logger)
     {
-        var interval = configuration.GetValue("MailGcBatch:IntervalSeconds", DefaultIntervalSeconds);
-        var batchSize = configuration.GetValue("MailGcBatch:BatchSize", DefaultBatchSize);
-        _intervalSeconds = interval > 0 ? interval : DefaultIntervalSeconds;
-        _batchSize = batchSize > 0 ? batchSize : DefaultBatchSize;
+        var interval = configuration.GetValue("MailGcBatch:IntervalSeconds", Constants.Batch.MailGc.DefaultIntervalSeconds);
+        var batchSize = configuration.GetValue("MailGcBatch:BatchSize", Constants.Batch.MailGc.DefaultBatchSize);
+        _intervalSeconds = interval > 0 ? interval : Constants.Batch.MailGc.DefaultIntervalSeconds;
+        _batchSize = batchSize > 0 ? batchSize : Constants.Batch.MailGc.DefaultBatchSize;
         _logger = logger;
     }
 
@@ -54,7 +48,7 @@ public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
         var mailRepository = scope.ServiceProvider.GetRequiredService<IMailRepository>();
 
         var now = DateTimeUtil.NowUnixSeconds();
-        var deleted = await mailRepository.DeleteRetentionExpiredAsync(now - RetentionSeconds, _batchSize);
+        var deleted = await mailRepository.DeleteRetentionExpiredAsync(now - Constants.Mail.RetentionSeconds, _batchSize);
 
         if (deleted > 0)
         {
@@ -62,4 +56,3 @@ public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
         }
     }
 }
-

@@ -57,12 +57,6 @@ public sealed record MailClaimAllOutcome(
 /// <summary>메일(우편함) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class MailRepository : GameDbBase, IMailRepository
 {
-    private const int RowTypeItem = 1;
-    private const int RowTypeCurrency = 2;
-    private const int GoldItemCode = 1;
-
-    private const int RewardTypeGold = 1;
-
     private readonly IItemLookup _itemLookup;
 
     /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
@@ -319,10 +313,10 @@ public sealed class MailRepository : GameDbBase, IMailRepository
             QueryFactory db, DbTransaction tx, long userId,
             IReadOnlyList<MailAttachment> rewards, IItemLookup itemLookup, long nowUnix)
     {
-        long gold = rewards.Where(r => r.RewardType == RewardTypeGold).Sum(r => r.Quantity);
+        long gold = rewards.Where(r => r.RewardType == Constants.RewardType.Gold).Sum(r => r.Quantity);
 
         // 아이템/재료는 코드별로 합산해 적재(같은 코드 첨부가 여러 건이어도 스택 병합이 한 번에 이뤄진다).
-        var itemGroups = rewards.Where(r => r.RewardType != RewardTypeGold)
+        var itemGroups = rewards.Where(r => r.RewardType != Constants.RewardType.Gold)
             .GroupBy(r => new { r.RewardType, r.RewardCode, r.EnhanceLevel })
             .Select(g => new MailAttachment(
                 g.Key.RewardType, g.Key.RewardCode, g.Sum(r => r.Quantity), g.Key.EnhanceLevel))
@@ -352,7 +346,9 @@ public sealed class MailRepository : GameDbBase, IMailRepository
     private static async Task<long> CreditGoldAsync(QueryFactory db, DbTransaction tx, long userId, long amount, long nowUnix)
     {
         var goldRow = await db.Query("player_item").Select("player_item_id", "quantity")
-            .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", Constants.Currency.GoldItemCode)
             .FirstOrDefaultAsync<ItemIdQtyRow>(tx);
 
         if (amount <= 0)
@@ -365,8 +361,8 @@ public sealed class MailRepository : GameDbBase, IMailRepository
             await db.Query("player_item").InsertAsync(new
             {
                 user_id = userId,
-                row_type = RowTypeCurrency,
-                item_code = GoldItemCode,
+                row_type = Constants.PlayerItemRow.Currency,
+                item_code = Constants.Currency.GoldItemCode,
                 quantity = amount,
                 slot = (int?)null,
                 enhance_level = 0,
@@ -394,7 +390,7 @@ public sealed class MailRepository : GameDbBase, IMailRepository
         if (stackMax > 1 && enhanceLevel == 0)
         {
             var stacks = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
-                .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", itemCode)
+                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).Where("item_code", itemCode)
                 .Where("enhance_level", 0)
                 .Where("quantity", "<", stackMax)
                 .GetAsync<ItemIdQtySlotRow>(tx);
@@ -436,7 +432,7 @@ public sealed class MailRepository : GameDbBase, IMailRepository
             long newItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
             {
                 user_id = userId,
-                row_type = RowTypeItem,
+                row_type = Constants.PlayerItemRow.Item,
                 item_code = itemCode,
                 quantity = put,
                 slot = slot,

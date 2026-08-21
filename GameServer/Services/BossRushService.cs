@@ -20,9 +20,6 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class BossRushService : IBossRushService
 {
-    /// <summary>랭킹 목록 기본 페이지 크기(요청이 limit을 생략했을 때).</summary>
-    private const int RankDefaultLimit = 50;
-
     private readonly IBossRushRepository _repository;
     private readonly IBossRushRankCache _rankCache;
     private readonly MasterDbProvider _masterData;
@@ -244,7 +241,7 @@ public sealed class BossRushService : IBossRushService
         }
 
         var safeOffset = Math.Max(offset, 0);
-        var safeLimit = limit <= 0 ? RankDefaultLimit : Math.Min(limit, rule.RankPageLimit);
+        var safeLimit = limit <= 0 ? Constants.BossRush.RankDefaultLimit : Math.Min(limit, rule.RankPageLimit);
 
         var source = BossRushRankSource.RankCache;
         var cached = await _rankCache.GetPageAsync(season.SeasonId, season.StartAt, safeOffset, safeLimit);

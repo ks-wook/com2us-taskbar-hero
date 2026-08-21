@@ -31,9 +31,6 @@ public sealed record RuneUpgradeOutcome(RuneUpgradeStatus Status, int NewLevel, 
 /// <summary>성장(스킬·룬) 세이브 접근 계층(taskbar_hero_game). SqlKata 쿼리 빌더 + 제네릭 매핑만 사용한다(dynamic 금지).</summary>
 public sealed class GrowthRepository : GameDbBase, IGrowthRepository
 {
-    private const int RowTypeCurrency = 2;
-    private const int GoldItemCode = 1;
-
     /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
     public GrowthRepository(GameDbFactory dbFactory) : base(dbFactory) { }
 
@@ -239,7 +236,9 @@ public sealed class GrowthRepository : GameDbBase, IGrowthRepository
             long cost = costOf(curLevel);
             var goldRow = await db.Query("player_item")
                 .Select("player_item_id", "quantity")
-                .Where("user_id", userId).Where("row_type", RowTypeCurrency).Where("item_code", GoldItemCode)
+                .Where("user_id", userId)
+                .Where("row_type", Constants.PlayerItemRow.Currency)
+                .Where("item_code", Constants.Currency.GoldItemCode)
                 .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
 
             long gold = goldRow?.Quantity ?? 0;

@@ -16,12 +16,6 @@ namespace GameServer.Logging;
 public sealed class EventLogger : IEventLogger
 {
     /// <summary>
-    /// 이벤트 로그 전용 로거 카테고리. <c>Program.cs</c>가 이 이름으로 sink를 가른다 —
-    /// 바꾸면 필터도 함께 바꿔야 한다.
-    /// </summary>
-    public const string Category = "TaskbarHero.EventLog";
-
-    /// <summary>
     /// 필드 record → JSON 변환 규칙. <c>PascalCase</c> 프로퍼티를 <c>snake_case</c> 컬럼 이름으로 바꾸고,
     /// null 필드는 아예 내지 않는다(컬럼이 NULL로 들어가는 것과 키가 없는 것은 <c>out_sql</c>에서 같다).
     /// </summary>
@@ -42,7 +36,7 @@ public sealed class EventLogger : IEventLogger
     /// <summary>전용 카테고리 로거를 만들고, req_id를 찾기 위한 HttpContext 접근자를 주입받는다.</summary>
     public EventLogger(ILoggerFactory loggerFactory, IHttpContextAccessor httpContextAccessor)
     {
-        _logger = loggerFactory.CreateLogger(Category);
+        _logger = loggerFactory.CreateLogger(Constants.EventLog.Category);
         _httpContextAccessor = httpContextAccessor;
     }
 

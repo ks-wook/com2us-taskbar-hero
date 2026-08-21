@@ -12,40 +12,35 @@ namespace GameServer.MasterData;
 /// </summary>
 public static class StageCoords
 {
-    public const int Acts = 5;
-    public const int Difficulties = 2;
-    public const int StagesPerAct = 10;          // 한 지역(Act)당 10 스테이지
-    public const int BossStage = 10;              // 각 Act·난이도의 10스테이지가 보스
-    public const int TotalStages = Acts * Difficulties * StagesPerAct; // 100
-
     public static int StageId(int act, int difficulty, int stage)
         => act * 1000000 + difficulty * 10000 + stage;
 
     public static bool IsValidCoord(int act, int difficulty, int stage)
-        => act >= 1 && act <= Acts
-        && difficulty >= 1 && difficulty <= Difficulties
-        && stage >= 1 && stage <= StagesPerAct;
+        => act >= 1 && act <= Constants.Stage.Acts
+        && difficulty >= 1 && difficulty <= Constants.Stage.Difficulties
+        && stage >= 1 && stage <= Constants.Stage.StagesPerAct;
 
     /// <summary>진행 시퀀스(1..100). 좌표가 유효하지 않으면 0.</summary>
     public static int Sequence(int act, int difficulty, int stage)
         => IsValidCoord(act, difficulty, stage)
-            ? (difficulty - 1) * (Acts * StagesPerAct) + (act - 1) * StagesPerAct + stage
+            ? (difficulty - 1) * (Constants.Stage.Acts * Constants.Stage.StagesPerAct)
+                + (act - 1) * Constants.Stage.StagesPerAct + stage
             : 0;
 
     /// <summary>시퀀스(1..100)를 좌표로 디코딩. 범위 밖이면 false.</summary>
     public static bool TryDecodeSequence(int sequence, out int act, out int difficulty, out int stage)
     {
         act = difficulty = stage = 0;
-        if (sequence < 1 || sequence > TotalStages)
+        if (sequence < 1 || sequence > Constants.Stage.TotalStages)
         {
             return false;
         }
 
         var zero = sequence - 1;
-        difficulty = zero / (Acts * StagesPerAct) + 1;
-        var rem = zero % (Acts * StagesPerAct);
-        act = rem / StagesPerAct + 1;
-        stage = rem % StagesPerAct + 1;
+        difficulty = zero / (Constants.Stage.Acts * Constants.Stage.StagesPerAct) + 1;
+        var rem = zero % (Constants.Stage.Acts * Constants.Stage.StagesPerAct);
+        act = rem / Constants.Stage.StagesPerAct + 1;
+        stage = rem % Constants.Stage.StagesPerAct + 1;
         return true;
     }
 }

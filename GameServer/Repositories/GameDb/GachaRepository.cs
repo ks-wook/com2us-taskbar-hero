@@ -57,9 +57,6 @@ public sealed record GachaHistoryPage(IReadOnlyList<GachaHistoryEntry> Entries, 
 /// </summary>
 public sealed class GachaRepository : GameDbBase, IGachaRepository
 {
-    private const int RowTypeItem = 1;
-    private const int RowTypeCurrency = 2;
-
     private readonly IItemLookup _itemLookup;
 
     /// <summary>세이브 DB 커넥션 팩토리를 기반 클래스로 전달한다.</summary>
@@ -113,7 +110,7 @@ public sealed class GachaRepository : GameDbBase, IGachaRepository
             // 1) 비용 재화 조회·검증(차감 전이라 실패해도 상태 변화가 없다).
             var currencyRow = await db.Query("player_item")
                 .Select("player_item_id", "quantity")
-                .Where("user_id", userId).Where("row_type", RowTypeCurrency)
+                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Currency)
                 .Where("item_code", banner.CostCurrencyCode)
                 .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
 
@@ -321,7 +318,7 @@ public sealed class GachaRepository : GameDbBase, IGachaRepository
         if (stackMax > 1)
         {
             var stacks = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
-                .Where("user_id", userId).Where("row_type", RowTypeItem).Where("item_code", itemCode)
+                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).Where("item_code", itemCode)
                 .Where("enhance_level", 0)
                 .Where("quantity", "<", stackMax)
                 .OrderBy("player_item_id")
@@ -363,7 +360,7 @@ public sealed class GachaRepository : GameDbBase, IGachaRepository
             long newItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
             {
                 user_id = userId,
-                row_type = RowTypeItem,
+                row_type = Constants.PlayerItemRow.Item,
                 item_code = itemCode,
                 quantity = put,
                 slot,
