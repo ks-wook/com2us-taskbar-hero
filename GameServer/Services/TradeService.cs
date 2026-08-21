@@ -120,6 +120,13 @@ public sealed class TradeService : ITradeService
         EmitRegister(
             userId, listing.ListingId, listing.ItemCode, listing.EnhanceLevel, listing.Price, ErrorCode.Success);
 
+        // 아이템 원장(6.2) — **이동**이다. 계정 보유량에서는 빠지지만 경제에서 사라진 것이 아니므로,
+        // 유입·유출 합계를 낼 때 trade_register/trade_cancel을 빼야 총량이 맞는다.
+        // 소유권 이전은 구매자가 메일을 수령할 때 mail_claim 유입으로 잡힌다.
+        _eventLogger.ItemRemoved(
+            userId, listing.ItemCode, _masterData.GetItem(listing.ItemCode), listing.Quantity,
+            itemId, ItemFlowReason.TradeRegister, listing.ListingId);
+
         return new SaveResult(ErrorCode.Success, "Registered", new TradeRegisterResultData
         {
             listingId = listing.ListingId,
@@ -277,6 +284,12 @@ public sealed class TradeService : ITradeService
         EmitClose(
             listing, TradeCloseOutcome.Cancel, DateTimeUtil.NowUnixSeconds(),
             buyerUid: null, mailId: null, settled: false, errorCode: ErrorCode.Success);
+
+        // 아이템 원장(6.2) — 에스크로 복귀도 **이동**이다. 등록 때 나간 만큼이 그대로 돌아와
+        // 같은 listing_id의 trade_register 행과 상계된다(개체 id는 복귀하며 새로 발급된 행의 것이다).
+        _eventLogger.ItemGained(
+            userId, listing.ItemCode, _masterData.GetItem(listing.ItemCode), listing.Quantity,
+            new GrantedItemIds(outcome.Delta), ItemFlowReason.TradeCancel, listing.ListingId);
 
         return new SaveResult(ErrorCode.Success, "Cancelled", new TradeCancelResultData
         {

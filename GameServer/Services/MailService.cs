@@ -109,6 +109,11 @@ public sealed class MailService : IMailService
                 userId, outcome.Gold, outcome.GoldBalance, CurrencySource.MailClaim, mailId);
         }
 
+        // 아이템 원장(6.2). 거래 구매·반송·출석 보상·신규 지원금이 실제로 가방에 들어오는 지점이 여기다 —
+        // 발급(mail.issue)은 건수만 담으므로 품목별 유통량은 이 행들이 유일한 근거다.
+        EmitClaimedItems(
+            userId, mailId, outcome.Category, outcome.Items, new GrantedItemIds(outcome.Delta));
+
         return new SaveResult(ErrorCode.Success, "Claimed", data);
     }
 
@@ -142,22 +147,54 @@ public sealed class MailService : IMailService
 
         _logger.ZLogInformation($"메일 일괄 수령: userId {userId:@UserId}, mails {outcome.ClaimedMailIds.Count:@MailCount}건, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
 
-        // 재화 원장(6.1) — 지급은 합계 한 번이지만 **메일 1건당 1행**으로 남긴다(ref_id = mail_id).
-        // 잔액은 지급 전 잔액에서 메일 순서대로 누적해 채운다. 한 트랜잭션 안의 값이라 중간 잔액이
+        // 두 원장 모두 지급은 합계 한 번이지만 **메일 1건당** 남긴다(ref_id = mail_id, 6.1·6.2).
+        // 재화 잔액은 지급 전 잔액에서 메일 순서대로 누적해 채운다. 한 트랜잭션 안의 값이라 중간 잔액이
         // DB에 실재하지는 않지만, 합이 정확하고 마지막 행이 실제 잔액과 일치한다.
+        // 아이템 개체 id는 지급 순서대로 하나의 목록에서 꺼내므로 메일을 넘나들어도 중복되지 않는다.
         var runningBalance = outcome.GoldBalance - outcome.Gold;
-        foreach (var mailId in outcome.ClaimedMailIds)
+        var granted = new GrantedItemIds(outcome.Delta);
+        foreach (var claimed in outcome.ClaimedMails)
         {
-            if (!outcome.GoldByMailId.TryGetValue(mailId, out var gold))
+            var gold = claimed.Attachments
+                .Where(a => a.RewardType == Constants.RewardType.Gold)
+                .Sum(a => a.Quantity);
+            if (gold > 0)
             {
-                continue; // 골드 첨부가 없는 메일(아이템만) — 재화 원장에는 남길 것이 없다.
+                runningBalance += gold;
+                _eventLogger.CurrencyGained(
+                    userId, gold, runningBalance, CurrencySource.MailClaim, claimed.MailId);
             }
 
-            runningBalance += gold;
-            _eventLogger.CurrencyGained(userId, gold, runningBalance, CurrencySource.MailClaim, mailId);
+            EmitClaimedItems(userId, claimed.MailId, claimed.Category, claimed.Attachments, granted);
         }
 
         return new SaveResult(ErrorCode.Success, "Claimed all", data);
+    }
+
+    /// <summary>
+    /// 메일 1건의 첨부 아이템을 아이템 원장에 남긴다(<c>item.flow</c>, 6.2). 골드 첨부는 재화 원장의 몫이라 건너뛴다.
+    /// <para>유입 사유는 메일 분류가 가른다 — 운영 메일(= 신규 가입 지원금)은 <c>newbie_grant</c>,
+    /// 나머지(거래 구매·만료 반송·출석·순위 보상)는 <c>mail_claim</c>이다.</para>
+    /// </summary>
+    /// <param name="granted">장비 개체 id를 꺼낼 목록. 일괄 수령은 메일 여러 건이 하나를 공유한다.</param>
+    private void EmitClaimedItems(
+        long userId, long mailId, int category, IReadOnlyList<MailAttachment> attachments, GrantedItemIds granted)
+    {
+        var reason = category == Constants.MailCategory.Operation
+            ? ItemFlowReason.NewbieGrant
+            : ItemFlowReason.MailClaim;
+
+        foreach (var attachment in attachments)
+        {
+            if (attachment.RewardType == Constants.RewardType.Gold)
+            {
+                continue;
+            }
+
+            _eventLogger.ItemGained(
+                userId, attachment.RewardCode, _masterData.GetItem(attachment.RewardCode), attachment.Quantity,
+                granted, reason, mailId);
+        }
     }
 
     /// <summary>리포지토리 수령 상태를 공유 ErrorCode로 변환한다.</summary>

@@ -188,6 +188,79 @@ public static class CurrencySource
     public const string TradeFee = "trade_fee";
 }
 
+// ── 6.2 아이템 변동 원장 ──
+
+/// <summary>
+/// <c>item.flow</c> — 아이템이 움직인 <b>모든 지점</b>이 남기는 원장 1행(6.2).
+/// <para>이 테이블 하나로 <b>"이 아이템은 어디서 얼마나 생기고 어디로 사라지나"</b>에 답한다 —
+/// 인플레이션의 원인이 과잉 드랍인지 소각 부족인지를 가르는 근거다. 드랍률 실측·가챠 유통량·
+/// 큐브 3연산·소모품 사용이 전부 <see cref="Reason"/>으로 갈라 나오므로, 5장 도메인 로그가
+/// 배열 컬럼을 갖지 않아도 되고 큐브·소모품은 도메인 테이블 자체가 필요 없다.</para>
+/// </summary>
+/// <param name="ItemType">1=장비 2=재료 4=소모품. <b>재화는 여기에 오지 않는다</b>(6.1의 몫).</param>
+/// <param name="ItemId">
+/// 개체 식별자. <b>장비처럼 개체가 유일한 경우에만</b> 담고 스택 아이템(재료·소모품)은 null이다 —
+/// 장비는 <c>stack_max=1</c>이라 지급 때마다 새 행이 생겨 개체 단위 추적(가챠 → 강화 → 거래 → 분해)이 된다.
+/// </param>
+/// <param name="Delta">+획득 / −소실. 장비는 개체마다 ±1이고, 스택 아이템은 이번 변동의 합계다.</param>
+/// <param name="Reason"><see cref="ItemFlowReason"/>의 값.</param>
+/// <param name="RefId">
+/// 관련 식별자. <b>해석은 <paramref name="Reason"/>이 정한다</b>(예: <c>stage_drop</c>이면 stage_id,
+/// <c>gacha</c>면 pull_id). 값이 없는 reason만 0을 쓴다.
+/// </param>
+public sealed record ItemFlowEvent(
+    int ItemCode, int ItemType, int Grade, long? ItemId,
+    int Delta, string Reason, long RefId) : IEventFields;
+
+/// <summary>
+/// <see cref="ItemFlowEvent.Reason"/>의 <b>고정 집합</b>(6.2). 아이템이 움직이는 경로를 새로 만들면
+/// 여기에 값을 추가하고 정의 문서의 목록도 함께 고친다 — 빠뜨리면 그 유통량이 설명되지 않는다.
+/// <para><b>이동(<see cref="TradeRegister"/>·<see cref="TradeCancel"/>)은 유입·유출 합계에서 빼야
+/// 총량이 맞는다</b> — 에스크로는 계정 밖으로 나갔을 뿐 사라진 것이 아니고, 실제 소유권 이전은
+/// 구매자의 <see cref="MailClaim"/>에서 유입으로 잡힌다.</para>
+/// </summary>
+public static class ItemFlowReason
+{
+    /// <summary>유입 · ref_id=stage_id — 클리어 전리품. <b>드랍률 실측의 근거</b>다.</summary>
+    public const string StageDrop = "stage_drop";
+
+    /// <summary>유입 · ref_id=pull_id — 뽑기 지급(등급 분포는 gacha_pull_item_logs가 답한다).</summary>
+    public const string Gacha = "gacha";
+
+    /// <summary>유입 · ref_id=0 — 합성 결과(등급 상승). <b>등급 상승 파이프라인 통과량</b>이다.</summary>
+    public const string CubeCombineOut = "cube_combine_out";
+
+    /// <summary>유입 · ref_id=recipe_code — 제작 결과.</summary>
+    public const string CubeCraftOut = "cube_craft_out";
+
+    /// <summary>유입 · ref_id=mail_id — 메일 첨부 수령(거래 구매·반송·출석 보상이 여기로 들어온다).</summary>
+    public const string MailClaim = "mail_claim";
+
+    /// <summary>유입 · ref_id=mail_id — 신규 지원금(메일 경유). 계정 생애에 한 번뿐이다.</summary>
+    public const string NewbieGrant = "newbie_grant";
+
+    /// <summary>유입 · ref_id=character_id — 캐릭터 생성 시 지급되는 기본 무기.</summary>
+    public const string CharacterCreateWeapon = "character_create_weapon";
+
+    /// <summary>유출 · ref_id=0 — 합성 소모(같은 req_id의 <see cref="CubeCombineOut"/>과 짝).</summary>
+    public const string CubeCombineIn = "cube_combine_in";
+
+    /// <summary>유출 · ref_id=recipe_code — 제작 소모 재료.</summary>
+    public const string CubeCraftIn = "cube_craft_in";
+
+    /// <summary>유출 · ref_id=0 — 분해 소모(골드 유입은 원장 gain/cube_dismantle).</summary>
+    public const string CubeDismantleIn = "cube_dismantle_in";
+
+    /// <summary>유출 · ref_id=0 — 소모품 사용(버프 종류는 item_code로 consumable_master를 보면 나온다).</summary>
+    public const string ConsumableUse = "consumable_use";
+
+    /// <summary>이동 · ref_id=listing_id — 거래소 에스크로 반출.</summary>
+    public const string TradeRegister = "trade_register";
+
+    /// <summary>이동 · ref_id=listing_id — 거래소 에스크로 복귀(등록 취소).</summary>
+    public const string TradeCancel = "trade_cancel";
+}
+
 // ── 5.11 배치 / 시스템 ──
 
 /// <summary>

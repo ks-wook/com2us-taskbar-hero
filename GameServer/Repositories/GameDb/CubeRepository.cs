@@ -27,6 +27,12 @@ public sealed record CombineOutcome(
     /// <summary>가방 변경분(5.0). 커밋 전에 확정된 값이라 응답 조립·캐시 갱신에 추가 조회가 필요 없다.</summary>
     public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
 
+    /// <summary>
+    /// 실제로 소모된 입력 장비(개체 id + 코드). <b>아이템 원장</b>이 소모 1개당 1행을 남기는 데 쓴다(6.2) —
+    /// 가방 변경분의 <c>removed</c>는 id만 담아 코드·등급을 알 수 없기 때문이다.
+    /// </summary>
+    public IReadOnlyList<CombineInput> Consumed { get; init; } = Array.Empty<CombineInput>();
+
     public static CombineOutcome Fail(CombineStatus status) => new(status, 0, 0, 0, 0, 0);
 }
 
@@ -52,6 +58,12 @@ public sealed record DismantleOutcome(DismantleStatus Status, long Gold, long Cu
 
     /// <summary>적립 후 골드 잔액(응답 balance).</summary>
     public long GoldBalance { get; init; }
+
+    /// <summary>
+    /// 실제로 분해된 품목(개체 id + 코드 + 개수). <b>아이템 원장</b>이 품목별 유출 행을 남기는 데 쓴다(6.2) —
+    /// 골드 유입 행(<c>gain</c>/<c>cube_dismantle</c>)은 무엇을 녹였는지 담지 않으므로 이 행들이 그 답이다.
+    /// </summary>
+    public IReadOnlyList<DismantleInput> Consumed { get; init; } = Array.Empty<DismantleInput>();
 
     public static DismantleOutcome Fail(DismantleStatus status) => new(status, 0, 0);
 }
@@ -175,6 +187,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
             return TxResult<CombineOutcome>.Commit(new CombineOutcome(CombineStatus.Ok, resultItemId, decision.ResultItemCode, decision.ResultGrade, newLevel, newExp)
             {
                 Delta = delta,
+                Consumed = inputs,
             });
         });
 
@@ -277,6 +290,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
                 NewCubeLevel = newLevel,
                 NewCubeExp = newExp,
                 GoldBalance = goldBalance,
+                Consumed = inputs,
             });
         });
 

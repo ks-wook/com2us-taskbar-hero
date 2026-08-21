@@ -19,8 +19,20 @@ public sealed record StartingEquipment(int ItemCode, int EquipSlot);
 /// <summary>캐릭터 추가 생성 트랜잭션 결과. Cost=차감 골드, GoldBalance=차감 후 잔액.</summary>
 public sealed record AddCharacterOutcome(AddCharacterStatus Status, long Cost, long GoldBalance)
 {
+    /// <summary>
+    /// 함께 지급·장착된 직업 기본 무기의 개체 id(지급이 없었으면 0). <b>아이템 원장</b>이
+    /// <c>character_create_weapon</c> 행에 담는 값이다(6.2).
+    /// </summary>
+    public long StartingWeaponItemId { get; init; }
+
     public static AddCharacterOutcome Fail(AddCharacterStatus status) => new(status, 0, 0);
 }
+
+/// <summary>
+/// 계정 초기화 트랜잭션 결과. 상태는 성공 아니면 예외라 담지 않고, <b>커밋 이후 이벤트 로그가 쓰는 식별자</b>만 돌려준다 —
+/// 발급된 신규 지원금 메일(5.8)과 지급된 기본 무기 개체(6.2). 각각 없었으면 0이다.
+/// </summary>
+public sealed record CreatePlayerOutcome(long WelcomeMailId, long StartingWeaponItemId);
 
 /// <summary>파티 편성 저장 트랜잭션 결과. Characters=갱신된 보유 캐릭터 전체(파티 자리 순).</summary>
 public sealed record ArrangePartyOutcome(ArrangePartyStatus Status, List<CharacterDto> Characters)
@@ -215,10 +227,10 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
     ///     game_player가 계정당 1행이라 이 트랜잭션은 계정 생애에 한 번만 성공하므로, 지급 여부 플래그 없이
     ///     중복 지급이 원천 차단된다(세이브 데이터 기획서 5.3)</para>
     /// </remarks>
-    public async Task<long> CreatePlayerWithFirstCharacterAsync(
+    public async Task<CreatePlayerOutcome> CreatePlayerWithFirstCharacterAsync(
         long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix,
         MailDraft? welcomeMail, StartingEquipment? startingEquipment, int? startingSkillCode)
-        => await TransactionAsync<long>(async (db, transaction) =>
+        => await TransactionAsync<CreatePlayerOutcome>(async (db, transaction) =>
         {
             await db.Query("game_player").InsertAsync(new
             {
@@ -245,9 +257,11 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
                 exp = 0,
             }, transaction);
 
+            long startingWeaponItemId = 0;
             if (startingEquipment is not null)
             {
-                await GrantEquippedStartingItemAsync(db, transaction, userId, 1, startingEquipment, nowUnix);
+                startingWeaponItemId = await GrantEquippedStartingItemAsync(
+                    db, transaction, userId, 1, startingEquipment, nowUnix);
             }
 
             if (startingSkillCode is not null)
@@ -275,8 +289,9 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
                 welcomeMailId = await MailRepository.InsertMailAsync(db, transaction, userId, welcomeMail, nowUnix);
             }
 
-            // 발급된 메일 id는 커밋 이후 발급 이벤트 로그(mail.issue)가 쓴다(5.8).
-            return TxResult<long>.Commit(welcomeMailId);
+            // 두 식별자는 커밋 이후 이벤트 로그가 쓴다 — 메일 id는 mail.issue(5.8), 무기 개체 id는 item.flow(6.2).
+            return TxResult<CreatePlayerOutcome>.Commit(
+                new CreatePlayerOutcome(welcomeMailId, startingWeaponItemId));
         });
 
     /// <summary>
@@ -342,9 +357,11 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
             }
 
             // 4) 기본 무기 지급 + 장착(정의가 있을 때만).
+            long startingWeaponItemId = 0;
             if (startingEquipment is not null)
             {
-                await GrantEquippedStartingItemAsync(db, transaction, userId, characterId, startingEquipment, nowUnix);
+                startingWeaponItemId = await GrantEquippedStartingItemAsync(
+                    db, transaction, userId, characterId, startingEquipment, nowUnix);
             }
 
             // 5) 기본 액티브 스킬 습득 + 장착(정의가 있을 때만).
@@ -353,7 +370,11 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
                 await GrantEquippedStartingSkillAsync(db, transaction, userId, characterId, startingSkillCode.Value);
             }
 
-            return TxResult<AddCharacterOutcome>.Commit(new AddCharacterOutcome(AddCharacterStatus.Ok, goldCost, newBalance));
+            return TxResult<AddCharacterOutcome>.Commit(
+                new AddCharacterOutcome(AddCharacterStatus.Ok, goldCost, newBalance)
+                {
+                    StartingWeaponItemId = startingWeaponItemId,
+                });
         });
 
     /// <summary>
@@ -362,8 +383,9 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
     /// <para>장착 중인 장비는 가방 칸을 쓰지 않는다는 규칙(InventoryRepository.ApplyEquipAsync)에 맞춰
     /// player_item.slot을 NULL로 넣는다 — 그래서 가방이 가득 차 있어도 지급이 실패하지 않고, 유니크 (user_id, slot)에도 걸리지 않는다.</para>
     /// <para>새로 만든 캐릭터의 빈 슬롯에 넣으므로 기존 장비와의 스왑·해제 처리가 필요 없다.</para>
+    /// <para>반환값은 <b>생성된 개체 id</b>다 — 아이템 원장이 <c>character_create_weapon</c> 행에 담는다(6.2).</para>
     /// </summary>
-    private static async Task GrantEquippedStartingItemAsync(
+    private static async Task<long> GrantEquippedStartingItemAsync(
         QueryFactory db, DbTransaction transaction, long userId, int characterId, StartingEquipment equipment, long nowUnix)
     {
         long playerItemId = await db.Query("player_item").InsertGetIdAsync<long>(new
@@ -386,6 +408,8 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
             equipped_character_id = characterId,
             equipped_slot = equipment.EquipSlot,
         }, transaction);
+
+        return playerItemId;
     }
 
     /// <summary>

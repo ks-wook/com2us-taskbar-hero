@@ -46,9 +46,21 @@ public sealed record MailClaimOutcome(
     /// <summary>가방 변경분(5.0). 첨부 아이템 적재로 생긴·병합된 행이 담긴다.</summary>
     public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
 
+    /// <summary>
+    /// 수령한 메일의 분류(1:운영 2:거래 3:출석 4:시스템 5:랭킹). <b>아이템 원장</b>이 유입 사유를 가르는 데 쓴다
+    /// (6.2 — 운영 메일은 <c>newbie_grant</c>, 나머지는 <c>mail_claim</c>).
+    /// </summary>
+    public int Category { get; init; }
+
     public static MailClaimOutcome Fail(MailClaimStatus status)
         => new(status, 0, Array.Empty<MailAttachment>(), 0);
 }
+
+/// <summary>
+/// 수령한 메일 1건의 귀속 첨부. 지급 자체는 전체 합계로 한 번에 이뤄지지만 <b>원장은 메일 1건당 남기므로</b>
+/// (<c>ref_id</c> = mail_id, 6.1·6.2) 메일별 귀속분이 따로 필요하다.
+/// </summary>
+public sealed record ClaimedMailAttachments(long MailId, int Category, IReadOnlyList<MailAttachment> Attachments);
 
 /// <summary>일괄 수령 트랜잭션 결과. ClaimedMailIds = 이번에 수령된 메일, Gold·Items = 첨부 합계, GoldBalance = 지급 후 잔액.</summary>
 public sealed record MailClaimAllOutcome(
@@ -59,10 +71,10 @@ public sealed record MailClaimAllOutcome(
     public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
 
     /// <summary>
-    /// 수령한 메일별 골드 첨부액(골드가 없는 메일은 빠진다). 지급 자체는 합계 한 번의 upsert지만,
-    /// <b>재화 원장은 메일 1건당 1행</b>이라(<c>ref_id</c> = mail_id, 6.1) 귀속액이 따로 필요하다.
+    /// 수령한 메일별 첨부(mail_id 오름차순, 첨부가 없는 메일도 포함). 재화·아이템 <b>두 원장이 모두
+    /// 메일 1건당 행을 남기므로</b>(6.1·6.2) 합계가 아니라 이 귀속분을 본다.
     /// </summary>
-    public IReadOnlyDictionary<long, long> GoldByMailId { get; init; } = new Dictionary<long, long>();
+    public IReadOnlyList<ClaimedMailAttachments> ClaimedMails { get; init; } = Array.Empty<ClaimedMailAttachments>();
 
     public static MailClaimAllOutcome Fail(MailClaimStatus status)
         => new(status, Array.Empty<long>(), 0, Array.Empty<MailAttachment>(), 0);
@@ -162,7 +174,12 @@ public sealed class MailRepository : GameDbBase, IMailRepository
                 return TxResult<MailClaimOutcome>.Rollback(MailClaimOutcome.Fail(MailClaimStatus.InventoryFull));
             }
 
-            return TxResult<MailClaimOutcome>.Commit(new MailClaimOutcome(MailClaimStatus.Ok, grant.gold, grant.items, grant.goldBalance) { Delta = grant.delta });
+            return TxResult<MailClaimOutcome>.Commit(
+                new MailClaimOutcome(MailClaimStatus.Ok, grant.gold, grant.items, grant.goldBalance)
+                {
+                    Delta = grant.delta,
+                    Category = mail.Category,
+                });
         });
 
     /// <summary>
@@ -181,24 +198,26 @@ public sealed class MailRepository : GameDbBase, IMailRepository
         long userId, long nowUnix)
         => await TransactionAsync<MailClaimAllOutcome>(async (db, transaction) =>
         {
-            // 1) 수령 가능(미수령·미만료) 메일.
+            // 1) 수령 가능(미수령·미만료) 메일. category는 아이템 원장의 유입 사유를 가르는 데 쓴다(6.2).
             var candidates = (await db.Query("player_mail")
-                .Select("mail_id")
+                .Select("mail_id", "category")
                 .Where("user_id", userId).Where("claimed", 0)
                 .Where(q => q.Where("expires_at", 0).OrWhere("expires_at", ">=", nowUnix))
                 .OrderBy("mail_id")
-                .GetAsync<long>(transaction)).ToList();
+                .GetAsync<MailIdCategoryRow>(transaction)).ToList();
 
             // 2) 메일별 수령권 선점. 동시 단건 수령이 먼저면 해당 메일만 제외.
             var claimedIds = new List<long>();
-            foreach (var mailId in candidates)
+            var categoryByMailId = new Dictionary<long, int>();
+            foreach (var candidate in candidates)
             {
                 var claimed = await db.Query("player_mail")
-                    .Where("mail_id", mailId).Where("user_id", userId).Where("claimed", 0)
+                    .Where("mail_id", candidate.MailId).Where("user_id", userId).Where("claimed", 0)
                     .UpdateAsync(new { claimed = 1, claimed_at = nowUnix, is_read = 1 }, transaction);
                 if (claimed > 0)
                 {
-                    claimedIds.Add(mailId);
+                    claimedIds.Add(candidate.MailId);
+                    categoryByMailId[candidate.MailId] = candidate.Category;
                 }
             }
 
@@ -213,24 +232,21 @@ public sealed class MailRepository : GameDbBase, IMailRepository
                 return TxResult<MailClaimAllOutcome>.Rollback(MailClaimAllOutcome.Fail(MailClaimStatus.InventoryFull));
             }
 
-            // 메일별 골드 귀속액. 지급은 합계 한 번이지만 원장은 메일 단위로 남긴다(6.1).
-            var goldByMailId = new Dictionary<long, long>();
-            foreach (var (mailId, attachments) in rewardsByMail)
-            {
-                var gold = attachments
-                    .Where(a => a.RewardType == Constants.RewardType.Gold)
-                    .Sum(a => a.Quantity);
-                if (gold > 0)
-                {
-                    goldByMailId[mailId] = gold;
-                }
-            }
+            // 메일별 첨부 귀속분. 지급은 합계 한 번이지만 원장은 메일 단위로 남긴다(6.1·6.2).
+            var claimedMails = claimedIds
+                .Select(mailId => new ClaimedMailAttachments(
+                    mailId,
+                    categoryByMailId[mailId],
+                    rewardsByMail.TryGetValue(mailId, out var attachments)
+                        ? attachments
+                        : Array.Empty<MailAttachment>()))
+                .ToList();
 
             return TxResult<MailClaimAllOutcome>.Commit(
                 new MailClaimAllOutcome(MailClaimStatus.Ok, claimedIds, grant.gold, grant.items, grant.goldBalance)
                 {
                     Delta = grant.delta,
-                    GoldByMailId = goldByMailId,
+                    ClaimedMails = claimedMails,
                 });
         });
 

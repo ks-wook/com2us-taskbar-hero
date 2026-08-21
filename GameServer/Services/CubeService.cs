@@ -79,6 +79,21 @@ public sealed class CubeService : ICubeService
         };
 
         _logger.ZLogInformation($"큐브 합성: userId {userId:@UserId}, consumed {ids.Count:@Count}, resultItemCode {outcome.ResultItemCode:@ResultCode}, grade {outcome.ResultGrade:@Grade}");
+
+        // 아이템 원장(6.2). 큐브는 도메인 로그 테이블이 없어 **이 행들이 합성의 유일한 기록**이다 —
+        // 소모 n행과 결과 1행이 같은 req_id로 묶여 "등급 상승 파이프라인 통과량"이 나온다.
+        // 커밋이 끝난 뒤에 방출한다(롤백된 사실을 로그에 남기지 않는다, 4.2).
+        foreach (var input in outcome.Consumed)
+        {
+            _eventLogger.ItemRemoved(
+                userId, input.ItemCode, _masterData.GetItem(input.ItemCode), 1,
+                input.ItemId, ItemFlowReason.CubeCombineIn, 0);
+        }
+
+        _eventLogger.ItemGained(
+            userId, outcome.ResultItemCode, _masterData.GetItem(outcome.ResultItemCode), 1,
+            new GrantedItemIds(outcome.Delta), ItemFlowReason.CubeCombineOut, 0);
+
         return new SaveResult(ErrorCode.Success, "Combined", data);
     }
 
@@ -134,6 +149,15 @@ public sealed class CubeService : ICubeService
         {
             _eventLogger.CurrencyGained(
                 userId, outcome.Gold, outcome.GoldBalance, CurrencySource.CubeDismantle, 0);
+        }
+
+        // 아이템 원장(6.2) — 위 골드 행이 말하지 못하는 "무엇을 녹였나"가 이 행들이다.
+        // 아이템이 경제에서 사라지는 주 경로라, 인플레이션 판단에서 소각량의 근거가 된다.
+        foreach (var input in outcome.Consumed)
+        {
+            _eventLogger.ItemRemoved(
+                userId, input.ItemCode, _masterData.GetItem(input.ItemCode), input.Count,
+                input.ItemId, ItemFlowReason.CubeDismantleIn, 0);
         }
 
         return new SaveResult(ErrorCode.Success, "Dismantled", data);
@@ -207,6 +231,20 @@ public sealed class CubeService : ICubeService
             _eventLogger.CurrencySpent(
                 userId, recipe.CostGold, outcome.GoldBalance, CurrencySource.CubeCraft, recipeCode);
         }
+
+        // 아이템 원장(6.2). 소모 재료와 결과가 같은 ref_id(recipe_code)로 묶여 레시피별 수지가 나온다 —
+        // 소모량은 레시피가 확정한 값이라 트랜잭션이 실제로 차감한 양과 같다(부족하면 RecipeNotMet으로 롤백된다).
+        foreach (var ingredient in recipe.Ingredients)
+        {
+            _eventLogger.ItemRemoved(
+                userId, ingredient.MaterialCode, _masterData.GetItem(ingredient.MaterialCode), ingredient.Quantity,
+                null, ItemFlowReason.CubeCraftIn, recipeCode);
+        }
+
+        _eventLogger.ItemGained(
+            userId, recipe.ResultItemCode, resultItem, recipe.ResultQuantity,
+            new GrantedItemIds(outcome.Delta), ItemFlowReason.CubeCraftOut, recipeCode);
+
         return new SaveResult(ErrorCode.Success, "Crafted", data);
     }
 

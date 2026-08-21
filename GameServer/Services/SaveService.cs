@@ -164,10 +164,10 @@ public sealed class SaveService : ISaveService
             var nowUnix = DateTimeUtil.NowUnixSeconds();
             var welcomeMail = ComposeNewbieRewardMail(nickname.Trim(), nowUnix);
 
-            long welcomeMailId;
+            CreatePlayerOutcome created;
             try
             {
-                welcomeMailId = await _saveRepository.CreatePlayerWithFirstCharacterAsync(
+                created = await _saveRepository.CreatePlayerWithFirstCharacterAsync(
                     userId, nickname.Trim(), classCode, gender, Constants.Inventory.BaseCapacity,
                     nowUnix, welcomeMail, startingWeapon, startingSkillCode);
             }
@@ -186,10 +186,16 @@ public sealed class SaveService : ISaveService
             _eventLogger.Action(Constants.EventLog.Tags.PlayerCreate, userId, new PlayerCreateEvent(classCode, gender));
 
             // 신규 지원금 메일 발급(5.8). 계정 생애에 한 번뿐이라 이 트랜잭션이 곧 유일한 발급 지점이다.
-            if (welcomeMail is not null && welcomeMailId > 0)
+            if (welcomeMail is not null && created.WelcomeMailId > 0)
             {
-                _eventLogger.MailIssued(userId, welcomeMailId, welcomeMail, MailSource.Newbie);
+                _eventLogger.MailIssued(userId, created.WelcomeMailId, welcomeMail, MailSource.Newbie);
             }
+
+            // 아이템 원장(6.2). 기본 무기는 가방을 거치지 않고 곧바로 장착된 상태로 생기지만, 계정 보유량이
+            // 늘어난 것은 같으므로 원장에 남긴다 — 남기지 않으면 이후 이 개체의 강화·거래·분해 행이
+            // 유입 없는 유출로 보인다. ref_id는 생성 순번(character_id)이다.
+            EmitStartingWeapon(userId, 1, startingWeapon, created.StartingWeaponItemId);
+
             // 최초 생성은 계정 초기화라 무료이며 파티 1번 자리에 편성된다.
             return SuccessCharacter(userId, 1, classCode, 1, gender, 0, null);
         }
@@ -229,7 +235,30 @@ public sealed class SaveService : ISaveService
                 userId, outcome.Cost, outcome.GoldBalance, CurrencySource.CharacterCreate, newCharacterId);
         }
 
+        // 아이템 원장(6.2) — 최초 생성과 같은 사유로 남긴다(ref_id = 생성 순번).
+        EmitStartingWeapon(userId, newCharacterId, startingWeapon, outcome.StartingWeaponItemId);
+
         return SuccessCharacter(userId, newCharacterId, classCode, newSlot, gender, outcome.Cost, outcome.GoldBalance);
+    }
+
+    /// <summary>
+    /// 캐릭터 생성과 함께 지급된 직업 기본 무기를 아이템 원장에 남긴다(<c>item.flow</c>, 6.2).
+    /// 지급 정의가 없어 맨손으로 생성됐으면(<paramref name="weapon"/>이 null) 아무것도 내지 않는다.
+    /// </summary>
+    /// <param name="characterId">생성 순번. 이 이벤트의 <c>ref_id</c>다.</param>
+    /// <param name="itemId">지급된 개체 id(장비라 개체가 유일하다).</param>
+    private void EmitStartingWeapon(long userId, int characterId, StartingEquipment? weapon, long itemId)
+    {
+        if (weapon is null || itemId <= 0)
+        {
+            return;
+        }
+
+        _eventLogger.Action(
+            Constants.EventLog.Tags.ItemFlow, userId,
+            new ItemFlowEvent(
+                weapon.ItemCode, Constants.ItemType.Equip, _masterData.GetItem(weapon.ItemCode)?.Grade ?? 0,
+                itemId, 1, ItemFlowReason.CharacterCreateWeapon, characterId));
     }
 
     /// <summary>

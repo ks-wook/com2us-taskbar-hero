@@ -188,6 +188,16 @@ public sealed class StageService : IStageService
                 userId, outcome.GrantedGold, outcome.GoldBalance, CurrencySource.StageClear, stageDef.StageId);
         }
 
+        // 아이템 원장(6.2). **실제로 적재된 전리품만** 남긴다 — 가방이 가득 차 폐기된 드랍은
+        // 계정 보유량을 바꾸지 않았으므로 원장에 넣으면 유통량이 부풀려진다.
+        // 이 행들의 reason='stage_drop'이 곧 드랍률 실측의 근거다(5.3 — 클리어 로그는 드랍 배열을 갖지 않는다).
+        if (dropped is not null && outcome.LootStored)
+        {
+            _eventLogger.ItemGained(
+                userId, dropped.ItemCode, _masterData.GetItem(dropped.ItemCode), dropped.Quantity,
+                new GrantedItemIds(outcome.Delta), ItemFlowReason.StageDrop, stageDef.StageId);
+        }
+
         _eventLogger.CharacterLevelUps(userId, outcome.LevelUps, LevelUpSource.Stage);
 
         return new SaveResult(ErrorCode.Success, "Stage cleared", data);

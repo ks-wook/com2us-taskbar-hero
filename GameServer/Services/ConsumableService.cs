@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Logging;
 using GameServer.Util;
 
 namespace GameServer.Services;
@@ -21,16 +22,19 @@ public sealed class ConsumableService : IConsumableService
     private readonly IConsumableRepository _consumableRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<ConsumableService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>리포지토리·마스터 데이터·가방 조회 캐시·로거를 주입받는다.</summary>
+    /// <summary>리포지토리·마스터 데이터·운영 로거·이벤트 로거를 주입받는다.</summary>
     public ConsumableService(
         IConsumableRepository consumableRepository,
         MasterDbProvider masterData,
-        ILogger<ConsumableService> logger)
+        ILogger<ConsumableService> logger,
+        IEventLogger eventLogger)
     {
         _consumableRepository = consumableRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -72,6 +76,13 @@ public sealed class ConsumableService : IConsumableService
             activeBuffs = outcome.ActiveBuffs.Select(ToDto).ToList(),
             inventoryDelta = outcome.Delta,
         };
+
+        // 아이템 원장(6.2). 소모품은 도메인 로그 테이블이 없어 **이 행이 사용의 유일한 기록**이다 —
+        // 어떤 버프를 얼마나 쓰는지는 item_code로 consumable_master를 보면 나오므로 버프 컬럼을 두지 않는다.
+        // 차감 트랜잭션이 커밋된 뒤에 방출한다(4.2).
+        _eventLogger.ItemRemoved(
+            userId, outcome.ItemCode, _masterData.GetItem(outcome.ItemCode), 1,
+            null, ItemFlowReason.ConsumableUse, 0);
 
         return new SaveResult(ErrorCode.Success, "Consumable used", data);
     }

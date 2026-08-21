@@ -86,6 +86,33 @@ public static class Constants
     // 마스터 코드
     // ────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// <c>mail_master.category</c>(= 발급된 <c>player_mail.category</c>). 템플릿 코드가
+    /// <c>category × 100 + 순번</c> 규약이라 이 값이 곧 템플릿의 백 자리다.
+    /// </summary>
+    public static class MailCategory
+    {
+        /// <summary>
+        /// 1:운영. 지금 이 분류로 발급되는 메일은 <see cref="MailTemplate.NewbieReward"/>(신규 가입 지원금)뿐이라,
+        /// <b>아이템 원장이 수령 시점에 유입 사유를 <c>newbie_grant</c>로 가르는 기준</b>으로 쓴다(6.2).
+        /// <c>player_mail</c>에는 템플릿 코드가 남지 않고(문구·category가 이미 스냅샷이다) 분류만 남기 때문이다.
+        /// 운영 지급 등 다른 1xx 템플릿을 추가하면 그 기준을 함께 손봐야 한다.
+        /// </summary>
+        public const int Operation = 1;
+
+        /// <summary>2:거래(거래소 구매 아이템·판매 대금·만료 반송).</summary>
+        public const int Trade = 2;
+
+        /// <summary>3:출석.</summary>
+        public const int Attendance = 3;
+
+        /// <summary>4:시스템.</summary>
+        public const int System = 4;
+
+        /// <summary>5:랭킹(보스러시 시즌 순위 보상).</summary>
+        public const int Rank = 5;
+    }
+
     /// <summary><c>mail_master</c> 템플릿 코드. 발급자는 코드만 알고 문구·만료는 템플릿이 확정한다.</summary>
     public static class MailTemplate
     {

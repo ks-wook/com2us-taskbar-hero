@@ -156,6 +156,10 @@ public sealed class GachaService : IGachaService
         // 지급 트랜잭션이 커밋된 뒤에 방출한다(4.2). 회차마다 1행이라 10연이면 10행이 같은 pull_id로 묶인다.
         EmitPullItems(userId, banner.GachaCode, outcome.PullId, outcome.Entries);
 
+        // 아이템 원장(6.2). 등급 실측은 위 gacha.pull_item이 답하고, 여기는 **아이템 유통량**이다 —
+        // 같은 코드가 여러 회차에 나오면 적재도 한 번에 이뤄지므로 코드별로 합쳐 남긴다.
+        EmitPullItemFlow(userId, outcome.PullId, outcome.Entries, outcome.Delta);
+
         return new SaveResult(ErrorCode.Success, "GachaPulled", data);
     }
 
@@ -173,6 +177,28 @@ public sealed class GachaService : IGachaService
                 new GachaPullItemEvent(
                     pullId, entry.Seq, gachaCode, entry.ItemCode, entry.Grade,
                     entry.PityApplied, entry.Guaranteed));
+        }
+    }
+
+    /// <summary>
+    /// 뽑기로 들어온 아이템을 원장에 남긴다(<c>item.flow</c>, 6.2). 지급이 코드별 합산으로 이뤄지므로
+    /// (같은 코드가 여러 회차에 나와도 적재는 한 번) 원장도 같은 단위로 낸다 — 장비는 개체마다 1행으로
+    /// 쪼개져 <c>item_id</c>가 붙고, 재료·소모품은 합계 1행이 된다.
+    /// </summary>
+    private void EmitPullItemFlow(
+        long userId, long pullId, IReadOnlyList<GachaPullEntry> entries, InventoryDeltaDto delta)
+    {
+        var granted = new GrantedItemIds(delta);
+        var byItemCode = entries
+            .GroupBy(e => e.ItemCode)
+            .Select(g => (ItemCode: g.Key, Quantity: g.Sum(e => (long)e.Quantity)))
+            .OrderBy(g => g.ItemCode);
+
+        foreach (var (itemCode, quantity) in byItemCode)
+        {
+            _eventLogger.ItemGained(
+                userId, itemCode, _masterData.GetItem(itemCode), quantity,
+                granted, ItemFlowReason.Gacha, pullId);
         }
     }
 

@@ -15,6 +15,13 @@ class MailRow
     public long ExpiresAt { get; set; }
 }
 
+// 일괄 수령이 선점 대상 메일을 훑을 때 쓰는 최소 컬럼(수령권 갱신 + 원장 유입 사유 판정).
+class MailIdCategoryRow
+{
+    public long MailId { get; set; }
+    public int Category { get; set; }
+}
+
 class MailRewardRow
 {
     public long MailId { get; set; }
