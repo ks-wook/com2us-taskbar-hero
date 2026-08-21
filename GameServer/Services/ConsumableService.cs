@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -24,7 +25,7 @@ public sealed class ConsumableService : IConsumableService
     /// 버프 누적 지속시간 상한(초, 24시간). 같은 종류를 반복 사용해 무한히 쌓는 것을 막는다(기획서 §4.2).
     /// 초과하는 요청은 아이템을 차감하지 않고 거부한다.
     /// </summary>
-    private const long BuffDurationCapSec = 86400;
+    private const long BuffDurationCapSec = 24 * DateTimeUtil.SecondsPerHour;
 
     private readonly IConsumableRepository _consumableRepository;
     private readonly MasterDbProvider _masterData;
@@ -54,7 +55,7 @@ public sealed class ConsumableService : IConsumableService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
 
         var outcome = await _consumableRepository.ApplyUseAsync(
             userId, itemId,
@@ -93,7 +94,7 @@ public sealed class ConsumableService : IConsumableService
     /// </summary>
     public async Task<SaveResult> GetActiveBuffsAsync(long userId)
     {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var buffs = await _consumableRepository.GetActiveBuffsAsync(userId, now);
 
         var data = new ActiveBuffListResultData

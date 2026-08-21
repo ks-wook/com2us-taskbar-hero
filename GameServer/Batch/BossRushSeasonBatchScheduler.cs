@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Util;
 
 namespace GameServer.Batch;
 
@@ -105,7 +106,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
             return Timeout.InfiniteTimeSpan;
         }
 
-        var remainingSeconds = _nextWakeUnix - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var remainingSeconds = _nextWakeUnix - DateTimeUtil.NowUnixSeconds();
         return remainingSeconds > 0 ? TimeSpan.FromSeconds(remainingSeconds) : PastDueRetryDelay;
     }
 
@@ -130,8 +131,8 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 
         var repository = scope.ServiceProvider.GetRequiredService<IBossRushRepository>();
         var rankCache = scope.ServiceProvider.GetRequiredService<IBossRushRankCache>();
-        var now = DateTimeOffset.UtcNow;
-        var nowUnix = now.ToUnixTimeSeconds();
+        var now = DateTimeUtil.UtcNow;
+        var nowUnix = DateTimeUtil.ToUnixSeconds(now);
 
         // ① 진행 중 시즌 확인. 없으면 이번 주기는 할 일이 없다 — 시즌 개시는 이 배치가 결정하지 않는다.
         var current = await repository.GetRunningSeasonAsync();
@@ -172,15 +173,12 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 
         // ⑥ 다음 시즌 개시 + 시즌 메타 캐시 갱신(정산의 마지막 단계, 기획서 6.4).
         var next = await repository.StartNextSeasonAsync(
-            season.EndAt, season.EndAt + (long)rule.SeasonPeriodDays * SecondsPerDay);
+            season.EndAt, season.EndAt + DateTimeUtil.DaysToSeconds(rule.SeasonPeriodDays));
         await rankCache.SetCurrentSeasonAsync(next);
         _nextWakeUnix = next.EndAt;
 
         _logger.ZLogInformation($"보스러시 시즌 정산 완료: seasonId {season.SeasonId:@SeasonId} 순위 확정 {settled:@Settled}건 · 보상 발급 {rewarded:@Rewarded}건 → 다음 시즌 {next.SeasonId:@NextSeasonId}");
     }
-
-    /// <summary>하루(초).</summary>
-    private const long SecondsPerDay = 86_400;
 
     /// <summary>
     /// 진행 중 시즌의 메타 캐시와 리더보드를 채운다(6.3 워밍업).

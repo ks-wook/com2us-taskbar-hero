@@ -2,6 +2,7 @@
 using GameServer.Repositories.GameDb.Interfaces;
 using ZLogger;
 using GameServer.Repositories.MemoryDb.Interfaces;
+using GameServer.Util;
 
 namespace GameServer.Batch;
 
@@ -16,7 +17,7 @@ namespace GameServer.Batch;
 public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
 {
     /// <summary>보관 기간(발급 후 7일, mail 기획서 6.5 확정) — 이 시간이 지난 메일이 삭제 대상이다.</summary>
-    private const long RetentionSeconds = 7L * 24 * 60 * 60;
+    private const long RetentionSeconds = 7 * DateTimeUtil.SecondsPerDay;
 
     private const int DefaultIntervalSeconds = 3600;
     private const int DefaultBatchSize = 500;
@@ -52,7 +53,7 @@ public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
     {
         var mailRepository = scope.ServiceProvider.GetRequiredService<IMailRepository>();
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var deleted = await mailRepository.DeleteRetentionExpiredAsync(now - RetentionSeconds, _batchSize);
 
         if (deleted > 0)

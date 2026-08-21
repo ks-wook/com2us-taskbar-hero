@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -81,7 +82,7 @@ public sealed class MailService : IMailService
             return new SaveResult(ErrorCode.MailNotFound, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _mailRepository.ApplyClaimAsync(userId, mailId, now);
 
         if (outcome.Status != MailClaimStatus.Ok)
@@ -113,7 +114,7 @@ public sealed class MailService : IMailService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _mailRepository.ApplyClaimAllAsync(userId, now);
 
         if (outcome.Status != MailClaimStatus.Ok)

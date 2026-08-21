@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -25,7 +26,7 @@ public sealed class TradeService : ITradeService
     private const int ListingLimit = 10;
 
     /// <summary>등록 유효기간 3일.</summary>
-    private const long ListingDurationSeconds = 3 * 86_400;
+    private const long ListingDurationSeconds = 3 * DateTimeUtil.SecondsPerDay;
 
     /// <summary>목록 페이지 크기 기본·상한(§7.2 — 과대 응답 방어).</summary>
     private const int DefaultPageSize = 50;
@@ -83,7 +84,7 @@ public sealed class TradeService : ITradeService
         // 깊은 페이지 방어: OFFSET 은 앞의 행을 세어 버리므로 상한을 둔다. 넘으면 빈 페이지로 응답한다.
         var normalizedPage = Math.Clamp(page, 0, MaxOffset / normalizedSize);
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var pageItems = await _tradeRepository.GetActiveListingPageAsync(
             normalizedItem, userId, mine, normalizedPage * normalizedSize, normalizedSize + 1, now);
 
@@ -116,7 +117,7 @@ public sealed class TradeService : ITradeService
             return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
         }
 
-        var now = NowUnix();
+        var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _tradeRepository.ApplyRegisterAsync(
             userId, itemId, price, ListingLimit, now, now + ListingDurationSeconds);
 
@@ -177,7 +178,7 @@ public sealed class TradeService : ITradeService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        var now = NowUnix();
+        var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _tradeRepository.ApplyBuyAsync(
             userId, listingId,
             listing => MailComposer.Compose(
@@ -237,7 +238,7 @@ public sealed class TradeService : ITradeService
             return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
         }
 
-        var outcome = await _tradeRepository.ApplyCancelAsync(userId, listingId, NowUnix());
+        var outcome = await _tradeRepository.ApplyCancelAsync(userId, listingId, DateTimeUtil.NowUnixSeconds());
 
         switch (outcome.Status)
         {
@@ -304,7 +305,4 @@ public sealed class TradeService : ITradeService
 
         return new SaveResult(ErrorCode.Success, "OK", data);
     }
-
-    /// <summary>현재 시각(Unix ts, 초). 거래·메일과 동일 기준.</summary>
-    private static long NowUnix() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 }

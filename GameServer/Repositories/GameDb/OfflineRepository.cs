@@ -3,6 +3,7 @@ using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
+using GameServer.Util;
 
 namespace GameServer.Repositories.GameDb;
 
@@ -93,7 +94,7 @@ public sealed class OfflineRepository : GameDbBase, IOfflineRepository
             }
 
             long observed = playerRow.LastActiveAt;
-            long elapsed = Math.Max(0, nowUnix - observed);
+            long elapsed = DateTimeUtil.ElapsedSeconds(observed, nowUnix);
             if (elapsed < minRewardSec)
             {
                 return TxResult<OfflineClaimOutcome>.Rollback(OfflineClaimOutcome.Fail(OfflineClaimStatus.AlreadyClaimed));

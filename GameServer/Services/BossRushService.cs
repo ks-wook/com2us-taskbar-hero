@@ -8,6 +8,7 @@ using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -54,8 +55,8 @@ public sealed class BossRushService : IBossRushService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow;
-        var nowUnix = now.ToUnixTimeSeconds();
+        var now = DateTimeUtil.UtcNow;
+        var nowUnix = DateTimeUtil.ToUnixSeconds(now);
 
         var season = await CurrentSeasonAsync();
         var snapshot = await _repository.GetInfoSnapshotAsync(userId, season?.SeasonId ?? 0);
@@ -122,10 +123,10 @@ public sealed class BossRushService : IBossRushService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow;
+        var now = DateTimeUtil.UtcNow;
 
         var outcome = await _repository.ApplyEnterAsync(
-            userId, rule.UnlockStageSequence, now.ToUnixTimeMilliseconds());
+            userId, rule.UnlockStageSequence, DateTimeUtil.ToUnixMilliseconds(now));
 
         switch (outcome.Status)
         {
@@ -181,7 +182,7 @@ public sealed class BossRushService : IBossRushService
             return new SaveResult(ErrorCode.BossRushInvalidProgress, string.Empty, null);
         }
 
-        var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var nowMs = DateTimeUtil.NowUnixMilliseconds();
 
         var outcome = await _repository.ApplyClearAsync(
             userId, request.runId, request.clearMs, roundTimes, rule.RunLifetimeMs, nowMs);

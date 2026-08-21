@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -22,8 +23,6 @@ public sealed class AttendanceService : IAttendanceService
 {
     /// <summary>출석 보상 메일 템플릿 코드(mail_master 301, {0} = 출석 일차).</summary>
     private const int AttendanceMailTemplateCode = 301;
-
-    private static readonly TimeSpan KstOffset = TimeSpan.FromHours(9);
 
     private readonly IAttendanceRepository _attendanceRepository;
     private readonly MasterDbProvider _masterData;
@@ -50,9 +49,9 @@ public sealed class AttendanceService : IAttendanceService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        var kstNow = DateTimeOffset.UtcNow.ToOffset(KstOffset);
-        var today = ToYyyyMmDd(kstNow);
-        var yearMonth = kstNow.Year * 100 + kstNow.Month;
+        var kstNow = DateTimeUtil.KstNow;
+        var today = DateTimeUtil.ToDateKey(kstNow);
+        var yearMonth = DateTimeUtil.ToYearMonthKey(kstNow);
 
         // 진행도는 계정당 1행(누적 출석일수 + 마지막 획득 일자). 세이브가 없으면 빈 진행도로 응답한다.
         var progress = await _attendanceRepository.GetProgressAsync(userId);
@@ -109,9 +108,8 @@ public sealed class AttendanceService : IAttendanceService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow;
-        var kstNow = now.ToOffset(KstOffset);
-        var today = ToYyyyMmDd(kstNow);
+        var now = DateTimeUtil.UtcNow;
+        var today = DateTimeUtil.ToDateKey(DateTimeUtil.ToKst(now));
 
         // 메일 템플릿은 일차와 무관하므로 먼저 확인한다(없으면 마스터 결함 → 10001, §6.2).
         var template = _masterData.GetMailTemplate(AttendanceMailTemplateCode);
@@ -121,7 +119,7 @@ public sealed class AttendanceService : IAttendanceService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        var nowUnix = now.ToUnixTimeSeconds();
+        var nowUnix = DateTimeUtil.ToUnixSeconds(now);
         var outcome = await _attendanceRepository.ApplyClaimAsync(
             userId, today, _masterData.MaxAttendanceDay,
             day => ComposeRewardMail(template, day, nowUnix), nowUnix);
@@ -183,9 +181,5 @@ public sealed class AttendanceService : IAttendanceService
     /// <summary>누적 출석 수에서 <b>다음에 받을 일차</b>(1~maxDay)를 구한다. 마지막 일차를 채웠으면 다시 1일차로 순환한다.</summary>
     private static int NextDay(int attendedCount, int maxDay)
         => maxDay <= 0 ? 0 : (attendedCount % maxDay) + 1;
-
-    /// <summary>KST 시각을 출석 일자 YYYYMMDD(int)로 변환한다.</summary>
-    private static int ToYyyyMmDd(DateTimeOffset kst)
-        => kst.Year * 10000 + kst.Month * 100 + kst.Day;
 
 }

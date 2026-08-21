@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -65,7 +66,7 @@ public sealed class StageService : IStageService
             return new SaveResult(ErrorCode.StageLocked, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         await _stageRepository.SetCurrentStageAsync(userId, act, difficulty, stage, now);
 
         var data = new StageEnterData
@@ -117,7 +118,7 @@ public sealed class StageService : IStageService
         // 활성 획득량 버프(경험치·골드 부스터) 배율은 지급 트랜잭션 안에서 곱한다(소모품/버프 기획서 6.2).
         var dropped = _masterData.RollDrop(reward);
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _stageRepository.ApplyClearAsync(
             userId, act, difficulty, stage, reward.Gold, reward.Exp, dropped,
             now);
@@ -207,7 +208,7 @@ public sealed class StageService : IStageService
             return new SaveResult(ErrorCode.StageNotEntered, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
 
         _logger.ZLogInformation($"스테이지 실패: userId {userId:@UserId}, stageId {stageDef.StageId:@StageId}, act {act:@Act}, difficulty {difficulty:@Difficulty}, stage {stage:@Stage}, elapsedMs {elapsedMs:@ElapsedMs}, remainingMonsterCount {remainingMonsterCount:@RemainingMonsterCount}, reachedBoss {reachedBoss:@ReachedBoss}");
 

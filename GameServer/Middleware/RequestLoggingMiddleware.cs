@@ -28,7 +28,9 @@ public sealed class RequestLoggingMiddleware
         finally
         {
             stopwatch.Stop();
-            _logger.ZLogInformation($"요청 처리: {context.Request.Method:@Method} {context.Request.Path.Value:@Path} → {context.Response.StatusCode:@StatusCode} ({stopwatch.ElapsedMilliseconds:@ElapsedMs}ms)");
+            // reqId는 이벤트 로그(logdb)의 req_id와 같은 값이다 — 한 요청이 만든 이벤트 행들을 이 접근 로그와
+            // 이어 붙이는 축이라, 접근 로그에도 함께 남긴다(로그 이벤트 정의 4.1).
+            _logger.ZLogInformation($"요청 처리: {context.Request.Method:@Method} {context.Request.Path.Value:@Path} → {context.Response.StatusCode:@StatusCode} ({stopwatch.ElapsedMilliseconds:@ElapsedMs}ms) reqId {context.TraceIdentifier:@ReqId}");
         }
     }
 }

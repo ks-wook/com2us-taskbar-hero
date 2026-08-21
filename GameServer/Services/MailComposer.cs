@@ -1,6 +1,7 @@
 ﻿using GameServer.MasterData;
 using GameServer.Repositories.GameDb;
 using GameServer.Models;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -11,8 +12,6 @@ namespace GameServer.Services;
 /// </summary>
 public static class MailComposer
 {
-    private const long SecondsPerDay = 86_400;
-
     /// <summary>
     /// 템플릿의 {0} 자리표시자에 파라미터를 채워 메일 초안을 만든다.
     /// 만료 시각은 템플릿 valid_days 기준 발급 시점 + N일(0이면 무기한 0)로 산출한다.
@@ -22,7 +21,7 @@ public static class MailComposer
     {
         var title = string.Format(template.TitleFormat, arg0);
         var body = string.Format(template.BodyFormat, arg0);
-        var expiresAt = template.ValidDays > 0 ? nowUnix + template.ValidDays * SecondsPerDay : 0;
+        var expiresAt = template.ValidDays > 0 ? nowUnix + DateTimeUtil.DaysToSeconds(template.ValidDays) : 0;
         return new MailDraft(template.Category, title, body, expiresAt, rewards);
     }
 
@@ -35,7 +34,7 @@ public static class MailComposer
     {
         var title = string.Format(template.TitleFormat, arg0, arg1);
         var body = string.Format(template.BodyFormat, arg0, arg1);
-        var expiresAt = template.ValidDays > 0 ? nowUnix + template.ValidDays * SecondsPerDay : 0;
+        var expiresAt = template.ValidDays > 0 ? nowUnix + DateTimeUtil.DaysToSeconds(template.ValidDays) : 0;
         return new MailDraft(template.Category, title, body, expiresAt, rewards);
     }
 }

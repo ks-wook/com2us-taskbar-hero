@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -17,12 +18,12 @@ namespace GameServer.Services;
 /// </summary>
 public sealed class OfflineService : IOfflineService
 {
-    private const long OfflineCapSec = 43200;         // 최대 누적 12시간 (기획서 확정)
-    private const long MinRewardSec = 600;            // 최소 정산 10분 (기획서 확정)
+    private const long OfflineCapSec = 12 * DateTimeUtil.SecondsPerHour;  // 최대 누적 12시간 (기획서 확정)
+    private const long MinRewardSec = 10 * DateTimeUtil.SecondsPerMinute; // 최소 정산 10분 (기획서 확정)
     // 파밍 스테이지의 "클리어 보상"을 이 주기(초)마다 얻는다고 가정해 시간당 산출율을 파생한다.
     // 기획서 §9 미결이던 stageGoldRate/stageExpRate를 학습용 단순식으로 확정한 것으로, 값만 바꾸면 조정된다.
-    private const long AssumedClearIntervalSec = 60;  // 스테이지 1클리어 ≈ 60초 가정
-    private const long OfflineEfficiencyDivisor = 2;  // 온라인 대비 50% = ÷2 (기획서 확정)
+    private const long AssumedClearIntervalSec = 60;                      // 스테이지 1클리어 ≈ 60초 가정
+    private const long OfflineEfficiencyDivisor = 2;                      // 온라인 대비 50% = ÷2 (기획서 확정)
 
     private readonly IOfflineRepository _offlineRepository;
     private readonly MasterDbProvider _masterData;
@@ -55,8 +56,8 @@ public sealed class OfflineService : IOfflineService
             return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var elapsed = Math.Max(0, now - ctx.LastActiveAt);
+        var now = DateTimeUtil.NowUnixSeconds();
+        var elapsed = DateTimeUtil.ElapsedSeconds(ctx.LastActiveAt, now);
         if (elapsed < MinRewardSec)
         {
             // 정산할 오프라인 경과가 최소 기준 미만(기획서 5.1: 200 OK + errorCode 3001).

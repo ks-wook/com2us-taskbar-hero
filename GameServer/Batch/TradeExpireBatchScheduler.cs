@@ -6,6 +6,7 @@ using ZLogger;
 using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Util;
 
 namespace GameServer.Batch;
 
@@ -88,7 +89,7 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
 
         var tradeRepository = scope.ServiceProvider.GetRequiredService<ITradeRepository>();
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var targets = await tradeRepository.GetExpiredListingIdsAsync(now, _batchSize);
         if (targets.Count == 0)
         {

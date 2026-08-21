@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -48,7 +49,7 @@ public sealed class GachaService : IGachaService
             return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var banners = new List<GachaBannerDto>();
 
         foreach (var banner in _masterData.OpenGachaBanners(now))
@@ -95,7 +96,7 @@ public sealed class GachaService : IGachaService
             return new SaveResult(ErrorCode.GachaNotFound, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
 
         // 목록 조회 시점에 열려 있었다는 사실이 뽑는 시점의 허가가 되지 않는다 — 비용 차감 전에 다시 판정한다(§6.1).
         if (!banner.IsOpenAt(now))

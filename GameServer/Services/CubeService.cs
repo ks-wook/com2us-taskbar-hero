@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -53,7 +54,7 @@ public sealed class CubeService : ICubeService
             return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _cubeRepository.ApplyCombineAsync(userId, ids, DecideCombine, now);
 
         switch (outcome.Status)
@@ -102,7 +103,7 @@ public sealed class CubeService : ICubeService
             return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _cubeRepository.ApplyDismantleAsync(userId, pairs, ComputeDismantleReward, now);
 
         switch (outcome.Status)
@@ -154,7 +155,7 @@ public sealed class CubeService : ICubeService
             return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _cubeRepository.ApplyCraftAsync(
             userId, recipe, resultItem.ItemType, resultItem.StackMax, CraftExp, now);
 
