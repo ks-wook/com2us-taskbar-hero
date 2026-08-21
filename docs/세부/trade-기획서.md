@@ -457,18 +457,18 @@ SELECT listing_id, seller_user_id, item_code, enhance_level, quantity, price, cr
 
 | 항목 | 설계 | 비고 |
 |---|---|---|
-| 호스팅 | GameServer 프로세스 내 `BackgroundService` 파생 `TradeExpireBatchService`(`GameServer/Batch/`) | 별도 프로세스·외부 스케줄러(cron 등)를 두지 않는다 — 단일 인스턴스 전제([7.7](#77-하지-않는-것)) |
+| 호스팅 | GameServer 프로세스 내 `BackgroundService` 파생 `TradeExpireBatchScheduler`(`GameServer/Batch/`) | 별도 프로세스·외부 스케줄러(cron 등)를 두지 않는다 — 단일 인스턴스 전제([7.7](#77-하지-않는-것)) |
 | 주기 | `PeriodicTimer` + `WaitForNextTickAsync` 루프, **3600초 = 1시간** | 이전 주기가 끝나야 다음 tick을 기다리므로 **재진입이 구조적으로 불가**(별도 잠금 불필요). 만료 효력은 읽기 경로가 즉시 내므로(7.6 서두) 이 주기는 **반송 지연 상한**일 뿐이며, 그 상한을 1시간으로 잡았다 |
 | 기동 직후 | 첫 tick을 기다리지 않고 **즉시 1회 실행** | 서버 중단 동안 쌓인 만료분을 바로 소화한다 — 재기동이 곧 반송 기회다 |
 | 1주기 상한 | **최대 1000건**, `listing_id` 오름차순 | 주기(1시간)보다 넉넉히 잡아, 서버가 한동안 내려가 있다 올라왔을 때 밀린 물량을 한 주기에 소화한다. 초과분은 다음 주기로 이월되며 상한 도달은 요약 로그로 확인 |
 | 종료 | `stoppingToken` 취소 시 처리 중인 1건만 마무리하고 루프 종료 | `OperationCanceledException`은 정상 종료로 처리 |
 | 설정 | `appsettings.json`에 `"TradeExpireBatch": { "IntervalSeconds": 3600, "BatchSize": 1000 }` | 설정이 없으면 코드 기본값(동일 수치)으로 동작. 반송 지연 상한을 더 줄이려면 `IntervalSeconds`만 낮춘다(코드 변경 불필요) |
 | 리더 락 | `batch:lock:trade-expire`를 `SET NX`로 잡고 **주기가 끝나면 소유자 확인 후 즉시 해제**(Lua CAS) | TTL은 주기가 아니라 **1주기 실행 시간의 상한**(= min(주기, 5분))이며, 락을 잡은 채 프로세스가 죽었을 때 자동으로 풀리게 하는 안전망이다. 주기와 같게 두면 재기동 시 그 주기만큼 배치가 멈춘다. "주기당 1회"는 락이 아니라 각 인스턴스의 타이머가 페이싱하고, 중복 실행은 조건부 갱신 선점의 멱등성이 흡수한다 |
-| DI 등록 | `builder.Services.AddHostedService<TradeExpireBatchService>()` | `Program.cs` |
+| DI 등록 | `builder.Services.AddHostedService<TradeExpireBatchScheduler>()` | `Program.cs` |
 | 의존성 수명 | 호스티드 서비스는 싱글턴이므로 scoped 리포지토리를 직접 주입받지 않고, **주기마다 `IServiceScopeFactory`로 스코프를 생성**해 `ITradeRepository`를 해석한다 | 리더 락(`batch:lock:trade-expire`)만 Redis를 쓴다 |
 | 시간 기준 | `DateTimeOffset.UtcNow.ToUnixTimeSeconds()` | 거래·메일과 동일한 Unix ts 기준 |
 
-> **공통 골격** — 주기 루프·설정 바인딩·스코프 생성·요약 로깅은 메일 GC 배치([mail 기획서 6.5](mail-기획서.md))도 동일하게 필요하다. 추상 클래스 `PeriodicBatchService`(파생이 `IntervalSeconds`·`BatchSize`·`RunCycleAsync(scope, ct)`만 구현)로 골격을 분리해 두 배치가 재사용한다.
+> **공통 골격** — 주기 루프·설정 바인딩·스코프 생성·요약 로깅은 메일 GC 배치([mail 기획서 6.5](mail-기획서.md))도 동일하게 필요하다. 추상 클래스 `PeriodicBatchScheduler`(파생이 `IntervalSeconds`·`BatchSize`·`RunCycleAsync(scope, ct)`만 구현)로 골격을 분리해 두 배치가 재사용한다.
 
 #### 7.6.2 1주기 처리 절차(의사코드)
 
@@ -509,7 +509,7 @@ for listingId in ids:                                  # 등록 1건 = 트랜잭
 
 #### 7.6.4 구현 체크리스트
 
-1. `GameServer/Batch/PeriodicBatchService.cs`(공통 골격) + `TradeExpireBatchService.cs` 작성, `Program.cs`에 `AddHostedService` 등록, `appsettings.json`에 `TradeExpireBatch` 섹션 추가.
+1. `GameServer/Batch/PeriodicBatchScheduler.cs`(공통 골격) + `TradeExpireBatchScheduler.cs` 작성, `Program.cs`에 `AddHostedService` 등록, `appsettings.json`에 `TradeExpireBatch` 섹션 추가.
 2. `ITradeRepository`에 배치 전용 메서드 2개: `GetExpiredListingIdsAsync(now, limit)`(대상 조회), `ApplyExpireAsync(listingId, now)`(선점 → 스냅샷 → 반송 메일 발급 → 커밋을 하나의 트랜잭션으로).
 3. **에러 코드 추가 없음** — 배치는 HTTP 응답이 없으므로 `ErrorCode`·클라이언트 계약 변경이 발생하지 않는다.
 4. 빌드(`dotnet build`) 확인 후 시나리오 테스트: 만료 등록 반송(메일 수신 확인) · 만료 직전 구매와의 경합(조건부 갱신으로 한쪽만 성공) · Redis 중단 상태에서 만료·구매가 정상 동작하는지.

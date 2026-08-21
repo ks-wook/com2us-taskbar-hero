@@ -76,7 +76,7 @@
 - **동시성**: 같은 계정의 중복 `clear`는 런 행 잠금 + 조건부 상태 전이(`status=1`일 때만 종결)로 직렬화한다 — 뒤에 온 요청은 0행을 받아 `BossRushRunAlreadyFinished(13004)`가 되며 기록이 이중 처리되지 않는다. 거래소가 쓰는 것과 같은 방식이다([거래소 기획서](trade-기획서.md) 7.4).
 - **랭킹 조회 성능**: 상위 목록은 `ZRANGE`(O(log N + M)), 내 순위는 `ZRANK`(O(log N))로 처리하고, 그 범위의 `user_id`에 대해서만 MySQL에서 닉네임·기록을 읽는다(`WHERE user_id IN (…)`, 최대 100건). 전체 정렬 스캔을 매 조회마다 하지 않는다.
 - **만료 판정은 읽는 시점에 한다.** 버려진 런을 정리하는 배치를 두지 않는다 — 런 만료는 반송할 자산이 없어 배치가 할 일이 `status` 컬럼 정리뿐이므로, 런을 읽는 경로(`clear`·`info`·`enter`)가 `started_at` 나이를 함께 검사한다(거래소의 만료 판정 규약과 동일, [거래소 기획서](trade-기획서.md) 7.6).
-- **배치 중복 실행 방지**: 시즌 정산 배치는 기존 `PeriodicBatchService` 골격을 상속해 Redis 리더 락(`batch:lock:{배치키}`)을 사용한다.
+- **배치 중복 실행 방지**: 시즌 정산 배치는 기존 `PeriodicBatchScheduler` 골격을 상속해 Redis 리더 락(`batch:lock:{배치키}`)을 사용한다.
 
 ## 4. 데이터 모델
 
@@ -555,7 +555,7 @@ COMMIT
 
 ### 6.4 시즌 정산 배치
 
-`BossRushSeasonBatchService`(`PeriodicBatchService` 상속, 락 키 `batch:lock:bossrush-season`, 주기 `appsettings`의 `BossRushSeasonBatch:IntervalSeconds` 기본 **600초**).
+`BossRushSeasonBatchScheduler`(`PeriodicBatchScheduler` 상속, 락 키 `batch:lock:bossrush-season`, 주기 `appsettings`의 `BossRushSeasonBatch:IntervalSeconds` 기본 **600초**).
 
 ```
 1) 대상 선점: UPDATE boss_rush_season SET status = 2 WHERE status = 1 AND end_at <= now

@@ -373,7 +373,7 @@ exp  = floor(effectiveSec × expPerSec  × OFFLINE_EFFICIENCY)   # 버프 배율
 
 ### 6.4 만료 버프 정리 배치
 
-만료 행은 조회 필터(`expires_at > now`)로 이미 걸러지므로 정리는 **저장 공간 회수 목적**이다. 기존 메일 GC(`GameServer/Batch/MailGcBatchService.cs`)와 동일한 `PeriodicBatchService` 파생 배치로 둔다.
+만료 행은 조회 필터(`expires_at > now`)로 이미 걸러지므로 정리는 **저장 공간 회수 목적**이다. 기존 메일 GC(`GameServer/Batch/MailGcBatchScheduler.cs`)와 동일한 `PeriodicBatchScheduler` 파생 배치로 둔다.
 
 ```
 DELETE FROM player_buff

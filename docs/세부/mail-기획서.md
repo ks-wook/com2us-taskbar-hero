@@ -272,7 +272,7 @@ COMMIT → { mailId, gained, balance }
 - 메일은 **발급(수신) 시각 기준 7일간 보관**하고, 경과분은 **배치 GC가 삭제**한다(`player_mail` 삭제 시 첨부 `player_mail_reward`는 FK CASCADE로 함께 삭제). 즉시 삭제·전용 삭제 엔드포인트는 두지 않는다.
 - **예외 — 미수령 무기한 메일은 보관한다.** 삭제 조건은 `created_at + 7일 < now` **그리고** (`expires_at > 0` **또는** `claimed = 1`)이다. 거래소 구매 아이템처럼 만료를 없앤 지급물을 보관 기한으로 지우면 무기한 발급이 무의미해지기 때문이다. 수령을 마치면 보관 기한 경과분과 함께 정리된다.
 - 만료를 두는 메일은 보관 7일이 사실상 **수령 가능 기간의 상한**이므로 `expires_at`을 7일 이내로 발급한다(`mail_master.valid_days ≤ 7`, 4장 — 현재는 출석 보상(301)·보스러시 순위 보상(501)이 해당). 무기한 메일(`valid_days=0` — 거래 메일 3종)은 이 상한을 적용받지 않는다.
-- **배치 구현**: 거래소 만료 배치와 **공통 골격(`PeriodicBatchService`, [trade 기획서 7.6.1](trade-기획서.md))을 재사용**하는 `BackgroundService`(`MailGcBatchService`)로 구현한다 — **1시간 주기 · 1회 최대 500건**(잠정, 측정 후 확정), 대상은 위 삭제 조건을 만족하는 `player_mail` DELETE. 실행 모델·실패 처리·로깅 규칙은 trade 기획서 7.6.1·7.6.3을 그대로 따른다(메일 GC는 락·캐시 갱신이 없어 더 단순하다).
+- **배치 구현**: 거래소 만료 배치와 **공통 골격(`PeriodicBatchScheduler`, [trade 기획서 7.6.1](trade-기획서.md))을 재사용**하는 `BackgroundService`(`MailGcBatchScheduler`)로 구현한다 — **1시간 주기 · 1회 최대 500건**(잠정, 측정 후 확정), 대상은 위 삭제 조건을 만족하는 `player_mail` DELETE. 실행 모델·실패 처리·로깅 규칙은 trade 기획서 7.6.1·7.6.3을 그대로 따른다(메일 GC는 락·캐시 갱신이 없어 더 단순하다).
 
 ## 7. 에러 코드
 
