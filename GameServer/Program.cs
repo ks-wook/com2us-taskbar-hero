@@ -15,6 +15,7 @@ using GameServer.Repositories.MemoryDb;
 using GameServer.Repositories.MasterDb.Interfaces;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using System.Reflection;
 using GameServer.Logging;
 using ZLogger.Providers;
 
@@ -224,6 +225,22 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<BossRushSeasonBatc
 // 스킵되지 않는다). 프로세스가 락을 잡은 채 강제 종료된 경우에만 TTL(최대 5분)이 지나야 풀린다.
 
 var app = builder.Build();
+
+// 서버 기동·종료 이벤트(로그 이벤트 정의 5.11). 대시보드에서 **배포 시점 주석**으로 쓴다 —
+// 지표가 꺾인 시점과 배포를 겹쳐 보기 위한 기준선이라, 요청이 아니라 프로세스 생애를 남긴다.
+// 계정이 없는 시스템 이벤트라 uid도 req_id도 붙지 않는다.
+var lifecycleLogger = app.Services.GetRequiredService<IEventLogger>();
+var serverVersion = typeof(Program).Assembly
+    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+    ?? typeof(Program).Assembly.GetName().Version?.ToString()
+    ?? "unknown";
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStarted.Register(() => lifecycleLogger.Action(
+    Constants.EventLog.Tags.ServerLifecycle, null,
+    new ServerLifecycleEvent(ServerLifecyclePhase.Start, serverVersion)));
+lifetime.ApplicationStopping.Register(() => lifecycleLogger.Action(
+    Constants.EventLog.Tags.ServerLifecycle, null,
+    new ServerLifecycleEvent(ServerLifecyclePhase.Stop, serverVersion)));
 
 // 마스터 데이터 기동 시 적재(실패 시 IsLoaded=false → 관련 요청은 MasterDataNotLoaded).
 await app.Services.GetRequiredService<MasterDbProvider>().LoadAsync();

@@ -106,6 +106,78 @@ public sealed record GachaPullItemEvent(
     long PullId, int Seq, int GachaCode, int ItemCode, int Grade,
     bool IsPity, bool IsGuaranteed) : IEventFields;
 
+// ── 5.11 배치 / 시스템 ──
+
+/// <summary>
+/// <c>batch.run</c> — 주기 배치 1회 종료. <b>배치가 밀리고 있나 · 실패가 쌓이나</b>를 답한다.
+/// <para><b>배치 종류별로 테이블을 나누지 않고 <see cref="BatchKey"/>로 구분한다</b> — 컬럼 구조가
+/// 배치마다 같기 때문이며, 거래 결말 셋을 <c>outcome</c> 한 컬럼에 담은 것과 같은 기준이다(5.11).</para>
+/// <para>이 이벤트에는 <c>uid</c>도 <c>req_id</c>도 없다 — 요청이 아니라 서버 스스로 도는 일이다.</para>
+/// </summary>
+/// <param name="BatchKey">배치 식별자(<c>trade-expire</c>·<c>mail-gc</c>·<c>bossrush-season</c>).</param>
+/// <param name="ElapsedMs">1주기 소요. 늘어나면 대상이 쌓이고 있다는 뜻이다.</param>
+public sealed record BatchRunEvent(
+    string BatchKey, int Processed, int Skipped, int Failed, long ElapsedMs) : IEventFields;
+
+/// <summary>
+/// <c>master.load</c> — 마스터 데이터 적재 완료. <b>배포 후 마스터가 기대대로 올라갔는지</b>를 본다.
+/// <para>테이블별 행 수를 컬럼으로 펼치지 않고 <b>테이블 수·총 행 수 두 값으로 요약</b>한다 —
+/// 마스터가 늘 때마다 로그 스키마가 따라 늘어나는 구조를 만들지 않기 위해서다(5.11).</para>
+/// </summary>
+public sealed record MasterLoadEvent(int TableCount, int RowCount, long ElapsedMs) : IEventFields;
+
+/// <summary>
+/// <c>server.lifecycle</c> — 기동·종료. 대시보드에서 <b>배포 시점 주석</b>으로 쓴다 —
+/// 지표가 꺾인 시점과 배포를 겹쳐 보기 위한 기준선이다(5.11).
+/// </summary>
+/// <param name="Phase"><see cref="ServerLifecyclePhase"/>의 값(<c>start</c>/<c>stop</c>).</param>
+/// <param name="Version">기동한 빌드의 버전.</param>
+public sealed record ServerLifecycleEvent(string Phase, string Version) : IEventFields;
+
+/// <summary><see cref="ServerLifecycleEvent.Phase"/>에 들어가는 값.</summary>
+public static class ServerLifecyclePhase
+{
+    /// <summary>기동 완료(요청을 받기 시작).</summary>
+    public const string Start = "start";
+
+    /// <summary>종료 시작.</summary>
+    public const string Stop = "stop";
+}
+
+/// <summary>
+/// <c>api.error</c> — 전역 예외 처리기가 미처리 예외를 잡음. <b>어떤 예외가 늘고 있나</b>를 답한다.
+/// <para><b>예외 메시지 전문·스택은 넣지 않는다</b> — 그건 사람이 읽는 운영 로그의 몫이고, 여기는
+/// 집계 축이 될 예외 <b>타입 이름</b>만으로 충분하다(5.11).</para>
+/// <para>시스템 이벤트 넷 중 <b>유일하게 요청에서 나온 값</b>(uid·req_id·path)을 갖는다.</para>
+/// </summary>
+/// <param name="ErrorCode">전역 처리기가 일반화한 코드(<c>ServerError</c>). 원인별로 갈리지 않는다.</param>
+public sealed record ApiErrorEvent(string Path, string ExceptionType, int ErrorCode) : IEventFields;
+
+// ── 5.10 보스러시 / 랭킹 ──
+
+/// <summary>
+/// <c>bossrush.enter</c> — 도전 개시. 스테이지와 같은 이유로 <b>실패가 보고되지 않으므로</b>
+/// <c>clear / enter</c> 비율이 완주율이자 포기·전멸의 추정치다(5.10).
+/// <para>거부도 남긴다 — 해금 미달·시즌 정산 중 진입은 각각 해금 조건과 정산 창의 길이를 가리키는 신호다.
+/// 그때 <see cref="RunId"/>·<see cref="SeasonId"/>는 0이다(런이 만들어지지 않았다).</para>
+/// </summary>
+public sealed record BossRushEnterEvent(long RunId, int SeasonId) : IEventFields;
+
+/// <summary>
+/// <c>bossrush.clear</c> — 클리어 보고. 기록 향상 추이·상위권 진입 난이도와 <b>라운드별 소요 분포</b>
+/// (어느 라운드가 병목인가)를 답한다.
+/// <para><b>라운드 기록은 자식 테이블이 아니라 컬럼 5개다</b> — 라운드 수가 5로 고정이라 자식 테이블로 두면
+/// 행이 6배가 되고, 병목 질문은 <c>avg(round3_ms)</c>처럼 컬럼 집계로 그대로 답한다(5.10).</para>
+/// </summary>
+/// <param name="ClearMs">클라이언트가 측정해 보고한 총 소요. 서버는 형식·자기정합성만 검증한다.</param>
+/// <param name="IsNewRecord">이번 보고가 시즌 최고를 갈아치웠는지.</param>
+/// <param name="BestClearMs">갱신 후 시즌 최고 기록.</param>
+/// <param name="RankAtReport">보고 직후 순위(캐시를 쓸 수 없으면 0). 시점 순위라 나중에 밀릴 수 있다.</param>
+public sealed record BossRushClearEvent(
+    long RunId, int SeasonId, int ClearMs,
+    int Round1Ms, int Round2Ms, int Round3Ms, int Round4Ms, int Round5Ms,
+    bool IsNewRecord, int BestClearMs, int RankAtReport) : IEventFields;
+
 // ── 5.9 출석부 ──
 
 /// <summary>

@@ -3,6 +3,7 @@ using GameServer.Repositories.GameDb.Interfaces;
 using ZLogger;
 using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Util;
+using GameServer.Logging;
 
 namespace GameServer.Batch;
 
@@ -23,8 +24,8 @@ public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
     /// <summary>설정에서 실행 주기·1회 처리 상한을 읽는다(없거나 0 이하이면 기본값).</summary>
     public MailGcBatchScheduler(
         IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
-        ILogger<MailGcBatchScheduler> logger)
-        : base(scopeFactory, batchLock, logger)
+        ILogger<MailGcBatchScheduler> logger, IEventLogger eventLogger)
+        : base(scopeFactory, batchLock, logger, eventLogger)
     {
         var interval = configuration.GetValue("MailGcBatch:IntervalSeconds", Constants.Batch.MailGc.DefaultIntervalSeconds);
         var batchSize = configuration.GetValue("MailGcBatch:BatchSize", Constants.Batch.MailGc.DefaultBatchSize);
@@ -43,7 +44,7 @@ public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
     /// 1주기 작업: 보관 기한(now − 7일) 이전에 발급된 메일 중 <b>미수령 무기한 메일을 제외</b>하고
     /// 상한(BatchSize)까지 삭제한 뒤 요약을 남긴다. 대상 0건이면 로그를 남기지 않는다(소음 방지).
     /// </summary>
-    protected override async Task RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
+    protected override async Task<BatchCycleResult> RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
     {
         var mailRepository = scope.ServiceProvider.GetRequiredService<IMailRepository>();
 
@@ -54,5 +55,8 @@ public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
         {
             _logger.ZLogInformation($"메일 GC 배치: 삭제 {deleted:@Deleted}건 (보관 7일 경과 대상, 1회 상한 {_batchSize:@BatchSize}건)");
         }
+
+        // 삭제는 조건 한 방(DELETE ... LIMIT)이라 건별 스킵·실패가 없다.
+        return new BatchCycleResult(deleted, 0, 0);
     }
 }

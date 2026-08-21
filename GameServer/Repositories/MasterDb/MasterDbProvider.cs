@@ -1,4 +1,6 @@
-﻿using GameServer.Models;
+﻿using System.Diagnostics;
+using GameServer.Logging;
+using GameServer.Models;
 using GameServer.Repositories.MasterDb.Interfaces;
 using TaskbarHero.Common.Dto;
 using TaskbarHero.Common.MasterData;
@@ -18,6 +20,7 @@ public sealed class MasterDbProvider
 {
     private readonly IMasterDbLoader _loader;
     private readonly ILogger<MasterDbProvider> _logger;
+    private readonly IEventLogger _eventLogger;
 
     private IReadOnlyDictionary<int, ClassMaster> _classes = new Dictionary<int, ClassMaster>();
     private IReadOnlyDictionary<int, StageDef> _stagesById = new Dictionary<int, StageDef>();
@@ -120,10 +123,11 @@ public sealed class MasterDbProvider
         => _bossRushRankRewards.FirstOrDefault(r => r.Contains(rank));
 
     /// <summary>적재기와 로거를 주입받는다. 이 클래스는 DB를 직접 만지지 않는다(적재는 로더 몫).</summary>
-    public MasterDbProvider(IMasterDbLoader loader, ILogger<MasterDbProvider> logger)
+    public MasterDbProvider(IMasterDbLoader loader, ILogger<MasterDbProvider> logger, IEventLogger eventLogger)
     {
         _loader = loader;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>기동 시 1회 적재 성공 여부. false면 관련 요청에 MasterDataNotLoaded를 반환한다.</summary>
@@ -409,6 +413,7 @@ public sealed class MasterDbProvider
     /// </summary>
     public async Task LoadAsync()
     {
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             var snapshot = await _loader.LoadAllAsync();
@@ -446,6 +451,15 @@ public sealed class MasterDbProvider
             }
 
             IsLoaded = true;
+            stopwatch.Stop();
+
+            // 적재 이벤트(5.11). 테이블별 행 수를 컬럼으로 펼치지 않고 두 값으로 요약한다 —
+            // 마스터가 늘 때마다 로그 스키마가 따라 늘어나는 구조를 만들지 않기 위해서다.
+            var loadedCounts = LoadedCounts();
+            _eventLogger.Action(
+                Constants.EventLog.Tags.MasterLoad, null,
+                new MasterLoadEvent(loadedCounts.Length, loadedCounts.Sum(), stopwatch.ElapsedMilliseconds));
+
             _logger.ZLogInformation($"마스터 데이터 적재 완료: class {_classes.Count:@Classes} · stage {_stagesById.Count:@Stages} · reward {_rewardsByStageId.Count:@Rewards} · level {_levelRequiredExp.Count:@Levels} · item {_itemsByCode.Count:@Items} · dropGrades {_itemsByGrade.Count:@Grades} · consumable {_consumablesByCode.Count:@Consumables} · enhance {_enhanceByLevel.Count:@Enhances} · expandSlots {_expandCosts.Count:@Expand} · skill {_skillsByCode.Count:@Skills} · rune {_runesByCode.Count:@Runes} · runeCost {_runeCosts.Count:@RuneCosts} · charCost {_characterCreateCosts.Count:@CharCosts} · cube {_cubeRules.Count:@Cubes} · recipe {_recipesByCode.Count:@Recipes} · attendance {_attendanceByDay.Count:@Attendances} · mailTemplate {_mailTemplates.Count:@MailTemplates} · newbieReward {_newbieRewards.Count:@NewbieRewards} · gacha {_gachaByCode.Count:@Gachas} · bossRushRound {_bossRushRounds.Count:@BossRushRounds} · bossRushRankReward {_bossRushRankRewards.Count:@BossRushRankRewards}");
         }
         catch (Exception ex)
@@ -454,4 +468,18 @@ public sealed class MasterDbProvider
             _logger.ZLogError(ex, $"마스터 데이터 적재 실패. 관련 요청은 MasterDataNotLoaded(10001)로 처리됩니다.");
         }
     }
+
+    /// <summary>
+    /// 적재된 마스터 컬렉션별 행 수. 길이가 곧 <c>table_count</c>, 합이 <c>row_count</c>이며
+    /// <c>master.load</c> 이벤트의 두 값을 만든다(5.11). 마스터를 추가하면 여기에도 한 줄 넣는다.
+    /// </summary>
+    private int[] LoadedCounts() => new[]
+    {
+        _classes.Count, _stagesById.Count, _rewardsByStageId.Count, _levelRequiredExp.Count,
+        _levelSkillPoints.Count, _itemsByCode.Count, _itemsByGrade.Count, _startingWeaponByClass.Count,
+        _consumablesByCode.Count, _enhanceByLevel.Count, _expandCosts.Count, _skillsByCode.Count,
+        _startingSkillByClass.Count, _runesByCode.Count, _runeCosts.Count, _characterCreateCosts.Count,
+        _cubeRules.Count, _recipesByCode.Count, _attendanceByDay.Count, _mailTemplates.Count,
+        _newbieRewards.Count, _gachaByCode.Count, _bossRushRounds.Count, _bossRushRankRewards.Count,
+    };
 }

@@ -1,7 +1,22 @@
-﻿using GameServer.Repositories.MemoryDb.Interfaces;
+﻿using System.Diagnostics;
+using GameServer.Logging;
+using GameServer.Repositories.MemoryDb.Interfaces;
 using ZLogger;
 
 namespace GameServer.Batch;
+
+/// <summary>
+/// 1주기가 처리한 건수. 골격이 이 값을 그대로 <c>batch.run</c> 이벤트 로그로 방출하므로
+/// (로그 이벤트 정의 5.11), 파생 배치는 자기 도메인의 처리량을 이 셋으로 환산해 돌려준다.
+/// </summary>
+/// <param name="Processed">실제로 처리한 건수.</param>
+/// <param name="Skipped">대상이었지만 그 사이 다른 경로가 처리해 건너뛴 건수.</param>
+/// <param name="Failed">건별 예외로 실패해 다음 주기로 미룬 건수.</param>
+public readonly record struct BatchCycleResult(int Processed, int Skipped, int Failed)
+{
+    /// <summary>할 일이 없었던 주기(대상 0건·선행 조건 미충족).</summary>
+    public static readonly BatchCycleResult Idle = new(0, 0, 0);
+}
 
 /// <summary>
 /// 주기 배치 공통 골격(trade 기획서 7.6.1, mail 기획서 6.5). 파생 클래스는 실행 주기(<see cref="Interval"/>)와
@@ -29,6 +44,7 @@ public abstract class PeriodicBatchScheduler : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IBatchLock _batchLock;
     private readonly ILogger _logger;
+    private readonly IEventLogger _eventLogger;
 
     /// <summary>
     /// 외부 기상 신호. 대기 중 <see cref="Wake"/>가 호출되면 남은 대기를 건너뛰고 즉시 다음 주기를 돈다.
@@ -37,12 +53,14 @@ public abstract class PeriodicBatchScheduler : BackgroundService
     /// </summary>
     private readonly SemaphoreSlim _wakeSignal = new(0, 1);
 
-    /// <summary>스코프 팩토리(주기마다 scoped 의존성 해석용)·리더 락·파생 클래스의 로거를 주입받는다.</summary>
-    protected PeriodicBatchScheduler(IServiceScopeFactory scopeFactory, IBatchLock batchLock, ILogger logger)
+    /// <summary>스코프 팩토리(주기마다 scoped 의존성 해석용)·리더 락·파생 클래스의 로거·이벤트 로거를 주입받는다.</summary>
+    protected PeriodicBatchScheduler(
+        IServiceScopeFactory scopeFactory, IBatchLock batchLock, ILogger logger, IEventLogger eventLogger)
     {
         _scopeFactory = scopeFactory;
         _batchLock = batchLock;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -123,8 +141,12 @@ public abstract class PeriodicBatchScheduler : BackgroundService
     /// <summary>리더 락 키 접미사(ASCII, 예: "mail-gc"). 락 키는 batch:lock:{BatchKey}.</summary>
     protected abstract string BatchKey { get; }
 
-    /// <summary>1주기 작업. scope에서 scoped 의존성(리포지토리 등)을 해석해 사용한다.</summary>
-    protected abstract Task RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken);
+    /// <summary>
+    /// 1주기 작업. scope에서 scoped 의존성(리포지토리 등)을 해석해 사용한다.
+    /// 반환한 처리 건수는 골격이 <c>batch.run</c> 이벤트 로그로 방출한다 — 할 일이 없었으면
+    /// <see cref="BatchCycleResult.Idle"/>을 돌려준다.
+    /// </summary>
+    protected abstract Task<BatchCycleResult> RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken);
 
     /// <summary>
     /// 배치 루프 본체: 즉시 1회 실행 후 <see cref="NextDelay"/>가 정한 간격으로 반복한다(기본은 Interval,
@@ -151,8 +173,19 @@ public abstract class PeriodicBatchScheduler : BackgroundService
                 }
 
                 using var scope = _scopeFactory.CreateScope();
-                await RunCycleAsync(scope, stoppingToken);
+
+                // 주기 소요를 잰다 — 이 값이 늘어나면 대상이 쌓이고 있다는 신호다(5.11).
+                var stopwatch = Stopwatch.StartNew();
+                var result = await RunCycleAsync(scope, stoppingToken);
+                stopwatch.Stop();
                 cycleRan = true;
+
+                // 실제로 돈 주기만 남긴다(락을 놓쳐 스킵한 주기는 이 배치가 한 일이 아니다).
+                // 계정이 없는 시스템 이벤트라 uid가 없고, 요청에서 나온 값이 아니라 req_id도 없다.
+                _eventLogger.Action(
+                    Constants.EventLog.Tags.BatchRun, null,
+                    new BatchRunEvent(
+                        BatchKey, result.Processed, result.Skipped, result.Failed, stopwatch.ElapsedMilliseconds));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

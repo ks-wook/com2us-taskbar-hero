@@ -37,7 +37,7 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
     public TradeExpireBatchScheduler(
         IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
         MasterDbProvider masterData, ILogger<TradeExpireBatchScheduler> logger, IEventLogger eventLogger)
-        : base(scopeFactory, batchLock, logger)
+        : base(scopeFactory, batchLock, logger, eventLogger)
     {
         _eventLogger = eventLogger;
         var interval = configuration.GetValue(
@@ -60,18 +60,18 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
     /// 캐시 제거를 수행한다. 건별 예외는 해당 건만 실패로 세고 다음 건을 계속 처리한다(주기 전체를 중단하지 않는다).
     /// 대상 0건이면 로그를 남기지 않는다(소음 방지).
     /// </summary>
-    protected override async Task RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
+    protected override async Task<BatchCycleResult> RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
     {
         if (!_masterData.IsLoaded)
         {
-            return; // 마스터 미적재면 반송 메일 문구를 만들 수 없다 — 다음 주기에 재시도.
+            return BatchCycleResult.Idle; // 마스터 미적재면 반송 메일 문구를 만들 수 없다 — 다음 주기에 재시도.
         }
 
         var template = _masterData.GetMailTemplate(Constants.MailTemplate.TradeReturn);
         if (template is null)
         {
             _logger.ZLogError($"거래소 만료 반송 메일 템플릿 미정의: templateCode {Constants.MailTemplate.TradeReturn:@TemplateCode} — mail_master 확인 필요");
-            return;
+            return BatchCycleResult.Idle;
         }
 
         var tradeRepository = scope.ServiceProvider.GetRequiredService<ITradeRepository>();
@@ -80,7 +80,7 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
         var targets = await tradeRepository.GetExpiredListingIdsAsync(now, _batchSize);
         if (targets.Count == 0)
         {
-            return;
+            return BatchCycleResult.Idle;
         }
 
         // 반송 메일 초안. 적재(트랜잭션 안)와 발급 이벤트(커밋 후) 두 곳이 같은 초안을 봐야
@@ -134,6 +134,7 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
         }
 
         _logger.ZLogInformation($"거래소 만료 배치: 처리 {processed:@Processed}건, 스킵 {skipped:@Skipped}건, 실패 {failed:@Failed}건 (1회 상한 {_batchSize:@BatchSize}건)");
+        return new BatchCycleResult(processed, skipped, failed);
     }
 
     /// <summary>
