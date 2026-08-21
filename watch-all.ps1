@@ -1,8 +1,11 @@
-﻿# 계정 서버 + 게임 서버를 각각 dotnet watch(핫 리로드)로 동시에 실행한다.
+﻿# 계정 서버 + 게임 서버를 각각 dotnet watch(핫 리로드)로 새 콘솔 창에 띄운다.
 #   사용법:  ./watch-all.ps1
 #   dotnet watch는 프로젝트 1개 대상이라, 두 서버를 각자 새 콘솔 창으로 띄운다.
-#   실행 전 Docker 엔진이 꺼져 있으면 Docker Desktop을 띄우고,
-#   의존 서비스(MySQL·Redis) 컨테이너가 꺼져 있으면 자동으로 켠다.
+#
+#   이 스크립트는 **서버만** 띄운다. 의존 서비스(MySQL·Redis)는 docker-compose가 담당한다:
+#       docker compose up -d mysql redis
+#   두 서버를 컨테이너로 돌리고 싶으면 이 스크립트 대신 `docker compose up -d --build`를 쓴다
+#   (같은 5160·5247 포트를 쓰므로 컨테이너 서버와 이 스크립트는 동시에 띄울 수 없다).
 #
 #   ※ 이 파일은 반드시 UTF-8 with BOM으로 저장한다(Windows PowerShell 5.1이 한글 리터럴을
 #      올바르게 파싱하도록). 아래 인코딩 설정과 함께 콘솔 한글 출력 깨짐을 방지한다.
@@ -13,96 +16,34 @@ $OutputEncoding = [System.Text.Encoding]::UTF8
 
 $root = $PSScriptRoot
 
-# ── Docker 엔진 확인/기동 ──────────────────────────────────────────────
-#   엔진이 꺼져 있으면 아래 docker ps·docker compose가 전부 실패하는데, 그 실패를 그냥
-#   지나치면 헬스체크 루프가 "뜨지도 않은 컨테이너"를 컨테이너마다 60초씩 기다린다.
-#   그래서 컨테이너를 건드리기 전에 엔진부터 확인하고, 꺼져 있으면 Docker Desktop을 띄운다.
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    Write-Host "docker CLI를 찾을 수 없습니다. Docker Desktop 설치 또는 PATH를 확인하세요." -ForegroundColor Red
+function Test-PortListening([int]$Port) {
+    return [bool](Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+}
+
+# ── 서버 포트 선점 확인 ────────────────────────────────────────────────
+#   컨테이너 서버(docker compose)가 이미 5160·5247을 쓰고 있으면 watch가 기동 직후
+#   바인딩 실패로 죽는다. 원인이 콘솔 창에서만 스쳐 지나가므로 여기서 먼저 막는다.
+$busy = @()
+if (Test-PortListening 5160) { $busy += "5160(AccountServer)" }
+if (Test-PortListening 5247) { $busy += "5247(GameServer)" }
+if ($busy.Count -gt 0) {
+    Write-Host "이미 사용 중인 포트: $($busy -join ', ')" -ForegroundColor Red
+    Write-Host "컨테이너 서버가 떠 있다면 먼저 내리세요: docker compose stop accountserver gameserver" -ForegroundColor Yellow
     exit 1
 }
 
-function Test-DockerEngine {
-    # CLI가 있어도 엔진(데몬)이 죽어 있으면 0이 아닌 코드로 끝난다 — 그 차이를 보는 게 목적이다.
-    docker info --format '{{.ServerVersion}}' 2>$null | Out-Null
-    return ($LASTEXITCODE -eq 0)
-}
-
-if (Test-DockerEngine) {
-    Write-Host "Docker 엔진 실행 중." -ForegroundColor DarkGray
+# ── 의존 서비스(MySQL·Redis) 확인 — 여기서 띄우지는 않는다 ─────────────
+#   포트가 닫혀 있어도 진행은 한다(서버는 뜨고 DB 접근 시점에 실패한다). 대신 원인을
+#   찾느라 헤매지 않도록 무엇이 없는지, 무엇을 실행하면 되는지 알려 준다.
+$missing = @()
+if (-not (Test-PortListening 3306)) { $missing += "MySQL(3306)" }
+if (-not (Test-PortListening 6379)) { $missing += "Redis(6379)" }
+if ($missing.Count -gt 0) {
+    Write-Host "의존 서비스가 감지되지 않습니다: $($missing -join ', ')" -ForegroundColor Yellow
+    Write-Host "먼저 실행하세요: docker compose up -d mysql redis" -ForegroundColor Yellow
 }
 else {
-    Write-Host "Docker 엔진이 꺼져 있습니다. Docker Desktop을 시작합니다..." -ForegroundColor Yellow
-
-    # 이미 프로세스가 떠 있으면 기동 중인 것이므로 새로 띄우지 않고 기다리기만 한다.
-    if (-not (Get-Process -Name "Docker Desktop" -ErrorAction SilentlyContinue)) {
-        $candidates = @()
-        # docker.exe 위치에서 역산(Docker Desktop 설치 폴더의 resources/bin 아래에 있다).
-        $cli = (Get-Command docker -ErrorAction SilentlyContinue).Source
-        if ($cli) {
-            $candidates += (Join-Path (Split-Path (Split-Path (Split-Path $cli -Parent) -Parent) -Parent) "Docker Desktop.exe")
-        }
-        if ($env:ProgramFiles) { $candidates += (Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe") }
-        if (${env:ProgramFiles(x86)}) { $candidates += (Join-Path ${env:ProgramFiles(x86)} "Docker\Docker\Docker Desktop.exe") }
-        if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA "Docker\Docker Desktop.exe") }
-
-        $desktop = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-        if (-not $desktop) {
-            Write-Host "Docker Desktop 실행 파일을 찾지 못했습니다. 직접 실행한 뒤 다시 시도하세요." -ForegroundColor Red
-            exit 1
-        }
-        Start-Process -FilePath $desktop
-    }
-
-    # 콜드 스타트는 WSL2 백엔드 기동까지 포함해 1~2분 걸린다. 3분까지 기다린다.
-    $ready = $false
-    for ($i = 0; $i -lt 60; $i++) {
-        Start-Sleep -Seconds 3
-        if (Test-DockerEngine) { $ready = $true; break }
-        if ($i % 5 -eq 4) { Write-Host "  엔진 기동 대기 중... ($(($i + 1) * 3)초)" -ForegroundColor DarkGray }
-    }
-
-    if (-not $ready) {
-        Write-Host "Docker 엔진이 3분 안에 준비되지 않았습니다. Docker Desktop 상태를 확인하세요." -ForegroundColor Red
-        exit 1
-    }
-    Write-Host "Docker 엔진 준비 완료." -ForegroundColor Green
-}
-
-# ── 의존 서비스(MySQL·Redis) — docker-compose ──────────────────────────
-#   Redis는 컨테이너(taskbar-hero-redis)로 띄운다. 단, 저장소 내 Windows 바이너리
-#   Redis를 이미 6379로 띄워 둔 경우에는 포트가 충돌하므로 compose의 redis는 건드리지 않는다.
-$composeFile = Join-Path $root "docker-compose.yml"
-
-$redisContainerUp = docker ps --filter "name=taskbar-hero-redis" --filter "status=running" -q
-$redisListening = [bool](Get-NetTCPConnection -LocalPort 6379 -State Listen -ErrorAction SilentlyContinue)
-$services = @("mysql")
-if ([string]::IsNullOrWhiteSpace($redisContainerUp) -and -not $redisListening) {
-    $services += "redis"
-}
-elseif ([string]::IsNullOrWhiteSpace($redisContainerUp)) {
-    Write-Host "Redis(6379)가 컨테이너 밖에서 이미 실행 중 — compose redis는 건너뜁니다." -ForegroundColor DarkGray
-}
-
-Write-Host "의존 서비스 확인/기동: $($services -join ', ')" -ForegroundColor DarkGray
-docker compose -f $composeFile up -d @services | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    # 여기서 멈춰야 한다 — 컨테이너가 없는데 아래 헬스체크로 넘어가면 뜨지 않을 컨테이너를
-    # 60초씩 기다린 뒤 서버만 올라가 "DB 없이 도는" 상태가 된다.
-    Write-Host "docker compose up 실패(위 출력을 확인하세요)." -ForegroundColor Red
-    exit 1
-}
-
-# 헬스체크가 붙은 서비스만 healthy를 기다린다(위에서 건너뛴 redis는 제외).
-foreach ($c in @("taskbar-hero-mysql") + $(if ($services -contains "redis" -or -not [string]::IsNullOrWhiteSpace($redisContainerUp)) { @("taskbar-hero-redis") } else { @() })) {
-    $health = $null
-    for ($i = 0; $i -lt 30; $i++) {
-        $health = docker inspect --format '{{.State.Health.Status}}' $c 2>$null
-        if ($health -eq "healthy") { break }
-        Start-Sleep -Seconds 2
-    }
-    if ($health -eq "healthy") { Write-Host "$c 준비 완료." -ForegroundColor Green }
-    else { Write-Host "$c 가 아직 healthy가 아닙니다(계속 진행). 상태: $health" -ForegroundColor Yellow }
+    Write-Host "의존 서비스 확인: MySQL(3306) · Redis(6379) 응답 중." -ForegroundColor DarkGray
 }
 
 # ── 선(先) 빌드: 두 watch를 띄우기 전에 솔루션을 직렬로 한 번 빌드 ──────

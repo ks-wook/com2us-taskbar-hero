@@ -1,13 +1,26 @@
-# Taskbar Hero 모작 — 로컬 개발용 MySQL · Redis 컨테이너
+# Taskbar Hero 모작 — 로컬 개발용 컨테이너(MySQL · Redis · AccountServer · GameServer)
 #
 # 사용법
-#   docker compose up -d        # 이미지 다운로드 + 백그라운드 실행(mysql + redis)
-#   docker compose logs -f mysql # 초기화 로그 확인
-#   docker compose down          # 중지(데이터는 볼륨에 유지)
-#   docker compose down -v       # 중지 + 데이터 볼륨까지 삭제(완전 초기화)
+#   docker compose up -d --build      # 서버 이미지 빌드 + 전체 백그라운드 실행
+#   docker compose up -d mysql redis  # 의존 서비스만(서버는 watch-all.ps1로 콘솔 실행할 때)
+#   docker compose logs -f gameserver # 특정 서비스 로그 확인
+#   docker compose build gameserver   # 코드 변경 후 서버 이미지 재빌드(재기동은 up -d)
+#   docker compose down               # 중지(데이터는 볼륨에 유지)
+#   docker compose down -v            # 중지 + 데이터 볼륨까지 삭제(완전 초기화)
+#
+# 두 서버 컨테이너는 호스트의 5160(AccountServer)·5247(GameServer)를 그대로 쓴다 —
+# `watch-all.ps1`(dotnet watch 콘솔 실행)과 **포트가 겹치므로 둘 중 하나만 띄운다**.
+# 핫 리로드로 개발할 때는 `docker compose up -d mysql redis`로 의존 서비스만 띄운 뒤
+# watch-all.ps1을 쓰고, 컨테이너로 통합 실행할 때는 `docker compose up -d --build`를 쓴다.
+# 서버 이미지는 소스를 COPY해 빌드하므로 코드를 고치면 재빌드해야 반영된다(핫 리로드 없음).
 #
 # 첫 기동 시 docs/의 스키마 SQL이 /docker-entrypoint-initdb.d 에서 알파벳 순으로 실행되어
 # account/game/master DB를 생성한다. (init 스크립트는 데이터 볼륨이 비어 있을 때만 동작)
+#
+# AccountServer는 토큰 서명 키(Security:SecretKey)를 저장소 밖에서 주입받는다(코드가 appsettings·
+# 하드코딩을 금지한다). 로컬에서는 저장소 루트의 `.env`(git 무시 대상)에 한 줄 넣어 둔다:
+#   ACCOUNT_SECRET_KEY=<임의의 64자 정도 문자열>
+# 콘솔 실행(dotnet run / watch-all.ps1)은 User Secrets에서 같은 설정을 읽으므로 .env와 무관하다.
 #
 # Redis는 두 서버의 인증 토큰 캐시·배치 리더 락 저장소이며 127.0.0.1:6379로 노출한다
 # (appsettings의 `Redis:ConnectionString`과 동일). 저장소 내 Windows 바이너리
@@ -33,8 +46,11 @@ services:
       # 첫 기동 시 스키마 자동 생성(읽기 전용 마운트). 파일명 접두 숫자로 실행 순서 고정.
       - ./docs/공통/db-schema.sql:/docker-entrypoint-initdb.d/01-db-schema.sql:ro
       - ./docs/세부/master-data/master-data-schema.sql:/docker-entrypoint-initdb.d/02-master-data-schema.sql:ro
+    # -h 127.0.0.1(TCP)로 검사한다 — init 스크립트를 실행하는 임시 서버는 소켓만 열고
+    # 네트워킹을 끄므로, TCP를 보면 "스키마 생성이 끝난 뒤"에야 healthy가 된다.
+    # 서버 컨테이너가 depends_on: service_healthy로 이 상태를 기다린다.
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p$$MYSQL_ROOT_PASSWORD"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-P", "3306", "-uroot", "-p$$MYSQL_ROOT_PASSWORD"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -63,6 +79,77 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
+
+  # ── 애플리케이션 서버 ────────────────────────────────────────────────
+  #   두 서버 모두 저장소 루트를 빌드 컨텍스트로 삼는다(공통 라이브러리
+  #   TaskbarHero.Common을 ProjectReference로 참조하기 때문).
+  #   접속 문자열은 이미지에 굽지 않고 여기서 환경 변수로 덮어쓴다 — appsettings.json의
+  #   localhost 대신 compose 네트워크의 서비스 이름(mysql·redis)을 가리켜야 한다.
+  #   (`__`는 ASP.NET Core 설정 계층 구분자다: ConnectionStrings__GameDb ≡ ConnectionStrings:GameDb)
+  accountserver:
+    build:
+      context: .
+      dockerfile: AccountServer/Dockerfile
+    image: taskbar-hero-accountserver
+    container_name: taskbar-hero-accountserver
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Seoul
+      # Development로 둬야 /swagger·/openapi/v1.json이 매핑된다(로컬 개발용 컴포즈).
+      ASPNETCORE_ENVIRONMENT: Development
+      # launchSettings.json(http 프로필)은 컨테이너 실행(dotnet AccountServer.dll)에
+      # 적용되지 않으므로 수신 주소를 직접 지정한다. 호스트와 같은 포트를 써서 URL을 통일한다.
+      ASPNETCORE_URLS: http://+:5160
+      ConnectionStrings__AccountDb: "Server=mysql;Port=3306;Database=taskbar_hero_account;Uid=root;Pwd=taskbar_hero_dev;"
+      Redis__ConnectionString: "redis:6379"
+      # 인증 토큰(HMAC-SHA256) 서명 키. 코드가 appsettings·하드코딩을 금지하므로 컨테이너에도
+      # 저장소 밖(.env 또는 호스트 환경변수)에서 주입한다. 값이 없으면 compose가 여기서 멈춘다 —
+      # 서버가 뜬 뒤 로그인 요청에서 500으로 드러나는 것보다 낫다.
+      Security__SecretKey: "${ACCOUNT_SECRET_KEY:?.env 에 ACCOUNT_SECRET_KEY=<임의의 긴 문자열> 을 넣으세요(AccountServer 토큰 서명 키)}"
+    ports:
+      - "5160:5160"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5160/openapi/v1.json"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  gameserver:
+    build:
+      context: .
+      dockerfile: GameServer/Dockerfile
+    image: taskbar-hero-gameserver
+    container_name: taskbar-hero-gameserver
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Seoul
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:5247
+      # 게임 DB + 마스터 DB(기동 시 인메모리로 적재) 두 개를 쓴다.
+      ConnectionStrings__GameDb: "Server=mysql;Port=3306;Database=taskbar_hero_game;Uid=root;Pwd=taskbar_hero_dev;"
+      ConnectionStrings__MasterDb: "Server=mysql;Port=3306;Database=taskbar_hero_master;Uid=root;Pwd=taskbar_hero_dev;"
+      # 인증 토큰 조회(AccountServer가 넣은 토큰) + 주기 배치 리더 락 저장소.
+      Redis__ConnectionString: "redis:6379"
+    ports:
+      - "5247:5247"
+    depends_on:
+      # 마스터 데이터를 기동 시 1회 적재하므로 MySQL이 healthy(= 스키마 생성 완료)여야 한다.
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:5247/openapi/v1.json"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
 volumes:
   taskbar-hero-mysql-data:
