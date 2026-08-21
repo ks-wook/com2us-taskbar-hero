@@ -124,4 +124,34 @@ Content-Type: application/json
   "token": "{{token}}"
 }
 
+### 스테이지 진입(도달 가능 검증 — 스킵 진입은 6002. 응답에 스폰·보스·배경타입)
+POST {{GameServer_HostAddress}}/api/game/stage/enter
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": { "act": 1, "difficulty": 1, "stage": 1 }
+}
+
+### 스테이지 클리어(보상은 서버 산출 — 현재 진입 스테이지와 불일치면 6003)
+POST {{GameServer_HostAddress}}/api/game/stage/clear
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": { "act": 1, "difficulty": 1, "stage": 1 }
+}
+
+### 스테이지 실패 보고(기록 전용 — 진행도·보상 불변. 미진입이면 6003, 음수 보고면 1006)
+POST {{GameServer_HostAddress}}/api/game/stage/fail
+Content-Type: application/json
+
+{
+  "userId": {{userId}},
+  "token": "{{token}}",
+  "data": { "act": 1, "difficulty": 1, "stage": 1, "elapsedMs": 41200, "remainingMonsterCount": 2, "reachedBoss": true }
+}
+
 ###

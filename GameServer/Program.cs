@@ -132,7 +132,7 @@ builder.Services.AddScoped<IBossRushRepository, BossRushRepository>();
 builder.Services.AddScoped<IBossRushRankCache, BossRushRankCache>();
 
 // 배치 리더 락(batch:lock:{배치키}) — 주기 배치가 scale-out 환경에서 중복 실행되지 않게 한다.
-//   PeriodicBatchService(싱글턴 BackgroundService)가 주입받으므로 싱글턴으로 등록한다.
+//   PeriodicBatchScheduler(싱글턴 BackgroundService)가 주입받으므로 싱글턴으로 등록한다.
 builder.Services.AddSingleton<IBatchLock, BatchLock>();
 builder.Services.AddScoped<IBossRushService, BossRushService>();
 
@@ -142,7 +142,7 @@ builder.Services.AddScoped<ITradeRepository, TradeRepository>();
 builder.Services.AddScoped<ITradeService, TradeService>();
 
 // ── 주기 배치(BackgroundService) ───────────────────────────────────────────────────────────────
-// 두 배치 모두 공통 골격 PeriodicBatchService를 상속하며, 그 골격이 다음을 보장한다:
+// 두 배치 모두 공통 골격 PeriodicBatchScheduler를 상속하며, 그 골격이 다음을 보장한다:
 //   · 기동 직후 즉시 1회 실행 → 그 뒤 각자의 주기(Interval)로 반복(PeriodicTimer.WaitForNextTickAsync).
 //     서버가 내려가 있던 동안 쌓인 대상을 첫 주기까지 기다리지 않고 바로 소화한다.
 //   · 이전 주기가 끝난 뒤에야 다음 tick을 기다리므로 재진입(주기 겹침)이 구조적으로 불가능하다.
@@ -163,13 +163,13 @@ builder.Services.AddScoped<ITradeService, TradeService>();
 //   따라서 이 주기는 "판매 기간 3일"의 정확도가 아니라 **에스크로 아이템이 메일로 반송되기까지의 지연 상한**
 //   만 결정한다 — 3일을 기다린 판매자를 더 기다리게 하지 않도록 1시간으로 잡았다. 대상 조회가
 //   idx_trade_expire를 커버링으로 타고 0건이면 로그도 남기지 않아 빈 주기 비용은 사실상 없다.
-builder.Services.AddHostedService<TradeExpireBatchService>();
+builder.Services.AddHostedService<TradeExpireBatchScheduler>();
 
 // 메일 보관 GC 배치(발급 7일 경과 메일 삭제, mail 기획서 6.5).
 //   실행 주기: **3600초 = 1시간** — appsettings "MailGcBatch:IntervalSeconds"(기본 3600). 1회 처리 상한 500건("BatchSize").
 //   보관 기간(7일)에 비해 삭제가 몇 분~한 시간 늦어도 사용자에게 보이는 차이가 없어 시간 단위로 넉넉히 잡았다.
 //   상한을 넘긴 분량은 다음 주기로 이월된다(1시간마다 최대 500건 정리).
-builder.Services.AddHostedService<MailGcBatchService>();
+builder.Services.AddHostedService<MailGcBatchScheduler>();
 
 // 보스러시 시즌 정산 배치(주간 시즌 종료 → 순위 확정 + 1~3위 골드 보상 메일 발급 → 다음 시즌 개시, 기획서 6.4).
 //   실행 주기: **600초 = 10분** — appsettings "BossRushSeasonBatch:IntervalSeconds"(기본 600).
@@ -179,7 +179,7 @@ builder.Services.AddHostedService<MailGcBatchService>();
 //   채우기)도 수행한다 — 이미 리더 락이 여기 있어 scale-out 시 중복 재구축을 그대로 막아 준다.
 //   **버려진 런을 정리하는 배치는 두지 않는다** — 만료된 런에 반송할 자산이 없어 배치가 할 일이 status 정리
 //   뿐이므로, 만료 판정을 읽는 시점(clear·info·enter)에 한다(거래소의 만료 판정 규약과 동일).
-builder.Services.AddHostedService<BossRushSeasonBatchService>();
+builder.Services.AddHostedService<BossRushSeasonBatchScheduler>();
 
 // 리더 락은 주기 종료와 함께 해제되므로, 정상 종료·재기동 후에는 곧바로 다시 실행된다(옛 방식처럼 주기만큼
 // 스킵되지 않는다). 프로세스가 락을 잡은 채 강제 종료된 경우에만 TTL(최대 5분)이 지나야 풀린다.

@@ -23,7 +23,7 @@ namespace GameServer.Batch;
 /// 그대로 막아 주기 때문이다.</para>
 /// 설정: appsettings "BossRushSeasonBatch" 섹션(IntervalSeconds 기본 600=10분 · BatchSize 기본 500).
 /// </summary>
-public sealed class BossRushSeasonBatchService : PeriodicBatchService
+public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 {
     /// <summary>기본 실행 주기 10분. 시즌 경계(주 1회)에 비해 충분히 촘촘하다.</summary>
     private const int DefaultIntervalSeconds = 10 * 60;
@@ -46,12 +46,12 @@ public sealed class BossRushSeasonBatchService : PeriodicBatchService
     private readonly int _intervalSeconds;
     private readonly int _batchSize;
     private readonly MasterDbProvider _masterData;
-    private readonly ILogger<BossRushSeasonBatchService> _logger;
+    private readonly ILogger<BossRushSeasonBatchScheduler> _logger;
 
     /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터를 주입받는다.</summary>
-    public BossRushSeasonBatchService(
+    public BossRushSeasonBatchScheduler(
         IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
-        MasterDbProvider masterData, ILogger<BossRushSeasonBatchService> logger)
+        MasterDbProvider masterData, ILogger<BossRushSeasonBatchScheduler> logger)
         : base(scopeFactory, batchLock, logger)
     {
         var interval = configuration.GetValue("BossRushSeasonBatch:IntervalSeconds", DefaultIntervalSeconds);

@@ -13,7 +13,7 @@ namespace GameServer.Batch;
 /// 전용 삭제 API는 두지 않으며, 1회 처리 건수를 제한해 밀린 분량은 다음 주기로 이월한다.
 /// 설정: appsettings "MailGcBatch" 섹션(IntervalSeconds 기본 3600 · BatchSize 기본 500, 잠정).
 /// </summary>
-public sealed class MailGcBatchService : PeriodicBatchService
+public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
 {
     /// <summary>보관 기간(발급 후 7일, mail 기획서 6.5 확정) — 이 시간이 지난 메일이 삭제 대상이다.</summary>
     private const long RetentionSeconds = 7L * 24 * 60 * 60;
@@ -23,12 +23,12 @@ public sealed class MailGcBatchService : PeriodicBatchService
 
     private readonly int _intervalSeconds;
     private readonly int _batchSize;
-    private readonly ILogger<MailGcBatchService> _logger;
+    private readonly ILogger<MailGcBatchScheduler> _logger;
 
     /// <summary>설정에서 실행 주기·1회 처리 상한을 읽는다(없거나 0 이하이면 기본값).</summary>
-    public MailGcBatchService(
+    public MailGcBatchScheduler(
         IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
-        ILogger<MailGcBatchService> logger)
+        ILogger<MailGcBatchScheduler> logger)
         : base(scopeFactory, batchLock, logger)
     {
         var interval = configuration.GetValue("MailGcBatch:IntervalSeconds", DefaultIntervalSeconds);

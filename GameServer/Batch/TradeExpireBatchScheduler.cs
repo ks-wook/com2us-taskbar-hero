@@ -23,7 +23,7 @@ namespace GameServer.Batch;
 /// <c>idx_trade_expire</c>를 커버링으로 타고 0건이면 로그도 남기지 않아 빈 주기 비용이 사실상 없다.</para>
 /// 설정: appsettings "TradeExpireBatch" 섹션(IntervalSeconds 기본 3600=1시간 · BatchSize 기본 1000).
 /// </summary>
-public sealed class TradeExpireBatchService : PeriodicBatchService
+public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
 {
     /// <summary>기본 실행 주기 1시간. 만료 효력은 읽기 경로가 즉시 내므로 이 주기는 <b>반송 지연 상한</b>일 뿐이다.</summary>
     private const int DefaultIntervalSeconds = 60 * 60;
@@ -45,12 +45,12 @@ public sealed class TradeExpireBatchService : PeriodicBatchService
     private readonly int _intervalSeconds;
     private readonly int _batchSize;
     private readonly MasterDbProvider _masterData;
-    private readonly ILogger<TradeExpireBatchService> _logger;
+    private readonly ILogger<TradeExpireBatchScheduler> _logger;
 
     /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터를 주입받는다.</summary>
-    public TradeExpireBatchService(
+    public TradeExpireBatchScheduler(
         IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
-        MasterDbProvider masterData, ILogger<TradeExpireBatchService> logger)
+        MasterDbProvider masterData, ILogger<TradeExpireBatchScheduler> logger)
         : base(scopeFactory, batchLock, logger)
     {
         var interval = configuration.GetValue("TradeExpireBatch:IntervalSeconds", DefaultIntervalSeconds);

@@ -167,4 +167,60 @@ public sealed class StageService : IStageService
         return new SaveResult(ErrorCode.Success, "Stage cleared", data);
     }
 
+    /// <summary>
+    /// 스테이지 실패(파티 전멸)를 접수한다. 전투가 클라이언트 권위라 서버는 전멸을 스스로 알 수 없으므로,
+    /// 클라이언트 보고를 **기록 전용**으로 받는다(기획서 5.3). 진행도·보상·재화를 일절 바꾸지 않으며,
+    /// 현재 진입 스테이지도 유지해 같은 스테이지를 곧바로 재시도할 수 있게 둔다.
+    /// 스테이지 존재·현재 진입 스테이지 일치·보고 수치의 형식만 검증한 뒤 실패 사실을 로그로 남긴다.
+    /// </summary>
+    public async Task<SaveResult> FailAsync(
+        long userId, int act, int difficulty, int stage,
+        int elapsedMs, int remainingMonsterCount, bool reachedBoss)
+    {
+        if (!_masterData.IsLoaded)
+        {
+            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+        }
+
+        var stageDef = _masterData.GetStage(act, difficulty, stage);
+        if (stageDef is null)
+        {
+            return new SaveResult(ErrorCode.StageNotFound, string.Empty, null);
+        }
+
+        // 보고 수치 검증: 음수는 클라이언트 결함이다. 집계를 오염시키느니 접수를 거부한다.
+        if (elapsedMs < 0 || remainingMonsterCount < 0)
+        {
+            return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
+        }
+
+        var progress = await _stageRepository.GetProgressAsync(userId);
+        if (progress is null)
+        {
+            return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+        }
+
+        // 진입하지 않은 스테이지의 실패 보고는 받지 않는다(클리어와 같은 기준) —
+        // enter 없이 들어온 fail은 난이도 집계의 분모(enter)와 짝이 맞지 않는다.
+        if (progress.Act != act || progress.Difficulty != difficulty || progress.Stage != stage)
+        {
+            return new SaveResult(ErrorCode.StageNotEntered, string.Empty, null);
+        }
+
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+        _logger.ZLogInformation($"스테이지 실패: userId {userId:@UserId}, stageId {stageDef.StageId:@StageId}, act {act:@Act}, difficulty {difficulty:@Difficulty}, stage {stage:@Stage}, elapsedMs {elapsedMs:@ElapsedMs}, remainingMonsterCount {remainingMonsterCount:@RemainingMonsterCount}, reachedBoss {reachedBoss:@ReachedBoss}");
+
+        var data = new StageFailResultData
+        {
+            act = act,
+            difficulty = difficulty,
+            stage = stage,
+            stageId = stageDef.StageId,
+            failedAt = now,
+        };
+
+        return new SaveResult(ErrorCode.Success, "Stage failure recorded", data);
+    }
+
 }

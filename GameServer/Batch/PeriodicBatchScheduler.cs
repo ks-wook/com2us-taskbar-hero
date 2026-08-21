@@ -20,14 +20,14 @@ namespace GameServer.Batch;
 ///   Redis 접근은 전부 Repositories/MemoryDb 계층에 있고, 이 골격은 "언제 잡고 언제 놓는가"만 정한다.</para>
 /// <para>· 루프 예외 가드 — 1주기 실패를 Error로 남기고 루프를 유지한다(배치 사망으로 대상이 영구 방치되는 것 방지).</para>
 /// </summary>
-public abstract class PeriodicBatchService : BackgroundService
+public abstract class PeriodicBatchScheduler : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IBatchLock _batchLock;
     private readonly ILogger _logger;
 
     /// <summary>스코프 팩토리(주기마다 scoped 의존성 해석용)·리더 락·파생 클래스의 로거를 주입받는다.</summary>
-    protected PeriodicBatchService(IServiceScopeFactory scopeFactory, IBatchLock batchLock, ILogger logger)
+    protected PeriodicBatchScheduler(IServiceScopeFactory scopeFactory, IBatchLock batchLock, ILogger logger)
     {
         _scopeFactory = scopeFactory;
         _batchLock = batchLock;
