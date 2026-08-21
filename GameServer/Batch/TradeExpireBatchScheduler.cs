@@ -7,6 +7,7 @@ using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Util;
+using GameServer.Logging;
 
 namespace GameServer.Batch;
 
@@ -30,13 +31,15 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
     private readonly int _batchSize;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<TradeExpireBatchScheduler> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터를 주입받는다.</summary>
+    /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터와 이벤트 로거를 주입받는다.</summary>
     public TradeExpireBatchScheduler(
         IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
-        MasterDbProvider masterData, ILogger<TradeExpireBatchScheduler> logger)
+        MasterDbProvider masterData, ILogger<TradeExpireBatchScheduler> logger, IEventLogger eventLogger)
         : base(scopeFactory, batchLock, logger)
     {
+        _eventLogger = eventLogger;
         var interval = configuration.GetValue(
             "TradeExpireBatch:IntervalSeconds", Constants.Batch.TradeExpire.DefaultIntervalSeconds);
         var batchSize = configuration.GetValue("TradeExpireBatch:BatchSize", Constants.Batch.TradeExpire.DefaultBatchSize);
@@ -111,6 +114,9 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
                     continue;
                 }
 
+                // 종결 이벤트(5.7). 구매·취소와 같은 테이블에 outcome=expire로 쌓여 미체결률의 분자가 된다.
+                // 배치가 내는 라인이라 req_id가 없다 — 요청에서 나온 값이 아니기 때문이다(4.1).
+                EmitExpire(expired, now);
                 processed++;
             }
             catch (Exception ex)
@@ -121,6 +127,22 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
         }
 
         _logger.ZLogInformation($"거래소 만료 배치: 처리 {processed:@Processed}건, 스킵 {skipped:@Skipped}건, 실패 {failed:@Failed}건 (1회 상한 {_batchSize:@BatchSize}건)");
+    }
+
+    /// <summary>
+    /// 만료 종결 이벤트 1행을 방출한다(5.7). 만료는 돈이 움직이지 않아 수수료·판매자 수령액이 0이고
+    /// 구매자도 없다 — 대신 <c>mail_id</c>로 반송 메일과 이어진다.
+    /// </summary>
+    private void EmitExpire(TradeExpireOutcome expired, long closedAt)
+    {
+        var listing = expired.Listing;
+        _eventLogger.Action(
+            Constants.EventLog.Tags.TradeClose, listing.SellerUserId,
+            new TradeCloseEvent(
+                listing.ListingId, listing.ItemCode, _masterData.GetItem(listing.ItemCode)?.Grade ?? 0,
+                TradeCloseOutcome.Expire, listing.Price, 0, 0, null,
+                DateTimeUtil.ElapsedSeconds(listing.CreatedAt, closedAt), expired.ReturnMailId),
+            (int)TaskbarHero.Common.ErrorCode.Success);
     }
 
     /// <summary>반송 메일 문구(`{0}`)에 넣을 아이템 이름. 마스터에 없으면 코드를 문자열로 폴백한다.</summary>

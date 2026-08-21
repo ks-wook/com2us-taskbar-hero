@@ -452,6 +452,16 @@ public static class Constants
             /// 컬럼으로 두지 않고 같은 <c>pull_id</c>의 행 수와 원장에서 파생한다(5.6).
             /// </summary>
             public const string GachaPullItem = "gacha.pull_item";
+
+            /// <summary>판매 등록(에스크로) → <c>trade_register_logs</c>. 가격 범위 거부까지 남긴다(5.7).</summary>
+            public const string TradeRegister = "trade.register";
+
+            /// <summary>
+            /// 등록이 <b>어떻게든 끝날 때</b>(구매·취소·만료) → <c>trade_close_logs</c>.
+            /// 결말 셋을 <c>outcome</c> 한 컬럼으로 갈라 한 테이블에 담는다 — 핵심 질문인 미체결률이
+            /// 세 결말의 비율이라 <c>GROUP BY outcome</c> 한 줄로 나오기 때문이다(5.7).
+            /// </summary>
+            public const string TradeClose = "trade.close";
         }
     }
 }

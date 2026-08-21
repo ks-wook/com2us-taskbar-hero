@@ -40,6 +40,6 @@ public interface ITradeRepository
     Task<IReadOnlyList<long>> GetExpiredListingIdsAsync(long nowUnix, int limit);
 
     /// <summary>만료 처리: 조건부 갱신으로 취소 확정 → 아이템을 판매자에게 메일로 반송한다. 이미 닫혔으면 null.</summary>
-    Task<TradeListingSnapshot?> ApplyExpireAsync(
+    Task<TradeExpireOutcome?> ApplyExpireAsync(
         long listingId, Func<TradeListingSnapshot, MailDraft> composeReturnMail, long nowUnix);
 }

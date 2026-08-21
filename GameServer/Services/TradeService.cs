@@ -8,6 +8,7 @@ using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
 using GameServer.Util;
+using GameServer.Logging;
 
 namespace GameServer.Services;
 
@@ -22,15 +23,17 @@ public sealed class TradeService : ITradeService
     private readonly ITradeRepository _tradeRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<TradeService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(거래 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
+    /// <summary>의존성(거래 리포지토리·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
     public TradeService(
         ITradeRepository tradeRepository, MasterDbProvider masterData,
-        ILogger<TradeService> logger)
+        ILogger<TradeService> logger, IEventLogger eventLogger)
     {
         _tradeRepository = tradeRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -98,6 +101,12 @@ public sealed class TradeService : ITradeService
             case TradeRegisterStatus.NotSellable:
                 return new SaveResult(ErrorCode.TradeNotSellable, string.Empty, null);
             case TradeRegisterStatus.PriceOutOfRange:
+                // 이 거부만 남긴다 — 부르려던 가격이 허용 범위 밖이라는 사실이 반복되면 그 범위가
+                // 실제 시세와 맞지 않는다는 뜻이다. 등록 한도 초과는 그 시점에 아이템을 아직 읽지 않아
+                // 남길 맥락(어떤 아이템)이 없고, 나머지는 정상 클라이언트가 시도하지 않는 요청이다(4.1).
+                EmitRegister(
+                    userId, 0, outcome.AttemptedItemCode, outcome.AttemptedEnhanceLevel, price,
+                    ErrorCode.TradePriceOutOfRange);
                 return new SaveResult(ErrorCode.TradePriceOutOfRange, string.Empty, null);
             case TradeRegisterStatus.ListingLimitExceeded:
                 return new SaveResult(ErrorCode.TradeListingLimitExceeded, string.Empty, null);
@@ -106,6 +115,10 @@ public sealed class TradeService : ITradeService
         var listing = outcome.Listing!;
 
         _logger.ZLogInformation($"거래소 등록: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}, price {listing.Price:@Price}");
+
+        // 에스크로 이동 트랜잭션이 커밋된 뒤에 방출한다(4.2).
+        EmitRegister(
+            userId, listing.ListingId, listing.ItemCode, listing.EnhanceLevel, listing.Price, ErrorCode.Success);
 
         return new SaveResult(ErrorCode.Success, "Registered", new TradeRegisterResultData
         {
@@ -171,12 +184,22 @@ public sealed class TradeService : ITradeService
             case TradeCloseStatus.SelfPurchase:
                 return new SaveResult(ErrorCode.TradeSelfPurchase, string.Empty, null);
             case TradeCloseStatus.InsufficientGold:
+                // "이 가격에서 못 샀다"는 시세 신호라 남긴다(4.1). 이미 닫힘·자기 등록·없는 등록은
+                // 각각 자연스러운 경합이거나 클라이언트가 막아야 할 요청이라 남기지 않는다.
+                EmitClose(
+                    outcome.Listing!, TradeCloseOutcome.Buy, now, buyerUid: userId, mailId: null,
+                    settled: false, errorCode: ErrorCode.InsufficientCurrency);
                 return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
         }
 
         var bought = outcome.Listing!;
 
         _logger.ZLogInformation($"거래소 구매: buyerUserId {userId:@BuyerUserId}, listingId {bought.ListingId:@ListingId}, price {bought.Price:@Price}, 정산액 {SettlementAmount(bought.Price):@Settlement}, 아이템 메일 {outcome.ItemMailId:@MailId}");
+
+        // uid는 판매자다 — 등록과 결말을 같은 계정 축으로 잇기 위해서이고, 구매자는 buyer_uid로 따로 담는다(5.7).
+        EmitClose(
+            bought, TradeCloseOutcome.Buy, now, buyerUid: userId, mailId: outcome.ItemMailId,
+            settled: true, errorCode: ErrorCode.Success);
 
         var data = new TradeBuyResultData
         {
@@ -217,12 +240,21 @@ public sealed class TradeService : ITradeService
             case TradeCloseStatus.AlreadyClosed:
                 return new SaveResult(ErrorCode.TradeAlreadyClosed, string.Empty, null);
             case TradeCloseStatus.InventoryFull:
+                // 되돌릴 칸이 없어 취소가 막히는 빈도는 가방 용량 설계의 신호다(4.1이 명시한 거부 중 하나).
+                EmitClose(
+                    outcome.Listing!, TradeCloseOutcome.Cancel, DateTimeUtil.NowUnixSeconds(),
+                    buyerUid: null, mailId: null, settled: false, errorCode: ErrorCode.InventoryFull);
                 return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
         }
 
         var listing = outcome.Listing!;
 
         _logger.ZLogInformation($"거래소 취소: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}");
+
+        // 취소는 아이템이 인벤토리로 돌아가 메일이 없다 — mail_id·buyer_uid 없이 나간다.
+        EmitClose(
+            listing, TradeCloseOutcome.Cancel, DateTimeUtil.NowUnixSeconds(),
+            buyerUid: null, mailId: null, settled: false, errorCode: ErrorCode.Success);
 
         return new SaveResult(ErrorCode.Success, "Cancelled", new TradeCancelResultData
         {
@@ -235,6 +267,41 @@ public sealed class TradeService : ITradeService
             },
             inventoryDelta = outcome.Delta,
         });
+    }
+
+    /// <summary>
+    /// 등록 이벤트 1행을 방출한다(5.7). 성공과 가격 범위 거부가 같은 자리를 쓰며, 거부 라인의
+    /// <paramref name="listingId"/>는 0이다(등록이 만들어지지 않았다). 등급·기준가는 마스터에서 찾는다.
+    /// </summary>
+    private void EmitRegister(
+        long userId, long listingId, int itemCode, int enhanceLevel, long price, ErrorCode errorCode)
+    {
+        var def = _masterData.GetItem(itemCode);
+        _eventLogger.Action(
+            Constants.EventLog.Tags.TradeRegister, userId,
+            new TradeRegisterEvent(listingId, itemCode, def?.Grade ?? 0, enhanceLevel, price, def?.BasePrice ?? 0),
+            (int)errorCode);
+    }
+
+    /// <summary>
+    /// 종결 이벤트 1행을 방출한다(5.7). 세 결말이 같은 테이블을 쓰므로 이 한 자리에서 낸다.
+    /// <para><paramref name="settled"/>가 true(구매 성사)일 때만 수수료·판매자 수령액을 채운다 —
+    /// 취소·만료·거부에는 돈이 움직이지 않아 0이다.</para>
+    /// </summary>
+    private void EmitClose(
+        TradeListingSnapshot listing, string outcome, long closedAt,
+        long? buyerUid, long? mailId, bool settled, ErrorCode errorCode)
+    {
+        long proceeds = settled ? SettlementAmount(listing.Price) : 0;
+        long fee = settled ? listing.Price - proceeds : 0;
+
+        _eventLogger.Action(
+            Constants.EventLog.Tags.TradeClose, listing.SellerUserId,
+            new TradeCloseEvent(
+                listing.ListingId, listing.ItemCode, _masterData.GetItem(listing.ItemCode)?.Grade ?? 0, outcome,
+                listing.Price, fee, proceeds, buyerUid,
+                DateTimeUtil.ElapsedSeconds(listing.CreatedAt, closedAt), mailId),
+            (int)errorCode);
     }
 
     /// <summary>판매 대금(수수료 20% 차감 후 판매자 수령액). 소수점은 버린다.</summary>

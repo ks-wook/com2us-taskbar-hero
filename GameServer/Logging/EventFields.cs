@@ -106,6 +106,52 @@ public sealed record GachaPullItemEvent(
     long PullId, int Seq, int GachaCode, int ItemCode, int Grade,
     bool IsPity, bool IsGuaranteed) : IEventFields;
 
+// ── 5.7 거래소 / 교역선 ──
+
+/// <summary>
+/// <c>trade.register</c> — 판매 등록(에스크로). <b>아이템별 시세 분포</b>(<c>price / base_price</c>)와 공급량을 답한다.
+/// <para><b>가격 범위 거부도 남긴다</b> — 유저가 부르려던 가격이 허용 범위 밖이라는 사실이 반복되면
+/// 그 범위가 실제 시세와 맞지 않는다는 뜻이다. 그때 <see cref="ListingId"/>는 0이다(등록이 만들어지지 않았다).</para>
+/// <para><c>price_ratio</c> 같은 파생 값은 컬럼으로 두지 않는다 — <c>price / base_price</c>로 언제든 계산된다.</para>
+/// </summary>
+/// <param name="BasePrice">마스터 기준가. 시세 배율의 분모다.</param>
+public sealed record TradeRegisterEvent(
+    long ListingId, int ItemCode, int Grade, int EnhanceLevel, long Price, long BasePrice) : IEventFields;
+
+/// <summary>
+/// <c>trade.close</c> — 등록이 <b>어떻게든 끝났을 때</b>(구매·취소·만료). 미체결률·체결가·체결까지 걸린 시간·
+/// 수수료 소각량을 답한다.
+/// <para><b>결말 셋을 한 테이블에 담는다</b> — 필드가 거의 같고, 핵심 질문인 미체결률이 세 결말의 비율이라
+/// <c>GROUP BY outcome</c> 한 줄로 나온다. 테이블을 셋으로 나누면 그 질문마다 <c>UNION</c>이 필요하다(5.7).</para>
+/// <para><b>uid는 언제나 판매자(등록자)</b>다 — 등록과 결말을 같은 계정 축으로 잇기 위해서이고,
+/// 구매자는 <see cref="BuyerUid"/>로 따로 담는다.</para>
+/// </summary>
+/// <param name="Outcome"><see cref="TradeCloseOutcome"/>의 값(<c>buy</c>/<c>cancel</c>/<c>expire</c>).</param>
+/// <param name="Fee">구매 성사 시 소각되는 수수료(판매가의 20%). 구매가 아니면 0이다 — 경제에서 사라지는 골드다.</param>
+/// <param name="SellerProceeds">판매자 수령액(가격 − 수수료). 구매가 아니면 0이다.</param>
+/// <param name="BuyerUid">구매자. 구매가 아니면 null(필드 자체가 빠진다).</param>
+/// <param name="ListedSec">등록 → 종결까지 걸린 초. <b>유동성 지표</b>다 — 길어지면 그 품목은 공급 과잉이다.</param>
+/// <param name="MailId">그 결말로 발급된 메일(구매=구매 아이템, 만료=반송). 취소는 인벤토리로 돌아가 메일이 없어 null이다.</param>
+public sealed record TradeCloseEvent(
+    long ListingId, int ItemCode, int Grade, string Outcome,
+    long Price, long Fee, long SellerProceeds, long? BuyerUid, long ListedSec, long? MailId) : IEventFields;
+
+/// <summary>
+/// <see cref="TradeCloseEvent.Outcome"/>에 들어가는 값. 컬럼에 그대로 적재되고 미체결률 집계의 그룹 축이라
+/// 오타가 나면 결말 하나가 통째로 빠진다.
+/// </summary>
+public static class TradeCloseOutcome
+{
+    /// <summary>구매 성사.</summary>
+    public const string Buy = "buy";
+
+    /// <summary>판매자가 직접 내림.</summary>
+    public const string Cancel = "cancel";
+
+    /// <summary>판매 기간(3일)이 지나 배치가 닫음.</summary>
+    public const string Expire = "expire";
+}
+
 // ── 5.4 오프라인 보상 ──
 
 /// <summary>

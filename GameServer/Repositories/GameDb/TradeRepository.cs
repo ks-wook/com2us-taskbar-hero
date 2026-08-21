@@ -22,6 +22,16 @@ public sealed record TradeRegisterOutcome(TradeRegisterStatus Status, TradeListi
     /// <summary>가방 변경분(5.0). 커밋 전에 확정된 값이라 응답 조립·캐시 갱신에 추가 조회가 필요 없다.</summary>
     public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
 
+    /// <summary>
+    /// 등록하려던 아이템의 마스터 코드·강화 단계. <b>가격 범위 거부에서도 채운다</b> — 그 거부를 이벤트 로그로
+    /// 남기는데, "어떤 아이템에 얼마를 부르려 했나"가 곧 가격 제한 범위를 조정할 근거이기 때문이다(5.7).
+    /// 등록이 성공하면 <see cref="Listing"/>이 같은 값을 담으므로 이 둘은 거부 경로 전용이다.
+    /// </summary>
+    public int AttemptedItemCode { get; init; }
+
+    /// <inheritdoc cref="AttemptedItemCode"/>
+    public int AttemptedEnhanceLevel { get; init; }
+
     public static TradeRegisterOutcome Fail(TradeRegisterStatus status) => new(status, null);
 }
 
@@ -31,6 +41,12 @@ public sealed record TradeBuyOutcome(
 {
     public static TradeBuyOutcome Fail(TradeCloseStatus status) => new(status, null, 0, 0);
 }
+
+/// <summary>
+/// 만료 처리 결과. 만료된 등록 스냅샷과 <b>판매자에게 발급한 반송 메일 id</b>를 함께 돌려준다 —
+/// 그 id가 이벤트 로그(<c>trade.close</c>)와 메일 원장을 잇는 축이다(5.7·5.8).
+/// </summary>
+public sealed record TradeExpireOutcome(TradeListingSnapshot Listing, long ReturnMailId);
 
 /// <summary>판매 취소 결과. 성공 시 인벤토리로 복귀한 아이템 스냅샷을 돌려준다.</summary>
 public sealed record TradeCancelOutcome(TradeCloseStatus Status, TradeListingSnapshot? Listing)
@@ -173,7 +189,13 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
 
             if (!IsPriceInRange(price, info.BasePrice))
             {
-                return TxResult<TradeRegisterOutcome>.Rollback(TradeRegisterOutcome.Fail(TradeRegisterStatus.PriceOutOfRange));
+                // 거부지만 시도한 아이템 맥락은 채워 돌려준다 — 이벤트 로그가 그대로 쓴다(5.7).
+                return TxResult<TradeRegisterOutcome>.Rollback(
+                    TradeRegisterOutcome.Fail(TradeRegisterStatus.PriceOutOfRange) with
+                    {
+                        AttemptedItemCode = item.ItemCode,
+                        AttemptedEnhanceLevel = item.EnhanceLevel,
+                    });
             }
 
             // 4) 에스크로 이동: 인벤토리 행 제거(스택형도 행 전체 — 부분 판매 없음).
@@ -263,7 +285,13 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
             var gold = await LoadGoldAsync(db, transaction, buyerUserId);
             if (gold is null || gold.Value.Quantity < row.Price)
             {
-                return TxResult<TradeBuyOutcome>.Rollback(TradeBuyOutcome.Fail(TradeCloseStatus.InsufficientGold));
+                // 거부지만 등록 스냅샷은 담아 돌려준다 — "이 가격에서 못 샀다"가 시세 신호라 로그로 남긴다(5.7).
+                return TxResult<TradeBuyOutcome>.Rollback(new TradeBuyOutcome(
+                    TradeCloseStatus.InsufficientGold,
+                    new TradeListingSnapshot(
+                        row.ListingId, row.SellerUserId, row.ItemCode, row.EnhanceLevel,
+                        row.Quantity, row.Price, row.CreatedAt, row.ExpiresAt),
+                    0, 0));
             }
 
             // 3) 선점(CAS): 판매중일 때만 판매완료로 전이.
@@ -340,7 +368,9 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
             var stored = await StoreTradeItemAsync(db, transaction, userId, snapshot, nowUnix, delta);
             if (!stored)
             {
-                return TxResult<TradeCancelOutcome>.Rollback(TradeCancelOutcome.Fail(TradeCloseStatus.InventoryFull));
+                // 거부지만 스냅샷은 담아 돌려준다 — 되돌릴 칸이 없어 취소가 막히는 빈도는 가방 용량 설계의 신호다(5.7).
+                return TxResult<TradeCancelOutcome>.Rollback(
+                    new TradeCancelOutcome(TradeCloseStatus.InventoryFull, snapshot));
             }
 
             return TxResult<TradeCancelOutcome>.Commit(new TradeCancelOutcome(TradeCloseStatus.Ok, snapshot) { Delta = delta });
@@ -363,9 +393,9 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
     /// 스냅샷 확보 → 판매자에게 반송 메일 발급. 그 사이 구매·취소로 이미 닫혔으면 null(스킵).
     /// 만료 반송은 아이템만 되돌리며 골드 이동은 없다.
     /// </summary>
-    public async Task<TradeListingSnapshot?> ApplyExpireAsync(
+    public async Task<TradeExpireOutcome?> ApplyExpireAsync(
         long listingId, Func<TradeListingSnapshot, MailDraft> composeReturnMail, long nowUnix)
-        => await TransactionAsync<TradeListingSnapshot?>(async (db, transaction) =>
+        => await TransactionAsync<TradeExpireOutcome?>(async (db, transaction) =>
         {
             // 1) 선점(CAS): 아직 판매중이고 만료가 지난 등록만 만료로 전이(수동 취소 3과 구분되는 4).
             var closed = await db.Query("trade_listing")
@@ -374,7 +404,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
                 .UpdateAsync(new { status = Constants.Trade.StatusExpired, closed_at = nowUnix }, transaction);
             if (closed == 0)
             {
-                return TxResult<TradeListingSnapshot?>.Rollback(null);
+                return TxResult<TradeExpireOutcome?>.Rollback(null);
             }
 
             // 2) 반송 스냅샷.
@@ -384,17 +414,17 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
                 .FirstOrDefaultAsync<TradeListingRow>(transaction);
             if (row is null)
             {
-                return TxResult<TradeListingSnapshot?>.Rollback(null);
+                return TxResult<TradeExpireOutcome?>.Rollback(null);
             }
 
             // 3) 반송 메일 발급(판매자). 인벤토리가 가득해도 안전하게 되돌리기 위해 메일을 쓴다.
             var snapshot = new TradeListingSnapshot(
                 row.ListingId, row.SellerUserId, row.ItemCode, row.EnhanceLevel,
                 row.Quantity, row.Price, row.CreatedAt, row.ExpiresAt);
-            await MailRepository.InsertMailAsync(
+            var returnMailId = await MailRepository.InsertMailAsync(
                 db, transaction, snapshot.SellerUserId, composeReturnMail(snapshot), nowUnix);
 
-            return TxResult<TradeListingSnapshot?>.Commit(snapshot);
+            return TxResult<TradeExpireOutcome?>.Commit(new TradeExpireOutcome(snapshot, returnMailId));
         });
 
     // ── 내부 헬퍼 ──
