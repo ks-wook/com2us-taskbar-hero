@@ -28,7 +28,14 @@ public sealed record MailSummary(
 /// (발급자가 임의 문자열을 만들지 않음), player_mail에 스냅샷으로 저장된다. Rewards = 첨부(0~N건, seq 순).
 /// </summary>
 public sealed record MailDraft(
-    int Category, string Title, string Body, long ExpiresAt, IReadOnlyList<MailAttachment> Rewards);
+    int Category, string Title, string Body, long ExpiresAt, IReadOnlyList<MailAttachment> Rewards)
+{
+    /// <summary>
+    /// 이 초안을 만든 <c>mail_master</c> 템플릿 코드. DB에는 저장하지 않고(문구·category가 이미 스냅샷으로
+    /// 들어간다) <b>발급 이벤트 로그</b>의 축으로만 쓴다 — 어떤 템플릿이 얼마나 나갔는지를 세는 값이다(5.8).
+    /// </summary>
+    public int TemplateCode { get; init; }
+}
 
 // ── 수령(claim) ──
 

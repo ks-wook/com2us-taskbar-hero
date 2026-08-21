@@ -21,7 +21,7 @@ public static class MailUtil
         var title = string.Format(template.TitleFormat, arg0);
         var body = string.Format(template.BodyFormat, arg0);
         var expiresAt = template.ValidDays > 0 ? nowUnix + DateTimeUtil.DaysToSeconds(template.ValidDays) : 0;
-        return new MailDraft(template.Category, title, body, expiresAt, rewards);
+        return new MailDraft(template.Category, title, body, expiresAt, rewards) { TemplateCode = template.TemplateCode };
     }
 
     /// <summary>
@@ -34,6 +34,6 @@ public static class MailUtil
         var title = string.Format(template.TitleFormat, arg0, arg1);
         var body = string.Format(template.BodyFormat, arg0, arg1);
         var expiresAt = template.ValidDays > 0 ? nowUnix + DateTimeUtil.DaysToSeconds(template.ValidDays) : 0;
-        return new MailDraft(template.Category, title, body, expiresAt, rewards);
+        return new MailDraft(template.Category, title, body, expiresAt, rewards) { TemplateCode = template.TemplateCode };
     }
 }

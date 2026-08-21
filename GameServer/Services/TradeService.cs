@@ -160,20 +160,22 @@ public sealed class TradeService : ITradeService
         }
 
         var now = DateTimeUtil.NowUnixSeconds();
-        var outcome = await _tradeRepository.ApplyBuyAsync(
-            userId, listingId,
-            listing => MailUtil.Compose(
-                purchaseTemplate, ItemLabel(listing.ItemCode), now,
-                new[]
-                {
-                    new MailAttachment(
-                        RewardTypeFor(listing.ItemCode), listing.ItemCode,
-                        listing.Quantity, listing.EnhanceLevel),
-                }),
-            listing => MailUtil.Compose(
-                settlementTemplate, ItemLabel(listing.ItemCode), now,
-                new[] { new MailAttachment(Constants.RewardType.Gold, 0, SettlementAmount(listing.Price)) }),
-            now);
+
+        // 두 초안을 지역 함수로 둔다 — 적재(트랜잭션 안)와 발급 이벤트(커밋 후)가 같은 초안을 봐야
+        // 로그의 template_code·gold·item_count가 실제 발급된 메일과 어긋나지 않는다.
+        MailDraft purchaseMail(TradeListingSnapshot listing) => MailUtil.Compose(
+            purchaseTemplate, ItemLabel(listing.ItemCode), now,
+            new[]
+            {
+                new MailAttachment(
+                    RewardTypeFor(listing.ItemCode), listing.ItemCode,
+                    listing.Quantity, listing.EnhanceLevel),
+            });
+        MailDraft settlementMail(TradeListingSnapshot listing) => MailUtil.Compose(
+            settlementTemplate, ItemLabel(listing.ItemCode), now,
+            new[] { new MailAttachment(Constants.RewardType.Gold, 0, SettlementAmount(listing.Price)) });
+
+        var outcome = await _tradeRepository.ApplyBuyAsync(userId, listingId, purchaseMail, settlementMail, now);
 
         switch (outcome.Status)
         {
@@ -200,6 +202,12 @@ public sealed class TradeService : ITradeService
         EmitClose(
             bought, TradeCloseOutcome.Buy, now, buyerUid: userId, mailId: outcome.ItemMailId,
             settled: true, errorCode: ErrorCode.Success);
+
+        // 구매 1건이 메일을 둘 발급한다 — 구매자에게 아이템, 판매자에게 대금. 받는 계정이 서로 달라
+        // 두 행의 uid가 다르다(5.8).
+        _eventLogger.MailIssued(userId, outcome.ItemMailId, purchaseMail(bought), MailSource.TradeBuyItem);
+        _eventLogger.MailIssued(
+            bought.SellerUserId, outcome.SettlementMailId, settlementMail(bought), MailSource.TradeSellProceeds);
 
         var data = new TradeBuyResultData
         {

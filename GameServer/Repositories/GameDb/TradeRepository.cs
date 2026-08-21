@@ -39,6 +39,12 @@ public sealed record TradeRegisterOutcome(TradeRegisterStatus Status, TradeListi
 public sealed record TradeBuyOutcome(
     TradeCloseStatus Status, TradeListingSnapshot? Listing, long GoldBalance, long ItemMailId)
 {
+    /// <summary>
+    /// 판매자에게 발급한 <b>판매 대금 메일</b> id. 구매 1건이 메일을 둘 발급하므로(구매자=아이템,
+    /// 판매자=대금) 발급 이벤트도 둘 나가며, 그 둘을 가르는 값이다(5.8).
+    /// </summary>
+    public long SettlementMailId { get; init; }
+
     public static TradeBuyOutcome Fail(TradeCloseStatus status) => new(status, null, 0, 0);
 }
 
@@ -319,10 +325,14 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
                 db, transaction, buyerUserId, composeItemMail(snapshot), nowUnix);
 
             // 6) 판매 대금 메일 발급(판매자).
-            await MailRepository.InsertMailAsync(
+            var settlementMailId = await MailRepository.InsertMailAsync(
                 db, transaction, row.SellerUserId, composeSettlementMail(snapshot), nowUnix);
 
-            return TxResult<TradeBuyOutcome>.Commit(new TradeBuyOutcome(TradeCloseStatus.Ok, snapshot, balance, itemMailId));
+            return TxResult<TradeBuyOutcome>.Commit(
+                new TradeBuyOutcome(TradeCloseStatus.Ok, snapshot, balance, itemMailId)
+                {
+                    SettlementMailId = settlementMailId,
+                });
         });
 
     /// <summary>

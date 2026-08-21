@@ -462,6 +462,12 @@ public static class Constants
             /// 세 결말의 비율이라 <c>GROUP BY outcome</c> 한 줄로 나오기 때문이다(5.7).
             /// </summary>
             public const string TradeClose = "trade.close";
+
+            /// <summary>
+            /// 서버가 메일을 발급하는 <b>모든 지점</b> → <c>mail_issue_logs</c>. 메일이 이 게임의 재화 지급
+            /// 관문이라, 발급 − 수령의 차액이 곧 <b>아직 경제에 풀리지 않은 재화</b>다(5.8).
+            /// </summary>
+            public const string MailIssue = "mail.issue";
         }
     }
 }

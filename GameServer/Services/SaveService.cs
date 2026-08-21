@@ -164,9 +164,10 @@ public sealed class SaveService : ISaveService
             var nowUnix = DateTimeUtil.NowUnixSeconds();
             var welcomeMail = ComposeNewbieRewardMail(nickname.Trim(), nowUnix);
 
+            long welcomeMailId;
             try
             {
-                await _saveRepository.CreatePlayerWithFirstCharacterAsync(
+                welcomeMailId = await _saveRepository.CreatePlayerWithFirstCharacterAsync(
                     userId, nickname.Trim(), classCode, gender, Constants.Inventory.BaseCapacity,
                     nowUnix, welcomeMail, startingWeapon, startingSkillCode);
             }
@@ -183,6 +184,12 @@ public sealed class SaveService : ISaveService
             // 가입 → 플레이 전환이라, 두 번째 이후의 캐릭터 추가는 이 축에 들어가지 않는다.
             // 커밋이 끝난 뒤 방출한다(롤백된 사실을 로그에 남기지 않는다, 4.2).
             _eventLogger.Action(Constants.EventLog.Tags.PlayerCreate, userId, new PlayerCreateEvent(classCode, gender));
+
+            // 신규 지원금 메일 발급(5.8). 계정 생애에 한 번뿐이라 이 트랜잭션이 곧 유일한 발급 지점이다.
+            if (welcomeMail is not null && welcomeMailId > 0)
+            {
+                _eventLogger.MailIssued(userId, welcomeMailId, welcomeMail, MailSource.Newbie);
+            }
             // 최초 생성은 계정 초기화라 무료이며 파티 1번 자리에 편성된다.
             return SuccessCharacter(userId, 1, classCode, 1, gender, 0, null);
         }

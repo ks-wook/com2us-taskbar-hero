@@ -83,6 +83,17 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
             return;
         }
 
+        // 반송 메일 초안. 적재(트랜잭션 안)와 발급 이벤트(커밋 후) 두 곳이 같은 초안을 봐야
+        // 로그의 template_code·gold·item_count가 실제 발급된 메일과 어긋나지 않는다.
+        MailDraft returnMail(TradeListingSnapshot listing) => MailUtil.Compose(
+            template, ItemLabel(listing.ItemCode), now,
+            new[]
+            {
+                new MailAttachment(
+                    RewardTypeFor(listing.ItemCode), listing.ItemCode,
+                    listing.Quantity, listing.EnhanceLevel),
+            });
+
         var processed = 0;
         var skipped = 0;
         var failed = 0;
@@ -96,17 +107,7 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
 
             try
             {
-                var expired = await tradeRepository.ApplyExpireAsync(
-                    listingId,
-                    listing => MailUtil.Compose(
-                        template, ItemLabel(listing.ItemCode), now,
-                        new[]
-                        {
-                            new MailAttachment(
-                                RewardTypeFor(listing.ItemCode), listing.ItemCode,
-                                listing.Quantity, listing.EnhanceLevel),
-                        }),
-                    now);
+                var expired = await tradeRepository.ApplyExpireAsync(listingId, returnMail, now);
 
                 if (expired is null)
                 {
@@ -117,6 +118,12 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
                 // 종결 이벤트(5.7). 구매·취소와 같은 테이블에 outcome=expire로 쌓여 미체결률의 분자가 된다.
                 // 배치가 내는 라인이라 req_id가 없다 — 요청에서 나온 값이 아니기 때문이다(4.1).
                 EmitExpire(expired, now);
+
+                // 반송 메일 발급(5.8). 받는 쪽은 판매자다.
+                _eventLogger.MailIssued(
+                    expired.Listing.SellerUserId, expired.ReturnMailId,
+                    returnMail(expired.Listing), MailSource.TradeExpire);
+
                 processed++;
             }
             catch (Exception ex)

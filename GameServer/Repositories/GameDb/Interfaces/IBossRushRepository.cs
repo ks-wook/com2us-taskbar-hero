@@ -65,7 +65,7 @@ public interface IBossRushRepository
     /// 전이하므로 재진입 시 이미 처리한 행은 0행이 되어 스킵된다.
     /// </summary>
     /// <param name="rewardMail">발급할 순위 보상 메일 초안. null이면 보상 없이 순위만 확정한다.</param>
-    Task<bool> SettleRecordAsync(
+    Task<SettleRecordOutcome> SettleRecordAsync(
         int seasonId, long userId, int finalRank, MailDraft? rewardMail, long nowUnix);
 
     /// <summary>시즌을 종료 처리한다(status → 3, settled_at 기록).</summary>

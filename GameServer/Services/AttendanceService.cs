@@ -8,6 +8,7 @@ using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
 using GameServer.Util;
+using GameServer.Logging;
 
 namespace GameServer.Services;
 
@@ -24,14 +25,17 @@ public sealed class AttendanceService : IAttendanceService
     private readonly IAttendanceRepository _attendanceRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<AttendanceService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(출석 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
+    /// <summary>의존성(출석 리포지토리·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
     public AttendanceService(
-        IAttendanceRepository attendanceRepository, MasterDbProvider masterData, ILogger<AttendanceService> logger)
+        IAttendanceRepository attendanceRepository, MasterDbProvider masterData,
+        ILogger<AttendanceService> logger, IEventLogger eventLogger)
     {
         _attendanceRepository = attendanceRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -149,6 +153,15 @@ public sealed class AttendanceService : IAttendanceService
         };
 
         _logger.ZLogInformation($"출석 보상 발급: userId {userId:@UserId}, attendDate {today:@AttendDate}, day {outcome.Day:@Day}, mailId {outcome.MailId:@MailId}");
+
+        // 출석 보상 메일 발급(5.8). 재화는 이 시점에 풀리지 않고 수령 시 원장으로 잡히므로,
+        // 이 행과 원장의 mail_claim 행의 차액이 곧 미수령 부채다.
+        var issuedMail = ComposeRewardMail(template, outcome.Day, nowUnix);
+        if (issuedMail is not null)
+        {
+            _eventLogger.MailIssued(userId, outcome.MailId, issuedMail, MailSource.Attendance);
+        }
+
         return new SaveResult(ErrorCode.Success, "Attended", data);
     }
 

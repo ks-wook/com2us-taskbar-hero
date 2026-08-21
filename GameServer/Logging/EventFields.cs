@@ -106,6 +106,50 @@ public sealed record GachaPullItemEvent(
     long PullId, int Seq, int GachaCode, int ItemCode, int Grade,
     bool IsPity, bool IsGuaranteed) : IEventFields;
 
+// ── 5.8 메일 ──
+
+/// <summary>
+/// <c>mail.issue</c> — 서버가 메일을 발급하는 <b>모든 지점</b>.
+/// <para><b>메일은 이 게임의 재화 지급 관문이다</b> — 출석·거래 대금·순위 보상·신규 지원금이 전부 메일을
+/// 거치므로, <b>발급(이 테이블) − 수령(원장의 mail_claim 행)</b>의 차액이 곧 <b>우편함에 떠 있는 부채</b>,
+/// 즉 아직 경제에 풀리지 않은 재화다. 발급 → 수령 지연도 두 시각의 차로 나온다(5.8).</para>
+/// </summary>
+/// <param name="TemplateCode">문구를 확정한 <c>mail_master</c> 템플릿. 어떤 템플릿이 얼마나 나갔는지를 센다.</param>
+/// <param name="Category">메일 분류(템플릿이 정한 값).</param>
+/// <param name="Source"><see cref="MailSource"/>의 값. 어느 도메인이 발급했는지를 가른다.</param>
+/// <param name="Gold">첨부된 골드 총액(없으면 0).</param>
+/// <param name="ItemCount">
+/// 첨부 아이템 <b>건수만</b> 담는다 — 품목별 상세는 수령 시 <c>item_flow_logs</c>가 담으므로
+/// 여기에 목록을 넣으면 같은 사실이 두 곳에 생긴다(5.8).
+/// </param>
+public sealed record MailIssueEvent(
+    long MailId, int TemplateCode, int Category, string Source, long Gold, int ItemCount) : IEventFields;
+
+/// <summary>
+/// <see cref="MailIssueEvent.Source"/>에 들어가는 <b>고정 집합</b>(5.8). 발급 주체를 가르는 집계 축이라
+/// 새 발급 지점을 만들면 여기에 값을 추가하고 정의 문서의 목록도 함께 고친다.
+/// </summary>
+public static class MailSource
+{
+    /// <summary>신규 가입 지원금(계정 초기화 시 1회).</summary>
+    public const string Newbie = "newbie";
+
+    /// <summary>출석 보상.</summary>
+    public const string Attendance = "attendance";
+
+    /// <summary>거래소 구매 아이템(구매자에게).</summary>
+    public const string TradeBuyItem = "trade_buy_item";
+
+    /// <summary>거래소 판매 대금(판매자에게, 수수료 차감 후).</summary>
+    public const string TradeSellProceeds = "trade_sell_proceeds";
+
+    /// <summary>거래소 만료 반송(판매자에게 아이템 되돌림).</summary>
+    public const string TradeExpire = "trade_expire";
+
+    /// <summary>보스러시 시즌 순위 보상(1~3위).</summary>
+    public const string BossRushRank = "bossrush_rank";
+}
+
 // ── 5.7 거래소 / 교역선 ──
 
 /// <summary>

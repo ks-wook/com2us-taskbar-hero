@@ -8,6 +8,7 @@ using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Util;
+using GameServer.Logging;
 
 namespace GameServer.Batch;
 
@@ -36,13 +37,15 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     private readonly int _batchSize;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<BossRushSeasonBatchScheduler> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터를 주입받는다.</summary>
+    /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터와 이벤트 로거를 주입받는다.</summary>
     public BossRushSeasonBatchScheduler(
         IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
-        MasterDbProvider masterData, ILogger<BossRushSeasonBatchScheduler> logger)
+        MasterDbProvider masterData, ILogger<BossRushSeasonBatchScheduler> logger, IEventLogger eventLogger)
         : base(scopeFactory, batchLock, logger)
     {
+        _eventLogger = eventLogger;
         var interval = configuration.GetValue(
             "BossRushSeasonBatch:IntervalSeconds", Constants.Batch.BossRushSeason.DefaultIntervalSeconds);
         var batchSize = configuration.GetValue(
@@ -239,14 +242,18 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 
                 try
                 {
-                    var applied = await repository.SettleRecordAsync(
+                    var settleResult = await repository.SettleRecordAsync(
                         season.SeasonId, target.UserId, rank, mail, nowUnix);
-                    if (applied)
+                    if (settleResult.Applied)
                     {
                         settled++;
                         if (mail is not null)
                         {
                             rewarded++;
+
+                            // 순위 보상 메일 발급(5.8). 배치가 내는 라인이라 req_id가 없다.
+                            _eventLogger.MailIssued(
+                                target.UserId, settleResult.RewardMailId, mail, MailSource.BossRushRank);
                         }
                     }
                 }

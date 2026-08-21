@@ -215,10 +215,10 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
     ///     game_player가 계정당 1행이라 이 트랜잭션은 계정 생애에 한 번만 성공하므로, 지급 여부 플래그 없이
     ///     중복 지급이 원천 차단된다(세이브 데이터 기획서 5.3)</para>
     /// </remarks>
-    public async Task CreatePlayerWithFirstCharacterAsync(
+    public async Task<long> CreatePlayerWithFirstCharacterAsync(
         long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix,
         MailDraft? welcomeMail, StartingEquipment? startingEquipment, int? startingSkillCode)
-        => await TransactionAsync(async (db, transaction) =>
+        => await TransactionAsync<long>(async (db, transaction) =>
         {
             await db.Query("game_player").InsertAsync(new
             {
@@ -269,10 +269,14 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
                 last_attend_date = 0,
             }, transaction);
 
+            long welcomeMailId = 0;
             if (welcomeMail is not null)
             {
-                await MailRepository.InsertMailAsync(db, transaction, userId, welcomeMail, nowUnix);
+                welcomeMailId = await MailRepository.InsertMailAsync(db, transaction, userId, welcomeMail, nowUnix);
             }
+
+            // 발급된 메일 id는 커밋 이후 발급 이벤트 로그(mail.issue)가 쓴다(5.8).
+            return TxResult<long>.Commit(welcomeMailId);
         });
 
     /// <summary>

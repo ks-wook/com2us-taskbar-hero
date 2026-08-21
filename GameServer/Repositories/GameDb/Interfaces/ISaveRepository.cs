@@ -33,8 +33,9 @@ public interface ISaveRepository
     Task<List<CharacterSlot>> GetCharacterSlotsAsync(long userId);
 
     /// <summary>최초 접속: game_player + 첫 캐릭터(직업·성별, 파티 1번 자리) + 기본 무기(장착 상태) + 기본 액티브 스킬(습득·장착) +
-    /// 큐브 + 신규 가입 지원금 메일을 한 트랜잭션으로 초기화한다. welcomeMail·startingEquipment·startingSkillCode가 null이면 그 항목은 건너뛴다.</summary>
-    Task CreatePlayerWithFirstCharacterAsync(
+    /// 큐브 + 신규 가입 지원금 메일을 한 트랜잭션으로 초기화한다. welcomeMail·startingEquipment·startingSkillCode가 null이면 그 항목은 건너뛴다.
+    /// <para>반환값은 <b>발급된 신규 지원금 메일 id</b>(발급하지 않았으면 0) — 커밋 이후 발급 이벤트 로그가 쓴다.</para></summary>
+    Task<long> CreatePlayerWithFirstCharacterAsync(
         long userId, string nickname, int classCode, int gender, int inventoryCapacity, long nowUnix,
         MailDraft? welcomeMail, StartingEquipment? startingEquipment, int? startingSkillCode);
 

@@ -40,6 +40,13 @@ public sealed record BossRushClearOutcome(
 /// <summary>랭킹 목록 1행(MySQL 폴백·종료 시즌 조회 결과). 닉네임은 별도 조회로 채운다.</summary>
 public sealed record BossRushRankRow(int Rank, long UserId, int ClearMs, long RecordedAt);
 
+/// <summary>
+/// 순위 확정 1건의 결과. <paramref name="Applied"/>가 false면 이미 확정된 행이라 아무것도 하지 않았다는 뜻이고,
+/// <paramref name="RewardMailId"/>는 이때 발급한 순위 보상 메일 id(보상 구간 밖이면 0)다 —
+/// 커밋 이후 발급 이벤트 로그(<c>mail.issue</c>)가 쓴다(5.8).
+/// </summary>
+public sealed record SettleRecordOutcome(bool Applied, long RewardMailId);
+
 /// <summary>시즌 정산 대상 1건(순위 미확정 기록).</summary>
 public sealed record BossRushSettleTarget(long UserId, int BestClearMs, long RecordedAt);
 
@@ -482,9 +489,9 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
     /// 기록 1건의 순위를 확정하고(final_rank) 보상 메일을 같은 트랜잭션에서 발급한다. final_rank=0 조건부
     /// 갱신이라 재진입 시 이미 처리한 행은 0행이 되어 스킵된다 — "보상은 갔는데 순위 기록이 없음"이 생기지 않는다.
     /// </summary>
-    public async Task<bool> SettleRecordAsync(
+    public async Task<SettleRecordOutcome> SettleRecordAsync(
         int seasonId, long userId, int finalRank, MailDraft? rewardMail, long nowUnix)
-        => await TransactionAsync<bool>(async (db, transaction) =>
+        => await TransactionAsync<SettleRecordOutcome>(async (db, transaction) =>
         {
             var mailId = rewardMail is null
                 ? 0L
@@ -499,10 +506,10 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
             if (updated == 0)
             {
                 // 이미 정산된 행 — 방금 만든 메일까지 함께 되돌린다(중복 발급 방지).
-                return TxResult<bool>.Rollback(false);
+                return TxResult<SettleRecordOutcome>.Rollback(new SettleRecordOutcome(false, 0));
             }
 
-            return TxResult<bool>.Commit(true);
+            return TxResult<SettleRecordOutcome>.Commit(new SettleRecordOutcome(true, mailId));
         });
 
     /// <summary>시즌을 종료 처리한다(status → 3, settled_at 기록).</summary>
