@@ -232,7 +232,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
                 MailDraft? mail = null;
                 if (reward is not null && reward.RewardGold > 0 && template is not null)
                 {
-                    mail = MailComposer.Compose(
+                    mail = MailUtil.Compose(
                         template, season.SeasonId.ToString(), rank.ToString(), nowUnix,
                         new[] { new MailAttachment(Constants.RewardType.Gold, 0, reward.RewardGold) });
                 }

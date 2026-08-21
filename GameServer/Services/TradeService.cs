@@ -149,7 +149,7 @@ public sealed class TradeService : ITradeService
         var now = DateTimeUtil.NowUnixSeconds();
         var outcome = await _tradeRepository.ApplyBuyAsync(
             userId, listingId,
-            listing => MailComposer.Compose(
+            listing => MailUtil.Compose(
                 purchaseTemplate, ItemLabel(listing.ItemCode), now,
                 new[]
                 {
@@ -157,7 +157,7 @@ public sealed class TradeService : ITradeService
                         RewardTypeFor(listing.ItemCode), listing.ItemCode,
                         listing.Quantity, listing.EnhanceLevel),
                 }),
-            listing => MailComposer.Compose(
+            listing => MailUtil.Compose(
                 settlementTemplate, ItemLabel(listing.ItemCode), now,
                 new[] { new MailAttachment(Constants.RewardType.Gold, 0, SettlementAmount(listing.Price)) }),
             now);

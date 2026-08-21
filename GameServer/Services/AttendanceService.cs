@@ -162,7 +162,7 @@ public sealed class AttendanceService : IAttendanceService
             return null;
         }
 
-        return MailComposer.Compose(
+        return MailUtil.Compose(
             template, day.ToString(), nowUnix,
             new[] { new MailAttachment(reward.RewardType, reward.RewardCode, reward.Quantity) });
     }

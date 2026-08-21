@@ -4,6 +4,7 @@ using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using SqlKata.Execution;
 using TaskbarHero.Common.Dto;
+using GameServer.Util;
 
 namespace GameServer.Repositories.GameDb;
 
@@ -233,7 +234,7 @@ public sealed class MailRepository : GameDbBase, IMailRepository
 
     /// <summary>
     /// 메일 1건(player_mail + 첨부 player_mail_reward)을 **발급자의 트랜잭션 안에서** 삽입하고 mail_id를 반환한다
-    /// (mail 기획서 §6.4 — 렌더링은 발급자 측 MailComposer, 적재는 리포지토리). 출석 획득·거래소 대금 등
+    /// (mail 기획서 §6.4 — 렌더링은 발급자 측 MailUtil, 적재는 리포지토리). 출석 획득·거래소 대금 등
     /// 도메인 트랜잭션이 자신의 상태 변경과 메일 발급을 원자적으로 묶을 때 호출한다.
     /// </summary>
     public static async Task<long> InsertMailAsync(

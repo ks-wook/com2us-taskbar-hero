@@ -95,7 +95,7 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
             {
                 var expired = await tradeRepository.ApplyExpireAsync(
                     listingId,
-                    listing => MailComposer.Compose(
+                    listing => MailUtil.Compose(
                         template, ItemLabel(listing.ItemCode), now,
                         new[]
                         {

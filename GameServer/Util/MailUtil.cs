@@ -1,16 +1,15 @@
 ﻿using GameServer.MasterData;
 using GameServer.Repositories.GameDb;
 using GameServer.Models;
-using GameServer.Util;
 
-namespace GameServer.Services;
+namespace GameServer.Util;
 
 /// <summary>
 /// 메일 발급 초안 렌더러(mail 기획서 §6.4 발급 규약). 발급자는 (템플릿, 문구 파라미터, 첨부)만 넘기고,
 /// 제목·본문·category·만료 시각은 mail_master 템플릿이 확정한다 — 도메인마다 문구/만료가 어긋나는 것을 막는다.
 /// 렌더링 결과(MailDraft)는 발급자의 트랜잭션 안에서 MailRepository.InsertMailAsync로 적재된다.
 /// </summary>
-public static class MailComposer
+public static class MailUtil
 {
     /// <summary>
     /// 템플릿의 {0} 자리표시자에 파라미터를 채워 메일 초안을 만든다.

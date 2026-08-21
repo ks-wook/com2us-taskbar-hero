@@ -339,7 +339,7 @@ public sealed class SaveService : ISaveService
             .Select(r => new MailAttachment(r.RewardType, r.RewardCode, r.Quantity))
             .ToList();
 
-        return MailComposer.Compose(template, nickname, nowUnix, attachments);
+        return MailUtil.Compose(template, nickname, nowUnix, attachments);
     }
 
     /// <summary>
