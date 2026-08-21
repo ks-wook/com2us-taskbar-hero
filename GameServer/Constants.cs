@@ -334,6 +334,13 @@ public static class Constants
         /// 이 인코딩은 클리어 시간 상한에 기대지 않는다(제한 시간을 없앤 근거, 기획서 4.3).
         /// </summary>
         public const long ScoreScale = 10_000_000L;
+
+        /// <summary>
+        /// 이벤트 로그가 라운드 기록을 펼쳐 담는 컬럼 수(<c>round1_ms</c> ~ <c>round5_ms</c>). 라운드 수가
+        /// 5로 고정이라 자식 테이블 대신 컬럼으로 둔 구조이며(로그 이벤트 정의 5.10), 마스터의 라운드 수가
+        /// 바뀌면 로그 스키마(<c>bossrush_clear_logs</c>)도 함께 고쳐야 한다.
+        /// </summary>
+        public const int RoundLogColumns = 5;
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -402,6 +409,47 @@ public static class Constants
             /// 한 주기에 소화하게 한다. 초과분은 다음 주기로 이월된다.
             /// </summary>
             public const int DefaultBatchSize = 1000;
+        }
+
+        /// <summary>동시 접속 히스토리 배치(appsettings "OnlineUserHistoryBatch", 로그 이벤트 정의 7장).</summary>
+        public static class OnlineUserHistory
+        {
+            /// <summary>기본 실행 주기 5분 — 히스토리 테이블의 시간 해상도가 곧 이 값이다.</summary>
+            public const int DefaultIntervalSeconds = 5 * (int)DateTimeUtil.SecondsPerMinute;
+
+            /// <summary>
+            /// "접속 중"으로 볼 마지막 활동 창(10분). 클라이언트 하트비트가 5분 주기라 그보다 짧게 잡으면
+            /// 정상 접속자가 창 밖으로 새고, 너무 길면 이미 나간 유저가 남아 동접이 부풀려진다 —
+            /// <b>하트비트 주기의 2배</b>가 한 번 유실돼도 견디는 최소 여유다.
+            /// </summary>
+            public const int DefaultActiveWindowSeconds = 10 * (int)DateTimeUtil.SecondsPerMinute;
+        }
+
+        /// <summary>시간 단위 히스토리 배치(appsettings "HourlyHistoryBatch", 로그 이벤트 정의 7장).</summary>
+        public static class HourlyHistory
+        {
+            /// <summary>기본 실행 주기 1시간(재화 유통·거래 호가 스냅샷의 시간 해상도).</summary>
+            public const int DefaultIntervalSeconds = (int)DateTimeUtil.SecondsPerHour;
+        }
+
+        /// <summary>일 단위 히스토리 배치(appsettings "DailyHistoryBatch", 로그 이벤트 정의 7장).</summary>
+        public static class DailyHistory
+        {
+            /// <summary>
+            /// 기본 실행 주기 1일. <b>정상 경로에서 이 주기로 돌지 않는다</b> — 다음 실행 시각(KST
+            /// <see cref="DefaultRunHourKst"/>시)까지 자기 때문이다. 남은 쓰임은 리더 락 TTL 산정과,
+            /// 주기가 실제로 돌지 못했을 때(리더 락 스킵·예외)의 재시도 간격이다.
+            /// </summary>
+            public const int DefaultIntervalSeconds = (int)DateTimeUtil.SecondsPerDay;
+
+            /// <summary>
+            /// 기본 실행 시각(KST 05시). 일 단위 6종은 <c>player_item</c>·<c>player_character</c>·
+            /// <c>player_skill</c> 전체를 GROUP BY 하는 무거운 집계라 <b>트래픽이 낮은 시간대</b>에 몰아 돌린다(7장).
+            /// </summary>
+            public const int DefaultRunHourKst = 5;
+
+            /// <summary>기상 시각을 아는 배치이므로 대기 상한을 사실상 풀어 둔다(주기에 잘려 폴링으로 돌아가지 않게).</summary>
+            public static readonly TimeSpan MaxDelay = TimeSpan.FromDays(2);
         }
     }
 
@@ -534,6 +582,40 @@ public static class Constants
             /// 아예 없는 기능은 이 행이 유일한 기록이다.
             /// </summary>
             public const string ItemFlow = "item.flow";
+
+            /// <summary>
+            /// 히스토리(주기 스냅샷) 태그 9종(7장). 액션 로그가 <b>변화</b>를 담는 데 반해 이쪽은
+            /// <b>총량과 현재 상태</b>를 담으며, 적재 테이블이 자연 키 PK라 같은 주기를 다시 세면 덮어쓴다.
+            /// </summary>
+            public static class History
+            {
+                /// <summary>5분 주기 동시 접속 → <c>online_user_history</c>. 하트비트를 로그로 남기지 않고 규모만 센다.</summary>
+                public const string OnlineUser = "history.online_user";
+
+                /// <summary>1시간 주기 재화 유통 총량 + 우편함 부채 → <c>currency_supply_history</c>.</summary>
+                public const string CurrencySupply = "history.currency_supply";
+
+                /// <summary>1시간 주기 아이템별 호가 → <c>trade_market_history</c>. 체결이 없어도 시세를 본다.</summary>
+                public const string TradeMarket = "history.trade_market";
+
+                /// <summary>1일 주기 아이템 유통량 → <c>item_supply_history</c>.</summary>
+                public const string ItemSupply = "history.item_supply";
+
+                /// <summary>1일 주기 진행도 분포 → <c>stage_progress_history</c>.</summary>
+                public const string StageProgress = "history.stage_progress";
+
+                /// <summary>1일 주기 착용 장비 분포 → <c>equip_item_history</c>. item_supply와 나누면 착용률이 나온다.</summary>
+                public const string EquipItem = "history.equip_item";
+
+                /// <summary>1일 주기 파티 조합 분포 → <c>party_comp_history</c>.</summary>
+                public const string PartyComp = "history.party_comp";
+
+                /// <summary>1일 주기 액티브 스킬 조합 → <c>skill_build_history</c>.</summary>
+                public const string SkillBuild = "history.skill_build";
+
+                /// <summary>1일 주기 스킬 투자 분포 → <c>skill_invest_history</c>.</summary>
+                public const string SkillInvest = "history.skill_invest";
+            }
         }
     }
 }

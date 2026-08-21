@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace GameServer.Logging;
 
 /// <summary>
@@ -269,7 +271,10 @@ public static class ItemFlowReason
 /// 배치마다 같기 때문이며, 거래 결말 셋을 <c>outcome</c> 한 컬럼에 담은 것과 같은 기준이다(5.11).</para>
 /// <para>이 이벤트에는 <c>uid</c>도 <c>req_id</c>도 없다 — 요청이 아니라 서버 스스로 도는 일이다.</para>
 /// </summary>
-/// <param name="BatchKey">배치 식별자(<c>trade-expire</c>·<c>mail-gc</c>·<c>bossrush-season</c>).</param>
+/// <param name="BatchKey">
+/// 배치 식별자(<c>trade-expire</c>·<c>mail-gc</c>·<c>bossrush-season</c>과 히스토리 3종
+/// <c>history-online-user</c>·<c>history-hourly</c>·<c>history-daily</c>).
+/// </param>
 /// <param name="ElapsedMs">1주기 소요. 늘어나면 대상이 쌓이고 있다는 뜻이다.</param>
 public sealed record BatchRunEvent(
     string BatchKey, int Processed, int Skipped, int Failed, long ElapsedMs) : IEventFields;
@@ -463,3 +468,95 @@ public static class LevelUpSource
     /// <summary>오프라인(방치) 정산으로 오른 레벨.</summary>
     public const string Offline = "offline";
 }
+
+// ── 7. 히스토리 로그(주기 스냅샷) ──
+//
+// 액션 로그가 **변화**를 담는 반면 이 아홉은 **총량과 현재 상태**를 담는다. 배치가 주기마다 게임 DB를 세어
+// 방출하며(서버는 여기서도 logdb에 접속하지 않는다), 적재 테이블은 자연 키 PK라 같은 주기를 다시 세면
+// 덮어쓰는 것이 정상 동작이다(7장).
+//
+// **일 단위 6종은 시간축 컬럼이 log_date다** — 라인의 timestamp는 적재되지 않지만(9.5의 column_mapping에서
+// 빠진다) 4.1의 필수 필드이고 "언제 집계를 돌렸나"가 배치 지연을 볼 때 필요하므로 라인에는 그대로 둔다.
+
+/// <summary>
+/// <c>history.online_user</c> — 5분 주기 동시 접속 추이. <b>하트비트 문제를 푸는 자리</b>다:
+/// <c>update-last-active</c>(5분 주기 × 전체 접속자)를 액션 로그로 남기면 그것 하나가 전체 볼륨을 넘지만,
+/// 같은 주기에 접속자 수만 세면 <b>1행</b>이고 필요한 답(동접)은 그대로 나온다(7장).
+/// </summary>
+/// <param name="OnlineCount">직전 하트비트 창 안에 활동한 계정 수.</param>
+public sealed record OnlineUserHistoryEvent(int OnlineCount) : IEventFields;
+
+/// <summary>
+/// <c>history.currency_supply</c> — 1시간 주기 유통 재화 총량. 원장(6.1)이 <b>흐름</b>을 담는다면 이쪽은
+/// <b>절대량</b>이라, 둘을 겹쳐 봐야 "유입이 많은데 총량이 안 늘었다(=소각이 받치고 있다)"를 가를 수 있다.
+/// </summary>
+/// <param name="TotalAmount">계정들이 실제로 들고 있는 총량.</param>
+/// <param name="HolderCount">잔액이 1 이상인 계정 수.</param>
+/// <param name="MailPendingAmount">
+/// 우편함에 미수령으로 떠 있는 첨부 골드 — <b>아직 경제에 풀리지 않은 부채</b>다.
+/// 발급(<c>mail.issue</c>)과 수령(원장 <c>mail_claim</c>)의 차액을 재집계하지 않고 바로 읽는 값이다.
+/// </param>
+public sealed record CurrencySupplyHistoryEvent(
+    int CurrencyCode, long TotalAmount, int HolderCount, long MailPendingAmount) : IEventFields;
+
+/// <summary>
+/// <c>history.trade_market</c> — 1시간 주기 아이템별 호가 스냅샷. <b>체결이 없어도 시세를 본다</b>는 것이
+/// 거래 결말 로그(5.7)와 다른 점이다 — 아무도 사지 않는 품목의 가격 변화는 체결 로그에 아예 나타나지 않는다.
+/// </summary>
+public sealed record TradeMarketHistoryEvent(
+    int ItemCode, int ListingCount, long MinPrice, long AvgPrice) : IEventFields;
+
+/// <summary>
+/// <c>history.item_supply</c> — 1일 주기 아이템별 유통량. <c>item_flow_logs</c>(6.2)의 누적과 대조해
+/// <b>원장이 빠뜨린 경로가 없는지</b> 검증할 수 있고, 과잉 공급 품목을 그 자체로 짚어 준다.
+/// </summary>
+/// <param name="LogDate">집계 기준 날짜(KST, <c>YYYY-MM-DD</c>). 적재 테이블의 시간축 컬럼이다.</param>
+public sealed record ItemSupplyHistoryEvent(
+    string LogDate, int ItemCode, long TotalCount, int HolderCount) : IEventFields;
+
+/// <summary>
+/// <c>history.stage_progress</c> — 1일 주기 진행도 분포(<b>유저들이 지금 어디에 몰려 있나</b>).
+/// <para><see cref="StageId"/>가 <b>0인 행은 아직 한 판도 클리어하지 못한 계정</b>이다 —
+/// 가입 직후 이탈의 규모라 빼지 않고 그대로 센다.</para>
+/// </summary>
+/// <param name="UserCount">그 스테이지가 최고 진행도인 계정 수.</param>
+public sealed record StageProgressHistoryEvent(
+    string LogDate, int StageId, int UserCount) : IEventFields;
+
+/// <summary>
+/// <c>history.equip_item</c> — 1일 주기 실제 착용 장비 분포. <c>item_supply_history</c>와 나누면
+/// <b>착용률</b>(가지고는 있는데 안 쓰는 아이템)이 나온다.
+/// <para>장착 <b>액션</b>을 남기지 않는 이유가 여기 있다 — 드랍마다 갈아입는 방치형 특성상 액션은 하루
+/// 수천~수만 행이 되지만, 이 스냅샷은 (아이템 종수 × 슬롯) 상한이라 하루 수백 행이다(7장).</para>
+/// </summary>
+/// <param name="EquippedCount">착용 중인 개체 수(한 계정이 여러 캐릭터에 같은 코드를 끼면 그만큼 센다).</param>
+/// <param name="HolderCount">그 아이템을 착용 중인 계정 수.</param>
+public sealed record EquipItemHistoryEvent(
+    string LogDate, int ItemCode, int EquipSlot, int EquippedCount, int HolderCount) : IEventFields;
+
+/// <summary>
+/// <c>history.party_comp</c> — 1일 주기 파티 조합 분포(<b>어떤 직업 조합이 실제로 쓰이나</b>, 밸런스 근거).
+/// <para><b>자리 세 값을 정렬하지 않는다</b> — 슬롯 위치가 편성의 일부라 <c>(1,2,3)</c>과 <c>(3,2,1)</c>은
+/// 다른 조합으로 센다(8.7). 조합만 보고 싶으면 조회에서 정렬해 묶는다.</para>
+/// <para>채워지지 않은 자리는 <b>0</b>이라, 이 값으로 파티 인원 분포(1인·2인·3인)도 함께 나온다.</para>
+/// </summary>
+public sealed record PartyCompHistoryEvent(
+    string LogDate, int Slot1ClassCode, int Slot2ClassCode, int Slot3ClassCode, int UserCount) : IEventFields;
+
+/// <summary>
+/// <c>history.skill_build</c> — 1일 주기 액티브 스킬 조합 분포(<b>실제 채용되는 2종</b>).
+/// <para>두 코드는 <b>오름차순</b>이라 같은 조합이 순서 차이로 갈라지지 않는다 — 파티와 달리
+/// 장착 순서에 의미가 없기 때문이다. 1개만 장착한 캐릭터는 두 번째가 0이다.</para>
+/// </summary>
+public sealed record SkillBuildHistoryEvent(
+    string LogDate, int ClassCode,
+    [property: JsonPropertyName("active_skill_code_1")] int ActiveSkillCode1,
+    [property: JsonPropertyName("active_skill_code_2")] int ActiveSkillCode2,
+    int CharacterCount) : IEventFields;
+
+/// <summary>
+/// <c>history.skill_invest</c> — 1일 주기 직업별 스킬 투자 편중(<b>아무도 안 올리는 스킬 = 밸런스 문제</b>)과
+/// 스킬 레벨 분포. 미습득(level 0) 행은 세지 않는다.
+/// </summary>
+public sealed record SkillInvestHistoryEvent(
+    string LogDate, int ClassCode, int SkillCode, int Level, int CharacterCount) : IEventFields;

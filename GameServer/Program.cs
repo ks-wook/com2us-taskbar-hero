@@ -221,6 +221,24 @@ builder.Services.AddHostedService<MailGcBatchScheduler>();
 builder.Services.AddSingleton<BossRushSeasonBatchScheduler>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<BossRushSeasonBatchScheduler>());
 
+// 히스토리(주기 스냅샷) 배치 3종 — 로그 이벤트 정의 7장.
+//   액션 로그가 **변화**를 담는 데 반해 이쪽은 **총량과 현재 상태**를 담는다. 게임 DB를 세어 이벤트 로그
+//   1줄을 내보내는 것이 전부이며(서버는 logdb에 접속하지 않는다), 적재 테이블이 자연 키 PK라 같은 주기를
+//   다시 세면 덮어쓰는 것이 정상 동작이다 — 그래서 세 배치 모두 **재실행이 안전**하다.
+//   주기별로 셋으로 나눈 기준은 "같은 시점의 스냅샷이어야 서로 나눠 볼 수 있는가"다.
+//   ① 5분 — 동시 접속(history.online_user). 하트비트(update-last-active)를 액션 로그로 남기면 그것 하나가
+//      전체 볼륨을 넘으므로, 같은 주기에 접속자 수만 세어 1행으로 대신한다.
+//   ② 1시간 — 재화 유통 총량 + 거래소 호가. 둘은 함께 읽어야 뜻이 생기는 짝이라(총량↑·호가↑=인플레이션,
+//      총량 유지·호가↑=품귀) 한 배치에서 같은 시각 기준으로 낸다.
+//   ③ 1일 — 상태 스냅샷 6종(아이템 유통량·진행도·착용 장비·파티 조합·스킬 조합·스킬 투자). player_item·
+//      player_character·player_skill 전체를 GROUP BY 하는 무거운 집계라 **트래픽이 낮은 시간대(KST 05시)**에
+//      몰아 돌린다. 폴링하지 않고 그 시각까지 자며, 고정 24시간 간격이 아니라 시각 기준이라 재기동해도
+//      집계 시각이 밀리지 않는다.
+builder.Services.AddScoped<IHistoryRepository, HistoryRepository>();
+builder.Services.AddHostedService<OnlineUserHistoryBatchScheduler>();
+builder.Services.AddHostedService<HourlyHistoryBatchScheduler>();
+builder.Services.AddHostedService<DailyHistoryBatchScheduler>();
+
 // 리더 락은 주기 종료와 함께 해제되므로, 정상 종료·재기동 후에는 곧바로 다시 실행된다(옛 방식처럼 주기만큼
 // 스킵되지 않는다). 프로세스가 락을 잡은 채 강제 종료된 경우에만 TTL(최대 5분)이 지나야 풀린다.
 
