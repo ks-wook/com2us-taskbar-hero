@@ -181,6 +181,15 @@ namespace TaskbarHero.Client.UI
                 return; // 종료 모달 표시 중에는 화면 클릭으로 게임이 시작되지 않게 한다
             }
 
+            // 공용 모달(세션 무효 안내 등)이 떠 있는 동안에도 시작 입력을 받지 않는다.
+            // 이 화면의 클릭 감지는 EventSystem이 아니라 Pointer 직접 읽기라, 모달의 '확인'을 누른
+            // 클릭이 그대로 게임 시작으로 이어진다(종료 모달은 _quitModalOpen이 따로 막는다).
+            if (ModalManager.Instance != null && ModalManager.Instance.IsShowing)
+            {
+                _pressHeld = false;
+                return;
+            }
+
             BlinkPressToStart();
 
             var pointer = Pointer.current;

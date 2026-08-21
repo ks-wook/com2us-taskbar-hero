@@ -15,6 +15,9 @@ namespace TaskbarHero.Client.Managers
     /// <b>전송 계층 오류</b>(연결 실패·타임아웃·봉투 없는 HTTP 오류·응답 해석 실패)는 호출측 처리와 별개로
     /// 여기서 공용 모달로 안내한다(<see cref="ReportTransportError"/>) — 화면 반응 없이 로그에만 남는
     /// 상황을 없애기 위함이다. 서버가 봉투로 응답한 논리 오류(errorCode)는 각 화면이 안내한다.
+    /// <para><b>로그인 정보 무효</b>(중복 로그인으로 밀려남 1004·만료 1005·봉투 없는 401/403)만은 예외로,
+    /// 화면별 안내가 아니라 <see cref="AuthGuard"/>가 세션을 끝내고 타이틀 화면으로 되돌린다 —
+    /// 이때 호출측 <c>onError</c>는 호출하지 않는다(각 화면의 실패 문구가 안내를 덮어쓰지 않게).</para>
     /// </summary>
     public class NetworkManager : MonoBehaviour
     {
@@ -298,14 +301,19 @@ namespace TaskbarHero.Client.Managers
                 //    (서버는 로그인 실패 등을 401/409 + { success:false, errorCode } 형태로 반환한다.)
                 if (hasEnvelope && !env.success)
                 {
-                    onError?.Invoke(new NetworkError
+                    var logicError = new NetworkError
                     {
                         IsTransportError = false,
                         HttpStatus = request.responseCode,
                         ErrorCode = (ErrorCode)env.errorCode,
                         Message = env.message,
                         RawBody = responseText,
-                    });
+                    };
+                    // 로그인 정보 무효(1004·1005 / 401·403)는 화면별 실패 문구가 아니라 세션 종료로 다룬다.
+                    if (!AuthGuard.Handle(url, logicError))
+                    {
+                        onError?.Invoke(logicError);
+                    }
                     yield break;
                 }
 
@@ -320,6 +328,11 @@ namespace TaskbarHero.Client.Managers
                         Message = string.IsNullOrEmpty(request.error) ? "네트워크 오류" : request.error,
                         RawBody = responseText,
                     };
+                    // 봉투 없이 돌아온 401·403도 세션 종료로 다룬다(네트워크 오류 안내로 흘리지 않는다).
+                    if (AuthGuard.Handle(url, transportError))
+                    {
+                        yield break;
+                    }
                     ReportTransportError(DescribeTransportKind(request.result, request.error), method, url, transportError);
                     onError?.Invoke(transportError);
                     yield break;

@@ -58,11 +58,13 @@ namespace TaskbarHero.Client.Managers
         /// <summary>인벤토리 변경을 알린다(장착·해제·재로드 후 호출).</summary>
         public static void RaiseInventoryChanged() => InventoryChanged?.Invoke();
 
-        /// <summary>로그인 인증 정보를 저장한다.</summary>
+        /// <summary>로그인 인증 정보를 저장한다. 세션이 새로 살아났으므로
+        /// 이전 세션 무효화로 잠긴 <see cref="AuthGuard"/>도 함께 원상복구한다(다음 무효화를 다시 안내할 수 있게).</summary>
         public static void SetAuth(long userId, string token)
         {
             UserId = userId;
             Token = token;
+            AuthGuard.Reset();
         }
 
         /// <summary>
