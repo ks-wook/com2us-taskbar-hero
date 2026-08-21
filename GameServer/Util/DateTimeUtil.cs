@@ -59,6 +59,13 @@ public static class DateTimeUtil
     /// <summary>시각을 일자 키 YYYYMMDD(int)로 변환한다(예: 2026-08-21 → 20260821).</summary>
     public static int ToDateKey(DateTimeOffset time) => time.Year * 10000 + time.Month * 100 + time.Day;
 
+    /// <summary>
+    /// 시각을 <c>YYYY-MM-DD</c> 문자열로 변환한다. <b>이벤트 로그의 date 컬럼 표기 전용</b>이며
+    /// (예: 출석 <c>attend_date</c>), DB·응답에 쓰는 일자 키(<see cref="ToDateKey"/>)와는 쓰임이 다르다 —
+    /// 적재 대상이 TimescaleDB의 <c>date</c> 컬럼이라 정수 키가 아니라 날짜 리터럴이어야 한다.
+    /// </summary>
+    public static string ToDateString(DateTimeOffset time) => time.ToString("yyyy-MM-dd");
+
     /// <summary>시각을 연월 키 YYYYMM(int)로 변환한다(예: 2026-08 → 202608).</summary>
     public static int ToYearMonthKey(DateTimeOffset time) => time.Year * 100 + time.Month;
 

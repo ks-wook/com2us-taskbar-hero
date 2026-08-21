@@ -154,6 +154,13 @@ public sealed class AttendanceService : IAttendanceService
 
         _logger.ZLogInformation($"출석 보상 발급: userId {userId:@UserId}, attendDate {today:@AttendDate}, day {outcome.Day:@Day}, mailId {outcome.MailId:@MailId}");
 
+        // 획득 이벤트(5.9). 일차(day)가 이 도메인의 질문(며칠째에서 끊기나)의 축이라 메일 로그와 별도로 남긴다.
+        _eventLogger.Action(
+            Constants.EventLog.Tags.AttendanceClaim, userId,
+            new AttendanceClaimEvent(
+                DateTimeUtil.ToDateString(DateTimeUtil.ToKst(now)), outcome.Day,
+                reward.RewardType, reward.RewardCode, reward.Quantity, outcome.MailId));
+
         // 출석 보상 메일 발급(5.8). 재화는 이 시점에 풀리지 않고 수령 시 원장으로 잡히므로,
         // 이 행과 원장의 mail_claim 행의 차액이 곧 미수령 부채다.
         var issuedMail = ComposeRewardMail(template, outcome.Day, nowUnix);

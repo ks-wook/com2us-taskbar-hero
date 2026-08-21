@@ -468,6 +468,12 @@ public static class Constants
             /// 관문이라, 발급 − 수령의 차액이 곧 <b>아직 경제에 풀리지 않은 재화</b>다(5.8).
             /// </summary>
             public const string MailIssue = "mail.issue";
+
+            /// <summary>
+            /// 오늘자 출석 보상 획득 → <c>attendance_claim_logs</c>. <c>mail.issue</c>와 겹치지만
+            /// 이 도메인의 질문인 <b>일차별 이탈</b>의 축(<c>day</c>)이 메일 로그에는 없어 따로 둔다(5.9).
+            /// </summary>
+            public const string AttendanceClaim = "attendance.claim";
         }
     }
 }

@@ -106,6 +106,20 @@ public sealed record GachaPullItemEvent(
     long PullId, int Seq, int GachaCode, int ItemCode, int Grade,
     bool IsPity, bool IsGuaranteed) : IEventFields;
 
+// ── 5.9 출석부 ──
+
+/// <summary>
+/// <c>attendance.claim</c> — 오늘자 출석 보상 획득. <b>일차별 이탈</b>(며칠째에서 끊기나)과 출석 재화 유입을 답한다.
+/// <para><c>mail.issue</c>(<c>source='attendance'</c>)와 사건이 겹치지만 이 테이블을 따로 둔다 —
+/// 이 도메인의 질문이 일차별 이탈이고, 그 축인 <see cref="Day"/>가 메일 로그에는 없기 때문이다(5.9).</para>
+/// <para>재화는 이 시점에 지급되지 않는다. <see cref="MailId"/>의 <b>수령 시점</b>에 원장으로 잡히므로,
+/// 이 행과 원장 사이의 시차가 곧 발급 → 수령 지연이다.</para>
+/// </summary>
+/// <param name="AttendDate">획득한 날짜(서버 KST 기준, <c>YYYY-MM-DD</c>).</param>
+/// <param name="Day">회차 안의 출석 일차(1~30). 이탈 분포의 축이다.</param>
+public sealed record AttendanceClaimEvent(
+    string AttendDate, int Day, int RewardType, int RewardCode, long Quantity, long MailId) : IEventFields;
+
 // ── 5.8 메일 ──
 
 /// <summary>
