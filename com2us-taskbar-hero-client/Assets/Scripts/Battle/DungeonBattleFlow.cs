@@ -67,6 +67,7 @@ namespace TaskbarHero.Client.Battle
         private bool _entered;
         private bool _cleared;
         private bool _defeated;        // 패배 처리 1회 가드(재입장 시 해제)
+        private float _stageStartUnscaledTime; // 이 스테이지 전투 시작 시각(패배 보고 elapsedMs 계산용, 슬로우모션 무관)
         private bool _restartOnEnter; // true면 다음 입장 응답에서 전투 필드를 리셋하고 처음부터 시작
         private bool _repeatSameStage; // true면 클리어 후 같은 스테이지를 반복(이미 클리어한 스테이지 수동 입장), false면 다음 스테이지로 전진
         private readonly List<int> _pendingLevelUps = new List<int>(); // 이번 클리어에서 레벨업한 캐릭터 id(오버레이 종료 후 글로우 재생)
@@ -212,6 +213,7 @@ namespace TaskbarHero.Client.Battle
             {
                 total += sp.count;
             }
+            _stageStartUnscaledTime = Time.unscaledTime; // 패배 보고의 elapsedMs 기준점(진입 응답으로 전투를 시작하는 시점)
             ShowEnterBanner(d.act, d.difficulty, d.stage); // 상단 중앙 입장 배너(페이드 인/아웃)
             Debug.Log($"[Dungeon] 진입 완료 {d.act}-{d.difficulty}-{d.stage}, 배경타입 {d.backgroundType} → 스폰 예정 {total}마리");
             if (_restartOnEnter)
@@ -332,7 +334,56 @@ namespace TaskbarHero.Client.Battle
             Time.timeScale = Mathf.Clamp(clearSlowMotionScale, 0.01f, 1f);
             Debug.Log($"[Dungeon] 아군 전멸 → 패배, 현재 스테이지 재시작 {_act}-{_difficulty}-{_stage}");
             SoundManager.Jingle(SoundId.JingleDefeat);
+            ReportFail();
             BattleDefeatOverlay.Show(() => EnterStage(_act, _difficulty, _stage, restartFromStart: true));
+        }
+
+        /// <summary>패배(파티 전멸)를 서버에 보고한다(<c>stage/fail</c>). 진행도·보상은 바뀌지 않고 기록만 남으므로
+        /// 응답을 기다리지 않고 패배 연출을 그대로 진행한다 — 재입장 요청보다 먼저 보내 순서를 지킨다.
+        /// <para>어떻게 졌는지(경과 시간·남은 적 수·보스 도달)를 함께 실어 난이도 집계에 쓰이게 한다.</para></summary>
+        private void ReportFail()
+        {
+            if (NetworkManager.Instance == null || !Session.IsLoggedIn)
+            {
+                return;
+            }
+
+            int elapsedMs = Mathf.Max(0, Mathf.RoundToInt((Time.unscaledTime - _stageStartUnscaledTime) * 1000f));
+            int remaining = battle != null ? battle.ServerRemainingMonsterCount : 0;
+            bool reachedBoss = battle != null && battle.ServerBossReached;
+
+            var request = new StageFailRequest
+            {
+                userId = Session.UserId,
+                token = Session.Token,
+                data = new StageFailData
+                {
+                    act = _act,
+                    difficulty = _difficulty,
+                    stage = _stage,
+                    elapsedMs = elapsedMs,
+                    remainingMonsterCount = remaining,
+                    reachedBoss = reachedBoss,
+                },
+            };
+            Debug.Log($"[Dungeon] 실패 보고 {_act}-{_difficulty}-{_stage} — {elapsedMs}ms, 남은 적 {remaining}, 보스도달 {reachedBoss}");
+            NetworkManager.Instance.PostToGame<StageFailResponse>("/api/game/stage/fail", request, OnFailReported, OnFailError);
+        }
+
+        /// <summary>실패 보고 성공: 기록만 남는 요청이라 게임 상태는 건드리지 않고 접수 결과만 로그로 남긴다.</summary>
+        private void OnFailReported(StageFailResponse response)
+        {
+            var d = response != null ? response.data : null;
+            if (d != null)
+            {
+                Debug.Log($"[Dungeon] 실패 보고 접수 {d.act}-{d.difficulty}-{d.stage} (stageId={d.stageId}, failedAt={d.failedAt})");
+            }
+        }
+
+        /// <summary>실패 보고 실패: 보고는 집계용이라 실패해도 패배 연출·재시작 흐름을 막지 않는다(경고만).</summary>
+        private void OnFailError(NetworkError error)
+        {
+            Debug.LogWarning($"[Dungeon] 실패 보고 실패: {error}");
         }
 
         private void OnClear(StageClearResponse response)

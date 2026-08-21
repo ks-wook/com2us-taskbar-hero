@@ -240,6 +240,7 @@ namespace TaskbarHero.Client.Battle
         private bool _serverCleared;
         private bool _defeated;                                // 아군 전멸 판정 1회 가드
         private int _bossCode;                                 // 이 스테이지의 보스 몬스터 코드(0=없음)
+        private bool _bossSpawned;                             // 이번 웨이브에서 보스가 실제로 등장했는지(패배 보고의 reachedBoss)
 
         /// <summary>스폰 큐 원소 — 몬스터 코드와 <b>그 자리의 등장 레벨</b>.
         /// 레벨은 몬스터가 아니라 등장 자리의 속성이라(마스터 데이터 값 §9.4) 코드와 함께 실어 나른다.</summary>
@@ -289,6 +290,13 @@ namespace TaskbarHero.Client.Battle
                 return Mathf.Clamp01((float)_serverKilled / _serverTotal);
             }
         }
+
+        /// <summary>아직 처치하지 못한 적 수(스폰 대기분 + 생존 개체). 패배 보고의 remainingMonsterCount로 쓴다 —
+        /// 0에 가까울수록 아슬아슬한 패배다.</summary>
+        public int ServerRemainingMonsterCount => Mathf.Max(0, _serverTotal - _serverKilled);
+
+        /// <summary>이번 웨이브에서 보스가 등장했는지(보스전까지 갔는지). 패배 보고의 reachedBoss로 쓴다.</summary>
+        public bool ServerBossReached => _bossSpawned;
 
         private void Start()
         {
@@ -1241,6 +1249,7 @@ namespace TaskbarHero.Client.Battle
             AttachWalkDust(go, () => mu != null && mu.IsMoving); // 걷기 먼지(전진 애니 재생 중에만 노출)
             if (isBoss)
             {
+                _bossSpawned = true; // 보스전까지 도달 — 패배 보고(reachedBoss)에 쓴다
                 BossWarningBanner.Show(bossWarningImage); // 보스 등장 경고 연출(중앙 경고 이미지 3회 펄스)
                 SoundManager.Sfx(SoundId.BossWarning);
                 SoundManager.Bgm(SoundId.BgmBoss, 2f); // 보스전 BGM으로 2초 크로스페이드
@@ -1311,6 +1320,7 @@ namespace TaskbarHero.Client.Battle
             _serverTotal = _serverQueue.Count;
             _serverKilled = 0;
             _serverCleared = false;
+            _bossSpawned = false;
             _spawnTimer = enemySpawnInterval; // 곧 첫 스폰
             _nextSpawnDelay = 0f;
         }
