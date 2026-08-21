@@ -1,0 +1,548 @@
+{
+  "uid": "logdb-economy",
+  "title": "3. 경제 · 원장",
+  "description": "재화·아이템이 움직인 모든 지점(6장). 도메인 로그를 UNION하지 않고 이 두 스트림으로 \"골드가 늘고 있나 줄고 있나\"에 답한다.",
+  "tags": [
+    "logdb",
+    "게임로그"
+  ],
+  "timezone": "Asia/Seoul",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10m",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {
+    "time_options": [
+      "1h",
+      "6h",
+      "12h",
+      "24h",
+      "2d",
+      "7d",
+      "30d",
+      "90d"
+    ],
+    "refresh_intervals": [
+      "1m",
+      "5m",
+      "10m",
+      "30m",
+      "1h"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "bucket",
+        "label": "집계 단위",
+        "description": "추이 그래프의 묶음 단위. 원본 테이블 패널은 이 값을 그대로 쓰고, 연속 집계 패널은 1일이 하한이다(8.10).",
+        "type": "custom",
+        "query": "5 minutes,1 hour,6 hours,1 day,7 days",
+        "current": {
+          "selected": true,
+          "text": "1 day",
+          "value": "1 day"
+        },
+        "options": [
+          {
+            "selected": false,
+            "text": "5 minutes",
+            "value": "5 minutes"
+          },
+          {
+            "selected": false,
+            "text": "1 hour",
+            "value": "1 hour"
+          },
+          {
+            "selected": false,
+            "text": "6 hours",
+            "value": "6 hours"
+          },
+          {
+            "selected": true,
+            "text": "1 day",
+            "value": "1 day"
+          },
+          {
+            "selected": false,
+            "text": "7 days",
+            "value": "7 days"
+          }
+        ],
+        "includeAll": false,
+        "multi": false,
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "서버 기동·종료",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "logdb"
+        },
+        "enable": true,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "target": {
+          "refId": "Anno",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT \"timestamp\" AS time, phase AS text, version AS tags\nFROM server_lifecycle_logs\nWHERE $__timeFilter(\"timestamp\")\nORDER BY 1"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "골드 흐름",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "골드 유입 · 유출 · 소각",
+      "description": "유출(spend)은 계정에서 나간 골드, 소각(burn)은 경제에서 사라진 골드다(거래 수수료). 잔액을 바꾸지 않는 정산 행이라 balance_after가 없다(6.1).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), bucket, 'Asia/Seoul') AS time,\n       CASE direction WHEN 'gain' THEN '유입' WHEN 'spend' THEN '유출' ELSE '소각' END AS metric,\n       sum(amount_sum) AS value\nFROM currency_flow_daily\nWHERE $__timeFilter(bucket)\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "순증(유입 − 유출)",
+      "description": "0선 위에 오래 머물면 인플레이션이다. 소각(burn)은 유출에 이미 포함된 골드의 사후 처리라 여기서 두 번 세지 않는다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), bucket, 'Asia/Seoul') AS time,\n       sum(CASE WHEN direction = 'gain' THEN amount_sum\n                WHEN direction = 'spend' THEN -amount_sum ELSE 0 END) AS \"순증\"\nFROM currency_flow_daily\nWHERE $__timeFilter(bucket)\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "barchart",
+      "title": "유입원 Top",
+      "description": "이 목록이 곧 이 게임 경제의 발행 지도다(6.1 고정 집합).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT source AS \"유입원\", sum(amount_sum) AS \"골드\"\nFROM currency_flow_daily\nWHERE $__timeFilter(bucket) AND direction = 'gain'\nGROUP BY source\nORDER BY 2 DESC\nLIMIT 15",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "xTickLabelRotation": 0
+      }
+    },
+    {
+      "id": 5,
+      "type": "barchart",
+      "title": "유출·소각원 Top",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT source AS \"유출원\",\n       sum(amount_sum) FILTER (WHERE direction = 'spend') AS \"유출\",\n       sum(amount_sum) FILTER (WHERE direction = 'burn') AS \"소각\"\nFROM currency_flow_daily\nWHERE $__timeFilter(bucket) AND direction <> 'gain'\nGROUP BY source\nORDER BY 2 DESC NULLS LAST\nLIMIT 15",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "auto",
+        "stacking": "none",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "xTickLabelRotation": 0
+      }
+    },
+    {
+      "id": 6,
+      "type": "row",
+      "title": "아이템 흐름",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "panels": []
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "아이템 생성 · 소멸(사유별)",
+      "description": "+획득 / −소실의 합이라 사유별로 부호가 갈린다(6.2). 큐브·소모품은 도메인 테이블이 없어 이 스트림이 유일한 기록이다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), bucket, 'Asia/Seoul') AS time, reason AS metric, sum(delta_sum) AS value\nFROM item_flow_daily\nWHERE $__timeFilter(bucket)\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "순증 상위 아이템",
+      "description": "거래소 등록·취소(trade_register/trade_cancel)는 계정 밖으로 나간 이동이라 총량 판단에서 빼고 봐야 한다(6.2).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT item_code AS \"아이템 코드\",\n       sum(delta_sum) AS \"순증\",\n       sum(delta_sum) FILTER (WHERE delta_sum > 0) AS \"유입 합\",\n       sum(delta_sum) FILTER (WHERE delta_sum < 0) AS \"유출 합\",\n       sum(flow_count) AS \"변동 건수\"\nFROM item_flow_daily\nWHERE $__timeFilter(bucket)\nGROUP BY item_code\nORDER BY \"순증\" DESC NULLS LAST\nLIMIT 30",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "row",
+      "title": "강화 — 골드 싱크",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "panels": []
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "강화 시도 · 거부",
+      "description": "재화 부족 거부까지 남기는 이벤트다 — 어느 단계에서 골드가 막히는지가 강화 곡선 조정의 근거다(5.5).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 27
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       count(*) FILTER (WHERE error_code = 0) AS \"성공\",\n       count(*) FILTER (WHERE error_code <> 0) AS \"거부(재화 부족 등)\",\n       sum(cost) FILTER (WHERE error_code = 0) AS \"소모 골드\"\nFROM item_enhance_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "강화 단계별 시도 · 거부율",
+      "description": "거부율이 튀는 단계가 골드 벽이다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 27
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT from_level AS \"출발 강화 단계\",\n       count(*) AS \"시도\",\n       count(*) FILTER (WHERE error_code <> 0) AS \"거부\",\n       round(count(*) FILTER (WHERE error_code <> 0)::numeric / nullif(count(*), 0), 3) AS \"거부율\",\n       sum(cost) FILTER (WHERE error_code = 0) AS \"소모 골드\"\nFROM item_enhance_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY from_level\nORDER BY from_level",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    }
+  ]
+}

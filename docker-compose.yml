@@ -1,6 +1,9 @@
 # Taskbar Hero 모작 — 로컬 개발용 컨테이너(MySQL · Redis · Grafana · AccountServer · GameServer)
 #
 # 사용법
+#   ./containers-up.ps1               # **권장** — 전체를 용도별로 묶어 띄우고 healthy까지 기다린다
+#                                     #   (서버 이미지 자동 재빌드 · 사전 점검 · 접속 주소 안내).
+#                                     #   서버 없이: ./containers-up.ps1 -Mode infra
 #   docker compose up -d --build      # 서버 이미지 빌드 + 전체 백그라운드 실행
 #   docker compose up -d mysql redis  # 의존 서비스만(서버는 watch-all.ps1로 콘솔 실행할 때)
 #   docker compose logs -f gameserver # 특정 서비스 로그 확인
@@ -162,7 +165,10 @@ services:
       # 사용자 설정(로그인·폴더·수동 편집)이 컨테이너를 다시 띄워도 남게 한다.
       - taskbar-hero-grafana-data:/var/lib/grafana
       # 데이터소스(logdb) · 대시보드 공급자 설정. 코드로 고정해 UI 수동 추가에 의존하지 않는다.
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # provisioning 폴더를 통째로 덮으면 이미지가 들고 있는 plugins·alerting 디렉터리가 사라져
+      # 기동 로그에 "no such file or directory" 오류가 찍힌다 — 쓰는 하위 두 개만 마운트한다.
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       # 대시보드 JSON 정본. 공급자가 30초마다 다시 읽으므로 파일을 고치면 재기동 없이 반영된다.
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
     depends_on:

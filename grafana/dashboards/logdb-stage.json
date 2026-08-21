@@ -1,0 +1,535 @@
+{
+  "uid": "logdb-stage",
+  "title": "2. 스테이지 · 성장",
+  "description": "진입·클리어·실패 셋을 stage_id로 맞춰 실질 난이도와 이탈을 본다(5.3). 리밸런싱 대상 스테이지를 고르는 화면이다.",
+  "tags": [
+    "logdb",
+    "게임로그"
+  ],
+  "timezone": "Asia/Seoul",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10m",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {
+    "time_options": [
+      "1h",
+      "6h",
+      "12h",
+      "24h",
+      "2d",
+      "7d",
+      "30d",
+      "90d"
+    ],
+    "refresh_intervals": [
+      "1m",
+      "5m",
+      "10m",
+      "30m",
+      "1h"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "bucket",
+        "label": "집계 단위",
+        "description": "추이 그래프의 묶음 단위. 원본 테이블 패널은 이 값을 그대로 쓰고, 연속 집계 패널은 1일이 하한이다(8.10).",
+        "type": "custom",
+        "query": "5 minutes,1 hour,6 hours,1 day,7 days",
+        "current": {
+          "selected": true,
+          "text": "1 day",
+          "value": "1 day"
+        },
+        "options": [
+          {
+            "selected": false,
+            "text": "5 minutes",
+            "value": "5 minutes"
+          },
+          {
+            "selected": false,
+            "text": "1 hour",
+            "value": "1 hour"
+          },
+          {
+            "selected": false,
+            "text": "6 hours",
+            "value": "6 hours"
+          },
+          {
+            "selected": true,
+            "text": "1 day",
+            "value": "1 day"
+          },
+          {
+            "selected": false,
+            "text": "7 days",
+            "value": "7 days"
+          }
+        ],
+        "includeAll": false,
+        "multi": false,
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "서버 기동·종료",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "logdb"
+        },
+        "enable": true,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "target": {
+          "refId": "Anno",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT \"timestamp\" AS time, phase AS text, version AS tags\nFROM server_lifecycle_logs\nWHERE $__timeFilter(\"timestamp\")\nORDER BY 1"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "전체 추이",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "판 수 추이(진입 · 클리어 · 실패)",
+      "description": "진입 − 클리어 − 실패 = **이탈**(보고 없이 사라진 판). 세 선의 간격이 그 규모다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), bucket, 'Asia/Seoul') AS time, sum(enter_count) AS \"진입\"\nFROM stage_enter_daily\nWHERE $__timeFilter(bucket)\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), bucket, 'Asia/Seoul') AS time, sum(clear_count) AS \"클리어\"\nFROM stage_clear_daily\nWHERE $__timeFilter(bucket)\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), bucket, 'Asia/Seoul') AS time, sum(fail_count) AS \"실패\"\nFROM stage_fail_daily\nWHERE $__timeFilter(bucket)\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "실패율 · 이탈율",
+      "description": "실패율 = 실패/진입(실질 난이도), 이탈율 = (진입−클리어−실패)/진입.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), e.bucket, 'Asia/Seoul') AS time,\n       round(sum(coalesce(f.fail_count, 0))::numeric / nullif(sum(e.enter_count), 0), 4) AS \"실패율\",\n       round(greatest(sum(e.enter_count) - sum(coalesce(c.clear_count, 0))\n             - sum(coalesce(f.fail_count, 0)), 0)::numeric\n             / nullif(sum(e.enter_count), 0), 4) AS \"이탈율\"\nFROM stage_enter_daily e\nLEFT JOIN stage_clear_daily c ON c.bucket = e.bucket AND c.stage_id = e.stage_id\nLEFT JOIN stage_fail_daily f ON f.bucket = e.bucket AND f.stage_id = e.stage_id\nWHERE $__timeFilter(e.bucket)\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "row",
+      "title": "스테이지별 난이도 — 리밸런싱 후보",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "panels": []
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "스테이지별 진입 · 클리어 · 실패 · 이탈",
+      "description": "실패율 높은 순 50개. 평균값은 일별 평균을 실패 건수로 가중해 합산한 값이다(단순 평균의 평균이 아니다). 잔여 적이 많고 실패가 이르면 스탯 벽, 적으면서 오래 끌면 DPS 부족이다(5.3).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 11,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT e.stage_id AS \"스테이지\",\n       sum(e.enter_count) AS \"진입\",\n       sum(coalesce(c.clear_count, 0)) AS \"클리어\",\n       sum(coalesce(f.fail_count, 0)) AS \"실패\",\n       greatest(sum(e.enter_count) - sum(coalesce(c.clear_count, 0))\n                - sum(coalesce(f.fail_count, 0)), 0) AS \"이탈\",\n       round(sum(coalesce(f.fail_count, 0))::numeric / nullif(sum(e.enter_count), 0), 4) AS \"실패율\",\n       round(sum(coalesce(f.avg_elapsed_ms * f.fail_count, 0))\n             / nullif(sum(coalesce(f.fail_count, 0)), 0) / 1000.0, 1) AS \"실패 평균 지속(초)\",\n       round(sum(coalesce(f.avg_remaining_monster_count * f.fail_count, 0))\n             / nullif(sum(coalesce(f.fail_count, 0)), 0), 2) AS \"실패 시 잔여 적\",\n       round(sum(coalesce(f.reached_boss_count, 0))::numeric\n             / nullif(sum(coalesce(f.fail_count, 0)), 0), 3) AS \"보스 도달 비율\"\nFROM stage_enter_daily e\nLEFT JOIN stage_clear_daily c ON c.bucket = e.bucket AND c.stage_id = e.stage_id\nLEFT JOIN stage_fail_daily f ON f.bucket = e.bucket AND f.stage_id = e.stage_id\nWHERE $__timeFilter(e.bucket)\nGROUP BY e.stage_id\nHAVING sum(e.enter_count) > 0\nORDER BY \"실패율\" DESC NULLS LAST, \"진입\" DESC\nLIMIT 50",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "row",
+      "title": "보상 · 성장",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "panels": []
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "스테이지 보상 유입(골드 · 경험치)",
+      "description": "클리어 보상 총량. 골드는 원장(currency_flow_logs)에도 남지만 여기서는 스테이지 몫만 본다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), bucket, 'Asia/Seoul') AS time, sum(gold_sum) AS \"골드\", sum(exp_sum) AS \"경험치\"\nFROM stage_clear_daily\nWHERE $__timeFilter(bucket)\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "레벨업 건수(출처별)",
+      "description": "stage / offline 중 어디서 성장하는가(5.3). 방치 비중이 과하면 전투 동기가 약하다는 신호다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       source AS metric, count(*) AS value\nFROM character_levelup_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "오프라인 보상 정산",
+      "description": "상한(12시간) 도달 비율이 높으면 방치 상한이 실제 접속 주기보다 짧다는 뜻이다(5.4).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       count(*) AS \"정산 횟수\",\n       count(*) FILTER (WHERE is_capped) AS \"상한 도달\",\n       round(avg(effective_sec) / 3600.0, 2) AS \"평균 인정 시간(시간)\"\nFROM offline_claim_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "오프라인 상한 도달률",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       round(count(*) FILTER (WHERE is_capped)::numeric / nullif(count(*), 0), 3) AS \"상한 도달률\"\nFROM offline_claim_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    }
+  ]
+}

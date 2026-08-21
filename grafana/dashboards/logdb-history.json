@@ -1,0 +1,771 @@
+{
+  "uid": "logdb-history",
+  "title": "6. 히스토리 — 총량 · 상태 스냅샷",
+  "description": "주기 배치가 게임 DB를 세어 남긴 스냅샷(7장). 액션 로그를 다 더해도 알 수 없는 **절대량과 상태 분포**를 답하며, 원본 로그가 90일 뒤 사라진 구간을 유일하게 증언한다.",
+  "tags": [
+    "logdb",
+    "게임로그"
+  ],
+  "timezone": "Asia/Seoul",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10m",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {
+    "time_options": [
+      "1h",
+      "6h",
+      "12h",
+      "24h",
+      "2d",
+      "7d",
+      "30d",
+      "90d"
+    ],
+    "refresh_intervals": [
+      "1m",
+      "5m",
+      "10m",
+      "30m",
+      "1h"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "bucket",
+        "label": "집계 단위",
+        "description": "추이 그래프의 묶음 단위. 원본 테이블 패널은 이 값을 그대로 쓰고, 연속 집계 패널은 1일이 하한이다(8.10).",
+        "type": "custom",
+        "query": "5 minutes,1 hour,6 hours,1 day,7 days",
+        "current": {
+          "selected": true,
+          "text": "1 hour",
+          "value": "1 hour"
+        },
+        "options": [
+          {
+            "selected": false,
+            "text": "5 minutes",
+            "value": "5 minutes"
+          },
+          {
+            "selected": true,
+            "text": "1 hour",
+            "value": "1 hour"
+          },
+          {
+            "selected": false,
+            "text": "6 hours",
+            "value": "6 hours"
+          },
+          {
+            "selected": false,
+            "text": "1 day",
+            "value": "1 day"
+          },
+          {
+            "selected": false,
+            "text": "7 days",
+            "value": "7 days"
+          }
+        ],
+        "includeAll": false,
+        "multi": false,
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "서버 기동·종료",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "logdb"
+        },
+        "enable": true,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "target": {
+          "refId": "Anno",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT \"timestamp\" AS time, phase AS text, version AS tags\nFROM server_lifecycle_logs\nWHERE $__timeFilter(\"timestamp\")\nORDER BY 1"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "동시 접속",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "동시 접속자 추이",
+      "description": "5분 주기 스냅샷(7장). 집계 단위를 5분으로 두면 원본 해상도, 1시간·1일로 올리면 그 구간의 평균과 피크를 함께 본다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       round(avg(online_count)) AS \"평균 동접\",\n       max(online_count) AS \"최대 동접\"\nFROM online_user_history\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "최근 동접",
+      "description": "가장 마지막 스냅샷 값이다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT \"timestamp\" AS time, online_count AS \"동접\"\nFROM online_user_history\nWHERE $__timeFilter(\"timestamp\")\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "row",
+      "title": "유통 재화 총량 — 인플레이션",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 9
+      },
+      "panels": []
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "유통 골드 총량 · 우편함 미수령",
+      "description": "총량은 **재고**라 구간 안에서 더하면 안 된다 — TimescaleDB의 last()로 그 구간 마지막 스냅샷을 고른다. 원장(경제 대시보드)의 순증과 겹쳐 보면 \"유입이 많은데 총량이 안 늘었다(=소각이 받치고 있다)\"를 가를 수 있다(7장).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       last(total_amount, \"timestamp\") AS \"유통 총량\",\n       last(mail_pending_amount, \"timestamp\") AS \"우편함 미수령(부채)\"\nFROM currency_supply_history\nWHERE $__timeFilter(\"timestamp\") AND currency_code = 1\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "계정당 평균 보유 골드 · 보유 계정 수",
+      "description": "총량이 늘어도 평균 보유가 그대로면 상위 계정에만 쌓인다는 뜻이다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       round(last(total_amount, \"timestamp\")::numeric\n             / nullif(last(holder_count, \"timestamp\"), 0)) AS \"계정당 평균 보유\",\n       last(holder_count, \"timestamp\") AS \"보유 계정 수\"\nFROM currency_supply_history\nWHERE $__timeFilter(\"timestamp\") AND currency_code = 1\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "row",
+      "title": "거래소 시세 — 체결이 없어도 보이는 수요",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "panels": []
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "시세 추이(매물 많은 상위 5 품목)",
+      "description": "1시간 주기 호가 스냅샷이라 **체결이 없는 품목도 시세가 남는다**(체결 로그만으로는 보이지 않는 수요다, 7장).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH top AS (\n    SELECT item_code\n    FROM trade_market_history\n    WHERE $__timeFilter(\"timestamp\")\n    GROUP BY item_code\n    ORDER BY sum(listing_count) DESC\n    LIMIT 5\n)\nSELECT time_bucket(INTERVAL '$bucket', h.\"timestamp\", 'Asia/Seoul') AS time,\n       h.item_code::text AS metric,\n       round(avg(h.avg_price)) AS value\nFROM trade_market_history h\nJOIN top t ON t.item_code = h.item_code\nWHERE $__timeFilter(h.\"timestamp\")\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "품목별 최신 매물 · 호가",
+      "description": "선택 구간의 **가장 최근 스냅샷** 한 줄씩. 매물이 쌓이면서 최저가가 내려가면 그 품목은 공급 과잉이다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT DISTINCT ON (item_code)\n       item_code AS \"아이템 코드\",\n       listing_count AS \"매물 수\",\n       min_price AS \"최저가\",\n       avg_price AS \"평균 호가\",\n       \"timestamp\" AS \"스냅샷 시각\"\nFROM trade_market_history\nWHERE $__timeFilter(\"timestamp\")\nORDER BY item_code, \"timestamp\" DESC",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "row",
+      "title": "아이템 유통량 · 진행도 (1일 주기)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "panels": []
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "유통량 상위 아이템 추이",
+      "description": "item_flow_logs(6.2)의 누적과 대조하면 **원장이 놓친 유입·유출**이 드러난다(7장). 일 단위 스냅샷이라 집계 단위 변수와 무관하게 하루 한 점이다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "WITH top AS (\n    SELECT item_code\n    FROM item_supply_history\n    WHERE $__timeFilter(log_date)\n    GROUP BY item_code\n    ORDER BY max(total_count) DESC\n    LIMIT 8\n)\nSELECT (log_date::timestamp AT TIME ZONE 'Asia/Seoul') AS time,\n       h.item_code::text AS metric,\n       sum(h.total_count) AS value\nFROM item_supply_history h\nJOIN top t ON t.item_code = h.item_code\nWHERE $__timeFilter(h.log_date)\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "barchart",
+      "title": "진행도 분포(최신 스냅샷)",
+      "description": "\"유저들이 지금 어디에 몰려 있나\" — 봉우리가 곧 진행 벽이다. 스테이지 대시보드의 실패율과 같은 스테이지를 가리키는지 맞춰 본다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT stage_id AS \"스테이지\", user_count AS \"계정 수\"\nFROM stage_progress_history\nWHERE log_date = (SELECT max(log_date) FROM stage_progress_history WHERE $__timeFilter(log_date))\nORDER BY stage_id",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "stacking": "none",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "xTickLabelRotation": 0
+      }
+    },
+    {
+      "id": 13,
+      "type": "row",
+      "title": "상태 스냅샷 — 장착 · 편성 · 스킬 (1일 주기)",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 36
+      },
+      "panels": []
+    },
+    {
+      "id": 14,
+      "type": "table",
+      "title": "착용 장비 상위(최신 스냅샷)",
+      "description": "item_supply_history(보유량)와 나누면 **보유하고도 안 쓰는 장비**가 보인다(7장).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 37
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT equip_slot AS \"슬롯\", item_code AS \"아이템 코드\",\n       equipped_count AS \"착용 개체\", holder_count AS \"착용 계정\"\nFROM equip_item_history\nWHERE log_date = (SELECT max(log_date) FROM equip_item_history WHERE $__timeFilter(log_date))\nORDER BY equipped_count DESC\nLIMIT 30",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "파티 조합 상위(최신 스냅샷)",
+      "description": "자리 순서를 정렬하지 않는다 — (1,2,3)과 (3,2,1)은 다른 조합으로 센다(8.7). 빈 자리는 0이다. 직업 밸런스 판단의 근거다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 37
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT slot1_class_code AS \"1자리\", slot2_class_code AS \"2자리\",\n       slot3_class_code AS \"3자리\", user_count AS \"계정 수\"\nFROM party_comp_history\nWHERE log_date = (SELECT max(log_date) FROM party_comp_history WHERE $__timeFilter(log_date))\nORDER BY user_count DESC\nLIMIT 20",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 16,
+      "type": "table",
+      "title": "액티브 스킬 조합 상위(최신 스냅샷)",
+      "description": "실제 채용되는 2종. 특정 조합이 독점하면 나머지 스킬이 죽어 있다는 뜻이다(7장).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 45
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT class_code AS \"직업\",\n       active_skill_code_1 AS \"액티브 1\", active_skill_code_2 AS \"액티브 2\",\n       character_count AS \"캐릭터 수\"\nFROM skill_build_history\nWHERE log_date = (SELECT max(log_date) FROM skill_build_history WHERE $__timeFilter(log_date))\nORDER BY character_count DESC\nLIMIT 20",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 17,
+      "type": "table",
+      "title": "스킬 투자 레벨 분포(최신 스냅샷)",
+      "description": "어느 스킬에 포인트가 몰리는가 — 조합(위 표)과 달리 **투자 깊이**를 본다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 45
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT class_code AS \"직업\", skill_code AS \"스킬\", level AS \"레벨\",\n       character_count AS \"캐릭터 수\"\nFROM skill_invest_history\nWHERE log_date = (SELECT max(log_date) FROM skill_invest_history WHERE $__timeFilter(log_date))\nORDER BY class_code, skill_code, level",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    }
+  ]
+}

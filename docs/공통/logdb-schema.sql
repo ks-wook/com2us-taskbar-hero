@@ -628,13 +628,18 @@ SELECT add_retention_policy('unknown_event_logs',     INTERVAL '90 days');
 --  · 갱신 정책은 start_offset 3 days · end_offset 1 hour · schedule_interval 1 hour 로 통일한다
 --    (늦게 도착한 로그를 3일까지 흡수).
 --  · WITH NO DATA 로 만든다 — 생성 시점에 전 구간을 한 번에 굴리지 않고 정책이 채운다.
+--  · **materialized_only = false (실시간 집계)** — 이게 없으면 뷰가 *구체화된 구간만* 돌려주고,
+--    갱신 정책이 end_offset(1시간) 앞을 남겨 두므로 **최근 1시간 + 다음 정책 실행 전까지의 로그가
+--    대시보드에서 통째로 안 보인다**(실측: 원본 27행인데 뷰는 0행). false 로 두면 뷰가
+--    '구체화된 부분 + 아직 안 굴린 꼬리의 실시간 집계'를 합쳐 돌려주므로 방금 쌓인 로그도 보인다.
+--    TimescaleDB 2.13+ 의 기본값이 true 라 **명시해야 한다**.
 --  · DAU 를 count(distinct uid) 로 만들지 않는다. 연속 집계는 DISTINCT 집계를 지원하지 않으므로
 --    (날짜, uid) 로 그룹한 session_user_daily 를 두고 **DAU는 그 뷰를 한 번 더 세는 방식**으로 얻는다.
 --    재방문율·리텐션도 같은 뷰의 자기 조인으로 나온다(8.10).
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE MATERIALIZED VIEW session_user_daily
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT time_bucket('1 day', "timestamp", 'Asia/Seoul') AS bucket,
        uid,
        count(*) AS session_count
@@ -643,7 +648,7 @@ GROUP BY bucket, uid
 WITH NO DATA;
 
 CREATE MATERIALIZED VIEW stage_enter_daily
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT time_bucket('1 day', "timestamp", 'Asia/Seoul') AS bucket,
        stage_id,
        count(*) AS enter_count
@@ -652,7 +657,7 @@ GROUP BY bucket, stage_id
 WITH NO DATA;
 
 CREATE MATERIALIZED VIEW stage_clear_daily
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT time_bucket('1 day', "timestamp", 'Asia/Seoul') AS bucket,
        stage_id,
        count(*)  AS clear_count,
@@ -665,7 +670,7 @@ WITH NO DATA;
 -- stage_enter_daily·stage_clear_daily 와 stage_id 로 조인하면 난이도 패널이 완성된다 —
 -- fail / enter 가 실질 난이도, enter − clear − fail 이 이탈(보고 없이 사라진 판)이다(8.10).
 CREATE MATERIALIZED VIEW stage_fail_daily
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT time_bucket('1 day', "timestamp", 'Asia/Seoul') AS bucket,
        stage_id,
        count(*)                       AS fail_count,
@@ -677,7 +682,7 @@ GROUP BY bucket, stage_id
 WITH NO DATA;
 
 CREATE MATERIALIZED VIEW currency_flow_daily
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT time_bucket('1 day', "timestamp", 'Asia/Seoul') AS bucket,
        direction,
        source,
@@ -688,7 +693,7 @@ GROUP BY bucket, direction, source
 WITH NO DATA;
 
 CREATE MATERIALIZED VIEW item_flow_daily
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT time_bucket('1 day', "timestamp", 'Asia/Seoul') AS bucket,
        item_code,
        reason,
@@ -699,7 +704,7 @@ GROUP BY bucket, item_code, reason
 WITH NO DATA;
 
 CREATE MATERIALIZED VIEW gacha_grade_daily
-WITH (timescaledb.continuous) AS
+WITH (timescaledb.continuous, timescaledb.materialized_only = false) AS
 SELECT time_bucket('1 day', "timestamp", 'Asia/Seoul') AS bucket,
        gacha_code,
        grade,

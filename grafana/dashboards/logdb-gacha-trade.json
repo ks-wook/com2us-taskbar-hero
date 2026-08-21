@@ -1,0 +1,787 @@
+{
+  "uid": "logdb-gacha-trade",
+  "title": "4. 가챠 · 거래소 · 메일 · 출석",
+  "description": "확률 실측·시세·미체결률·출석 일차 이탈. 유저가 의식적으로 하는 행동이라 볼륨은 작지만 기획 판단이 가장 많이 걸리는 축이다(5.6~5.9).",
+  "tags": [
+    "logdb",
+    "게임로그"
+  ],
+  "timezone": "Asia/Seoul",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10m",
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {
+    "time_options": [
+      "1h",
+      "6h",
+      "12h",
+      "24h",
+      "2d",
+      "7d",
+      "30d",
+      "90d"
+    ],
+    "refresh_intervals": [
+      "1m",
+      "5m",
+      "10m",
+      "30m",
+      "1h"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "bucket",
+        "label": "집계 단위",
+        "description": "추이 그래프의 묶음 단위. 원본 테이블 패널은 이 값을 그대로 쓰고, 연속 집계 패널은 1일이 하한이다(8.10).",
+        "type": "custom",
+        "query": "5 minutes,1 hour,6 hours,1 day,7 days",
+        "current": {
+          "selected": true,
+          "text": "1 day",
+          "value": "1 day"
+        },
+        "options": [
+          {
+            "selected": false,
+            "text": "5 minutes",
+            "value": "5 minutes"
+          },
+          {
+            "selected": false,
+            "text": "1 hour",
+            "value": "1 hour"
+          },
+          {
+            "selected": false,
+            "text": "6 hours",
+            "value": "6 hours"
+          },
+          {
+            "selected": true,
+            "text": "1 day",
+            "value": "1 day"
+          },
+          {
+            "selected": false,
+            "text": "7 days",
+            "value": "7 days"
+          }
+        ],
+        "includeAll": false,
+        "multi": false,
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "서버 기동·종료",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "logdb"
+        },
+        "enable": true,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "target": {
+          "refId": "Anno",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT \"timestamp\" AS time, phase AS text, version AS tags\nFROM server_lifecycle_logs\nWHERE $__timeFilter(\"timestamp\")\nORDER BY 1"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "가챠 — 확률 실측",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "table",
+      "title": "배너별 등급 실측 분포",
+      "description": "마스터의 설계 확률과 이 비율이 벌어지면 뽑기 테이블이나 구현을 의심한다(5.6).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT gacha_code AS \"배너\",\n       grade AS \"등급\",\n       sum(pull_count) AS \"개수\",\n       round(sum(pull_count)::numeric\n             / nullif(sum(sum(pull_count)) OVER (PARTITION BY gacha_code), 0), 5) AS \"실측 비율\",\n       sum(pity_count) AS \"천장 발동\"\nFROM gacha_grade_daily\nWHERE $__timeFilter(bucket)\nGROUP BY gacha_code, grade\nORDER BY gacha_code, grade",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "등급별 획득 추이",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), bucket, 'Asia/Seoul') AS time, '등급 ' || grade::text AS metric, sum(pull_count) AS value\nFROM gacha_grade_daily\nWHERE $__timeFilter(bucket)\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "천장 발동 비율",
+      "description": "천장에 의존해 최고 등급을 얻고 있다면 확률이 체감보다 낮다는 뜻이다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), bucket, 'Asia/Seoul') AS time,\n       round(sum(pity_count)::numeric / nullif(sum(pull_count), 0), 4) AS \"천장 발동 비율\"\nFROM gacha_grade_daily\nWHERE $__timeFilter(bucket)\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "row",
+      "title": "거래소",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "panels": []
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "등록 · 결말 추이",
+      "description": "등록 1건은 결말 1건으로만 끝난다(8.5). 만료가 늘면 공급 과잉이거나 가격이 높다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 19
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time, count(*) AS \"등록\"\nFROM trade_register_logs\nWHERE $__timeFilter(\"timestamp\") AND error_code = 0\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       CASE outcome WHEN 'buy' THEN '체결' WHEN 'cancel' THEN '취소' ELSE '만료' END AS metric,\n       count(*) AS value\nFROM trade_close_logs\nWHERE $__timeFilter(\"timestamp\") AND error_code = 0\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "piechart",
+      "title": "결말 비율(미체결률)",
+      "description": "핵심 질문인 미체결률이 세 결말의 비율이라 GROUP BY outcome 한 줄로 나온다(5.7).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 19
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT CASE outcome WHEN 'buy' THEN '체결' WHEN 'cancel' THEN '취소' ELSE '만료' END AS metric,\n       count(*) AS value\nFROM trade_close_logs\nWHERE $__timeFilter(\"timestamp\") AND error_code = 0\nGROUP BY outcome",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "pieType": "donut",
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "품목별 시세 · 유동성",
+      "description": "listing_id로 등록 행과 결말 행을 잇는다(8.9의 listing_id 인덱스가 이 조인을 받는다). 체결 시간이 길수록 그 품목은 공급 과잉이다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 27
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT r.item_code AS \"아이템 코드\",\n       count(*) AS \"등록\",\n       round(avg(r.price)) AS \"평균 등록가\",\n       round(avg(r.price::numeric / nullif(r.base_price, 0)), 3) AS \"기준가 대비\",\n       count(c.listing_id) FILTER (WHERE c.outcome = 'buy') AS \"체결\",\n       round(avg(c.listed_sec) FILTER (WHERE c.outcome = 'buy') / 3600.0, 2) AS \"평균 체결 시간(시간)\"\nFROM trade_register_logs r\nLEFT JOIN trade_close_logs c ON c.listing_id = r.listing_id\nWHERE $__timeFilter(r.\"timestamp\") AND r.error_code = 0\nGROUP BY r.item_code\nORDER BY \"등록\" DESC\nLIMIT 30",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "거래 대금 · 수수료 소각",
+      "description": "수수료는 경제에서 사라지는 골드다 — 거래소가 싱크로 얼마나 일하는지 본다(5.7).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 37
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       sum(price) AS \"거래 대금\",\n       sum(fee) AS \"수수료(소각)\",\n       sum(seller_proceeds) AS \"판매자 수령\"\nFROM trade_close_logs\nWHERE $__timeFilter(\"timestamp\") AND error_code = 0 AND outcome = 'buy'\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "등록 거부(가격 범위 등)",
+      "description": "반복되면 허용 가격 범위가 실제 시세와 어긋난다는 신호다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 37
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       error_code::text AS metric, count(*) AS value\nFROM trade_register_logs\nWHERE $__timeFilter(\"timestamp\") AND error_code <> 0\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "row",
+      "title": "메일 · 출석",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 45
+      },
+      "panels": []
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "메일 발급(사유별)",
+      "description": "메일이 재화 지급의 관문이라, 발급 − 수령의 차액이 곧 아직 경제에 풀리지 않은 재화다(5.8).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 46
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       source AS metric, count(*) AS value\nFROM mail_issue_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "메일 골드 발급 vs 수령",
+      "description": "두 선의 누적 차이가 우편함에 잠긴 부채다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 46
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time, sum(gold) AS \"메일 발급 골드\"\nFROM mail_issue_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(GREATEST(INTERVAL '$bucket', INTERVAL '1 day'), bucket, 'Asia/Seoul') AS time, sum(amount_sum) AS \"메일 수령 골드\"\nFROM currency_flow_daily\nWHERE $__timeFilter(bucket) AND source = 'mail_claim'\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 14,
+      "type": "barchart",
+      "title": "출석 일차별 수령",
+      "description": "일차가 올라갈수록 줄어드는 폭이 곧 초반 이탈 곡선이다(5.9).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT day AS \"출석 일차\", count(*) AS \"수령\"\nFROM attendance_claim_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY day\nORDER BY day",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "stacking": "none",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "xTickLabelRotation": 0
+      }
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "출석 보상 종류별 지급량",
+      "description": "",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 54
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT day AS \"일차\", reward_type AS \"보상 종류\", reward_code AS \"코드\",\n       count(*) AS \"수령\", sum(quantity) AS \"총 지급량\"\nFROM attendance_claim_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY day, reward_type, reward_code\nORDER BY day",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    }
+  ]
+}

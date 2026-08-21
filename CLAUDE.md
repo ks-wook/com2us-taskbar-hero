@@ -50,6 +50,11 @@
 - **컨트롤러는 HTTP 응답 메서드만 포함**: 컨트롤러 클래스에는 엔드포인트 액션 메서드(`[HttpGet]`/`[HttpPost]` 등이 붙은 HTTP 요청/응답 처리 메서드)만 둔다. 그 외 로직은 **private 헬퍼라도 예외 없이** 컨트롤러 밖으로 분리한다:
   - **컨트롤러 공통 보조 메서드**(인증 userId 추출, 공통 응답 변환, ErrorCode ↔ HTTP 상태/메시지 매핑 등)는 **베이스 컨트롤러 클래스**(`ControllerBase`를 상속한 추상 클래스, 예: `GameApiControllerBase`·`AccountApiControllerBase`)에 `protected`/`private static`으로 구현하고, 각 컨트롤러가 이를 **상속**해 사용한다.
   - 컨트롤러 작업 시 이 규칙을 매번 확인한다.
+- **상수는 예외 없이 `Constants.cs`에 선언**: 매직 넘버·고정 문자열·불변 값(`const`, 그리고 숫자·문자열·`TimeSpan` 같은 값을 담은 `static readonly`)은 **그 서버의 `Constants.cs`**에만 선언한다(`GameServer/Constants.cs`. `AccountServer`에는 아직 없으므로 상수가 처음 필요해지면 `AccountServer/Constants.cs`를 만들어 거기에 넣는다). 서비스·컨트롤러·리포지토리·미들웨어·배치 클래스 안에는 **private 상수라도 두지 않는다** — 같은 성격의 값이 여러 파일에 흩어지면 어디에 있는지 찾을 수 없고, 두 곳에서 각자 정의한 값이 조용히 어긋난다.
+  - 값이 아니라 **동작 설정 객체 인스턴스**(예: `JsonSerializerOptions`)는 상수가 아니므로 그 객체를 쓰는 클래스에 `static readonly`로 둔다.
+  - 도메인별 중첩 static 클래스(`Constants.BossRush`·`Constants.Trade`·`Constants.EventLog` 등) 중 **그 값이 속한 도메인 블록**에 넣고, 없으면 새 중첩 클래스를 만든다. 값의 의미와 그 값이어야 하는 이유는 `/// <summary>` 주석으로 남긴다.
+  - 새 상수를 만들거나 기존 상수를 옮길 때 이 규칙을 매번 확인한다. 상수가 필요해지면 **선언 위치를 고민하지 않고 곧바로 `Constants.cs`**에 넣는다.
+  - 예외는 **`GameServer/Logging/EventFields.cs`의 로그 필드 값 집합**(`CurrencyDirection`·`CurrencySource`·`ItemFlowReason`)뿐이다 — 로그 이벤트 `record`와 1:1로 붙어 있어야 카탈로그(`docs/공통/로그-이벤트-정의.md` 5~7장)와 대조하기 쉬운 정의 전용 파일이다. 이 파일 외의 어디에도 상수를 새로 만들지 않는다.
 - **기능 구현 시 빌드 및 테스트 진행**: 기능을 구현하면 반드시 빌드(`dotnet build`)로 컴파일을 확인하고, 실제 동작을 테스트로 검증한다. 빌드 성공과 테스트 통과를 확인하기 전에는 작업을 완료로 간주하지 않는다.
 - **어시스턴트는 서버를 포어그라운드로만 띄운다**: 서버(`GameServer`·`AccountServer`)를 어시스턴트가 띄울 수 있으나, **반드시 사용자가 볼 수 있는 별도 콘솔 창(포어그라운드)** 으로만 띄운다. **숨김·백그라운드 기동은 금지**한다 — `Start-Process -WindowStyle Hidden`·`Start-Job`·harness `run_in_background`·`&`·`nohup` 등. 숨겨진 서버는 세션이 끝나도 남아 `bin/` 파일을 잠그고(MSB3021/MSB3027), 다음 테스트가 **옛 바이너리를 검증**하게 만든다.
   - 기동 명령(창이 뜨고 로그가 사용자에게 그대로 보인다):

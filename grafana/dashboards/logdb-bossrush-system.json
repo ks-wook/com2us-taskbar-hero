@@ -1,0 +1,699 @@
+{
+  "uid": "logdb-bossrush-system",
+  "title": "5. 보스러시 · 시스템",
+  "description": "보스러시 완주율·라운드 병목과, 서버 자체의 상태(배치·마스터 적재·미처리 예외). 지표(Prometheus)를 두지 않아 이 대시보드가 운영 관측의 전부다(2·12장).",
+  "tags": [
+    "logdb",
+    "게임로그"
+  ],
+  "timezone": "Asia/Seoul",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5m",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "timepicker": {
+    "time_options": [
+      "1h",
+      "6h",
+      "12h",
+      "24h",
+      "2d",
+      "7d",
+      "30d",
+      "90d"
+    ],
+    "refresh_intervals": [
+      "1m",
+      "5m",
+      "10m",
+      "30m",
+      "1h"
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "bucket",
+        "label": "집계 단위",
+        "description": "추이 그래프의 묶음 단위. 원본 테이블 패널은 이 값을 그대로 쓰고, 연속 집계 패널은 1일이 하한이다(8.10).",
+        "type": "custom",
+        "query": "5 minutes,1 hour,6 hours,1 day,7 days",
+        "current": {
+          "selected": true,
+          "text": "1 hour",
+          "value": "1 hour"
+        },
+        "options": [
+          {
+            "selected": false,
+            "text": "5 minutes",
+            "value": "5 minutes"
+          },
+          {
+            "selected": true,
+            "text": "1 hour",
+            "value": "1 hour"
+          },
+          {
+            "selected": false,
+            "text": "6 hours",
+            "value": "6 hours"
+          },
+          {
+            "selected": false,
+            "text": "1 day",
+            "value": "1 day"
+          },
+          {
+            "selected": false,
+            "text": "7 days",
+            "value": "7 days"
+          }
+        ],
+        "includeAll": false,
+        "multi": false,
+        "hide": 0,
+        "skipUrlSync": false
+      }
+    ]
+  },
+  "annotations": {
+    "list": [
+      {
+        "name": "서버 기동·종료",
+        "datasource": {
+          "type": "grafana-postgresql-datasource",
+          "uid": "logdb"
+        },
+        "enable": true,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "target": {
+          "refId": "Anno",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT \"timestamp\" AS time, phase AS text, version AS tags\nFROM server_lifecycle_logs\nWHERE $__timeFilter(\"timestamp\")\nORDER BY 1"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "보스러시",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "도전 · 완주",
+      "description": "enter와 clear를 짝지어 완주율을 낸다(5.10). 진입 거부는 해금 미달·정산 창이다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time, count(*) AS \"도전\"\nFROM bossrush_enter_logs\nWHERE $__timeFilter(\"timestamp\") AND error_code = 0\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time, count(*) AS \"완주 보고\"\nFROM bossrush_clear_logs\nWHERE $__timeFilter(\"timestamp\") AND error_code = 0\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        },
+        {
+          "refId": "C",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       count(*) AS \"진입 거부\"\nFROM bossrush_enter_logs\nWHERE $__timeFilter(\"timestamp\") AND error_code <> 0\nGROUP BY 1\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "barchart",
+      "title": "라운드별 평균 소요 — 병목",
+      "description": "라운드 5개가 컬럼으로 펼쳐져 있어(8.6) 어느 라운드가 병목인지 바로 보인다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT '1라운드' AS \"라운드\", round(avg(round1_ms) / 1000.0, 1) AS \"평균 소요(초)\"\nFROM bossrush_clear_logs WHERE $__timeFilter(\"timestamp\") AND error_code = 0\nUNION ALL\nSELECT '2라운드', round(avg(round2_ms) / 1000.0, 1)\nFROM bossrush_clear_logs WHERE $__timeFilter(\"timestamp\") AND error_code = 0\nUNION ALL\nSELECT '3라운드', round(avg(round3_ms) / 1000.0, 1)\nFROM bossrush_clear_logs WHERE $__timeFilter(\"timestamp\") AND error_code = 0\nUNION ALL\nSELECT '4라운드', round(avg(round4_ms) / 1000.0, 1)\nFROM bossrush_clear_logs WHERE $__timeFilter(\"timestamp\") AND error_code = 0\nUNION ALL\nSELECT '5라운드', round(avg(round5_ms) / 1000.0, 1)\nFROM bossrush_clear_logs WHERE $__timeFilter(\"timestamp\") AND error_code = 0",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "vertical",
+        "showValue": "auto",
+        "stacking": "none",
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "xTickLabelRotation": 0
+      }
+    },
+    {
+      "id": 4,
+      "type": "table",
+      "title": "시즌별 기록 분포",
+      "description": "시즌이 진행될수록 평균이 내려가면(빨라지면) 성장 곡선이 콘텐츠를 앞지르고 있다는 뜻이다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT season_id AS \"시즌\",\n       count(*) AS \"완주 보고\",\n       count(DISTINCT uid) AS \"참가 계정\",\n       round(min(clear_ms) / 1000.0, 1) AS \"최고 기록(초)\",\n       round(avg(clear_ms) / 1000.0, 1) AS \"평균 기록(초)\",\n       count(*) FILTER (WHERE is_new_record) AS \"기록 갱신\"\nFROM bossrush_clear_logs\nWHERE $__timeFilter(\"timestamp\") AND error_code = 0\nGROUP BY season_id\nORDER BY season_id DESC",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "클리어 보고 거부",
+      "description": "닫힌 런에 온 보고(런 수명 초과)가 반복되면 런 수명이 실제 플레이 시간보다 짧다는 신호다(5.10).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       error_code::text AS metric, count(*) AS value\nFROM bossrush_clear_logs\nWHERE $__timeFilter(\"timestamp\") AND error_code <> 0\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "row",
+      "title": "서버 상태",
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "panels": []
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "미처리 예외 추이(예외 타입별)",
+      "description": "전역 예외 처리기가 잡은 것만 온다 — 규칙대로 거부한 요청(ErrorCode)은 여기 없다(5.11).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       exception_type AS metric, count(*) AS value\nFROM api_error_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 8,
+      "type": "table",
+      "title": "최근 미처리 예외",
+      "description": "uid는 인증 전 예외에서 비어 있을 수 있다. req_id로 접근 로그(콘솔)와 같은 요청을 맞춘다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \"timestamp\" AS \"시각\", path AS \"경로\", exception_type AS \"예외\", error_code AS \"에러코드\",\n       uid AS \"계정\", req_id AS \"요청 ID\"\nFROM api_error_logs\nWHERE $__timeFilter(\"timestamp\")\nORDER BY \"timestamp\" DESC\nLIMIT 100",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "배치 처리량",
+      "description": "배치 종류를 테이블이 아니라 batch_key로 구분한다(5.11).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT time_bucket(INTERVAL '$bucket', \"timestamp\", 'Asia/Seoul') AS time,\n       batch_key AS metric, sum(processed) AS value\nFROM batch_run_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY 1, 2\nORDER BY 1",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "배치 실패 · 소요",
+      "description": "스킵은 다른 인스턴스가 리더 락을 잡은 정상 동작이다 — 실패만 신호로 본다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT batch_key AS \"배치\",\n       count(*) AS \"주기 수\",\n       sum(processed) AS \"처리\",\n       sum(skipped) AS \"스킵\",\n       sum(failed) AS \"실패\",\n       round(avg(elapsed_ms)) AS \"평균 소요(ms)\",\n       max(elapsed_ms) AS \"최대 소요(ms)\"\nFROM batch_run_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY batch_key\nORDER BY \"실패\" DESC, \"처리\" DESC",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "마스터 적재(최근)",
+      "description": "배포 후 마스터가 기대대로 올라갔는지 확인하는 자리다(5.11).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 34
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \"timestamp\" AS \"시각\", table_count AS \"테이블 수\", row_count AS \"행 수\",\n       elapsed_ms AS \"소요(ms)\"\nFROM master_load_logs\nWHERE $__timeFilter(\"timestamp\")\nORDER BY \"timestamp\" DESC\nLIMIT 20",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "서버 기동 · 종료",
+      "description": "모든 대시보드의 주석(annotation)으로도 표시된다 — 수치가 튄 시점이 배포 때문인지 가른다.",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 34
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT \"timestamp\" AS \"시각\", phase AS \"구분\", version AS \"버전\"\nFROM server_lifecycle_logs\nWHERE $__timeFilter(\"timestamp\")\nORDER BY \"timestamp\" DESC\nLIMIT 20",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 13,
+      "type": "table",
+      "title": "카탈로그 누락 감지(unknown_event_logs)",
+      "description": "**행이 있으면 그 자체가 이상 신호다** — fluentd의 <table> 매핑에 없는 태그가 흘러들었다는 뜻이라, 방출 코드와 카탈로그(5·7장)가 어긋났음을 알린다(9.5).",
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "logdb"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 34
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "logdb"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT tag AS \"태그\", count(*) AS \"건수\", max(\"timestamp\") AS \"마지막 수신\"\nFROM unknown_event_logs\nWHERE $__timeFilter(\"timestamp\")\nGROUP BY tag\nORDER BY 2 DESC",
+          "editorMode": "code"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {}
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
+      }
+    }
+  ]
+}
