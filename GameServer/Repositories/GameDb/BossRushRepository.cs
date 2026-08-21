@@ -212,7 +212,9 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
             var run = locked.Value;
             if (run.Status != (int)BossRushRunStatus.Running)
             {
-                return TxResult<BossRushClearOutcome>.Rollback(BossRushClearOutcome.Fail(BossRushClearStatus.AlreadyFinished));
+                // 거부지만 시즌 id는 담아 돌려준다 — 이 보고가 어느 시즌 것이었는지가 로그의 축이다(5.10).
+                return TxResult<BossRushClearOutcome>.Rollback(new BossRushClearOutcome(
+                    BossRushClearStatus.AlreadyFinished, run.SeasonId, 0, false, 0, 0, false));
             }
 
             // 2) 만료 판정(읽는 시점). 정리 배치를 두지 않고 이 경로가 status를 확정한다(6.2).
@@ -224,7 +226,8 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
                     .UpdateAsync(
                         new { status = (int)BossRushRunStatus.Expired, finished_at = nowMs },
                         transaction);
-                return TxResult<BossRushClearOutcome>.Commit(BossRushClearOutcome.Fail(BossRushClearStatus.AlreadyFinished));
+                return TxResult<BossRushClearOutcome>.Commit(new BossRushClearOutcome(
+                    BossRushClearStatus.AlreadyFinished, run.SeasonId, 0, false, 0, 0, false));
             }
 
             // 3) 조건부 종결 — 동시 중복 보고는 여기서 0행이 되어 갈린다.

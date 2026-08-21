@@ -474,6 +474,27 @@ public static class Constants
             /// 이 도메인의 질문인 <b>일차별 이탈</b>의 축(<c>day</c>)이 메일 로그에는 없어 따로 둔다(5.9).
             /// </summary>
             public const string AttendanceClaim = "attendance.claim";
+
+            /// <summary>도전 개시 → <c>bossrush_enter_logs</c>. clear와 짝지어 <b>완주율</b>을 낸다(5.10).</summary>
+            public const string BossRushEnter = "bossrush.enter";
+
+            /// <summary>클리어 보고 → <c>bossrush_clear_logs</c>. 라운드별 소요가 컬럼 5개로 펼쳐진다(5.10).</summary>
+            public const string BossRushClear = "bossrush.clear";
+
+            /// <summary>
+            /// 주기 배치 1회 종료 → <c>batch_run_logs</c>. 배치 종류를 테이블이 아니라 <c>batch_key</c>로
+            /// 구분한다 — 컬럼 구조가 배치마다 같기 때문이다(5.11).
+            /// </summary>
+            public const string BatchRun = "batch.run";
+
+            /// <summary>마스터 데이터 적재 완료 → <c>master_load_logs</c>. 배포 후 마스터가 기대대로 올라갔나(5.11).</summary>
+            public const string MasterLoad = "master.load";
+
+            /// <summary>서버 기동·종료 → <c>server_lifecycle_logs</c>. 대시보드의 <b>배포 시점 표시</b>로 쓴다(5.11).</summary>
+            public const string ServerLifecycle = "server.lifecycle";
+
+            /// <summary>전역 예외 처리기가 미처리 예외를 잡음 → <c>api_error_logs</c>(5.11).</summary>
+            public const string ApiError = "api.error";
         }
     }
 }

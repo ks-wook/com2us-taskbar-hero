@@ -9,6 +9,7 @@ using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
 using GameServer.Util;
+using GameServer.Logging;
 
 namespace GameServer.Services;
 
@@ -24,16 +25,62 @@ public sealed class BossRushService : IBossRushService
     private readonly IBossRushRankCache _rankCache;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<BossRushService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(보스러시 리포지토리·랭킹 캐시·마스터 데이터·로거)을 주입받는다.</summary>
+    /// <summary>
+    /// 이벤트 로그가 라운드 기록을 펼쳐 담는 컬럼 수(round1_ms ~ round5_ms). 라운드 수가 5로 고정이라
+    /// 자식 테이블 대신 컬럼으로 둔 구조이며(로그 이벤트 정의 5.10), 마스터의 라운드 수가 바뀌면
+    /// 로그 스키마도 함께 고쳐야 한다.
+    /// </summary>
+    private const int RoundLogColumns = 5;
+
+    /// <summary>의존성(보스러시 리포지토리·랭킹 캐시·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
     public BossRushService(
         IBossRushRepository repository, IBossRushRankCache rankCache,
-        MasterDbProvider masterData, ILogger<BossRushService> logger)
+        MasterDbProvider masterData, ILogger<BossRushService> logger, IEventLogger eventLogger)
     {
         _repository = repository;
         _rankCache = rankCache;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
+    }
+
+    /// <summary>
+    /// 도전 개시 이벤트 1행을 방출한다(5.10). 성공과 거부가 같은 자리를 쓰며, 거부 라인의
+    /// run_id·season_id는 0이다(런이 만들어지지 않았다). 완주율을 셀 때는 <c>error_code = 0</c>만 분모로 삼는다.
+    /// </summary>
+    private void EmitEnter(long userId, long runId, int seasonId, ErrorCode errorCode)
+        => _eventLogger.Action(
+            Constants.EventLog.Tags.BossRushEnter, userId,
+            new BossRushEnterEvent(runId, seasonId),
+            (int)errorCode);
+
+    /// <summary>
+    /// 클리어 보고 이벤트 1행을 방출한다(5.10). 라운드 목록을 <b>컬럼 5개로 펼쳐</b> 담는다 —
+    /// 보고에 빠진 라운드는 0이 된다(정합성 검증을 통과한 보고라 정상 경로에서는 다섯 칸이 모두 찬다).
+    /// </summary>
+    private void EmitClear(
+        long userId, long runId, int seasonId, int clearMs,
+        IReadOnlyList<(int Round, int ElapsedMs)> roundTimes,
+        bool isNewRecord, int bestClearMs, int rankAtReport, ErrorCode errorCode)
+    {
+        var byRound = new int[RoundLogColumns];
+        foreach (var (round, elapsedMs) in roundTimes)
+        {
+            if (round >= 1 && round <= RoundLogColumns)
+            {
+                byRound[round - 1] = elapsedMs;
+            }
+        }
+
+        _eventLogger.Action(
+            Constants.EventLog.Tags.BossRushClear, userId,
+            new BossRushClearEvent(
+                runId, seasonId, clearMs,
+                byRound[0], byRound[1], byRound[2], byRound[3], byRound[4],
+                isNewRecord, bestClearMs, rankAtReport),
+            (int)errorCode);
     }
 
     /// <summary>
@@ -130,8 +177,12 @@ public sealed class BossRushService : IBossRushService
             case BossRushEnterStatus.NoPlayer:
                 return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
             case BossRushEnterStatus.Locked:
+                // 해금 미달 진입 시도가 반복되면 해금 조건(진행도)이 유저 기대와 어긋난다는 신호다.
+                EmitEnter(userId, 0, 0, ErrorCode.BossRushLocked);
                 return new SaveResult(ErrorCode.BossRushLocked, string.Empty, null);
             case BossRushEnterStatus.SeasonClosed:
+                // 정산 중 진입 시도. 반복되면 정산 창이 길다는 뜻이다(그만큼 콘텐츠가 닫혀 있었다).
+                EmitEnter(userId, 0, 0, ErrorCode.BossRushSeasonClosed);
                 return new SaveResult(ErrorCode.BossRushSeasonClosed, string.Empty, null);
         }
 
@@ -142,6 +193,7 @@ public sealed class BossRushService : IBossRushService
             rounds = rounds.Select(ToRoundDto).ToList(),
         };
 
+        EmitEnter(userId, outcome.RunId, outcome.SeasonId, ErrorCode.Success);
         return new SaveResult(ErrorCode.Success, "BossRushStarted", data);
     }
 
@@ -189,6 +241,12 @@ public sealed class BossRushService : IBossRushService
             case BossRushClearStatus.RunNotFound:
                 return new SaveResult(ErrorCode.BossRushRunNotFound, string.Empty, null);
             case BossRushClearStatus.AlreadyFinished:
+                // 이미 닫힌 런에 온 보고(중복 보고이거나 런 수명 초과). 후자가 반복되면 런 수명이
+                // 실제 플레이 시간보다 짧다는 신호라, 보고된 기록을 그대로 담아 남긴다.
+                EmitClear(
+                    userId, request.runId, outcome.SeasonId, request.clearMs, roundTimes,
+                    isNewRecord: false, bestClearMs: 0, rankAtReport: 0,
+                    errorCode: ErrorCode.BossRushRunAlreadyFinished);
                 return new SaveResult(ErrorCode.BossRushRunAlreadyFinished, string.Empty, null);
         }
 
@@ -215,6 +273,11 @@ public sealed class BossRushService : IBossRushService
             bestClearMs = outcome.BestClearMs,
             rank = rank,
         };
+
+        // 랭킹 캐시 갱신까지 끝난 뒤에 방출한다 — rank_at_report가 응답과 같은 값이어야 하기 때문이다.
+        EmitClear(
+            userId, request.runId, outcome.SeasonId, request.clearMs, roundTimes,
+            outcome.IsNewRecord, outcome.BestClearMs, rank, ErrorCode.Success);
 
         return new SaveResult(ErrorCode.Success, "BossRushCleared", data);
     }

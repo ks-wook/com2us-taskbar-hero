@@ -43,7 +43,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     public BossRushSeasonBatchScheduler(
         IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
         MasterDbProvider masterData, ILogger<BossRushSeasonBatchScheduler> logger, IEventLogger eventLogger)
-        : base(scopeFactory, batchLock, logger)
+        : base(scopeFactory, batchLock, logger, eventLogger)
     {
         _eventLogger = eventLogger;
         var interval = configuration.GetValue(
@@ -100,13 +100,13 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     /// <para><b>진행 중 시즌이 없으면 ①에서 즉시 끝낸다</b> — 시즌을 새로 만들지 않으므로 워밍업·정산 모두
     /// 대상이 없다. 정산할 시즌이 없을 때도 조용히 끝낸다(로그 소음 방지).</para>
     /// </summary>
-    protected override async Task RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
+    protected override async Task<BatchCycleResult> RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
     {
         var rule = _masterData.IsLoaded ? _masterData.BossRushRule : null;
         if (rule is null)
         {
             _nextWakeUnix = 0; // 기상 시각을 모른다 — 기본 주기로 재시도.
-            return; // 마스터 미적재·콘텐츠 미구성.
+            return BatchCycleResult.Idle; // 마스터 미적재·콘텐츠 미구성.
         }
 
         var repository = scope.ServiceProvider.GetRequiredService<IBossRushRepository>();
@@ -119,7 +119,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         if (current is null)
         {
             _nextWakeUnix = 0; // 정산할 시즌이 없다 — 기본 주기로 새 시즌 등록을 살핀다.
-            return;
+            return BatchCycleResult.Idle;
         }
 
         // 이 시즌이 끝나는 순간이 다음에 깨어날 유일한 이유다.
@@ -132,7 +132,8 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         var season = await repository.ClaimSeasonForSettlementAsync(nowUnix);
         if (season is null)
         {
-            return;
+            // 워밍업만 하고 끝난 주기. 정산 대상이 없었을 뿐 배치는 정상적으로 돌았다.
+            return BatchCycleResult.Idle;
         }
 
         _logger.ZLogInformation($"보스러시 시즌 정산 시작: seasonId {season.SeasonId:@SeasonId} (종료 {season.EndAt:@EndAt})");
@@ -145,7 +146,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         }
 
         // ④ 순위 확정 + 보상 메일 발급.
-        var (settled, rewarded) = await SettleAsync(repository, season, template, nowUnix, stoppingToken);
+        var (settled, rewarded, failed) = await SettleAsync(repository, season, template, nowUnix, stoppingToken);
 
         // ⑤ 시즌 종료 + 리더보드 TTL.
         await repository.CloseSeasonAsync(season.SeasonId, nowUnix);
@@ -158,6 +159,9 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         _nextWakeUnix = next.EndAt;
 
         _logger.ZLogInformation($"보스러시 시즌 정산 완료: seasonId {season.SeasonId:@SeasonId} 순위 확정 {settled:@Settled}건 · 보상 발급 {rewarded:@Rewarded}건 → 다음 시즌 {next.SeasonId:@NextSeasonId}");
+
+        // 처리량은 확정한 순위 건수로 센다(보상 발급 수는 상위 3위로 고정이라 처리량 지표가 되지 못한다).
+        return new BatchCycleResult(settled, 0, failed);
     }
 
     /// <summary>
@@ -206,12 +210,13 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     /// 보상 메일을 같은 트랜잭션에서 발급한다. 이미 확정된 행 수를 시작 순위로 이어 재진입에서도
     /// 순위가 어긋나지 않게 한다.
     /// </summary>
-    private async Task<(int Settled, int Rewarded)> SettleAsync(
+    private async Task<(int Settled, int Rewarded, int Failed)> SettleAsync(
         IBossRushRepository repository, BossRushSeason season, MailTemplateDef? template,
         long nowUnix, CancellationToken stoppingToken)
     {
         var settled = 0;
         var rewarded = 0;
+        var failed = 0;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -259,6 +264,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
                 }
                 catch (Exception ex)
                 {
+                    failed++;
                     _logger.ZLogError(ex, $"보스러시 순위 확정 실패(seasonId {season.SeasonId:@SeasonId} userId {target.UserId:@UserId} rank {rank:@Rank}) — 다음 주기에 재시도합니다.");
                 }
 
@@ -266,7 +272,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
             }
         }
 
-        return (settled, rewarded);
+        return (settled, rewarded, failed);
     }
 
 }
