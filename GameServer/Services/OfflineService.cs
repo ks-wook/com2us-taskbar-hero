@@ -96,6 +96,13 @@ public sealed class OfflineService : IOfflineService
             new OfflineClaimEvent(elapsed, outcome.EffectiveSec, outcome.Capped, outcome.Gold, outcome.Exp));
 
         // 레벨업은 스테이지와 같은 테이블에 source만 다르게 쌓인다 — 두 경로의 성장 기여를 갈라 본다(5.3).
+        // 재화 원장(6.1). 상세(상한 여부)는 offline_claim_logs가 담으므로 ref_id는 0이다.
+        if (outcome.Gold > 0)
+        {
+            _eventLogger.CurrencyGained(
+                userId, outcome.Gold, outcome.GoldBalance, CurrencySource.OfflineClaim, 0);
+        }
+
         _eventLogger.CharacterLevelUps(userId, outcome.LevelUps, LevelUpSource.Offline);
 
         return new SaveResult(ErrorCode.Success, "Offline reward claimed", data);

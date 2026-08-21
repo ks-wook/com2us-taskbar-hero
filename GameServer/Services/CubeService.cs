@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Logging;
 using GameServer.Util;
 
 namespace GameServer.Services;
@@ -20,15 +21,17 @@ public sealed class CubeService : ICubeService
     private readonly ICubeRepository _cubeRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<CubeService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(큐브 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
+    /// <summary>의존성(큐브 리포지토리·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
     public CubeService(
         ICubeRepository cubeRepository, MasterDbProvider masterData,
-        ILogger<CubeService> logger)
+        ILogger<CubeService> logger, IEventLogger eventLogger)
     {
         _cubeRepository = cubeRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -124,6 +127,15 @@ public sealed class CubeService : ICubeService
         };
 
         _logger.ZLogInformation($"큐브 분해: userId {userId:@UserId}, items {pairs.Count:@Count}, gold {outcome.Gold:@Gold}, cubeExp {outcome.CubeExp:@CubeExp}");
+
+        // 재화 원장(6.1). 아이템 → 골드 전환이라 유입으로 잡히고, 분해된 품목은 같은 req_id의
+        // item_flow_logs 행들이 답하므로 ref_id는 0이다.
+        if (outcome.Gold > 0)
+        {
+            _eventLogger.CurrencyGained(
+                userId, outcome.Gold, outcome.GoldBalance, CurrencySource.CubeDismantle, 0);
+        }
+
         return new SaveResult(ErrorCode.Success, "Dismantled", data);
     }
 
@@ -187,6 +199,14 @@ public sealed class CubeService : ICubeService
         };
 
         _logger.ZLogInformation($"큐브 제작: userId {userId:@UserId}, recipeCode {recipeCode:@RecipeCode}, resultItemCode {recipe.ResultItemCode:@ResultCode} x{recipe.ResultQuantity:@Quantity}");
+
+        // 재화 원장(6.1). 레시피별 사용 빈도가 ref_id로 나온다 — 큐브는 도메인 로그 테이블이 없어
+        // 이 행과 item_flow_logs가 유일한 기록이다.
+        if (recipe.CostGold > 0)
+        {
+            _eventLogger.CurrencySpent(
+                userId, recipe.CostGold, outcome.GoldBalance, CurrencySource.CubeCraft, recipeCode);
+        }
         return new SaveResult(ErrorCode.Success, "Crafted", data);
     }
 

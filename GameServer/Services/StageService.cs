@@ -181,6 +181,13 @@ public sealed class StageService : IStageService
                 stageDef.StageId, act, difficulty, stage,
                 outcome.GrantedGold, outcome.GrantedExp, outcome.IsFirstClear, outcome.MaxStageCleared));
 
+        // 재화 원장(6.1). 스테이지 클리어가 이 경제의 주 유입원이다.
+        if (outcome.GrantedGold > 0)
+        {
+            _eventLogger.CurrencyGained(
+                userId, outcome.GrantedGold, outcome.GoldBalance, CurrencySource.StageClear, stageDef.StageId);
+        }
+
         _eventLogger.CharacterLevelUps(userId, outcome.LevelUps, LevelUpSource.Stage);
 
         return new SaveResult(ErrorCode.Success, "Stage cleared", data);

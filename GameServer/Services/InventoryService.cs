@@ -221,6 +221,13 @@ public sealed class InventoryService : IInventoryService
 
         // 차감·상승 트랜잭션이 커밋된 뒤에 방출한다(4.2).
         EmitEnhance(userId, itemId, outcome, ErrorCode.Success);
+
+        // 재화 원장(6.1). 강화는 이 경제의 주요 골드 유출원이다.
+        if (outcome.Cost > 0)
+        {
+            _eventLogger.CurrencySpent(
+                userId, outcome.Cost, outcome.CurrencyBalance, CurrencySource.ItemEnhance, itemId);
+        }
         return new SaveResult(ErrorCode.Success, "Enhanced", data);
     }
 
@@ -274,6 +281,15 @@ public sealed class InventoryService : IInventoryService
         };
 
         _logger.ZLogInformation($"인벤토리 확장 성공: userId {userId:@UserId}, capacity {outcome.InventoryCapacity:@Capacity}, cost {outcome.Cost:@Cost}");
+
+        // 재화 원장(6.1). 1회 1칸이라 행 수가 곧 누적 확장량이고, ref_id에는 도달한 용량을 담는다.
+        if (outcome.Cost > 0)
+        {
+            _eventLogger.CurrencySpent(
+                userId, outcome.Cost, outcome.GoldBalance,
+                CurrencySource.InventoryExpand, outcome.InventoryCapacity);
+        }
+
         return new SaveResult(ErrorCode.Success, "Expanded", data);
     }
 

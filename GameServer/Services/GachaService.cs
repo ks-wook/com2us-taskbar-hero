@@ -146,6 +146,13 @@ public sealed class GachaService : IGachaService
             inventoryDelta = outcome.Delta,
         };
 
+        // 재화 원장(6.1). 1연/10연 어느 쪽이든 비용은 요청당 1행이고, 결과는 같은 pull_id로 이어진다.
+        if (outcome.CostAmount > 0)
+        {
+            _eventLogger.CurrencySpent(
+                userId, outcome.CostAmount, outcome.Balance, CurrencySource.GachaPull, outcome.PullId);
+        }
+
         // 지급 트랜잭션이 커밋된 뒤에 방출한다(4.2). 회차마다 1행이라 10연이면 10행이 같은 pull_id로 묶인다.
         EmitPullItems(userId, banner.GachaCode, outcome.PullId, outcome.Entries);
 

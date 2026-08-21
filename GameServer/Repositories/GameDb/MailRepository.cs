@@ -58,6 +58,12 @@ public sealed record MailClaimAllOutcome(
     /// <summary>가방 변경분(5.0). 수령 전체를 합산한 최종 상태다(메일별로 나누지 않는다).</summary>
     public InventoryDeltaDto Delta { get; init; } = new InventoryDeltaDto();
 
+    /// <summary>
+    /// 수령한 메일별 골드 첨부액(골드가 없는 메일은 빠진다). 지급 자체는 합계 한 번의 upsert지만,
+    /// <b>재화 원장은 메일 1건당 1행</b>이라(<c>ref_id</c> = mail_id, 6.1) 귀속액이 따로 필요하다.
+    /// </summary>
+    public IReadOnlyDictionary<long, long> GoldByMailId { get; init; } = new Dictionary<long, long>();
+
     public static MailClaimAllOutcome Fail(MailClaimStatus status)
         => new(status, Array.Empty<long>(), 0, Array.Empty<MailAttachment>(), 0);
 }
@@ -197,16 +203,35 @@ public sealed class MailRepository : GameDbBase, IMailRepository
             }
 
             // 3) 첨부 일괄 로드 + 4) 지급. 수령 대상이 없어도 잔액은 회신한다.
-            var rewards = claimedIds.Count > 0
-                ? (await LoadRewardsAsync(db, transaction, claimedIds)).Values.SelectMany(r => r).ToList()
-                : new List<MailAttachment>();
+            var rewardsByMail = claimedIds.Count > 0
+                ? await LoadRewardsAsync(db, transaction, claimedIds)
+                : new Dictionary<long, IReadOnlyList<MailAttachment>>();
+            var rewards = rewardsByMail.Values.SelectMany(r => r).ToList();
             var grant = await GrantAttachmentsAsync(db, transaction, userId, rewards, _itemLookup, nowUnix);
             if (!grant.stored)
             {
                 return TxResult<MailClaimAllOutcome>.Rollback(MailClaimAllOutcome.Fail(MailClaimStatus.InventoryFull));
             }
 
-            return TxResult<MailClaimAllOutcome>.Commit(new MailClaimAllOutcome(MailClaimStatus.Ok, claimedIds, grant.gold, grant.items, grant.goldBalance) { Delta = grant.delta });
+            // 메일별 골드 귀속액. 지급은 합계 한 번이지만 원장은 메일 단위로 남긴다(6.1).
+            var goldByMailId = new Dictionary<long, long>();
+            foreach (var (mailId, attachments) in rewardsByMail)
+            {
+                var gold = attachments
+                    .Where(a => a.RewardType == Constants.RewardType.Gold)
+                    .Sum(a => a.Quantity);
+                if (gold > 0)
+                {
+                    goldByMailId[mailId] = gold;
+                }
+            }
+
+            return TxResult<MailClaimAllOutcome>.Commit(
+                new MailClaimAllOutcome(MailClaimStatus.Ok, claimedIds, grant.gold, grant.items, grant.goldBalance)
+                {
+                    Delta = grant.delta,
+                    GoldByMailId = goldByMailId,
+                });
         });
 
     /// <summary>

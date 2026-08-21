@@ -220,6 +220,15 @@ public sealed class SaveService : ISaveService
         }
 
         _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newCharacterId:@CharacterId}, classCode {classCode:@ClassCode}, slot {newSlot:@Slot}, gender {gender:@Gender}, cost {outcome.Cost:@Cost}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}, startingSkill {startingSkillCode ?? 0:@StartingSkill}");
+
+        // 재화 원장(6.1). ref_id가 생성 순번(character_id)이라 "몇 번째 캐릭터를 언제 샀나"가 이 값으로 나온다.
+        // 최초 생성은 무료라 이 행이 없다(그쪽은 player.create가 답한다).
+        if (outcome.Cost > 0)
+        {
+            _eventLogger.CurrencySpent(
+                userId, outcome.Cost, outcome.GoldBalance, CurrencySource.CharacterCreate, newCharacterId);
+        }
+
         return SuccessCharacter(userId, newCharacterId, classCode, newSlot, gender, outcome.Cost, outcome.GoldBalance);
     }
 

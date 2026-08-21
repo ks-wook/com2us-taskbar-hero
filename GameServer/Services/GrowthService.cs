@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Logging;
 
 namespace GameServer.Services;
 
@@ -20,13 +21,17 @@ public sealed class GrowthService : IGrowthService
     private readonly IGrowthRepository _growthRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<GrowthService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(성장 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
-    public GrowthService(IGrowthRepository growthRepository, MasterDbProvider masterData, ILogger<GrowthService> logger)
+    /// <summary>의존성(성장 리포지토리·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
+    public GrowthService(
+        IGrowthRepository growthRepository, MasterDbProvider masterData,
+        ILogger<GrowthService> logger, IEventLogger eventLogger)
     {
         _growthRepository = growthRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -243,6 +248,15 @@ public sealed class GrowthService : IGrowthService
         };
 
         _logger.ZLogInformation($"룬 업그레이드: userId {userId:@UserId}, runeCode {runeCode:@RuneCode}, level {outcome.NewLevel:@Level}, cost {outcome.Cost:@Cost}");
+
+        // 재화 원장(6.1). 룬은 도메인 로그 테이블이 없어 이 행이 유일한 기록이다 —
+        // 룬별 투자 편중은 ref_id로, 도달 레벨은 룬별 행 수의 누적으로 나온다.
+        if (outcome.Cost > 0)
+        {
+            _eventLogger.CurrencySpent(
+                userId, outcome.Cost, outcome.GoldBalance, CurrencySource.RuneUpgrade, runeCode);
+        }
+
         return new SaveResult(ErrorCode.Success, "Rune upgraded", data);
     }
 }

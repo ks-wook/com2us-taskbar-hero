@@ -203,6 +203,20 @@ public sealed class TradeService : ITradeService
             bought, TradeCloseOutcome.Buy, now, buyerUid: userId, mailId: outcome.ItemMailId,
             settled: true, errorCode: ErrorCode.Success);
 
+        // 재화 원장(6.1) — 구매 순간 경제에 반영되는 것은 이 둘뿐이다.
+        //   ① 구매자의 지출(전액)  ② 수수료 소각(판매자 부담, 어느 계정에도 가지 않는다)
+        // 판매자 몫은 아직 우편함에 부채로 떠 있고, mail_claim 시점에 gain으로 잡힌다.
+        _eventLogger.CurrencySpent(
+            userId, bought.Price, outcome.GoldBalance, CurrencySource.TradeBuy, bought.ListingId);
+
+        var settlement = SettlementAmount(bought.Price);
+        var fee = bought.Price - settlement;
+        if (fee > 0)
+        {
+            _eventLogger.CurrencyBurned(
+                bought.SellerUserId, fee, CurrencySource.TradeFee, bought.ListingId);
+        }
+
         // 구매 1건이 메일을 둘 발급한다 — 구매자에게 아이템, 판매자에게 대금. 받는 계정이 서로 달라
         // 두 행의 uid가 다르다(5.8).
         _eventLogger.MailIssued(userId, outcome.ItemMailId, purchaseMail(bought), MailSource.TradeBuyItem);

@@ -7,6 +7,7 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Logging;
 using GameServer.Util;
 
 namespace GameServer.Services;
@@ -20,15 +21,17 @@ public sealed class MailService : IMailService
     private readonly IMailRepository _mailRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<MailService> _logger;
+    private readonly IEventLogger _eventLogger;
 
     /// <summary>의존성(메일 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
     public MailService(
         IMailRepository mailRepository, MasterDbProvider masterData,
-        ILogger<MailService> logger)
+        ILogger<MailService> logger, IEventLogger eventLogger)
     {
         _mailRepository = mailRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -97,6 +100,15 @@ public sealed class MailService : IMailService
         };
 
         _logger.ZLogInformation($"메일 수령: userId {userId:@UserId}, mailId {mailId:@MailId}, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
+
+        // 재화 원장(6.1). 출석·거래 대금·순위 보상·신규 지원금이 전부 이 자리로 들어온다 —
+        // 우편함에 부채로 떠 있던 재화가 실제로 경제에 풀리는 순간이다.
+        if (outcome.Gold > 0)
+        {
+            _eventLogger.CurrencyGained(
+                userId, outcome.Gold, outcome.GoldBalance, CurrencySource.MailClaim, mailId);
+        }
+
         return new SaveResult(ErrorCode.Success, "Claimed", data);
     }
 
@@ -129,6 +141,22 @@ public sealed class MailService : IMailService
         };
 
         _logger.ZLogInformation($"메일 일괄 수령: userId {userId:@UserId}, mails {outcome.ClaimedMailIds.Count:@MailCount}건, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
+
+        // 재화 원장(6.1) — 지급은 합계 한 번이지만 **메일 1건당 1행**으로 남긴다(ref_id = mail_id).
+        // 잔액은 지급 전 잔액에서 메일 순서대로 누적해 채운다. 한 트랜잭션 안의 값이라 중간 잔액이
+        // DB에 실재하지는 않지만, 합이 정확하고 마지막 행이 실제 잔액과 일치한다.
+        var runningBalance = outcome.GoldBalance - outcome.Gold;
+        foreach (var mailId in outcome.ClaimedMailIds)
+        {
+            if (!outcome.GoldByMailId.TryGetValue(mailId, out var gold))
+            {
+                continue; // 골드 첨부가 없는 메일(아이템만) — 재화 원장에는 남길 것이 없다.
+            }
+
+            runningBalance += gold;
+            _eventLogger.CurrencyGained(userId, gold, runningBalance, CurrencySource.MailClaim, mailId);
+        }
+
         return new SaveResult(ErrorCode.Success, "Claimed all", data);
     }
 

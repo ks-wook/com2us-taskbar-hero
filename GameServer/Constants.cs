@@ -495,6 +495,18 @@ public static class Constants
 
             /// <summary>전역 예외 처리기가 미처리 예외를 잡음 → <c>api_error_logs</c>(5.11).</summary>
             public const string ApiError = "api.error";
+
+            /// <summary>
+            /// 재화가 움직인 <b>모든 지점</b> → <c>currency_flow_logs</c>(6.1). 도메인 로그와 겹치지만,
+            /// "골드가 전체적으로 늘고 있나 줄고 있나"는 이 스트림이 아니면 매번 도메인을 UNION 해야 답한다.
+            /// </summary>
+            public const string CurrencyFlow = "currency.flow";
+
+            /// <summary>
+            /// 아이템이 움직인 <b>모든 지점</b> → <c>item_flow_logs</c>(6.2). 큐브·소모품처럼 도메인 테이블이
+            /// 아예 없는 기능은 이 행이 유일한 기록이다.
+            /// </summary>
+            public const string ItemFlow = "item.flow";
         }
     }
 }

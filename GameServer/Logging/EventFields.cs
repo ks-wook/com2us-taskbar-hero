@@ -106,6 +106,88 @@ public sealed record GachaPullItemEvent(
     long PullId, int Seq, int GachaCode, int ItemCode, int Grade,
     bool IsPity, bool IsGuaranteed) : IEventFields;
 
+// ── 6.1 재화 변동 원장 ──
+
+/// <summary>
+/// <c>currency.flow</c> — 재화(골드)가 움직인 <b>모든 지점</b>이 남기는 원장 1행(6.1).
+/// <para>도메인 로그와 내용이 겹치지만 겹침을 감수한다 — 유입·유출이 여러 도메인에 흩어져 있어,
+/// 이 스트림이 없으면 "골드가 늘고 있나 줄고 있나"에 답할 때마다 도메인 수만큼 <c>UNION</c>해야 한다.
+/// 도메인 로그와는 <c>req_id</c>로 이어 붙는다.</para>
+/// </summary>
+/// <param name="Direction"><see cref="CurrencyDirection"/>의 값. 부호는 여기가 갖는다.</param>
+/// <param name="Amount"><b>절대값</b>. 방향은 <paramref name="Direction"/>이 정한다.</param>
+/// <param name="BalanceAfter">
+/// 변동 후 잔액(그 시점 스냅샷). <b><c>burn</c>은 null</b> — 소각은 어느 계정의 잔액도 바꾸지 않는
+/// 정산용 행이라, 숫자를 적으면 같은 변동을 두 번 센 것처럼 읽힌다.
+/// </param>
+/// <param name="Source"><see cref="CurrencySource"/>의 값. 이 목록이 곧 이 게임 경제의 전체 지도다.</param>
+/// <param name="RefId">
+/// 관련 식별자. <b>해석은 <paramref name="Source"/>가 정한다</b>(예: <c>stage_clear</c>면 stage_id,
+/// <c>gacha_pull</c>이면 pull_id). 그 도메인의 질문에 답하는 축이므로 값이 없는 source만 0을 쓴다.
+/// </param>
+public sealed record CurrencyFlowEvent(
+    int CurrencyCode, string Direction, long Amount, long? BalanceAfter,
+    string Source, long RefId) : IEventFields;
+
+/// <summary><see cref="CurrencyFlowEvent.Direction"/>에 들어가는 값(6.1).</summary>
+public static class CurrencyDirection
+{
+    /// <summary>유입(계정 잔액 증가).</summary>
+    public const string Gain = "gain";
+
+    /// <summary>유출(계정 잔액 감소).</summary>
+    public const string Spend = "spend";
+
+    /// <summary>
+    /// 소각 — 아무 계정에도 가지 않고 경제에서 사라진다. <c>gain</c>/<c>spend</c>만으로는 총량이 맞지 않아
+    /// "골드가 어디로 샜는지" 설명할 수 없으므로, 이 방향이 그 차액을 명시해 <b>회계를 닫는다</b>.
+    /// </summary>
+    public const string Burn = "burn";
+}
+
+/// <summary>
+/// <see cref="CurrencyFlowEvent.Source"/>의 <b>고정 집합</b>(6.1). 재화가 움직이는 경로를 새로 만들면
+/// 여기에 값을 추가하고 정의 문서의 지도도 함께 고친다 — 빠뜨리면 그만큼 경제가 설명되지 않는다.
+/// </summary>
+public static class CurrencySource
+{
+    /// <summary>gain · ref_id=stage_id — 온라인 전투 보상(주 유입원).</summary>
+    public const string StageClear = "stage_clear";
+
+    /// <summary>gain · ref_id=0 — 오프라인 정산(상세는 offline_claim_logs).</summary>
+    public const string OfflineClaim = "offline_claim";
+
+    /// <summary>gain · ref_id=0 — 아이템 → 골드 전환(분해 품목은 같은 req_id의 item_flow_logs 행들).</summary>
+    public const string CubeDismantle = "cube_dismantle";
+
+    /// <summary>gain · ref_id=mail_id — 출석·거래 대금·순위 보상·신규 지원금이 전부 여기로 들어온다.</summary>
+    public const string MailClaim = "mail_claim";
+
+    /// <summary>spend · ref_id=character_id — 몇 번째 캐릭터를 언제 샀나가 이 값으로 나온다.</summary>
+    public const string CharacterCreate = "character_create";
+
+    /// <summary>spend · ref_id=item_id — 장비 강화(상세는 item_enhance_logs).</summary>
+    public const string ItemEnhance = "item_enhance";
+
+    /// <summary>spend · ref_id=확장 후 용량 — 1회 1칸이라 행 수가 곧 누적 확장량이다.</summary>
+    public const string InventoryExpand = "inventory_expand";
+
+    /// <summary>spend · ref_id=recipe_code — 레시피별 사용 빈도가 이 값으로 나온다.</summary>
+    public const string CubeCraft = "cube_craft";
+
+    /// <summary>spend · ref_id=rune_code — 룬별 투자 편중이 이 값으로 나온다.</summary>
+    public const string RuneUpgrade = "rune_upgrade";
+
+    /// <summary>spend · ref_id=pull_id — 뽑기 비용(결과는 gacha_pull_item_logs가 같은 pull_id로 담는다).</summary>
+    public const string GachaPull = "gacha_pull";
+
+    /// <summary>spend · ref_id=listing_id — 거래소 구매(전액).</summary>
+    public const string TradeBuy = "trade_buy";
+
+    /// <summary>burn · ref_id=listing_id — 거래 수수료 20%.</summary>
+    public const string TradeFee = "trade_fee";
+}
+
 // ── 5.11 배치 / 시스템 ──
 
 /// <summary>
