@@ -1,0 +1,34 @@
+# 로그 저장소(logdb) 데이터소스 프로비저닝.
+#
+#   UI에서 손으로 추가하지 않고 이 파일로 고정한다 — 대시보드 JSON이 `uid: logdb`를 가리키므로
+#   데이터소스 uid가 흔들리면 모든 패널이 깨진다.
+#   비밀번호는 파일에 적지 않고 컨테이너 환경변수(LOGDB_PASSWORD)를 그라파나가 보간한다.
+#
+#   설계 정본: docs/공통/로그-이벤트-정의.md 8·9장.
+
+apiVersion: 1
+
+datasources:
+  - name: logdb
+    uid: logdb
+    # Grafana 10.4+ 의 PostgreSQL 데이터소스 식별자(예전 이름 `postgres` 도 아직 통한다).
+    type: grafana-postgresql-datasource
+    access: proxy
+    # compose 네트워크의 서비스 이름. 호스트 포트(127.0.0.1:5432)가 아니라 컨테이너로 직접 붙는다.
+    url: timescaledb:5432
+    user: fluentd
+    database: logdb
+    isDefault: true
+    editable: false
+    secureJsonData:
+      password: ${LOGDB_PASSWORD}
+    jsonData:
+      sslmode: disable
+      postgresVersion: 1700
+      # TimescaleDB 확장을 알려 준다 — 쿼리 편집기가 time_bucket 을 인식하고,
+      # $__timeGroup 매크로가 time_bucket 으로 번역된다.
+      timescaledb: true
+      # 로그 적재는 fluentd가 10초마다 하므로 캐시를 짧게 둔다.
+      maxOpenConns: 10
+      maxIdleConns: 5
+      connMaxLifetime: 14400

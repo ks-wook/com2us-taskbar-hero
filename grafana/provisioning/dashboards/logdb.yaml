@@ -1,0 +1,24 @@
+# 대시보드 프로비저닝 — grafana/dashboards/*.json 을 그라파나가 읽어 등록한다.
+#
+#   JSON 파일이 정본이라, UI에서 고친 내용은 컨테이너를 다시 띄우면 사라진다
+#   (`allowUiUpdates: true` 로 두어 UI 편집 자체는 되게 했고, 남기려면 JSON으로 내보내
+#    grafana/dashboards/ 에 덮어써야 한다).
+#
+#   설계 정본: docs/공통/로그-이벤트-정의.md 8·9장.
+
+apiVersion: 1
+
+providers:
+  - name: logdb-dashboards
+    orgId: 1
+    # 사이드바에 이 폴더로 묶여 보인다.
+    folder: 게임 로그
+    type: file
+    # JSON 안의 uid 를 그대로 쓴다(대시보드 링크가 재기동마다 바뀌지 않게).
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      # /var/lib/grafana(볼륨) 안에 겹쳐 마운트하지 않도록 별도 경로를 쓴다.
+      path: /etc/grafana/dashboards
+      foldersFromFilesStructure: false

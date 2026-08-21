@@ -32,15 +32,19 @@
 # 외부에서는 테일스케일로 본다 — 호스트에서 아래 한 줄을 띄워 두면 tailnet 안에서 접속된다:
 #   tailscale serve --bg --https=10000 http://localhost:3000
 # 컨테이너의 GF_SERVER_ROOT_URL·GF_SERVER_DOMAIN 이 그 주소와 맞아야 로그인 리다이렉트가 깨지지 않는다.
-# 데이터소스·대시보드는 아직 붙이지 않았다(UI에서 추가하면 볼륨에 남는다).
+# 데이터소스(`logdb`)와 대시보드 5개는 `grafana/`에 **코드로 고정**해 두고 프로비저닝으로 붙인다
+# (`grafana/provisioning/**`, `grafana/dashboards/*.json`). UI에서 고친 것은 정본이 아니므로,
+# 남기려면 대시보드를 JSON으로 내보내 `grafana/dashboards/`에 덮어쓴다.
 #
-# fluentd는 GameServer의 **이벤트 로그(집계용 JSON)** 수집기다(docs/공통/로그-이벤트-정의.md 9장).
-# 호스트의 `GameServer/logs/event/`를 in_tail로 걷으므로, 서버를 콘솔(`dotnet run`·watch-all.ps1)로
-# 띄우든 컨테이너로 띄우든 **같은 디렉터리**를 본다(gameserver 서비스가 그 경로를 바인드 마운트한다).
-# 적재 대상 TimescaleDB(`logdb`)는 아직 이 컴포즈에 없다 — 그 서비스가 뜨기 전까지 fluentd는
-# 접속 실패로 재시작을 반복한다. 그 사이의 로그는 서버가 쓴 JSON 파일에 남고, fluentd가 정상화되면
-# `pos_file` 위치부터 이어 읽으므로 유실되지 않는다(9.3). 지금 단계에서 컴포즈 전체를 띄우고 싶지
-# 않으면 `docker compose up -d mysql redis grafana` 처럼 서비스를 지정한다.
+# 로그 파이프라인은 **GameServer(ZLogger JSON 파일) → fluentd → TimescaleDB(logdb) → Grafana**다
+# (docs/공통/로그-이벤트-정의.md 3·8·9장).
+#   · fluentd는 호스트의 `GameServer/logs/event/`를 in_tail로 걷는다 — 서버를 콘솔(`dotnet run`·
+#     watch-all.ps1)로 띄우든 컨테이너로 띄우든 **같은 디렉터리**를 본다(gameserver 서비스가 그
+#     경로를 바인드 마운트한다).
+#   · timescaledb(`logdb`)는 첫 기동 시 `docs/공통/logdb-schema.sql`을 실행해 로그 테이블 31개
+#     (액션 21 + unknown + 히스토리 9)와 하이퍼테이블·압축·보존·연속 집계를 만든다. 스키마를 고쳐
+#     다시 적용하려면 `docker compose down -v`로 볼륨을 비우고 재기동한다(init은 빈 볼륨에서만 돈다).
+#   · 로그 저장소만 따로 띄울 수 있다: `docker compose up -d timescaledb fluentd`.
 
 services:
   mysql:
@@ -95,6 +99,39 @@ services:
       retries: 10
       start_period: 5s
 
+  # ── 로그 저장소 ──────────────────────────────────────────────────────
+  #   logdb: 게임 로그 전용 TimescaleDB. 게임 DB(MySQL)와 **물리적으로 분리**되므로
+  #   분석 질의가 서비스 DB의 커넥션·버퍼풀을 건드리지 않는다(로그 이벤트 정의 3장).
+  #   **서버는 이 DB에 접속하지 않는다** — 적재는 fluentd(out_sql)만 한다.
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg17
+    container_name: taskbar-hero-timescaledb
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Seoul
+      # 이 컨테이너의 수퍼유저가 곧 fluentd 접속 계정이다(fluent.conf의 username fluentd).
+      # 개발용 단독 인스턴스라 계정을 따로 쪼개지 않는다 — 하이퍼테이블·정책 생성에
+      # 수퍼유저 권한이 필요하고, 접속자가 fluentd 하나뿐이다.
+      POSTGRES_DB: logdb
+      POSTGRES_USER: fluentd
+      POSTGRES_PASSWORD: "${LOGDB_PASSWORD:-taskbar_hero_dev}"
+    ports:
+      # psql·Grafana를 호스트에서 붙일 수 있게 루프백에만 노출한다(게임 DB의 3306과 겹치지 않는다).
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - taskbar-hero-logdb-data:/var/lib/postgresql/data
+      # 첫 기동 시 스키마 자동 생성(데이터 볼륨이 비어 있을 때만 실행). 이미지 자체의 init
+      # 스크립트(000_*)가 먼저 돌아 timescaledb 확장을 준비하므로 접두 숫자를 그 뒤로 둔다.
+      - ./docs/공통/logdb-schema.sql:/docker-entrypoint-initdb.d/01-logdb-schema.sql:ro
+    # -h 127.0.0.1(TCP)로 검사한다 — init 스크립트를 실행하는 임시 서버는 유닉스 소켓만 열므로,
+    # TCP를 보면 "스키마 생성이 끝난 뒤"에야 healthy가 된다(mysql과 같은 이유).
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-p", "5432", "-U", "fluentd", "-d", "logdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   grafana:
     image: grafana/grafana:12.0.2
     container_name: taskbar-hero-grafana
@@ -114,13 +151,24 @@ services:
       # 다른 머신·테일넷에서는 .env 의 GRAFANA_ROOT_URL·GRAFANA_DOMAIN 으로 덮어쓴다.
       GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL:-https://ksu864-1.tail961c4e.ts.net:10000/}"
       GF_SERVER_DOMAIN: "${GRAFANA_DOMAIN:-ksu864-1.tail961c4e.ts.net}"
+      # logdb 데이터소스 비밀번호. 프로비저닝 YAML이 ${LOGDB_PASSWORD}로 이 값을 보간한다
+      # (비밀번호를 저장소 파일에 적지 않는다 — 로깅 규칙 §7과 같은 기준).
+      LOGDB_PASSWORD: "${LOGDB_PASSWORD:-taskbar_hero_dev}"
     ports:
       # 그라파나 기본 포트. 호스트 루프백에만 바인딩한다 — 외부 공개는 테일스케일 프록시가 담당하므로
       # 이 포트를 0.0.0.0 으로 열 필요가 없다(기본 비밀번호가 admin이라 직접 노출은 피한다).
       - "127.0.0.1:3000:3000"
     volumes:
-      # 대시보드·데이터소스 설정이 컨테이너를 다시 띄워도 남게 한다.
+      # 사용자 설정(로그인·폴더·수동 편집)이 컨테이너를 다시 띄워도 남게 한다.
       - taskbar-hero-grafana-data:/var/lib/grafana
+      # 데이터소스(logdb) · 대시보드 공급자 설정. 코드로 고정해 UI 수동 추가에 의존하지 않는다.
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # 대시보드 JSON 정본. 공급자가 30초마다 다시 읽으므로 파일을 고치면 재기동 없이 반영된다.
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on:
+      # 데이터소스가 가리키는 logdb가 준비된 뒤에 뜨게 한다(첫 화면에서 빈 패널을 보지 않도록).
+      timescaledb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:3000/api/health"]
       interval: 15s
@@ -154,7 +202,10 @@ services:
       # pos_file · 버퍼. **볼륨에 둬야** 컨테이너를 다시 만들어도 읽은 위치를 잃지 않는다
       # (잃으면 같은 파일을 처음부터 다시 읽어 중복 적재가 된다 — 9.3).
       - taskbar-hero-fluentd-state:/var/log/fluentd
-    # logdb(timescaledb) 서비스를 올리면 여기에 depends_on: { timescaledb: service_healthy }를 넣는다.
+    depends_on:
+      # out_sql은 기동 시 logdb에 접속하므로, **스키마 생성이 끝난 뒤**(healthy) 떠야 한다.
+      timescaledb:
+        condition: service_healthy
 
   # ── 애플리케이션 서버 ────────────────────────────────────────────────
   #   두 서버 모두 저장소 루트를 빌드 컨텍스트로 삼는다(공통 라이브러리
@@ -238,3 +289,5 @@ volumes:
   taskbar-hero-grafana-data:
   # fluentd의 pos_file(어디까지 읽었나) · DB 앞 파일 버퍼. 컨테이너 재생성에도 남아야 한다.
   taskbar-hero-fluentd-state:
+  # 로그 저장소(TimescaleDB logdb) 데이터. `down -v`로 지우면 스키마 SQL이 다시 실행된다.
+  taskbar-hero-logdb-data:
