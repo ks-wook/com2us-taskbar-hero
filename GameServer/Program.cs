@@ -14,6 +14,8 @@ using GameServer.Repositories.MemoryDb;
 using GameServer.Repositories.MasterDb.Interfaces;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
+using GameServer.Logging;
+using ZLogger.Providers;
 
 // DB 조회는 SqlKata 제네릭 매핑(.GetAsync<T>/.FirstOrDefaultAsync<T>)으로 POCO에 매핑한다(dynamic 금지, CLAUDE.md 규칙).
 // snake_case 컬럼 → PascalCase 프로퍼티 자동 매핑을 위해 Dapper 규칙을 켠다(SqlKata.Execution이 Dapper로 실행).
@@ -42,6 +44,31 @@ builder.Logging.AddZLoggerConsole(options =>
     });
 });
 
+// 이벤트 로그(집계용): 사람이 읽는 운영 로그와 **완전히 다른 경로**다(로그 이벤트 정의 3장).
+//   운영 로그 = 한글 평문 → 콘솔 / 이벤트 로그 = 평탄 JSON 1줄 → 전용 파일 → fluentd in_tail → logdb.
+//   같은 stdout에 섞으면 수집기가 평문과 JSON을 갈라 파싱해야 하므로, 카테고리(TaskbarHero.EventLog)로
+//   나누고 sink 자체를 분리한다. 라인은 EventLogger가 통째로 만들어 넘기므로 여기서는 **접두사 없이
+//   메시지만** 쓴다 — 포매터가 필드를 덧붙이면 out_sql의 컬럼 매핑이 어긋난다(4.1).
+var eventLogDirectory = builder.Configuration.GetValue("EventLog:Directory", "logs/event")!;
+Directory.CreateDirectory(eventLogDirectory);
+builder.Logging.AddZLoggerRollingFile(options =>
+{
+    options.FilePathSelector = (timestamp, sequence) =>
+        Path.Combine(eventLogDirectory, $"event-{timestamp.ToLocalTime():yyyyMMdd}_{sequence:000}.json");
+    options.RollingInterval = RollingInterval.Day;
+    options.RollingSizeKB = 1024 * 100; // 100MB마다 파일을 끊는다(tail 대상이 무한히 커지지 않게).
+    options.UsePlainTextFormatter(formatter =>
+    {
+        formatter.SetPrefixFormatter($"", (in MessageTemplate _, in LogInfo _) => { });
+        formatter.SetSuffixFormatter($"", (in MessageTemplate _, in LogInfo _) => { });
+    });
+});
+
+// sink 라우팅: 이벤트 로그는 파일에만, 운영 로그는 콘솔에만 간다.
+builder.Logging.AddFilter<ZLoggerConsoleLoggerProvider>(EventLogger.Category, LogLevel.None);
+builder.Logging.AddFilter<ZLoggerRollingFileLoggerProvider>(null, LogLevel.None);
+builder.Logging.AddFilter<ZLoggerRollingFileLoggerProvider>(EventLogger.Category, LogLevel.Information);
+
 
 // MVC 컨트롤러 + OpenAPI.
 // DTO는 TaskbarHero.Common의 [Serializable] + public 필드(Unity JsonUtility 공유용)이므로
@@ -49,6 +76,10 @@ builder.Logging.AddZLoggerConsole(options =>
 builder.Services.AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.IncludeFields = true);
 builder.Services.AddOpenApi();
+
+// 이벤트 로그 방출기. req_id(HttpContext.TraceIdentifier)를 스스로 찾으므로 접근자를 함께 등록한다.
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<IEventLogger, EventLogger>();
 
 // 전역 예외 처리기(미처리 예외 → Error 로깅 + 일반화 500 응답). 로깅 규칙 §6.
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();

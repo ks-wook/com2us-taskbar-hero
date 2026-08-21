@@ -8,6 +8,8 @@ using ZLogger;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
+using GameServer.Logging;
+using GameServer.Util;
 
 namespace GameServer.Services;
 
@@ -32,18 +34,21 @@ public sealed class SaveService : ISaveService
     private readonly IConsumableRepository _consumableRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<SaveService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(세이브·소모품 버프 리포지토리, 마스터 데이터, 로거)을 주입받는다.</summary>
+    /// <summary>의존성(세이브·소모품 버프 리포지토리, 마스터 데이터, 운영 로거, 이벤트 로거)을 주입받는다.</summary>
     public SaveService(
         ISaveRepository saveRepository,
         IConsumableRepository consumableRepository,
         MasterDbProvider masterData,
-        ILogger<SaveService> logger)
+        ILogger<SaveService> logger,
+        IEventLogger eventLogger)
     {
         _saveRepository = saveRepository;
         _consumableRepository = consumableRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -72,6 +77,8 @@ public sealed class SaveService : ISaveService
         var player = await _saveRepository.GetPlayerAsync(userId);
         if (player is null)
         {
+            // 세션 개시 이벤트(로그 이벤트 정의 5.2). 아직 세이브가 없으므로 경과 시간은 0이다.
+            _eventLogger.Action(EventLogTags.SaveLoad, userId, new SaveLoadEvent(IsNew: true, OfflineElapsedSec: 0));
             return new SaveResult(ErrorCode.Success, "New player", new { isNew = true });
         }
 
@@ -83,8 +90,8 @@ public sealed class SaveService : ISaveService
         var cube = await _saveRepository.GetCubeAsync(userId) ?? new CubeDto { cubeLevel = 1, cubeExp = 0 };
         var inventoryTotal = await _saveRepository.GetBagItemCountAsync(userId);
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var offlineElapsed = Math.Max(0, now - player.lastActiveAt);
+        var now = DateTimeUtil.NowUnixSeconds();
+        var offlineElapsed = DateTimeUtil.ElapsedSeconds(player.lastActiveAt, now);
 
         // 활성 버프만 담는다(만료 행은 남아 있어도 제외 — 오프라인 정산이 소급 참조할 뿐이다).
         var activeBuffs = await _consumableRepository.GetActiveBuffsAsync(userId, now);
@@ -110,6 +117,10 @@ public sealed class SaveService : ISaveService
             inventoryTotal = inventoryTotal,
             offlineElapsedSec = offlineElapsed,
         };
+
+        // 세션 개시 이벤트(로그 이벤트 정의 5.2). 계정 로그를 남기지 않으므로 접속·리텐션 분석이 전부 이 행에서 나온다.
+        _eventLogger.Action(
+            EventLogTags.SaveLoad, userId, new SaveLoadEvent(IsNew: false, OfflineElapsedSec: offlineElapsed));
 
         return new SaveResult(ErrorCode.Success, "Load successful", data);
     }
@@ -162,7 +173,7 @@ public sealed class SaveService : ISaveService
                 return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
             }
 
-            var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var nowUnix = DateTimeUtil.NowUnixSeconds();
             var welcomeMail = ComposeNewbieRewardMail(nickname.Trim(), nowUnix);
 
             try
@@ -179,6 +190,11 @@ public sealed class SaveService : ISaveService
             }
 
             _logger.ZLogInformation($"캐릭터 생성 성공(신규 계정): userId {userId:@UserId}, characterId {1:@CharacterId}, classCode {classCode:@ClassCode}, gender {gender:@Gender}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}, startingSkill {startingSkillCode ?? 0:@StartingSkill}");
+
+            // 최초 생성만 이벤트로 남긴다(로그 이벤트 정의 5.2) — 답하는 질문이 첫 직업 선호와
+            // 가입 → 플레이 전환이라, 두 번째 이후의 캐릭터 추가는 이 축에 들어가지 않는다.
+            // 커밋이 끝난 뒤 방출한다(롤백된 사실을 로그에 남기지 않는다, 4.2).
+            _eventLogger.Action(EventLogTags.PlayerCreate, userId, new PlayerCreateEvent(classCode, gender));
             // 최초 생성은 계정 초기화라 무료이며 파티 1번 자리에 편성된다.
             return SuccessCharacter(userId, 1, classCode, 1, gender, 0, null);
         }
@@ -198,7 +214,7 @@ public sealed class SaveService : ISaveService
 
         var outcome = await _saveRepository.AddCharacterAsync(
             userId, newCharacterId, classCode, newSlot, gender, cost,
-            startingWeapon, startingSkillCode, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            startingWeapon, startingSkillCode, DateTimeUtil.NowUnixSeconds());
         switch (outcome.Status)
         {
             case AddCharacterStatus.InsufficientCurrency:
@@ -278,7 +294,7 @@ public sealed class SaveService : ISaveService
     /// <summary>접속 시각(last_active_at)을 현재로 갱신한다(heartbeat). 계정 세이브가 없으면 SaveNotFound.</summary>
     public async Task<SaveResult> UpdateLastActiveAsync(long userId)
     {
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var now = DateTimeUtil.NowUnixSeconds();
         var affected = await _saveRepository.UpdateLastActiveAsync(userId, now);
         if (affected == 0)
         {
