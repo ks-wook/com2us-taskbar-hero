@@ -329,7 +329,7 @@ namespace TaskbarHero.Common.Dto
         public LoadDataDto data = new LoadDataDto();
     }
 
-    // ── 스테이지 진입 / 클리어 (stage-battle 기획서 §5) ──
+    // ── 스테이지 진입 / 클리어 / 실패 (stage-battle 기획서 §5) ──
 
     /// <summary>스테이지 진입·클리어 공통 요청 데이터. { act, difficulty, stage }</summary>
     [Serializable]
@@ -347,6 +347,30 @@ namespace TaskbarHero.Common.Dto
         public long userId;
         public string token;
         public StageActionData data;
+    }
+
+    /// <summary>
+    /// 스테이지 실패(파티 전멸) 보고 데이터(5.3). 좌표에 더해 **어떻게 졌는지**를 담는다.
+    /// { act, difficulty, stage, elapsedMs, remainingMonsterCount, reachedBoss }
+    /// </summary>
+    [Serializable]
+    public class StageFailData
+    {
+        public int act;
+        public int difficulty;
+        public int stage;
+        public int elapsedMs;              // 진입~전멸까지 걸린 시간(ms). 즉사인지 접전인지 가른다
+        public int remainingMonsterCount;  // 전멸 시점에 남아 있던 적 수. 0에 가까울수록 아슬아슬한 패배
+        public bool reachedBoss;           // 보스전까지 갔는지(보스가 벽인지 잡몹이 벽인지)
+    }
+
+    /// <summary>스테이지 실패 보고 요청 body(인증). { userId, token, data:StageFailData }</summary>
+    [Serializable]
+    public class StageFailRequest
+    {
+        public long userId;
+        public string token;
+        public StageFailData data;
     }
 
     /// <summary>스테이지 스폰(일반 몬스터 등장 레벨·수) 한 항목.</summary>
@@ -446,6 +470,20 @@ namespace TaskbarHero.Common.Dto
         public List<CurrencyDto> balance = new List<CurrencyDto>();
         public StageProgressDto progress = new StageProgressDto();
         public InventoryDeltaDto inventoryDelta = new InventoryDeltaDto();
+    }
+
+    /// <summary>
+    /// 실패 보고 응답 데이터(5.3). 기록만 하므로 진행도·보상은 바뀌지 않는다 —
+    /// 서버가 무엇을 어느 시각으로 접수했는지만 되돌려준다.
+    /// </summary>
+    [Serializable]
+    public class StageFailResultData
+    {
+        public int act;
+        public int difficulty;
+        public int stage;
+        public int stageId;
+        public long failedAt;   // 서버 접수 시각(Unix seconds)
     }
 
     // ── 인벤토리/아이템 액션 (inventory-item-cube 기획서 §5.1·5.2·5.5) ──
@@ -632,6 +670,16 @@ namespace TaskbarHero.Common.Dto
         public int errorCode;
         public string message;
         public StageClearData data = new StageClearData();
+    }
+
+    /// <summary>스테이지 실패 보고 응답 { success, errorCode, message, data(StageFailResultData) }.</summary>
+    [Serializable]
+    public class StageFailResponse
+    {
+        public bool success;
+        public int errorCode;
+        public string message;
+        public StageFailResultData data = new StageFailResultData();
     }
 
     // ── 성장(직업/스킬/룬) 액션 (growth 기획서 §5) ──

@@ -8,17 +8,17 @@
 |---|---|---|---|
 | [**로그인/인증**](#로그인인증) (회원가입·로그인·로그아웃·자동 로그인 검증) | AuthController | Account | `POST /api/auth/signup` · `login` · `logout` · `validate` |
 | [**세이브 데이터/캐릭터 생성**](#세이브-데이터캐릭터-생성) (코어 로드 · 가방 페이지 조회 · 생성 · 파티 편성 저장 · heartbeat) | GameSaveController · GameInventoryController(가방 조회) | Game | `POST /api/game/load` · `inventory/list` · `create-character` · `party/arrange` · `update-last-active` |
-| [**스테이지**](#스테이지) (던전 입장·클리어 보상) | GameStageController | Game | `POST /api/game/stage/enter` · `clear` |
+| [**스테이지**](#스테이지) (던전 입장·클리어 보상·실패 보고) | GameStageController | Game | `POST /api/game/stage/enter` · `clear` · `fail` |
 | [**방치형 오프라인 보상**](#방치형-오프라인-보상) | GameOfflineController | Game | `POST /api/game/offline/claim` |
 | [**인벤토리/아이템**](#인벤토리아이템) (장착·해제·강화·배치·용량 확장. 가방 조회는 세이브 데이터 섹션) | GameInventoryController | Game | `POST /api/game/inventory/equip` · `unequip` · `enhance` · `move` · `expand` |
 | [**소모품/버프**](#소모품버프) (소모품 사용 → 경험치·골드 획득량 버프 부여·연장, 적용 중인 버프 조회) | GameConsumableController | Game | `POST /api/game/consumable/use`, `POST /api/game/consumable/buffs` |
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**가챠**](#가챠뽑기) (배너 조회 / 뽑기 1연·10연 / 뽑기 기록 조회) | GameGachaController | Game | `POST /api/game/gacha/banners` · `pull` · `history` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
-| [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchService(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
-| [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchService(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
+| [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchScheduler(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
+| [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchScheduler(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
 | [**출석부 보상**](#출석부-보상) (이번달 진행도 조회 / 오늘자 보상 획득→메일 발급, 일차 = 누적 출석 순번 1~30) | GameAttendanceController | Game | `POST /api/game/attendance/status` · `claim` |
-| [**보스러시/랭킹**](#보스러시랭킹) (정보 조회 / 도전 시작 / 클리어 보고=클라 측정 시간 기록 / 랭킹 목록 / 내 순위 / 시즌 정산 배치) | GameBossRushController · BossRushSeasonBatchService(배치) | Game | `POST /api/game/boss-rush/info` · `enter` · `clear` · `rank` · `my-rank` |
+| [**보스러시/랭킹**](#보스러시랭킹) (정보 조회 / 도전 시작 / 클리어 보고=클라 측정 시간 기록 / 랭킹 목록 / 내 순위 / 시즌 정산 배치) | GameBossRushController · BossRushSeasonBatchScheduler(배치) | Game | `POST /api/game/boss-rush/info` · `enter` · `clear` · `rank` · `my-rank` |
 
 > **가방 변경분 공통 규약(`inventoryDelta`)** — 가방을 바꾸는 액션(`cube/*`·`gacha/pull`·`consumable/use`·`mail/claim`·`mail/claim-all`·`stage/clear`·`trade/register`·`trade/cancel`)은 변경분을 응답에 담는다. 클라이언트는 응답만으로 가방을 갱신하며 **액션 뒤에 `/load`·`/inventory/list`를 재조회하지 않는다**([인벤토리/아이템/큐브 기획서](../docs/세부/inventory-item-cube-기획서.md) 5.0).
 >
@@ -334,7 +334,7 @@ sequenceDiagram
 
 ## 스테이지
 
-스테이지 진입·클리어(서버 권위 보상 산출) (GameStageController, `/api/game/stage`, GameServer). 저장소: MySQL `taskbar_hero_game`(`game_player`·`player_item`·`player_character`·`player_buff`) + 인메모리 마스터 데이터(stage/reward/level/item).
+스테이지 진입·클리어(서버 권위 보상 산출)·실패 보고 (GameStageController, `/api/game/stage`, GameServer). 저장소: MySQL `taskbar_hero_game`(`game_player`·`player_item`·`player_character`·`player_buff`) + 인메모리 마스터 데이터(stage/reward/level/item).
 
 **클리어 보상에는 활성 획득량 버프 배율이 곱해진다.** 소모품 부스터([소모품/버프](#소모품버프) 섹션)로 부여된 배율을 **지급과 같은 트랜잭션에서** 읽어(만료분 제외) 골드·경험치에 적용하고, 응답에는 배율이 반영된 최종 지급액을 담는다. 오프라인 정산에는 적용하지 않는다.
 
@@ -403,6 +403,42 @@ sequenceDiagram
 ```
 
 - 전투 중 계속 발생하는 호출이라 **전리품이 쌓여도 가방을 다시 받지 않는다.** 클라이언트가 응답의 `inventoryDelta`·`balance`를 세션 캐시에 반영해 두므로, 창고를 열기 전에 이미 최신 상태다.
+
+### POST /api/game/stage/fail — 스테이지 실패 보고(기록 전용)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 클라이언트
+    participant S as GameServer
+    participant DB as MySQL(game)
+
+    C->>S: POST /stage/fail { userId, token, data:{ act, difficulty, stage, elapsedMs, remainingMonsterCount, reachedBoss } }
+    S->>S: 마스터 데이터 확인(인메모리) — 해당 좌표의 스테이지 정의
+    alt 마스터 미로드 / 스테이지 없음
+        S-->>C: 실패 { errorCode: MasterDataNotLoaded(10001) / StageNotFound(6001) }
+    else 스테이지 존재
+        S->>S: 보고 수치 검증 — elapsedMs·remainingMonsterCount 음수 금지
+        alt 음수 보고(클라이언트 결함)
+            S-->>C: 실패 { errorCode: InvalidRequest(1006) }
+        else 형식 정상
+            S->>DB: 플레이어 진행도 데이터 확인
+            alt 세이브 없음
+                S-->>C: 실패 { errorCode: SaveNotFound(2001) }
+            else 현재 진입 스테이지와 대조
+                alt 미진입 / 좌표 불일치
+                    S-->>C: 실패 { errorCode: StageNotEntered(6003) }
+                else 일치
+                    S->>S: 실패 이벤트 기록(stage.fail) — 쓰기 없음(진행도·재화·진입 스테이지 불변)
+                    S-->>C: 성공 { 접수한 좌표·stageId·failedAt }
+                end
+            end
+        end
+    end
+```
+
+- **상태를 바꾸지 않는 유일한 스테이지 API다.** 진입 스테이지를 지우지 않으므로 클라이언트는 곧바로 같은 스테이지를 재시도하고, 성공하면 `clear`가 이어진다.
+- 서버는 전투를 재현하지 않아 전멸을 관측할 수 없다 — 이 보고가 있어야 실질 난이도(`fail / enter`)를 추정이 아닌 **측정**으로 얻는다([로그 이벤트 정의](../docs/공통/로그-이벤트-정의.md) 5.3).
 - **가방이 가득 차도 클리어는 거부하지 않는다.** 전리품만 폐기하고 골드·경험치·진행도는 정상 반영하므로(응답 `rewards.items`가 빈 배열) 방치 전투가 인벤토리 정리 때문에 멈추지 않는다.
 
 ## 방치형 오프라인 보상
@@ -846,7 +882,7 @@ sequenceDiagram
 
 ## 거래소/교역선
 
-판매 등록·목록 조회·구매·취소 (GameTradeController, `/api/game/trade`, GameServer)와 만료 배치(TradeExpireBatchService). 저장소: MySQL `taskbar_hero_game`(`trade_listing`·`player_item`·`player_mail`) + 인메모리 마스터(item — `sellable`·`base_price`, mail 템플릿 201·202).
+판매 등록·목록 조회·구매·취소 (GameTradeController, `/api/game/trade`, GameServer)와 만료 배치(TradeExpireBatchScheduler). 저장소: MySQL `taskbar_hero_game`(`trade_listing`·`player_item`·`player_mail`) + 인메모리 마스터(item — `sellable`·`base_price`, mail 템플릿 201·202).
 
 핵심 규약(trade 기획서 §4·§7):
 
@@ -986,9 +1022,9 @@ sequenceDiagram
 - 수동 취소는 요청자가 온라인이므로 **인벤토리로 직접 복원**한다(만료 반송은 메일 — 아래 참고).
 - 구매·만료 배치가 같은 등록을 동시에 닫으려 해도 먼저 선점한 쪽만 성공하고, 뒤에 온 쪽은 조건부 갱신 0행으로 `TradeAlreadyClosed(7005)`가 된다.
 
-### 거래소 만료 배치 — TradeExpireBatchService (엔드포인트 없음)
+### 거래소 만료 배치 — TradeExpireBatchScheduler (엔드포인트 없음)
 
-등록 후 3일이 지난 판매중 등록을 `status=4`(만료)로 닫고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchService`)로, 기동 직후 1회 + **1시간 주기**(설정 `TradeExpireBatch`)로 실행되고 1회 최대 1000건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:trade-expire`)을 획득한 인스턴스만 실행한다.
+등록 후 3일이 지난 판매중 등록을 `status=4`(만료)로 닫고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchScheduler`)로, 기동 직후 1회 + **1시간 주기**(설정 `TradeExpireBatch`)로 실행되고 1회 최대 1000건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:trade-expire`)을 획득한 인스턴스만 실행한다.
 
 **이 배치는 만료를 판정하지 않는다.** 목록 조회·구매·등록 한도가 `expires_at > now`를 직접 검사해 만료를 즉시 반영하므로, 배치의 역할은 **에스크로 아이템 반송과 `status` 정리**뿐이고 주기가 판매 기간(3일)의 정확도에 영향을 주지 않는다. 주기가 결정하는 것은 판매자가 아이템을 되돌려받기까지의 **지연 상한**이며, 3일을 기다린 판매자를 더 기다리게 하지 않도록 **1시간**으로 잡았다(대상 조회가 `idx_trade_expire` 커버링이라 빈 주기 비용이 사실상 없다).
 
@@ -1141,7 +1177,7 @@ sequenceDiagram
 
 ## 메일
 
-우편함 조회·첨부 수령·일괄 수령 (GameMailController, `/api/game/mail`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_mail`·`player_mail_reward`·`player_item`·`game_player`) + 인메모리 마스터 데이터(item — 첨부 적재 규칙). 첨부 종류·수량은 발급 시점에 확정된 메일 원장이 기준이며(서버 권위), 중복 수령은 조건부 갱신(`claimed` 0→1일 때만 전이)으로 차단한다. 보관(발급 후 7일)이 지난 메일은 GameServer 내 배치(`MailGcBatchService`)가 주기 삭제한다(엔드포인트 없음, mail 기획서 6.5).
+우편함 조회·첨부 수령·일괄 수령 (GameMailController, `/api/game/mail`, GameServer). 저장소: MySQL `taskbar_hero_game`(`player_mail`·`player_mail_reward`·`player_item`·`game_player`) + 인메모리 마스터 데이터(item — 첨부 적재 규칙). 첨부 종류·수량은 발급 시점에 확정된 메일 원장이 기준이며(서버 권위), 중복 수령은 조건부 갱신(`claimed` 0→1일 때만 전이)으로 차단한다. 보관(발급 후 7일)이 지난 메일은 GameServer 내 배치(`MailGcBatchScheduler`)가 주기 삭제한다(엔드포인트 없음, mail 기획서 6.5).
 
 ### POST /api/game/mail/list — 우편함 조회(+읽음 처리)
 
@@ -1294,9 +1330,9 @@ sequenceDiagram
 
 - 실제 재화·아이템 지급은 여기서 하지 않는다 — 플레이어가 우편함에서 수령(`/api/game/mail/claim`)할 때 계정에 반영된다([메일](#메일) 참고).
 
-### 메일 보관 GC 배치 — MailGcBatchService (엔드포인트 없음)
+### 메일 보관 GC 배치 — MailGcBatchScheduler (엔드포인트 없음)
 
-발급(수신) 후 7일이 지난 메일을 열람·수령 여부와 무관하게 삭제한다(mail 기획서 6.5). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchService`)로, 기동 직후 1회 + 1시간 주기(설정 `MailGcBatch`)로 실행되고 1회 최대 500건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:mail-gc`)을 먼저 획득한 인스턴스만 실행해 scale-out 시 중복 실행을 방지한다.
+발급(수신) 후 7일이 지난 메일을 열람·수령 여부와 무관하게 삭제한다(mail 기획서 6.5). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchScheduler`)로, 기동 직후 1회 + 1시간 주기(설정 `MailGcBatch`)로 실행되고 1회 최대 500건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:mail-gc`)을 먼저 획득한 인스턴스만 실행해 scale-out 시 중복 실행을 방지한다.
 
 ```mermaid
 sequenceDiagram
@@ -1305,7 +1341,7 @@ sequenceDiagram
     participant R as Redis
     participant DB as MySQL(game)
 
-    Note over S: MailGcBatchService — 기동 직후 1회 실행 후 1시간 주기 반복(재진입 없음)
+    Note over S: MailGcBatchScheduler — 기동 직후 1회 실행 후 1시간 주기 반복(재진입 없음)
     loop 매 주기
         S->>R: 리더 락 시도(batch:lock:mail-gc, SET NX + TTL=min(주기,5분) — 주기 종료 시 소유자 확인 후 해제)
         alt 락 미획득(다른 인스턴스가 이번 주기 실행)
@@ -1497,7 +1533,7 @@ sequenceDiagram
     Note over C: 랭킹 UI 고정 영역용 — 목록 페이지를 넘기는 동안 다시 호출하지 않는다
 ```
 
-### 시즌 정산 배치 — `BossRushSeasonBatchService`
+### 시즌 정산 배치 — `BossRushSeasonBatchScheduler`
 
 ```mermaid
 sequenceDiagram
@@ -1505,7 +1541,7 @@ sequenceDiagram
     participant R as Redis
     participant DB as MySQL(game)
 
-    Note over S: BossRushSeasonBatchService — 기동 직후 1회 실행 후 10분 주기 반복(재진입 없음)
+    Note over S: BossRushSeasonBatchScheduler — 기동 직후 1회 실행 후 10분 주기 반복(재진입 없음)
     loop 매 주기
         S->>R: 리더 락 시도(batch:lock:bossrush-season, SET NX + TTL=min(주기,5분))
         alt 락 미획득(다른 인스턴스가 이번 주기 실행)
