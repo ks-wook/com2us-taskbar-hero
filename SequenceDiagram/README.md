@@ -1541,15 +1541,15 @@ sequenceDiagram
     participant R as Redis
     participant DB as MySQL(game)
 
-    Note over S: BossRushSeasonBatchScheduler — 기동 직후 1회 실행 후 10분 주기 반복(재진입 없음)
+    Note over S: BossRushSeasonBatchScheduler — 기동 직후 1회 실행 후 진행 중 시즌의 end_at까지 대기했다가 그 시각에 실행(폴링 없음·재진입 없음)
     loop 매 주기
         S->>R: 리더 락 시도(batch:lock:bossrush-season, SET NX + TTL=min(주기,5분))
         alt 락 미획득(다른 인스턴스가 이번 주기 실행)
             S->>S: 스킵(Debug 로그)
         else 락 획득(Redis 장애 시에도 락 없이 진행 — 축소 운전)
             S->>DB: 진행 중 시즌 확인
-            alt 시즌 없음(첫 기동)
-                S->>DB: 첫 시즌 개시(이번 주 월요일 00:00 KST ~ +7일)
+            alt 진행 중 시즌 없음
+                S->>S: 종료(시즌을 만들지 않는다 — 정산할 대상이 없으므로 무기한 대기, 외부 기상 신호로만 재개)
             end
             S->>R: 현재 시즌 메타 캐시 갱신
             S->>R: 리더보드 존재 확인
@@ -1572,6 +1572,7 @@ sequenceDiagram
                 S->>DB: 다음 시즌 개시(start_at 유니크로 중복 방지)
                 S->>R: 현재 시즌 메타 캐시 갱신
                 S->>S: 요약 로그(순위 확정 N건 · 보상 발급 M건)
+                S->>S: 다음 기상 시각 = 새 시즌의 end_at
             end
         end
     end

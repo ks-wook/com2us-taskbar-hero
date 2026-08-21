@@ -172,14 +172,21 @@ builder.Services.AddHostedService<TradeExpireBatchScheduler>();
 builder.Services.AddHostedService<MailGcBatchScheduler>();
 
 // 보스러시 시즌 정산 배치(주간 시즌 종료 → 순위 확정 + 1~3위 골드 보상 메일 발급 → 다음 시즌 개시, 기획서 6.4).
-//   실행 주기: **600초 = 10분** — appsettings "BossRushSeasonBatch:IntervalSeconds"(기본 600).
+//   **폴링하지 않는다** — 정산이 필요한 순간은 진행 중 시즌의 end_at 하나뿐이라 그 시각까지 자고 정확히
+//   그때 깨어난다. 진행 중 시즌이 없으면 **무기한 대기**하며(깨어나도 할 일이 없다) 외부에서 Wake()로 깨운다.
+//   appsettings "BossRushSeasonBatch:IntervalSeconds"(기본 600=10분)는 리더 락 TTL 산정과, 주기가 실제로
+//   돌지 못했을 때(리더 락 스킵·예외)의 재시도 간격으로만 남는다.
 //   1회(페이지) 처리 상한 500건("BatchSize") — 페이지 단위 트랜잭션으로 쪼개 긴 잠금을 만들지 않는다.
 //   정산은 final_rank=0 조건부 갱신이라 멱등하며, 중간에 죽어도 다음 주기가 남은 행만 이어서 처리한다.
 //   기동 시에는 정산 전에 **랭킹 캐시 워밍업**(리더보드가 비었으면 boss_rush_record에서 재구축 + 시즌 메타 캐시
 //   채우기)도 수행한다 — 이미 리더 락이 여기 있어 scale-out 시 중복 재구축을 그대로 막아 준다.
 //   **버려진 런을 정리하는 배치는 두지 않는다** — 만료된 런에 반송할 자산이 없어 배치가 할 일이 status 정리
 //   뿐이므로, 만료 판정을 읽는 시점(clear·info·enter)에 한다(거래소의 만료 판정 규약과 동일).
-builder.Services.AddHostedService<BossRushSeasonBatchScheduler>();
+// 싱글턴으로도 등록해 **DI에서 꺼낼 수 있게** 한다 — AddHostedService만으로는 IHostedService로만 잡혀
+// 인스턴스를 해석할 수 없다. 무기한 대기에 들어간 배치를 외부에서 Wake()로 깨우려면 이 배선이 필요하다
+// (실제로 언제 깨울지는 운영 영역이라 호출부는 두지 않는다).
+builder.Services.AddSingleton<BossRushSeasonBatchScheduler>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<BossRushSeasonBatchScheduler>());
 
 // 리더 락은 주기 종료와 함께 해제되므로, 정상 종료·재기동 후에는 곧바로 다시 실행된다(옛 방식처럼 주기만큼
 // 스킵되지 않는다). 프로세스가 락을 잡은 채 강제 종료된 경우에만 TTL(최대 5분)이 지나야 풀린다.

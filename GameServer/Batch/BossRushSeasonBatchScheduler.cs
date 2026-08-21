@@ -17,6 +17,12 @@ namespace GameServer.Batch;
 /// <para><b>멱등</b>하다 — 순위 확정은 <c>final_rank = 0</c> 조건부 갱신이라 재진입 시 이미 처리한 행은
 /// 0행이 되어 스킵되고, 다음 시즌 개시는 <c>start_at</c> 유니크가 중복을 막는다. 배치가 중간에 죽어도
 /// 다음 주기가 남은 행만 이어서 처리한다.</para>
+/// <para><b>시즌을 새로 만들지 않는다</b> — 진행 중 시즌이 없으면 그 주기는 아무 일도 하지 않고 끝낸다.</para>
+/// <para><b>폴링하지 않는다</b> — 정산이 필요한 순간은 진행 중 시즌의 <c>end_at</c> 하나뿐이고 그 시각은 이미
+/// DB에 있으므로, <see cref="NextDelay"/>를 재정의해 <b>그 시각까지 자고 정확히 그때 깨어난다</b>.
+/// 진행 중 시즌이 없으면 <b>무기한 잔다</b> — 시즌이 없는 동안은 몇 번을 깨어나도 할 일이 없기 때문이다.
+/// 새 시즌이 등록되면 그 사실을 아는 쪽이 <see cref="PeriodicBatchScheduler.Wake"/>로 깨운다(서버 기동 시
+/// 도는 첫 주기도 같은 역할을 한다).</para>
 /// <para>기동 시에는 정산 전에 <b>랭킹 캐시 워밍업</b>도 수행한다 — 현재 시즌 리더보드가 비어 있으면
 /// <c>boss_rush_record</c>를 페이지 단위로 읽어 ZADD로 재구축하고, 현재 시즌 메타 캐시를 채운다(6.3).
 /// 이 작업이 배치에 붙어 있는 이유는 <b>Redis 리더 락</b>이 이미 여기에 있어 scale-out 시 중복 재구축을
@@ -25,7 +31,11 @@ namespace GameServer.Batch;
 /// </summary>
 public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 {
-    /// <summary>기본 실행 주기 10분. 시즌 경계(주 1회)에 비해 충분히 촘촘하다.</summary>
+    /// <summary>
+    /// 기본 주기 10분. 이 배치는 <b>정상 경로에서 이 주기로 돌지 않는다</b> — 진행 중 시즌이 있으면 그
+    /// 종료 시각까지, 없으면 무기한 자기 때문이다. 남은 쓰임은 ①리더 락 TTL 산정과 ②주기가 실제로 돌지
+    /// 못했을 때(리더 락 스킵·예외)의 재시도 간격이다.
+    /// </summary>
     private const int DefaultIntervalSeconds = 10 * 60;
 
     /// <summary>1주기(정산 페이지) 처리 상한. 페이지 단위 트랜잭션으로 쪼개 긴 잠금을 만들지 않는다.</summary>
@@ -37,11 +47,14 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     /// <summary>메일 첨부 reward_type 1:골드. 순위 보상은 골드뿐이라 이 값만 쓴다(기획서 4.1).</summary>
     private const int RewardTypeGold = 1;
 
+    /// <summary>
+    /// 종료 시각이 이미 지났는데도 정산되지 않은 시즌이 남아 있을 때(다른 인스턴스가 정산 중이라 리더 락을
+    /// 놓쳤거나 직전 주기가 실패한 경우)의 재시도 간격. 그 상황에서만 쓰이므로 짧게 잡아도 안전하다.
+    /// </summary>
+    private static readonly TimeSpan PastDueRetryDelay = TimeSpan.FromMinutes(1);
+
     /// <summary>종료된 시즌 리더보드에 거는 TTL(7일). 과거 키가 무한히 쌓이지 않게 한다(기획서 4.3).</summary>
     private static readonly TimeSpan ClosedSeasonTtl = TimeSpan.FromDays(7);
-
-    /// <summary>KST(UTC+9) — 시즌 경계(월요일 00:00)를 잡는 기준.</summary>
-    private static readonly TimeSpan KstOffset = TimeSpan.FromHours(9);
 
     private readonly int _intervalSeconds;
     private readonly int _batchSize;
@@ -62,23 +75,57 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         _logger = logger;
     }
 
+    /// <summary>
+    /// 다음 기상 시각(유닉스초) = 진행 중 시즌의 종료 시각. <b>정산이 필요한 순간은 그때 하나뿐</b>이라
+    /// 그 시각까지 자면 되고, 그 사이를 주기적으로 확인할 이유가 없다.
+    /// 0이면 미확정(진행 중 시즌 없음·마스터 미적재) — 기본 주기로 되돌아간다.
+    /// </summary>
+    private long _nextWakeUnix;
+
     protected override TimeSpan Interval => TimeSpan.FromSeconds(_intervalSeconds);
+
+    /// <summary>
+    /// 진행 중 시즌의 종료 시각을 알고 있으면 <b>그 시각까지 정확히 잔다</b>(폴링 아님).
+    /// 진행 중 시즌이 없으면 <b>무기한 대기</b>한다 — 시즌이 없는 동안은 몇 번을 깨어나도 할 일이 없다.
+    /// 반환값의 상·하한은 골격이 잡는다.
+    /// </summary>
+    /// <summary>
+    /// 대기 상한을 기본 주기 대신 7일로 푼다 — 시즌 종료가 며칠 뒤여도 <b>그때까지 통째로 자기 위해서</b>다.
+    /// 상한을 주기(10분)로 두면 아는 시각까지 자려던 대기가 매번 잘려 결국 폴링이 된다.
+    /// 7일은 시즌 길이보다 길어 실질적인 제약이 아니면서 <c>Task.Delay</c>의 한계 안에 안전하게 든다.
+    /// </summary>
+    protected override TimeSpan MaxDelay => TimeSpan.FromDays(7);
+
+    protected override TimeSpan NextDelay()
+    {
+        if (_nextWakeUnix <= 0)
+        {
+            // 진행 중 시즌이 없다 — 깨어나도 정산할 대상이 없으므로 아예 돌지 않는다.
+            // 새 시즌이 등록되면 그 사실을 아는 쪽이 Wake()로 깨운다(기동 시 첫 주기도 그 역할을 한다).
+            return Timeout.InfiniteTimeSpan;
+        }
+
+        var remainingSeconds = _nextWakeUnix - DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        return remainingSeconds > 0 ? TimeSpan.FromSeconds(remainingSeconds) : PastDueRetryDelay;
+    }
 
     protected override string BatchName => "보스러시 시즌 정산 배치";
 
     protected override string BatchKey => "bossrush-season";
 
     /// <summary>
-    /// 1주기 작업: ①현재 시즌 보장(없으면 개시) + 랭킹 캐시 워밍업 → ②종료 시각이 지난 시즌 선점 →
-    /// ③순위 확정·보상 메일 발급 → ④시즌 종료·리더보드 TTL → ⑤다음 시즌 개시.
-    /// 정산할 시즌이 없으면 워밍업만 하고 조용히 끝낸다(로그 소음 방지).
+    /// 1주기 작업: ①진행 중 시즌 확인 → ②랭킹 캐시 워밍업 → ③종료 시각이 지난 시즌 선점 →
+    /// ④순위 확정·보상 메일 발급 → ⑤시즌 종료·리더보드 TTL → ⑥다음 시즌 개시.
+    /// <para><b>진행 중 시즌이 없으면 ①에서 즉시 끝낸다</b> — 시즌을 새로 만들지 않으므로 워밍업·정산 모두
+    /// 대상이 없다. 정산할 시즌이 없을 때도 조용히 끝낸다(로그 소음 방지).</para>
     /// </summary>
     protected override async Task RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
     {
         var rule = _masterData.IsLoaded ? _masterData.BossRushRule : null;
         if (rule is null)
         {
-            return; // 마스터 미적재·콘텐츠 미구성 — 다음 주기에 재시도.
+            _nextWakeUnix = 0; // 기상 시각을 모른다 — 기본 주기로 재시도.
+            return; // 마스터 미적재·콘텐츠 미구성.
         }
 
         var repository = scope.ServiceProvider.GetRequiredService<IBossRushRepository>();
@@ -86,10 +133,21 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         var now = DateTimeOffset.UtcNow;
         var nowUnix = now.ToUnixTimeSeconds();
 
-        // ① 현재 시즌 보장 + 랭킹 캐시 워밍업.
-        await EnsureCurrentSeasonAsync(repository, rankCache, rule, now);
+        // ① 진행 중 시즌 확인. 없으면 이번 주기는 할 일이 없다 — 시즌 개시는 이 배치가 결정하지 않는다.
+        var current = await repository.GetRunningSeasonAsync();
+        if (current is null)
+        {
+            _nextWakeUnix = 0; // 정산할 시즌이 없다 — 기본 주기로 새 시즌 등록을 살핀다.
+            return;
+        }
 
-        // ② 종료 시각이 지난 시즌 선점(조건부 갱신 0행이면 정산할 시즌 없음).
+        // 이 시즌이 끝나는 순간이 다음에 깨어날 유일한 이유다.
+        _nextWakeUnix = current.EndAt;
+
+        // ② 랭킹 캐시 워밍업(리더보드가 비어 있을 때만).
+        await WarmUpRankCacheAsync(repository, rankCache, current);
+
+        // ③ 종료 시각이 지난 시즌 선점(조건부 갱신 0행이면 정산할 시즌 없음).
         var season = await repository.ClaimSeasonForSettlementAsync(nowUnix);
         if (season is null)
         {
@@ -105,17 +163,18 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
             _logger.ZLogError($"보스러시 순위 보상 메일 템플릿 미정의: templateCode {RankRewardMailTemplateCode:@TemplateCode} — mail_master 확인 필요(순위만 확정합니다)");
         }
 
-        // ③ 순위 확정 + 보상 메일 발급.
+        // ④ 순위 확정 + 보상 메일 발급.
         var (settled, rewarded) = await SettleAsync(repository, season, template, nowUnix, stoppingToken);
 
-        // ④ 시즌 종료 + 리더보드 TTL.
+        // ⑤ 시즌 종료 + 리더보드 TTL.
         await repository.CloseSeasonAsync(season.SeasonId, nowUnix);
         await rankCache.ExpireAsync(season.SeasonId, ClosedSeasonTtl);
 
-        // ⑤ 다음 시즌 개시 + 시즌 메타 캐시 갱신(정산의 마지막 단계, 기획서 6.4).
+        // ⑥ 다음 시즌 개시 + 시즌 메타 캐시 갱신(정산의 마지막 단계, 기획서 6.4).
         var next = await repository.StartNextSeasonAsync(
             season.EndAt, season.EndAt + (long)rule.SeasonPeriodDays * SecondsPerDay);
         await rankCache.SetCurrentSeasonAsync(next);
+        _nextWakeUnix = next.EndAt;
 
         _logger.ZLogInformation($"보스러시 시즌 정산 완료: seasonId {season.SeasonId:@SeasonId} 순위 확정 {settled:@Settled}건 · 보상 발급 {rewarded:@Rewarded}건 → 다음 시즌 {next.SeasonId:@NextSeasonId}");
     }
@@ -124,22 +183,12 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     private const long SecondsPerDay = 86_400;
 
     /// <summary>
-    /// 진행 중 시즌이 없으면 개시하고, 현재 시즌 메타 캐시와 리더보드를 채운다(6.3 워밍업).
+    /// 진행 중 시즌의 메타 캐시와 리더보드를 채운다(6.3 워밍업).
     /// 리더보드 키가 이미 있으면 재구축하지 않는다 — 워밍업은 "비었을 때만" 하는 복구 작업이다.
     /// </summary>
-    private async Task EnsureCurrentSeasonAsync(
-        IBossRushRepository repository, IBossRushRankCache rankCache, BossRushRuleDef rule, DateTimeOffset now)
+    private async Task WarmUpRankCacheAsync(
+        IBossRushRepository repository, IBossRushRankCache rankCache, BossRushSeason season)
     {
-        var season = await repository.GetRunningSeasonAsync();
-        if (season is null)
-        {
-            // 첫 기동(시즌 행이 아예 없음) — 이번 주 월요일 00:00(KST)부터 시작하는 시즌을 만든다.
-            var startAt = WeekStartUnix(now);
-            season = await repository.StartNextSeasonAsync(
-                startAt, startAt + (long)rule.SeasonPeriodDays * SecondsPerDay);
-            _logger.ZLogInformation($"보스러시 첫 시즌 개시: seasonId {season.SeasonId:@SeasonId} (시작 {season.StartAt:@StartAt} · 종료 {season.EndAt:@EndAt})");
-        }
-
         await rankCache.SetCurrentSeasonAsync(season);
 
         var exists = await rankCache.ExistsAsync(season.SeasonId);
@@ -238,13 +287,4 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         return (settled, rewarded);
     }
 
-    /// <summary>이번 주 월요일 00:00(KST)의 유닉스초. 첫 시즌 개시 시각을 잡는 데 쓴다.</summary>
-    private static long WeekStartUnix(DateTimeOffset utcNow)
-    {
-        var kstNow = utcNow.ToOffset(KstOffset);
-        var daysFromMonday = ((int)kstNow.DayOfWeek + 6) % 7; // 월=0 … 일=6
-        var monday = new DateTimeOffset(kstNow.Year, kstNow.Month, kstNow.Day, 0, 0, 0, KstOffset)
-            .AddDays(-daysFromMonday);
-        return monday.ToUnixTimeSeconds();
-    }
 }
