@@ -1178,6 +1178,113 @@ namespace TaskbarHero.Client.Battle
                 : transform.position + Vector3.right * Mathf.Max(0.5f, _attackRange * 0.5f);
         }
 
+        // ---- 활 투사체 발사 시점(활을 놓는 프레임) ----
+
+        /// <summary>
+        /// 화살이 활을 떠나는 시점(공격 클립 정규화 시간 0~1).
+        /// <para>궁수 활 클립 <c>0_Attack_Bow</c>(길이 0.833s / 60fps)의 커브를 보면 오른팔(P_RArm)이
+        /// t=0.517s에서 최대로 젖혀져(-76.9°) <b>시위가 완전히 당겨지고</b>, 바로 다음 구간에서 왼팔이
+        /// -140.7°→-278.3°로 튕겨 나가며 몸통도 -38.6°→+12°로 되돌아온다 — 즉 t≈0.517s(정규화 0.62)가
+        /// 화살이 떠나는 순간이다. <c>SpumCharacterAnimator.arrowRainBowNormalizedTime</c>(0.62)이 활 최고점
+        /// 정지 프레임으로 쓰는 값과 같은 근거다.</para>
+        /// <para>값을 올리면 더 늦게(활을 놓고 난 뒤에), 내리면 더 이르게 발사된다.</para>
+        /// </summary>
+        private const float ArrowReleaseNormalizedTime = 0.62f;
+
+        /// <summary>릴리스 프레임을 기다리는 최대 시간(초). 공격 클립이 들어오지 않는 예외 상황에서
+        /// 화살이 영원히 나가지 않는 것을 막는 안전장치다(활 클립 0.833s보다 넉넉하게).</summary>
+        private const float ArrowReleaseTimeout = 1.2f;
+
+        /// <summary>
+        /// 공격 클립이 화살을 놓는 프레임(<see cref="ArrowReleaseNormalizedTime"/>)에 도달할 때까지 기다린다.
+        /// <para>지연을 초 단위 상수로 박지 않고 애니메이터의 정규화 시간을 폴링한다 — 클립이 바뀌거나 재생
+        /// 속도가 달라져도 발사 시점이 그림과 함께 움직인다. 트랜지션 구간을 먼저 흘려보낸 뒤 진행도를 본다.</para>
+        /// <para>애니메이터가 없거나 <see cref="ArrowReleaseTimeout"/> 안에 공격 클립으로 들어오지 못하면
+        /// 기다림을 포기하고 즉시 발사한다 — 연출 동기화가 전투를 멈추게 하지는 않는다.</para>
+        /// </summary>
+        private IEnumerator WaitForAttackRelease()
+        {
+            if (_anim == null)
+            {
+                yield break;
+            }
+
+            float nt = Mathf.Clamp01(ArrowReleaseNormalizedTime);
+            float waited = 0f;
+
+            // 1) 트랜지션이 끝나 공격 클립이 '현재 클립'이 될 때까지.
+            while (waited < ArrowReleaseTimeout && !IsAttackMotionPlaying())
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+
+            // 2) 그 클립이 릴리스 프레임을 지날 때까지(1회 재생 안에서만 — 재생이 끝났으면 즉시 발사).
+            while (waited < ArrowReleaseTimeout && IsAttackMotionPlaying()
+                   && _anim.GetCurrentAnimatorStateInfo(0).normalizedTime < nt)
+            {
+                waited += Time.deltaTime;
+                yield return null;
+            }
+        }
+
+        /// <summary>
+        /// 활을 놓는 프레임까지 기다렸다가 기본공격 화살을 발사한다(발사음도 이 순간에 함께 낸다).
+        /// <para>대상은 <b>발사 시점에 다시</b> 잡는다 — 시위를 당기는 동안 앞의 적이 죽어 최전방이 바뀔 수 있고,
+        /// 그때 옛 대상을 쏘면 이미 사라진 자리로 화살이 날아간다.</para>
+        /// </summary>
+        private IEnumerator ShootArrowAtRelease(long dmg, bool crit)
+        {
+            yield return WaitForAttackRelease();
+
+            SoundManager.Sfx(BattleSounds.BasicAttackFor(_classCode)); // 활 소리 = 화살이 떠나는 순간(§5.3)
+            var monster = _ctrl.MonsterTransform;
+            Vector3 origin = transform.position + Vector3.up * _ctrl.EffectYOffset;
+            var arrowGo = Instantiate(_arrowPrefab, origin, Quaternion.identity);
+            var arrow = arrowGo.GetComponent<ArrowProjectile>();
+            string label = $"[{_name}] 화살 → 몬스터";
+            if (arrow != null)
+            {
+                arrow.Launch(monster, _arrowSpeed, _ctrl.EffectYOffset, () => DealDamage(0f, dmg, crit, label));
+            }
+            else
+            {
+                DealDamage(_ctrl.BasicHitDelay, dmg, crit, label);
+            }
+        }
+
+        /// <summary>
+        /// 활을 놓는 프레임까지 기다렸다가 원거리 스킬 투사체를 발사한다(기본공격 화살과 같은 시점).
+        /// 판정(관통 훑기 / 단일 대상)과 흡혈 예약도 발사 순간에 시작해, 그림과 데미지가 같은 지점에서 출발한다.
+        /// </summary>
+        private IEnumerator ShootSkillProjectileAtRelease(Skill sk, long dmg, bool crit, float hitDelay, string label)
+        {
+            yield return WaitForAttackRelease();
+
+            Vector3 origin = transform.position + Vector3.up * _ctrl.EffectYOffset;
+            var fx = Instantiate(sk.effect, origin, Quaternion.identity);
+            if (sk.scale > 0f && sk.scale != 1f) fx.transform.localScale *= sk.scale; // 이펙트 크기 배율(정조준·다중 사격 2배 등)
+            var proj = fx.GetComponent<ProjectileEffect>();
+            if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
+
+            if (_aoeSkillCodes.Contains(sk.code))
+            {
+                // 광역(관통) 지정 스킬: 대상 한 기만 맞히는 대신, <b>날아가는 이펙트가 훑고 지나간 적을
+                // 모두</b> 1회씩 맞힌다(정조준 사격). 판정을 그려진 궤적에 맡기므로 관통 사거리·굵기를
+                // 따로 정하지 않아도 그림과 어긋나지 않는다.
+                _ctrl.DealSweepDamage(fx, dmg, crit, label, RangedSweepHalfHeight, bigHit: true,
+                    knockback: MonsterUnit.SkillKnockback);
+                ScheduleLifesteal(hitDelay, dmg);
+                proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset, null);
+            }
+            else
+            {
+                // 단일 대상: 종전대로 도달 시점에 대상에게만 데미지.
+                proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
+                            () => DealDamage(0f, dmg, crit, label, bigHit: true, knockback: MonsterUnit.SkillKnockback));
+            }
+        }
+
         /// <summary>지연 뒤 효과음을 1회 재생한다(타격 시점과 소리를 맞춰야 하는 임팩트음용 — 사운드 정의서 §9.3).</summary>
         private IEnumerator PlaySfxAfter(float delay, SoundId id)
         {
@@ -1284,29 +1391,9 @@ namespace TaskbarHero.Client.Battle
                 else if (_ranged && sk.effect != null && _ctrl.MonsterTransform != null)
                 {
                     // 원거리(레인저): 스킬 이펙트를 투사체로 발사(자기 위치 → 대상).
+                    // 발사는 기본공격 화살과 같은 규칙 — 시위를 다 당긴 프레임까지 기다린다.
                     PlayAttackAnim();
-                    Vector3 origin = transform.position + Vector3.up * _ctrl.EffectYOffset;
-                    var fx = Instantiate(sk.effect, origin, Quaternion.identity);
-                    if (sk.scale > 0f && sk.scale != 1f) fx.transform.localScale *= sk.scale; // 이펙트 크기 배율(정조준·다중 사격 2배 등)
-                    var proj = fx.GetComponent<ProjectileEffect>();
-                    if (proj == null) proj = fx.AddComponent<ProjectileEffect>();
-
-                    if (_aoeSkillCodes.Contains(sk.code))
-                    {
-                        // 광역(관통) 지정 스킬: 대상 한 기만 맞히는 대신, <b>날아가는 이펙트가 훑고 지나간 적을
-                        // 모두</b> 1회씩 맞힌다(정조준 사격). 판정을 그려진 궤적에 맡기므로 관통 사거리·굵기를
-                        // 따로 정하지 않아도 그림과 어긋나지 않는다.
-                        _ctrl.DealSweepDamage(fx, dmg, crit, label, RangedSweepHalfHeight, bigHit: true,
-                            knockback: MonsterUnit.SkillKnockback);
-                        ScheduleLifesteal(hitDelay, dmg);
-                        proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset, null);
-                    }
-                    else
-                    {
-                        // 단일 대상: 종전대로 도달 시점에 대상에게만 데미지.
-                        proj.Launch(_ctrl.MonsterTransform, _arrowSpeed, _ctrl.EffectYOffset,
-                                    () => DealDamage(0f, dmg, crit, label, bigHit: true, knockback: MonsterUnit.SkillKnockback));
-                    }
+                    StartCoroutine(ShootSkillProjectileAtRelease(sk, dmg, crit, hitDelay, label));
                     _busyTimer = motion;
                 }
                 else
@@ -1337,10 +1424,18 @@ namespace TaskbarHero.Client.Battle
         private void BasicAttack()
         {
             PlayAttackAnim();
-            SoundManager.Sfx(BattleSounds.BasicAttackFor(_classCode)); // 직업별 기본 공격음(§5.2~§5.5)
             long dmg = Damage(1f, out bool crit);
 
-            if (_basicAttackProjectile != null && _ctrl.MonsterTransform != null)
+            bool casterProjectile = _basicAttackProjectile != null && _ctrl.MonsterTransform != null;
+            // 활을 쏘는 궁수는 <b>화살이 떠나는 순간</b>에 공격음을 낸다(아래 릴리스 대기 경로).
+            // 시위를 당기는 동안 활 소리가 먼저 울리면 투사체가 이른 것과 똑같이 어긋나 보인다.
+            bool arrowRelease = !casterProjectile && _ranged && _arrowPrefab != null;
+            if (!arrowRelease)
+            {
+                SoundManager.Sfx(BattleSounds.BasicAttackFor(_classCode)); // 직업별 기본 공격음(§5.2~§5.5)
+            }
+
+            if (casterProjectile)
             {
                 // 캐스터(마법사 등): 기본공격을 투사체로 발사(자기 위치 → 대상). 도달 시 데미지.
                 Vector3 origin = transform.position + Vector3.up * _ctrl.EffectYOffset;
@@ -1358,17 +1453,10 @@ namespace TaskbarHero.Client.Battle
                             () => DealDamage(0f, dmg, crit, label), stopOnArrive: true);
                 _busyTimer = _ctrl.BasicHitDelay;
             }
-            else if (_ranged && _arrowPrefab != null)
+            else if (arrowRelease)
             {
-                var monster = _ctrl.MonsterTransform;
-                Vector3 origin = transform.position + Vector3.up * _ctrl.EffectYOffset;
-                var arrowGo = Instantiate(_arrowPrefab, origin, Quaternion.identity);
-                var arrow = arrowGo.GetComponent<ArrowProjectile>();
-                string label = $"[{_name}] 화살 → 몬스터";
-                if (arrow != null)
-                    arrow.Launch(monster, _arrowSpeed, _ctrl.EffectYOffset, () => DealDamage(0f, dmg, crit, label));
-                else
-                    DealDamage(_ctrl.BasicHitDelay, dmg, crit, label);
+                // 활(궁수): 시위를 다 당긴 프레임에서 화살이 떠난다 — 발사는 코루틴이 그 시점까지 기다린다.
+                StartCoroutine(ShootArrowAtRelease(dmg, crit));
                 _busyTimer = _ctrl.BasicHitDelay;
             }
             else // 근접
