@@ -2,12 +2,14 @@ using MySqlConnector;
 using SqlKata.Compilers;
 using SqlKata.Execution;
 
-namespace AccountServer.Data;
+namespace AccountServer.Repositories.AccountDb;
 
 /// <summary>
-/// Account DB(MySQL) 접근용 SqlKata <see cref="QueryFactory"/> 생성기.
+/// 계정 DB(taskbar_hero_account) 접근용 SqlKata <see cref="QueryFactory"/> 생성기.
 /// 연결 문자열은 docker-compose.yml 의 MySQL 설정과 맞춘 ConnectionStrings:AccountDb 를 사용한다.
 /// 원시 SQL을 조립하지 않고 SqlKata 쿼리 빌더로만 질의한다(프로젝트 규칙).
+/// <para>리포지토리는 이 팩토리를 직접 쓰지 않고 <see cref="AccountDbBase"/>를 상속해
+/// 커넥션 개시 규약을 물려받는다(GameServer의 GameDbFactory·GameDbBase와 같은 구조).</para>
 /// </summary>
 public sealed class AccountDbFactory
 {

@@ -1,4 +1,4 @@
-using AccountServer.Services;
+using AccountServer.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;

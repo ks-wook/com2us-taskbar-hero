@@ -1,28 +1,20 @@
-﻿using System.Net.Mail;
+using System.Net.Mail;
 using AccountServer.Auth;
-using AccountServer.Repositories.AccountDb;
+using AccountServer.Models;
+using AccountServer.Repositories.AccountDb.Interfaces;
+using AccountServer.Repositories.MemoryDb.Interfaces;
+using AccountServer.Services.Interfaces;
 using MySqlConnector;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
-using AccountServer.Repositories.MemoryDb;
 
 namespace AccountServer.Services;
 
-/// <summary>회원가입 처리 결과(에러 코드 + 발급된 user_id).</summary>
-public readonly record struct SignupResult(ErrorCode ErrorCode, long UserId);
-
-/// <summary>로그인 처리 결과(에러 코드 + user_id + 발급 토큰).</summary>
-public readonly record struct LoginResult(ErrorCode ErrorCode, long UserId, string Token);
-
-public interface IAuthService
-{
-    Task<SignupResult> SignupAsync(SignupRequest request);
-    Task<LoginResult> LoginAsync(LoginRequest request);
-    Task<ErrorCode> LogoutAsync(long userId, string token);
-    Task<ErrorCode> ValidateTokenAsync(long userId, string token);
-}
-
+/// <summary>
+/// 계정/인증 유스케이스(회원가입·로그인·로그아웃·자동 로그인 검증)를 처리하는 서비스.
+/// 세션의 정본은 Redis 토큰이고 MySQL user_auth_token은 영속 백업이다(계정/로그인 기획서 4.2).
+/// </summary>
 public sealed class AuthService : IAuthService
 {
     // 계정/로그인 기획서 5.1: 비밀번호 최소 6자.
