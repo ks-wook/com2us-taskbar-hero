@@ -440,6 +440,12 @@ public static class Constants
             /// <b>상한에 걸렸는지는 원장이 모른다</b> — 그 한 컬럼이 이 테이블을 따로 두는 이유다(5.4).
             /// </summary>
             public const string OfflineClaim = "offline.claim";
+
+            /// <summary>
+            /// 장비 강화 +1 → <c>item_enhance_logs</c>. <b>재화 부족 거부까지 남긴다</b> —
+            /// 어느 단계에서 골드가 막히는지가 강화 곡선을 조정하는 근거다(5.5).
+            /// </summary>
+            public const string ItemEnhance = "item.enhance";
         }
     }
 }

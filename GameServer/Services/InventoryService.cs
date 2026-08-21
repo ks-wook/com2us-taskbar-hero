@@ -8,6 +8,7 @@ using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
 using GameServer.Util;
+using GameServer.Logging;
 
 namespace GameServer.Services;
 
@@ -23,15 +24,17 @@ public sealed class InventoryService : IInventoryService
     private readonly IInventoryRepository _inventoryRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<InventoryService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(인벤토리 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
+    /// <summary>의존성(인벤토리 리포지토리·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
     public InventoryService(
         IInventoryRepository inventoryRepository, MasterDbProvider masterData,
-        ILogger<InventoryService> logger)
+        ILogger<InventoryService> logger, IEventLogger eventLogger)
     {
         _inventoryRepository = inventoryRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -195,6 +198,10 @@ public sealed class InventoryService : IInventoryService
             case EnhanceStatus.MaxEnhanceReached:
                 return new SaveResult(ErrorCode.MaxEnhanceReached, string.Empty, null);
             case EnhanceStatus.InsufficientCurrency:
+                // 이 거부만 남긴다 — 어느 단계에서 골드가 막히는지는 강화 곡선을 조정할 자리를 가리킨다.
+                // 나머지(아이템 없음·장비 아님·최대 단계)는 정상 클라이언트라면 시도조차 하지 않는 요청이라
+                // 반복돼도 기획이 아니라 클라이언트를 고쳐야 한다(4.1의 선별 기준).
+                EmitEnhance(userId, itemId, outcome, ErrorCode.InsufficientCurrency);
                 return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
         }
 
@@ -211,7 +218,25 @@ public sealed class InventoryService : IInventoryService
         };
 
         _logger.ZLogInformation($"장비 강화 성공: userId {userId:@UserId}, itemId {itemId:@ItemId}, enhanceLevel {outcome.EnhanceLevel:@EnhanceLevel}, cost {outcome.Cost:@Cost}, equipped {outcome.Equipped:@Equipped}");
+
+        // 차감·상승 트랜잭션이 커밋된 뒤에 방출한다(4.2).
+        EmitEnhance(userId, itemId, outcome, ErrorCode.Success);
         return new SaveResult(ErrorCode.Success, "Enhanced", data);
+    }
+
+    /// <summary>
+    /// 강화 이벤트 1행을 방출한다(5.5). 성공과 거부가 <b>같은 필드에 error_code만 다른</b> 형태라 한 자리에서 낸다 —
+    /// 거부 라인의 <c>to_level</c>·<c>cost</c>는 시도한 값이다. 등급은 마스터에서 아이템 코드로 찾는다.
+    /// </summary>
+    private void EmitEnhance(long userId, long itemId, EnhanceOutcome outcome, ErrorCode errorCode)
+    {
+        var grade = _masterData.GetItem(outcome.ItemCode)?.Grade ?? 0;
+        _eventLogger.Action(
+            Constants.EventLog.Tags.ItemEnhance, userId,
+            new ItemEnhanceEvent(
+                itemId, outcome.ItemCode, grade,
+                outcome.FromLevel, outcome.FromLevel + 1, outcome.Cost),
+            (int)errorCode);
     }
 
     /// <summary>

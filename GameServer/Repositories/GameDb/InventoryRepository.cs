@@ -43,6 +43,18 @@ public sealed record MoveOutcome(MoveStatus Status, long MovedItemId, int MovedS
 public sealed record EnhanceOutcome(
     EnhanceStatus Status, int EnhanceLevel, long Cost, int CurrencyCode, long CurrencyBalance, bool Equipped)
 {
+    /// <summary>
+    /// 강화를 시도한 아이템의 마스터 코드. <b>실패해도 채운다</b> — 거부(재화 부족)도 이벤트 로그로 남기는데,
+    /// 그 라인이 성공과 같은 필드를 가져야 "어느 아이템에서 막혔나"를 셀 수 있기 때문이다(5.5).
+    /// </summary>
+    public int ItemCode { get; init; }
+
+    /// <summary>
+    /// 강화 <b>전</b> 단계. 성공 라인에서는 <c>EnhanceLevel - 1</c>과 같고, 거부 라인에서는 시도 시점의 단계다
+    /// (거부는 단계가 오르지 않으므로 이 값이 유일한 기준이다).
+    /// </summary>
+    public int FromLevel { get; init; }
+
     public static EnhanceOutcome Fail(EnhanceStatus status) => new(status, 0, 0, 0, 0, false);
 }
 
@@ -467,7 +479,13 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
             long balance = currencyRow is null ? 0 : currencyRow.Quantity;
             if (balance < cost)
             {
-                return TxResult<EnhanceOutcome>.Rollback(EnhanceOutcome.Fail(EnhanceStatus.InsufficientCurrency));
+                // 거부지만 시도한 값(아이템·단계·비용)은 채워 돌려준다 — 이벤트 로그가 그대로 쓴다(5.5).
+                return TxResult<EnhanceOutcome>.Rollback(new EnhanceOutcome(
+                    EnhanceStatus.InsufficientCurrency, 0, cost, currencyCode, balance, false)
+                {
+                    ItemCode = itemRow.ItemCode,
+                    FromLevel = itemRow.EnhanceLevel,
+                });
             }
 
             // 4) 비용 차감(재화 행 UPDATE).
@@ -488,7 +506,11 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
                 .UpdateAsync(new { enhance_level = newLevel }, transaction);
 
             return TxResult<EnhanceOutcome>.Commit(new EnhanceOutcome(
-                EnhanceStatus.Ok, newLevel, cost, currencyCode, newBalance, equippedUpdated > 0));
+                EnhanceStatus.Ok, newLevel, cost, currencyCode, newBalance, equippedUpdated > 0)
+            {
+                ItemCode = itemRow.ItemCode,
+                FromLevel = itemRow.EnhanceLevel,
+            });
         });
 
     /// <summary>

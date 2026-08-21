@@ -74,6 +74,20 @@ public sealed record StageFailEvent(
 public sealed record CharacterLevelUpEvent(
     long CharacterId, int ClassCode, int FromLevel, int ToLevel, string Source) : IEventFields;
 
+// ── 5.5 아이템 강화 ──
+
+/// <summary>
+/// <c>item.enhance</c> — 장비 강화 +1. <b>강화 단계 분포</b>(유저가 어디서 멈추나)와 어떤 등급·부위에 투자가
+/// 몰리는지, 그리고 골드 유출에서 강화가 차지하는 비중을 답한다.
+/// <para><b>거부(재화 부족)도 같은 필드로 남긴다</b> — 그때 <see cref="ToLevel"/>·<see cref="Cost"/>는
+/// *시도한* 값이다. 어느 단계에서 골드가 막히는지가 곧 강화 비용 곡선을 조정할 자리를 가리킨다(5.5).</para>
+/// </summary>
+/// <param name="ItemId">강화 대상 보유 아이템(<c>player_item_id</c>). 같은 아이템의 강화 이력을 잇는 축이다.</param>
+/// <param name="Grade">아이템 등급. 등급별로 투자가 어디에 몰리는지 가른다.</param>
+/// <param name="Cost">소모한(또는 소모하려 한) 재화량.</param>
+public sealed record ItemEnhanceEvent(
+    long ItemId, int ItemCode, int Grade, int FromLevel, int ToLevel, long Cost) : IEventFields;
+
 // ── 5.4 오프라인 보상 ──
 
 /// <summary>
