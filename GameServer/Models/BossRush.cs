@@ -1,4 +1,6 @@
-﻿namespace GameServer.Models;
+﻿using TaskbarHero.Common.Dto;
+
+namespace GameServer.Models;
 
 // ── 도메인 모델 — 저장소 계층 사이를 오가는 반환 타입(행 매핑 POCO가 아니다) ──
 /// <summary>
@@ -8,7 +10,18 @@
 /// <para>행 매핑용 POCO는 아래 <see cref="BossRushSeasonRow"/>이며, 이쪽은 그것을 투영해 계층 밖으로
 /// 내보내는 타입이다.</para>
 /// </summary>
-public sealed record BossRushSeason(int SeasonId, long StartAt, long EndAt, int Status);
+public sealed record BossRushSeason(int SeasonId, long StartAt, long EndAt, int Status)
+{
+    /// <summary>이 시즌을 응답 DTO로 투영한다.</summary>
+    public BossRushSeasonDto ToDto()
+        => new()
+        {
+            seasonId = SeasonId,
+            startAt = StartAt,
+            endAt = EndAt,
+            status = Status,
+        };
+}
 
 // BossRushRepository 전용 DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지).
 // Dapper.MatchNamesWithUnderscores=true(Program.cs)로 snake_case 컬럼 → PascalCase 프로퍼티 매핑.
@@ -85,14 +98,44 @@ public sealed record BossRushRuleDef(
     public long RunLifetimeMs => (long)RunExpireSec * 1000;
 }
 /// <summary>보스러시 라운드 스폰 1건(boss_rush_spawn, is_boss=0). 레벨은 등장 자리의 속성이다.</summary>
-public sealed record BossRushSpawnEntry(int MonsterCode, int MonsterLevel, int Count);
+public sealed record BossRushSpawnEntry(int MonsterCode, int MonsterLevel, int Count)
+{
+    /// <summary>스폰 1건을 응답 DTO로 투영한다(스탯은 담지 않는다 — 클라이언트가 레벨 배율로 산출한다).</summary>
+    public BossRushSpawnDto ToDto()
+        => new()
+        {
+            monsterCode = MonsterCode,
+            monsterLevel = MonsterLevel,
+            count = Count,
+        };
+}
 /// <summary>
 /// 보스러시 라운드 정의(boss_rush_round + 자식 boss_rush_spawn). 라운드 r은 Act r의 전투이며
 /// 배경도 그 Act의 스테이지 배경을 재활용한다. 보스는 자식 테이블의 is_boss=1 행에서 투영한다.
 /// </summary>
 public sealed record BossRushRoundDef(
     int Round, int BackgroundType, int BossMonsterCode, int BossMonsterLevel,
-    IReadOnlyList<BossRushSpawnEntry> Spawns);
+    IReadOnlyList<BossRushSpawnEntry> Spawns)
+{
+    /// <summary>
+    /// 라운드 정의를 응답 DTO로 투영한다 — 서버는 몬스터 코드와 <b>등장 레벨</b>만 내려주고 스탯은 담지 않는다
+    /// (클라이언트가 monster_master의 레벨 1 기준값에 레벨 배율을 곱해 산출한다).
+    /// </summary>
+    public BossRushRoundDto ToDto()
+        => new()
+        {
+            round = Round,
+            backgroundType = BackgroundType,
+            monsters = Spawns.Select(s => s.ToDto()).ToList(),
+            boss = BossMonsterCode == 0
+                ? null
+                : new BossRushBossDto
+                {
+                    monsterCode = BossMonsterCode,
+                    monsterLevel = BossMonsterLevel,
+                },
+        };
+}
 /// <summary>
 /// 보스러시 시즌 순위 보상 구간(boss_rush_rank_reward). 지급 품목이 골드뿐이라 자식 테이블이 없다.
 /// 현재 3행(1위·2위·3위)이며 4위 이하는 행이 없어 보상을 받지 않는다(보스러시 기획서 4.1).

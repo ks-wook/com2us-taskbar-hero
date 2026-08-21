@@ -27,13 +27,6 @@ public sealed class BossRushService : IBossRushService
     private readonly ILogger<BossRushService> _logger;
     private readonly IEventLogger _eventLogger;
 
-    /// <summary>
-    /// 이벤트 로그가 라운드 기록을 펼쳐 담는 컬럼 수(round1_ms ~ round5_ms). 라운드 수가 5로 고정이라
-    /// 자식 테이블 대신 컬럼으로 둔 구조이며(로그 이벤트 정의 5.10), 마스터의 라운드 수가 바뀌면
-    /// 로그 스키마도 함께 고쳐야 한다.
-    /// </summary>
-    private const int RoundLogColumns = 5;
-
     /// <summary>의존성(보스러시 리포지토리·랭킹 캐시·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
     public BossRushService(
         IBossRushRepository repository, IBossRushRankCache rankCache,
@@ -65,10 +58,10 @@ public sealed class BossRushService : IBossRushService
         IReadOnlyList<(int Round, int ElapsedMs)> roundTimes,
         bool isNewRecord, int bestClearMs, int rankAtReport, ErrorCode errorCode)
     {
-        var byRound = new int[RoundLogColumns];
+        var byRound = new int[Constants.BossRush.RoundLogColumns];
         foreach (var (round, elapsedMs) in roundTimes)
         {
-            if (round >= 1 && round <= RoundLogColumns)
+            if (round >= 1 && round <= Constants.BossRush.RoundLogColumns)
             {
                 byRound[round - 1] = elapsedMs;
             }
@@ -112,30 +105,14 @@ public sealed class BossRushService : IBossRushService
         BossRushMyRecordDto? myRecord = null;
         if (snapshot.MyRecord is not null && season is not null)
         {
-            var rank = await _rankCache.GetRankAsync(season.SeasonId, userId);
-            myRecord = new BossRushMyRecordDto
-            {
-                bestClearMs = snapshot.MyRecord.BestClearMs,
-                recordedAt = snapshot.MyRecord.RecordedAt,
-                rank = rank ?? 0,
-            };
+            var myRank = await _rankCache.GetRankAsync(season.SeasonId, userId);
+            myRecord = snapshot.MyRecord.ToDto(myRank ?? 0);
         }
 
-        BossRushActiveRunDto? activeRun = null;
-        if (snapshot.ActiveRun is not null)
-        {
-            var startedAtUnix = snapshot.ActiveRun.StartedAtMs / 1000;
-            var expiresAt = startedAtUnix + rule.RunExpireSec;
-            if (expiresAt > nowUnix)
-            {
-                activeRun = new BossRushActiveRunDto
-                {
-                    runId = snapshot.ActiveRun.RunId,
-                    startedAt = startedAtUnix,
-                    expiresAt = expiresAt,
-                };
-            }
-        }
+        var activeRun = snapshot.ActiveRun is not null
+                        && snapshot.ActiveRun.ExpiresAt(rule.RunExpireSec) > nowUnix
+            ? snapshot.ActiveRun.ToDto(rule.RunExpireSec)
+            : null;
 
         var data = new BossRushInfoResultData
         {
@@ -143,7 +120,7 @@ public sealed class BossRushService : IBossRushService
             unlocked = snapshot.MaxStageCleared >= rule.UnlockStageSequence,
             unlockStageSequence = rule.UnlockStageSequence,
             maxStageCleared = snapshot.MaxStageCleared,
-            season = season is null ? null : ToSeasonDto(season),
+            season = season?.ToDto(),
             myRecord = myRecord,
             activeRun = activeRun,
         };
@@ -190,7 +167,7 @@ public sealed class BossRushService : IBossRushService
         {
             runId = outcome.RunId,
             seasonId = outcome.SeasonId,
-            rounds = rounds.Select(ToRoundDto).ToList(),
+            rounds = rounds.Select(r => r.ToDto()).ToList(),
         };
 
         EmitEnter(userId, outcome.RunId, outcome.SeasonId, ErrorCode.Success);
@@ -334,7 +311,7 @@ public sealed class BossRushService : IBossRushService
             offset = safeOffset,
             limit = safeLimit,
             source = (int)source,
-            entries = rows.Select(r => ToEntryDto(r, nicknames)).ToList(),
+            entries = rows.Select(r => r.ToDto(nicknames)).ToList(),
         };
 
         return new SaveResult(ErrorCode.Success, "OK", data);
@@ -385,7 +362,7 @@ public sealed class BossRushService : IBossRushService
             seasonId = season.SeasonId,
             totalEntries = total ?? 0,
             source = (int)source,
-            myRank = row is null ? null : ToEntryDto(row, nicknames),
+            myRank = row?.ToDto(nicknames),
         };
 
         return new SaveResult(ErrorCode.Success, "OK", data);
@@ -492,50 +469,4 @@ public sealed class BossRushService : IBossRushService
 
         return Enumerable.Range(1, roundCount).Select(r => (r, byRound[r])).ToList();
     }
-
-    /// <summary>시즌 레코드를 응답 DTO로 변환한다.</summary>
-    private static BossRushSeasonDto ToSeasonDto(BossRushSeason season)
-        => new()
-        {
-            seasonId = season.SeasonId,
-            startAt = season.StartAt,
-            endAt = season.EndAt,
-            status = season.Status,
-        };
-
-    /// <summary>
-    /// 라운드 정의를 응답 DTO로 변환한다 — 서버는 몬스터 코드와 <b>등장 레벨</b>만 내려주고 스탯은 담지 않는다
-    /// (클라이언트가 monster_master의 레벨 1 기준값에 레벨 배율을 곱해 산출한다).
-    /// </summary>
-    private static BossRushRoundDto ToRoundDto(BossRushRoundDef def)
-        => new()
-        {
-            round = def.Round,
-            backgroundType = def.BackgroundType,
-            monsters = def.Spawns.Select(s => new BossRushSpawnDto
-            {
-                monsterCode = s.MonsterCode,
-                monsterLevel = s.MonsterLevel,
-                count = s.Count,
-            }).ToList(),
-            boss = def.BossMonsterCode == 0
-                ? null
-                : new BossRushBossDto
-                {
-                    monsterCode = def.BossMonsterCode,
-                    monsterLevel = def.BossMonsterLevel,
-                },
-        };
-
-    /// <summary>랭킹 1행을 응답 DTO로 변환한다. 닉네임을 찾지 못하면 빈 문자열로 둔다(순위 표시는 유지).</summary>
-    private static BossRushRankEntryDto ToEntryDto(
-        BossRushRankRow row, IReadOnlyDictionary<long, string> nicknames)
-        => new()
-        {
-            rank = row.Rank,
-            userId = row.UserId,
-            nickname = nicknames.TryGetValue(row.UserId, out var name) ? name : string.Empty,
-            clearMs = row.ClearMs,
-            recordedAt = row.RecordedAt,
-        };
 }

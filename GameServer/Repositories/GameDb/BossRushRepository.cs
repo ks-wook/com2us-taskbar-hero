@@ -3,14 +3,41 @@ using GameServer.Repositories.GameDb.Interfaces;
 using MySqlConnector;
 using SqlKata.Execution;
 using TaskbarHero.Common;
+using TaskbarHero.Common.Dto;
 
 namespace GameServer.Repositories.GameDb;
 
 /// <summary>진행 중인 도전 런(만료 판정 전 원본). 만료 여부는 호출측이 started_at 나이로 판단한다.</summary>
-public sealed record BossRushActiveRun(long RunId, int SeasonId, long StartedAtMs);
+public sealed record BossRushActiveRun(long RunId, int SeasonId, long StartedAtMs)
+{
+    /// <summary>런 시작 시각(초). 응답과 만료 판정이 모두 초 단위를 쓴다.</summary>
+    public long StartedAt => StartedAtMs / 1000;
+
+    /// <summary>이 런의 보고가 받아들여지는 마지막 시각(초) — 시작 시각 + 런 수명.</summary>
+    public long ExpiresAt(int runExpireSec) => StartedAt + runExpireSec;
+
+    /// <summary>진행 중 런을 응답 DTO로 투영한다(만료 판정은 호출측이 한다).</summary>
+    public BossRushActiveRunDto ToDto(int runExpireSec)
+        => new()
+        {
+            runId = RunId,
+            startedAt = StartedAt,
+            expiresAt = ExpiresAt(runExpireSec),
+        };
+}
 
 /// <summary>시즌 개인 최고 기록(boss_rush_record). 기록이 없으면 null로 다룬다.</summary>
-public sealed record BossRushRecord(int BestClearMs, long RecordedAt);
+public sealed record BossRushRecord(int BestClearMs, long RecordedAt)
+{
+    /// <summary>내 최고 기록을 응답 DTO로 투영한다. 순위는 랭킹 캐시에서 얻은 값을 받아 채운다(불가면 0).</summary>
+    public BossRushMyRecordDto ToDto(int rank)
+        => new()
+        {
+            bestClearMs = BestClearMs,
+            recordedAt = RecordedAt,
+            rank = rank,
+        };
+}
 
 /// <summary>보스러시 정보 조회용 스냅샷 — 진행도·진행 중 런·내 최고 기록을 한 번에 읽는다.</summary>
 public sealed record BossRushInfoSnapshot(
@@ -38,7 +65,19 @@ public sealed record BossRushClearOutcome(
 }
 
 /// <summary>랭킹 목록 1행(MySQL 폴백·종료 시즌 조회 결과). 닉네임은 별도 조회로 채운다.</summary>
-public sealed record BossRushRankRow(int Rank, long UserId, int ClearMs, long RecordedAt);
+public sealed record BossRushRankRow(int Rank, long UserId, int ClearMs, long RecordedAt)
+{
+    /// <summary>랭킹 1행을 응답 DTO로 투영한다. 닉네임을 찾지 못하면 빈 문자열로 둔다(순위 표시는 유지).</summary>
+    public BossRushRankEntryDto ToDto(IReadOnlyDictionary<long, string> nicknames)
+        => new()
+        {
+            rank = Rank,
+            userId = UserId,
+            nickname = nicknames.TryGetValue(UserId, out var name) ? name : string.Empty,
+            clearMs = ClearMs,
+            recordedAt = RecordedAt,
+        };
+}
 
 /// <summary>
 /// 순위 확정 1건의 결과. <paramref name="Applied"/>가 false면 이미 확정된 행이라 아무것도 하지 않았다는 뜻이고,
