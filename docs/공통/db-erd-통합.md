@@ -74,6 +74,7 @@
 | Redis | `GameServer` | **보스러시 조회 캐시 2종** — `player:nickname`(Hash, `userId`→`nickname`, TTL 없음, **lazy 채움**·정본은 `game_player.nickname`)과 `bossrush:season:current`(Hash, `seasonId`·`startAt`·`endAt`·`status`, 시즌 정산 배치가 갱신·정본은 `boss_rush_season`). 이 둘이 있어 **현재 시즌 랭킹 조회는 정상 경로에서 MySQL을 건드리지 않는다**(같은 문서 4.3) |
 | MySQL (Game DB) | `GameServer` | 플레이어 진행 세이브 데이터. **가방 조회(`inventory/list`)를 포함한 개인 데이터 읽기에는 캐시를 두지 않는다** — `(user_id, slot)` 인덱스 keyset 질의로 직접 읽는다([인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 6.5). **유일한 캐시 예외는 보스러시 랭킹**이다 — 순위는 "정렬된 전체 집합에서의 위치"라 개인 행 조회로 답할 수 없어 Redis Sorted Set을 파생 인덱스로 둔다 |
 | 인메모리 캐시(원천 CSV/JSON) | `GameServer` | 마스터(정적 기획) 데이터. 관계형 영속 테이블이 아닌 읽기 전용 정의 |
+| TimescaleDB (`logdb`) | fluentd 적재(두 서버가 JSON 로그를 방출) | **게임 로그 저장소.** 이벤트 하나가 테이블 하나인 **액션 로그 하이퍼테이블**(`stage_clear_logs`·`currency_flow_logs`·`item_flow_logs` 등)과 주기 스냅샷용 **히스토리 테이블**(`online_user_history` 등)로 구성된다. 게임 세이브와 **분리된 인스턴스**이고 FK도 두지 않는다(같은 `user_id`·`item_code`를 이름만 공유). 분석·집계 전용이며 **정본은 항상 Game DB**, 서버는 이 DB에 접속하지 않는다 — 상세 ERD·인덱스·보존은 [로그 이벤트 정의](로그-이벤트-정의.md) 8장 |
 
 - **서버 간 공유 키**: 모든 게임 DB 테이블의 `user_id`는 `AccountServer`의 `users.user_id`와 **동일 식별자**다.
 - **시간 값**: 계정·세이브 공통으로 **Unix timestamp(BIGINT, 초)**.
@@ -641,3 +642,4 @@ erDiagram
 - [가챠(뽑기) 시스템 기획서](../세부/gacha-기획서.md) — `player_gacha_counter`·`player_gacha_pull`·`player_gacha_pull_item`, `gacha_master` 계열 소비 규칙
 - [보스러시 / 랭킹 기획서](../세부/boss-rush-기획서.md) — `boss_rush_season`·`boss_rush_run`·`boss_rush_run_round`·`boss_rush_record`, `boss_rush_master` 계열 마스터, Redis 랭킹 리더보드(정본 MySQL · 캐시 Redis)
 - [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md) — 마스터 테이블 정의
+- [로그 이벤트 정의](로그-이벤트-정의.md) — 로그 저장소(TimescaleDB `logdb`)의 이벤트별 액션 로그·히스토리 테이블 ERD와 fluentd 적재 경로

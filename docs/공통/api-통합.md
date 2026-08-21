@@ -117,8 +117,10 @@
 |---|---|---|---|---|
 | `POST /api/game/stage/enter` | 스테이지 진입(진행 가능 검증) | `{ act, difficulty, stage }` | `stageId`, `monsters[]`, `boss`, `enteredAt` | `StageNotFound(6001)`, `StageLocked(6002)` |
 | `POST /api/game/stage/clear` | 스테이지 클리어 → 보상 지급·진행도 갱신 | `{ act, difficulty, stage }` | `rewards`, `characters[]`(각 `isLevelUp`), `balance`, `progress`, `inventoryDelta` | `StageNotEntered(6003)` |
+| `POST /api/game/stage/fail` | 파티 전멸 보고(기록 전용, 상태 불변) | `{ act, difficulty, stage, elapsedMs, remainingMonsterCount, reachedBoss }` | `stageId`, `failedAt` | `StageNotFound(6001)`, `StageNotEntered(6003)`, `InvalidRequest(1006)` |
 
 - 진입 응답은 스테이지의 **몬스터 구성(`monsters`)·보스(`boss`)** 를 포함하며, 각 항목에 **등장 레벨(`monsterLevel`)** 이 실린다(스탯은 내려주지 않는다 — 클라가 `monster_master`의 레벨 1 기준값에 레벨 배율을 곱해 산출). 클리어 보상(골드·경험치·전리품)은 서버가 마스터로 산출, 경험치는 3캐릭터 동일 지급(캐릭터별 **`isLevelUp`**), 골드는 계정. 이미 클리어한 스테이지는 재파밍 가능(보상은 프런티어와 **동일**). 전리품이 인벤토리 용량을 초과하면 **전리품만 폐기하고 골드·경험치는 지급**하며 클리어는 성공한다(에러 없음, `rewards.items`·`inventoryDelta` 비움).
+- **실패(`stage/fail`)는 기록 전용이다.** 전투가 클라이언트 권위라 서버는 전멸을 알 수 없어 클라이언트가 보고하며, 진행도·보상·재화·현재 진입 스테이지를 **하나도 바꾸지 않는다**(같은 스테이지 즉시 재도전 가능, 응답은 접수 확인뿐). 보고 값(`elapsedMs`·`remainingMonsterCount`·`reachedBoss`)은 **실질 난이도 측정용 관측치**이고 음수만 거부한다. 유실돼도 게임 상태에 영향이 없어 재시도하지 않는다.
 
 ### 3.6 거래소 / 교역선
 
@@ -227,6 +229,7 @@
 - [인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md)
 - [소모품 아이템 / 계정 버프 기획서](../세부/consumable-buff-기획서.md)
 - [성장 시스템 기획서](../세부/growth-기획서.md)
+- [스테이지/전투 결과 기획서](../세부/stage-battle-기획서.md)
 - [거래소 / 교역선 기획서](../세부/trade-기획서.md)
 - [메일 기획서](../세부/mail-기획서.md)
 - [출석부 보상 시스템 기획서](../세부/attendance-기획서.md)
