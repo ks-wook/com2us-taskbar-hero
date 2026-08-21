@@ -8,6 +8,7 @@ using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
 using GameServer.Util;
+using GameServer.Logging;
 
 namespace GameServer.Services;
 
@@ -21,13 +22,17 @@ public sealed class OfflineService : IOfflineService
     private readonly IOfflineRepository _offlineRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<OfflineService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(오프라인 리포지토리·마스터 데이터·로거)을 주입받는다.</summary>
-    public OfflineService(IOfflineRepository offlineRepository, MasterDbProvider masterData, ILogger<OfflineService> logger)
+    /// <summary>의존성(오프라인 리포지토리·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
+    public OfflineService(
+        IOfflineRepository offlineRepository, MasterDbProvider masterData,
+        ILogger<OfflineService> logger, IEventLogger eventLogger)
     {
         _offlineRepository = offlineRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -83,6 +88,16 @@ public sealed class OfflineService : IOfflineService
         };
 
         _logger.ZLogInformation($"오프라인 보상 정산: userId {userId:@UserId}, elapsed {elapsed:@Elapsed}s, effective {outcome.EffectiveSec:@Effective}s, gold {outcome.Gold:@Gold}, exp {outcome.Exp:@Exp}");
+
+        // 지급 트랜잭션이 커밋된 뒤에 방출한다(4.2). elapsed는 응답에 담은 값과 같은 값이라
+        // 로그와 유저가 본 화면이 어긋나지 않는다.
+        _eventLogger.Action(
+            Constants.EventLog.Tags.OfflineClaim, userId,
+            new OfflineClaimEvent(elapsed, outcome.EffectiveSec, outcome.Capped, outcome.Gold, outcome.Exp));
+
+        // 레벨업은 스테이지와 같은 테이블에 source만 다르게 쌓인다 — 두 경로의 성장 기여를 갈라 본다(5.3).
+        _eventLogger.CharacterLevelUps(userId, outcome.LevelUps, LevelUpSource.Offline);
+
         return new SaveResult(ErrorCode.Success, "Offline reward claimed", data);
     }
 

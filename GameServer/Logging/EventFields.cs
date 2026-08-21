@@ -74,6 +74,20 @@ public sealed record StageFailEvent(
 public sealed record CharacterLevelUpEvent(
     long CharacterId, int ClassCode, int FromLevel, int ToLevel, string Source) : IEventFields;
 
+// ── 5.4 오프라인 보상 ──
+
+/// <summary>
+/// <c>offline.claim</c> — 오프라인(방치) 보상 정산. <b>12시간 상한에 걸리는 비율</b>이 상한을 조정할지 판단하는
+/// 근거이고, 전체 재화 유입에서 오프라인이 차지하는 비중을 재는 자리이기도 하다.
+/// <para>골드 유입 자체는 원장(<c>currency_flow_logs</c>)에도 남지만 <b>상한에 걸렸는지는 원장이 모른다</b> —
+/// <see cref="IsCapped"/> 한 컬럼이 이 테이블을 따로 두는 이유다(5.4).</para>
+/// </summary>
+/// <param name="ElapsedSec">실제 경과 시간(마지막 활동 이후). 상한을 적용하기 전의 값이다.</param>
+/// <param name="EffectiveSec">상한을 적용한 뒤 실제로 보상 계산에 쓰인 시간.</param>
+/// <param name="IsCapped">상한에 걸려 잘렸는지. 이 비율이 높으면 상한이 유저 행동과 맞지 않는다는 뜻이다.</param>
+public sealed record OfflineClaimEvent(
+    long ElapsedSec, long EffectiveSec, bool IsCapped, long Gold, long Exp) : IEventFields;
+
 /// <summary>
 /// <see cref="CharacterLevelUpEvent.Source"/>에 들어가는 값. 컬럼에 그대로 적재되는 문자열이라
 /// 오타가 나면 집계에서 조용히 빠지므로 상수로 고정한다.

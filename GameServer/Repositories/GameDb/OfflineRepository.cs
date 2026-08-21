@@ -21,6 +21,12 @@ public sealed record OfflineClaimOutcome(
     List<OfflineCharacterState> Characters,
     long LastActiveAt)
 {
+    /// <summary>
+    /// 이번 정산 경험치로 레벨이 오른 캐릭터들. 스테이지 클리어와 같은 <c>character.levelup</c> 이벤트로 나가며
+    /// <c>source</c>만 <c>offline</c>으로 갈린다(로그 이벤트 정의 5.3).
+    /// </summary>
+    public IReadOnlyList<CharacterLevelUp> LevelUps { get; init; } = Array.Empty<CharacterLevelUp>();
+
     public static OfflineClaimOutcome Fail(OfflineClaimStatus status)
         => new(status, 0, false, 0, 0, 0, new List<OfflineCharacterState>(), 0);
 }
@@ -114,15 +120,16 @@ public sealed class OfflineRepository : GameDbBase, IOfflineRepository
             // 5) 경험치 지급(파티 편성 캐릭터 동일) + 레벨 재계산.
             //    미편성(slot=0) 캐릭터는 방치 전투에 참가하지 않았으므로 경험치를 받지 않는다(세이브 데이터 기획서 5.5).
             var charRows = await db.Query("player_character")
-                .Select("character_id", "level", "exp")
+                .Select("character_id", "level", "exp", "class_code")
                 .Where("user_id", userId).Where("slot", "!=", Constants.Party.SlotUnassigned)
                 .OrderBy("slot")
                 .GetAsync<CharProgressRow>(transaction);
 
             var characters = new List<OfflineCharacterState>();
+            var levelUps = new List<CharacterLevelUp>();
             foreach (var c in charRows)
             {
-                var (newLevel, newExp, _) = _levelUp.Calculate(c.Level, c.Exp, exp);
+                var (newLevel, newExp, leveledUp) = _levelUp.Calculate(c.Level, c.Exp, exp);
                 await db.Query("player_character")
                     .Where("user_id", userId).Where("character_id", c.CharacterId)
                     .UpdateAsync(new { level = newLevel, exp = newExp }, transaction);
@@ -133,10 +140,19 @@ public sealed class OfflineRepository : GameDbBase, IOfflineRepository
                     level = newLevel,
                     exp = newExp,
                 });
+
+                // 오른 캐릭터만 담는다 — 이벤트 로그는 "레벨이 올랐다"는 사건 자체가 1행이다(5.3).
+                if (leveledUp)
+                {
+                    levelUps.Add(new CharacterLevelUp(c.CharacterId, c.ClassCode, c.Level, newLevel));
+                }
             }
 
             return TxResult<OfflineClaimOutcome>.Commit(new OfflineClaimOutcome(
-                OfflineClaimStatus.Ok, effectiveSec, capped, gold, exp, goldBalance, characters, nowUnix));
+                OfflineClaimStatus.Ok, effectiveSec, capped, gold, exp, goldBalance, characters, nowUnix)
+            {
+                LevelUps = levelUps,
+            });
         });
 
     /// <summary>재화(골드) 행을 upsert하고 갱신 후 잔액을 반환한다(없으면 새 재화 행 생성).</summary>

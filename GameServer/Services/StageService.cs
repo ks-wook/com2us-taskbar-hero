@@ -181,7 +181,7 @@ public sealed class StageService : IStageService
                 stageDef.StageId, act, difficulty, stage,
                 outcome.GrantedGold, outcome.GrantedExp, outcome.IsFirstClear, outcome.MaxStageCleared));
 
-        EmitLevelUps(userId, outcome.LevelUps, LevelUpSource.Stage);
+        _eventLogger.CharacterLevelUps(userId, outcome.LevelUps, LevelUpSource.Stage);
 
         return new SaveResult(ErrorCode.Success, "Stage cleared", data);
     }
@@ -257,18 +257,4 @@ public sealed class StageService : IStageService
             Constants.EventLog.Tags.StageEnter, userId,
             new StageEnterEvent(stageId, act, difficulty, stage),
             (int)errorCode);
-
-    /// <summary>
-    /// 이번 지급으로 오른 레벨을 캐릭터 1명당 1행으로 방출한다(5.3). 아무도 오르지 않았으면 아무것도 내지 않는다.
-    /// </summary>
-    private void EmitLevelUps(long userId, IReadOnlyList<CharacterLevelUp> levelUps, string source)
-    {
-        foreach (var levelUp in levelUps)
-        {
-            _eventLogger.Action(
-                Constants.EventLog.Tags.CharacterLevelUp, userId,
-                new CharacterLevelUpEvent(
-                    levelUp.CharacterId, levelUp.ClassCode, levelUp.FromLevel, levelUp.ToLevel, source));
-        }
-    }
 }

@@ -434,6 +434,12 @@ public static class Constants
             /// <c>source</c> 필드로 갈린다(5.3).
             /// </summary>
             public const string CharacterLevelUp = "character.levelup";
+
+            /// <summary>
+            /// 오프라인(방치) 보상 정산 → <c>offline_claim_logs</c>. 골드 유입은 원장에도 남지만
+            /// <b>상한에 걸렸는지는 원장이 모른다</b> — 그 한 컬럼이 이 테이블을 따로 두는 이유다(5.4).
+            /// </summary>
+            public const string OfflineClaim = "offline.claim";
         }
     }
 }
