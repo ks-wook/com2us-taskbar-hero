@@ -36,6 +36,18 @@ public sealed record ClearOutcome(
     /// </summary>
     public bool LootStored { get; init; }
 
+    /// <summary>
+    /// 이번 클리어가 <b>최고 도달 스테이지를 밀어 올린</b> 첫 클리어인지(재파밍이면 false).
+    /// 스테이지별 이탈 지점을 세려면 첫 클리어와 반복 파밍을 갈라야 해서 이벤트 로그에 함께 남긴다(5.3).
+    /// </summary>
+    public bool IsFirstClear { get; init; }
+
+    /// <summary>
+    /// 이번 경험치 지급으로 레벨이 오른 캐릭터들. 성장 곡선 실측용 이벤트 로그(character.levelup)의 원본이며,
+    /// 아무도 오르지 않았으면 비어 있다.
+    /// </summary>
+    public IReadOnlyList<CharacterLevelUp> LevelUps { get; init; } = Array.Empty<CharacterLevelUp>();
+
     public static ClearOutcome Fail(ClearStatus status)
         => new(status, new List<CharacterProgressDto>(), 0, 0, 0, 1.0m, 1.0m, 0, 0, 0, 0);
 }
@@ -148,12 +160,13 @@ public sealed class StageRepository : GameDbBase, IStageRepository
             // 4) 경험치 지급(파티 편성 캐릭터 동일) + 레벨 재계산.
             //    미편성(slot=0) 캐릭터는 전투에 나가지 않았으므로 경험치를 받지 않는다(세이브 데이터 기획서 5.5).
             var charRows = await db.Query("player_character")
-                .Select("character_id", "level", "exp")
+                .Select("character_id", "level", "exp", "class_code")
                 .Where("user_id", userId).Where("slot", "!=", Constants.Party.SlotUnassigned)
                 .OrderBy("slot")
                 .GetAsync<CharProgressRow>(transaction);
 
             var characters = new List<CharacterProgressDto>();
+            var levelUps = new List<CharacterLevelUp>();
             foreach (var c in charRows)
             {
                 int characterId = c.CharacterId;
@@ -170,6 +183,12 @@ public sealed class StageRepository : GameDbBase, IStageRepository
                     exp = newExp,
                     isLevelUp = leveledUp,
                 });
+
+                // 오른 캐릭터만 담는다 — 이벤트 로그는 "레벨이 올랐다"는 사건 자체가 1행이다(5.3).
+                if (leveledUp)
+                {
+                    levelUps.Add(new CharacterLevelUp(characterId, c.ClassCode, c.Level, newLevel));
+                }
             }
 
             // 5) 전리품 적재(있으면). 적재 결과는 가방 변경분(5.0)에 담긴다.
@@ -222,6 +241,8 @@ public sealed class StageRepository : GameDbBase, IStageRepository
                 gold, exp, goldMultiplier, expMultiplier,
                 newAct, newDiff, newStage, newMax)
             {
+                IsFirstClear = isFrontier,
+                LevelUps = levelUps,
                 Delta = delta,
                 LootStored = lootStored,
             });

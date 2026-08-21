@@ -28,3 +28,61 @@ public sealed record SaveLoadEvent(bool IsNew, long OfflineElapsedSec) : IEventF
 /// <param name="ClassCode">선택한 직업(class_master).</param>
 /// <param name="Gender">선택한 성별(1:남 2:여). 외형 전용이라 스탯과 무관하다.</param>
 public sealed record PlayerCreateEvent(int ClassCode, int Gender) : IEventFields;
+
+// ── 5.3 스테이지 / 전투 ──
+
+/// <summary>
+/// <c>stage.enter</c> — 스테이지 진입. 이 이벤트 하나만으로는 답하는 질문이 없고,
+/// <c>stage.clear</c>·<c>stage.fail</c>과 짝지어야 뜻이 생긴다 — <b>실질 난이도</b>(fail / enter)의 분모이며,
+/// <c>enter − clear − fail</c>이 보고 없이 사라진 판, 즉 <b>이탈</b>이다.
+/// <para>진입 <b>거부</b>도 남기는 유일한 스테이지 이벤트다(<c>error_code</c>) — 도달하지 못한 스테이지로의
+/// 진입 시도가 반복되면 잠금 UI나 진행 곡선을 손봐야 한다는 신호이기 때문이다(4.1의 선별 기준).</para>
+/// </summary>
+public sealed record StageEnterEvent(int StageId, int Act, int Difficulty, int Stage) : IEventFields;
+
+/// <summary>
+/// <c>stage.clear</c> — 클리어 보상 지급 확정. <b>이 체계에서 가장 빈번한 이벤트</b>다(방치형이라 한 판이
+/// 수십 초로 끝난다, 10장). 스테이지별 이탈 지점과 재화 유입량이 여기서 나온다.
+/// </summary>
+/// <param name="Gold">실제 지급액(획득량 버프 배율이 적용된 뒤의 값). 마스터 기본값이 아니다.</param>
+/// <param name="Exp">실제 지급 경험치(같은 이유로 배율 적용 후).</param>
+/// <param name="IsFirstClear">최고 도달을 밀어 올린 첫 클리어인지. 반복 파밍과 갈라야 이탈 지점이 보인다.</param>
+/// <param name="MaxStageCleared">클리어 반영 후의 최고 진행도(되돌릴 수 없는 단조 증가 상태, 5장 기준 2).</param>
+public sealed record StageClearEvent(
+    int StageId, int Act, int Difficulty, int Stage,
+    long Gold, long Exp, bool IsFirstClear, int MaxStageCleared) : IEventFields;
+
+/// <summary>
+/// <c>stage.fail</c> — 파티 전멸(클라이언트 보고). 전투가 클라이언트 권위라 서버는 전멸을 스스로 알 수 없고,
+/// 이 보고가 있어야 실질 난이도를 추정이 아닌 <b>측정</b>으로 얻는다.
+/// <para>세 수치가 <b>리밸런싱 대상</b>을 고른다 — 실패율만 보면 "조금 모자라 진 스테이지"와 "손도 못 대는 벽"이
+/// 같아 보인다.</para>
+/// </summary>
+/// <param name="ElapsedMs">진입~전멸까지 걸린 시간. 즉사와 접전을 가른다.</param>
+/// <param name="RemainingMonsterCount">전멸 시점의 잔여 적 수. 0에 가까울수록 소폭 하향으로 넘길 수 있는 패배다.</param>
+/// <param name="ReachedBoss">보스전까지 갔는지. 잡몹이 벽인지 보스가 벽인지 가른다.</param>
+public sealed record StageFailEvent(
+    int StageId, int Act, int Difficulty, int Stage,
+    int ElapsedMs, int RemainingMonsterCount, bool ReachedBoss) : IEventFields;
+
+/// <summary>
+/// <c>character.levelup</c> — 캐릭터 레벨 상승. <b>기획 성장 곡선과 실측의 괴리</b>를 재는 이벤트다.
+/// <para>상태 분포(지금 몇 레벨인가)는 스냅샷이 답하지만 이 이벤트는 예외로 액션 로그에 남긴다 —
+/// 레벨은 <b>되돌릴 수 없는 단조 증가 상태</b>라 액션의 누적이 곧 상태여서 집계 편향이 없다(5장 기준 2).</para>
+/// </summary>
+/// <param name="Source">레벨을 올린 경로(<c>stage</c> 또는 <c>offline</c>). 두 경로의 기여 비중을 가른다.</param>
+public sealed record CharacterLevelUpEvent(
+    long CharacterId, int ClassCode, int FromLevel, int ToLevel, string Source) : IEventFields;
+
+/// <summary>
+/// <see cref="CharacterLevelUpEvent.Source"/>에 들어가는 값. 컬럼에 그대로 적재되는 문자열이라
+/// 오타가 나면 집계에서 조용히 빠지므로 상수로 고정한다.
+/// </summary>
+public static class LevelUpSource
+{
+    /// <summary>스테이지 클리어 보상으로 오른 레벨.</summary>
+    public const string Stage = "stage";
+
+    /// <summary>오프라인(방치) 정산으로 오른 레벨.</summary>
+    public const string Offline = "offline";
+}

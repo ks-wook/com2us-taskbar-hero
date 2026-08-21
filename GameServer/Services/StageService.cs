@@ -8,6 +8,7 @@ using GameServer.Repositories.MasterDb;
 using GameServer.Models;
 using GameServer.Services.Interfaces;
 using GameServer.Util;
+using GameServer.Logging;
 
 namespace GameServer.Services;
 
@@ -21,15 +22,17 @@ public sealed class StageService : IStageService
     private readonly IStageRepository _stageRepository;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<StageService> _logger;
+    private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(스테이지 리포지토리·마스터 데이터·가방 조회 캐시·로거)을 주입받는다.</summary>
+    /// <summary>의존성(스테이지 리포지토리·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
     public StageService(
         IStageRepository stageRepository, MasterDbProvider masterData,
-        ILogger<StageService> logger)
+        ILogger<StageService> logger, IEventLogger eventLogger)
     {
         _stageRepository = stageRepository;
         _masterData = masterData;
         _logger = logger;
+        _eventLogger = eventLogger;
     }
 
     /// <summary>
@@ -61,11 +64,16 @@ public sealed class StageService : IStageService
         var seq = StageCoords.Sequence(act, difficulty, stage);
         if (seq > progress.MaxStageCleared + 1)
         {
+            // 진입 거부도 남긴다 — 도달 못 한 스테이지로의 시도가 반복되면 잠금 UI나 진행 곡선의 문제다(5.3).
+            // 나머지 거부(스테이지 없음·세이브 없음·마스터 미적재)는 클라 결함/서버 결함이라 남기지 않는다.
+            EmitStageEnter(userId, stageDef.StageId, act, difficulty, stage, ErrorCode.StageLocked);
             return new SaveResult(ErrorCode.StageLocked, string.Empty, null);
         }
 
         var now = DateTimeUtil.NowUnixSeconds();
         await _stageRepository.SetCurrentStageAsync(userId, act, difficulty, stage, now);
+
+        EmitStageEnter(userId, stageDef.StageId, act, difficulty, stage, ErrorCode.Success);
 
         var data = new StageEnterData
         {
@@ -163,6 +171,18 @@ public sealed class StageService : IStageService
         };
 
         _logger.ZLogInformation($"스테이지 클리어: userId {userId:@UserId}, act {act:@Act}, difficulty {difficulty:@Difficulty}, stage {stage:@Stage}, gold {outcome.GrantedGold:@Gold}, exp {outcome.GrantedExp:@Exp}, goldMul {outcome.GoldMultiplier:@GoldMultiplier}, expMul {outcome.ExpMultiplier:@ExpMultiplier}");
+
+        // 지급 트랜잭션이 커밋된 뒤에 방출한다(롤백된 사실을 로그에 남기지 않는다, 4.2).
+        // 담는 값은 마스터 기본값이 아니라 **실제 지급액**이다 — 버프 배율이 곱해진 뒤의 유입량이어야
+        // 재화 유입 집계가 경제 실측이 된다.
+        _eventLogger.Action(
+            Constants.EventLog.Tags.StageClear, userId,
+            new StageClearEvent(
+                stageDef.StageId, act, difficulty, stage,
+                outcome.GrantedGold, outcome.GrantedExp, outcome.IsFirstClear, outcome.MaxStageCleared));
+
+        EmitLevelUps(userId, outcome.LevelUps, LevelUpSource.Stage);
+
         return new SaveResult(ErrorCode.Success, "Stage cleared", data);
     }
 
@@ -210,6 +230,12 @@ public sealed class StageService : IStageService
 
         _logger.ZLogInformation($"스테이지 실패: userId {userId:@UserId}, stageId {stageDef.StageId:@StageId}, act {act:@Act}, difficulty {difficulty:@Difficulty}, stage {stage:@Stage}, elapsedMs {elapsedMs:@ElapsedMs}, remainingMonsterCount {remainingMonsterCount:@RemainingMonsterCount}, reachedBoss {reachedBoss:@ReachedBoss}");
 
+        // 이 엔드포인트의 존재 이유가 곧 이 이벤트다 — 상태를 바꾸지 않고 이 한 행만 남긴다(5.3).
+        _eventLogger.Action(
+            Constants.EventLog.Tags.StageFail, userId,
+            new StageFailEvent(
+                stageDef.StageId, act, difficulty, stage, elapsedMs, remainingMonsterCount, reachedBoss));
+
         var data = new StageFailResultData
         {
             act = act,
@@ -222,4 +248,27 @@ public sealed class StageService : IStageService
         return new SaveResult(ErrorCode.Success, "Stage failure recorded", data);
     }
 
+    /// <summary>
+    /// 진입 이벤트 1행을 방출한다(5.3). 성공과 거부가 필드까지 같고 <c>error_code</c>만 다르므로
+    /// 두 경로가 같은 자리를 쓴다 — 거부만 따로 적는 자리를 만들면 같은 사실이 두 곳에 생긴다(5장).
+    /// </summary>
+    private void EmitStageEnter(long userId, int stageId, int act, int difficulty, int stage, ErrorCode errorCode)
+        => _eventLogger.Action(
+            Constants.EventLog.Tags.StageEnter, userId,
+            new StageEnterEvent(stageId, act, difficulty, stage),
+            (int)errorCode);
+
+    /// <summary>
+    /// 이번 지급으로 오른 레벨을 캐릭터 1명당 1행으로 방출한다(5.3). 아무도 오르지 않았으면 아무것도 내지 않는다.
+    /// </summary>
+    private void EmitLevelUps(long userId, IReadOnlyList<CharacterLevelUp> levelUps, string source)
+    {
+        foreach (var levelUp in levelUps)
+        {
+            _eventLogger.Action(
+                Constants.EventLog.Tags.CharacterLevelUp, userId,
+                new CharacterLevelUpEvent(
+                    levelUp.CharacterId, levelUp.ClassCode, levelUp.FromLevel, levelUp.ToLevel, source));
+        }
+    }
 }

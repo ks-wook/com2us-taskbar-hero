@@ -28,4 +28,10 @@ class CharProgressRow
     public int CharacterId { get; set; }
     public int Level { get; set; }
     public long Exp { get; set; }
+
+    /// <summary>
+    /// 직업 코드. 경험치 계산에는 쓰이지 않고 <b>레벨업 이벤트 로그</b>(character.levelup)의 축으로만 쓴다 —
+    /// 직업별 성장 곡선을 가르는 값이라 로그에 함께 남긴다(로그 이벤트 정의 5.3).
+    /// </summary>
+    public int ClassCode { get; set; }
 }

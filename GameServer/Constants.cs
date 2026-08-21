@@ -416,6 +416,24 @@ public static class Constants
 
             /// <summary>최초 캐릭터 생성(계정 세이브 초기화) → <c>player_create_logs</c>.</summary>
             public const string PlayerCreate = "player.create";
+
+            /// <summary>
+            /// 스테이지 진입 → <c>stage_enter_logs</c>. 실패(전멸) 보고와 짝지어 실질 난이도를 재는
+            /// 분모이고, 보고 없이 사라진 판(이탈)을 세는 기준이기도 하다(5.3).
+            /// </summary>
+            public const string StageEnter = "stage.enter";
+
+            /// <summary>스테이지 클리어(보상 지급 확정) → <c>stage_clear_logs</c>. 이 체계에서 가장 빈번한 이벤트다.</summary>
+            public const string StageClear = "stage.clear";
+
+            /// <summary>스테이지 실패(파티 전멸, 클라이언트 보고) → <c>stage_fail_logs</c>.</summary>
+            public const string StageFail = "stage.fail";
+
+            /// <summary>
+            /// 캐릭터 레벨 상승 → <c>character_levelup_logs</c>. 스테이지·오프라인이 공통으로 내며
+            /// <c>source</c> 필드로 갈린다(5.3).
+            /// </summary>
+            public const string CharacterLevelUp = "character.levelup";
         }
     }
 }
