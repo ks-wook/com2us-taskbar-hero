@@ -58,7 +58,7 @@ builder.Services.AddScoped<IAuthTokenRepository, AuthTokenRepository>();
 builder.Services.AddSingleton<TokenGenerator>();
 builder.Services.AddSingleton(sp =>
 {
-    var connectionString = builder.Configuration.GetValue("Redis:ConnectionString", "127.0.0.1:6379")!;
+    var connectionString = builder.Configuration.GetValue("Redis:ConnectionString", "127.0.0.1:36379")!;
     return new RedisConnection(new RedisConfig("account", connectionString));
 });
 builder.Services.AddSingleton<IAuthTokenCache, AuthTokenCache>();
