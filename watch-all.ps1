@@ -3,10 +3,10 @@
 #   dotnet watch는 프로젝트 1개 대상이라, 두 서버를 각자 새 콘솔 창으로 띄운다.
 #
 #   이 스크립트는 **서버만** 띄운다. 의존 서비스는 docker-compose가 담당한다:
-#       python server_up.py --mode infra
+#       docker compose up -d mysql redis
 #   서버가 뜬 뒤 보스러시 랭킹 캐시를 Redis에 적재한다(서버가 스스로 하지 않는다):
 #       python server_up.py --warmup-only
-#   두 서버를 컨테이너로 돌리고 싶으면 이 스크립트 대신 `python server_up.py`를 쓴다
+#   두 서버까지 컨테이너로 돌리고 싶으면 이 스크립트 대신 `python server_up.py`를 쓴다
 #   (같은 5160·5247 포트를 쓰므로 컨테이너 서버와 이 스크립트는 동시에 띄울 수 없다).
 #
 #   ※ 이 파일은 반드시 UTF-8 with BOM으로 저장한다(Windows PowerShell 5.1이 한글 리터럴을
@@ -42,7 +42,7 @@ if (-not (Test-PortListening 3306)) { $missing += "MySQL(3306)" }
 if (-not (Test-PortListening 6379)) { $missing += "Redis(6379)" }
 if ($missing.Count -gt 0) {
     Write-Host "의존 서비스가 감지되지 않습니다: $($missing -join ', ')" -ForegroundColor Yellow
-    Write-Host "먼저 실행하세요: python server_up.py --mode infra" -ForegroundColor Yellow
+    Write-Host "먼저 실행하세요: docker compose up -d mysql redis" -ForegroundColor Yellow
 }
 else {
     Write-Host "의존 서비스 확인: MySQL(3306) · Redis(6379) 응답 중." -ForegroundColor DarkGray

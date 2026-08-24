@@ -379,6 +379,19 @@ CREATE TABLE boss_rush_season (
     KEY idx_bossrush_season_settle (status, end_at) COMMENT '정산 대상 시즌 탐색'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='보스러시 랭킹 시즌(전역)';
 
+-- 첫 시즌 1행. **스키마 초기화가 심는다** — 서버에는 "첫 시즌을 여는" 경로가 없다.
+--   정산 배치는 진행 중 시즌의 end_at이 지났을 때 **다음** 시즌만 개시하므로(보스러시 기획서 6.4),
+--   이 행이 없으면 새 환경에서 보스러시가 영구히 닫힌 상태(BossRushSeasonClosed)로 남는다.
+--   시작 시각은 기획서의 주간 경계(**KST 월요일 00:00**)에 맞추고, 서버·컨테이너 타임존 설정에
+--   기대지 않도록 유닉스 초에서 직접 계산한다:
+--     ①+9h로 KST 기준 일수 → ②월요일까지 되감기(에폭 1970-01-01이 목요일이라 +3 보정) → ③UTC로 환산.
+--   7일은 boss_rush_master.season_period_days와 같은 값이다(마스터 DB는 이 스크립트 다음에 만들어져
+--   여기서 조회할 수 없으므로 상수로 둔다 — 시즌 길이를 바꾸면 두 곳을 함께 고친다).
+INSERT INTO boss_rush_season (start_at, end_at, status)
+SELECT m.start_at, m.start_at + 7 * 86400, 1
+  FROM (SELECT ((FLOOR((UNIX_TIMESTAMP() + 32400) / 86400)
+                 - ((FLOOR((UNIX_TIMESTAMP() + 32400) / 86400) + 3) % 7)) * 86400) - 32400 AS start_at) AS m;
+
 
 -- 보스러시 도전 1회의 원장. 만료 판정과 사후 관측의 근거다.
 --   **도전 횟수 제한이 없으므로 카운터 컬럼도, 날짜 경계 개념도 없다** — 행은 "언제 누가 도전했는지"의

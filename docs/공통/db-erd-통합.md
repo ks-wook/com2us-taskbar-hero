@@ -432,6 +432,7 @@ erDiagram
 
 - **역할**: 보스러시 랭킹 **시즌의 정본**. 랭킹은 시즌 단위로 리셋되므로 "지금 어느 시즌인가"·"정산했는가"가 서버 판단의 기준이 된다. `status`를 조건부 갱신(`1 → 2`)으로 전이시켜 **정산 배치의 선점 단위**로도 쓴다.
 - **저장 데이터**: `season_id`(PK, AUTO_INCREMENT), `start_at`·`end_at`(KST 월요일 00:00 경계, 주간), `status`(1:진행 2:정산중 3:종료), `settled_at`(정산 완료 시각). 정산 중(`2`)에는 새 런을 받지 않는다(`BossRushSeasonClosed(13007)`).
+- **첫 시즌 1행은 스키마 초기화 SQL(`db-schema.sql`)이 심는다** — 시작 시각은 KST 직전 월요일 00:00, 길이는 7일(`boss_rush_master.season_period_days`와 같은 값). 서버는 **다음** 시즌만 개시하므로(정산 배치) 이 행이 없으면 새 환경에서 보스러시가 열리지 않는다.
 
 ### boss_rush_run
 
