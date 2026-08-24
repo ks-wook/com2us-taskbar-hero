@@ -314,6 +314,16 @@
   .callout p { margin: 0; }
 
   /* ── 순서(성장 루트) ── */
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.92em;
+    background: var(--surface-2);
+    border: 1px solid var(--line-soft);
+    border-radius: 2px;
+    padding: 1px 5px;
+    word-break: break-all;
+  }
+
   ol.route { list-style: none; padding: 0; margin: 24px 0; }
   ol.route li {
     display: grid;
@@ -400,22 +410,46 @@
 
   <nav class="toc" aria-label="목차">
     <ol>
-      <li><a href="#intro"><span class="n">01</span>어떤 게임인가요?</a></li>
-      <li><a href="#start"><span class="n">02</span>처음 시작하기</a></li>
-      <li><a href="#screen"><span class="n">03</span>화면 보는 법</a></li>
-      <li><a href="#jobs"><span class="n">04</span>어떤 직업을 고를까요?</a></li>
-      <li><a href="#battle"><span class="n">05</span>전투는 이렇게 흘러가요</a></li>
-      <li><a href="#features"><span class="n">06</span>기능별 사용법</a></li>
-      <li><a href="#route"><span class="n">07</span>키우는 순서</a></li>
+      <li><a href="#run"><span class="n">01</span>게임 실행 방법</a></li>
+      <li><a href="#intro"><span class="n">02</span>어떤 게임인가요?</a></li>
+      <li><a href="#start"><span class="n">03</span>처음 시작하기</a></li>
+      <li><a href="#screen"><span class="n">04</span>화면 보는 법</a></li>
+      <li><a href="#jobs"><span class="n">05</span>어떤 직업을 고를까요?</a></li>
+      <li><a href="#battle"><span class="n">06</span>전투는 이렇게 흘러가요</a></li>
+      <li><a href="#features"><span class="n">07</span>기능별 사용법</a></li>
+      <li><a href="#route"><span class="n">08</span>키우는 순서</a></li>
     </ol>
   </nav>
 </header>
 
 <!-- 01 -->
-<section id="intro">
+<section id="run">
   <div class="sec-head">
     <div class="taskbar" aria-hidden="true"></div>
     <p class="eyebrow">01</p>
+    <h2>게임 실행 방법</h2>
+  </div>
+
+  <p>설치 과정은 없어요. 받은 폴더 안에서 실행 파일 하나만 누르면 바로 시작됩니다.</p>
+
+  <ol class="route">
+    <li><span class="step">1</span><p>받은 <b>압축 파일의 압축을 풀어요.</b></p></li>
+    <li><span class="step">2</span><p>풀린 폴더 안의 <b><code>Game</code> 폴더</b>로 들어가요.</p></li>
+    <li><span class="step">3</span><p><b><code>com2us-taskbar-hero-client.exe</code></b> 를 두 번 클릭하면 게임이 시작돼요.</p></li>
+  </ol>
+
+  <div class="callout">
+    <span class="tag">주의</span>
+    <p><code>com2us-taskbar-hero-client.exe</code> 파일만 따로 꺼내서 옮기면 실행되지 않아요.
+    같은 <code>Game</code> 폴더 안에 있는 다른 파일·폴더가 함께 있어야 하니, <b>폴더째로</b> 옮겨 주세요.</p>
+  </div>
+</section>
+
+<!-- 02 -->
+<section id="intro">
+  <div class="sec-head">
+    <div class="taskbar" aria-hidden="true"></div>
+    <p class="eyebrow">02</p>
     <h2>어떤 게임인가요?</h2>
   </div>
 
@@ -447,11 +481,11 @@
   장비를 갈아 끼우거나 스킬을 하나 올려 주면 충분해요.</p>
 </section>
 
-<!-- 02 -->
+<!-- 03 -->
 <section id="start">
   <div class="sec-head">
     <div class="taskbar" aria-hidden="true"></div>
-    <p class="eyebrow">02</p>
+    <p class="eyebrow">03</p>
     <h2>처음 시작하기</h2>
   </div>
 
@@ -476,11 +510,11 @@
   </div>
 </section>
 
-<!-- 03 -->
+<!-- 04 -->
 <section id="screen">
   <div class="sec-head">
     <div class="taskbar" aria-hidden="true"></div>
-    <p class="eyebrow">03</p>
+    <p class="eyebrow">04</p>
     <h2>화면 보는 법</h2>
   </div>
 
@@ -526,11 +560,11 @@
   <p>보상을 얻으면 아이템이 아래 <b>가방 버튼으로 날아 들어가는 모습</b>이 보여요. 무엇이 들어왔는지는 가방을 열어 확인하면 돼요.</p>
 </section>
 
-<!-- 04 -->
+<!-- 05 -->
 <section id="jobs">
   <div class="sec-head">
     <div class="taskbar" aria-hidden="true"></div>
-    <p class="eyebrow">04</p>
+    <p class="eyebrow">05</p>
     <h2>어떤 직업을 고를까요?</h2>
   </div>
 
@@ -649,11 +683,11 @@
   </div>
 </section>
 
-<!-- 05 -->
+<!-- 06 -->
 <section id="battle">
   <div class="sec-head">
     <div class="taskbar" aria-hidden="true"></div>
-    <p class="eyebrow">05</p>
+    <p class="eyebrow">06</p>
     <h2>전투는 이렇게 흘러가요</h2>
   </div>
 
@@ -691,11 +725,11 @@
   </div>
 </section>
 
-<!-- 06 -->
+<!-- 07 -->
 <section id="features">
   <div class="sec-head">
     <div class="taskbar" aria-hidden="true"></div>
-    <p class="eyebrow">06</p>
+    <p class="eyebrow">07</p>
     <h2>기능별 사용법</h2>
   </div>
 
@@ -820,11 +854,11 @@
   </ul>
 </section>
 
-<!-- 07 -->
+<!-- 08 -->
 <section id="route">
   <div class="sec-head">
     <div class="taskbar" aria-hidden="true"></div>
-    <p class="eyebrow">07</p>
+    <p class="eyebrow">08</p>
     <h2>키우는 순서</h2>
   </div>
 

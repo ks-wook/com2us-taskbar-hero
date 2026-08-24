@@ -17,14 +17,14 @@ namespace TaskbarHero.ClientEditor
     /// <b>배포 패키지</b> 원클릭 빌드 도구 — 이 프로젝트의 <b>유일한 빌드 옵션</b>이다.
     /// <para>
     /// 유니티 프로젝트 구조를 모르는 사람이 <b>폴더째 받아서 바로 플레이</b>할 수 있도록,
-    /// 게임 본체를 한 단계 아래 <c>Game/</c>에 넣고 그 <b>한 단계 위</b>에 플레이 가이드와
-    /// 실행 버튼 역할의 런처 exe를 함께 놓는다.
+    /// 게임 본체를 한 단계 아래 <c>Game/</c>에 넣고 그 <b>한 단계 위</b>에 플레이 가이드를 놓는다.
+    /// <b>실행 파일은 따로 만들지 않는다</b> — 받는 사람은 <c>Game</c> 폴더의 게임 exe를 직접 실행하며,
+    /// 그 방법은 가이드 1장('게임 실행 방법')에 적혀 있다.
     /// </para>
     /// <code>
-    /// Builds/TaskbarHero/          ← 이 폴더를 통째로 압축해 전달한다
-    ///   Com2us Taskbar Hero 실행.exe   ← 런처(버튼). 아래 Game/의 실제 exe를 실행한다
-    ///   게임-플레이-가이드.html    ← docs/게임-플레이-가이드.html (스크린샷을 내장한 단일 파일)
-    ///   Game/                      ← 유니티 빌드 결과물(exe + *_Data + 런타임 DLL)
+    /// Builds/TaskbarHero/               ← 이 폴더를 통째로 압축해 전달한다
+    ///   게임-플레이-가이드.html         ← docs/게임-플레이-가이드.html (스크린샷을 내장한 단일 파일)
+    ///   Game/                           ← 유니티 빌드 결과물(exe + *_Data + 런타임 DLL)
     /// </code>
     /// <para>
     /// 접속 환경은 <b>QA(원격 서버)</b> 고정이다 — 남에게 건네는 배포본이므로 로컬 서버 주소로는
@@ -43,12 +43,6 @@ namespace TaskbarHero.ClientEditor
 
         /// <summary>게임 본체(유니티 빌드 결과물)를 담는 하위 폴더 이름.</summary>
         private const string GameDirName = "Game";
-
-        /// <summary>배포 루트에 놓이는 실행 버튼(런처)의 파일 이름.</summary>
-        private const string LauncherFileName = "Com2us Taskbar Hero 실행.exe";
-
-        /// <summary>C# 컴파일러를 찾지 못했을 때 런처 대신 만드는 배치 파일 이름.</summary>
-        private const string LauncherFallbackFileName = "Com2us Taskbar Hero 실행.cmd";
 
         /// <summary>배포 루트에 놓이는 플레이 가이드의 파일 이름.</summary>
         private const string GuideFileName = "게임-플레이-가이드.html";
@@ -131,15 +125,51 @@ namespace TaskbarHero.ClientEditor
 
             Debug.Log($"[GameDistributionBuilder] 게임 본체 빌드 성공 · 크기 {summary.totalSize / (1024 * 1024)}MB");
 
-            CopyGuide(guideSource, Path.Combine(packageDir, GuideFileName));
-            string launcher = CreateLauncher(packageDir, GameDirName + "\\" + gameExeName);
+            string guidePath = Path.Combine(packageDir, GuideFileName);
+            CopyGuide(guideSource, guidePath);
+            RemoveObsoleteLaunchers(packageDir);
 
             Debug.Log($"[GameDistributionBuilder] 배포 패키지 완성 → {packageDir}\n" +
-                      $"  · {Path.GetFileName(launcher)} (실행 버튼)\n" +
                       $"  · {GuideFileName} (플레이 가이드)\n" +
-                      $"  · {GameDirName}/ (게임 본체)\n" +
-                      "이 폴더를 통째로 압축해 전달하면 받는 사람은 실행 버튼만 누르면 됩니다.");
-            EditorUtility.RevealInFinder(launcher);
+                      $"  · {GameDirName}/{gameExeName} (게임 실행 파일)\n" +
+                      $"이 폴더를 통째로 압축해 전달하면, 받는 사람은 {GameDirName} 폴더의 {gameExeName}을 누르면 됩니다" +
+                      "(가이드 1장에 같은 안내가 있습니다).");
+            EditorUtility.RevealInFinder(guidePath);
+        }
+
+        /// <summary>
+        /// 예전 빌드가 배포 루트에 만들어 둔 <b>런처 파일을 지운다</b>. 지금은 런처를 만들지 않고
+        /// 받는 사람이 <c>Game</c> 폴더의 게임 exe를 직접 실행하므로, 남아 있으면 무엇을 눌러야 할지 헷갈린다.
+        /// 이 빌더가 예전에 만들던 <b>정확한 이름만</b> 지운다(사용자가 넣어 둔 다른 파일은 건드리지 않는다).
+        /// </summary>
+        private static void RemoveObsoleteLaunchers(string packageDir)
+        {
+            string[] obsoleteNames =
+            {
+                "Com2us Taskbar Hero 실행.exe",
+                "Com2us Taskbar Hero 실행.cmd",
+                "게임 플레이.exe",
+                "게임 플레이.cmd",
+                "먼저 읽어주세요.txt",
+            };
+
+            foreach (string name in obsoleteNames)
+            {
+                string path = Path.Combine(packageDir, name);
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+                try
+                {
+                    File.Delete(path);
+                    Debug.Log($"[GameDistributionBuilder] 예전 빌드가 남긴 파일을 지웠습니다: {name}");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[GameDistributionBuilder] 예전 파일을 지우지 못했습니다({name}): {e.Message}");
+                }
+            }
         }
 
         /// <summary>파일명에 쓸 수 없는 문자를 '_'로 치환한다(제품 이름을 exe 이름으로 쓰기 위함).</summary>
@@ -206,150 +236,6 @@ namespace TaskbarHero.ClientEditor
                       $"(스크린샷 {embedded}장 내장 · {new FileInfo(destPath).Length / 1024}KB)");
         }
 
-        /// <summary>
-        /// 배포 루트에 <b>실행 버튼</b>(런처)을 만든다. 자기 위치를 기준으로 <c>Game\게임.exe</c>를 찾아 실행하므로
-        /// 폴더를 어디로 옮기든·압축을 어디에 풀든 동작한다(절대 경로를 굽는 바로가기 .lnk와 다른 점).
-        /// C# 컴파일러(윈도우 기본 탑재 .NET Framework csc)를 찾지 못하면 같은 일을 하는 .cmd로 대체한다.
-        /// 만들어진 파일의 전체 경로를 돌려준다.
-        /// </summary>
-        private static string CreateLauncher(string packageDir, string gameRelativePath)
-        {
-            string exePath = Path.Combine(packageDir, LauncherFileName);
-            string cmdPath = Path.Combine(packageDir, LauncherFallbackFileName);
-            string compilerPath = FindCSharpCompiler();
-
-            if (compilerPath != null && CompileLauncher(compilerPath, exePath, gameRelativePath))
-            {
-                if (File.Exists(cmdPath))
-                {
-                    File.Delete(cmdPath);   // 예전 빌드가 남긴 대체 배치 파일을 치운다
-                }
-                Debug.Log($"[GameDistributionBuilder] 실행 버튼 생성: {exePath}");
-                return exePath;
-            }
-
-            File.WriteAllText(cmdPath,
-                "@echo off\r\n" +
-                "start \"\" \"%~dp0" + gameRelativePath + "\"\r\n",
-                new UTF8Encoding(false));
-            Debug.LogWarning("[GameDistributionBuilder] C# 컴파일러를 찾지 못했거나 컴파일에 실패해 " +
-                             $"런처 exe 대신 배치 파일을 만들었습니다: {cmdPath}");
-            return cmdPath;
-        }
-
-        /// <summary>윈도우에 기본 탑재된 .NET Framework C# 컴파일러 경로를 찾는다(없으면 null).</summary>
-        private static string FindCSharpCompiler()
-        {
-            string windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-            string[] candidates =
-            {
-                Path.Combine(windows, @"Microsoft.NET\Framework64\v4.0.30319\csc.exe"),
-                Path.Combine(windows, @"Microsoft.NET\Framework\v4.0.30319\csc.exe"),
-            };
-            return candidates.FirstOrDefault(File.Exists);
-        }
-
-        /// <summary>런처 소스를 임시 파일로 써서 <paramref name="compilerPath"/>로 콘솔 창 없는 exe(winexe)로 컴파일한다.</summary>
-        private static bool CompileLauncher(string compilerPath, string exePath, string gameRelativePath)
-        {
-            string sourcePath = Path.GetFullPath(FileUtil.GetUniqueTempPathInProject() + ".cs");
-            try
-            {
-                // 소스에 한글 문자열이 있으므로 BOM을 붙여 쓴다(BOM이 없으면 csc가 ANSI로 읽는다).
-                File.WriteAllText(sourcePath, LauncherSource(gameRelativePath), new UTF8Encoding(true));
-
-                var startInfo = new System.Diagnostics.ProcessStartInfo(compilerPath)
-                {
-                    Arguments = "/nologo /target:winexe /optimize+ /platform:anycpu " +
-                                "/r:System.dll /r:System.Windows.Forms.dll " +
-                                $"/out:\"{exePath}\" \"{sourcePath}\"",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true,
-                };
-                using (var process = System.Diagnostics.Process.Start(startInfo))
-                {
-                    string stdout = process!.StandardOutput.ReadToEnd();
-                    string stderr = process.StandardError.ReadToEnd();
-                    process.WaitForExit();
-                    if (process.ExitCode == 0 && File.Exists(exePath))
-                    {
-                        return true;
-                    }
-                    Debug.LogWarning($"[GameDistributionBuilder] 런처 컴파일 실패(종료 코드 {process.ExitCode}):\n{stdout}\n{stderr}");
-                    return false;
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"[GameDistributionBuilder] 런처 컴파일 중 예외: {e.Message}");
-                return false;
-            }
-            finally
-            {
-                if (File.Exists(sourcePath))
-                {
-                    File.Delete(sourcePath);
-                }
-            }
-        }
-
-        /// <summary>런처 exe의 C# 소스. 게임 exe의 상대 경로만 끼워 넣는다.</summary>
-        private static string LauncherSource(string gameRelativePath)
-        {
-            const string template = @"
-using System;
-using System.Diagnostics;
-using System.IO;
-using System.Reflection;
-using System.Windows.Forms;
-
-// Taskbar Hero 실행 버튼. 자기 자신이 놓인 폴더를 기준으로 게임 본체를 찾아 실행한다.
-// (에디터 메뉴 TaskbarHero/Build/배포 패키지 빌드가 빌드 때마다 생성하는 파일 — 직접 편집하지 말 것)
-internal static class TaskbarHeroLauncher
-{
-    private const string GameRelativePath = @""__GAME_RELATIVE_PATH__"";
-    private const string Caption = ""Taskbar Hero"";
-
-    [STAThread]
-    private static int Main()
-    {
-        string baseDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-        string exePath = Path.Combine(baseDir, GameRelativePath);
-
-        if (!File.Exists(exePath))
-        {
-            MessageBox.Show(
-                ""게임 파일을 찾지 못했습니다."" + Environment.NewLine + Environment.NewLine +
-                exePath + Environment.NewLine + Environment.NewLine +
-                ""압축을 풀 때 폴더 구조가 바뀌지 않았는지 확인해 주세요. "" +
-                ""'Com2us Taskbar Hero 실행'과 'Game' 폴더가 같은 자리에 있어야 합니다."",
-                Caption, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return 1;
-        }
-
-        try
-        {
-            Process.Start(new ProcessStartInfo(exePath)
-            {
-                WorkingDirectory = Path.GetDirectoryName(exePath),
-                UseShellExecute = true,
-            });
-            return 0;
-        }
-        catch (Exception e)
-        {
-            MessageBox.Show(
-                ""게임을 실행하지 못했습니다."" + Environment.NewLine + Environment.NewLine + e.Message,
-                Caption, MessageBoxButtons.OK, MessageBoxIcon.Error);
-            return 1;
-        }
-    }
-}
-";
-            return template.Replace("__GAME_RELATIVE_PATH__", gameRelativePath);
-        }
 
         /// <summary>
         /// 투명화 전제 설정이 되돌아가 검은 배경이 나올 상황이면 경고를 남긴다(빌드는 계속 진행).
