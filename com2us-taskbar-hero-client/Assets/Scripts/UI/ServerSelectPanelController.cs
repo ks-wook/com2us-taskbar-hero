@@ -9,18 +9,23 @@ using TaskbarHero.Client.Managers;
 namespace TaskbarHero.Client.UI
 {
     /// <summary>
-    /// '접속 서버' 화면. <b>빌드 옵션(접속 환경) 버튼</b>(Dev / QA)과 선택된 환경의 계정·게임 서버 주소 표시,
-    /// 호스트를 직접 입력하는 칸, 하단 버튼으로 구성된다. 여는 경로가 둘이다:
+    /// '접속 서버' 화면. <b>빌드 옵션(접속 환경) 버튼</b>(Dev / QA)과 선택된 환경의 프리셋 주소 표시,
+    /// <b>계정·게임 서버 주소를 각각 포트까지 입력하는 칸</b>(<c>호스트:포트</c>), 하단 버튼으로 구성된다.
+    /// 두 서버는 포트가 다르므로(Dev 5160/5247 · QA 443/8443) 호스트 하나로는 접속처를 표현할 수 없어
+    /// 서버별 입력 칸을 둔다(스킴 http/https는 선택한 환경 값을 유지한다).
+    /// 여는 경로가 둘이다:
     /// <list type="bullet">
-    /// <item><b>로그인 직전 자동 노출</b>(<see cref="Show"/>) — 종전 흐름. QA 빌드에서는 뜨지 않고
-    ///   (<see cref="ServerEnvironment.ShowServerSelectOnStart"/>) 곧바로 로그인으로 넘어간다.</item>
+    /// <item><b>로그인 직전 자동 노출</b>(<see cref="Show"/>) — QA 빌드에서는 생략하고 곧바로 로그인으로 넘어간다
+    ///   (<see cref="ServerEnvironment.ShowServerSelectOnStart"/>). <b>단, 이 기기에 저장된 접속처가 없으면</b>
+    ///   (<see cref="NeedsInitialSelection"/>) 빌드 종류와 무관하게 <b>무조건 표시</b>한다 — 접속처를 한 번도
+    ///   고르지 않은 기기를 프리셋 주소로 조용히 붙여 버리지 않기 위함이다.</item>
     /// <item><b>타이틀 우측 하단 톱니바퀴</b>(<see cref="ShowManual"/>) — <b>빌드 종류와 무관하게</b> 열린다.
     ///   접속처를 되돌릴 통로가 없으면 안 되므로 QA 빌드에서도 이 경로는 막지 않는다.
     ///   '취소'(또는 ESC)로 아무것도 바꾸지 않고 닫을 수 있다.</item>
     /// </list>
-    /// 기본 선택은 <b>지금 접속 중인 환경</b>(= 마지막으로 고른 환경)이다. '확인'을 누르면 환경과 접속 호스트가
-    /// 확정(<see cref="NetworkManager"/>에 적용)되고 <b>다음 실행을 위해 저장</b>된다 — 마지막으로 접속한
-    /// 서버가 계속 유지된다.
+    /// 기본 선택은 <b>지금 접속 중인 환경</b>(= 마지막으로 고른 환경)이다. '확인'을 누르면 환경과 두 서버 주소가
+    /// 확정(<see cref="NetworkManager.SetServerEndpoints"/>)되고 <b>다음 실행을 위해 저장</b>된다 —
+    /// 마지막으로 접속한 서버가 계속 유지되고, 이후로는 "저장된 접속처가 있는 기기"가 된다.
     /// 런타임에 자체 Canvas·EventSystem을 코드로 구성한다(타이틀 단계에는 EventSystem이 없으므로 필요 시 생성).
     /// </summary>
     public class ServerSelectPanelController : MonoBehaviour
@@ -33,7 +38,8 @@ namespace TaskbarHero.Client.UI
         private static readonly Color ConfirmColor = new Color(0.18f, 0.45f, 0.28f, 1f);
         private static readonly Color CancelColor = new Color(0.30f, 0.22f, 0.24f, 1f);
 
-        private InputField _input;
+        private InputField _accountInput;
+        private InputField _gameInput;
         private Action _onConfirmed;
         private Action<bool> _onClosed;
         private bool _manual;
@@ -51,15 +57,25 @@ namespace TaskbarHero.Client.UI
         public static bool IsOpen { get; private set; }
 
         /// <summary>
+        /// <b>이 기기에 저장된 접속처가 없는가</b>(접속 서버 선택 UI의 '확인'을 누른 적이 없는가).
+        /// true면 <b>빌드 종류·자동 로그인과 무관하게</b> 선택 화면을 반드시 한 번 보여 준다 —
+        /// 접속처를 고른 적 없는 기기를 빌드 프리셋 주소로 조용히 붙여 버리지 않기 위함이다.
+        /// </summary>
+        public static bool NeedsInitialSelection
+            => NetworkManager.Instance != null && !NetworkManager.HasServerSelection;
+
+        /// <summary>
         /// 로그인 직전의 접속 서버 선택 화면을 표시한다. onConfirmed는 '확인' 후(서버 확정·화면 파괴 직후) 1회 호출된다.
         /// <para><b>서버 선택을 자동으로 묻지 않는 빌드</b>(QA — <see cref="ServerEnvironment.ShowServerSelectOnStart"/>가
         /// false)에서는 화면을 만들지 않고 onConfirmed를 즉시 호출한다. 접속처는 이미 <see cref="NetworkManager"/>가
         /// 기동 시 확정해 뒀으므로(마지막 선택 또는 빌드 프리셋) 여기서 더 확정할 것이 없다.
         /// 바꿔야 할 때는 타이틀의 톱니바퀴(<see cref="ShowManual"/>)로 연다.</para>
+        /// <para><b>예외 — 저장된 접속처가 없는 기기</b>(<see cref="NeedsInitialSelection"/>)에서는 그 빌드에서도
+        /// 화면을 띄운다.</para>
         /// </summary>
         public static void Show(Action onConfirmed)
         {
-            if (!ServerEnvironment.ShowServerSelectOnStart)
+            if (!ServerEnvironment.ShowServerSelectOnStart && !NeedsInitialSelection)
             {
                 var env = NetworkManager.Instance != null
                     ? NetworkManager.Instance.CurrentEnvironment
@@ -69,6 +85,21 @@ namespace TaskbarHero.Client.UI
                 return;
             }
             Create(manual: false, onConfirmed: onConfirmed, onClosed: null);
+        }
+
+        /// <summary>
+        /// 접속처를 <b>반드시 확정하고 넘어가야 하는</b> 경우(저장된 접속처가 없는 기기)에 쓰는 강제 노출.
+        /// 자동 노출과 같은 화면이라 '취소'·ESC가 없다.
+        /// </summary>
+        /// <param name="onClosed">'확인' 후 1회 호출된다. 인자는 <b>접속 주소가 실제로 바뀌었는지</b>이며,
+        /// true면 호출측이 그 서버 기준으로 상태를 다시 잡아야 한다(예: 이전 서버로 끝낸 자동 로그인 무효화).</param>
+        public static void ShowRequired(Action<bool> onClosed)
+        {
+            if (IsOpen)
+            {
+                return;   // 이미 떠 있으면 겹쳐 열지 않는다.
+            }
+            Create(manual: false, onConfirmed: null, onClosed: onClosed);
         }
 
         /// <summary>
@@ -123,7 +154,7 @@ namespace TaskbarHero.Client.UI
             var card = NewRect("Card", transform);
             card.anchorMin = card.anchorMax = new Vector2(0.5f, 0.5f);
             card.pivot = new Vector2(0.5f, 0.5f);
-            card.sizeDelta = new Vector2(680f, 520f);
+            card.sizeDelta = new Vector2(680f, 620f);   // 계정·게임 주소 입력 칸 2개가 들어가는 높이
             card.anchoredPosition = Vector2.zero;
             var cardImg = card.gameObject.AddComponent<Image>();
             cardImg.color = new Color(0.10f, 0.13f, 0.20f, 0.98f);
@@ -168,7 +199,7 @@ namespace TaskbarHero.Client.UI
             qbrt.anchoredPosition = new Vector2(350f, -138f);
             qaBtn.onClick.AddListener(() => SelectEnvironment(ServerEnvironmentKind.Qa));
 
-            // 선택된 환경의 계정·게임 서버 주소 표시(두 줄).
+            // 선택된 환경의 프리셋 주소 표시(두 줄) — 입력 칸을 프리셋으로 되돌리고 싶을 때의 참고값.
             _addressText = NewText("AddressText", card, font, string.Empty, 20, TextAnchor.UpperLeft);
             _addressText.color = new Color(0.75f, 0.82f, 0.95f);
             var art = _addressText.rectTransform;
@@ -177,27 +208,37 @@ namespace TaskbarHero.Client.UI
             art.sizeDelta = new Vector2(-80f, 64f);
             art.anchoredPosition = new Vector2(0f, -204f);
 
-            // '직접 입력' 라벨
-            var label = NewText("InputLabel", card, font, "직접 입력 (호스트만 · 스킴·포트는 환경 값 유지)", 22, TextAnchor.MiddleLeft);
+            // 직접 입력 — 서버별로 '호스트:포트'를 입력한다(스킴은 선택한 환경 값 유지).
+            string account = NetworkManager.Instance != null ? NetworkManager.Instance.AccountAuthority : "localhost:5160";
+            string game = NetworkManager.Instance != null ? NetworkManager.Instance.GameAuthority : "localhost:5247";
+
+            _accountInput = BuildAddressField(card, font, "AccountAddress", "계정 서버 (호스트:포트)", account, "예: localhost:5160", -282f);
+            _gameInput = BuildAddressField(card, font, "GameAddress", "게임 서버 (호스트:포트)", game, "예: localhost:5247", -386f);
+
+            RefreshEnvironmentView(fillInput: false);
+
+            BuildFooterButtons(card, font);
+        }
+
+        /// <summary>라벨 + '호스트:포트' 입력 칸 한 쌍을 만들어 카드에 배치한다(라벨이 위, 입력 칸이 아래).</summary>
+        /// <param name="top">라벨의 카드 상단 기준 y 오프셋(음수).</param>
+        private static InputField BuildAddressField(RectTransform card, Font font, string name, string caption, string value, string placeholder, float top)
+        {
+            var label = NewText(name + "Label", card, font, caption, 22, TextAnchor.MiddleLeft);
             label.color = new Color(0.85f, 0.9f, 1f);
             var lrt = label.rectTransform;
             lrt.anchorMin = new Vector2(0f, 1f); lrt.anchorMax = new Vector2(1f, 1f);
             lrt.pivot = new Vector2(0.5f, 1f);
             lrt.sizeDelta = new Vector2(-80f, 30f);
-            lrt.anchoredPosition = new Vector2(0f, -282f);
+            lrt.anchoredPosition = new Vector2(0f, top);
 
-            // 직접 입력 칸(기본값 = 현재 접속 호스트 = 마지막으로 접속한 주소)
-            string current = NetworkManager.Instance != null ? NetworkManager.Instance.ServerHost : "localhost";
-            _input = NewInputField("ServerInput", card, font, current, "서버 주소(호스트) 입력");
-            var irt = (RectTransform)_input.transform;
+            var input = NewInputField(name + "Input", card, font, value, placeholder);
+            var irt = (RectTransform)input.transform;
             irt.anchorMin = new Vector2(0f, 1f); irt.anchorMax = new Vector2(1f, 1f);
             irt.pivot = new Vector2(0.5f, 1f);
-            irt.sizeDelta = new Vector2(-80f, 64f);
-            irt.anchoredPosition = new Vector2(0f, -318f);
-
-            RefreshEnvironmentView(fillInput: false);
-
-            BuildFooterButtons(card, font);
+            irt.sizeDelta = new Vector2(-80f, 60f);
+            irt.anchoredPosition = new Vector2(0f, top - 34f);
+            return input;
         }
 
         /// <summary>하단 버튼을 만든다. 톱니바퀴로 연 경우에는 아무것도 바꾸지 않고 닫는 '취소'를 함께 둔다
@@ -256,7 +297,8 @@ namespace TaskbarHero.Client.UI
             RefreshEnvironmentView(fillInput: true);
         }
 
-        /// <summary>선택된 환경에 맞춰 버튼 강조·주소 표시를 갱신한다. fillInput이면 입력 칸도 그 환경의 프리셋 호스트로 채운다.</summary>
+        /// <summary>선택된 환경에 맞춰 버튼 강조·프리셋 주소 표시를 갱신한다.
+        /// fillInput이면 두 입력 칸도 그 환경의 프리셋 주소(호스트:포트)로 채운다.</summary>
         private void RefreshEnvironmentView(bool fillInput)
         {
             if (_devButtonImage != null)
@@ -272,42 +314,65 @@ namespace TaskbarHero.Client.UI
             string gameUrl = ServerEnvironment.GameBaseUrlOf(_selectedEnv);
             if (_addressText != null)
             {
-                _addressText.text = $"계정: {accountUrl}\n게임: {gameUrl}";
+                _addressText.text = $"환경 기본값 — 계정: {accountUrl}\n환경 기본값 — 게임: {gameUrl}";
             }
-            if (fillInput && _input != null)
+            if (fillInput)
             {
-                _input.text = HostOf(accountUrl);
+                if (_accountInput != null)
+                {
+                    _accountInput.text = AuthorityOf(accountUrl);
+                }
+                if (_gameInput != null)
+                {
+                    _gameInput.text = AuthorityOf(gameUrl);
+                }
             }
         }
 
-        /// <summary>URL에서 호스트명만 뽑아낸다(입력 칸 기본값용. 파싱 실패 시 원본 반환).</summary>
-        private static string HostOf(string url)
+        /// <summary>URL에서 접속 주소(호스트:포트)를 뽑아낸다 — 기본 포트도 생략하지 않고 붙여
+        /// 입력 칸에 포트가 항상 보이게 한다(파싱 실패 시 원본 반환).</summary>
+        private static string AuthorityOf(string url)
         {
-            try { return new Uri(url).Host; }
+            try
+            {
+                var uri = new Uri(url);
+                return $"{uri.Host}:{uri.Port}";
+            }
             catch { return url; }
         }
 
-        /// <summary>'확인': 선택한 환경과 입력한 접속 호스트를 확정한다 — <see cref="NetworkManager"/>에 적용하고
-        /// 다음 실행을 위해 저장한 뒤 화면을 닫는다.</summary>
+        /// <summary>'확인': 선택한 환경과 입력한 계정·게임 서버 주소(호스트:포트)를 확정한다 —
+        /// <see cref="NetworkManager.SetServerEndpoints"/>로 적용·저장한 뒤 화면을 닫는다.
+        /// 빈 칸은 그 환경의 프리셋 주소로 본다(포트만 비면 프리셋 포트가 유지된다).</summary>
         private void OnConfirm()
         {
             SoundManager.Sfx(SoundId.UiModalOk);
 
-            string host = _input != null ? _input.text : null;
             bool changed = false;
             if (NetworkManager.Instance != null)
             {
-                string before = NetworkManager.Instance.AccountServerBaseUrl;
-                // 환경(스킴·포트 프리셋)을 먼저 확정한 뒤, 호스트 override를 적용한다. 둘 다 저장된다.
-                NetworkManager.Instance.SetEnvironment(_selectedEnv);
-                if (!string.IsNullOrWhiteSpace(host))
+                string beforeAccount = NetworkManager.Instance.AccountServerBaseUrl;
+                string beforeGame = NetworkManager.Instance.GameServerBaseUrl;
+
+                string account = _accountInput != null ? _accountInput.text : null;
+                string game = _gameInput != null ? _gameInput.text : null;
+                if (string.IsNullOrWhiteSpace(account))
                 {
-                    NetworkManager.Instance.SetServerHost(host.Trim());
+                    account = AuthorityOf(ServerEnvironment.AccountBaseUrlOf(_selectedEnv));
                 }
-                changed = !string.Equals(before, NetworkManager.Instance.AccountServerBaseUrl, StringComparison.Ordinal);
+                if (string.IsNullOrWhiteSpace(game))
+                {
+                    game = AuthorityOf(ServerEnvironment.GameBaseUrlOf(_selectedEnv));
+                }
+
+                NetworkManager.Instance.SetServerEndpoints(_selectedEnv, account.Trim(), game.Trim());
+
+                changed = !string.Equals(beforeAccount, NetworkManager.Instance.AccountServerBaseUrl, StringComparison.Ordinal)
+                          || !string.Equals(beforeGame, NetworkManager.Instance.GameServerBaseUrl, StringComparison.Ordinal);
                 if (changed)
                 {
-                    Debug.Log($"[ServerSelect] 접속 서버 변경: {before} → {NetworkManager.Instance.AccountServerBaseUrl}");
+                    Debug.Log($"[ServerSelect] 접속 서버 변경: 계정 {beforeAccount} → {NetworkManager.Instance.AccountServerBaseUrl}" +
+                              $" · 게임 {beforeGame} → {NetworkManager.Instance.GameServerBaseUrl}");
                 }
             }
             Close(changed);

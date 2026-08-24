@@ -45,9 +45,20 @@ namespace TaskbarHero.Client.Managers
         private string _defaultGameBaseUrl;
         private ServerEnvironmentKind _environment;
 
-        // 접속 호스트 override 저장 키. 환경마다 별개로 저장한다 — Dev에서 저장한 "localhost"가
-        // QA 빌드의 주소를 덮어써 접속이 깨지는 것을 막기 위함이다.
-        private const string PrefKeyServerHostPrefix = "th_server_host_";
+        // 접속 주소(호스트:포트) override 저장 키. **계정·게임 서버를 각각** 저장하고, 환경마다 별개로 둔다 —
+        // 두 서버는 포트가 다르므로(Dev 5160/5247 · QA 443/8443) 호스트 하나로는 표현할 수 없고,
+        // Dev에서 저장한 "localhost:5160"이 QA 빌드의 주소를 덮어써 접속이 깨지는 것도 막아야 한다.
+        private const string PrefKeyAccountAuthorityPrefix = "th_server_account_";
+        private const string PrefKeyGameAuthorityPrefix = "th_server_game_";
+
+        // 포트 없이 호스트만 저장했던 시절의 키(마이그레이션 전용). 새 키가 없을 때만 호스트로 읽고
+        // (포트는 환경 프리셋 유지) 다음 확정 시점에 지운다.
+        private const string PrefKeyLegacyServerHostPrefix = "th_server_host_";
+
+        // 이 기기에서 접속처를 한 번이라도 확정했는지 표시하는 키. **값이 프리셋과 같아도** 기록한다 —
+        // "저장된 접속처가 없으면 접속 서버 선택 UI를 무조건 띄운다"는 규칙의 판정 근거이기 때문이다
+        // (주소·환경 키는 프리셋/빌드 기본값과 같으면 지우므로, 그것만으로는 선택 여부를 알 수 없다).
+        private const string PrefKeyServerChosenPrefix = "th_server_chosen_";
 
         // 마지막으로 고른 접속 환경 저장 키. **빌드에 구워진 기본 환경별로 나눈다**(th_server_env_dev / th_server_env_qa) —
         // PlayerPrefs는 Dev/QA 빌드가 같은 product 이름으로 공유하므로, 키가 하나면 Dev 빌드에서 고른 값이
@@ -67,11 +78,16 @@ namespace TaskbarHero.Client.Managers
         /// '접속 서버 변경' 화면에서 바꾸면 다음 실행까지 유지된다.</summary>
         public ServerEnvironmentKind CurrentEnvironment => _environment;
 
-        /// <summary>현재 접속 서버 호스트(계정 서버 URL에서 추출). 예: "localhost".</summary>
-        public string ServerHost => ExtractHost(accountServerBaseUrl);
+        /// <summary>현재 계정 서버 접속 주소(<b>호스트:포트</b>). 예: "localhost:5160". 서버 선택 UI의 입력 기본값.</summary>
+        public string AccountAuthority => ExtractAuthority(accountServerBaseUrl);
 
-        /// <summary>현재 환경의 프리셋 호스트(호스트 override 없는 상태의 주소). 서버 선택 UI의 기본값·프리셋 판정에 사용.</summary>
-        public string DefaultServerHost => ExtractHost(string.IsNullOrEmpty(_defaultAccountBaseUrl) ? accountServerBaseUrl : _defaultAccountBaseUrl);
+        /// <summary>현재 게임 서버 접속 주소(<b>호스트:포트</b>). 예: "localhost:5247". 서버 선택 UI의 입력 기본값.</summary>
+        public string GameAuthority => ExtractAuthority(gameServerBaseUrl);
+
+        /// <summary>이 기기에서 접속처를 <b>한 번이라도 확정했는가</b>(접속 서버 선택 UI의 '확인'을 누른 적이 있는가).
+        /// false면 저장된 접속 정보가 없다는 뜻이므로, 빌드 종류와 무관하게 접속 서버 선택 UI를 무조건 노출한다
+        /// (<c>ServerSelectPanelController.NeedsInitialSelection</c>).</summary>
+        public static bool HasServerSelection => PlayerPrefs.GetInt(ChosenPrefKey, 0) == 1;
 
         private void Awake()
         {
@@ -90,7 +106,7 @@ namespace TaskbarHero.Client.Managers
             // 옛 저장값에 갇혀 되돌릴 방법이 없어지는 상황이 생기지 않는다.
             var startEnv = LoadSavedEnvironment();
             ApplyEnvironment(startEnv);
-            ApplySavedHost();
+            ApplySavedAuthorities();
 
             Debug.Log($"[NET] 접속 환경={ServerEnvironment.DisplayNameOf(_environment)}" +
                       $"({(startEnv == ServerEnvironment.BuildDefault ? "빌드 옵션" : "저장된 선택")})" +
@@ -98,18 +114,22 @@ namespace TaskbarHero.Client.Managers
         }
 
         /// <summary>
-        /// 접속 환경을 바꾸고 <b>다음 실행을 위해 저장</b>한다. 계정·게임 서버 주소를 그 환경의 프리셋으로 되돌린 뒤,
-        /// 그 환경에 저장해 둔 접속 호스트 override가 있으면 함께 되살린다(환경마다 마지막 주소를 따로 기억한다).
+        /// 접속 환경과 계정·게임 서버 접속 주소(<b>호스트:포트</b>)를 확정하고 <b>다음 실행을 위해 저장</b>한다.
+        /// 접속 서버 선택 UI의 '확인'이 쓰는 단일 확정 경로다 — 환경 프리셋(스킴·포트)을 먼저 적용한 뒤
+        /// 입력한 주소를 얹으므로, 포트를 비워 두면 그 환경 프리셋의 포트가 유지된다.
+        /// 확정한 값이 프리셋과 같아도 <b>선택했다는 사실은 기록</b>한다(<see cref="HasServerSelection"/>).
         /// </summary>
-        public void SetEnvironment(ServerEnvironmentKind kind)
+        public void SetServerEndpoints(ServerEnvironmentKind kind, string accountAuthority, string gameAuthority)
         {
             SaveEnvironment(kind);
-            if (_environment == kind)
+            if (_environment != kind)
             {
-                return;   // 같은 환경이면 호스트 override를 날리지 않는다.
+                ApplyEnvironment(kind);   // 프리셋으로 되돌린 뒤 아래에서 입력 주소를 얹는다
             }
-            ApplyEnvironment(kind);
-            ApplySavedHost();
+            accountServerBaseUrl = BuildUrl(_defaultAccountBaseUrl, accountAuthority);
+            gameServerBaseUrl = BuildUrl(_defaultGameBaseUrl, gameAuthority);
+            SaveAuthorities();
+            MarkServerChosen();
         }
 
         /// <summary>마지막으로 고른 접속 환경을 읽는다(저장값이 없거나 알 수 없는 값이면 빌드 기본 환경).</summary>
@@ -136,13 +156,25 @@ namespace TaskbarHero.Client.Managers
             PlayerPrefs.Save();
         }
 
-        /// <summary>현재 환경에 저장된 접속 호스트 override가 있으면 적용한다(없으면 환경 프리셋 주소를 그대로 둔다).</summary>
-        private void ApplySavedHost()
+        /// <summary>현재 환경에 저장된 접속 주소(호스트:포트) override가 있으면 적용한다(없으면 환경 프리셋 주소를 그대로 둔다).
+        /// 새 키가 하나도 없고 <b>포트 없던 시절의 호스트 키</b>만 있으면 그 호스트를 두 서버에 적용한다(포트는 프리셋 유지).</summary>
+        private void ApplySavedAuthorities()
         {
-            string savedHost = PlayerPrefs.GetString(HostPrefKey(_environment), string.Empty);
-            if (!string.IsNullOrEmpty(savedHost))
+            string account = PlayerPrefs.GetString(AuthorityPrefKey(PrefKeyAccountAuthorityPrefix, _environment), string.Empty);
+            string game = PlayerPrefs.GetString(AuthorityPrefKey(PrefKeyGameAuthorityPrefix, _environment), string.Empty);
+            if (string.IsNullOrEmpty(account) && string.IsNullOrEmpty(game))
             {
-                ApplyServerHost(savedHost);
+                string legacyHost = PlayerPrefs.GetString(AuthorityPrefKey(PrefKeyLegacyServerHostPrefix, _environment), string.Empty);
+                account = legacyHost;
+                game = legacyHost;
+            }
+            if (!string.IsNullOrWhiteSpace(account))
+            {
+                accountServerBaseUrl = BuildUrl(_defaultAccountBaseUrl, account);
+            }
+            if (!string.IsNullOrWhiteSpace(game))
+            {
+                gameServerBaseUrl = BuildUrl(_defaultGameBaseUrl, game);
             }
         }
 
@@ -156,19 +188,23 @@ namespace TaskbarHero.Client.Managers
             gameServerBaseUrl = _defaultGameBaseUrl;
         }
 
-        /// <summary>접속 서버 호스트를 바꾸고(각 서버의 스킴·포트는 환경 프리셋 유지) 다음 실행을 위해 환경별로 저장한다.
-        /// 환경 프리셋과 같은 호스트면 저장하지 않고 지운다 — 프리셋 주소가 나중에 바뀌었을 때 옛 호스트가 남아
-        /// 새 주소를 덮어쓰는 것을 막기 위함이다.</summary>
-        public void SetServerHost(string host)
+        /// <summary>계정·게임 서버의 접속 주소(호스트:포트)를 환경별로 저장한다. 환경 프리셋과 같으면 저장하지 않고 지운다 —
+        /// 프리셋 주소가 나중에 바뀌었을 때 옛 값이 남아 새 주소를 덮어쓰는 것을 막기 위함이다.
+        /// 포트 없던 시절의 호스트 키도 함께 지운다(새 키가 정본이므로 남겨 둘 이유가 없다).</summary>
+        private void SaveAuthorities()
         {
-            if (!ApplyServerHost(host))
-            {
-                return;
-            }
+            SaveAuthority(PrefKeyAccountAuthorityPrefix, accountServerBaseUrl, _defaultAccountBaseUrl);
+            SaveAuthority(PrefKeyGameAuthorityPrefix, gameServerBaseUrl, _defaultGameBaseUrl);
+            PlayerPrefs.DeleteKey(AuthorityPrefKey(PrefKeyLegacyServerHostPrefix, _environment));
+            PlayerPrefs.Save();
+        }
 
-            string key = HostPrefKey(_environment);
-            string applied = ExtractHost(accountServerBaseUrl);
-            if (string.Equals(applied, ExtractHost(_defaultAccountBaseUrl), StringComparison.OrdinalIgnoreCase))
+        /// <summary>한 서버의 접속 주소를 저장한다(환경 프리셋과 같으면 키를 지운다).</summary>
+        private void SaveAuthority(string prefix, string url, string presetUrl)
+        {
+            string key = AuthorityPrefKey(prefix, _environment);
+            string applied = ExtractAuthority(url);
+            if (string.Equals(applied, ExtractAuthority(presetUrl), StringComparison.OrdinalIgnoreCase))
             {
                 PlayerPrefs.DeleteKey(key);
             }
@@ -176,60 +212,71 @@ namespace TaskbarHero.Client.Managers
             {
                 PlayerPrefs.SetString(key, applied);
             }
+        }
+
+        /// <summary>이 기기에서 접속처를 확정했다고 기록한다(확정값이 프리셋과 같아도 기록한다).</summary>
+        private static void MarkServerChosen()
+        {
+            PlayerPrefs.SetInt(ChosenPrefKey, 1);
             PlayerPrefs.Save();
         }
 
-        /// <summary>환경별 접속 호스트 override 저장 키.</summary>
-        private static string HostPrefKey(ServerEnvironmentKind kind)
-            => PrefKeyServerHostPrefix + ServerEnvironment.DisplayNameOf(kind).ToLowerInvariant();
+        /// <summary>환경별 접속 주소 override 저장 키.</summary>
+        private static string AuthorityPrefKey(string prefix, ServerEnvironmentKind kind)
+            => prefix + ServerEnvironment.DisplayNameOf(kind).ToLowerInvariant();
 
         /// <summary>접속 환경 저장 키. <b>빌드에 구워진 기본 환경</b>으로 가른다(선택한 환경이 아니다) —
         /// Dev 빌드의 선택과 QA 빌드의 선택이 서로를 덮어쓰지 않게 하기 위함이다.</summary>
         private static string EnvPrefKey
             => PrefKeyServerEnvPrefix + ServerEnvironment.DisplayNameOf(ServerEnvironment.BuildDefault).ToLowerInvariant();
 
-        /// <summary>입력 호스트로 계정·게임 서버 base URL을 재구성한다(저장 없이). 유효하면 true.</summary>
-        private bool ApplyServerHost(string host)
-        {
-            if (string.IsNullOrWhiteSpace(host))
-            {
-                return false;
-            }
-            string accountBase = string.IsNullOrEmpty(_defaultAccountBaseUrl) ? accountServerBaseUrl : _defaultAccountBaseUrl;
-            string gameBase = string.IsNullOrEmpty(_defaultGameBaseUrl) ? gameServerBaseUrl : _defaultGameBaseUrl;
-            accountServerBaseUrl = ReplaceHost(accountBase, host);
-            gameServerBaseUrl = ReplaceHost(gameBase, host);
-            return true;
-        }
+        /// <summary>접속처 확정 여부 저장 키. 환경 키와 같은 이유로 <b>빌드에 구워진 기본 환경</b>으로 가른다 —
+        /// Dev 빌드에서 한 선택이 QA 빌드의 "저장된 접속처 없음" 판정을 지워 버리지 않게 하기 위함이다.</summary>
+        private static string ChosenPrefKey
+            => PrefKeyServerChosenPrefix + ServerEnvironment.DisplayNameOf(ServerEnvironment.BuildDefault).ToLowerInvariant();
 
-        /// <summary>URL에서 호스트명만 추출한다(파싱 실패 시 원본 반환).</summary>
-        private static string ExtractHost(string url)
-        {
-            try { return new Uri(url).Host; }
-            catch { return url; }
-        }
-
-        /// <summary>base URL의 호스트만 newHost로 교체한다(스킴·포트 유지). newHost에 스킴/포트가 섞여 있으면 제거한다.</summary>
-        private static string ReplaceHost(string baseUrl, string newHost)
+        /// <summary>프리셋 URL의 스킴에 입력 주소(<c>호스트[:포트]</c>)를 얹어 base URL을 만든다.
+        /// 포트를 생략하면 프리셋 포트를 유지하고, 스킴·경로가 섞여 들어오면 떼어낸다.
+        /// 포트 자리에 숫자가 아닌 값이 오면 경고를 남기고 프리셋 포트를 쓴다. 파싱 실패 시 프리셋을 그대로 반환한다.</summary>
+        private static string BuildUrl(string presetUrl, string authority)
         {
             try
             {
-                var uri = new Uri(baseUrl);
-                string h = newHost.Trim();
-                int scheme = h.IndexOf("://", StringComparison.Ordinal);
-                if (scheme >= 0) h = h.Substring(scheme + 3);
-                h = h.TrimEnd('/');
-                int slash = h.IndexOf('/');
-                if (slash >= 0) h = h.Substring(0, slash);
-                int colon = h.IndexOf(':');
-                if (colon >= 0) h = h.Substring(0, colon); // 커스텀 포트는 무시(각 서버 기본 포트 유지)
-                if (string.IsNullOrEmpty(h)) return baseUrl;
+                var uri = new Uri(presetUrl);
+                string a = (authority ?? string.Empty).Trim();
+                int scheme = a.IndexOf("://", StringComparison.Ordinal);
+                if (scheme >= 0) a = a.Substring(scheme + 3);
+                int slash = a.IndexOf('/');
+                if (slash >= 0) a = a.Substring(0, slash);
+
+                string host = a;
+                int port = uri.Port;
+                int colon = a.LastIndexOf(':');
+                if (colon >= 0)
+                {
+                    host = a.Substring(0, colon);
+                    string portText = a.Substring(colon + 1);
+                    if (int.TryParse(portText, out int parsed) && parsed > 0 && parsed <= 65535)
+                    {
+                        port = parsed;
+                    }
+                    else if (portText.Length > 0)
+                    {
+                        Debug.LogWarning($"[NET] 포트 값을 해석할 수 없어 프리셋 포트({port})를 쓴다: {authority}");
+                    }
+                }
+                if (string.IsNullOrEmpty(host))
+                {
+                    return presetUrl;
+                }
                 // 스킴 기본 포트(http 80·https 443)는 생략해 프리셋 주소와 같은 형태를 유지한다.
-                return uri.IsDefaultPort ? $"{uri.Scheme}://{h}" : $"{uri.Scheme}://{h}:{uri.Port}";
+                bool defaultPort = (uri.Scheme == Uri.UriSchemeHttps && port == 443)
+                                   || (uri.Scheme == Uri.UriSchemeHttp && port == 80);
+                return defaultPort ? $"{uri.Scheme}://{host}" : $"{uri.Scheme}://{host}:{port}";
             }
             catch
             {
-                return baseUrl;
+                return presetUrl;
             }
         }
 
@@ -446,7 +493,9 @@ namespace TaskbarHero.Client.Managers
             catch { return url; }
         }
 
-        /// <summary>URL에서 호스트:포트를 추출한다(파싱 실패 시 원본 반환).</summary>
+        /// <summary>URL에서 접속 주소(호스트:포트)를 추출한다. 스킴 기본 포트(http 80·https 443)도 <b>생략하지 않고</b>
+        /// 붙인다 — 접속처를 포트까지 명시해 보여 주고(서버 선택 UI의 입력 기본값) 저장값 비교에 쓰기 위함이다.
+        /// 요청 로그의 축약 표기도 이 값을 쓴다. 파싱 실패 시 원본 반환.</summary>
         private static string ExtractAuthority(string url)
         {
             try { var uri = new Uri(url); return uri.Host + ":" + uri.Port; }

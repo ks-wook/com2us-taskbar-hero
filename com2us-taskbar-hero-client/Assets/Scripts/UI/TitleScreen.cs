@@ -24,6 +24,10 @@ namespace TaskbarHero.Client.UI
     /// '접속 서버 변경' 화면을 연다. 로그인 직전의 자동 노출과 달리 <b>QA 빌드에서도 열린다</b> —
     /// 그 빌드는 서버 선택 화면이 뜨지 않아 접속처를 되돌릴 통로가 없기 때문이다.
     /// 게임이 시작되면 톱니바퀴는 사라진다(로그인 이후에는 접속처를 바꿀 수 없다).</para>
+    ///
+    /// <para><b>저장된 접속처가 없는 기기</b>(<see cref="ServerSelectPanelController.NeedsInitialSelection"/>)에서는
+    /// 빌드 종류는 물론 <b>자동 로그인 성공 여부와도 무관하게</b> 접속 서버 선택 화면을 먼저 띄운다 —
+    /// 접속처를 한 번도 고르지 않은 기기를 빌드 프리셋 주소로 조용히 붙여 버리지 않기 위함이다.</para>
     /// </summary>
     public class TitleScreen : MonoBehaviour
     {
@@ -267,7 +271,9 @@ namespace TaskbarHero.Client.UI
         /// <summary>
         /// 화면을 눌렀을 때의 시작 처리.
         /// <para><b>자동 로그인이 성공한 경우</b>에는 접속 서버 선택·로그인 UI를 모두 건너뛰고
-        /// 곧바로 게임에 진입한다(이미 인증이 끝났고 접속 서버도 그 검증에 쓴 것으로 확정됐다).</para>
+        /// 곧바로 게임에 진입한다(이미 인증이 끝났고 접속 서버도 그 검증에 쓴 것으로 확정됐다).
+        /// <b>단, 이 기기에 저장된 접속처가 없으면</b> 그 경우에도 접속 서버 선택을 먼저 받는다
+        /// (<see cref="OnRequiredServerSelectClosed"/>).</para>
         /// 그 외에는 종전대로 접속 서버 선택 UI → 로그인 UI 순으로 진행한다.
         /// </summary>
         public void StartGame()
@@ -302,13 +308,39 @@ namespace TaskbarHero.Client.UI
 
             if (_autoLoginReady)
             {
+                // 저장된 접속처가 없는 기기라면 자동 로그인이라도 접속 서버를 먼저 확정받는다.
+                if (ServerSelectPanelController.NeedsInitialSelection)
+                {
+                    ServerSelectPanelController.ShowRequired(OnRequiredServerSelectClosed);
+                    return;
+                }
                 EnterGameDirectly();
                 return;
             }
 
             // 로그인 이전에 접속 서버 선택 UI를 노출하고, '확인' 후 로그인 UI를 활성화한다.
-            // QA 빌드는 접속처가 원격으로 고정이라 이 화면이 뜨지 않고 곧바로 로그인 UI로 넘어간다.
+            // QA 빌드는 접속처가 원격으로 고정이라 이 화면이 뜨지 않고 곧바로 로그인 UI로 넘어간다
+            // (단, 이 기기에 저장된 접속처가 없으면 QA 빌드에서도 뜬다).
             ServerSelectPanelController.Show(ShowLogin);
+        }
+
+        /// <summary>
+        /// 저장된 접속처가 없어 <b>강제로</b> 띄운 접속 서버 선택 화면이 닫힌 뒤의 처리.
+        /// 접속처가 그대로면 자동 로그인 진입을 이어 가고, <b>바뀌었으면</b> 이전 서버가 내준 검증 결과를 버리고
+        /// 로그인 UI로 되돌린다 — 그대로 두면 바꾼 서버에 이전 계정으로 진입하게 된다.
+        /// (저장 세션 자체는 남긴다 — 원래 서버로 되돌리면 자동 로그인이 다시 살아난다.)
+        /// </summary>
+        private void OnRequiredServerSelectClosed(bool changed)
+        {
+            if (!changed)
+            {
+                EnterGameDirectly();
+                return;
+            }
+
+            Session.Clear();
+            _autoLoginReady = false;
+            ShowLogin();
         }
 
         /// <summary>자동 로그인 상태에서 로그인 UI 없이 게임 진입 연쇄를 실행한다(세이브 로드 → 오프라인 정산 → 씬 전환).</summary>

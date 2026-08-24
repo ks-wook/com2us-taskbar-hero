@@ -29,6 +29,8 @@ namespace TaskbarHero.Client.Managers
     /// <para>
     /// <b>QA 빌드는 로그인 전 서버 선택 화면을 자동으로 띄우지 않는다</b>(<see cref="ShowServerSelectOnStart"/>) —
     /// 접속처가 원격으로 정해진 배포본이라 매 실행 선택을 물을 이유가 없다. 바꿔야 할 때는 톱니바퀴로 연다.
+    /// <b>예외로, 이 기기에서 접속처를 한 번도 확정하지 않았으면</b>(<see cref="NetworkManager.HasServerSelection"/>가 false)
+    /// 빌드 종류와 무관하게 선택 화면을 무조건 띄운다(<c>ServerSelectPanelController.NeedsInitialSelection</c>).
     /// </para>
     /// 실제 적용은 <see cref="NetworkManager"/>가 담당한다.
     /// </summary>
@@ -68,6 +70,8 @@ namespace TaskbarHero.Client.Managers
         /// 접속처가 정해진 배포본이라 매 실행 선택을 묻지 않는다.
         /// <para>이 값이 false여도 <b>접속처를 바꿀 수 없다는 뜻은 아니다</b> — 타이틀 화면의 톱니바퀴로
         /// 언제든 '접속 서버 변경'을 열 수 있다(<c>ServerSelectPanelController.ShowManual</c>).</para>
+        /// <para>이 값은 <b>빌드 옵션만</b> 본다. <b>저장된 접속처가 없는 기기</b>에서는 이 값이 false여도
+        /// 화면을 띄운다 — 그 판정은 <c>ServerSelectPanelController.NeedsInitialSelection</c>이 한다.</para>
         /// </summary>
         public static bool ShowServerSelectOnStart
         {
