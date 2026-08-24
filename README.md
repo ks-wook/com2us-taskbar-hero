@@ -33,6 +33,16 @@
 
 ---
 
+## 아키텍처
+
+<img src="docs/images/개발환경-images/프로젝트-아키텍쳐.png" alt="Com2us Taskbar Hero 시스템 아키텍처" width="100%">
+
+*서버 2개(계정, 게임) · Mysql · Redis(캐싱 + 토큰 관리)*
+
+Unity 클라이언트는 **AccountServer**(`:5160`)에서 로그인해 인증 토큰을 받고(①), 이후 게임 요청은 **GameServer**(`:5247`)로 보낸다(③).
+
+---
+
 ## 개발 현황
 
 > **트랙 구분** — 서버(ASP.NET Core)와 Unity 클라이언트는 **병행 개발**한다. 각 기능은 API 계약(요청/응답 스키마·공유 DTO·`ErrorCode`)을 먼저 확정하고, 클라는 목(mock)으로 선행 개발한 뒤 서버 구현 완료 시 **실연동**으로 교체한다.

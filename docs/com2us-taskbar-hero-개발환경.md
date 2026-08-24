@@ -38,7 +38,7 @@
 | 구성 | `AccountServer`(계정·인증, `:5160`) · `GameServer`(게임 로직, `:5247`) · `TaskbarHero.Common`(공유 라이브러리) |
 | 공유 라이브러리 | `netstandard2.0;net10.0` 멀티타겟 — 서버는 `ProjectReference`, Unity 클라이언트는 **로컬 UPM 패키지**로 같은 소스를 소비 |
 | DB | MySQL 8.4 (Docker Compose) — 게임 DB / 마스터 DB 분리 |
-| 캐시·부가 저장소 | Redis 8.2 (Docker Compose, `127.0.0.1:6379`) — **인증 토큰, 배치 리더 락**. 게임 데이터 조회 캐시는 실측 후 전부 제거했다(인벤토리 §6.5 · 거래소 §7.3) |
+| 캐시·부가 저장소 | Redis 8.2 (Docker Compose, 호스트 `127.0.0.1:36379` → 컨테이너 `6379`) — **인증 토큰, 배치 리더 락**. 게임 데이터 조회 캐시는 실측 후 전부 제거했다(인벤토리 §6.5 · 거래소 §7.3) |
 | 데이터 접근 | **SqlKata** 쿼리 빌더 + Dapper 제네릭 매핑(원시 SQL 조립·`dynamic` 금지) |
 | Redis 접근 | **CloudStructures** 타입 구조체 |
 | 로깅 | **ZLogger** (구조화 필드, `:@PascalCase` 규약) |
@@ -433,7 +433,7 @@ com2us-taskbar-hero-client/
 |---|---|
 | 구워 둔 UI의 버튼 핸들러는 **런타임에 다시 연결**한다(`WireRuntime()`) | `onClick.AddListener`는 비영구 리스너라 프리팹·씬에 직렬화되지 않는다 — 빌드 시점에 붙인 리스너가 실행 시 사라져 버튼이 안 눌렸다(편성 씬 '뒤로'·'캐릭터 추가'에서 실제 발생) |
 | 빌더는 **공용 아트의 임포트 설정을 바꾸지 않는다** | `Multiple`로 임포트된 텍스처를 `Single`로 바꾸면 서브 스프라이트가 삭제돼 **그것을 참조한 모든 프리팹·씬의 참조가 한꺼번에 끊긴다**(`modal_bg`·`pixel_rpg_button`에서 실제 발생). 빌더는 읽어서 배선만 한다 |
-| 새 씬은 `SceneSwitcher` + Build Settings + `FullGameBuilder` 목록에 **함께** 등록한다 | 빠지면 런타임 `LoadScene`이 실패한다. `[MenuItem]`은 컴파일 타임 속성이라 동적 생성이 불가해 항목을 손으로 늘려야 한다 |
+| 새 씬은 `SceneSwitcher` + Build Settings + `GameDistributionBuilder` 목록에 **함께** 등록한다 | 빠지면 런타임 `LoadScene`이 실패한다. `[MenuItem]`은 컴파일 타임 속성이라 동적 생성이 불가해 항목을 손으로 늘려야 한다 |
 | 전투는 `BattleDevScene`이 정본, `GameScene`은 **빌더로 복제**한다 | 하네스 씬에서 전투를 개발하고 `DungeonBattleBuilder`(메뉴 `TaskbarHero/UI/던전 전투 배선`)로 GameScene에 옮긴다. GameScene을 직접 손대면 두 씬이 갈라진다 |
 
 **개발용 하네스 씬을 따로 둔 것도 같은 계열의 선택이다.** 전투(`BattleDevScene`)와 애니메이션(`AnimDevScene`)은 게임 흐름 전체를 타지 않고도 그 부분만 켜서 볼 수 있게 격리했다. `AnimDevScene`은 `Assets/Animations/`에 클립을 넣고 씬 생성 메뉴를 다시 실행하면 목록에 자동 배선되므로, 새 모션을 확인하는 비용이 거의 없다.
