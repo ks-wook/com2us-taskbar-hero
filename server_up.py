@@ -26,7 +26,7 @@
     직접 올린다:  docker compose up -d mysql redis   (그 뒤 랭킹 캐시는 --warmup-only로 적재)
 
 기동 절차(스크립트가 순서대로 한다)
-    ① 사전 점검 — 도커 접속 · .env의 ACCOUNT_SECRET_KEY · 이벤트 로그 디렉터리 · **호스트 포트 충돌**
+    ① 사전 점검 — 도커 접속 · 토큰 서명 키 · 이벤트 로그 디렉터리 · **호스트 포트 충돌**
     ② docker compose up -d (서버 이미지 재빌드)
     ③ 모든 컨테이너가 healthy 될 때까지 대기
     ④ **MySQL 스키마 확인** — 계정·게임·마스터 DB의 테이블이 실제로 만들어졌는지 센다
@@ -56,9 +56,10 @@
     붙지 않는다 — 붙으면 인코딩 규칙이 두 언어에 복제돼 조용히 어긋난다.
 
 주의
-    · **AccountServer는 토큰 서명 키를 저장소 밖에서 받는다.** 저장소 루트 .env(git 무시 대상)에
-      한 줄이 필요하며, 없으면 사전 점검에서 멈춘다 — 새 PC에서 유일한 수동 준비물이다:
-        ACCOUNT_SECRET_KEY=<임의의 긴 문자열>
+    · **새 PC에서 손으로 준비할 것이 없다.** AccountServer의 토큰 서명 키는 저장소에 든
+      AccountServer/appsettings.json의 Security:SecretKey(로컬 개발용 기본값)를 쓴다. 다른 키로
+      돌리려면 .env나 호스트 환경에 `Security__SecretKey=<값>` 을 두면 기본값을 덮어쓴다.
+      (Grafana만 예외 — full 모드에서 다른 PC라면 위의 .env 두 줄이 필요하다.)
     · 컨테이너 서버와 watch-all.ps1 은 같은 5160·5247 포트를 쓰므로 동시에 띄울 수 없다.
       핫 리로드로 개발할 때는 `docker compose up -d mysql redis` + watch-all.ps1 을 쓰고,
       서버가 뜬 뒤 `python server_up.py --warmup-only` 로 랭킹 캐시를 적재한다.
@@ -240,6 +241,32 @@ def is_ready(service: str, state: str) -> bool:
     return state == "healthy"
 
 
+# ── 설정 읽기 ───────────────────────────────────────────────────────────
+def read_json_setting(path: Path, keys: tuple[str, ...]) -> str | None:
+    """
+    appsettings 계열 JSON에서 중첩 키 하나를 문자열로 읽는다. 없거나 못 읽으면 None.
+
+    ASP.NET Core 설정 파서는 주석을 허용하므로 파싱 전에 `//` 줄을 걷어낸다. 서버 설정을 스크립트가
+    **읽기만** 하는 이유는 값의 정본을 한 곳(서버 설정)에 두기 위해서다 — 스크립트에 기본값을 박아
+    두면 서버 설정을 바꿨을 때 둘이 조용히 어긋난다.
+    """
+    if not path.exists():
+        return None
+
+    try:
+        text = re.sub(r"^\s*//.*$", "", path.read_text(encoding="utf-8-sig"), flags=re.MULTILINE)
+        node = json.loads(text)
+    except (OSError, ValueError):
+        return None
+
+    for key in keys:
+        if not isinstance(node, dict):
+            return None
+        node = node.get(key)
+
+    return node if isinstance(node, str) and node.strip() else None
+
+
 # ── 사전 점검 ───────────────────────────────────────────────────────────
 def port_taken(port: int) -> bool:
     """그 포트를 이미 누군가 쥐고 있는지 — ①접속을 걸어 보고, 안 되면 ②직접 bind를 시도해 본다.
@@ -300,18 +327,30 @@ def prepare_event_log_dir() -> None:
 
 
 def check_account_secret() -> bool:
-    """AccountServer 컨테이너가 .env에서 받는 토큰 서명 키가 있는지 확인한다.
-
-    없으면 compose가 그 자리에서 멈추므로(`:?` 지정), 무엇을 넣어야 하는지 먼저 알려 준다.
     """
+    AccountServer의 토큰 서명 키를 어디서든 얻을 수 있는지 확인한다.
+
+    정상 경로는 <b>AccountServer/appsettings.json의 Security:SecretKey</b>다(저장소에 들어 있는 로컬
+    개발용 기본값). 그래서 새 PC는 클론만 하면 되고 준비물이 없다. 다른 키로 돌리려면 .env나 호스트
+    환경에 `Security__SecretKey`를 두면 컴포즈가 그 값을 전달해 기본값을 덮어쓴다.
+    """
+    if read_json_setting(ROOT / "AccountServer" / "appsettings.json", ("Security", "SecretKey")):
+        return True
+
     env_file = ROOT / ".env"
     if env_file.exists():
-        text = env_file.read_text(encoding="utf-8", errors="replace")
-        if re.search(r"^\s*ACCOUNT_SECRET_KEY\s*=\s*\S", text, re.MULTILINE):
+        # utf-8-sig로 읽어 BOM을 떼어 낸다 — 윈도우에서 만든 .env는 BOM이 붙는 일이 흔하고, BOM은
+        # 공백류가 아니라서 키가 첫 줄이면 아래 정규식이 있는 키를 없다고 판정한다.
+        text = env_file.read_text(encoding="utf-8-sig", errors="replace")
+        if re.search(r"^\s*Security__SecretKey\s*=\s*\S", text, re.MULTILINE):
             return True
 
-    say(".env에 ACCOUNT_SECRET_KEY가 없습니다(AccountServer 토큰 서명 키).", "err")
-    say("저장소 루트 .env에 한 줄 넣으세요:  ACCOUNT_SECRET_KEY=<임의의 긴 문자열>", "warn")
+    if os.environ.get("Security__SecretKey"):
+        return True
+
+    say("AccountServer 토큰 서명 키(Security:SecretKey)를 찾을 수 없습니다.", "err")
+    say("AccountServer/appsettings.json의 Security:SecretKey를 되돌리거나,", "warn")
+    say("저장소 루트 .env에 한 줄 넣으세요:  Security__SecretKey=<임의의 긴 문자열>", "warn")
     return False
 
 
@@ -425,16 +464,7 @@ def read_admin_key(explicit: str | None) -> str | None:
     if from_env:
         return from_env
 
-    settings = ROOT / "GameServer" / "appsettings.json"
-    if not settings.exists():
-        return None
-
-    try:
-        # appsettings.json은 주석을 허용하므로(ASP.NET Core 설정 파서) 파싱 전에 걷어낸다.
-        text = re.sub(r"^\s*//.*$", "", settings.read_text(encoding="utf-8-sig"), flags=re.MULTILINE)
-        return json.loads(text).get("Admin", {}).get("ApiKey") or None
-    except (OSError, ValueError):
-        return None
+    return read_json_setting(ROOT / "GameServer" / "appsettings.json", ("Admin", "ApiKey"))
 
 
 def wait_game_server(base_url: str, timeout: int) -> bool:
