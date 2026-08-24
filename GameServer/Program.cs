@@ -169,6 +169,13 @@ builder.Services.AddScoped<IBossRushRankCache, BossRushRankCache>();
 builder.Services.AddSingleton<IBatchLock, BatchLock>();
 builder.Services.AddScoped<IBossRushService, BossRushService>();
 
+// 랭킹 캐시 최초 적재(워밍업) — **서버가 스스로 하지 않는다.** 부트스트랩 스크립트(server_up.py)가
+//   컨테이너·서버 기동을 확인한 뒤 관리 API(POST /api/admin/boss-rush/rank/warmup)로 한 번 지시한다.
+//   예전에는 시즌 정산 배치가 리더 락을 쥔 채 매 주기 앞단에서 이 일을 했는데, 적재 시점이 배치 주기에
+//   묶여 눈에 보이지 않았다. 호출자가 스크립트 하나로 정해지면서 중복 재구축을 막을 분산 락도 필요 없어졌다.
+//   정본이 MySQL이라 몇 번을 돌려도 안전하다(ZADD는 userId 단위 덮어쓰기, 점수는 기록에서 결정론적 계산).
+builder.Services.AddScoped<IBossRushRankWarmupService, BossRushRankWarmupService>();
+
 // 거래소(교역선) 계층(목록·등록·구매·취소). Redis를 쓰지 않는다 — 목록은 전용 색인을 타는 MySQL 직접 조회,
 // 등록·구매·취소·만료의 직렬화는 MySQL 행 잠금이 담당한다(거래소 기획서 7.3·7.4).
 builder.Services.AddScoped<ITradeRepository, TradeRepository>();
@@ -211,8 +218,7 @@ builder.Services.AddHostedService<MailGcBatchScheduler>();
 //   돌지 못했을 때(리더 락 스킵·예외)의 재시도 간격으로만 남는다.
 //   1회(페이지) 처리 상한 500건("BatchSize") — 페이지 단위 트랜잭션으로 쪼개 긴 잠금을 만들지 않는다.
 //   정산은 final_rank=0 조건부 갱신이라 멱등하며, 중간에 죽어도 다음 주기가 남은 행만 이어서 처리한다.
-//   기동 시에는 정산 전에 **랭킹 캐시 워밍업**(리더보드가 비었으면 boss_rush_record에서 재구축 + 시즌 메타 캐시
-//   채우기)도 수행한다 — 이미 리더 락이 여기 있어 scale-out 시 중복 재구축을 그대로 막아 준다.
+//   **랭킹 캐시 워밍업은 이 배치가 하지 않는다** — 부트스트랩 스크립트가 관리 API로 지시한다(위 등록 참고).
 //   **버려진 런을 정리하는 배치는 두지 않는다** — 만료된 런에 반송할 자산이 없어 배치가 할 일이 status 정리
 //   뿐이므로, 만료 판정을 읽는 시점(clear·info·enter)에 한다(거래소의 만료 판정 규약과 동일).
 // 싱글턴으로도 등록해 **DI에서 꺼낼 수 있게** 한다 — AddHostedService만으로는 IHostedService로만 잡혀

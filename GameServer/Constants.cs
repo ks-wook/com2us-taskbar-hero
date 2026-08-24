@@ -1,4 +1,4 @@
-using GameServer.Util;
+﻿using GameServer.Util;
 
 namespace GameServer;
 
@@ -336,6 +336,32 @@ public static class Constants
         public const long ScoreScale = 10_000_000L;
 
         /// <summary>
+        /// 랭킹 캐시 워밍업(관리 API)이 <c>boss_rush_record</c>를 읽는 페이지 크기. 한 번에 다 읽지 않고
+        /// 쪼개는 이유는 시즌 등재 인원이 늘어도 메모리 사용량이 이 크기에 묶이기 때문이다.
+        /// </summary>
+        public const int RankWarmupPageSize = 500;
+
+        /// <summary>
+        /// 랭킹 캐시 워밍업 결과 상태값(관리 API 응답 <c>status</c>). 외부 스크립트가 이 문자열로
+        /// 성공/재적재 여부를 판정하므로 <b>값을 바꾸면 스크립트도 함께 고쳐야 한다</b>
+        /// (<c>server_up.py</c>).
+        /// </summary>
+        public static class RankWarmupStatus
+        {
+            /// <summary>진행 중 시즌이 없어 적재할 대상이 없다(정상, 재적재 0건).</summary>
+            public const string NoSeason = "no-season";
+
+            /// <summary>리더보드 키가 이미 있어 재구축을 건너뛰었다(정상).</summary>
+            public const string AlreadyWarm = "already-warm";
+
+            /// <summary>MySQL에서 읽어 리더보드를 재구축했다.</summary>
+            public const string Restored = "restored";
+
+            /// <summary>Redis에 접근할 수 없어 적재하지 못했다(스크립트가 실패로 봐야 하는 유일한 값).</summary>
+            public const string CacheUnavailable = "cache-unavailable";
+        }
+
+        /// <summary>
         /// 이벤트 로그가 라운드 기록을 펼쳐 담는 컬럼 수(<c>round1_ms</c> ~ <c>round5_ms</c>). 라운드 수가
         /// 5로 고정이라 자식 테이블 대신 컬럼으로 둔 구조이며(로그 이벤트 정의 5.10), 마스터의 라운드 수가
         /// 바뀌면 로그 스키마(<c>bossrush_clear_logs</c>)도 함께 고쳐야 한다.
@@ -468,6 +494,20 @@ public static class Constants
     {
         /// <summary>인증된 userId를 컨트롤러로 전달하는 <c>HttpContext.Items</c> 키.</summary>
         public const string UserIdItemKey = "userId";
+    }
+
+    /// <summary>
+    /// 운영·개발용 관리 API(<c>/api/admin/**</c>). 게임 인증 미들웨어는 <c>/api/game</c>만 검사하므로
+    /// 이 경로는 <b>아래 키 헤더로 스스로 보호한다</b> — 키가 설정돼 있지 않으면 엔드포인트 자체가
+    /// 404로 닫힌다(설정하지 않은 서버에 무인증 관리 API가 열려 있는 상태를 만들지 않는다).
+    /// </summary>
+    public static class Admin
+    {
+        /// <summary>관리 API 인증 헤더 이름.</summary>
+        public const string ApiKeyHeader = "X-Admin-Key";
+
+        /// <summary>관리 API 키를 읽는 설정 경로(appsettings · 환경변수 <c>Admin__ApiKey</c>).</summary>
+        public const string ApiKeyConfigPath = "Admin:ApiKey";
     }
 
     /// <summary>이벤트 로그(집계용, 로그 이벤트 정의 4장). 구현은 <c>Logging/EventLogger.cs</c>.</summary>

@@ -18,7 +18,7 @@
 | [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchScheduler(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
 | [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchScheduler(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
 | [**출석부 보상**](#출석부-보상) (이번달 진행도 조회 / 오늘자 보상 획득→메일 발급, 일차 = 누적 출석 순번 1~30) | GameAttendanceController | Game | `POST /api/game/attendance/status` · `claim` |
-| [**보스러시/랭킹**](#보스러시랭킹) (정보 조회 / 도전 시작 / 클리어 보고=클라 측정 시간 기록 / 랭킹 목록 / 내 순위 / 시즌 정산 배치) | GameBossRushController · BossRushSeasonBatchScheduler(배치) | Game | `POST /api/game/boss-rush/info` · `enter` · `clear` · `rank` · `my-rank` |
+| [**보스러시/랭킹**](#보스러시랭킹) (정보 조회 / 도전 시작 / 클리어 보고=클라 측정 시간 기록 / 랭킹 목록 / 내 순위 / 랭킹 캐시 적재=관리 API / 시즌 정산 배치) | GameBossRushController · AdminBossRushController · BossRushSeasonBatchScheduler(배치) | Game | `POST /api/game/boss-rush/info` · `enter` · `clear` · `rank` · `my-rank` · `POST /api/admin/boss-rush/rank/warmup` |
 
 > **가방 변경분 공통 규약(`inventoryDelta`)** — 가방을 바꾸는 액션(`cube/*`·`gacha/pull`·`consumable/use`·`mail/claim`·`mail/claim-all`·`stage/clear`·`trade/register`·`trade/cancel`)은 변경분을 응답에 담는다. 클라이언트는 응답만으로 가방을 갱신하며 **액션 뒤에 `/load`·`/inventory/list`를 재조회하지 않는다**([인벤토리/아이템/큐브 기획서](../docs/세부/inventory-item-cube-기획서.md) 5.0).
 >
@@ -1533,6 +1533,63 @@ sequenceDiagram
     Note over C: 랭킹 UI 고정 영역용 — 목록 페이지를 넘기는 동안 다시 호출하지 않는다
 ```
 
+### 랭킹 캐시 적재(관리) — `POST /api/admin/boss-rush/rank/warmup`
+
+랭킹 캐시는 **서버가 스스로 적재하지 않는다.** 부트스트랩 스크립트(`python server_up.py`)가 컨테이너와 서버를
+띄우고 헬스 체크를 통과한 뒤 이 관리 API를 한 번 호출한다. 예전에는 시즌 정산 배치가 Redis 리더 락을 쥔 채 매
+주기 앞단에서 이 일을 했지만, 적재 시점이 배치 주기에 묶여 보이지 않았다 — 지금은 **기동 절차의 명시적인 한
+단계**이고 호출자가 하나뿐이라 중복 재구축을 막을 분산 락이 필요하지 않다(보스러시 기획서 6.3).
+
+```mermaid
+sequenceDiagram
+    actor T as 부트스트랩 스크립트(server_up.py)
+    participant S as GameServer
+    participant R as Redis
+    participant DB as MySQL(game)
+
+    Note over T: docker compose up -d → 컨테이너 healthy 대기
+    loop 준비 대기(최대 --timeout)
+        T->>S: GET /openapi/v1.json
+    end
+    T->>S: POST /api/admin/boss-rush/rank/warmup?force=… (헤더 X-Admin-Key)
+    S->>S: 관리 키 검증(설정 Admin:ApiKey)
+    alt 키 미설정
+        S-->>T: 404 { success:false } — 관리 API 닫힘
+    else 키 불일치
+        S-->>T: 401 { success:false }
+    else 통과
+        S->>DB: 진행 중 시즌 조회(boss_rush_season status=1)
+        alt 진행 중 시즌 없음
+            S-->>T: 200 성공 { status: "no-season", restored: 0 }
+        else 진행 중 시즌 있음
+            S->>R: 현재 시즌 메타 캐시 갱신(bossrush:season:current)
+            S->>R: EXISTS rank:bossrush:{seasonId}
+            alt Redis 접근 불가
+                S-->>T: 503 실패 { status: "cache-unavailable" }
+            else 리더보드 이미 존재 & force 아님
+                S->>R: ZCARD로 등재 인원 확인
+                S-->>T: 200 성공 { status: "already-warm", members: N }
+            else 비어 있음(또는 force)
+                loop 기록 페이지(500건 단위, 정렬 순서)
+                    S->>DB: boss_rush_record 스캔(season_id, offset, limit)
+                    S->>R: ZADD(score = clearMs × 10^7 + (recordedAt − season.start_at))
+                end
+                S->>R: ZCARD로 등재 인원 확인
+                alt 일부 ZADD 실패
+                    S-->>T: 503 실패 { status: "cache-unavailable", restored: N }
+                else 전량 적재
+                    S-->>T: 200 성공 { status: "restored", restored: N, members: N }
+                end
+            end
+        end
+    end
+```
+
+> **몇 번을 호출해도 안전하다.** 정본이 MySQL이고 ZADD는 `userId` 단위 덮어쓰기이며 점수는 기록에서 결정론적으로
+> 계산되므로, 같은 상태에 다시 호출하면 같은 리더보드가 된다. 적재 로직(점수 인코딩·키 이름)은 **서버 코드에만**
+> 있고 스크립트는 지시와 결과 판정만 한다 — 스크립트가 MySQL·Redis에 직접 붙으면 인코딩 규칙이 두 언어에
+> 복제돼 조용히 어긋난다.
+
 ### 시즌 정산 배치 — `BossRushSeasonBatchScheduler`
 
 ```mermaid
@@ -1550,12 +1607,6 @@ sequenceDiagram
             S->>DB: 진행 중 시즌 확인
             alt 진행 중 시즌 없음
                 S->>S: 종료(시즌을 만들지 않는다 — 정산할 대상이 없으므로 무기한 대기, 외부 기상 신호로만 재개)
-            end
-            S->>R: 현재 시즌 메타 캐시 갱신
-            S->>R: 리더보드 존재 확인
-            alt 리더보드 비어 있음(캐시 유실)
-                S->>DB: 시즌 기록을 정렬 순서로 페이지 스캔
-                S->>R: ZADD로 재구축(워밍업)
             end
             S->>DB: 종료 시각 지난 시즌 선점(status 1 → 2, 조건부 갱신)
             alt 정산 대상 없음

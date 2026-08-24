@@ -169,3 +169,6 @@ docs/images/**/*.mp4
 
 # 이벤트 로그 파일(fluentd가 걷는 대상, 저장소에 담지 않는다)
 logs/
+docs/images/아키텍처-구성도.svg
+docs/공통/아키텍처-구성도.md
+docs/아키텍처-구성도-발표자료.pptx

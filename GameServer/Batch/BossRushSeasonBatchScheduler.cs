@@ -25,10 +25,9 @@ namespace GameServer.Batch;
 /// 진행 중 시즌이 없으면 <b>무기한 잔다</b> — 시즌이 없는 동안은 몇 번을 깨어나도 할 일이 없기 때문이다.
 /// 새 시즌이 등록되면 그 사실을 아는 쪽이 <see cref="PeriodicBatchScheduler.Wake"/>로 깨운다(서버 기동 시
 /// 도는 첫 주기도 같은 역할을 한다).</para>
-/// <para>기동 시에는 정산 전에 <b>랭킹 캐시 워밍업</b>도 수행한다 — 현재 시즌 리더보드가 비어 있으면
-/// <c>boss_rush_record</c>를 페이지 단위로 읽어 ZADD로 재구축하고, 현재 시즌 메타 캐시를 채운다(6.3).
-/// 이 작업이 배치에 붙어 있는 이유는 <b>Redis 리더 락</b>이 이미 여기에 있어 scale-out 시 중복 재구축을
-/// 그대로 막아 주기 때문이다.</para>
+/// <para><b>랭킹 캐시 최초 적재(워밍업)는 이 배치가 하지 않는다</b> — 서버 밖의 부트스트랩 스크립트
+/// (<c>server_up.py</c>)가 기동을 확인한 뒤 관리 API <c>POST /api/admin/boss-rush/rank/warmup</c>을
+/// 한 번 호출한다(6.3). 정산이 만드는 캐시 변화(리더보드 TTL·다음 시즌 메타)는 그대로 이 배치가 낸다.</para>
 /// 설정: appsettings "BossRushSeasonBatch" 섹션(IntervalSeconds 기본 600=10분 · BatchSize 기본 500).
 /// </summary>
 public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
@@ -95,10 +94,10 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     protected override string BatchKey => "bossrush-season";
 
     /// <summary>
-    /// 1주기 작업: ①진행 중 시즌 확인 → ②랭킹 캐시 워밍업 → ③종료 시각이 지난 시즌 선점 →
-    /// ④순위 확정·보상 메일 발급 → ⑤시즌 종료·리더보드 TTL → ⑥다음 시즌 개시.
-    /// <para><b>진행 중 시즌이 없으면 ①에서 즉시 끝낸다</b> — 시즌을 새로 만들지 않으므로 워밍업·정산 모두
-    /// 대상이 없다. 정산할 시즌이 없을 때도 조용히 끝낸다(로그 소음 방지).</para>
+    /// 1주기 작업: ①진행 중 시즌 확인 → ②종료 시각이 지난 시즌 선점 → ③순위 확정·보상 메일 발급 →
+    /// ④시즌 종료·리더보드 TTL → ⑤다음 시즌 개시.
+    /// <para><b>진행 중 시즌이 없으면 ①에서 즉시 끝낸다</b> — 시즌을 새로 만들지 않으므로 정산 대상이 없다.
+    /// 정산할 시즌이 없을 때도 조용히 끝낸다(로그 소음 방지).</para>
     /// </summary>
     protected override async Task<BatchCycleResult> RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
     {
@@ -125,14 +124,10 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         // 이 시즌이 끝나는 순간이 다음에 깨어날 유일한 이유다.
         _nextWakeUnix = current.EndAt;
 
-        // ② 랭킹 캐시 워밍업(리더보드가 비어 있을 때만).
-        await WarmUpRankCacheAsync(repository, rankCache, current);
-
-        // ③ 종료 시각이 지난 시즌 선점(조건부 갱신 0행이면 정산할 시즌 없음).
+        // ② 종료 시각이 지난 시즌 선점(조건부 갱신 0행이면 정산할 시즌 없음).
         var season = await repository.ClaimSeasonForSettlementAsync(nowUnix);
         if (season is null)
         {
-            // 워밍업만 하고 끝난 주기. 정산 대상이 없었을 뿐 배치는 정상적으로 돌았다.
             return BatchCycleResult.Idle;
         }
 
@@ -145,14 +140,14 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
             _logger.ZLogError($"보스러시 순위 보상 메일 템플릿 미정의: templateCode {Constants.MailTemplate.BossRushRankReward:@TemplateCode} — mail_master 확인 필요(순위만 확정합니다)");
         }
 
-        // ④ 순위 확정 + 보상 메일 발급.
+        // ③ 순위 확정 + 보상 메일 발급.
         var (settled, rewarded, failed) = await SettleAsync(repository, season, template, nowUnix, stoppingToken);
 
-        // ⑤ 시즌 종료 + 리더보드 TTL.
+        // ④ 시즌 종료 + 리더보드 TTL.
         await repository.CloseSeasonAsync(season.SeasonId, nowUnix);
         await rankCache.ExpireAsync(season.SeasonId, Constants.Batch.BossRushSeason.ClosedSeasonTtl);
 
-        // ⑥ 다음 시즌 개시 + 시즌 메타 캐시 갱신(정산의 마지막 단계, 기획서 6.4).
+        // ⑤ 다음 시즌 개시 + 시즌 메타 캐시 갱신(정산의 마지막 단계, 기획서 6.4).
         var next = await repository.StartNextSeasonAsync(
             season.EndAt, season.EndAt + DateTimeUtil.DaysToSeconds(rule.SeasonPeriodDays));
         await rankCache.SetCurrentSeasonAsync(next);
@@ -162,47 +157,6 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 
         // 처리량은 확정한 순위 건수로 센다(보상 발급 수는 상위 3위로 고정이라 처리량 지표가 되지 못한다).
         return new BatchCycleResult(settled, 0, failed);
-    }
-
-    /// <summary>
-    /// 진행 중 시즌의 메타 캐시와 리더보드를 채운다(6.3 워밍업).
-    /// 리더보드 키가 이미 있으면 재구축하지 않는다 — 워밍업은 "비었을 때만" 하는 복구 작업이다.
-    /// </summary>
-    private async Task WarmUpRankCacheAsync(
-        IBossRushRepository repository, IBossRushRankCache rankCache, BossRushSeason season)
-    {
-        await rankCache.SetCurrentSeasonAsync(season);
-
-        var exists = await rankCache.ExistsAsync(season.SeasonId);
-        if (exists is null || exists.Value)
-        {
-            return; // 캐시를 쓸 수 없거나(다음 주기 재시도) 이미 채워져 있다.
-        }
-
-        var restored = 0;
-        var offset = 0;
-        while (true)
-        {
-            var page = await repository.ScanRecordsAsync(season.SeasonId, offset, _batchSize);
-            if (page.Count == 0)
-            {
-                break;
-            }
-
-            foreach (var record in page)
-            {
-                await rankCache.UpsertAsync(
-                    season.SeasonId, season.StartAt, record.UserId, record.BestClearMs, record.RecordedAt);
-                restored++;
-            }
-
-            offset += page.Count;
-        }
-
-        if (restored > 0)
-        {
-            _logger.ZLogInformation($"보스러시 랭킹 캐시 워밍업: seasonId {season.SeasonId:@SeasonId} {restored:@Restored}건 재구축");
-        }
     }
 
     /// <summary>

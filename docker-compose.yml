@@ -1,9 +1,9 @@
-# Taskbar Hero 모작 — 로컬 개발용 컨테이너(MySQL · Redis · Grafana · AccountServer · GameServer)
+﻿# Taskbar Hero 모작 — 로컬 개발용 컨테이너(MySQL · Redis · Grafana · AccountServer · GameServer)
 #
 # 사용법
-#   ./containers-up.ps1               # **권장** — 전체를 용도별로 묶어 띄우고 healthy까지 기다린다
-#                                     #   (서버 이미지 자동 재빌드 · 사전 점검 · 접속 주소 안내).
-#                                     #   서버 없이: ./containers-up.ps1 -Mode infra
+#   python server_up.py            # **권장** — 전체를 용도별로 묶어 띄우고 healthy까지 기다린 뒤
+#                                     #   보스러시 랭킹 캐시까지 적재한다(서버 이미지 자동 재빌드 ·
+#                                     #   사전 점검 · 접속 주소 안내). 서버 없이: --mode infra
 #   docker compose up -d --build      # 서버 이미지 빌드 + 전체 백그라운드 실행
 #   docker compose up -d mysql redis  # 의존 서비스만(서버는 watch-all.ps1로 콘솔 실행할 때)
 #   docker compose logs -f gameserver # 특정 서비스 로그 확인
@@ -13,8 +13,9 @@
 #
 # 두 서버 컨테이너는 호스트의 5160(AccountServer)·5247(GameServer)를 그대로 쓴다 —
 # `watch-all.ps1`(dotnet watch 콘솔 실행)과 **포트가 겹치므로 둘 중 하나만 띄운다**.
-# 핫 리로드로 개발할 때는 `docker compose up -d mysql redis`로 의존 서비스만 띄운 뒤
-# watch-all.ps1을 쓰고, 컨테이너로 통합 실행할 때는 `docker compose up -d --build`를 쓴다.
+# 핫 리로드로 개발할 때는 `python server_up.py --mode infra`로 의존 서비스만 띄운 뒤
+# watch-all.ps1을 쓰고(그 뒤 `python server_up.py --warmup-only`로 랭킹 캐시를 적재한다),
+# 컨테이너로 통합 실행할 때는 `python server_up.py`를 쓴다.
 # 서버 이미지는 소스를 COPY해 빌드하므로 코드를 고치면 재빌드해야 반영된다(핫 리로드 없음).
 #
 # 첫 기동 시 docs/의 스키마 SQL이 /docker-entrypoint-initdb.d 에서 알파벳 순으로 실행되어

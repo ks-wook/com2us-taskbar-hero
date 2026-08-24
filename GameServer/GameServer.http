@@ -154,4 +154,12 @@ Content-Type: application/json
   "data": { "act": 1, "difficulty": 1, "stage": 1, "elapsedMs": 41200, "remainingMonsterCount": 2, "reachedBoss": true }
 }
 
+### [관리] 보스러시 랭킹 캐시 최초 적재(게임 토큰 아님 — X-Admin-Key 헤더. 평소에는 server_up.py가 호출한다)
+POST {{GameServer_HostAddress}}/api/admin/boss-rush/rank/warmup
+X-Admin-Key: taskbar_hero_dev_admin
+
+### [관리] 같은 적재를 강제로(리더보드가 이미 채워져 있어도 MySQL에서 다시 적재)
+POST {{GameServer_HostAddress}}/api/admin/boss-rush/rank/warmup?force=true
+X-Admin-Key: taskbar_hero_dev_admin
+
 ###

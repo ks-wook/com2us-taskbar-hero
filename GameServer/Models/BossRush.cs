@@ -23,6 +23,17 @@ public sealed record BossRushSeason(int SeasonId, long StartAt, long EndAt, int 
         };
 }
 
+/// <summary>
+/// 랭킹 캐시 워밍업 결과(관리 API <c>POST /api/admin/boss-rush/rank/warmup</c> 응답 본문).
+/// <para><c>Status</c>는 <see cref="Constants.BossRush.RankWarmupStatus"/>의 값이며, 외부 부트스트랩
+/// 스크립트가 이 값으로 성공/실패를 판정한다.</para>
+/// </summary>
+/// <param name="Status">워밍업 결과 상태(no-season · already-warm · restored · cache-unavailable).</param>
+/// <param name="SeasonId">대상 시즌 번호(진행 중 시즌이 없으면 0).</param>
+/// <param name="Restored">MySQL에서 읽어 리더보드에 넣은 기록 수.</param>
+/// <param name="Members">적재 후 리더보드 등재 인원(ZCARD). 캐시를 쓸 수 없으면 0.</param>
+public sealed record BossRushRankWarmupResult(string Status, int SeasonId, int Restored, int Members);
+
 // BossRushRepository 전용 DB 행 매핑용 POCO(제네릭 매핑 전용, dynamic 금지).
 // Dapper.MatchNamesWithUnderscores=true(Program.cs)로 snake_case 컬럼 → PascalCase 프로퍼티 매핑.
 
