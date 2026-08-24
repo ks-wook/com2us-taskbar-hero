@@ -38,14 +38,14 @@ if ($busy.Count -gt 0) {
 #   포트가 닫혀 있어도 진행은 한다(서버는 뜨고 DB 접근 시점에 실패한다). 대신 원인을
 #   찾느라 헤매지 않도록 무엇이 없는지, 무엇을 실행하면 되는지 알려 준다.
 $missing = @()
-if (-not (Test-PortListening 3306)) { $missing += "MySQL(3306)" }
-if (-not (Test-PortListening 6379)) { $missing += "Redis(6379)" }
+if (-not (Test-PortListening 33306)) { $missing += "MySQL(33306)" }
+if (-not (Test-PortListening 36379)) { $missing += "Redis(36379)" }
 if ($missing.Count -gt 0) {
     Write-Host "의존 서비스가 감지되지 않습니다: $($missing -join ', ')" -ForegroundColor Yellow
     Write-Host "먼저 실행하세요: docker compose up -d mysql redis" -ForegroundColor Yellow
 }
 else {
-    Write-Host "의존 서비스 확인: MySQL(3306) · Redis(6379) 응답 중." -ForegroundColor DarkGray
+    Write-Host "의존 서비스 확인: MySQL(33306) · Redis(36379) 응답 중." -ForegroundColor DarkGray
 }
 
 # ── 선(先) 빌드: 두 watch를 띄우기 전에 솔루션을 직렬로 한 번 빌드 ──────

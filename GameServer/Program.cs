@@ -109,7 +109,7 @@ builder.Services.AddSingleton<ICubeLevelCalculator, CubeLevelCalculator>();
 // Redis 토큰 조회기(CloudStructures) — 인증 미들웨어가 사용.
 builder.Services.AddSingleton(_ =>
 {
-    var connectionString = builder.Configuration.GetValue("Redis:ConnectionString", "127.0.0.1:6379")!;
+    var connectionString = builder.Configuration.GetValue("Redis:ConnectionString", "127.0.0.1:36379")!;
     return new RedisConnection(new RedisConfig("game", connectionString));
 });
 builder.Services.AddSingleton<IAuthTokenReader, AuthTokenReader>();

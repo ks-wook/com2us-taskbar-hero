@@ -2,14 +2,15 @@
 """로컬 개발 환경 부트스트랩 — 컨테이너 기동부터 보스러시 랭킹 캐시 최초 적재까지.
 
 사용법 (저장소 루트에서 실행한다 — docker compose가 이 위치를 기준으로 돈다)
-    python server_up.py                  # 대화형: 무엇을 띄울지(1 게임 서버만 / 2 로그까지)와 재빌드를 묻는다
-    python server_up.py -y               # 묻지 않고 기본값(dev · 재빌드 O · 랭킹 캐시 적재 O)
+    python server_up.py                  # **아무것도 묻지 않는다** — 서버 이미지 재빌드 + 게임 필수
+                                         #   4개(accountserver · gameserver · mysql · redis) 기동
+                                         #   + 보스러시 랭킹 캐시 적재
     python server_up.py --mode full      # 로그 파이프라인(fluentd·logdb·Grafana)까지 전부
+    python server_up.py -i               # 무엇을 띄울지·재빌드할지 메뉴로 고른다
     python server_up.py --warmup-only    # 이미 떠 있는 GameServer에 랭킹 캐시 적재만 지시
     python server_up.py --down           # 그 묶음을 중지(볼륨·데이터는 남는다)
 
-    옵션을 명시한 항목은 묻지 않는다. 입력이 터미널이 아니면(파이프·CI) 아무것도 묻지 않고
-    기본값으로 진행하므로, 스크립트로 호출하는 쪽은 그대로 쓴다.
+    -i 로 물을 때도 옵션으로 명시한 항목은 묻지 않는다.
 
 띄우는 것 — 둘 중 하나다(대화형 메뉴의 1번·2번이 각각 이것이다)
     dev (기본)  mysql · redis · accountserver · gameserver
@@ -33,9 +34,8 @@
     ⑤ 보스러시 랭킹 캐시 적재(관리 API 1회 호출)
 
 주요 옵션
-    -y, --yes       아무것도 묻지 않고 기본값으로 진행한다.
-    --interactive   터미널이 아니어도 물어본다(파이프로 답을 넣어 시험할 때).
-    --mode dev|full 무엇을 띄울지 지정한다(생략하면 물어본다).
+    -i, --interactive  무엇을 띄울지·재빌드할지 메뉴로 물어본다(기본은 묻지 않는다).
+    --mode dev|full 무엇을 띄울지 지정한다(생략하면 dev).
     --build         묻지 않고 서버 이미지를 다시 빌드한다.
     --no-build      서버 이미지 재빌드를 건너뛴다(코드를 안 고쳤을 때만).
     --force-warmup  리더보드가 이미 채워져 있어도 MySQL에서 다시 적재한다.
@@ -121,8 +121,8 @@ NO_HEALTHCHECK = {"fluentd"}
 # 있을 수 있어, compose의 bind 실패보다 **먼저** 무엇이 겹쳤는지 알려 준다(서버 포트는 콘솔 실행과의
 # 충돌도 함께 걸러 낸다).
 SERVICE_PORTS = {
-    "mysql": 3306,
-    "redis": 6379,
+    "mysql": 33306,
+    "redis": 36379,
     "timescaledb": 5432,
     "grafana": 3000,
     "fluentd": 24220,
@@ -296,8 +296,10 @@ def check_port_conflicts(services: list[str]) -> list[tuple[str, int]]:
 
     그 포트를 쥔 것이 이 컴포즈의 컨테이너면 충돌이 아니다 — 코드를 고치고 다시 배포하는 것이 이
     스크립트의 정상 사용법이라, 자기 자신이 띄운 컨테이너를 보고 막으면 재실행 자체가 불가능해진다
-    (compose가 알아서 교체한다). 걸러 내는 것은 **컴포즈 밖의 점유자**다 — 새 PC에 이미 깔려 있는
-    로컬 MySQL(3306)·Redis(6379)·Postgres(5432)나, 콘솔로 띄운 서버(5160·5247)가 그 대상이다.
+    (compose가 알아서 교체한다). 걸러 내는 것은 **컴포즈 밖의 점유자**다 — 콘솔로 띄운 서버
+    (5160·5247)나, 그 PC의 다른 프로그램이 이 호스트 포트를 이미 쓰는 경우다. 저장소 서비스는
+    흔한 기본 포트를 피해 호스트 쪽을 옮겨 두었다(MySQL 33306 · Redis 36379) — 그 PC에 이미 깔린
+    로컬 MySQL(3306)·Redis(6379)와 부딪히지 않게 하려는 것이다.
     """
     busy = []
     for service, port in SERVICE_PORTS.items():
@@ -599,7 +601,10 @@ def resolve_options(args: argparse.Namespace) -> tuple[str, list[str], bool, boo
     옵션으로 준 값은 절대 묻지 않는다 — 스크립트로 호출하는 쪽이 프롬프트에 걸려 멈추지 않게
     하려는 것이고, 같은 이유로 입력이 터미널이 아니면(파이프·CI) 아무것도 묻지 않는다.
     """
-    prompt = args.interactive or (sys.stdin.isatty() and not args.yes)
+    # **기본은 묻지 않는다** — 옵션 없이 실행하면 곧바로 기본값(dev · 재빌드 · 랭킹 캐시 적재)으로
+    # 진행한다. 매번 쓰는 조합이 그것 하나이고, 스크립트로 호출하는 쪽도 그대로 쓸 수 있어야 한다.
+    # 다른 구성을 고르고 싶을 때만 --interactive 로 메뉴를 띄운다.
+    prompt = args.interactive
     if prompt:
         say("실행할 구성을 확인합니다(엔터 = 기본값).", "info")
 
@@ -649,8 +654,8 @@ def print_summary(services: list[str], state: dict[str, str], pending: list[str]
 
     print()
     addresses = [
-        ("mysql", "MySQL        : 127.0.0.1:3306 (root / taskbar_hero_dev)"),
-        ("redis", "Redis        : 127.0.0.1:6379"),
+        ("mysql", "MySQL        : 127.0.0.1:33306 (root / taskbar_hero_dev)"),
+        ("redis", "Redis        : 127.0.0.1:36379"),
         ("timescaledb", "logdb        : 127.0.0.1:5432 (fluentd / logdb)"),
         ("grafana", "Grafana      : http://localhost:3000"),
         ("accountserver", "AccountServer: http://localhost:5160/swagger"),
@@ -669,11 +674,10 @@ def parse_args() -> argparse.Namespace:
         description="로컬 개발 환경 부트스트랩(컨테이너 기동 + 보스러시 랭킹 캐시 최초 적재).",
     )
     parser.add_argument("--mode", choices=list(GROUPS), default=None,
-                        help=f"dev(게임만) 또는 full(로그 파이프라인까지). 생략하면 물어본다 · 기본 {DEFAULT_MODE}")
-    parser.add_argument("-y", "--yes", action="store_true", help="아무것도 묻지 않고 기본값으로 진행한다")
-    parser.add_argument("--interactive", action="store_true",
-                        help="터미널이 아니어도 물어본다(파이프로 답을 넣어 시험할 때)")
-    parser.add_argument("--build", action="store_true", help="묻지 않고 서버 이미지를 다시 빌드한다")
+                        help=f"dev(게임만) 또는 full(로그 파이프라인까지). 생략하면 {DEFAULT_MODE}")
+    parser.add_argument("-i", "--interactive", action="store_true",
+                        help="무엇을 띄울지·재빌드할지 메뉴로 물어본다(기본은 묻지 않고 진행)")
+    parser.add_argument("--build", action="store_true", help="서버 이미지를 다시 빌드한다(기본 동작이라 -i로 물을 때만 의미가 있다)")
     parser.add_argument("--no-build", action="store_true", help="서버 이미지 재빌드를 건너뛴다")
     parser.add_argument("--down", action="store_true", help="그 묶음을 중지한다(볼륨·데이터는 남는다)")
     parser.add_argument("--warmup-only", action="store_true", help="컨테이너는 건드리지 않고 랭킹 캐시 적재만 지시한다")

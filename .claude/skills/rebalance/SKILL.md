@@ -123,7 +123,7 @@ python tools/master_data_export.py     # schema.sql 재적용(MySQL) → 마스�
 python tools/master_monster_tool.py verify   # "클라 번들이 정본과 다름" 경고가 사라졌는지 확인
 ```
 
-- 이 명령은 **MySQL(도커 `taskbar-hero-master`, `127.0.0.1:3306`)과 `pymysql`** 이 필요하다. 안 떠 있으면 `docker compose up -d`로 **컨테이너만 올려서** 실행한다.
+- 이 명령은 **MySQL(도커 `taskbar-hero-mysql`, 호스트 `127.0.0.1:33306`)과 `pymysql`** 이 필요하다. 안 떠 있으면 `docker compose up -d`로 **컨테이너만 올려서** 실행한다.
 - **MySQL을 끝내 올릴 수 없으면 거기서 멈추고 그 사실을 보고한다.** 정본(⑤)은 이미 반영된 상태이며, 사용자에게 남은 한 단계가 **Unity 메뉴 `TaskbarHero > 마스터 데이터 > 최신화 (DB→JSON)`** 임을 알린다. 임의로 "완료"로 보고하지 않는다.
 - 어시스턴트가 **Unity 에디터를 대신 띄우지는 않는다.** 번들 갱신은 위 CLI로 충분하고, 아이콘 DB 재빌드가 필요한 작업(아이템 추가)이 아니면 에디터 조작은 필요 없다.
 

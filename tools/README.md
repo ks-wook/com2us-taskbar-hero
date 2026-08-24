@@ -82,7 +82,7 @@ python tools/balance_sim.py constants                     # 읽어 온 상수·�
 ### 사전 준비
 1. **Python 3** (Windows에선 Microsoft Store 스텁이 아닌 실제 설치본. 예: `winget install Python.Python.3.12`)
 2. **pymysql**: `python -m pip install pymysql`
-3. **로컬 MySQL 실행** (docker 컨테이너 `taskbar-hero-master`, `127.0.0.1:3306`)
+3. **로컬 MySQL 실행** (docker 컨테이너 `taskbar-hero-mysql`, 호스트 `127.0.0.1:33306`)
 
 ### 사용법 (CLI)
 ```bash

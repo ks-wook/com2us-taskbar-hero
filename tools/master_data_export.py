@@ -503,7 +503,7 @@ def main():
     ap.add_argument("--schema", default=DEFAULT_SCHEMA, help="master-data-schema.sql 경로")
     ap.add_argument("--output", default=DEFAULT_OUTPUT, help="JSON 출력 디렉터리(Assets/Resources/MasterData)")
     ap.add_argument("--host", default="localhost")
-    ap.add_argument("--port", type=int, default=3306)
+    ap.add_argument("--port", type=int, default=33306)  # compose가 컨테이너 3306을 호스트 33306으로 노출한다
     ap.add_argument("--user", default="root")
     ap.add_argument("--password", default="taskbar_hero_dev")
     ap.add_argument("--database", default=DEFAULT_DB)

@@ -1,11 +1,12 @@
 ﻿# Taskbar Hero 모작 — 로컬 개발용 컨테이너(MySQL · Redis · Grafana · AccountServer · GameServer)
 #
 # 사용법
-#   python server_up.py               # **권장** — 묶음·Grafana·재빌드를 대화형으로 물어보고, 띄운 뒤
-#                                     #   healthy까지 기다린다(사전 점검 · 포트 충돌 확인 · 접속 주소
-#                                     #   안내 · 보스러시 랭킹 캐시 적재). 묻지 않으려면 -y.
-#                                     #   dev(기본)  = mysql · redis · accountserver · gameserver
-#                                     #   full        = dev + timescaledb · fluentd · grafana
+#   python server_up.py               # **권장** — 아무것도 묻지 않고 dev 구성을 띄운다(서버 이미지
+#                                     #   재빌드 · 사전 점검 · 포트 충돌 확인 · healthy 대기 ·
+#                                     #   MySQL 스키마 확인 · 보스러시 랭킹 캐시 적재).
+#                                     #   dev(기본) = mysql · redis · accountserver · gameserver
+#                                     #   full      = dev + timescaledb · fluentd · grafana (--mode full)
+#                                     #   메뉴로 고르려면 -i
 #   docker compose up -d --build      # 서버 이미지 빌드 + 전체 백그라운드 실행
 #   docker compose up -d mysql redis  # 의존 서비스만(서버는 watch-all.ps1로 콘솔 실행할 때)
 #   docker compose logs -f gameserver # 특정 서비스 로그 확인
@@ -29,7 +30,7 @@
 #   Security__SecretKey=<임의의 64자 정도 문자열>
 # 콘솔 실행(dotnet run / watch-all.ps1)도 같은 appsettings를 읽으며, User Secrets를 두면 그쪽이 이긴다.
 #
-# Redis는 두 서버의 인증 토큰 캐시·배치 리더 락 저장소이며 127.0.0.1:6379로 노출한다
+# Redis는 두 서버의 인증 토큰 캐시·배치 리더 락 저장소이며 127.0.0.1:36379로 노출한다(컨테이너 안은 6379)
 # (appsettings의 `Redis:ConnectionString`과 동일). 저장소 내 Windows 바이너리
 # `Redis-8.8.0-Windows-x64-cygwin-with-Service/`도 그대로 쓸 수 있으나, 같은 6379를
 # 쓰므로 둘 중 하나만 띄운다.
@@ -66,7 +67,10 @@ services:
       MYSQL_ROOT_PASSWORD: taskbar_hero_dev
       TZ: Asia/Seoul
     ports:
-      - "3306:3306"
+      # **호스트 33306 → 컨테이너 3306.** 그 PC에 이미 깔린 로컬 MySQL(3306)과 부딪히지 않게
+      # 호스트 쪽 번호만 옮겼다. 컨테이너 안 포트와 서버 컨테이너의 접속 문자열(`Server=mysql;Port=3306`)은
+      # compose 네트워크 안이라 그대로다 — 바뀌는 것은 호스트에서 직접 붙을 때의 번호뿐이다.
+      - "33306:3306"
     volumes:
       - taskbar-hero-mysql-data:/var/lib/mysql
       # 첫 기동 시 스키마 자동 생성(읽기 전용 마운트). 파일명 접두 숫자로 실행 순서 고정.
@@ -95,8 +99,9 @@ services:
     environment:
       TZ: Asia/Seoul
     ports:
-      # 호스트 루프백에만 바인딩(외부 노출 방지).
-      - "127.0.0.1:6379:6379"
+      # 호스트 루프백에만 바인딩(외부 노출 방지). **호스트 36379 → 컨테이너 6379** —
+      # 로컬에 이미 도는 Redis(6379)나 저장소 내 윈도우 바이너리와 부딪히지 않게 옮겼다.
+      - "127.0.0.1:36379:6379"
     volumes:
       - taskbar-hero-redis-data:/data
     healthcheck:
@@ -123,7 +128,7 @@ services:
       POSTGRES_USER: fluentd
       POSTGRES_PASSWORD: "${LOGDB_PASSWORD:-taskbar_hero_dev}"
     ports:
-      # psql·Grafana를 호스트에서 붙일 수 있게 루프백에만 노출한다(게임 DB의 3306과 겹치지 않는다).
+      # psql·Grafana를 호스트에서 붙일 수 있게 루프백에만 노출한다(게임 DB의 33306과 겹치지 않는다).
       - "127.0.0.1:5432:5432"
     volumes:
       - taskbar-hero-logdb-data:/var/lib/postgresql/data
