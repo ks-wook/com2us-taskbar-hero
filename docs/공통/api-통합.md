@@ -17,13 +17,14 @@
   - [3.8 출석부 보상](#38-출석부-보상)
   - [3.9 가챠(뽑기)](#39-가챠뽑기)
   - [3.10 보스러시 / 랭킹](#310-보스러시--랭킹)
+  - [3.11 관리 API (랭킹 캐시 적재)](#311-관리-api-랭킹-캐시-적재)
 - [4. 에러 코드](#4-에러-코드)
 - [5. 출처 문서](#5-출처-문서)
 
 ## 1. 공통 규약
 
 - 모든 API는 **POST**. 응답은 `{ success, errorCode, message, data }` 형식이며 `success`는 `errorCode == 0`(`Success`)과 동치다.
-- **인증**: 로그인 이후 요청은 body에 `{ userId, token, data }`를 담는다(헤더 미사용). 미들웨어가 `token`을 Redis `auth:token:{userId}`와 대조. **GameServer의 게임 API는 모두 인증이 필요**하므로 아래 GameServer 표(3장)에는 인증 칼럼을 두지 않는다. **무인증 예외**: AccountServer의 회원가입·로그인뿐이다(마스터 데이터는 클라이언트 번들이라 다운로드 API가 없다).
+- **인증**: 로그인 이후 요청은 body에 `{ userId, token, data }`를 담는다(헤더 미사용). 미들웨어가 `token`을 Redis `auth:token:{userId}`와 대조. **GameServer의 게임 API는 모두 인증이 필요**하므로 아래 GameServer 표(3장)에는 인증 칼럼을 두지 않는다. **무인증 예외**: AccountServer의 회원가입·로그인뿐이다(마스터 데이터는 클라이언트 번들이라 다운로드 API가 없다). **관리 API(3.11)는 이 인증 체계 밖**이다 — 게임 토큰이 아니라 `X-Admin-Key` 헤더로 보호하고 응답도 `errorCode`를 쓰지 않는다.
 - `errorCode`는 `TaskbarHero.Common`의 `ErrorCode`이며 값 목록은 [ErrorCode 통합 정의](error-code-정의.md) 참고.
 - **Base URL(개발)**: AccountServer `http://localhost:5160`, GameServer `http://localhost:5247`.
 
@@ -203,7 +204,7 @@
 - **보스러시 API는 재화·아이템을 지급하지 않는다.** 라운드별·완주 보상이 없어 `clear` 응답에 `rewards`·`characters`·`balance`·`inventoryDelta`가 없고, 이 호출이 바꾸는 것은 런 상태와 시즌 최고 기록뿐이다. 보상은 **시즌 순위 보상 메일**(3.7, 템플릿 501·`category=5` 랭킹)로만 나가며 **골드뿐**이다 — 가방 칸을 쓰지 않으므로 수령 단계에서도 `InventoryFull(4002)`이 발생하지 않는다.
 - **현재 시즌 랭킹 조회(`rank`·`my-rank`)는 정상 경로에서 MySQL을 건드리지 않는다.** 순위·기록은 리더보드 ZSET(점수에 `clearMs`·`recordedAt`이 인코딩되어 있다), 표시 이름은 `player:nickname` 해시(`HMGET`, 미스만 `game_player`에서 부분 백필), 시즌 메타는 `bossrush:season:current` 해시에서 나온다. MySQL은 **캐시 미스·Redis 폴백·종료 시즌 조회**에서만 개입한다([보스러시 기획서](../세부/boss-rush-기획서.md) 4.3·6.3).
 - **`source`는 "순위를 어디서 산출했는지"** 다 — `1`=Redis(`ZRANGE`/`ZRANK`) `2`=MySQL 폴백. **닉네임 캐시 미스나 종료 시즌 메타 조회로 MySQL을 거쳐도 `1`** 이며, "MySQL을 접근했는가"를 뜻하지 않는다.
-- **랭킹 정본은 MySQL(`boss_rush_record`)이고 Redis Sorted Set(`rank:bossrush:{seasonId}`)은 순위 조회 전용 캐시**다. 캐시가 비면 기동 워밍업으로 재구축하며, Redis 장애 시에는 MySQL 정렬 조회로 축소 운전한다(응답 `source=2`). 동점은 **먼저 달성한 쪽이 상위**이며, Redis 정렬이 이 규칙을 표현하도록 점수를 `clearMs × 10^10 + recordedAt`으로 인코딩한다(같은 문서 4.3·6.3).
+- **랭킹 정본은 MySQL(`boss_rush_record`)이고 Redis Sorted Set(`rank:bossrush:{seasonId}`)은 순위 조회 전용 캐시**다. 캐시가 비면 **관리 API(3.11)로 정본에서 재적재**하며(서버가 스스로 하지 않는다), Redis 장애 시에는 MySQL 정렬 조회로 축소 운전한다(응답 `source=2`). 동점은 **먼저 달성한 쪽이 상위**이며, Redis 정렬이 이 규칙을 표현하도록 점수를 `clearMs × 10^7 + (recordedAt − season.start_at)`으로 인코딩한다(같은 문서 4.3·6.3).
 - **순위 산출 순서**: `clear`는 **MySQL에 기록을 확정(커밋) → Redis 리더보드 갱신(ZADD) → 갱신된 리더보드에서 `ZRANK`로 순위 계산 → 순위를 담은 결과 반환** 순으로 처리한다. ZADD는 반드시 커밋 이후여야 하고(Redis에는 롤백이 없다), 기록을 갱신하지 못했어도(`isNewRecord=false`) `ZRANK`는 수행해 **현재 순위**를 내려준다(같은 문서 6.2).
 - **랭킹 목록과 내 순위를 별도 엔드포인트로 나눈다.** 페이징을 도입한 이상 목록(`rank`)은 **페이지를 넘길 때마다** 호출되지만 내 순위(`my-rank`)는 페이지와 무관하게 한 번만 필요하므로, 합쳐 두면 같은 값을 페이지 수만큼 중복 계산·전송한다. 나눠 두면 목록 응답이 `(seasonId, offset, limit)`만으로 결정되는 **뷰어 무관 데이터**로 남는다. 서버 비용도 늘지 않는다 — 목록은 `ZRANGE`, 내 순위는 `ZRANK`+`ZSCORE`로 애초에 다른 연산이다. 클라이언트는 랭킹 UI를 열 때 두 API를 각각 호출하고, 내 페이지로 점프할 때는 `my-rank`의 `myRank.rank`로 `offset = floor((rank-1)/limit) × limit`을 계산해 `rank`를 호출한다([보스러시 기획서](../세부/boss-rush-기획서.md) 5.4·5.5).
 - **랭킹 목록은 전체 등재 유저를 페이징으로 노출한다** — 상위 N위로 자르지 않으며 1위부터 꼴찌까지 `offset`으로 넘겨 볼 수 있다. `ZRANGE`가 O(log N + M)이라 깊은 오프셋도 반환 크기에만 비례해 싸기 때문이다(MySQL 폴백에서만 `OFFSET`이 비싸지지만 커버링 인덱스 안의 스캔이라 감수한다). 서버가 clamp하는 것은 **페이지 크기(`limit` ≤ 100)** 뿐이고, 페이지 이동은 클라이언트가 `totalEntries`와 `myRank.rank`(→ `offset = floor((rank-1)/limit) × limit`)로 계산한다(같은 문서 4.3·5.4).
@@ -213,6 +214,21 @@
 - **버려진 런을 정리하는 배치는 두지 않는다.** 만료된 런에는 반송할 자산이 없어 배치가 할 일이 `status` 컬럼 정리뿐이므로, 거래소와 같은 규약으로 **만료 판정을 읽는 시점에** 한다(3.6) — `clear`는 `started_at + run_expire_sec`(30분)을 넘긴 런을 그 자리에서 `status=3`으로 종결하고 `BossRushRunAlreadyFinished(13004)`로 거부하며, `info`는 만료된 런을 `activeRun: null`로, `enter`는 남은 런을 자동 종결한다. **런 수명 30분은 게임 룰이 아니라** 보고가 네트워크 오류로 실패했을 때 재시도가 통하는 구간이자 버려진 런의 정리 기준이다([보스러시 기획서](../세부/boss-rush-기획서.md) 6.2).
 
 > **마스터(기획) 데이터 다운로드 API는 두지 않는다.** 본 프로젝트는 학습 목적이므로 마스터 데이터는 **클라이언트에 번들로 포함**되고, 서버도 같은 원천을 기동 시 자체 로드한다(런타임 배포·버전 협상 없음, [마스터 데이터 기획서](../세부/master-data/master-data-기획서.md)).
+
+### 3.11 관리 API (랭킹 캐시 적재)
+
+> 출처: [보스러시 기획서](../세부/boss-rush-기획서.md) 6.3
+
+| 경로 | 기능 | 인증 | 요청 | 응답 주요 | 주요 상태 코드 |
+|---|---|---|---|---|---|
+| `POST /api/admin/boss-rush/rank/warmup` | **보스러시 랭킹 캐시 최초 적재** — 진행 중 시즌의 메타 캐시를 갱신하고, 리더보드가 비어 있으면 `boss_rush_record`를 페이지 단위로 읽어 ZADD로 재구축 | `X-Admin-Key` 헤더 | 쿼리 `?force=true`(선택, 이미 채워져 있어도 다시 적재) | `status`, `seasonId`, `restored`, `members` | `200` 성공 · `401` 키 불일치 · `404` 관리 API 미설정 · `503` Redis 접근 불가 |
+
+- **응답 형식이 게임 API와 다르다**: `{ success, message, data }`이며 `errorCode`가 없다. 게임 클라이언트가 부르는 API가 아니므로 `ErrorCode` 체계에 새 코드를 만들지 않았고, 판정은 HTTP 상태와 `data.status`로 한다.
+- **`data.status` 4종**: `no-season`(진행 중 시즌 없음 — 적재 대상이 없다, 정상) · `already-warm`(리더보드가 이미 채워져 있어 건너뜀) · `restored`(MySQL에서 재구축) · `cache-unavailable`(Redis 접근 실패 또는 부분 적재 — 유일한 실패값이며 HTTP 503으로 나간다).
+- **호출 주체는 서버 밖의 부트스트랩 스크립트**(`python server_up.py`)다. 컨테이너·서버 기동을 확인한 뒤 이 엔드포인트를 한 번 호출한다 — **서버는 랭킹 캐시를 스스로 적재하지 않는다.** 예전에는 시즌 정산 배치가 Redis 리더 락을 쥔 채 매 주기 앞단에서 이 일을 했으나, 적재 시점이 배치 주기에 묶여 보이지 않았고 호출자가 스크립트 하나로 정해지면서 중복 재구축을 막을 분산 락도 필요 없어졌다.
+- **몇 번을 호출해도 안전하다**(멱등). 정본이 MySQL이고 ZADD는 `userId` 단위 덮어쓰기이며 점수는 기록에서 결정론적으로 계산되므로, 같은 상태에 다시 호출하면 같은 리더보드가 된다.
+- **키가 설정돼 있지 않으면 404로 닫힌다**(설정 `Admin:ApiKey`, 환경변수 `Admin__ApiKey`). 설정을 빼먹은 서버에 무인증 관리 API가 열려 있는 상태를 만들지 않고, 경로의 존재 자체를 감춘다.
+- **적재 로직(점수 인코딩·키 이름)은 서버 코드에만 둔다.** 스크립트가 MySQL·Redis에 직접 붙어 ZADD하면 인코딩 규칙이 두 언어에 복제돼 조용히 어긋나므로, 스크립트는 "적재하라"고 지시만 한다.
 
 ## 4. 에러 코드
 
