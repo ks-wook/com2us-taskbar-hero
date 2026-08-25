@@ -11,7 +11,7 @@ namespace GameServer.Services;
 /// 리더보드(<c>rank:bossrush:{seasonId}</c>)가 비어 있으면 MySQL <c>boss_rush_record</c>를 페이지 단위로
 /// 읽어 ZADD로 재구축한다.
 /// <para><b>서버가 스스로 하지 않는다.</b> 예전에는 시즌 정산 배치가 리더 락을 쥔 채 매 주기 앞단에서
-/// 이 일을 했지만, 지금은 <b>서버 밖의 부트스트랩 스크립트</b>(<c>server_up.py</c>)가 서버 기동을 확인한
+/// 이 일을 했지만, 지금은 <b>서버 밖의 부트스트랩 스크립트</b>(<c>server_up_with_docker.py</c>)가 서버 기동을 확인한
 /// 뒤 관리 API를 한 번 호출한다 — 적재 시점이 기동 절차의 명시적인 한 단계가 되고, 호출자가 하나뿐이라
 /// 중복 재구축을 막을 분산 락이 필요하지 않다.</para>
 /// <para>정본은 MySQL이므로 이 작업은 <b>언제 몇 번을 돌려도 안전</b>하다 — ZADD는 member(userId) 단위

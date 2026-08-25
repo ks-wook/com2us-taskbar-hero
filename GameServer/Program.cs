@@ -169,7 +169,7 @@ builder.Services.AddScoped<IBossRushRankCache, BossRushRankCache>();
 builder.Services.AddSingleton<IBatchLock, BatchLock>();
 builder.Services.AddScoped<IBossRushService, BossRushService>();
 
-// 랭킹 캐시 최초 적재(워밍업) — **서버가 스스로 하지 않는다.** 부트스트랩 스크립트(server_up.py)가
+// 랭킹 캐시 최초 적재(워밍업) — **서버가 스스로 하지 않는다.** 부트스트랩 스크립트(server_up_with_docker.py)가
 //   컨테이너·서버 기동을 확인한 뒤 관리 API(POST /api/admin/boss-rush/rank/warmup)로 한 번 지시한다.
 //   예전에는 시즌 정산 배치가 리더 락을 쥔 채 매 주기 앞단에서 이 일을 했는데, 적재 시점이 배치 주기에
 //   묶여 눈에 보이지 않았다. 호출자가 스크립트 하나로 정해지면서 중복 재구축을 막을 분산 락도 필요 없어졌다.

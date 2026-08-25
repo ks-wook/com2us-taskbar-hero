@@ -486,7 +486,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 
 ### 5.6 랭킹 캐시 적재(관리) — `POST /api/admin/boss-rush/rank/warmup`
 
-랭킹 캐시(리더보드 ZSET + 시즌 메타)를 정본에서 최초 적재한다. **게임 클라이언트가 부르는 API가 아니다** — 호출 주체는 부트스트랩 스크립트 `python server_up.py`이며, 서버는 이 적재를 기동 시 스스로 하지 않는다(6.3).
+랭킹 캐시(리더보드 ZSET + 시즌 메타)를 정본에서 최초 적재한다. **게임 클라이언트가 부르는 API가 아니다** — 호출 주체는 부트스트랩 스크립트 `python server_up_with_docker.py`이며, 서버는 이 적재를 기동 시 스스로 하지 않는다(6.3).
 
 **인증**: 게임 토큰이 아니라 `X-Admin-Key` 헤더(설정 `Admin:ApiKey`). 키가 설정돼 있지 않으면 엔드포인트가 **404로 닫힌다**.
 
@@ -573,7 +573,7 @@ COMMIT
 - **Redis Sorted Set은 순위 조회 전용 파생 인덱스.** MySQL로 순위를 세면 `COUNT(*) WHERE best_clear_ms < ?` 스캔이 등재 인원에 비례해 무거워지지만 `ZRANK`는 O(log N)이다.
 - **정상 경로의 랭킹 조회는 Redis 단독이다.** 목록(5.4)은 `ZRANGE ... WITHSCORES` + `ZCARD` + `HMGET player:nickname`, 내 순위(5.5)는 `ZRANK` + `ZSCORE` + `ZCARD` + `HMGET`(1 field)로 끝난다. 시즌 메타는 `bossrush:season:current`에서 읽는다(4.3). **MySQL은 캐시 미스·폴백·종료 시즌 조회에서만** 개입한다.
 - **캐시 최초 적재(워밍업)는 서버 밖에서 지시한다.** 관리 API `POST /api/admin/boss-rush/rank/warmup`(`X-Admin-Key` 헤더)이 `EXISTS rank:bossrush:{현시즌}`을 확인하고 없으면 `boss_rush_record`를 페이지 단위(500)로 읽어 ZADD로 재구축하며(점수 인코딩에 그 시즌의 `start_at`이 필요하므로 시즌 행을 함께 들고 있는다, 4.3), `bossrush:season:current`도 같은 호출에서 `boss_rush_season`에서 적재한다. **닉네임 캐시는 적재 대상이 아니다** — lazy로 채워진다(4.3).
-  - **호출 주체는 부트스트랩 스크립트**(`python server_up.py`)다. 컨테이너·서버를 띄우고 헬스 체크를 통과한 뒤 이 엔드포인트를 한 번 호출한다 — **서버는 기동 시 스스로 적재하지 않는다.**
+  - **호출 주체는 부트스트랩 스크립트**(`python server_up_with_docker.py`)다. 컨테이너·서버를 띄우고 헬스 체크를 통과한 뒤 이 엔드포인트를 한 번 호출한다 — **서버는 기동 시 스스로 적재하지 않는다.**
   - **왜 배치에서 뺐나**: 예전에는 시즌 정산 배치가 Redis 리더 락을 쥔 채 매 주기 앞단에서 이 일을 했다. 락을 재활용해 scale-out 중복 재구축을 막을 수 있었지만, **적재 시점이 배치 주기에 묶여 보이지 않았고**(캐시가 비어 있는 동안 조회가 조용히 MySQL 폴백으로 돌았다) 서버 기동 절차와 적재 절차가 한 프로세스 안에 섞여 있었다. 지금은 적재가 **기동 절차의 명시적인 한 단계**이며, 호출자가 스크립트 하나로 정해지므로 중복 재구축을 막을 분산 락이 필요하지 않다.
   - **몇 번을 호출해도 안전하다**(멱등). 정본이 MySQL이고 ZADD는 `userId` 단위 덮어쓰기이며 점수는 기록에서 결정론적으로 계산된다. `?force=true`면 리더보드가 이미 채워져 있어도 다시 적재한다.
   - **적재 로직은 서버 코드에만 둔다.** 스크립트가 MySQL·Redis에 직접 붙어 ZADD하면 점수 인코딩과 키 이름이 두 언어에 복제돼 조용히 어긋나므로, 스크립트는 "적재하라"고 지시만 하고 결과(`status`·`restored`·`members`)를 읽어 성공/실패만 판정한다.

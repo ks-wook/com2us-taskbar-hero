@@ -5,8 +5,12 @@
 #   이 스크립트는 **서버만** 띄운다. 의존 서비스는 docker-compose가 담당한다:
 #       docker compose up -d mysql redis
 #   서버가 뜬 뒤 보스러시 랭킹 캐시를 Redis에 적재한다(서버가 스스로 하지 않는다):
-#       python server_up.py --warmup-only
-#   두 서버까지 컨테이너로 돌리고 싶으면 이 스크립트 대신 `python server_up.py`를 쓴다
+#       python server_up_with_docker.py --warmup-only
+#
+#   ※ `python server_up.py`가 같은 일(두 서버 watch 기동)에 사전 점검·선빌드·스키마 확인·랭킹 캐시
+#      적재까지 묶어 처리한다(로컬 MySQL·Redis 전제. 컨테이너 DB에 붙일 때는
+#      --mysql-port 33306 --redis 127.0.0.1:36379). 이 스크립트는 그 이전부터 쓰던 최소 경로다.
+#   두 서버까지 컨테이너로 돌리고 싶으면 이 스크립트 대신 `python server_up_with_docker.py`를 쓴다
 #   (같은 5160·5247 포트를 쓰므로 컨테이너 서버와 이 스크립트는 동시에 띄울 수 없다).
 #
 #   ※ 이 파일은 반드시 UTF-8 with BOM으로 저장한다(Windows PowerShell 5.1이 한글 리터럴을

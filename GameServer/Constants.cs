@@ -344,7 +344,7 @@ public static class Constants
         /// <summary>
         /// 랭킹 캐시 워밍업 결과 상태값(관리 API 응답 <c>status</c>). 외부 스크립트가 이 문자열로
         /// 성공/재적재 여부를 판정하므로 <b>값을 바꾸면 스크립트도 함께 고쳐야 한다</b>
-        /// (<c>server_up.py</c>).
+        /// (<c>server_up_with_docker.py</c>).
         /// </summary>
         public static class RankWarmupStatus
         {

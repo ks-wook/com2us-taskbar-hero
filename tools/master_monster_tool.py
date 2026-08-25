@@ -703,6 +703,14 @@ def spawn_count_of(spawn_rows, sid, code):
     return 0
 
 
+def spawn_level_of(spawn_rows, sid, code):
+    """그 (stage_id, monster_code)의 현재 등장 레벨(없으면 None)."""
+    for r in spawn_rows:
+        if r["stage_id"] == sid and r["code"] == code:
+            return r["level"]
+    return None
+
+
 def stage_total(spawn_rows, sid, override=None):
     """그 스테이지의 일반 몬스터 총 마리 수(보스 행 제외). override = {code: count} 로 일부를 바꿔 계산한다."""
     counts = {r["code"]: r["count"] for r in spawn_rows
@@ -733,7 +741,13 @@ def build_spawn_rows(code, stages, difficulties, spawn_rows=None, level=None, st
                         "1 미만입니다. 배치를 없애려면 별도로 행을 지우세요.")
             else:
                 final = count
-            lv = level if level is not None else spawn_level(act, stage, False, strong)
+            # 이미 배치된 행은 **그 레벨을 유지한다** — 마리 수만 조정하는 `spawn` 이
+            # 세기(레벨)까지 곡선 값으로 되돌려 버리면 손으로 정한 배치가 조용히 무너진다.
+            lv = level
+            if lv is None:
+                lv = spawn_level_of(spawn_rows or [], sid, code)
+            if lv is None:
+                lv = spawn_level(act, stage, False, strong)
             rows.append({"stage_id": sid, "code": code, "level": lv,
                          "count": final, "is_boss": 0})
     return rows
@@ -1025,11 +1039,11 @@ def cmd_add(args):
 
     verb = "갱신" if updating else "추가"
     print(f"[{verb}] {code} {name} — hp {hp} / attack {attack} "
-          f"(Act{args.act} {'보스' if boss else f'스테이지 {stage}'} 추천 {rec_hp}/{rec_atk})")
-    if args.hp is not None and args.hp != rec_hp:
-        print(f"  · hp 를 추천({rec_hp})에서 {args.hp} 로 지정했습니다.")
-    if args.attack is not None and args.attack != rec_atk:
-        print(f"  · attack 을 추천({rec_atk})에서 {args.attack} 로 지정했습니다.")
+          f"(Act{args.act} {'보스' if boss else f'스테이지 {stage}'} 기준값 {base_hp}/{base_atk})")
+    if args.hp is not None and args.hp != base_hp:
+        print(f"  · hp 를 통일 기준값({base_hp})에서 {args.hp} 로 지정했습니다.")
+    if args.attack is not None and args.attack != base_atk:
+        print(f"  · attack 을 통일 기준값({base_atk})에서 {args.attack} 로 지정했습니다.")
 
     if args.dry_run:
         print("\n--- schema.sql (해당 줄) ---")

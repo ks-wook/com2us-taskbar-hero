@@ -7,11 +7,11 @@
 
 ## 서버 실행 방법
 
-저장소 루트에서 **`server_up.py` 스크립트를 실행하면** docker-compose 기반으로 로컬 실행에 필요한 컨테이너들이 세팅되어 실행된다.
+저장소 루트에서 **`server_up_with_docker.py` 스크립트를 실행하면** docker-compose 기반으로 로컬 실행에 필요한 컨테이너들이 세팅되어 실행된다.
 
 ```powershell
 git clone <repo> && cd com2us-taskbar-hero
-python server_up.py
+python server_up_with_docker.py
 ```
 
 스크립트가 사전 점검(도커 접속·포트 충돌) → 서버 이미지 재빌드 → `docker compose up -d`(mysql · redis · accountserver · gameserver) → 컨테이너 healthy 대기 → MySQL 스키마 확인 → 보스러시 랭킹 캐시 적재까지 순서대로 처리한다.

@@ -142,7 +142,7 @@ Base64 디코딩 → 필드 분리(userId:timestamp:salt:hash)
 
 **SecretKey는 `AccountServer/appsettings.json`에 로컬 개발용 기본값을 두고, 운영·배포에서는 환경 변수로 덮어쓴다.**
 
-- **로컬/개발**: `appsettings.json`의 `Security:SecretKey`(32바이트 = 64 hex 랜덤). **저장소를 클론하면 그대로 뜬다** — 새 PC에서 손으로 준비할 것이 없게 하는 것이 이 결정의 이유다(부트스트랩 `server_up.py`의 준비물 0). 이 값은 로컬 개발 전용이며 실제 계정을 지키는 키가 아니다.
+- **로컬/개발**: `appsettings.json`의 `Security:SecretKey`(32바이트 = 64 hex 랜덤). **저장소를 클론하면 그대로 뜬다** — 새 PC에서 손으로 준비할 것이 없게 하는 것이 이 결정의 이유다(부트스트랩 `server_up_with_docker.py`의 준비물 0). 이 값은 로컬 개발 전용이며 실제 계정을 지키는 키가 아니다.
 - **운영/배포**: 환경 변수 `Security__SecretKey=<값>`(또는 User Secrets)로 주입한다 — ASP.NET Core 설정 우선순위상 환경 변수가 `appsettings.json`을 이기므로 코드를 고치지 않고 교체된다. 컨테이너로 띄울 때는 저장소 루트 `.env`에 `Security__SecretKey=<값>`을 두면 컴포즈가 전달한다(값이 없으면 전달하지 않으므로 기본값이 그대로 쓰인다).
 - **소스에는 넣지 않는다.** 코드가 키를 들고 있으면 어느 배포에서도 바꿀 수 없다. `TokenGenerator`는 출처와 무관하게 `configuration["Security:SecretKey"]`로 읽고, 비어 있으면 기동 시 예외로 알린다.
 - SecretKey는 최소 32바이트(256비트) 이상 랜덤 값을 사용한다. 키를 바꾸면 **이미 발급된 토큰만** 무효가 된다(재로그인으로 복구, GameServer는 Redis 대조만 하므로 키를 모른다).

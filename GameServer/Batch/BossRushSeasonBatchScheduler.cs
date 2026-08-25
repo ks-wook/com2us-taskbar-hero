@@ -28,7 +28,7 @@ namespace GameServer.Batch;
 /// 새 시즌이 등록되면 그 사실을 아는 쪽이 <see cref="PeriodicBatchScheduler.Wake"/>로 깨운다(서버 기동 시
 /// 도는 첫 주기도 같은 역할을 한다).</para>
 /// <para><b>랭킹 캐시 최초 적재(워밍업)는 이 배치가 하지 않는다</b> — 서버 밖의 부트스트랩 스크립트
-/// (<c>server_up.py</c>)가 기동을 확인한 뒤 관리 API <c>POST /api/admin/boss-rush/rank/warmup</c>을
+/// (<c>server_up_with_docker.py</c>)가 기동을 확인한 뒤 관리 API <c>POST /api/admin/boss-rush/rank/warmup</c>을
 /// 한 번 호출한다(6.3). 정산이 만드는 캐시 변화(리더보드 TTL·다음 시즌 메타)는 그대로 이 배치가 낸다.</para>
 /// 설정: appsettings "BossRushSeasonBatch" 섹션(IntervalSeconds 기본 600=10분 · BatchSize 기본 500).
 /// </summary>

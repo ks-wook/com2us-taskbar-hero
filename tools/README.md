@@ -1,6 +1,6 @@
 # tools — 개발용 도구
 
-> **로컬 환경 기동은 이 폴더가 아니라 저장소 루트의 `server_up.py`**다 — `python server_up.py`가 docker compose 묶음을 띄우고 healthy까지 기다린 뒤 보스러시 랭킹 캐시까지 적재한다(옛 `containers-up.ps1` 대체). 묶음·옵션 설명은 그 파일 상단 주석에 있다.
+> **로컬 환경 기동은 이 폴더가 아니라 저장소 루트의 `server_up_with_docker.py`**다 — `python server_up_with_docker.py`가 docker compose 묶음을 띄우고 healthy까지 기다린 뒤 보스러시 랭킹 캐시까지 적재한다(옛 `containers-up.ps1` 대체). 묶음·옵션 설명은 그 파일 상단 주석에 있다.
 
 ## balance_sim.py — 밸런스 시뮬레이터 (클리어 여부·클리어 시간 산출)
 

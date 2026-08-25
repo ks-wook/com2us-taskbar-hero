@@ -5,7 +5,7 @@ namespace GameServer.Controllers;
 
 /// <summary>
 /// 보스러시 운영·개발용 관리 API(<c>X-Admin-Key</c> 필요, 게임 인증 토큰과 무관).
-/// <para>호출 주체는 부트스트랩 스크립트 <c>server_up.py</c>다 — 컨테이너와 서버를 띄운 뒤
+/// <para>호출 주체는 부트스트랩 스크립트 <c>server_up_with_docker.py</c>다 — 컨테이너와 서버를 띄운 뒤
 /// 랭킹 캐시 최초 적재를 이 엔드포인트로 지시한다(보스러시 기획서 6.3).</para>
 /// </summary>
 [ApiController]

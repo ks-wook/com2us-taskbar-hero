@@ -1535,14 +1535,14 @@ sequenceDiagram
 
 ### 랭킹 캐시 적재(관리) — `POST /api/admin/boss-rush/rank/warmup`
 
-랭킹 캐시는 **서버가 스스로 적재하지 않는다.** 부트스트랩 스크립트(`python server_up.py`)가 컨테이너와 서버를
+랭킹 캐시는 **서버가 스스로 적재하지 않는다.** 부트스트랩 스크립트(`python server_up_with_docker.py`)가 컨테이너와 서버를
 띄우고 헬스 체크를 통과한 뒤 이 관리 API를 한 번 호출한다. 예전에는 시즌 정산 배치가 Redis 리더 락을 쥔 채 매
 주기 앞단에서 이 일을 했지만, 적재 시점이 배치 주기에 묶여 보이지 않았다 — 지금은 **기동 절차의 명시적인 한
 단계**이고 호출자가 하나뿐이라 중복 재구축을 막을 분산 락이 필요하지 않다(보스러시 기획서 6.3).
 
 ```mermaid
 sequenceDiagram
-    actor T as 부트스트랩 스크립트(server_up.py)
+    actor T as 부트스트랩 스크립트(server_up_with_docker.py)
     participant S as GameServer
     participant R as Redis
     participant DB as MySQL(game)

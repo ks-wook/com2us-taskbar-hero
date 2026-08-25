@@ -154,7 +154,7 @@ Content-Type: application/json
   "data": { "act": 1, "difficulty": 1, "stage": 1, "elapsedMs": 41200, "remainingMonsterCount": 2, "reachedBoss": true }
 }
 
-### [관리] 보스러시 랭킹 캐시 최초 적재(게임 토큰 아님 — X-Admin-Key 헤더. 평소에는 server_up.py가 호출한다)
+### [관리] 보스러시 랭킹 캐시 최초 적재(게임 토큰 아님 — X-Admin-Key 헤더. 평소에는 server_up_with_docker.py가 호출한다)
 POST {{GameServer_HostAddress}}/api/admin/boss-rush/rank/warmup
 X-Admin-Key: taskbar_hero_dev_admin
 
