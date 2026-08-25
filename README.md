@@ -2,6 +2,33 @@
 
 2026 컴투스 지니어스 - 방치형 게임 **Taskbar Hero** 모작 프로젝트
 
+
+---
+
+## 서버 실행 방법
+
+저장소 루트에서 **`server_up.py` 스크립트를 실행하면** docker-compose 기반으로 로컬 실행에 필요한 컨테이너들이 세팅되어 실행된다.
+
+```powershell
+git clone <repo> && cd com2us-taskbar-hero
+python server_up.py
+```
+
+스크립트가 사전 점검(도커 접속·포트 충돌) → 서버 이미지 재빌드 → `docker compose up -d`(mysql · redis · accountserver · gameserver) → 컨테이너 healthy 대기 → MySQL 스키마 확인 → 보스러시 랭킹 캐시 적재까지 순서대로 처리한다.
+
+**필요한 것**: Docker Desktop · .NET SDK 10 · Python 3.7+ (클라이언트 개발 시 Unity `6000.5.3f1`)
+
+**접속 주소(로컬 기준)**
+
+| 대상 | 주소 |
+|---|---|
+| GameServer | `http://localhost:5247/swagger` |
+| AccountServer | `http://localhost:5160/swagger` |
+| MySQL | `127.0.0.1:33306` |
+| Redis | `127.0.0.1:36379` |
+
+더 자세한 옵션과 개발 흐름은 [개발시-참고문서.md](개발시-참고문서.md)를 참고한다.
+
 ---
 
 ## 게임 소개
@@ -18,8 +45,6 @@
 <img src="docs/images/플레이-화면.png" alt="Taskbar Hero 플레이 화면" width="100%">
 
 *작업표시줄 위에 도킹된 플레이 화면 — 가운데 좁은 띠에서 자동 전투가 진행된다.*
-
-조작 방법과 화면별 상세 설명은 **[게임 플레이 가이드](com2us-taskbar-hero-client/docs/게임-플레이-가이드.html)** 를 참고한다(브라우저로 열면 된다).
 
 ---
 
