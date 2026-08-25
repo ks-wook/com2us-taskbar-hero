@@ -13,19 +13,16 @@ namespace TaskbarHero.Client.UI
     /// <b>계정·게임 서버 주소를 각각 포트까지 입력하는 칸</b>(<c>호스트:포트</c>), 하단 버튼으로 구성된다.
     /// 두 서버는 포트가 다르므로(Dev 5160/5247 · QA 443/8443) 호스트 하나로는 접속처를 표현할 수 없어
     /// 서버별 입력 칸을 둔다(스킴 http/https는 선택한 환경 값을 유지한다).
-    /// 여는 경로가 둘이다:
-    /// <list type="bullet">
-    /// <item><b>로그인 직전 자동 노출</b>(<see cref="Show"/>) — QA 빌드에서는 생략하고 곧바로 로그인으로 넘어간다
-    ///   (<see cref="ServerEnvironment.ShowServerSelectOnStart"/>). <b>단, 이 기기에 저장된 접속처가 없으면</b>
-    ///   (<see cref="NeedsInitialSelection"/>) 빌드 종류와 무관하게 <b>무조건 표시</b>한다 — 접속처를 한 번도
-    ///   고르지 않은 기기를 프리셋 주소로 조용히 붙여 버리지 않기 위함이다.</item>
-    /// <item><b>타이틀 우측 하단 톱니바퀴</b>(<see cref="ShowManual"/>) — <b>빌드 종류와 무관하게</b> 열린다.
-    ///   접속처를 되돌릴 통로가 없으면 안 되므로 QA 빌드에서도 이 경로는 막지 않는다.
-    ///   '취소'(또는 ESC)로 아무것도 바꾸지 않고 닫을 수 있다.</item>
-    /// </list>
-    /// 기본 선택은 <b>지금 접속 중인 환경</b>(= 마지막으로 고른 환경)이다. '확인'을 누르면 환경과 두 서버 주소가
-    /// 확정(<see cref="NetworkManager.SetServerEndpoints"/>)되고 <b>다음 실행을 위해 저장</b>된다 —
-    /// 마지막으로 접속한 서버가 계속 유지되고, 이후로는 "저장된 접속처가 있는 기기"가 된다.
+    /// 여는 경로는 <b>타이틀 우측 하단 톱니바퀴</b>(<see cref="ShowManual"/>) 하나다 — 빌드 종류와 무관하게 열리며
+    /// '취소'(또는 ESC)로 아무것도 바꾸지 않고 닫을 수 있다. <b>로그인 직전 자동 노출은 하지 않는다</b>
+    /// (<see cref="ServerEnvironment.ShowServerSelectOnStart"/>가 항상 false) — 시작 접속처가 빌드에 구워진
+    /// 환경(에디터·Dev 빌드는 <b>Dev</b>)으로 정해져 있으므로 매 실행 물을 이유가 없다.
+    /// 자동 노출 경로(<see cref="Show"/>)는 그 값을 true로 되돌리면 다시 살아난다.
+    /// <para>
+    /// 기본 선택은 <b>지금 접속 중인 환경</b>이며, 실행 시작 시점의 그 값은 언제나 빌드 기본 환경(= Dev)이다.
+    /// '확인'을 누르면 환경과 두 서버 주소가 확정(<see cref="NetworkManager.SetServerEndpoints"/>)된다 —
+    /// <b>호스트:포트만 다음 실행까지 저장</b>되고, 고른 <b>환경</b>은 그 실행에만 적용된다.
+    /// </para>
     /// 런타임에 자체 Canvas·EventSystem을 코드로 구성한다(타이틀 단계에는 EventSystem이 없으므로 필요 시 생성).
     /// </summary>
     public class ServerSelectPanelController : MonoBehaviour
@@ -57,49 +54,24 @@ namespace TaskbarHero.Client.UI
         public static bool IsOpen { get; private set; }
 
         /// <summary>
-        /// <b>이 기기에 저장된 접속처가 없는가</b>(접속 서버 선택 UI의 '확인'을 누른 적이 없는가).
-        /// true면 <b>빌드 종류·자동 로그인과 무관하게</b> 선택 화면을 반드시 한 번 보여 준다 —
-        /// 접속처를 고른 적 없는 기기를 빌드 프리셋 주소로 조용히 붙여 버리지 않기 위함이다.
-        /// </summary>
-        public static bool NeedsInitialSelection
-            => NetworkManager.Instance != null && !NetworkManager.HasServerSelection;
-
-        /// <summary>
         /// 로그인 직전의 접속 서버 선택 화면을 표시한다. onConfirmed는 '확인' 후(서버 확정·화면 파괴 직후) 1회 호출된다.
-        /// <para><b>서버 선택을 자동으로 묻지 않는 빌드</b>(QA — <see cref="ServerEnvironment.ShowServerSelectOnStart"/>가
-        /// false)에서는 화면을 만들지 않고 onConfirmed를 즉시 호출한다. 접속처는 이미 <see cref="NetworkManager"/>가
-        /// 기동 시 확정해 뒀으므로(마지막 선택 또는 빌드 프리셋) 여기서 더 확정할 것이 없다.
+        /// <para><b>기본값은 "띄우지 않음"이다</b> — <see cref="ServerEnvironment.ShowServerSelectOnStart"/>가 false이므로
+        /// 화면을 만들지 않고 onConfirmed를 즉시 호출한다. 접속처는 이미 <see cref="NetworkManager"/>가 기동 시
+        /// 빌드 기본 환경(에디터·Dev 빌드는 Dev)으로 확정해 뒀으므로 여기서 더 확정할 것이 없다.
         /// 바꿔야 할 때는 타이틀의 톱니바퀴(<see cref="ShowManual"/>)로 연다.</para>
-        /// <para><b>예외 — 저장된 접속처가 없는 기기</b>(<see cref="NeedsInitialSelection"/>)에서는 그 빌드에서도
-        /// 화면을 띄운다.</para>
         /// </summary>
         public static void Show(Action onConfirmed)
         {
-            if (!ServerEnvironment.ShowServerSelectOnStart && !NeedsInitialSelection)
+            if (!ServerEnvironment.ShowServerSelectOnStart)
             {
                 var env = NetworkManager.Instance != null
                     ? NetworkManager.Instance.CurrentEnvironment
                     : ServerEnvironment.BuildDefault;
-                Debug.Log($"[ServerSelect] 서버 선택을 자동으로 묻지 않는 빌드({ServerEnvironment.DisplayNameOf(env)}) — 화면을 건너뛴다");
+                Debug.Log($"[ServerSelect] 접속 서버 선택을 자동으로 묻지 않는다({ServerEnvironment.DisplayNameOf(env)}) — 화면을 건너뛴다");
                 onConfirmed?.Invoke();
                 return;
             }
             Create(manual: false, onConfirmed: onConfirmed, onClosed: null);
-        }
-
-        /// <summary>
-        /// 접속처를 <b>반드시 확정하고 넘어가야 하는</b> 경우(저장된 접속처가 없는 기기)에 쓰는 강제 노출.
-        /// 자동 노출과 같은 화면이라 '취소'·ESC가 없다.
-        /// </summary>
-        /// <param name="onClosed">'확인' 후 1회 호출된다. 인자는 <b>접속 주소가 실제로 바뀌었는지</b>이며,
-        /// true면 호출측이 그 서버 기준으로 상태를 다시 잡아야 한다(예: 이전 서버로 끝낸 자동 로그인 무효화).</param>
-        public static void ShowRequired(Action<bool> onClosed)
-        {
-            if (IsOpen)
-            {
-                return;   // 이미 떠 있으면 겹쳐 열지 않는다.
-            }
-            Create(manual: false, onConfirmed: null, onClosed: onClosed);
         }
 
         /// <summary>

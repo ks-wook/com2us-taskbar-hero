@@ -19,18 +19,15 @@ namespace TaskbarHero.Client.Managers
     /// (에디터 메뉴 <c>TaskbarHero/Build/…</c>의 QA 빌드가 <c>extraScriptingDefines</c>로 넣는다).
     /// </para>
     /// <para>
-    /// <b>접속처는 어느 빌드에서든 바꿀 수 있고, 마지막 선택이 다음 실행까지 유지된다</b> —
-    /// 타이틀 화면 우측 하단의 톱니바퀴(<c>ServerSettingsButton</c>)로 '접속 서버 변경' 화면을 열며,
-    /// 확정한 환경·호스트는 <see cref="NetworkManager"/>가 PlayerPrefs에 저장해 다음 실행에 되살린다.
-    /// 저장 키는 <b>빌드에 구워진 기본 환경별로 분리</b>돼 있다 — PlayerPrefs는 Dev/QA 빌드가 같은
-    /// product 이름으로 공유하므로, 키가 하나면 Dev 빌드에서 고른 값이 QA 빌드의 시작 접속처를 덮어써
-    /// "QA 빌드인데 로컬로 붙는" 사고가 난다.
+    /// <b>시작 접속처는 언제나 이 빌드에 구워진 환경</b>이다 — 에디터·Dev 빌드는 <b>Dev(로컬)</b>, QA 빌드는 QA.
+    /// 지난 실행에서 고른 환경은 다음 실행으로 넘기지 않는다 — 에디터에서 한 번 QA를 골랐다는 이유로
+    /// 다음 플레이가 조용히 원격 서버에 붙어 버리는 것을 막기 위함이다.
     /// </para>
     /// <para>
-    /// <b>QA 빌드는 로그인 전 서버 선택 화면을 자동으로 띄우지 않는다</b>(<see cref="ShowServerSelectOnStart"/>) —
-    /// 접속처가 원격으로 정해진 배포본이라 매 실행 선택을 물을 이유가 없다. 바꿔야 할 때는 톱니바퀴로 연다.
-    /// <b>예외로, 이 기기에서 접속처를 한 번도 확정하지 않았으면</b>(<see cref="NetworkManager.HasServerSelection"/>가 false)
-    /// 빌드 종류와 무관하게 선택 화면을 무조건 띄운다(<c>ServerSelectPanelController.NeedsInitialSelection</c>).
+    /// <b>접속 서버 선택 화면은 자동으로 뜨지 않는다</b>(<see cref="ShowServerSelectOnStart"/>가 어느 빌드에서도 false).
+    /// 접속처를 바꾸려면 타이틀 화면 우측 하단의 톱니바퀴(<c>ServerSettingsButton</c>)로 직접 연다.
+    /// 거기서 확정한 <b>호스트:포트 override</b>는 환경별 키로 PlayerPrefs에 저장돼 다음 실행에도 유지되지만
+    /// (Dev/QA 키가 분리돼 서로를 덮어쓰지 않는다), <b>어느 환경으로 붙을지</b>는 저장하지 않는다.
     /// </para>
     /// 실제 적용은 <see cref="NetworkManager"/>가 담당한다.
     /// </summary>
@@ -51,8 +48,8 @@ namespace TaskbarHero.Client.Managers
         /// <summary>QA 게임 서버 주소(Tailscale, https 8443).</summary>
         public const string QaGameBaseUrl = "https://ksu864-1.tail961c4e.ts.net:8443";
 
-        /// <summary>이 빌드에 구워진 기본 환경(정의 심볼 <c>TH_QA</c>가 있으면 QA).
-        /// 저장된 선택이 없을 때의 시작 환경이자, 접속처 저장 키를 가르는 기준이다.</summary>
+        /// <summary>이 빌드에 구워진 접속 환경(정의 심볼 <c>TH_QA</c>가 있으면 QA, 없으면 <b>Dev</b>).
+        /// <b>실행할 때마다 이 환경으로 시작</b>한다(지난 실행의 선택은 되살리지 않는다).</summary>
         public static ServerEnvironmentKind BuildDefault
         {
             get
@@ -66,24 +63,12 @@ namespace TaskbarHero.Client.Managers
         }
 
         /// <summary>
-        /// 로그인 직전에 '접속 서버 선택' 화면을 <b>자동으로</b> 띄우는가. <b>QA 빌드는 false</b> —
-        /// 접속처가 정해진 배포본이라 매 실행 선택을 묻지 않는다.
+        /// 로그인 직전에 '접속 서버 선택' 화면을 <b>자동으로</b> 띄우는가. <b>어느 빌드에서도 false</b> —
+        /// 시작 접속처가 <see cref="BuildDefault"/>(에디터·Dev 빌드는 Dev)로 정해져 있으므로 매 실행 물을 이유가 없다.
         /// <para>이 값이 false여도 <b>접속처를 바꿀 수 없다는 뜻은 아니다</b> — 타이틀 화면의 톱니바퀴로
         /// 언제든 '접속 서버 변경'을 열 수 있다(<c>ServerSelectPanelController.ShowManual</c>).</para>
-        /// <para>이 값은 <b>빌드 옵션만</b> 본다. <b>저장된 접속처가 없는 기기</b>에서는 이 값이 false여도
-        /// 화면을 띄운다 — 그 판정은 <c>ServerSelectPanelController.NeedsInitialSelection</c>이 한다.</para>
         /// </summary>
-        public static bool ShowServerSelectOnStart
-        {
-            get
-            {
-#if TH_QA
-                return false;
-#else
-                return true;
-#endif
-            }
-        }
+        public static bool ShowServerSelectOnStart => false;
 
         /// <summary>환경별 계정 서버 base URL.</summary>
         public static string AccountBaseUrlOf(ServerEnvironmentKind kind)
