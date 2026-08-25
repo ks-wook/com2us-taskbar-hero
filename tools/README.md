@@ -70,6 +70,9 @@ python tools/balance_sim.py constants                     # 읽어 온 상수·�
 `master-data-schema.sql`의 시드 데이터를 **Unity 클라이언트용 JSON 번들**로 추출한다.
 
 - 흐름: `schema.sql` 재적용(DROP+CREATE+INSERT) → MySQL master DB 조회 → 기획서 §7 규약(**테이블별 camelCase JSON 배열**)으로 직렬화 → `com2us-taskbar-hero-client/Assets/Resources/MasterData/*.json` 출력.
+- **대상 MySQL은 둘이고, 접속되는 것만 갱신한다** — 컨테이너(호스트 `33306`)와 이 PC에 설치한 MySQL(`3306`) 양쪽에 같은 `schema.sql`을 적용한다. 꺼져 있는 쪽은 `[skip ]`으로 건너뛰고, **하나도 못 붙으면 실패**로 끝낸다(종료 코드 5). 클라 번들은 내용이 같으므로 **한 번만** 쓴다(`--export-from`으로 어느 쪽에서 뽑을지 지정 가능).
+  - 대상 선택: `--targets container,local`(기본 `all`) · 접속 정보는 `--container-*`·`--local-*`로 덮어쓴다. 로컬 비밀번호는 환경 변수 `TASKBAR_HERO_MYSQL_LOCAL_PASSWORD`로도 줄 수 있다.
+  - `--host/--port/--user/--password`를 하나라도 주면 **그 대상 하나만** 갱신한다(옛 사용법 그대로).
 - 자식 테이블은 부모 JSON에 배열로 중첩한다: `skill_coefficient`→`skill_master.coefs[]`, `stage_spawn`→`stage_master.spawns[]`, `cube_recipe_ingredient`→`cube_recipe.ingredients[]`. 스탯 컬럼(`hp`~`cooldown`)은 `baseStats`/`statBonus` 객체로 묶는다.
 - 출력 파일(16종): `equip_slot_master · grade_master · class_master · level_master · skill_master · rune_master · item_master · monster_master · stage_master · stage_reward · cube_master · cube_recipe · attendance_master · character_create_cost · inventory_expand_master · gacha_master`. (값 미확정인 `enhance_master`는 제외.)
 - `gacha_master`는 자식 3종을 부모에 중첩한다: `gacha_grade_weight`→`gradeWeights[]`, `gacha_item_pool`→`itemPool[]`, `gacha_pity_rule`→`pityRules[]`. 클라이언트가 배너 이름·비용·등급 확률·천장 기준을 이 번들에서 읽는다(가챠 기획서 §5 서두 — 서버는 "지금 열려 있는가·내 천장이 얼마인가"만 내려준다).
@@ -87,7 +90,9 @@ python tools/balance_sim.py constants                     # 읽어 온 상수·�
 ### 사용법 (CLI)
 ```bash
 python tools/master_data_export.py
-# 옵션: --schema PATH  --output DIR  --host  --port  --user  --password  --database  --no-apply
+# 옵션: --schema PATH  --output DIR  --targets container,local  --export-from container|local
+#       --container-host/-port/-user/-password  --local-host/-port/-user/-password
+#       --host/--port/--user/--password(대상 하나만 지정)  --database  --no-apply
 #   --no-apply : schema.sql 재적용을 생략하고 현재 DB 상태에서만 추출
 ```
 기본값은 이 리포 구조 기준으로 자동 계산된다(스크립트 위치 → 리포 루트).

@@ -11,13 +11,25 @@
      - 스탯 컬럼(hp~cooldown)은 baseStats/statBonus 객체로 묶는다.
   4) 클라이언트의 Assets/Resources/MasterData/*.json 으로 출력한다.
 
+대상 DB — **컨테이너와 로컬 설치본을 모두 갱신하되, 접속되는 것만 한다.**
+  로컬 개발에는 MySQL이 두 벌 있을 수 있다(docker compose의 mysql = 호스트 33306, 이 PC에 설치한 MySQL = 3306).
+  둘 중 어느 쪽에 붙어 개발하든 정본 SQL이 반영돼 있어야 하므로, 이 스크립트는 **선택된 대상 전부에 schema.sql을
+  적용**하고 **접속되지 않는 대상은 건너뛴다**(하나도 못 붙으면 실패로 끝낸다). 클라 JSON 번들은 대상마다 같은
+  SQL을 적용해 내용이 같으므로 **한 번만** 쓴다(--export-from 으로 어느 대상에서 뽑을지 고를 수 있다).
+
 정본:
   - 값:    docs/세부/master-data/master-data-값.md
   - 구조:  docs/세부/master-data/master-data-기획서.md  (§7 클라 번들 포맷)
   - SQL:   docs/세부/master-data/master-data-schema.sql
 
 의존성: pymysql (pip install pymysql)
-사용: python master_data_export.py  [--schema PATH] [--output DIR] [--host] [--port] [--user] [--password] [--no-apply]
+사용:
+  python master_data_export.py                          # 컨테이너 + 로컬 중 붙는 것 전부 갱신
+  python master_data_export.py --targets local          # 로컬 설치본만
+  python master_data_export.py --local-password <비밀번호>   # 로컬 계정 비밀번호가 기본값과 다를 때
+  python master_data_export.py --host 127.0.0.1 --port 3306 --user root --password pw
+                                                        # 대상을 하나만 직접 지정(옛 사용법 — 그 대상만 갱신)
+  python master_data_export.py --no-apply               # schema.sql 재적용 없이 현재 DB에서 번들만 추출
 """
 import argparse
 import json
@@ -45,6 +57,30 @@ REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 DEFAULT_SCHEMA = os.path.join(REPO_ROOT, "docs", "세부", "master-data", "master-data-schema.sql")
 DEFAULT_OUTPUT = os.path.join(REPO_ROOT, "com2us-taskbar-hero-client", "Assets", "Resources", "MasterData")
 DEFAULT_DB = "taskbar_hero_master"
+
+# ---------------------------------------------------------------------------
+# 갱신 대상 MySQL
+#   로컬 개발에는 MySQL이 두 벌 있을 수 있다 — compose의 컨테이너(호스트 33306)와 이 PC에 설치한 MySQL(3306).
+#   어느 쪽에 붙어 개발하든 정본이 반영돼 있어야 하므로 기본값은 **둘 다**이고, 접속되지 않는 쪽은 건너뛴다.
+#   비밀번호는 환경 변수로 덮어쓸 수 있다(컨테이너 쪽은 compose에 고정된 개발용 값이라 그대로 둔다).
+# ---------------------------------------------------------------------------
+TARGET_DEFAULTS = {
+    "container": {
+        "label": "컨테이너 MySQL",
+        "host": "127.0.0.1",
+        "port": 33306,
+        "user": "root",
+        "password": os.environ.get("TASKBAR_HERO_MYSQL_CONTAINER_PASSWORD", "taskbar_hero_dev"),
+    },
+    "local": {
+        "label": "로컬 설치 MySQL",
+        "host": "127.0.0.1",
+        "port": 3306,
+        "user": "root",
+        "password": os.environ.get("TASKBAR_HERO_MYSQL_LOCAL_PASSWORD", "root"),
+    },
+}
+TARGET_ORDER = ("container", "local")
 
 
 # ---------------------------------------------------------------------------
@@ -498,34 +534,112 @@ EXPORTERS = [
 ]
 
 
+def connect(target):
+    """대상 하나에 접속한다(DB 미선택 — schema.sql이 CREATE DATABASE/USE 를 수행한다)."""
+    return pymysql.connect(
+        host=target["host"], port=target["port"], user=target["user"], password=target["password"],
+        charset="utf8mb4", autocommit=False, connect_timeout=5,
+    )
+
+
+def resolve_targets(args):
+    """갱신할 대상 목록을 확정한다.
+
+    --host 등을 하나라도 주면 **그 대상 하나만** 갱신한다(옛 사용법과 같은 동작). 그러지 않으면
+    --targets(기본 container,local)의 기본값에 --container-*/--local-* 로 준 값만 덮어쓴다.
+    """
+    if any(v is not None for v in (args.host, args.port, args.user, args.password)):
+        base = TARGET_DEFAULTS["container"]
+        return [{
+            "key": "custom",
+            "label": "지정한 MySQL",
+            "host": args.host or base["host"],
+            "port": args.port or base["port"],
+            "user": args.user or base["user"],
+            "password": args.password if args.password is not None else base["password"],
+        }]
+
+    keys = TARGET_ORDER if args.targets == "all" else tuple(
+        k.strip() for k in args.targets.split(",") if k.strip())
+    targets = []
+    for key in keys:
+        if key not in TARGET_DEFAULTS:
+            sys.stderr.write(f"[ERROR] 알 수 없는 대상: {key} (가능한 값: {', '.join(TARGET_ORDER)}, all)\n")
+            return None
+        t = dict(TARGET_DEFAULTS[key], key=key)
+        for field in ("host", "port", "user", "password"):
+            override = getattr(args, f"{key}_{field}", None)
+            if override is not None:
+                t[field] = override
+        targets.append(t)
+    return targets
+
+
 def main():
     ap = argparse.ArgumentParser(description="마스터 데이터 DB -> Unity JSON 추출기")
     ap.add_argument("--schema", default=DEFAULT_SCHEMA, help="master-data-schema.sql 경로")
     ap.add_argument("--output", default=DEFAULT_OUTPUT, help="JSON 출력 디렉터리(Assets/Resources/MasterData)")
-    ap.add_argument("--host", default="localhost")
-    ap.add_argument("--port", type=int, default=33306)  # compose가 컨테이너 3306을 호스트 33306으로 노출한다
-    ap.add_argument("--user", default="root")
-    ap.add_argument("--password", default="taskbar_hero_dev")
+    ap.add_argument("--targets", default="all",
+                    help=f"갱신할 대상(콤마 구분: {', '.join(TARGET_ORDER)} · 기본 all = 둘 다, 접속되는 것만)")
+    ap.add_argument("--export-from", default=None, choices=list(TARGET_ORDER) + ["custom"],
+                    help="클라 번들을 뽑을 대상(생략하면 접속된 첫 대상)")
+    for key in TARGET_ORDER:
+        d = TARGET_DEFAULTS[key]
+        ap.add_argument(f"--{key}-host", default=None, help=f"{d['label']} 호스트(기본 {d['host']})")
+        ap.add_argument(f"--{key}-port", type=int, default=None, help=f"{d['label']} 포트(기본 {d['port']})")
+        ap.add_argument(f"--{key}-user", default=None, help=f"{d['label']} 계정(기본 {d['user']})")
+        ap.add_argument(f"--{key}-password", default=None, help=f"{d['label']} 비밀번호")
+    # 옛 사용법 — 하나라도 주면 그 대상 하나만 갱신한다(기본값을 두지 않아 "줬는지"를 구분한다).
+    ap.add_argument("--host", default=None, help="대상을 하나만 직접 지정할 때의 호스트")
+    ap.add_argument("--port", type=int, default=None, help="대상을 하나만 직접 지정할 때의 포트")
+    ap.add_argument("--user", default=None, help="대상을 하나만 직접 지정할 때의 계정")
+    ap.add_argument("--password", default=None, help="대상을 하나만 직접 지정할 때의 비밀번호")
     ap.add_argument("--database", default=DEFAULT_DB)
     ap.add_argument("--no-apply", action="store_true", help="schema.sql 재적용을 생략하고 현재 DB에서만 추출")
     args = ap.parse_args()
 
-    # schema.sql 재적용은 DB 미선택 상태로 연결(스크립트가 CREATE DATABASE/USE 를 수행)
-    conn = pymysql.connect(
-        host=args.host, port=args.port, user=args.user, password=args.password,
-        charset="utf8mb4", autocommit=False,
-    )
-    try:
-        if not args.no_apply:
-            if not os.path.isfile(args.schema):
-                sys.stderr.write(f"[ERROR] schema 파일을 찾을 수 없습니다: {args.schema}\n")
-                return 3
-            n = apply_schema(conn, args.schema)
-            print(f"[apply] schema.sql 재적용 완료: {n}개 문 실행 ({args.schema})")
-        else:
+    targets = resolve_targets(args)
+    if targets is None:
+        return 4
+    if not args.no_apply and not os.path.isfile(args.schema):
+        sys.stderr.write(f"[ERROR] schema 파일을 찾을 수 없습니다: {args.schema}\n")
+        return 3
+
+    # ── ① 대상별 접속 → 붙는 것만 갱신한다(안 붙는 대상은 건너뛴다) ──
+    applied, skipped, conns = [], [], []
+    for t in targets:
+        where = f"{t['host']}:{t['port']}"
+        try:
+            conn = connect(t)
+        except Exception as error:
+            skipped.append((t, str(error).split("\n")[0]))
+            print(f"[skip ] {t['label']}({where}) 접속 불가 — 건너뜁니다: {str(error)[:80]}")
+            continue
+
+        conns.append((t, conn))
+        if args.no_apply:
             with conn.cursor() as cur:
                 cur.execute(f"USE `{args.database}`")
-            print(f"[apply] 생략(--no-apply). 기존 DB `{args.database}` 사용")
+            print(f"[apply] {t['label']}({where}) 생략(--no-apply). 기존 DB `{args.database}` 사용")
+        else:
+            n = apply_schema(conn, args.schema)
+            print(f"[apply] {t['label']}({where}) schema.sql 재적용 완료: {n}개 문 실행")
+        applied.append(t)
+
+    try:
+        if not applied:
+            sys.stderr.write("[ERROR] 접속되는 MySQL이 없습니다 — 갱신한 대상이 없습니다.\n")
+            for t, reason in skipped:
+                sys.stderr.write(f"        {t['label']}({t['host']}:{t['port']}): {reason}\n")
+            sys.stderr.write("        컨테이너는 `docker compose up -d mysql`, 로컬 설치본은 서비스 시작 후 다시 실행하세요.\n")
+            return 5
+
+        # ── ② 번들은 한 번만 쓴다(대상마다 같은 SQL을 적용했으므로 내용이 같다) ──
+        pick = args.export_from
+        source, conn = next(((t, c) for t, c in conns if pick is None or t["key"] == pick), (None, None))
+        if conn is None:
+            sys.stderr.write(f"[ERROR] --export-from {pick} 대상에 접속하지 못했습니다.\n")
+            return 5
 
         os.makedirs(args.output, exist_ok=True)
         total_rows = 0
@@ -538,10 +652,13 @@ def main():
             total_rows += len(data)
             print(f"[write] {filename}.json : {len(data)}건")
 
-        print(f"[done] {len(EXPORTERS)}개 파일 / 총 {total_rows}행 -> {args.output}")
+        print(f"[done] DB 갱신 {len(applied)}곳({' · '.join(t['label'] for t in applied)})"
+              + (f" · 건너뜀 {len(skipped)}곳({' · '.join(t['label'] for t, _ in skipped)})" if skipped else "")
+              + f" / 번들 {len(EXPORTERS)}개 파일 · 총 {total_rows}행 <- {source['label']} -> {args.output}")
         return 0
     finally:
-        conn.close()
+        for _, conn in conns:
+            conn.close()
 
 
 if __name__ == "__main__":
