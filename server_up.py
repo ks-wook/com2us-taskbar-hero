@@ -2,9 +2,8 @@
 """도커 없이 서버 2개만 dotnet watch(핫 리로드)로 띄우는 부트스트랩 — 랭킹 캐시 적재까지.
 
 이 스크립트가 전제하는 것 (server_up_with_docker.py 와 다른 점이 이것뿐이다)
-    **MySQL은 이 PC에 설치되어 돌고 있다**(스크립트가 만들어 줄 수 없다). 컨테이너는 만들지 않는다.
-    **Redis는 응답하지 않으면 저장소에 든 Windows 바이너리를 띄운다** —
-    `Redis-8.8.0-Windows-x64-cygwin-with-Service/redis-server.exe redis.conf`(새 콘솔 창).
+    **MySQL·Redis가 이 PC에서 이미 돌고 있다**(스크립트가 만들어 주지 않는다). 컨테이너는 만들지 않고
+    **AccountServer·GameServer 두 개만** 띄운다 — 의존 서비스는 응답만 확인하고, 없으면 거기서 멈춘다.
     도커를 쓰는 쪽은 `python server_up_with_docker.py`다(컨테이너 5~8개 + 서버까지 전부 컨테이너로).
 
 사용법 (저장소 루트에서 실행한다 — 프로젝트 경로를 이 위치 기준으로 찾는다)
@@ -32,8 +31,8 @@
        옵션으로 준 값은 묻지 않고, 입력이 터미널이 아니면(파이프·CI) 아무것도 묻지 않는다 —
        프롬프트에서 멈추지 않게 하려는 것이다(그 경로에서 계정·비밀번호는 appsettings 값을 쓰고,
        테이블 세팅은 --init-schema를 명시하지 않으면 하지 않는다).
-    ① 사전 점검 — dotnet SDK · 토큰 서명 키 · 이벤트 로그 디렉터리 · **MySQL 응답** ·
-                   **Redis 응답(없으면 저장소 바이너리를 띄운다)** · **서버 포트(5160·5247) 선점**
+    ① 사전 점검 — dotnet SDK · 토큰 서명 키 · 이벤트 로그 디렉터리 · **MySQL·Redis 응답** ·
+                   **서버 포트(5160·5247) 선점**
     ② 테이블 세팅(⓪에서 y였으면) → MySQL 스키마 확인. 계정·게임·마스터 DB 테이블 수를 센다.
        접속 자체가 안 되면(계정·비밀번호 불일치) 여기서 멈춘다 — 그대로 띄우면 서버는 뜨고
        모든 요청이 DB 오류로 죽는다. 테이블이 하나도 없으면 무엇을 실행하면 되는지 알려 주고 멈춘다.
@@ -79,12 +78,11 @@
       실행하면 되는지 알려 준다).
       db-schema.sql이 **첫 보스러시 시즌 1행**도 심는다 — 그 행이 없으면 보스러시가 영구히 닫힌
       상태로 남으므로, 새 로컬 MySQL은 이 세팅을 반드시 한 번 거쳐야 한다.
-    · **저장소 Redis는 이 스크립트가 끄지 않는다**(--stop은 서버 2개만 끊는다). 그 콘솔 창을 닫으면
-      멈춘다. redis.conf가 appendonly no라 재시작하면 캐시가 비지만, 랭킹은 MySQL이 정본이고 적재는
-      매 기동에 다시 하므로 문제가 되지 않는다. 포트는 redis.conf가 정본이라 스크립트가 바꾸지 않는다 —
-      --redis 로 다른 포트를 요청하면 띄우지 않고 어긋난 지점을 알려 준다.
-    · 컨테이너 Redis(호스트 36379)와 저장소 Redis(6379)를 **둘 다 띄우지 않는다** — 서버가 보는 것은
-      Redis 주소 하나뿐이라, 두 개가 떠 있으면 어느 쪽에 썼는지 헷갈린다.
+    · **MySQL·Redis는 이 스크립트가 띄우지도, 끄지도 않는다**(--stop은 서버 2개만 끊는다). 이 PC에
+      설치본을 켜 두거나 컨테이너로 띄워 두고(docker compose up -d mysql redis) 주소만 알려 준다.
+      Redis를 저장소 바이너리로 쓰려면 Redis-8.8.0-.../start.bat 을 직접 실행한다.
+    · Redis 인스턴스는 **하나만** 띄운다 — 서버가 보는 것은 Redis 주소 하나뿐이라, 컨테이너(호스트
+      36379)와 로컬(6379)이 함께 떠 있으면 어느 쪽에 썼는지 헷갈린다.
     · 끝나면 **엔터를 누를 때까지 창을 닫지 않는다**(더블클릭 실행에서 실패 사유가 사라지지 않게).
       바로 닫으려면 --no-pause. 콘솔이 아닌 실행(파이프·CI)에서는 기다리지 않는다.
     · 마스터 데이터는 서버 기동 시 **1회만** 인메모리로 적재된다. 값을 고쳤으면 watch 재시작이
@@ -130,16 +128,6 @@ DEFAULT_MYSQL_USER = "root"
 DEFAULT_REDIS_HOST = "127.0.0.1"
 DEFAULT_REDIS_PORT = 6379
 DEFAULT_REDIS = f"{DEFAULT_REDIS_HOST}:{DEFAULT_REDIS_PORT}"
-
-# 저장소에 들어 있는 Windows Redis 바이너리. Redis는 로컬에 서비스로 깔려 있지 않은 것이 보통이라,
-# 응답이 없으면 이 폴더의 `redis-server.exe redis.conf`를 새 콘솔 창에 띄운다(MySQL은 설치본이 전제).
-# 폴더 이름에 버전이 박혀 있어 그대로 못 찾으면 `Redis-*` 로 한 번 더 찾는다.
-REDIS_DIR_NAME = "Redis-8.8.0-Windows-x64-cygwin-with-Service"
-REDIS_DIR_GLOB = "Redis-*"
-REDIS_SERVER_EXE = "redis-server.exe"
-REDIS_CONF = "redis.conf"
-# 로컬로 보는 호스트 — 원격 Redis를 이 PC에서 띄울 수는 없으므로 자동 기동은 이 목록에서만 한다.
-LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
 
 # 접속 문자열 정본. 파일에서 읽어 호스트·포트만 갈아 끼우고, 환경 변수 이름으로 자식에게 넘긴다.
 #   (서버 폴더, appsettings의 키 경로, 덮어쓸 환경 변수 이름)
@@ -502,91 +490,18 @@ def prepare_event_log_dir() -> None:
         say("이벤트 로그 디렉터리 생성: GameServer/logs/event", "dim")
 
 
-def find_redis_dir() -> Path | None:
-    """저장소에 든 Redis 바이너리 폴더를 찾는다(`redis-server.exe`와 `redis.conf`가 함께 있어야 인정)."""
-    candidates = [ROOT / REDIS_DIR_NAME] + sorted(ROOT.glob(REDIS_DIR_GLOB))
-    for path in candidates:
-        if (path / REDIS_SERVER_EXE).exists() and (path / REDIS_CONF).exists():
-            return path
-    return None
-
-
-def read_redis_conf_port(conf: Path) -> int | None:
-    """redis.conf가 실제로 열 포트를 읽는다(설정 파일이 정본 — 스크립트가 포트를 정하지 않는다)."""
-    try:
-        lines = conf.read_text(encoding="utf-8", errors="replace").splitlines()
-    except OSError:
-        return None
-
-    port = None
-    for line in lines:
-        match = re.match(r"^\s*port\s+(\d+)\s*$", line)
-        if match:
-            port = int(match.group(1))  # 뒤에 나온 설정이 이긴다(redis도 마지막 값을 쓴다).
-    return port
-
-
-def start_local_redis(host: str, port: int, timeout: int = 30) -> bool:
-    """
-    저장소에 든 Redis 바이너리를 **새 콘솔 창**에 띄우고 응답할 때까지 기다린다.
-
-    MySQL과 달리 Redis는 이 PC에 서비스로 깔려 있지 않은 것이 보통이고, 저장소가 Windows 바이너리를
-    같이 들고 있어 여기서 띄우는 편이 낫다. 창을 따로 띄우는 이유는 서버와 같다 — 무엇이 돌고 있는지
-    보이게 하려는 것이다(숨겨 띄우면 세션이 끝난 뒤에도 남아 포트를 쥔 채 잊힌다).
-    포트는 **redis.conf가 정본**이라 스크립트가 바꾸지 않는다 — 요청한 포트와 다르면 띄우지 않고
-    무엇이 어긋났는지 알려 준다(엉뚱한 포트에 띄워 놓고 "떴다"고 보고하면 원인을 찾기 더 어렵다).
-    """
-    if host not in LOCAL_HOSTS:
-        return False
-
-    redis_dir = find_redis_dir()
-    if redis_dir is None:
-        return False
-
-    conf_port = read_redis_conf_port(redis_dir / REDIS_CONF)
-    if conf_port is not None and conf_port != port:
-        say(f"저장소 Redis({redis_dir.name})의 redis.conf 포트는 {conf_port}인데 {port}로 접속하려 합니다.", "warn")
-        say(f"· 그 인스턴스를 쓰려면:  --redis {host}:{conf_port}", "warn")
-        say("· 포트를 바꾸려면 redis.conf의 port 를 고치세요(설정 파일이 정본입니다).", "warn")
-        return False
-
-    say(f"Redis가 응답하지 않아 저장소 바이너리를 띄웁니다: {redis_dir.name} (포트 {port})", "info")
-    argv = [str(redis_dir / REDIS_SERVER_EXE), REDIS_CONF]
-    kwargs: dict[str, object] = {"cwd": str(redis_dir)}
-    if os.name == "nt":
-        kwargs["creationflags"] = subprocess.CREATE_NEW_CONSOLE
-
-    try:
-        subprocess.Popen(argv, **kwargs)  # type: ignore[arg-type]
-    except OSError as error:
-        say(f"Redis 기동 실패: {error}", "err")
-        return False
-
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if port_listening(host, port):
-            say(f"Redis 기동 완료: {host}:{port}", "ok")
-            return True
-        time.sleep(1)
-
-    say(f"Redis가 준비되지 않았습니다({host}:{port}). 그 콘솔 창의 로그를 확인하세요.", "err")
-    return False
-
-
 def check_dependencies(args: argparse.Namespace) -> bool:
     """
-    MySQL·Redis가 응답하는지 확인한다 — **Redis는 없으면 저장소 바이너리로 띄우고, MySQL은 막는다.**
+    MySQL·Redis가 응답하는지 확인한다 — **둘 다 이 스크립트가 띄우지 않고, 없으면 막는다.**
 
-    둘을 다르게 다루는 이유는 준비 방법이 다르기 때문이다. MySQL은 이 PC에 설치·서비스 등록해 두는
-    것이 전제라 스크립트가 만들어 줄 수 없다(그래서 경고로 넘기지 않고 막는다 — 넘어가면 서버는 뜨고
-    첫 요청에서야 접속 오류로 드러난다). Redis는 저장소가 Windows 바이너리를 들고 있어 띄울 수 있다.
+    이 스크립트가 하는 일은 서버 2개를 띄우는 것뿐이다. 의존 서비스는 이 PC에 설치·서비스 등록해
+    두거나 컨테이너로 띄워 두는 것이 전제다. 응답이 없을 때 경고로 넘기지 않고 막는 이유는, 넘어가면
+    서버는 그대로 뜨고 **첫 요청에서야 접속 오류로 드러나** 원인을 찾기가 더 어렵기 때문이다.
     """
     mysql_ok = port_listening(args.mysql_host, args.mysql_port)
 
     redis_host, redis_port = split_host_port(args.redis, DEFAULT_REDIS_PORT)
     redis_ok = port_listening(redis_host, redis_port)
-    if not redis_ok and not args.no_redis_autostart:
-        redis_ok = start_local_redis(redis_host, redis_port)
 
     if mysql_ok and redis_ok:
         say(f"의존 서비스 확인: MySQL {args.mysql_host}:{args.mysql_port} · Redis {redis_host}:{redis_port} 응답 중.", "dim")
@@ -603,10 +518,8 @@ def check_dependencies(args: argparse.Namespace) -> bool:
         say("· MySQL은 이 스크립트가 띄우지 않습니다 — 로컬 서비스를 시작하거나 포트·계정을 확인하세요", "warn")
         say("  (--mysql-host · --mysql-port · --mysql-user · --mysql-password).", "warn")
     if not redis_ok:
-        if find_redis_dir() is None:
-            say(f"· 저장소 Redis 바이너리 폴더를 찾지 못했습니다({REDIS_DIR_NAME}).", "warn")
-        else:
-            say(f"· 저장소 Redis를 직접 띄워 보세요:  {REDIS_DIR_NAME}/start.bat", "warn")
+        say("· Redis도 이 스크립트가 띄우지 않습니다 — 로컬 인스턴스를 먼저 켜고 주소를 맞추세요(--redis).", "warn")
+        say("  (저장소 바이너리를 쓸 경우:  Redis-8.8.0-Windows-x64-cygwin-with-Service/start.bat)", "warn")
     say("· 컨테이너로 띄우려면:  docker compose up -d mysql redis", "warn")
     say("  (그 경우 --mysql-port 33306 --redis 127.0.0.1:36379)", "warn")
     say("· 확인만 건너뛰려면 --skip-deps-check (접속 실패는 서버 로그에서 드러납니다).", "warn")
@@ -1021,8 +934,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-init-schema", dest="init_schema", action="store_const", const=False,
                         help="묻지 않고 테이블 세팅을 건너뛴다")
     parser.add_argument("--skip-deps-check", action="store_true", help="로컬 MySQL·Redis 응답 확인을 건너뛴다")
-    parser.add_argument("--no-redis-autostart", action="store_true",
-                        help="Redis가 응답하지 않아도 저장소 바이너리를 띄우지 않는다")
     parser.add_argument("--no-build", action="store_true", help="선 빌드를 건너뛴다(공유 출력 경합 위험 — 상단 설명)")
     parser.add_argument("--warmup-only", action="store_true", help="서버를 띄우지 않고 랭킹 캐시 적재만 지시한다")
     parser.add_argument("--no-warmup", action="store_true", help="랭킹 캐시 적재 단계를 건너뛴다")
