@@ -815,6 +815,7 @@ namespace TaskbarHero.Client.Battle
                 if (devCode != 0 && db.Monsters.ContainsKey(devCode))
                 {
                     monsterCode = devCode;
+                    ApplyDevMonsterPrefab(devCode);
                     Debug.Log($"[BattleDev] 검수 요청 몬스터로 고정: {devCode}");
                     return;
                 }
@@ -823,6 +824,22 @@ namespace TaskbarHero.Client.Battle
             if (monsterCode != 0 && db.Monsters.ContainsKey(monsterCode)) return;
             foreach (var code in db.Monsters.Keys) { monsterCode = code; return; }
         }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// 검수 요청 코드의 프리팹(<c>monster_{code}.prefab</c>)을 웨이브 프리팹으로 갈아 끼운다.
+        /// <para>CharacterDevScene의 '전투로 검수'는 <b>코드만</b> 넘기므로, 이것을 하지 않으면 이름·체력만
+        /// 그 몬스터이고 외형은 씬에 배선된 기본 프리팹이 나온다 — 외형을 보려고 들어온 경로에서 정작
+        /// 외형이 확인되지 않는다. 에디터 전용이라 빌드에는 들어가지 않는다.</para>
+        /// </summary>
+        private void ApplyDevMonsterPrefab(int code)
+        {
+            string path = $"Assets/Prefabs/Character/Monster/monster_{code}.prefab";
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab != null) monsterPrefab = prefab;
+            else Debug.LogWarning($"[BattleDev] {path} 이 없어 외형은 씬 기본 프리팹으로 둡니다.");
+        }
+#endif
 
         private void LoadMonsterStats()
         {
