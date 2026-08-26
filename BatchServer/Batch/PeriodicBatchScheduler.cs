@@ -93,7 +93,8 @@ public abstract class PeriodicBatchScheduler : BackgroundService
     /// 다음 발화 시각(유닉스초). 기본은 <see cref="Interval"/> 버킷 경계다(<see cref="BucketFireTime"/>).
     /// <b>과거 값이면 즉시 발화하고, 미래 값이면 그때까지 잔다.</b>
     /// <para>발화 시각이 DB에 있는 배치(예: 시즌 종료 시각)를 위해 <paramref name="scope"/>를 넘긴다.
-    /// <paramref name="lastFireUnix"/>는 이 프로세스가 직전에 다룬 발화 시각이며 기동 직후에는 0이다.
+    /// <paramref name="lastFireUnix"/>는 이 프로세스가 직전에 다룬 발화 시각이다(기동 직후 값은
+    /// <see cref="CatchUpOnStart"/>에 따라 0 또는 현재 버킷 시작).
     /// 그보다 크지 않은 값을 돌려줘도 된다 — 골격이 기본 버킷으로 밀어 재시도한다.</para>
     /// </summary>
     protected virtual ValueTask<long> NextFireTimeAsync(
@@ -101,26 +102,22 @@ public abstract class PeriodicBatchScheduler : BackgroundService
         => new(BucketFireTime(lastFireUnix, nowUnix));
 
     /// <summary>
-    /// <see cref="Interval"/> 버킷 경계 기준의 발화 시각.
-    /// <para>기동 직후(<paramref name="lastFireUnix"/>가 0)에는 <see cref="CatchUpOnStart"/>에 따라
-    /// <b>현재 버킷</b>(과거 → 즉시 발화) 또는 <b>다음 경계</b>(미래 → 대기)를 고른다.</para>
-    /// <para>그 뒤로는 max(직전 발화 + 간격, 지금이 속한 버킷의 시작)이다 — 앞의 항이 정상 진행이고,
-    /// 뒤의 항이 <b>작업이 길어져 밀린 발화를 현재 버킷 하나로 접는</b> 역할이다.</para>
+    /// <see cref="Interval"/> 버킷 경계 기준의 발화 시각 = max(직전 발화 + 간격, 지금이 속한 버킷의 시작).
+    /// <para>앞의 항이 정상 진행이고, 뒤의 항이 <b>작업이 길어져 밀린 발화를 현재 버킷 하나로 접는</b> 역할이다.</para>
+    /// <para>기동 직후의 시작점은 <see cref="ExecuteAsync"/>가 <see cref="CatchUpOnStart"/>에 따라 정해 넘긴다 —
+    /// 여기서 "직전 발화가 없다"를 따로 다루지 않는 이유는, 대기 중 루프를 돌 때마다 그 분기가 다시 타면서
+    /// 발화 시각이 한 칸씩 밀려 <b>영영 돌지 않게</b> 되기 때문이다.</para>
     /// </summary>
     protected long BucketFireTime(long lastFireUnix, long nowUnix)
     {
-        // 파생은 모두 설정값을 양수로 보정해 넘기지만, 0이 들어오면 나눗셈이 배치를 영구히 죽인다.
-        var interval = Math.Max(1L, (long)Interval.TotalSeconds);
-        var currentBucket = nowUnix / interval * interval;
-
-        if (lastFireUnix == 0)
-        {
-            return CatchUpOnStart ? currentBucket : currentBucket + interval;
-        }
-
+        var interval = IntervalSeconds;
         var next = lastFireUnix + interval;
+        var currentBucket = nowUnix / interval * interval;
         return next > currentBucket ? next : currentBucket;
     }
+
+    /// <summary>발화 간격(초). 0 이하가 들어와 나눗셈이 배치를 영구히 죽이는 것만 막는다.</summary>
+    private long IntervalSeconds => Math.Max(1L, (long)Interval.TotalSeconds);
 
     /// <summary>
     /// 배치 루프 본체: <b>발화 시각 계산 → 그 시각까지 대기 → 실행</b>의 반복이다.
@@ -129,7 +126,10 @@ public abstract class PeriodicBatchScheduler : BackgroundService
     /// </summary>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var lastFire = 0L;
+        // 시작점. 따라잡기를 하는 배치는 0에서 시작해 **현재 버킷**을 노리고(과거이므로 즉시 발화),
+        // 하지 않는 배치는 현재 버킷을 **이미 다룬 것으로 보고** 시작해 다음 경계부터 돈다.
+        var now0 = DateTimeUtil.NowUnixSeconds();
+        var lastFire = CatchUpOnStart ? 0L : now0 / IntervalSeconds * IntervalSeconds;
 
         while (!stoppingToken.IsCancellationRequested)
         {
