@@ -27,6 +27,8 @@ public abstract class AccountApiControllerBase : ControllerBase
         ErrorCode.InvalidPassword => StatusCodes.Status401Unauthorized,
         ErrorCode.InvalidToken => StatusCodes.Status401Unauthorized,
         ErrorCode.ExpiredToken => StatusCodes.Status401Unauthorized,
+        // 서비스가 예외를 잡아 일반화한 코드. 전역 예외 처리기의 응답과 같은 500으로 맞춘다.
+        ErrorCode.ServerError => StatusCodes.Status500InternalServerError,
         _ => StatusCodes.Status400BadRequest,
     };
 
@@ -38,6 +40,7 @@ public abstract class AccountApiControllerBase : ControllerBase
         ErrorCode.InvalidPassword => "Invalid password",
         ErrorCode.InvalidToken => "Invalid token",
         ErrorCode.ExpiredToken => "Expired token",
+        ErrorCode.ServerError => "Internal server error",
         _ => code.ToString(),
     };
 }

@@ -14,6 +14,8 @@ namespace AccountServer.Services;
 /// <summary>
 /// 계정/인증 유스케이스(회원가입·로그인·로그아웃·자동 로그인 검증)를 처리하는 서비스.
 /// 세션의 정본은 Redis 토큰이고 MySQL user_auth_token은 영속 백업이다(계정/로그인 기획서 4.2).
+/// <para>공개 메서드는 본문 전체를 try로 감싸 어떤 예외도 밖으로 새지 않게 하고, 잡은 예외는 Error로 남긴 뒤
+/// <see cref="ErrorCode.ServerError"/>를 돌려준다(내부 정보는 응답에 싣지 않는다).</para>
 /// </summary>
 public sealed class AuthService : IAuthService
 {
@@ -50,102 +52,142 @@ public sealed class AuthService : IAuthService
 
     /// <summary>
     /// 회원가입을 처리한다. 입력(이메일 형식·비밀번호 최소 길이·닉네임)을 검증하고, 이메일 중복을 선검사한 뒤
-    /// 비밀번호를 BCrypt로 해시해 사용자 행을 삽입한다. 동시 삽입 경합은 UNIQUE 위반을 잡아 DuplicateEmail로 변환한다.
+    /// 비밀번호를 BCrypt로 해시해 사용자 행을 삽입한다. 동시 삽입 경합은 UNIQUE 위반을 잡아 DuplicateEmail로 변환하고,
+    /// 그 밖의 예외는 ServerError로 변환한다.
     /// </summary>
     public async Task<SignupResult> SignupAsync(SignupRequest request)
     {
-        // 1. 입력 검증 — 이메일 형식, 비밀번호 최소 6자, 닉네임 필수.
-        if (!IsValidEmail(request.email)
-            || string.IsNullOrEmpty(request.password) || request.password.Length < MinPasswordLength
-            || string.IsNullOrWhiteSpace(request.nickname) || request.nickname.Length > MaxNicknameLength)
-        {
-            return new SignupResult(ErrorCode.InvalidRequest, 0);
-        }
-
-        var email = request.email!.Trim();
-        var nickname = request.nickname!.Trim();
-
-        // 2. 이메일 중복 선검사(빠른 실패). 최종 보장은 DB UNIQUE 인덱스가 한다.
-        if (await _userRepository.ExistsByEmailAsync(email))
-        {
-            return new SignupResult(ErrorCode.DuplicateEmail, 0);
-        }
-
-        // 3. BCrypt 해시 후 저장.
-        var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.password);
-        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
         try
         {
-            var userId = await _userRepository.InsertUserAsync(email, passwordHash, nickname, nowUnix);
-            _logger.ZLogInformation($"회원가입 성공: userId {userId:@UserId}");
-            return new SignupResult(ErrorCode.Success, userId);
+            // 1. 입력 검증 — 이메일 형식, 비밀번호 최소 6자, 닉네임 필수.
+            var invalidField = FindInvalidSignupField(request);
+            if (invalidField is not null)
+            {
+                _logger.ZLogDebug(
+                    $"회원가입 거절: errorCode {(int)ErrorCode.InvalidRequest:@ErrorCode}({ErrorCode.InvalidRequest:@ErrorName}), 잘못된 항목 {invalidField:@Field}");
+                return new SignupResult(ErrorCode.InvalidRequest, 0);
+            }
+
+            var email = request.email!.Trim();
+            var nickname = request.nickname!.Trim();
+
+            // 2. 이메일 중복 선검사(빠른 실패). 최종 보장은 DB UNIQUE 인덱스가 한다.
+            if (await _userRepository.ExistsByEmailAsync(email))
+            {
+                _logger.ZLogDebug(
+                    $"회원가입 거절: errorCode {(int)ErrorCode.DuplicateEmail:@ErrorCode}({ErrorCode.DuplicateEmail:@ErrorName}), email {email:@Email}");
+                return new SignupResult(ErrorCode.DuplicateEmail, 0);
+            }
+
+            // 3. BCrypt 해시 후 저장.
+            var passwordHash = BCrypt.Net.BCrypt.HashPassword(request.password);
+            var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            try
+            {
+                var userId = await _userRepository.InsertUserAsync(email, passwordHash, nickname, nowUnix);
+                _logger.ZLogInformation($"회원가입 성공: userId {userId:@UserId}");
+                return new SignupResult(ErrorCode.Success, userId);
+            }
+            catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
+            {
+                // 선검사 통과 후 동시 요청이 먼저 삽입한 경합(race). UNIQUE 인덱스가 막아준다.
+                _logger.ZLogWarning(
+                    $"회원가입 이메일 중복 경합 감지: errorCode {(int)ErrorCode.DuplicateEmail:@ErrorCode}({ErrorCode.DuplicateEmail:@ErrorName}), email {email:@Email}");
+                return new SignupResult(ErrorCode.DuplicateEmail, 0);
+            }
         }
-        catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
+        catch (Exception ex)
         {
-            // 선검사 통과 후 동시 요청이 먼저 삽입한 경합(race). UNIQUE 인덱스가 막아준다.
-            _logger.ZLogWarning($"회원가입 이메일 중복 경합 감지: {email:@Email}");
-            return new SignupResult(ErrorCode.DuplicateEmail, 0);
+            LogUnhandled(ex, "회원가입");
+            return new SignupResult(ErrorCode.ServerError, 0);
         }
     }
 
     /// <summary>
     /// 로그인을 처리한다. 입력 검증 → 이메일로 사용자 조회 → BCrypt 비밀번호 검증 후 인증 토큰을 발급하고,
-    /// MySQL에 UPSERT(기존 세션 무효화)하고 Redis에 캐싱한다(단일 세션). 성공 시 user_id와 토큰을 반환한다.
+    /// MySQL에 UPSERT(기존 세션 무효화)하고 Redis에 캐싱한다(단일 세션). 성공 시 user_id와 토큰을 반환하고,
+    /// 예외는 ServerError로 변환한다.
     /// </summary>
     public async Task<LoginResult> LoginAsync(LoginRequest request)
     {
-        // 1. 입력 검증.
-        if (!IsValidEmail(request.email)
-            || string.IsNullOrEmpty(request.password) || request.password.Length < MinPasswordLength)
+        try
         {
-            return new LoginResult(ErrorCode.InvalidRequest, 0, string.Empty);
-        }
+            // 1. 입력 검증.
+            var invalidField = FindInvalidLoginField(request);
+            if (invalidField is not null)
+            {
+                _logger.ZLogDebug(
+                    $"로그인 거절: errorCode {(int)ErrorCode.InvalidRequest:@ErrorCode}({ErrorCode.InvalidRequest:@ErrorName}), 잘못된 항목 {invalidField:@Field}");
+                return new LoginResult(ErrorCode.InvalidRequest, 0, string.Empty);
+            }
 
-        // 2. 사용자 조회.
-        var user = await _userRepository.GetCredentialByEmailAsync(request.email!.Trim());
-        if (user is null)
+            // 2. 사용자 조회.
+            var email = request.email!.Trim();
+            var user = await _userRepository.GetCredentialByEmailAsync(email);
+            if (user is null)
+            {
+                _logger.ZLogDebug(
+                    $"로그인 거절: errorCode {(int)ErrorCode.UserNotFound:@ErrorCode}({ErrorCode.UserNotFound:@ErrorName}), email {email:@Email}");
+                return new LoginResult(ErrorCode.UserNotFound, 0, string.Empty);
+            }
+
+            // 3. 비밀번호 검증(BCrypt).
+            if (!BCrypt.Net.BCrypt.Verify(request.password, user.PasswordHash))
+            {
+                // 비밀번호 값은 남기지 않는다(로깅 규칙 7장).
+                _logger.ZLogDebug(
+                    $"로그인 거절: errorCode {(int)ErrorCode.InvalidPassword:@ErrorCode}({ErrorCode.InvalidPassword:@ErrorName}), userId {user.UserId:@UserId}");
+                return new LoginResult(ErrorCode.InvalidPassword, 0, string.Empty);
+            }
+
+            // 4. 토큰 생성.
+            var token = _tokenGenerator.GenerateToken(user.UserId);
+            var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var expiredAt = now + _tokenExpirationHours * 3600L;
+
+            // 5. MySQL 저장(UPSERT → 기존 세션 무효화) + 6. Redis 캐싱(단일 세션 기준값 덮어쓰기).
+            await _authTokenRepository.UpsertAsync(user.UserId, token, now, expiredAt);
+            await _authTokenCache.SetAsync(user.UserId, token, TimeSpan.FromHours(_tokenExpirationHours));
+
+            _logger.ZLogInformation($"로그인 성공: userId {user.UserId:@UserId}");
+            return new LoginResult(ErrorCode.Success, user.UserId, token);
+        }
+        catch (Exception ex)
         {
-            return new LoginResult(ErrorCode.UserNotFound, 0, string.Empty);
+            LogUnhandled(ex, "로그인");
+            return new LoginResult(ErrorCode.ServerError, 0, string.Empty);
         }
-
-        // 3. 비밀번호 검증(BCrypt).
-        if (!BCrypt.Net.BCrypt.Verify(request.password, user.PasswordHash))
-        {
-            return new LoginResult(ErrorCode.InvalidPassword, 0, string.Empty);
-        }
-
-        // 4. 토큰 생성.
-        var token = _tokenGenerator.GenerateToken(user.UserId);
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var expiredAt = now + _tokenExpirationHours * 3600L;
-
-        // 5. MySQL 저장(UPSERT → 기존 세션 무효화) + 6. Redis 캐싱(단일 세션 기준값 덮어쓰기).
-        await _authTokenRepository.UpsertAsync(user.UserId, token, now, expiredAt);
-        await _authTokenCache.SetAsync(user.UserId, token, TimeSpan.FromHours(_tokenExpirationHours));
-
-        _logger.ZLogInformation($"로그인 성공: userId {user.UserId:@UserId}");
-        return new LoginResult(ErrorCode.Success, user.UserId, token);
     }
 
     /// <summary>
     /// 로그아웃을 처리한다. Redis 캐시 토큰과 대조해(없으면 만료, 불일치면 무효 토큰) 유효할 때만
-    /// MySQL 토큰 행과 Redis 키를 삭제해 세션을 무효화한다.
+    /// MySQL 토큰 행과 Redis 키를 삭제해 세션을 무효화한다. 예외는 ServerError로 변환한다.
     /// </summary>
     public async Task<ErrorCode> LogoutAsync(long userId, string token)
     {
-        var verified = await VerifyTokenAsync(userId, token);
-        if (verified != ErrorCode.Success)
+        try
         {
-            return verified;
+            var verified = await VerifyTokenAsync(userId, token);
+            if (verified != ErrorCode.Success)
+            {
+                _logger.ZLogDebug(
+                    $"로그아웃 거절: errorCode {(int)verified:@ErrorCode}({verified:@ErrorName}), userId {userId:@UserId}");
+                return verified;
+            }
+
+            // MySQL 행 삭제 + Redis 키 삭제.
+            await _authTokenRepository.DeleteAsync(userId);
+            await _authTokenCache.DeleteAsync(userId);
+
+            _logger.ZLogInformation($"로그아웃 성공: userId {userId:@UserId}");
+            return ErrorCode.Success;
         }
-
-        // MySQL 행 삭제 + Redis 키 삭제.
-        await _authTokenRepository.DeleteAsync(userId);
-        await _authTokenCache.DeleteAsync(userId);
-
-        _logger.ZLogInformation($"로그아웃 성공: userId {userId:@UserId}");
-        return ErrorCode.Success;
+        catch (Exception ex)
+        {
+            LogUnhandled(ex, "로그아웃", userId);
+            return ErrorCode.ServerError;
+        }
     }
 
     /// <summary>
@@ -155,19 +197,35 @@ public sealed class AuthService : IAuthService
     /// 대조 자체는 로그아웃과 공유하는 <see cref="VerifyTokenAsync"/>가 맡고, 이 메서드는 그 앞뒤에
     /// **자동 로그인 유스케이스에만 필요한 처리**(진입 로그 등)를 얹는 자리다.
     /// </summary>
-    public Task<ErrorCode> ValidateTokenAsync(long userId, string token)
+    public async Task<ErrorCode> ValidateTokenAsync(long userId, string token)
     {
-        // 앱 실행마다 호출되는 경로라 Debug로 남긴다(운영에서는 꺼지고, 접근 로그와도 중복되지 않는다).
-        // 토큰 값은 남기지 않는다(로깅 규칙 §7).
-        _logger.ZLogDebug($"자동 로그인 토큰 유효성 검증 요청: userId {userId:@UserId}");
+        try
+        {
+            // 앱 실행마다 호출되는 경로라 Debug로 남긴다(운영에서는 꺼지고, 접근 로그와도 중복되지 않는다).
+            // 토큰 값은 남기지 않는다(로깅 규칙 §7).
+            _logger.ZLogDebug($"자동 로그인 토큰 유효성 검증 요청: userId {userId:@UserId}");
 
-        return VerifyTokenAsync(userId, token);
+            var verified = await VerifyTokenAsync(userId, token);
+            if (verified != ErrorCode.Success)
+            {
+                _logger.ZLogDebug(
+                    $"자동 로그인 거절: errorCode {(int)verified:@ErrorCode}({verified:@ErrorName}), userId {userId:@UserId}");
+            }
+
+            return verified;
+        }
+        catch (Exception ex)
+        {
+            LogUnhandled(ex, "자동 로그인 검증", userId);
+            return ErrorCode.ServerError;
+        }
     }
 
     /// <summary>
     /// 요청의 userId·token이 현재 유효한 세션인지 Redis 토큰과 대조한다(단일 세션의 유효 기준).
     /// 값이 없으면 만료/폐기(ExpiredToken), 있으나 다르면 다른 기기의 로그인으로 밀려난 토큰(InvalidToken)이다.
     /// 로그아웃·자동 로그인 검증이 공유하는 판정이라 한 곳에 둔다.
+    /// 예외는 잡지 않는다 — 호출한 공개 메서드의 try가 받는다.
     /// </summary>
     private async Task<ErrorCode> VerifyTokenAsync(long userId, string token)
     {
@@ -188,6 +246,52 @@ public sealed class AuthService : IAuthService
         }
 
         return ErrorCode.Success;
+    }
+
+    /// <summary>
+    /// 서비스가 잡은 예외를 Error로 1줄 남긴다. 예외 객체를 그대로 넘겨 스택을 보존하고,
+    /// 호출자에게는 ServerError를 돌려준다(내부 정보는 응답에 싣지 않는다).
+    /// </summary>
+    private void LogUnhandled(Exception exception, string operation, long userId = 0)
+        => _logger.ZLogError(
+            exception,
+            $"{operation:@Operation} 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+
+    /// <summary>회원가입 입력에서 규칙을 어긴 항목 이름을 돌려준다(모두 정상이면 null). 거절 로그에 그대로 실린다.</summary>
+    private static string? FindInvalidSignupField(SignupRequest request)
+    {
+        if (!IsValidEmail(request.email))
+        {
+            return "email";
+        }
+
+        if (string.IsNullOrEmpty(request.password) || request.password.Length < MinPasswordLength)
+        {
+            return "password";
+        }
+
+        if (string.IsNullOrWhiteSpace(request.nickname) || request.nickname.Length > MaxNicknameLength)
+        {
+            return "nickname";
+        }
+
+        return null;
+    }
+
+    /// <summary>로그인 입력에서 규칙을 어긴 항목 이름을 돌려준다(모두 정상이면 null).</summary>
+    private static string? FindInvalidLoginField(LoginRequest request)
+    {
+        if (!IsValidEmail(request.email))
+        {
+            return "email";
+        }
+
+        if (string.IsNullOrEmpty(request.password) || request.password.Length < MinPasswordLength)
+        {
+            return "password";
+        }
+
+        return null;
     }
 
     /// <summary>이메일이 비어 있지 않고 파싱 가능한 형식인지 검사한다(MailAddress 기준).</summary>
