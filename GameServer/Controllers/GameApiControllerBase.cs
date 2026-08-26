@@ -63,6 +63,8 @@ public abstract class GameApiControllerBase : ControllerBase
         // 인증 실패 계열(미들웨어가 대부분 선처리하나 방어적으로 매핑).
         ErrorCode.InvalidToken => StatusCodes.Status401Unauthorized,
         ErrorCode.ExpiredToken => StatusCodes.Status401Unauthorized,
+        // 서비스가 예외를 잡아 일반화한 코드. 전역 예외 처리기의 응답과 같은 500으로 맞춘다.
+        ErrorCode.ServerError => StatusCodes.Status500InternalServerError,
         // 나머지 검증 실패는 400.
         _ => StatusCodes.Status400BadRequest,
     };
@@ -133,6 +135,7 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.MasterDataNotLoaded => "Master data not loaded",
         ErrorCode.InvalidToken => "Invalid token",
         ErrorCode.ExpiredToken => "Expired token",
+        ErrorCode.ServerError => "Internal server error",
         _ => code.ToString(),
     };
 }

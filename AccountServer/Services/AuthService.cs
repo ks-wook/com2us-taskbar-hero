@@ -99,7 +99,8 @@ public sealed class AuthService : IAuthService
         }
         catch (Exception ex)
         {
-            LogUnhandled(ex, "회원가입");
+            _logger.ZLogError(
+                ex, $"SignupAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName})");
             return new SignupResult(ErrorCode.ServerError, 0);
         }
     }
@@ -155,7 +156,8 @@ public sealed class AuthService : IAuthService
         }
         catch (Exception ex)
         {
-            LogUnhandled(ex, "로그인");
+            _logger.ZLogError(
+                ex, $"LoginAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName})");
             return new LoginResult(ErrorCode.ServerError, 0, string.Empty);
         }
     }
@@ -185,7 +187,8 @@ public sealed class AuthService : IAuthService
         }
         catch (Exception ex)
         {
-            LogUnhandled(ex, "로그아웃", userId);
+            _logger.ZLogError(
+                ex, $"LogoutAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
             return ErrorCode.ServerError;
         }
     }
@@ -216,7 +219,8 @@ public sealed class AuthService : IAuthService
         }
         catch (Exception ex)
         {
-            LogUnhandled(ex, "자동 로그인 검증", userId);
+            _logger.ZLogError(
+                ex, $"ValidateTokenAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
             return ErrorCode.ServerError;
         }
     }
@@ -247,15 +251,6 @@ public sealed class AuthService : IAuthService
 
         return ErrorCode.Success;
     }
-
-    /// <summary>
-    /// 서비스가 잡은 예외를 Error로 1줄 남긴다. 예외 객체를 그대로 넘겨 스택을 보존하고,
-    /// 호출자에게는 ServerError를 돌려준다(내부 정보는 응답에 싣지 않는다).
-    /// </summary>
-    private void LogUnhandled(Exception exception, string operation, long userId = 0)
-        => _logger.ZLogError(
-            exception,
-            $"{operation:@Operation} 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
 
     /// <summary>회원가입 입력에서 규칙을 어긴 항목 이름을 돌려준다(모두 정상이면 null). 거절 로그에 그대로 실린다.</summary>
     private static string? FindInvalidSignupField(SignupRequest request)

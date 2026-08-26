@@ -26,7 +26,8 @@ public sealed class AdminBossRushController(IBossRushRankWarmupService warmupSer
         }
 
         var result = await warmupService.WarmUpAsync(force, cancellationToken);
-        var failed = result.Status == Constants.BossRush.RankWarmupStatus.CacheUnavailable;
+        var failed = result.Status is Constants.BossRush.RankWarmupStatus.CacheUnavailable
+            or Constants.BossRush.RankWarmupStatus.Failed;
 
         return AdminResponse(
             failed ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status200OK,

@@ -357,8 +357,11 @@ public static class Constants
             /// <summary>MySQL에서 읽어 리더보드를 재구축했다.</summary>
             public const string Restored = "restored";
 
-            /// <summary>Redis에 접근할 수 없어 적재하지 못했다(스크립트가 실패로 봐야 하는 유일한 값).</summary>
+            /// <summary>Redis에 접근할 수 없어 적재하지 못했다.</summary>
             public const string CacheUnavailable = "cache-unavailable";
+
+            /// <summary>적재 중 예외가 나 중단됐다(서비스가 잡아 이 값으로 바꾼다). 위 값과 함께 실패로 본다.</summary>
+            public const string Failed = "failed";
         }
 
         /// <summary>

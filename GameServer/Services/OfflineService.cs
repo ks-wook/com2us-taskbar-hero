@@ -42,70 +42,79 @@ public sealed class OfflineService : IOfflineService
     /// </summary>
     public async Task<SaveResult> ClaimAsync(long userId)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
+            if (!_masterData.IsLoaded)
+            {
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
 
-        var ctx = await _offlineRepository.GetContextAsync(userId);
-        if (ctx is null)
-        {
-            // 계정 세이브(game_player) 미생성 — 캐릭터 생성 전.
-            return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
-        }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-        var elapsed = DateTimeUtil.ElapsedSeconds(ctx.LastActiveAt, now);
-        if (elapsed < Constants.Offline.MinRewardSec)
-        {
-            // 정산할 오프라인 경과가 최소 기준 미만(기획서 5.1: 200 OK + errorCode 3001).
-            return new SaveResult(ErrorCode.NoOfflineReward, string.Empty, null);
-        }
-
-        // 파밍 기준: 현재 진입 스테이지의 클리어 보상(골드·경험치)에서 시간당 산출율을 파생한다.
-        var (rewardGold, rewardExp) = StageRewardRates(ctx.Act, ctx.Difficulty, ctx.Stage);
-
-        var outcome = await _offlineRepository.ClaimAsync(
-            userId, now, Constants.Offline.MinRewardSec,
-            lockedElapsed => ComputeReward(lockedElapsed, rewardGold, rewardExp));
-
-        switch (outcome.Status)
-        {
-            case OfflineClaimStatus.NoPlayer:
+            var ctx = await _offlineRepository.GetContextAsync(userId);
+            if (ctx is null)
+            {
+                // 계정 세이브(game_player) 미생성 — 캐릭터 생성 전.
                 return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
-            case OfflineClaimStatus.AlreadyClaimed:
-                return new SaveResult(ErrorCode.OfflineRewardAlreadyClaimed, string.Empty, null);
+            }
+
+            var now = DateTimeUtil.NowUnixSeconds();
+            var elapsed = DateTimeUtil.ElapsedSeconds(ctx.LastActiveAt, now);
+            if (elapsed < Constants.Offline.MinRewardSec)
+            {
+                // 정산할 오프라인 경과가 최소 기준 미만(기획서 5.1: 200 OK + errorCode 3001).
+                return new SaveResult(ErrorCode.NoOfflineReward, string.Empty, null);
+            }
+
+            // 파밍 기준: 현재 진입 스테이지의 클리어 보상(골드·경험치)에서 시간당 산출율을 파생한다.
+            var (rewardGold, rewardExp) = StageRewardRates(ctx.Act, ctx.Difficulty, ctx.Stage);
+
+            var outcome = await _offlineRepository.ClaimAsync(
+                userId, now, Constants.Offline.MinRewardSec,
+                lockedElapsed => ComputeReward(lockedElapsed, rewardGold, rewardExp));
+
+            switch (outcome.Status)
+            {
+                case OfflineClaimStatus.NoPlayer:
+                    return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+                case OfflineClaimStatus.AlreadyClaimed:
+                    return new SaveResult(ErrorCode.OfflineRewardAlreadyClaimed, string.Empty, null);
+            }
+
+            var data = new OfflineRewardResult
+            {
+                offlineElapsedSec = elapsed,
+                effectiveSec = outcome.EffectiveSec,
+                capped = outcome.Capped,
+                rewards = new OfflineRewardAmount { gold = outcome.Gold, exp = outcome.Exp },
+                characters = outcome.Characters,
+                lastActiveAt = outcome.LastActiveAt,
+            };
+
+            _logger.ZLogInformation($"오프라인 보상 정산: userId {userId:@UserId}, elapsed {elapsed:@Elapsed}s, effective {outcome.EffectiveSec:@Effective}s, gold {outcome.Gold:@Gold}, exp {outcome.Exp:@Exp}");
+
+            // 지급 트랜잭션이 커밋된 뒤에 방출한다(4.2). elapsed는 응답에 담은 값과 같은 값이라
+            // 로그와 유저가 본 화면이 어긋나지 않는다.
+            _eventLogger.Action(
+                Constants.EventLog.Tags.OfflineClaim, userId,
+                new OfflineClaimEvent(elapsed, outcome.EffectiveSec, outcome.Capped, outcome.Gold, outcome.Exp));
+
+            // 레벨업은 스테이지와 같은 테이블에 source만 다르게 쌓인다 — 두 경로의 성장 기여를 갈라 본다(5.3).
+            // 재화 원장(6.1). 상세(상한 여부)는 offline_claim_logs가 담으므로 ref_id는 0이다.
+            if (outcome.Gold > 0)
+            {
+                _eventLogger.CurrencyGained(
+                    userId, outcome.Gold, outcome.GoldBalance, CurrencySource.OfflineClaim, 0);
+            }
+
+            _eventLogger.CharacterLevelUps(userId, outcome.LevelUps, LevelUpSource.Offline);
+
+            return new SaveResult(ErrorCode.Success, "Offline reward claimed", data);
         }
-
-        var data = new OfflineRewardResult
+        catch (Exception ex)
         {
-            offlineElapsedSec = elapsed,
-            effectiveSec = outcome.EffectiveSec,
-            capped = outcome.Capped,
-            rewards = new OfflineRewardAmount { gold = outcome.Gold, exp = outcome.Exp },
-            characters = outcome.Characters,
-            lastActiveAt = outcome.LastActiveAt,
-        };
-
-        _logger.ZLogInformation($"오프라인 보상 정산: userId {userId:@UserId}, elapsed {elapsed:@Elapsed}s, effective {outcome.EffectiveSec:@Effective}s, gold {outcome.Gold:@Gold}, exp {outcome.Exp:@Exp}");
-
-        // 지급 트랜잭션이 커밋된 뒤에 방출한다(4.2). elapsed는 응답에 담은 값과 같은 값이라
-        // 로그와 유저가 본 화면이 어긋나지 않는다.
-        _eventLogger.Action(
-            Constants.EventLog.Tags.OfflineClaim, userId,
-            new OfflineClaimEvent(elapsed, outcome.EffectiveSec, outcome.Capped, outcome.Gold, outcome.Exp));
-
-        // 레벨업은 스테이지와 같은 테이블에 source만 다르게 쌓인다 — 두 경로의 성장 기여를 갈라 본다(5.3).
-        // 재화 원장(6.1). 상세(상한 여부)는 offline_claim_logs가 담으므로 ref_id는 0이다.
-        if (outcome.Gold > 0)
-        {
-            _eventLogger.CurrencyGained(
-                userId, outcome.Gold, outcome.GoldBalance, CurrencySource.OfflineClaim, 0);
+            _logger.ZLogError(
+                ex, $"ClaimAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        _eventLogger.CharacterLevelUps(userId, outcome.LevelUps, LevelUpSource.Offline);
-
-        return new SaveResult(ErrorCode.Success, "Offline reward claimed", data);
     }
 
     /// <summary>파밍 기준 스테이지(현재 진입 스테이지)의 클리어 보상(골드·경험치)을 조회한다. 스테이지/보상 정의가 없으면 (0, 0).</summary>

@@ -40,61 +40,70 @@ public sealed class CubeService : ICubeService
     /// </summary>
     public async Task<SaveResult> CombineAsync(long userId, IReadOnlyList<long> itemIds)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        var ids = itemIds ?? new List<long>();
-        // 빈 목록·중복 id는 조건 미충족으로 거부(개수 정합은 큐브 규칙과 트랜잭션 내부에서 재검증).
-        if (ids.Count == 0 || ids.Distinct().Count() != ids.Count)
-        {
-            return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
-        }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-        var outcome = await _cubeRepository.ApplyCombineAsync(userId, ids, DecideCombine, now);
-
-        switch (outcome.Status)
-        {
-            case CombineStatus.ItemNotFound:
-                return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
-            case CombineStatus.ItemEquipped:
-                return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
-            case CombineStatus.RecipeNotMet:
-                return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
-        }
-
-        var data = new CubeCombineResultData
-        {
-            consumed = ids.ToList(),
-            result = new CombineResultDto
+            if (!_masterData.IsLoaded)
             {
-                itemId = outcome.ResultItemId,
-                itemCode = outcome.ResultItemCode,
-                grade = outcome.ResultGrade,
-            },
-            cube = new CubeDto { cubeLevel = outcome.CubeLevel, cubeExp = outcome.CubeExp },
-            inventoryDelta = outcome.Delta,
-        };
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
 
-        _logger.ZLogInformation($"큐브 합성: userId {userId:@UserId}, consumed {ids.Count:@Count}, resultItemCode {outcome.ResultItemCode:@ResultCode}, grade {outcome.ResultGrade:@Grade}");
+            var ids = itemIds ?? new List<long>();
+            // 빈 목록·중복 id는 조건 미충족으로 거부(개수 정합은 큐브 규칙과 트랜잭션 내부에서 재검증).
+            if (ids.Count == 0 || ids.Distinct().Count() != ids.Count)
+            {
+                return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
+            }
 
-        // 아이템 원장(6.2). 큐브는 도메인 로그 테이블이 없어 **이 행들이 합성의 유일한 기록**이다 —
-        // 소모 n행과 결과 1행이 같은 req_id로 묶여 "등급 상승 파이프라인 통과량"이 나온다.
-        // 커밋이 끝난 뒤에 방출한다(롤백된 사실을 로그에 남기지 않는다, 4.2).
-        foreach (var input in outcome.Consumed)
-        {
-            _eventLogger.ItemRemoved(
-                userId, input.ItemCode, _masterData.GetItem(input.ItemCode), 1,
-                input.ItemId, ItemFlowReason.CubeCombineIn, 0);
+            var now = DateTimeUtil.NowUnixSeconds();
+            var outcome = await _cubeRepository.ApplyCombineAsync(userId, ids, DecideCombine, now);
+
+            switch (outcome.Status)
+            {
+                case CombineStatus.ItemNotFound:
+                    return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
+                case CombineStatus.ItemEquipped:
+                    return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
+                case CombineStatus.RecipeNotMet:
+                    return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
+            }
+
+            var data = new CubeCombineResultData
+            {
+                consumed = ids.ToList(),
+                result = new CombineResultDto
+                {
+                    itemId = outcome.ResultItemId,
+                    itemCode = outcome.ResultItemCode,
+                    grade = outcome.ResultGrade,
+                },
+                cube = new CubeDto { cubeLevel = outcome.CubeLevel, cubeExp = outcome.CubeExp },
+                inventoryDelta = outcome.Delta,
+            };
+
+            _logger.ZLogInformation($"큐브 합성: userId {userId:@UserId}, consumed {ids.Count:@Count}, resultItemCode {outcome.ResultItemCode:@ResultCode}, grade {outcome.ResultGrade:@Grade}");
+
+            // 아이템 원장(6.2). 큐브는 도메인 로그 테이블이 없어 **이 행들이 합성의 유일한 기록**이다 —
+            // 소모 n행과 결과 1행이 같은 req_id로 묶여 "등급 상승 파이프라인 통과량"이 나온다.
+            // 커밋이 끝난 뒤에 방출한다(롤백된 사실을 로그에 남기지 않는다, 4.2).
+            foreach (var input in outcome.Consumed)
+            {
+                _eventLogger.ItemRemoved(
+                    userId, input.ItemCode, _masterData.GetItem(input.ItemCode), 1,
+                    input.ItemId, ItemFlowReason.CubeCombineIn, 0);
+            }
+
+            _eventLogger.ItemGained(
+                userId, outcome.ResultItemCode, _masterData.GetItem(outcome.ResultItemCode), 1,
+                new GrantedItemIds(outcome.Delta), ItemFlowReason.CubeCombineOut, 0);
+
+            return new SaveResult(ErrorCode.Success, "Combined", data);
         }
-
-        _eventLogger.ItemGained(
-            userId, outcome.ResultItemCode, _masterData.GetItem(outcome.ResultItemCode), 1,
-            new GrantedItemIds(outcome.Delta), ItemFlowReason.CubeCombineOut, 0);
-
-        return new SaveResult(ErrorCode.Success, "Combined", data);
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"CombineAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -103,64 +112,73 @@ public sealed class CubeService : ICubeService
     /// </summary>
     public async Task<SaveResult> DismantleAsync(long userId, IReadOnlyList<CubeDismantleItemDto> items)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        var list = items ?? new List<CubeDismantleItemDto>();
-        var pairs = list.Select(i => (i.itemId, i.count)).ToList();
-        // 빈 목록·중복 id는 잘못된 요청으로 거부.
-        if (pairs.Count == 0 || pairs.Select(p => p.itemId).Distinct().Count() != pairs.Count)
-        {
-            return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
-        }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-        var outcome = await _cubeRepository.ApplyDismantleAsync(userId, pairs, ComputeDismantleReward, now);
-
-        switch (outcome.Status)
-        {
-            case DismantleStatus.ItemNotFound:
-                return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
-            case DismantleStatus.ItemEquipped:
-                return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
-            case DismantleStatus.InsufficientQuantity:
-                return new SaveResult(ErrorCode.InsufficientQuantity, string.Empty, null);
-        }
-
-        var data = new CubeDismantleResultData
-        {
-            gold = outcome.Gold,
-            cubeExp = outcome.CubeExp,
-            cube = new CubeDto { cubeLevel = outcome.NewCubeLevel, cubeExp = outcome.NewCubeExp },
-            balance = new List<CurrencyDto>
+            if (!_masterData.IsLoaded)
             {
-                new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
-            },
-            inventoryDelta = outcome.Delta,
-        };
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
 
-        _logger.ZLogInformation($"큐브 분해: userId {userId:@UserId}, items {pairs.Count:@Count}, gold {outcome.Gold:@Gold}, cubeExp {outcome.CubeExp:@CubeExp}");
+            var list = items ?? new List<CubeDismantleItemDto>();
+            var pairs = list.Select(i => (i.itemId, i.count)).ToList();
+            // 빈 목록·중복 id는 잘못된 요청으로 거부.
+            if (pairs.Count == 0 || pairs.Select(p => p.itemId).Distinct().Count() != pairs.Count)
+            {
+                return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
+            }
 
-        // 재화 원장(6.1). 아이템 → 골드 전환이라 유입으로 잡히고, 분해된 품목은 같은 req_id의
-        // item_flow_logs 행들이 답하므로 ref_id는 0이다.
-        if (outcome.Gold > 0)
-        {
-            _eventLogger.CurrencyGained(
-                userId, outcome.Gold, outcome.GoldBalance, CurrencySource.CubeDismantle, 0);
+            var now = DateTimeUtil.NowUnixSeconds();
+            var outcome = await _cubeRepository.ApplyDismantleAsync(userId, pairs, ComputeDismantleReward, now);
+
+            switch (outcome.Status)
+            {
+                case DismantleStatus.ItemNotFound:
+                    return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
+                case DismantleStatus.ItemEquipped:
+                    return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
+                case DismantleStatus.InsufficientQuantity:
+                    return new SaveResult(ErrorCode.InsufficientQuantity, string.Empty, null);
+            }
+
+            var data = new CubeDismantleResultData
+            {
+                gold = outcome.Gold,
+                cubeExp = outcome.CubeExp,
+                cube = new CubeDto { cubeLevel = outcome.NewCubeLevel, cubeExp = outcome.NewCubeExp },
+                balance = new List<CurrencyDto>
+                {
+                    new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
+                },
+                inventoryDelta = outcome.Delta,
+            };
+
+            _logger.ZLogInformation($"큐브 분해: userId {userId:@UserId}, items {pairs.Count:@Count}, gold {outcome.Gold:@Gold}, cubeExp {outcome.CubeExp:@CubeExp}");
+
+            // 재화 원장(6.1). 아이템 → 골드 전환이라 유입으로 잡히고, 분해된 품목은 같은 req_id의
+            // item_flow_logs 행들이 답하므로 ref_id는 0이다.
+            if (outcome.Gold > 0)
+            {
+                _eventLogger.CurrencyGained(
+                    userId, outcome.Gold, outcome.GoldBalance, CurrencySource.CubeDismantle, 0);
+            }
+
+            // 아이템 원장(6.2) — 위 골드 행이 말하지 못하는 "무엇을 녹였나"가 이 행들이다.
+            // 아이템이 경제에서 사라지는 주 경로라, 인플레이션 판단에서 소각량의 근거가 된다.
+            foreach (var input in outcome.Consumed)
+            {
+                _eventLogger.ItemRemoved(
+                    userId, input.ItemCode, _masterData.GetItem(input.ItemCode), input.Count,
+                    input.ItemId, ItemFlowReason.CubeDismantleIn, 0);
+            }
+
+            return new SaveResult(ErrorCode.Success, "Dismantled", data);
         }
-
-        // 아이템 원장(6.2) — 위 골드 행이 말하지 못하는 "무엇을 녹였나"가 이 행들이다.
-        // 아이템이 경제에서 사라지는 주 경로라, 인플레이션 판단에서 소각량의 근거가 된다.
-        foreach (var input in outcome.Consumed)
+        catch (Exception ex)
         {
-            _eventLogger.ItemRemoved(
-                userId, input.ItemCode, _masterData.GetItem(input.ItemCode), input.Count,
-                input.ItemId, ItemFlowReason.CubeDismantleIn, 0);
+            _logger.ZLogError(
+                ex, $"DismantleAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        return new SaveResult(ErrorCode.Success, "Dismantled", data);
     }
 
     /// <summary>
@@ -169,83 +187,92 @@ public sealed class CubeService : ICubeService
     /// </summary>
     public async Task<SaveResult> CraftAsync(long userId, int recipeCode)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
+            if (!_masterData.IsLoaded)
+            {
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
 
-        var recipe = _masterData.GetRecipe(recipeCode);
-        if (recipe is null)
-        {
-            return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
-        }
-
-        var resultItem = _masterData.GetItem(recipe.ResultItemCode);
-        if (resultItem is null)
-        {
-            return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
-        }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-        var outcome = await _cubeRepository.ApplyCraftAsync(
-            userId, recipe, resultItem.ItemType, resultItem.StackMax, Constants.Cube.CraftExp, now);
-
-        switch (outcome.Status)
-        {
-            case CraftStatus.CubeLevelInsufficient:
-                return new SaveResult(ErrorCode.CubeLevelInsufficient, string.Empty, null);
-            case CraftStatus.InsufficientCurrency:
-                return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
-            case CraftStatus.RecipeNotMet:
+            var recipe = _masterData.GetRecipe(recipeCode);
+            if (recipe is null)
+            {
                 return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
-            case CraftStatus.InventoryFull:
-                return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
-        }
+            }
 
-        var data = new CubeCraftResultData
-        {
-            consumed = recipe.Ingredients
-                .Select(g => new ItemQuantityDto { itemCode = g.MaterialCode, quantity = g.Quantity })
-                .ToList(),
-            gained = new CubeCraftGainedDto
+            var resultItem = _masterData.GetItem(recipe.ResultItemCode);
+            if (resultItem is null)
             {
-                items = new List<ItemQuantityDto>
+                return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
+            }
+
+            var now = DateTimeUtil.NowUnixSeconds();
+            var outcome = await _cubeRepository.ApplyCraftAsync(
+                userId, recipe, resultItem.ItemType, resultItem.StackMax, Constants.Cube.CraftExp, now);
+
+            switch (outcome.Status)
+            {
+                case CraftStatus.CubeLevelInsufficient:
+                    return new SaveResult(ErrorCode.CubeLevelInsufficient, string.Empty, null);
+                case CraftStatus.InsufficientCurrency:
+                    return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+                case CraftStatus.RecipeNotMet:
+                    return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
+                case CraftStatus.InventoryFull:
+                    return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
+            }
+
+            var data = new CubeCraftResultData
+            {
+                consumed = recipe.Ingredients
+                    .Select(g => new ItemQuantityDto { itemCode = g.MaterialCode, quantity = g.Quantity })
+                    .ToList(),
+                gained = new CubeCraftGainedDto
                 {
-                    new ItemQuantityDto { itemCode = recipe.ResultItemCode, quantity = recipe.ResultQuantity },
+                    items = new List<ItemQuantityDto>
+                    {
+                        new ItemQuantityDto { itemCode = recipe.ResultItemCode, quantity = recipe.ResultQuantity },
+                    },
                 },
-            },
-            cube = new CubeDto { cubeLevel = outcome.CubeLevel, cubeExp = outcome.CubeExp },
-            balance = new List<CurrencyDto>
+                cube = new CubeDto { cubeLevel = outcome.CubeLevel, cubeExp = outcome.CubeExp },
+                balance = new List<CurrencyDto>
+                {
+                    new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
+                },
+                inventoryDelta = outcome.Delta,
+            };
+
+            _logger.ZLogInformation($"큐브 제작: userId {userId:@UserId}, recipeCode {recipeCode:@RecipeCode}, resultItemCode {recipe.ResultItemCode:@ResultCode} x{recipe.ResultQuantity:@Quantity}");
+
+            // 재화 원장(6.1). 레시피별 사용 빈도가 ref_id로 나온다 — 큐브는 도메인 로그 테이블이 없어
+            // 이 행과 item_flow_logs가 유일한 기록이다.
+            if (recipe.CostGold > 0)
             {
-                new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
-            },
-            inventoryDelta = outcome.Delta,
-        };
+                _eventLogger.CurrencySpent(
+                    userId, recipe.CostGold, outcome.GoldBalance, CurrencySource.CubeCraft, recipeCode);
+            }
 
-        _logger.ZLogInformation($"큐브 제작: userId {userId:@UserId}, recipeCode {recipeCode:@RecipeCode}, resultItemCode {recipe.ResultItemCode:@ResultCode} x{recipe.ResultQuantity:@Quantity}");
+            // 아이템 원장(6.2). 소모 재료와 결과가 같은 ref_id(recipe_code)로 묶여 레시피별 수지가 나온다 —
+            // 소모량은 레시피가 확정한 값이라 트랜잭션이 실제로 차감한 양과 같다(부족하면 RecipeNotMet으로 롤백된다).
+            foreach (var ingredient in recipe.Ingredients)
+            {
+                _eventLogger.ItemRemoved(
+                    userId, ingredient.MaterialCode, _masterData.GetItem(ingredient.MaterialCode), ingredient.Quantity,
+                    null, ItemFlowReason.CubeCraftIn, recipeCode);
+            }
 
-        // 재화 원장(6.1). 레시피별 사용 빈도가 ref_id로 나온다 — 큐브는 도메인 로그 테이블이 없어
-        // 이 행과 item_flow_logs가 유일한 기록이다.
-        if (recipe.CostGold > 0)
-        {
-            _eventLogger.CurrencySpent(
-                userId, recipe.CostGold, outcome.GoldBalance, CurrencySource.CubeCraft, recipeCode);
+            _eventLogger.ItemGained(
+                userId, recipe.ResultItemCode, resultItem, recipe.ResultQuantity,
+                new GrantedItemIds(outcome.Delta), ItemFlowReason.CubeCraftOut, recipeCode);
+
+            return new SaveResult(ErrorCode.Success, "Crafted", data);
         }
-
-        // 아이템 원장(6.2). 소모 재료와 결과가 같은 ref_id(recipe_code)로 묶여 레시피별 수지가 나온다 —
-        // 소모량은 레시피가 확정한 값이라 트랜잭션이 실제로 차감한 양과 같다(부족하면 RecipeNotMet으로 롤백된다).
-        foreach (var ingredient in recipe.Ingredients)
+        catch (Exception ex)
         {
-            _eventLogger.ItemRemoved(
-                userId, ingredient.MaterialCode, _masterData.GetItem(ingredient.MaterialCode), ingredient.Quantity,
-                null, ItemFlowReason.CubeCraftIn, recipeCode);
+            _logger.ZLogError(
+                ex, $"CraftAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        _eventLogger.ItemGained(
-            userId, recipe.ResultItemCode, resultItem, recipe.ResultQuantity,
-            new GrantedItemIds(outcome.Delta), ItemFlowReason.CubeCraftOut, recipeCode);
-
-        return new SaveResult(ErrorCode.Success, "Crafted", data);
     }
 
     /// <summary>

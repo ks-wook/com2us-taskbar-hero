@@ -48,24 +48,33 @@ public sealed class TradeService : ITradeService
     /// </summary>
     public async Task<SaveResult> ListAsync(long userId, int itemCode, bool mine, int page, int pageSize)
     {
-        var normalizedItem = Math.Max(0, itemCode);
-        var normalizedSize = pageSize <= 0
-            ? Constants.Trade.DefaultPageSize
-            : Math.Min(pageSize, Constants.Trade.MaxPageSize);
-        // 깊은 페이지 방어: OFFSET 은 앞의 행을 세어 버리므로 상한을 둔다. 넘으면 빈 페이지로 응답한다.
-        var normalizedPage = Math.Clamp(page, 0, Constants.Trade.MaxOffset / normalizedSize);
-
-        var now = DateTimeUtil.NowUnixSeconds();
-        var pageItems = await _tradeRepository.GetActiveListingPageAsync(
-            normalizedItem, userId, mine, normalizedPage * normalizedSize, normalizedSize + 1, now);
-
-        bool hasMore = pageItems.Count > normalizedSize;
-        if (hasMore)
+        try
         {
-            pageItems = pageItems.Take(normalizedSize).ToList();
-        }
+            var normalizedItem = Math.Max(0, itemCode);
+            var normalizedSize = pageSize <= 0
+                ? Constants.Trade.DefaultPageSize
+                : Math.Min(pageSize, Constants.Trade.MaxPageSize);
+            // 깊은 페이지 방어: OFFSET 은 앞의 행을 세어 버리므로 상한을 둔다. 넘으면 빈 페이지로 응답한다.
+            var normalizedPage = Math.Clamp(page, 0, Constants.Trade.MaxOffset / normalizedSize);
 
-        return Listed(pageItems, normalizedPage, normalizedSize, hasMore);
+            var now = DateTimeUtil.NowUnixSeconds();
+            var pageItems = await _tradeRepository.GetActiveListingPageAsync(
+                normalizedItem, userId, mine, normalizedPage * normalizedSize, normalizedSize + 1, now);
+
+            bool hasMore = pageItems.Count > normalizedSize;
+            if (hasMore)
+            {
+                pageItems = pageItems.Take(normalizedSize).ToList();
+            }
+
+            return Listed(pageItems, normalizedPage, normalizedSize, hasMore);
+        }
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"ListAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -78,64 +87,73 @@ public sealed class TradeService : ITradeService
     /// </summary>
     public async Task<SaveResult> RegisterAsync(long userId, long itemId, long price)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            if (!_masterData.IsLoaded)
+            {
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            if (itemId <= 0 || price <= 0)
+            {
+                return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
+            }
+
+            var now = DateTimeUtil.NowUnixSeconds();
+            var outcome = await _tradeRepository.ApplyRegisterAsync(
+                userId, itemId, price, Constants.Trade.ListingLimit, now, now + Constants.Trade.ListingDurationSeconds);
+
+            switch (outcome.Status)
+            {
+                case TradeRegisterStatus.ItemNotFound:
+                    return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
+                case TradeRegisterStatus.ItemEquipped:
+                    return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
+                case TradeRegisterStatus.NotSellable:
+                    return new SaveResult(ErrorCode.TradeNotSellable, string.Empty, null);
+                case TradeRegisterStatus.PriceOutOfRange:
+                    // 이 거부만 남긴다 — 부르려던 가격이 허용 범위 밖이라는 사실이 반복되면 그 범위가
+                    // 실제 시세와 맞지 않는다는 뜻이다. 등록 한도 초과는 그 시점에 아이템을 아직 읽지 않아
+                    // 남길 맥락(어떤 아이템)이 없고, 나머지는 정상 클라이언트가 시도하지 않는 요청이다(4.1).
+                    EmitRegister(
+                        userId, 0, outcome.AttemptedItemCode, outcome.AttemptedEnhanceLevel, price,
+                        ErrorCode.TradePriceOutOfRange);
+                    return new SaveResult(ErrorCode.TradePriceOutOfRange, string.Empty, null);
+                case TradeRegisterStatus.ListingLimitExceeded:
+                    return new SaveResult(ErrorCode.TradeListingLimitExceeded, string.Empty, null);
+            }
+
+            var listing = outcome.Listing!;
+
+            _logger.ZLogInformation($"거래소 등록: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}, price {listing.Price:@Price}");
+
+            // 에스크로 이동 트랜잭션이 커밋된 뒤에 방출한다(4.2).
+            EmitRegister(
+                userId, listing.ListingId, listing.ItemCode, listing.EnhanceLevel, listing.Price, ErrorCode.Success);
+
+            // 아이템 원장(6.2) — **이동**이다. 계정 보유량에서는 빠지지만 경제에서 사라진 것이 아니므로,
+            // 유입·유출 합계를 낼 때 trade_register/trade_cancel을 빼야 총량이 맞는다.
+            // 소유권 이전은 구매자가 메일을 수령할 때 mail_claim 유입으로 잡힌다.
+            _eventLogger.ItemRemoved(
+                userId, listing.ItemCode, _masterData.GetItem(listing.ItemCode), listing.Quantity,
+                itemId, ItemFlowReason.TradeRegister, listing.ListingId);
+
+            return new SaveResult(ErrorCode.Success, "Registered", new TradeRegisterResultData
+            {
+                listingId = listing.ListingId,
+                itemCode = listing.ItemCode,
+                enhanceLevel = listing.EnhanceLevel,
+                quantity = listing.Quantity,
+                price = listing.Price,
+                inventoryDelta = outcome.Delta,
+            });
         }
-
-        if (itemId <= 0 || price <= 0)
+        catch (Exception ex)
         {
-            return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
+            _logger.ZLogError(
+                ex, $"RegisterAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-        var outcome = await _tradeRepository.ApplyRegisterAsync(
-            userId, itemId, price, Constants.Trade.ListingLimit, now, now + Constants.Trade.ListingDurationSeconds);
-
-        switch (outcome.Status)
-        {
-            case TradeRegisterStatus.ItemNotFound:
-                return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
-            case TradeRegisterStatus.ItemEquipped:
-                return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
-            case TradeRegisterStatus.NotSellable:
-                return new SaveResult(ErrorCode.TradeNotSellable, string.Empty, null);
-            case TradeRegisterStatus.PriceOutOfRange:
-                // 이 거부만 남긴다 — 부르려던 가격이 허용 범위 밖이라는 사실이 반복되면 그 범위가
-                // 실제 시세와 맞지 않는다는 뜻이다. 등록 한도 초과는 그 시점에 아이템을 아직 읽지 않아
-                // 남길 맥락(어떤 아이템)이 없고, 나머지는 정상 클라이언트가 시도하지 않는 요청이다(4.1).
-                EmitRegister(
-                    userId, 0, outcome.AttemptedItemCode, outcome.AttemptedEnhanceLevel, price,
-                    ErrorCode.TradePriceOutOfRange);
-                return new SaveResult(ErrorCode.TradePriceOutOfRange, string.Empty, null);
-            case TradeRegisterStatus.ListingLimitExceeded:
-                return new SaveResult(ErrorCode.TradeListingLimitExceeded, string.Empty, null);
-        }
-
-        var listing = outcome.Listing!;
-
-        _logger.ZLogInformation($"거래소 등록: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}, price {listing.Price:@Price}");
-
-        // 에스크로 이동 트랜잭션이 커밋된 뒤에 방출한다(4.2).
-        EmitRegister(
-            userId, listing.ListingId, listing.ItemCode, listing.EnhanceLevel, listing.Price, ErrorCode.Success);
-
-        // 아이템 원장(6.2) — **이동**이다. 계정 보유량에서는 빠지지만 경제에서 사라진 것이 아니므로,
-        // 유입·유출 합계를 낼 때 trade_register/trade_cancel을 빼야 총량이 맞는다.
-        // 소유권 이전은 구매자가 메일을 수령할 때 mail_claim 유입으로 잡힌다.
-        _eventLogger.ItemRemoved(
-            userId, listing.ItemCode, _masterData.GetItem(listing.ItemCode), listing.Quantity,
-            itemId, ItemFlowReason.TradeRegister, listing.ListingId);
-
-        return new SaveResult(ErrorCode.Success, "Registered", new TradeRegisterResultData
-        {
-            listingId = listing.ListingId,
-            itemCode = listing.ItemCode,
-            enhanceLevel = listing.EnhanceLevel,
-            quantity = listing.Quantity,
-            price = listing.Price,
-            inventoryDelta = outcome.Delta,
-        });
     }
 
     /// <summary>
@@ -148,102 +166,111 @@ public sealed class TradeService : ITradeService
     /// </summary>
     public async Task<SaveResult> BuyAsync(long userId, long listingId)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        if (listingId <= 0)
-        {
-            return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
-        }
-
-        var settlementTemplate = _masterData.GetMailTemplate(Constants.MailTemplate.TradeSettlement);
-        var purchaseTemplate = _masterData.GetMailTemplate(Constants.MailTemplate.TradePurchase);
-        if (settlementTemplate is null || purchaseTemplate is null)
-        {
-            _logger.ZLogError($"거래소 메일 템플릿 미정의: 대금 {settlementTemplate is not null:@HasSettlement}, 구매 아이템 {purchaseTemplate is not null:@HasPurchase} — mail_master 확인 필요");
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-
-        // 두 초안을 지역 함수로 둔다 — 적재(트랜잭션 안)와 발급 이벤트(커밋 후)가 같은 초안을 봐야
-        // 로그의 template_code·gold·item_count가 실제 발급된 메일과 어긋나지 않는다.
-        MailDraft purchaseMail(TradeListingSnapshot listing) => MailUtil.Compose(
-            purchaseTemplate, ItemLabel(listing.ItemCode), now,
-            new[]
+            if (!_masterData.IsLoaded)
             {
-                new MailAttachment(
-                    RewardTypeFor(listing.ItemCode), listing.ItemCode,
-                    listing.Quantity, listing.EnhanceLevel),
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            if (listingId <= 0)
+            {
+                return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
+            }
+
+            var settlementTemplate = _masterData.GetMailTemplate(Constants.MailTemplate.TradeSettlement);
+            var purchaseTemplate = _masterData.GetMailTemplate(Constants.MailTemplate.TradePurchase);
+            if (settlementTemplate is null || purchaseTemplate is null)
+            {
+                _logger.ZLogError($"거래소 메일 템플릿 미정의: 대금 {settlementTemplate is not null:@HasSettlement}, 구매 아이템 {purchaseTemplate is not null:@HasPurchase} — mail_master 확인 필요");
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            var now = DateTimeUtil.NowUnixSeconds();
+
+            // 두 초안을 지역 함수로 둔다 — 적재(트랜잭션 안)와 발급 이벤트(커밋 후)가 같은 초안을 봐야
+            // 로그의 template_code·gold·item_count가 실제 발급된 메일과 어긋나지 않는다.
+            MailDraft purchaseMail(TradeListingSnapshot listing) => MailUtil.Compose(
+                purchaseTemplate, ItemLabel(listing.ItemCode), now,
+                new[]
+                {
+                    new MailAttachment(
+                        RewardTypeFor(listing.ItemCode), listing.ItemCode,
+                        listing.Quantity, listing.EnhanceLevel),
+                });
+            MailDraft settlementMail(TradeListingSnapshot listing) => MailUtil.Compose(
+                settlementTemplate, ItemLabel(listing.ItemCode), now,
+                new[] { new MailAttachment(Constants.RewardType.Gold, 0, SettlementAmount(listing.Price)) });
+
+            var outcome = await _tradeRepository.ApplyBuyAsync(userId, listingId, purchaseMail, settlementMail, now);
+
+            switch (outcome.Status)
+            {
+                case TradeCloseStatus.ListingNotFound:
+                    return new SaveResult(ErrorCode.TradeListingNotFound, string.Empty, null);
+                case TradeCloseStatus.AlreadyClosed:
+                    return new SaveResult(ErrorCode.TradeAlreadyClosed, string.Empty, null);
+                case TradeCloseStatus.SelfPurchase:
+                    return new SaveResult(ErrorCode.TradeSelfPurchase, string.Empty, null);
+                case TradeCloseStatus.InsufficientGold:
+                    // "이 가격에서 못 샀다"는 시세 신호라 남긴다(4.1). 이미 닫힘·자기 등록·없는 등록은
+                    // 각각 자연스러운 경합이거나 클라이언트가 막아야 할 요청이라 남기지 않는다.
+                    EmitClose(
+                        outcome.Listing!, TradeCloseOutcome.Buy, now, buyerUid: userId, mailId: null,
+                        settled: false, errorCode: ErrorCode.InsufficientCurrency);
+                    return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+            }
+
+            var bought = outcome.Listing!;
+
+            _logger.ZLogInformation($"거래소 구매: buyerUserId {userId:@BuyerUserId}, listingId {bought.ListingId:@ListingId}, price {bought.Price:@Price}, 정산액 {SettlementAmount(bought.Price):@Settlement}, 아이템 메일 {outcome.ItemMailId:@MailId}");
+
+            // uid는 판매자다 — 등록과 결말을 같은 계정 축으로 잇기 위해서이고, 구매자는 buyer_uid로 따로 담는다(5.7).
+            EmitClose(
+                bought, TradeCloseOutcome.Buy, now, buyerUid: userId, mailId: outcome.ItemMailId,
+                settled: true, errorCode: ErrorCode.Success);
+
+            // 재화 원장(6.1) — 구매 순간 경제에 반영되는 것은 이 둘뿐이다.
+            //   ① 구매자의 지출(전액)  ② 수수료 소각(판매자 부담, 어느 계정에도 가지 않는다)
+            // 판매자 몫은 아직 우편함에 부채로 떠 있고, mail_claim 시점에 gain으로 잡힌다.
+            _eventLogger.CurrencySpent(
+                userId, bought.Price, outcome.GoldBalance, CurrencySource.TradeBuy, bought.ListingId);
+
+            var settlement = SettlementAmount(bought.Price);
+            var fee = bought.Price - settlement;
+            if (fee > 0)
+            {
+                _eventLogger.CurrencyBurned(
+                    bought.SellerUserId, fee, CurrencySource.TradeFee, bought.ListingId);
+            }
+
+            // 구매 1건이 메일을 둘 발급한다 — 구매자에게 아이템, 판매자에게 대금. 받는 계정이 서로 달라
+            // 두 행의 uid가 다르다(5.8).
+            _eventLogger.MailIssued(userId, outcome.ItemMailId, purchaseMail(bought), MailSource.TradeBuyItem);
+            _eventLogger.MailIssued(
+                bought.SellerUserId, outcome.SettlementMailId, settlementMail(bought), MailSource.TradeSellProceeds);
+
+            var data = new TradeBuyResultData
+            {
+                listingId = bought.ListingId,
+                cost = new CurrencyDto { currencyType = Constants.Currency.GoldItemCode, amount = bought.Price },
+                mailId = outcome.ItemMailId,
+            };
+            data.gained.items.Add(new TradeItemDto
+            {
+                itemCode = bought.ItemCode,
+                enhanceLevel = bought.EnhanceLevel,
+                quantity = bought.Quantity,
             });
-        MailDraft settlementMail(TradeListingSnapshot listing) => MailUtil.Compose(
-            settlementTemplate, ItemLabel(listing.ItemCode), now,
-            new[] { new MailAttachment(Constants.RewardType.Gold, 0, SettlementAmount(listing.Price)) });
-
-        var outcome = await _tradeRepository.ApplyBuyAsync(userId, listingId, purchaseMail, settlementMail, now);
-
-        switch (outcome.Status)
-        {
-            case TradeCloseStatus.ListingNotFound:
-                return new SaveResult(ErrorCode.TradeListingNotFound, string.Empty, null);
-            case TradeCloseStatus.AlreadyClosed:
-                return new SaveResult(ErrorCode.TradeAlreadyClosed, string.Empty, null);
-            case TradeCloseStatus.SelfPurchase:
-                return new SaveResult(ErrorCode.TradeSelfPurchase, string.Empty, null);
-            case TradeCloseStatus.InsufficientGold:
-                // "이 가격에서 못 샀다"는 시세 신호라 남긴다(4.1). 이미 닫힘·자기 등록·없는 등록은
-                // 각각 자연스러운 경합이거나 클라이언트가 막아야 할 요청이라 남기지 않는다.
-                EmitClose(
-                    outcome.Listing!, TradeCloseOutcome.Buy, now, buyerUid: userId, mailId: null,
-                    settled: false, errorCode: ErrorCode.InsufficientCurrency);
-                return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+            data.balance.Add(new CurrencyDto { currencyType = Constants.Currency.GoldItemCode, amount = outcome.GoldBalance });
+            return new SaveResult(ErrorCode.Success, "Purchased", data);
         }
-
-        var bought = outcome.Listing!;
-
-        _logger.ZLogInformation($"거래소 구매: buyerUserId {userId:@BuyerUserId}, listingId {bought.ListingId:@ListingId}, price {bought.Price:@Price}, 정산액 {SettlementAmount(bought.Price):@Settlement}, 아이템 메일 {outcome.ItemMailId:@MailId}");
-
-        // uid는 판매자다 — 등록과 결말을 같은 계정 축으로 잇기 위해서이고, 구매자는 buyer_uid로 따로 담는다(5.7).
-        EmitClose(
-            bought, TradeCloseOutcome.Buy, now, buyerUid: userId, mailId: outcome.ItemMailId,
-            settled: true, errorCode: ErrorCode.Success);
-
-        // 재화 원장(6.1) — 구매 순간 경제에 반영되는 것은 이 둘뿐이다.
-        //   ① 구매자의 지출(전액)  ② 수수료 소각(판매자 부담, 어느 계정에도 가지 않는다)
-        // 판매자 몫은 아직 우편함에 부채로 떠 있고, mail_claim 시점에 gain으로 잡힌다.
-        _eventLogger.CurrencySpent(
-            userId, bought.Price, outcome.GoldBalance, CurrencySource.TradeBuy, bought.ListingId);
-
-        var settlement = SettlementAmount(bought.Price);
-        var fee = bought.Price - settlement;
-        if (fee > 0)
+        catch (Exception ex)
         {
-            _eventLogger.CurrencyBurned(
-                bought.SellerUserId, fee, CurrencySource.TradeFee, bought.ListingId);
+            _logger.ZLogError(
+                ex, $"BuyAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        // 구매 1건이 메일을 둘 발급한다 — 구매자에게 아이템, 판매자에게 대금. 받는 계정이 서로 달라
-        // 두 행의 uid가 다르다(5.8).
-        _eventLogger.MailIssued(userId, outcome.ItemMailId, purchaseMail(bought), MailSource.TradeBuyItem);
-        _eventLogger.MailIssued(
-            bought.SellerUserId, outcome.SettlementMailId, settlementMail(bought), MailSource.TradeSellProceeds);
-
-        var data = new TradeBuyResultData
-        {
-            listingId = bought.ListingId,
-            cost = new CurrencyDto { currencyType = Constants.Currency.GoldItemCode, amount = bought.Price },
-            mailId = outcome.ItemMailId,
-        };
-        data.gained.items.Add(new TradeItemDto
-        {
-            itemCode = bought.ItemCode,
-            enhanceLevel = bought.EnhanceLevel,
-            quantity = bought.Quantity,
-        });
-        data.balance.Add(new CurrencyDto { currencyType = Constants.Currency.GoldItemCode, amount = outcome.GoldBalance });
-        return new SaveResult(ErrorCode.Success, "Purchased", data);
     }
 
     /// <summary>
@@ -253,55 +280,64 @@ public sealed class TradeService : ITradeService
     /// </summary>
     public async Task<SaveResult> CancelAsync(long userId, long listingId)
     {
-        if (listingId <= 0)
+        try
         {
-            return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
-        }
-
-        var outcome = await _tradeRepository.ApplyCancelAsync(userId, listingId, DateTimeUtil.NowUnixSeconds());
-
-        switch (outcome.Status)
-        {
-            case TradeCloseStatus.ListingNotFound:
-                return new SaveResult(ErrorCode.TradeListingNotFound, string.Empty, null);
-            case TradeCloseStatus.NotOwner:
-                return new SaveResult(ErrorCode.TradeNotOwner, string.Empty, null);
-            case TradeCloseStatus.AlreadyClosed:
-                return new SaveResult(ErrorCode.TradeAlreadyClosed, string.Empty, null);
-            case TradeCloseStatus.InventoryFull:
-                // 되돌릴 칸이 없어 취소가 막히는 빈도는 가방 용량 설계의 신호다(4.1이 명시한 거부 중 하나).
-                EmitClose(
-                    outcome.Listing!, TradeCloseOutcome.Cancel, DateTimeUtil.NowUnixSeconds(),
-                    buyerUid: null, mailId: null, settled: false, errorCode: ErrorCode.InventoryFull);
-                return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
-        }
-
-        var listing = outcome.Listing!;
-
-        _logger.ZLogInformation($"거래소 취소: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}");
-
-        // 취소는 아이템이 인벤토리로 돌아가 메일이 없다 — mail_id·buyer_uid 없이 나간다.
-        EmitClose(
-            listing, TradeCloseOutcome.Cancel, DateTimeUtil.NowUnixSeconds(),
-            buyerUid: null, mailId: null, settled: false, errorCode: ErrorCode.Success);
-
-        // 아이템 원장(6.2) — 에스크로 복귀도 **이동**이다. 등록 때 나간 만큼이 그대로 돌아와
-        // 같은 listing_id의 trade_register 행과 상계된다(개체 id는 복귀하며 새로 발급된 행의 것이다).
-        _eventLogger.ItemGained(
-            userId, listing.ItemCode, _masterData.GetItem(listing.ItemCode), listing.Quantity,
-            new GrantedItemIds(outcome.Delta), ItemFlowReason.TradeCancel, listing.ListingId);
-
-        return new SaveResult(ErrorCode.Success, "Cancelled", new TradeCancelResultData
-        {
-            listingId = listing.ListingId,
-            restored = new TradeItemDto
+            if (listingId <= 0)
             {
-                itemCode = listing.ItemCode,
-                enhanceLevel = listing.EnhanceLevel,
-                quantity = listing.Quantity,
-            },
-            inventoryDelta = outcome.Delta,
-        });
+                return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
+            }
+
+            var outcome = await _tradeRepository.ApplyCancelAsync(userId, listingId, DateTimeUtil.NowUnixSeconds());
+
+            switch (outcome.Status)
+            {
+                case TradeCloseStatus.ListingNotFound:
+                    return new SaveResult(ErrorCode.TradeListingNotFound, string.Empty, null);
+                case TradeCloseStatus.NotOwner:
+                    return new SaveResult(ErrorCode.TradeNotOwner, string.Empty, null);
+                case TradeCloseStatus.AlreadyClosed:
+                    return new SaveResult(ErrorCode.TradeAlreadyClosed, string.Empty, null);
+                case TradeCloseStatus.InventoryFull:
+                    // 되돌릴 칸이 없어 취소가 막히는 빈도는 가방 용량 설계의 신호다(4.1이 명시한 거부 중 하나).
+                    EmitClose(
+                        outcome.Listing!, TradeCloseOutcome.Cancel, DateTimeUtil.NowUnixSeconds(),
+                        buyerUid: null, mailId: null, settled: false, errorCode: ErrorCode.InventoryFull);
+                    return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
+            }
+
+            var listing = outcome.Listing!;
+
+            _logger.ZLogInformation($"거래소 취소: userId {userId:@UserId}, listingId {listing.ListingId:@ListingId}, itemCode {listing.ItemCode:@ItemCode}");
+
+            // 취소는 아이템이 인벤토리로 돌아가 메일이 없다 — mail_id·buyer_uid 없이 나간다.
+            EmitClose(
+                listing, TradeCloseOutcome.Cancel, DateTimeUtil.NowUnixSeconds(),
+                buyerUid: null, mailId: null, settled: false, errorCode: ErrorCode.Success);
+
+            // 아이템 원장(6.2) — 에스크로 복귀도 **이동**이다. 등록 때 나간 만큼이 그대로 돌아와
+            // 같은 listing_id의 trade_register 행과 상계된다(개체 id는 복귀하며 새로 발급된 행의 것이다).
+            _eventLogger.ItemGained(
+                userId, listing.ItemCode, _masterData.GetItem(listing.ItemCode), listing.Quantity,
+                new GrantedItemIds(outcome.Delta), ItemFlowReason.TradeCancel, listing.ListingId);
+
+            return new SaveResult(ErrorCode.Success, "Cancelled", new TradeCancelResultData
+            {
+                listingId = listing.ListingId,
+                restored = new TradeItemDto
+                {
+                    itemCode = listing.ItemCode,
+                    enhanceLevel = listing.EnhanceLevel,
+                    quantity = listing.Quantity,
+                },
+                inventoryDelta = outcome.Delta,
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"CancelAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>

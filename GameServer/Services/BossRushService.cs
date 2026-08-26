@@ -86,46 +86,55 @@ public sealed class BossRushService : IBossRushService
     /// </summary>
     public async Task<SaveResult> GetInfoAsync(long userId)
     {
-        var rule = Rule();
-        if (rule is null)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            var rule = Rule();
+            if (rule is null)
+            {
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            var now = DateTimeUtil.UtcNow;
+            var nowUnix = DateTimeUtil.ToUnixSeconds(now);
+
+            var season = await CurrentSeasonAsync();
+            var snapshot = await _repository.GetInfoSnapshotAsync(userId, season?.SeasonId ?? 0);
+            if (snapshot is null)
+            {
+                return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+            }
+
+            BossRushMyRecordDto? myRecord = null;
+            if (snapshot.MyRecord is not null && season is not null)
+            {
+                var myRank = await _rankCache.GetRankAsync(season.SeasonId, userId);
+                myRecord = snapshot.MyRecord.ToDto(myRank ?? 0);
+            }
+
+            var activeRun = snapshot.ActiveRun is not null
+                            && snapshot.ActiveRun.ExpiresAt(rule.RunExpireSec) > nowUnix
+                ? snapshot.ActiveRun.ToDto(rule.RunExpireSec)
+                : null;
+
+            var data = new BossRushInfoResultData
+            {
+                serverTime = nowUnix,
+                unlocked = snapshot.MaxStageCleared >= rule.UnlockStageSequence,
+                unlockStageSequence = rule.UnlockStageSequence,
+                maxStageCleared = snapshot.MaxStageCleared,
+                season = season?.ToDto(),
+                myRecord = myRecord,
+                activeRun = activeRun,
+            };
+
+            return new SaveResult(ErrorCode.Success, "OK", data);
         }
-
-        var now = DateTimeUtil.UtcNow;
-        var nowUnix = DateTimeUtil.ToUnixSeconds(now);
-
-        var season = await CurrentSeasonAsync();
-        var snapshot = await _repository.GetInfoSnapshotAsync(userId, season?.SeasonId ?? 0);
-        if (snapshot is null)
+        catch (Exception ex)
         {
-            return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+            _logger.ZLogError(
+                ex, $"GetInfoAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        BossRushMyRecordDto? myRecord = null;
-        if (snapshot.MyRecord is not null && season is not null)
-        {
-            var myRank = await _rankCache.GetRankAsync(season.SeasonId, userId);
-            myRecord = snapshot.MyRecord.ToDto(myRank ?? 0);
-        }
-
-        var activeRun = snapshot.ActiveRun is not null
-                        && snapshot.ActiveRun.ExpiresAt(rule.RunExpireSec) > nowUnix
-            ? snapshot.ActiveRun.ToDto(rule.RunExpireSec)
-            : null;
-
-        var data = new BossRushInfoResultData
-        {
-            serverTime = nowUnix,
-            unlocked = snapshot.MaxStageCleared >= rule.UnlockStageSequence,
-            unlockStageSequence = rule.UnlockStageSequence,
-            maxStageCleared = snapshot.MaxStageCleared,
-            season = season?.ToDto(),
-            myRecord = myRecord,
-            activeRun = activeRun,
-        };
-
-        return new SaveResult(ErrorCode.Success, "OK", data);
     }
 
     /// <summary>
@@ -137,41 +146,50 @@ public sealed class BossRushService : IBossRushService
     /// </summary>
     public async Task<SaveResult> EnterAsync(long userId)
     {
-        var rule = Rule();
-        var rounds = _masterData.BossRushRounds();
-        if (rule is null || rounds.Count == 0)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            var rule = Rule();
+            var rounds = _masterData.BossRushRounds();
+            if (rule is null || rounds.Count == 0)
+            {
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            var now = DateTimeUtil.UtcNow;
+
+            var outcome = await _repository.ApplyEnterAsync(
+                userId, rule.UnlockStageSequence, DateTimeUtil.ToUnixMilliseconds(now));
+
+            switch (outcome.Status)
+            {
+                case BossRushEnterStatus.NoPlayer:
+                    return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+                case BossRushEnterStatus.Locked:
+                    // 해금 미달 진입 시도가 반복되면 해금 조건(진행도)이 유저 기대와 어긋난다는 신호다.
+                    EmitEnter(userId, 0, 0, ErrorCode.BossRushLocked);
+                    return new SaveResult(ErrorCode.BossRushLocked, string.Empty, null);
+                case BossRushEnterStatus.SeasonClosed:
+                    // 정산 중 진입 시도. 반복되면 정산 창이 길다는 뜻이다(그만큼 콘텐츠가 닫혀 있었다).
+                    EmitEnter(userId, 0, 0, ErrorCode.BossRushSeasonClosed);
+                    return new SaveResult(ErrorCode.BossRushSeasonClosed, string.Empty, null);
+            }
+
+            var data = new BossRushEnterResultData
+            {
+                runId = outcome.RunId,
+                seasonId = outcome.SeasonId,
+                rounds = rounds.Select(r => r.ToDto()).ToList(),
+            };
+
+            EmitEnter(userId, outcome.RunId, outcome.SeasonId, ErrorCode.Success);
+            return new SaveResult(ErrorCode.Success, "BossRushStarted", data);
         }
-
-        var now = DateTimeUtil.UtcNow;
-
-        var outcome = await _repository.ApplyEnterAsync(
-            userId, rule.UnlockStageSequence, DateTimeUtil.ToUnixMilliseconds(now));
-
-        switch (outcome.Status)
+        catch (Exception ex)
         {
-            case BossRushEnterStatus.NoPlayer:
-                return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
-            case BossRushEnterStatus.Locked:
-                // 해금 미달 진입 시도가 반복되면 해금 조건(진행도)이 유저 기대와 어긋난다는 신호다.
-                EmitEnter(userId, 0, 0, ErrorCode.BossRushLocked);
-                return new SaveResult(ErrorCode.BossRushLocked, string.Empty, null);
-            case BossRushEnterStatus.SeasonClosed:
-                // 정산 중 진입 시도. 반복되면 정산 창이 길다는 뜻이다(그만큼 콘텐츠가 닫혀 있었다).
-                EmitEnter(userId, 0, 0, ErrorCode.BossRushSeasonClosed);
-                return new SaveResult(ErrorCode.BossRushSeasonClosed, string.Empty, null);
+            _logger.ZLogError(
+                ex, $"EnterAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        var data = new BossRushEnterResultData
-        {
-            runId = outcome.RunId,
-            seasonId = outcome.SeasonId,
-            rounds = rounds.Select(r => r.ToDto()).ToList(),
-        };
-
-        EmitEnter(userId, outcome.RunId, outcome.SeasonId, ErrorCode.Success);
-        return new SaveResult(ErrorCode.Success, "BossRushStarted", data);
     }
 
     /// <summary>
@@ -184,79 +202,88 @@ public sealed class BossRushService : IBossRushService
     /// </summary>
     public async Task<SaveResult> ClearAsync(long userId, BossRushClearData request)
     {
-        var rule = Rule();
-        var rounds = _masterData.BossRushRounds();
-        if (rule is null || rounds.Count == 0)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        if (request.runId <= 0 || request.clearMs <= 0)
-        {
-            return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
-        }
-
-        // 자기정합성 상한 — 런이 열려 있던 시간(런 수명)보다 긴 클리어 시간은 앞뒤가 맞지 않는다.
-        // 이 검사는 런을 종결시키지 않는다(런 수명 안에서는 재보고가 통해야 한다). 동시에 이 상한이
-        // 랭킹 점수 인코딩의 안전 여유를 보장한다(§4.3).
-        var roundTimes = request.clearMs > rule.RunLifetimeMs
-            ? null
-            : NormalizeRoundTimes(request.rounds, rule.RoundCount, request.clearMs);
-        if (roundTimes is null)
-        {
-            _logger.ZLogWarning($"보스러시 라운드 보고 정합성 실패: userId {userId:@UserId} runId {request.runId:@RunId} clearMs {request.clearMs:@ClearMs} — 클라이언트 보고값이 앞뒤가 맞지 않습니다.");
-            return new SaveResult(ErrorCode.BossRushInvalidProgress, string.Empty, null);
-        }
-
-        var nowMs = DateTimeUtil.NowUnixMilliseconds();
-
-        var outcome = await _repository.ApplyClearAsync(
-            userId, request.runId, request.clearMs, roundTimes, rule.RunLifetimeMs, nowMs);
-
-        switch (outcome.Status)
-        {
-            case BossRushClearStatus.RunNotFound:
-                return new SaveResult(ErrorCode.BossRushRunNotFound, string.Empty, null);
-            case BossRushClearStatus.AlreadyFinished:
-                // 이미 닫힌 런에 온 보고(중복 보고이거나 런 수명 초과). 후자가 반복되면 런 수명이
-                // 실제 플레이 시간보다 짧다는 신호라, 보고된 기록을 그대로 담아 남긴다.
-                EmitClear(
-                    userId, request.runId, outcome.SeasonId, request.clearMs, roundTimes,
-                    isNewRecord: false, bestClearMs: 0, rankAtReport: 0,
-                    errorCode: ErrorCode.BossRushRunAlreadyFinished);
-                return new SaveResult(ErrorCode.BossRushRunAlreadyFinished, string.Empty, null);
-        }
-
-        // 커밋 이후에만 랭킹 캐시를 갱신한다 — Redis에는 롤백이 없다(§6.2).
-        var rank = 0;
-        if (outcome.RankEligible)
-        {
-            if (outcome.IsNewRecord)
+            var rule = Rule();
+            var rounds = _masterData.BossRushRounds();
+            if (rule is null || rounds.Count == 0)
             {
-                await _rankCache.UpsertAsync(
-                    outcome.SeasonId, outcome.SeasonStartAt, userId, outcome.BestClearMs, outcome.RecordedAt);
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
             }
 
-            // 기록을 갱신하지 못했어도 순위는 내려준다 — 다른 유저가 올라와 순위가 밀렸을 수 있다.
-            rank = await _rankCache.GetRankAsync(outcome.SeasonId, userId) ?? 0;
+            if (request.runId <= 0 || request.clearMs <= 0)
+            {
+                return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
+            }
+
+            // 자기정합성 상한 — 런이 열려 있던 시간(런 수명)보다 긴 클리어 시간은 앞뒤가 맞지 않는다.
+            // 이 검사는 런을 종결시키지 않는다(런 수명 안에서는 재보고가 통해야 한다). 동시에 이 상한이
+            // 랭킹 점수 인코딩의 안전 여유를 보장한다(§4.3).
+            var roundTimes = request.clearMs > rule.RunLifetimeMs
+                ? null
+                : NormalizeRoundTimes(request.rounds, rule.RoundCount, request.clearMs);
+            if (roundTimes is null)
+            {
+                _logger.ZLogWarning($"보스러시 라운드 보고 정합성 실패: userId {userId:@UserId} runId {request.runId:@RunId} clearMs {request.clearMs:@ClearMs} — 클라이언트 보고값이 앞뒤가 맞지 않습니다.");
+                return new SaveResult(ErrorCode.BossRushInvalidProgress, string.Empty, null);
+            }
+
+            var nowMs = DateTimeUtil.NowUnixMilliseconds();
+
+            var outcome = await _repository.ApplyClearAsync(
+                userId, request.runId, request.clearMs, roundTimes, rule.RunLifetimeMs, nowMs);
+
+            switch (outcome.Status)
+            {
+                case BossRushClearStatus.RunNotFound:
+                    return new SaveResult(ErrorCode.BossRushRunNotFound, string.Empty, null);
+                case BossRushClearStatus.AlreadyFinished:
+                    // 이미 닫힌 런에 온 보고(중복 보고이거나 런 수명 초과). 후자가 반복되면 런 수명이
+                    // 실제 플레이 시간보다 짧다는 신호라, 보고된 기록을 그대로 담아 남긴다.
+                    EmitClear(
+                        userId, request.runId, outcome.SeasonId, request.clearMs, roundTimes,
+                        isNewRecord: false, bestClearMs: 0, rankAtReport: 0,
+                        errorCode: ErrorCode.BossRushRunAlreadyFinished);
+                    return new SaveResult(ErrorCode.BossRushRunAlreadyFinished, string.Empty, null);
+            }
+
+            // 커밋 이후에만 랭킹 캐시를 갱신한다 — Redis에는 롤백이 없다(§6.2).
+            var rank = 0;
+            if (outcome.RankEligible)
+            {
+                if (outcome.IsNewRecord)
+                {
+                    await _rankCache.UpsertAsync(
+                        outcome.SeasonId, outcome.SeasonStartAt, userId, outcome.BestClearMs, outcome.RecordedAt);
+                }
+
+                // 기록을 갱신하지 못했어도 순위는 내려준다 — 다른 유저가 올라와 순위가 밀렸을 수 있다.
+                rank = await _rankCache.GetRankAsync(outcome.SeasonId, userId) ?? 0;
+            }
+
+            var data = new BossRushClearResultData
+            {
+                runId = request.runId,
+                seasonId = outcome.SeasonId,
+                clearMs = request.clearMs,
+                isNewRecord = outcome.IsNewRecord,
+                bestClearMs = outcome.BestClearMs,
+                rank = rank,
+            };
+
+            // 랭킹 캐시 갱신까지 끝난 뒤에 방출한다 — rank_at_report가 응답과 같은 값이어야 하기 때문이다.
+            EmitClear(
+                userId, request.runId, outcome.SeasonId, request.clearMs, roundTimes,
+                outcome.IsNewRecord, outcome.BestClearMs, rank, ErrorCode.Success);
+
+            return new SaveResult(ErrorCode.Success, "BossRushCleared", data);
         }
-
-        var data = new BossRushClearResultData
+        catch (Exception ex)
         {
-            runId = request.runId,
-            seasonId = outcome.SeasonId,
-            clearMs = request.clearMs,
-            isNewRecord = outcome.IsNewRecord,
-            bestClearMs = outcome.BestClearMs,
-            rank = rank,
-        };
-
-        // 랭킹 캐시 갱신까지 끝난 뒤에 방출한다 — rank_at_report가 응답과 같은 값이어야 하기 때문이다.
-        EmitClear(
-            userId, request.runId, outcome.SeasonId, request.clearMs, roundTimes,
-            outcome.IsNewRecord, outcome.BestClearMs, rank, ErrorCode.Success);
-
-        return new SaveResult(ErrorCode.Success, "BossRushCleared", data);
+            _logger.ZLogError(
+                ex, $"ClearAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -268,53 +295,62 @@ public sealed class BossRushService : IBossRushService
     /// </summary>
     public async Task<SaveResult> GetRankAsync(long userId, int seasonId, int offset, int limit)
     {
-        var rule = Rule();
-        if (rule is null)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            var rule = Rule();
+            if (rule is null)
+            {
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            var season = await ResolveSeasonAsync(seasonId);
+            if (season is null)
+            {
+                return new SaveResult(ErrorCode.BossRushSeasonClosed, string.Empty, null);
+            }
+
+            var safeOffset = Math.Max(offset, 0);
+            var safeLimit = limit <= 0 ? Constants.BossRush.RankDefaultLimit : Math.Min(limit, rule.RankPageLimit);
+
+            var source = BossRushRankSource.RankCache;
+            var cached = await _rankCache.GetPageAsync(season.SeasonId, season.StartAt, safeOffset, safeLimit);
+            var total = await _rankCache.CountAsync(season.SeasonId);
+
+            List<BossRushRankRow> rows;
+            if (cached is null || total is null)
+            {
+                source = BossRushRankSource.Database;
+                var closed = season.Status == (int)BossRushSeasonStatus.Closed;
+                rows = (await _repository.GetRankPageAsync(season.SeasonId, safeOffset, safeLimit, closed)).ToList();
+                total = await _repository.CountEntriesAsync(season.SeasonId);
+            }
+            else
+            {
+                rows = cached.Select(c => new BossRushRankRow(c.Rank, c.UserId, c.ClearMs, c.RecordedAt)).ToList();
+            }
+
+            var nicknames = await ResolveNicknamesAsync(rows.Select(r => r.UserId).ToList());
+
+            var data = new BossRushRankResultData
+            {
+                seasonId = season.SeasonId,
+                seasonStatus = season.Status,
+                seasonEndAt = season.EndAt,
+                totalEntries = total ?? rows.Count,
+                offset = safeOffset,
+                limit = safeLimit,
+                source = (int)source,
+                entries = rows.Select(r => r.ToDto(nicknames)).ToList(),
+            };
+
+            return new SaveResult(ErrorCode.Success, "OK", data);
         }
-
-        var season = await ResolveSeasonAsync(seasonId);
-        if (season is null)
+        catch (Exception ex)
         {
-            return new SaveResult(ErrorCode.BossRushSeasonClosed, string.Empty, null);
+            _logger.ZLogError(
+                ex, $"GetRankAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        var safeOffset = Math.Max(offset, 0);
-        var safeLimit = limit <= 0 ? Constants.BossRush.RankDefaultLimit : Math.Min(limit, rule.RankPageLimit);
-
-        var source = BossRushRankSource.RankCache;
-        var cached = await _rankCache.GetPageAsync(season.SeasonId, season.StartAt, safeOffset, safeLimit);
-        var total = await _rankCache.CountAsync(season.SeasonId);
-
-        List<BossRushRankRow> rows;
-        if (cached is null || total is null)
-        {
-            source = BossRushRankSource.Database;
-            var closed = season.Status == (int)BossRushSeasonStatus.Closed;
-            rows = (await _repository.GetRankPageAsync(season.SeasonId, safeOffset, safeLimit, closed)).ToList();
-            total = await _repository.CountEntriesAsync(season.SeasonId);
-        }
-        else
-        {
-            rows = cached.Select(c => new BossRushRankRow(c.Rank, c.UserId, c.ClearMs, c.RecordedAt)).ToList();
-        }
-
-        var nicknames = await ResolveNicknamesAsync(rows.Select(r => r.UserId).ToList());
-
-        var data = new BossRushRankResultData
-        {
-            seasonId = season.SeasonId,
-            seasonStatus = season.Status,
-            seasonEndAt = season.EndAt,
-            totalEntries = total ?? rows.Count,
-            offset = safeOffset,
-            limit = safeLimit,
-            source = (int)source,
-            entries = rows.Select(r => r.ToDto(nicknames)).ToList(),
-        };
-
-        return new SaveResult(ErrorCode.Success, "OK", data);
     }
 
     /// <summary>
@@ -324,48 +360,57 @@ public sealed class BossRushService : IBossRushService
     /// </summary>
     public async Task<SaveResult> GetMyRankAsync(long userId, int seasonId)
     {
-        var season = await ResolveSeasonAsync(seasonId);
-        if (season is null)
+        try
         {
-            return new SaveResult(ErrorCode.BossRushSeasonClosed, string.Empty, null);
+            var season = await ResolveSeasonAsync(seasonId);
+            if (season is null)
+            {
+                return new SaveResult(ErrorCode.BossRushSeasonClosed, string.Empty, null);
+            }
+
+            var source = BossRushRankSource.RankCache;
+            var cachedEntry = await _rankCache.GetMyEntryAsync(season.SeasonId, season.StartAt, userId);
+            var total = await _rankCache.CountAsync(season.SeasonId);
+
+            BossRushRankRow? row;
+            if (total is null)
+            {
+                source = BossRushRankSource.Database;
+                var closed = season.Status == (int)BossRushSeasonStatus.Closed;
+                row = await _repository.GetMyRankAsync(season.SeasonId, userId, closed);
+                total = await _repository.CountEntriesAsync(season.SeasonId);
+            }
+            else if (cachedEntry is null)
+            {
+                // 캐시는 살아 있는데 내가 없다 = 그 시즌에 기록이 없다(폴백 대상이 아니다).
+                row = null;
+            }
+            else
+            {
+                row = new BossRushRankRow(
+                    cachedEntry.Rank, cachedEntry.UserId, cachedEntry.ClearMs, cachedEntry.RecordedAt);
+            }
+
+            var nicknames = row is null
+                ? new Dictionary<long, string>()
+                : await ResolveNicknamesAsync(new List<long> { row.UserId });
+
+            var data = new BossRushMyRankResultData
+            {
+                seasonId = season.SeasonId,
+                totalEntries = total ?? 0,
+                source = (int)source,
+                myRank = row?.ToDto(nicknames),
+            };
+
+            return new SaveResult(ErrorCode.Success, "OK", data);
         }
-
-        var source = BossRushRankSource.RankCache;
-        var cachedEntry = await _rankCache.GetMyEntryAsync(season.SeasonId, season.StartAt, userId);
-        var total = await _rankCache.CountAsync(season.SeasonId);
-
-        BossRushRankRow? row;
-        if (total is null)
+        catch (Exception ex)
         {
-            source = BossRushRankSource.Database;
-            var closed = season.Status == (int)BossRushSeasonStatus.Closed;
-            row = await _repository.GetMyRankAsync(season.SeasonId, userId, closed);
-            total = await _repository.CountEntriesAsync(season.SeasonId);
+            _logger.ZLogError(
+                ex, $"GetMyRankAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-        else if (cachedEntry is null)
-        {
-            // 캐시는 살아 있는데 내가 없다 = 그 시즌에 기록이 없다(폴백 대상이 아니다).
-            row = null;
-        }
-        else
-        {
-            row = new BossRushRankRow(
-                cachedEntry.Rank, cachedEntry.UserId, cachedEntry.ClearMs, cachedEntry.RecordedAt);
-        }
-
-        var nicknames = row is null
-            ? new Dictionary<long, string>()
-            : await ResolveNicknamesAsync(new List<long> { row.UserId });
-
-        var data = new BossRushMyRankResultData
-        {
-            seasonId = season.SeasonId,
-            totalEntries = total ?? 0,
-            source = (int)source,
-            myRank = row?.ToDto(nicknames),
-        };
-
-        return new SaveResult(ErrorCode.Success, "OK", data);
     }
 
     /// <summary>마스터에 적재된 보스러시 전역 규칙. 마스터 미로드거나 콘텐츠 미구성이면 null.</summary>

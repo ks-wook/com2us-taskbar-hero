@@ -62,55 +62,64 @@ public sealed class SaveService : ISaveService
     /// </remarks>
     public async Task<SaveResult> LoadAsync(long userId)
     {
-        var player = await _saveRepository.GetPlayerAsync(userId);
-        if (player is null)
+        try
         {
-            // 세션 개시 이벤트(로그 이벤트 정의 5.2). 아직 세이브가 없으므로 경과 시간은 0이다.
-            _eventLogger.Action(Constants.EventLog.Tags.SaveLoad, userId, new SaveLoadEvent(IsNew: true, OfflineElapsedSec: 0));
-            return new SaveResult(ErrorCode.Success, "New player", new { isNew = true });
+            var player = await _saveRepository.GetPlayerAsync(userId);
+            if (player is null)
+            {
+                // 세션 개시 이벤트(로그 이벤트 정의 5.2). 아직 세이브가 없으므로 경과 시간은 0이다.
+                _eventLogger.Action(Constants.EventLog.Tags.SaveLoad, userId, new SaveLoadEvent(IsNew: true, OfflineElapsedSec: 0));
+                return new SaveResult(ErrorCode.Success, "New player", new { isNew = true });
+            }
+
+            var characters = await _saveRepository.GetCharactersAsync(userId);
+            var currencies = await _saveRepository.GetCurrenciesAsync(userId);
+            var equipped = await _saveRepository.GetEquippedAsync(userId);
+            var skills = await _saveRepository.GetSkillsAsync(userId);
+            var runes = await _saveRepository.GetRunesAsync(userId);
+            var cube = await _saveRepository.GetCubeAsync(userId) ?? new CubeDto { cubeLevel = 1, cubeExp = 0 };
+            var inventoryTotal = await _saveRepository.GetBagItemCountAsync(userId);
+
+            var now = DateTimeUtil.NowUnixSeconds();
+            var offlineElapsed = DateTimeUtil.ElapsedSeconds(player.lastActiveAt, now);
+
+            // 활성 버프만 담는다(만료 행은 남아 있어도 제외 — 오프라인 정산이 소급 참조할 뿐이다).
+            var activeBuffs = await _consumableRepository.GetActiveBuffsAsync(userId, now);
+
+            var data = new LoadDataDto
+            {
+                player = player,
+                characters = characters,
+                currencies = currencies,
+                equipped = equipped,
+                skills = skills,
+                runes = runes,
+                cube = cube,
+                activeBuffs = activeBuffs
+                    .Select(b => new ActiveBuffDto
+                    {
+                        buffType = b.BuffType,
+                        buffValue = b.BuffValue,
+                        startedAt = b.StartedAt,
+                        expiresAt = b.ExpiresAt,
+                    })
+                    .ToList(),
+                inventoryTotal = inventoryTotal,
+                offlineElapsedSec = offlineElapsed,
+            };
+
+            // 세션 개시 이벤트(로그 이벤트 정의 5.2). 계정 로그를 남기지 않으므로 접속·리텐션 분석이 전부 이 행에서 나온다.
+            _eventLogger.Action(
+                Constants.EventLog.Tags.SaveLoad, userId, new SaveLoadEvent(IsNew: false, OfflineElapsedSec: offlineElapsed));
+
+            return new SaveResult(ErrorCode.Success, "Load successful", data);
         }
-
-        var characters = await _saveRepository.GetCharactersAsync(userId);
-        var currencies = await _saveRepository.GetCurrenciesAsync(userId);
-        var equipped = await _saveRepository.GetEquippedAsync(userId);
-        var skills = await _saveRepository.GetSkillsAsync(userId);
-        var runes = await _saveRepository.GetRunesAsync(userId);
-        var cube = await _saveRepository.GetCubeAsync(userId) ?? new CubeDto { cubeLevel = 1, cubeExp = 0 };
-        var inventoryTotal = await _saveRepository.GetBagItemCountAsync(userId);
-
-        var now = DateTimeUtil.NowUnixSeconds();
-        var offlineElapsed = DateTimeUtil.ElapsedSeconds(player.lastActiveAt, now);
-
-        // 활성 버프만 담는다(만료 행은 남아 있어도 제외 — 오프라인 정산이 소급 참조할 뿐이다).
-        var activeBuffs = await _consumableRepository.GetActiveBuffsAsync(userId, now);
-
-        var data = new LoadDataDto
+        catch (Exception ex)
         {
-            player = player,
-            characters = characters,
-            currencies = currencies,
-            equipped = equipped,
-            skills = skills,
-            runes = runes,
-            cube = cube,
-            activeBuffs = activeBuffs
-                .Select(b => new ActiveBuffDto
-                {
-                    buffType = b.BuffType,
-                    buffValue = b.BuffValue,
-                    startedAt = b.StartedAt,
-                    expiresAt = b.ExpiresAt,
-                })
-                .ToList(),
-            inventoryTotal = inventoryTotal,
-            offlineElapsedSec = offlineElapsed,
-        };
-
-        // 세션 개시 이벤트(로그 이벤트 정의 5.2). 계정 로그를 남기지 않으므로 접속·리텐션 분석이 전부 이 행에서 나온다.
-        _eventLogger.Action(
-            Constants.EventLog.Tags.SaveLoad, userId, new SaveLoadEvent(IsNew: false, OfflineElapsedSec: offlineElapsed));
-
-        return new SaveResult(ErrorCode.Success, "Load successful", data);
+            _logger.ZLogError(
+                ex, $"LoadAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -127,118 +136,127 @@ public sealed class SaveService : ISaveService
     /// </summary>
     public async Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode, int gender)
     {
-        // 마스터 미로드 시 직업 검증 불가.
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        // 존재하지 않는 직업 코드.
-        if (!_masterData.IsValidClass(classCode))
-        {
-            return new SaveResult(ErrorCode.InvalidClassCode, string.Empty, null);
-        }
-
-        // 정의되지 않은 성별 값(1:남 2:여 외).
-        if (!IsValidGender(gender))
-        {
-            return new SaveResult(ErrorCode.InvalidGender, string.Empty, null);
-        }
-
-        var player = await _saveRepository.GetPlayerAsync(userId);
-
-        // 생성과 함께 지급·장착할 직업 기본 무기(정의가 없으면 null → 맨손 생성).
-        var startingWeapon = ResolveStartingWeapon(classCode);
-
-        // 생성과 함께 습득·장착시킬 직업 기본 액티브 스킬(정의가 없으면 null → 스킬 없이 생성).
-        var startingSkillCode = ResolveStartingSkillCode(classCode);
-
-        // 최초 생성: game_player 초기화 + 1번 슬롯.
-        if (player is null)
-        {
-            if (string.IsNullOrWhiteSpace(nickname))
+            // 마스터 미로드 시 직업 검증 불가.
+            if (!_masterData.IsLoaded)
             {
-                return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
             }
 
-            var nowUnix = DateTimeUtil.NowUnixSeconds();
-            var welcomeMail = ComposeNewbieRewardMail(nickname.Trim(), nowUnix);
-
-            CreatePlayerOutcome created;
-            try
+            // 존재하지 않는 직업 코드.
+            if (!_masterData.IsValidClass(classCode))
             {
-                created = await _saveRepository.CreatePlayerWithFirstCharacterAsync(
-                    userId, nickname.Trim(), classCode, gender, Constants.Inventory.BaseCapacity,
-                    nowUnix, welcomeMail, startingWeapon, startingSkillCode);
-            }
-            catch (MySqlException ex) when (ex.Number == Constants.MySqlError.DuplicateEntry)
-            {
-                // 동시 초기화 경합.
-                _logger.ZLogWarning($"계정 초기화 경합 감지: user {userId:@UserId}");
-                return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
+                return new SaveResult(ErrorCode.InvalidClassCode, string.Empty, null);
             }
 
-            _logger.ZLogInformation($"캐릭터 생성 성공(신규 계정): userId {userId:@UserId}, characterId {1:@CharacterId}, classCode {classCode:@ClassCode}, gender {gender:@Gender}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}, startingSkill {startingSkillCode ?? 0:@StartingSkill}");
-
-            // 최초 생성만 이벤트로 남긴다(로그 이벤트 정의 5.2) — 답하는 질문이 첫 직업 선호와
-            // 가입 → 플레이 전환이라, 두 번째 이후의 캐릭터 추가는 이 축에 들어가지 않는다.
-            // 커밋이 끝난 뒤 방출한다(롤백된 사실을 로그에 남기지 않는다, 4.2).
-            _eventLogger.Action(Constants.EventLog.Tags.PlayerCreate, userId, new PlayerCreateEvent(classCode, gender));
-
-            // 신규 지원금 메일 발급(5.8). 계정 생애에 한 번뿐이라 이 트랜잭션이 곧 유일한 발급 지점이다.
-            if (welcomeMail is not null && created.WelcomeMailId > 0)
+            // 정의되지 않은 성별 값(1:남 2:여 외).
+            if (!IsValidGender(gender))
             {
-                _eventLogger.MailIssued(userId, created.WelcomeMailId, welcomeMail, MailSource.Newbie);
+                return new SaveResult(ErrorCode.InvalidGender, string.Empty, null);
             }
 
-            // 아이템 원장(6.2). 기본 무기는 가방을 거치지 않고 곧바로 장착된 상태로 생기지만, 계정 보유량이
-            // 늘어난 것은 같으므로 원장에 남긴다 — 남기지 않으면 이후 이 개체의 강화·거래·분해 행이
-            // 유입 없는 유출로 보인다. ref_id는 생성 순번(character_id)이다.
-            EmitStartingWeapon(userId, 1, startingWeapon, created.StartingWeaponItemId);
+            var player = await _saveRepository.GetPlayerAsync(userId);
 
-            // 최초 생성은 계정 초기화라 무료이며 파티 1번 자리에 편성된다.
-            return SuccessCharacter(userId, 1, classCode, 1, gender, 0, null);
-        }
+            // 생성과 함께 지급·장착할 직업 기본 무기(정의가 없으면 null → 맨손 생성).
+            var startingWeapon = ResolveStartingWeapon(classCode);
 
-        // 기존 계정: 직업 중복만 검사한다(보유 수 상한 없음 — 직업 중복 불가가 곧 상한).
-        var owned = await _saveRepository.GetCharacterSlotsAsync(userId);
-        if (owned.Any(s => s.ClassCode == classCode))
-        {
-            return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
-        }
+            // 생성과 함께 습득·장착시킬 직업 기본 액티브 스킬(정의가 없으면 null → 스킬 없이 생성).
+            var startingSkillCode = ResolveStartingSkillCode(classCode);
 
-        var newCharacterId = NextCharacterId(owned);
-        var newSlot = FirstFreePartySlot(owned);
-        // 생성 비용은 "몇 번째로 만드는 캐릭터인가"(보유 수 + 1)로 찾는 마스터 명시값(현재 정액).
-        // 골드 확인·차감·캐릭터 삽입은 리포지토리 트랜잭션에서 원자적으로 처리한다.
-        var cost = _masterData.CharacterCreateCost(owned.Count + 1);
+            // 최초 생성: game_player 초기화 + 1번 슬롯.
+            if (player is null)
+            {
+                if (string.IsNullOrWhiteSpace(nickname))
+                {
+                    return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
+                }
 
-        var outcome = await _saveRepository.AddCharacterAsync(
-            userId, newCharacterId, classCode, newSlot, gender, cost,
-            startingWeapon, startingSkillCode, DateTimeUtil.NowUnixSeconds());
-        switch (outcome.Status)
-        {
-            case AddCharacterStatus.InsufficientCurrency:
-                return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
-            case AddCharacterStatus.DuplicateConflict:
-                // 식별자/직업 유니크 경합(동시 생성).
+                var nowUnix = DateTimeUtil.NowUnixSeconds();
+                var welcomeMail = ComposeNewbieRewardMail(nickname.Trim(), nowUnix);
+
+                CreatePlayerOutcome created;
+                try
+                {
+                    created = await _saveRepository.CreatePlayerWithFirstCharacterAsync(
+                        userId, nickname.Trim(), classCode, gender, Constants.Inventory.BaseCapacity,
+                        nowUnix, welcomeMail, startingWeapon, startingSkillCode);
+                }
+                catch (MySqlException ex) when (ex.Number == Constants.MySqlError.DuplicateEntry)
+                {
+                    // 동시 초기화 경합.
+                    _logger.ZLogWarning($"계정 초기화 경합 감지: user {userId:@UserId}");
+                    return new SaveResult(ErrorCode.InvalidSaveData, string.Empty, null);
+                }
+
+                _logger.ZLogInformation($"캐릭터 생성 성공(신규 계정): userId {userId:@UserId}, characterId {1:@CharacterId}, classCode {classCode:@ClassCode}, gender {gender:@Gender}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}, startingSkill {startingSkillCode ?? 0:@StartingSkill}");
+
+                // 최초 생성만 이벤트로 남긴다(로그 이벤트 정의 5.2) — 답하는 질문이 첫 직업 선호와
+                // 가입 → 플레이 전환이라, 두 번째 이후의 캐릭터 추가는 이 축에 들어가지 않는다.
+                // 커밋이 끝난 뒤 방출한다(롤백된 사실을 로그에 남기지 않는다, 4.2).
+                _eventLogger.Action(Constants.EventLog.Tags.PlayerCreate, userId, new PlayerCreateEvent(classCode, gender));
+
+                // 신규 지원금 메일 발급(5.8). 계정 생애에 한 번뿐이라 이 트랜잭션이 곧 유일한 발급 지점이다.
+                if (welcomeMail is not null && created.WelcomeMailId > 0)
+                {
+                    _eventLogger.MailIssued(userId, created.WelcomeMailId, welcomeMail, MailSource.Newbie);
+                }
+
+                // 아이템 원장(6.2). 기본 무기는 가방을 거치지 않고 곧바로 장착된 상태로 생기지만, 계정 보유량이
+                // 늘어난 것은 같으므로 원장에 남긴다 — 남기지 않으면 이후 이 개체의 강화·거래·분해 행이
+                // 유입 없는 유출로 보인다. ref_id는 생성 순번(character_id)이다.
+                EmitStartingWeapon(userId, 1, startingWeapon, created.StartingWeaponItemId);
+
+                // 최초 생성은 계정 초기화라 무료이며 파티 1번 자리에 편성된다.
+                return SuccessCharacter(userId, 1, classCode, 1, gender, 0, null);
+            }
+
+            // 기존 계정: 직업 중복만 검사한다(보유 수 상한 없음 — 직업 중복 불가가 곧 상한).
+            var owned = await _saveRepository.GetCharacterSlotsAsync(userId);
+            if (owned.Any(s => s.ClassCode == classCode))
+            {
                 return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
+            }
+
+            var newCharacterId = NextCharacterId(owned);
+            var newSlot = FirstFreePartySlot(owned);
+            // 생성 비용은 "몇 번째로 만드는 캐릭터인가"(보유 수 + 1)로 찾는 마스터 명시값(현재 정액).
+            // 골드 확인·차감·캐릭터 삽입은 리포지토리 트랜잭션에서 원자적으로 처리한다.
+            var cost = _masterData.CharacterCreateCost(owned.Count + 1);
+
+            var outcome = await _saveRepository.AddCharacterAsync(
+                userId, newCharacterId, classCode, newSlot, gender, cost,
+                startingWeapon, startingSkillCode, DateTimeUtil.NowUnixSeconds());
+            switch (outcome.Status)
+            {
+                case AddCharacterStatus.InsufficientCurrency:
+                    return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+                case AddCharacterStatus.DuplicateConflict:
+                    // 식별자/직업 유니크 경합(동시 생성).
+                    return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
+            }
+
+            _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newCharacterId:@CharacterId}, classCode {classCode:@ClassCode}, slot {newSlot:@Slot}, gender {gender:@Gender}, cost {outcome.Cost:@Cost}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}, startingSkill {startingSkillCode ?? 0:@StartingSkill}");
+
+            // 재화 원장(6.1). ref_id가 생성 순번(character_id)이라 "몇 번째 캐릭터를 언제 샀나"가 이 값으로 나온다.
+            // 최초 생성은 무료라 이 행이 없다(그쪽은 player.create가 답한다).
+            if (outcome.Cost > 0)
+            {
+                _eventLogger.CurrencySpent(
+                    userId, outcome.Cost, outcome.GoldBalance, CurrencySource.CharacterCreate, newCharacterId);
+            }
+
+            // 아이템 원장(6.2) — 최초 생성과 같은 사유로 남긴다(ref_id = 생성 순번).
+            EmitStartingWeapon(userId, newCharacterId, startingWeapon, outcome.StartingWeaponItemId);
+
+            return SuccessCharacter(userId, newCharacterId, classCode, newSlot, gender, outcome.Cost, outcome.GoldBalance);
         }
-
-        _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newCharacterId:@CharacterId}, classCode {classCode:@ClassCode}, slot {newSlot:@Slot}, gender {gender:@Gender}, cost {outcome.Cost:@Cost}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}, startingSkill {startingSkillCode ?? 0:@StartingSkill}");
-
-        // 재화 원장(6.1). ref_id가 생성 순번(character_id)이라 "몇 번째 캐릭터를 언제 샀나"가 이 값으로 나온다.
-        // 최초 생성은 무료라 이 행이 없다(그쪽은 player.create가 답한다).
-        if (outcome.Cost > 0)
+        catch (Exception ex)
         {
-            _eventLogger.CurrencySpent(
-                userId, outcome.Cost, outcome.GoldBalance, CurrencySource.CharacterCreate, newCharacterId);
+            _logger.ZLogError(
+                ex, $"CreateCharacterAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        // 아이템 원장(6.2) — 최초 생성과 같은 사유로 남긴다(ref_id = 생성 순번).
-        EmitStartingWeapon(userId, newCharacterId, startingWeapon, outcome.StartingWeaponItemId);
-
-        return SuccessCharacter(userId, newCharacterId, classCode, newSlot, gender, outcome.Cost, outcome.GoldBalance);
     }
 
     /// <summary>
@@ -270,20 +288,29 @@ public sealed class SaveService : ISaveService
     /// </summary>
     public async Task<SaveResult> ArrangePartyAsync(long userId, IReadOnlyList<PartyMemberDto>? members)
     {
-        var invalid = ValidatePartySnapshot(members);
-        if (invalid is not null)
+        try
         {
-            return new SaveResult(invalid.Value, string.Empty, null);
-        }
+            var invalid = ValidatePartySnapshot(members);
+            if (invalid is not null)
+            {
+                return new SaveResult(invalid.Value, string.Empty, null);
+            }
 
-        var outcome = await _saveRepository.SavePartyAsync(userId, members!);
-        if (outcome.Status == ArrangePartyStatus.CharacterNotFound)
+            var outcome = await _saveRepository.SavePartyAsync(userId, members!);
+            if (outcome.Status == ArrangePartyStatus.CharacterNotFound)
+            {
+                return new SaveResult(ErrorCode.CharacterNotFound, string.Empty, null);
+            }
+
+            _logger.ZLogInformation($"파티 편성 저장: userId {userId:@UserId}, memberCount {members!.Count:@MemberCount}");
+            return new SaveResult(ErrorCode.Success, "Party arranged", new ArrangePartyResultData { characters = outcome.Characters });
+        }
+        catch (Exception ex)
         {
-            return new SaveResult(ErrorCode.CharacterNotFound, string.Empty, null);
+            _logger.ZLogError(
+                ex, $"ArrangePartyAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        _logger.ZLogInformation($"파티 편성 저장: userId {userId:@UserId}, memberCount {members!.Count:@MemberCount}");
-        return new SaveResult(ErrorCode.Success, "Party arranged", new ArrangePartyResultData { characters = outcome.Characters });
     }
 
     /// <summary>
@@ -327,15 +354,24 @@ public sealed class SaveService : ISaveService
     /// <summary>접속 시각(last_active_at)을 현재로 갱신한다(heartbeat). 계정 세이브가 없으면 SaveNotFound.</summary>
     public async Task<SaveResult> UpdateLastActiveAsync(long userId)
     {
-        var now = DateTimeUtil.NowUnixSeconds();
-        var affected = await _saveRepository.UpdateLastActiveAsync(userId, now);
-        if (affected == 0)
+        try
         {
-            // 아직 계정 세이브(game_player)가 없음.
-            return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
-        }
+            var now = DateTimeUtil.NowUnixSeconds();
+            var affected = await _saveRepository.UpdateLastActiveAsync(userId, now);
+            if (affected == 0)
+            {
+                // 아직 계정 세이브(game_player)가 없음.
+                return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+            }
 
-        return new SaveResult(ErrorCode.Success, "Heartbeat OK", new { lastActiveAt = now });
+            return new SaveResult(ErrorCode.Success, "Heartbeat OK", new { lastActiveAt = now });
+        }
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"UpdateLastActiveAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>캐릭터 생성 성공 응답(userId·characterId·classCode·배정 파티 자리·gender·초기 레벨 1 + 소모 골드·잔액)을 만든다.

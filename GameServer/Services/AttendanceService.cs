@@ -45,54 +45,63 @@ public sealed class AttendanceService : IAttendanceService
     /// </summary>
     public async Task<SaveResult> StatusAsync(long userId)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        var kstNow = DateTimeUtil.KstNow;
-        var today = DateTimeUtil.ToDateKey(kstNow);
-        var yearMonth = DateTimeUtil.ToYearMonthKey(kstNow);
-
-        // 진행도는 계정당 1행(누적 출석일수 + 마지막 획득 일자). 세이브가 없으면 빈 진행도로 응답한다.
-        var progress = await _attendanceRepository.GetProgressAsync(userId);
-        var attendedCount = progress?.AttendCount ?? 0;
-        var todayClaimed = progress is not null && progress.LastAttendDate == today;
-
-        // 사다리는 maxDay 주기로 순환한다(§2). 오늘 해당 일차는 이미 받았으면 오늘 받은 일차(= 현재 회차 진행도),
-        // 아니면 다음 일차(= 누적 수 % maxDay + 1)다. 순환하므로 "받을 보상이 없는" 상태는 없다.
-        var maxDay = _masterData.MaxAttendanceDay;
-        var progressInCycle = ProgressInCycle(attendedCount, maxDay);
-        var todayDay = todayClaimed ? progressInCycle : NextDay(attendedCount, maxDay);
-
-        // 보상 사다리: attendance_master에 정의된 전 일차(1~30). 현재 회차에서 앞에서부터 순서대로 수령되므로
-        // claimed는 "day ≤ 현재 회차 진행도"로 판정한다(날짜와 무관, 새 회차가 시작되면 다시 비워진다).
-        var days = new List<AttendanceDayDto>();
-        foreach (var day in _masterData.AttendanceDays)
-        {
-            var reward = _masterData.GetAttendanceReward(day)!;
-            days.Add(new AttendanceDayDto
+            if (!_masterData.IsLoaded)
             {
-                day = day,
-                rewardType = reward.RewardType,
-                rewardCode = reward.RewardCode,
-                quantity = reward.Quantity,
-                claimed = day <= progressInCycle,
-            });
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            var kstNow = DateTimeUtil.KstNow;
+            var today = DateTimeUtil.ToDateKey(kstNow);
+            var yearMonth = DateTimeUtil.ToYearMonthKey(kstNow);
+
+            // 진행도는 계정당 1행(누적 출석일수 + 마지막 획득 일자). 세이브가 없으면 빈 진행도로 응답한다.
+            var progress = await _attendanceRepository.GetProgressAsync(userId);
+            var attendedCount = progress?.AttendCount ?? 0;
+            var todayClaimed = progress is not null && progress.LastAttendDate == today;
+
+            // 사다리는 maxDay 주기로 순환한다(§2). 오늘 해당 일차는 이미 받았으면 오늘 받은 일차(= 현재 회차 진행도),
+            // 아니면 다음 일차(= 누적 수 % maxDay + 1)다. 순환하므로 "받을 보상이 없는" 상태는 없다.
+            var maxDay = _masterData.MaxAttendanceDay;
+            var progressInCycle = ProgressInCycle(attendedCount, maxDay);
+            var todayDay = todayClaimed ? progressInCycle : NextDay(attendedCount, maxDay);
+
+            // 보상 사다리: attendance_master에 정의된 전 일차(1~30). 현재 회차에서 앞에서부터 순서대로 수령되므로
+            // claimed는 "day ≤ 현재 회차 진행도"로 판정한다(날짜와 무관, 새 회차가 시작되면 다시 비워진다).
+            var days = new List<AttendanceDayDto>();
+            foreach (var day in _masterData.AttendanceDays)
+            {
+                var reward = _masterData.GetAttendanceReward(day)!;
+                days.Add(new AttendanceDayDto
+                {
+                    day = day,
+                    rewardType = reward.RewardType,
+                    rewardCode = reward.RewardCode,
+                    quantity = reward.Quantity,
+                    claimed = day <= progressInCycle,
+                });
+            }
+
+            var data = new AttendanceStatusResultData
+            {
+                yearMonth = yearMonth,
+                today = today,
+                attendedCount = attendedCount,
+                todayDay = todayDay,
+                todayClaimed = todayClaimed,
+                canClaim = !todayClaimed,
+                days = days,
+            };
+
+            return new SaveResult(ErrorCode.Success, "OK", data);
         }
-
-        var data = new AttendanceStatusResultData
+        catch (Exception ex)
         {
-            yearMonth = yearMonth,
-            today = today,
-            attendedCount = attendedCount,
-            todayDay = todayDay,
-            todayClaimed = todayClaimed,
-            canClaim = !todayClaimed,
-            days = days,
-        };
-
-        return new SaveResult(ErrorCode.Success, "OK", data);
+            _logger.ZLogError(
+                ex, $"StatusAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -104,72 +113,81 @@ public sealed class AttendanceService : IAttendanceService
     /// </summary>
     public async Task<SaveResult> ClaimAsync(long userId)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        var now = DateTimeUtil.UtcNow;
-        var today = DateTimeUtil.ToDateKey(DateTimeUtil.ToKst(now));
-
-        // 메일 템플릿은 일차와 무관하므로 먼저 확인한다(없으면 마스터 결함 → 10001, §6.2).
-        var template = _masterData.GetMailTemplate(Constants.MailTemplate.Attendance);
-        if (template is null)
-        {
-            _logger.ZLogError($"출석 보상 메일 템플릿 미정의: templateCode {Constants.MailTemplate.Attendance:@TemplateCode} — mail_master 확인 필요");
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        var nowUnix = DateTimeUtil.ToUnixSeconds(now);
-        var outcome = await _attendanceRepository.ApplyClaimAsync(
-            userId, today, _masterData.MaxAttendanceDay,
-            day => ComposeRewardMail(template, day, nowUnix), nowUnix);
-
-        switch (outcome.Status)
-        {
-            case AttendanceClaimStatus.NoPlayer:
-                // 계정 세이브(game_player) 미생성 — 캐릭터 생성 전.
-                return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
-            case AttendanceClaimStatus.AlreadyClaimed:
-                return new SaveResult(ErrorCode.AttendanceAlreadyClaimed, string.Empty, null);
-            case AttendanceClaimStatus.RewardNotFound:
-                _logger.ZLogError($"출석 일차 보상 미정의: day {outcome.Day:@Day} — attendance_master 확인 필요");
-                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        // 트랜잭션에서 확정된 일차의 보상을 응답에 그대로 싣는다(위에서 발급된 메일 첨부와 동일).
-        var reward = _masterData.GetAttendanceReward(outcome.Day)!;
-        var data = new AttendanceClaimResultData
-        {
-            attendDate = today,
-            day = outcome.Day,
-            reward = new AttendanceRewardDto
+            if (!_masterData.IsLoaded)
             {
-                rewardType = reward.RewardType,
-                rewardCode = reward.RewardCode,
-                quantity = reward.Quantity,
-            },
-            mailId = outcome.MailId,
-        };
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
 
-        _logger.ZLogInformation($"출석 보상 발급: userId {userId:@UserId}, attendDate {today:@AttendDate}, day {outcome.Day:@Day}, mailId {outcome.MailId:@MailId}");
+            var now = DateTimeUtil.UtcNow;
+            var today = DateTimeUtil.ToDateKey(DateTimeUtil.ToKst(now));
 
-        // 획득 이벤트(5.9). 일차(day)가 이 도메인의 질문(며칠째에서 끊기나)의 축이라 메일 로그와 별도로 남긴다.
-        _eventLogger.Action(
-            Constants.EventLog.Tags.AttendanceClaim, userId,
-            new AttendanceClaimEvent(
-                DateTimeUtil.ToDateString(DateTimeUtil.ToKst(now)), outcome.Day,
-                reward.RewardType, reward.RewardCode, reward.Quantity, outcome.MailId));
+            // 메일 템플릿은 일차와 무관하므로 먼저 확인한다(없으면 마스터 결함 → 10001, §6.2).
+            var template = _masterData.GetMailTemplate(Constants.MailTemplate.Attendance);
+            if (template is null)
+            {
+                _logger.ZLogError($"출석 보상 메일 템플릿 미정의: templateCode {Constants.MailTemplate.Attendance:@TemplateCode} — mail_master 확인 필요");
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
 
-        // 출석 보상 메일 발급(5.8). 재화는 이 시점에 풀리지 않고 수령 시 원장으로 잡히므로,
-        // 이 행과 원장의 mail_claim 행의 차액이 곧 미수령 부채다.
-        var issuedMail = ComposeRewardMail(template, outcome.Day, nowUnix);
-        if (issuedMail is not null)
-        {
-            _eventLogger.MailIssued(userId, outcome.MailId, issuedMail, MailSource.Attendance);
+            var nowUnix = DateTimeUtil.ToUnixSeconds(now);
+            var outcome = await _attendanceRepository.ApplyClaimAsync(
+                userId, today, _masterData.MaxAttendanceDay,
+                day => ComposeRewardMail(template, day, nowUnix), nowUnix);
+
+            switch (outcome.Status)
+            {
+                case AttendanceClaimStatus.NoPlayer:
+                    // 계정 세이브(game_player) 미생성 — 캐릭터 생성 전.
+                    return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
+                case AttendanceClaimStatus.AlreadyClaimed:
+                    return new SaveResult(ErrorCode.AttendanceAlreadyClaimed, string.Empty, null);
+                case AttendanceClaimStatus.RewardNotFound:
+                    _logger.ZLogError($"출석 일차 보상 미정의: day {outcome.Day:@Day} — attendance_master 확인 필요");
+                    return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            // 트랜잭션에서 확정된 일차의 보상을 응답에 그대로 싣는다(위에서 발급된 메일 첨부와 동일).
+            var reward = _masterData.GetAttendanceReward(outcome.Day)!;
+            var data = new AttendanceClaimResultData
+            {
+                attendDate = today,
+                day = outcome.Day,
+                reward = new AttendanceRewardDto
+                {
+                    rewardType = reward.RewardType,
+                    rewardCode = reward.RewardCode,
+                    quantity = reward.Quantity,
+                },
+                mailId = outcome.MailId,
+            };
+
+            _logger.ZLogInformation($"출석 보상 발급: userId {userId:@UserId}, attendDate {today:@AttendDate}, day {outcome.Day:@Day}, mailId {outcome.MailId:@MailId}");
+
+            // 획득 이벤트(5.9). 일차(day)가 이 도메인의 질문(며칠째에서 끊기나)의 축이라 메일 로그와 별도로 남긴다.
+            _eventLogger.Action(
+                Constants.EventLog.Tags.AttendanceClaim, userId,
+                new AttendanceClaimEvent(
+                    DateTimeUtil.ToDateString(DateTimeUtil.ToKst(now)), outcome.Day,
+                    reward.RewardType, reward.RewardCode, reward.Quantity, outcome.MailId));
+
+            // 출석 보상 메일 발급(5.8). 재화는 이 시점에 풀리지 않고 수령 시 원장으로 잡히므로,
+            // 이 행과 원장의 mail_claim 행의 차액이 곧 미수령 부채다.
+            var issuedMail = ComposeRewardMail(template, outcome.Day, nowUnix);
+            if (issuedMail is not null)
+            {
+                _eventLogger.MailIssued(userId, outcome.MailId, issuedMail, MailSource.Attendance);
+            }
+
+            return new SaveResult(ErrorCode.Success, "Attended", data);
         }
-
-        return new SaveResult(ErrorCode.Success, "Attended", data);
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"ClaimAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>산출된 출석 일차의 보상(attendance_master)으로 발급할 메일 초안을 렌더링한다.

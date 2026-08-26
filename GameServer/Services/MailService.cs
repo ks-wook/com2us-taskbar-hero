@@ -40,30 +40,39 @@ public sealed class MailService : IMailService
     /// </summary>
     public async Task<SaveResult> ListAsync(long userId)
     {
-        var mails = await _mailRepository.GetMailboxAndMarkReadAsync(userId);
-
-        var data = new MailListResultData
+        try
         {
-            mails = mails.Select(m => new MailDto
-            {
-                mailId = m.MailId,
-                category = m.Category,
-                title = m.Title,
-                body = m.Body,
-                attachments = m.Attachments.Select(a => new MailAttachmentDto
-                {
-                    rewardType = a.RewardType,
-                    rewardCode = a.RewardCode,
-                    quantity = a.Quantity,
-                }).ToList(),
-                isRead = m.IsRead,
-                claimed = m.Claimed,
-                createdAt = m.CreatedAt,
-                expiresAt = m.ExpiresAt,
-            }).ToList(),
-        };
+            var mails = await _mailRepository.GetMailboxAndMarkReadAsync(userId);
 
-        return new SaveResult(ErrorCode.Success, "OK", data);
+            var data = new MailListResultData
+            {
+                mails = mails.Select(m => new MailDto
+                {
+                    mailId = m.MailId,
+                    category = m.Category,
+                    title = m.Title,
+                    body = m.Body,
+                    attachments = m.Attachments.Select(a => new MailAttachmentDto
+                    {
+                        rewardType = a.RewardType,
+                        rewardCode = a.RewardCode,
+                        quantity = a.Quantity,
+                    }).ToList(),
+                    isRead = m.IsRead,
+                    claimed = m.Claimed,
+                    createdAt = m.CreatedAt,
+                    expiresAt = m.ExpiresAt,
+                }).ToList(),
+            };
+
+            return new SaveResult(ErrorCode.Success, "OK", data);
+        }
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"ListAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -73,48 +82,57 @@ public sealed class MailService : IMailService
     /// </summary>
     public async Task<SaveResult> ClaimAsync(long userId, long mailId)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            if (!_masterData.IsLoaded)
+            {
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            if (mailId <= 0)
+            {
+                return new SaveResult(ErrorCode.MailNotFound, string.Empty, null);
+            }
+
+            var now = DateTimeUtil.NowUnixSeconds();
+            var outcome = await _mailRepository.ApplyClaimAsync(userId, mailId, now);
+
+            if (outcome.Status != MailClaimStatus.Ok)
+            {
+                return new SaveResult(ToErrorCode(outcome.Status), string.Empty, null);
+            }
+
+            var data = new MailClaimResultData
+            {
+                mailId = mailId,
+                gained = BuildGained(outcome.Gold, outcome.Items),
+                balance = BuildBalance(outcome.GoldBalance),
+                inventoryDelta = outcome.Delta,
+            };
+
+            _logger.ZLogInformation($"메일 수령: userId {userId:@UserId}, mailId {mailId:@MailId}, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
+
+            // 재화 원장(6.1). 출석·거래 대금·순위 보상·신규 지원금이 전부 이 자리로 들어온다 —
+            // 우편함에 부채로 떠 있던 재화가 실제로 경제에 풀리는 순간이다.
+            if (outcome.Gold > 0)
+            {
+                _eventLogger.CurrencyGained(
+                    userId, outcome.Gold, outcome.GoldBalance, CurrencySource.MailClaim, mailId);
+            }
+
+            // 아이템 원장(6.2). 거래 구매·반송·출석 보상·신규 지원금이 실제로 가방에 들어오는 지점이 여기다 —
+            // 발급(mail.issue)은 건수만 담으므로 품목별 유통량은 이 행들이 유일한 근거다.
+            EmitClaimedItems(
+                userId, mailId, outcome.Category, outcome.Items, new GrantedItemIds(outcome.Delta));
+
+            return new SaveResult(ErrorCode.Success, "Claimed", data);
         }
-
-        if (mailId <= 0)
+        catch (Exception ex)
         {
-            return new SaveResult(ErrorCode.MailNotFound, string.Empty, null);
+            _logger.ZLogError(
+                ex, $"ClaimAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-        var outcome = await _mailRepository.ApplyClaimAsync(userId, mailId, now);
-
-        if (outcome.Status != MailClaimStatus.Ok)
-        {
-            return new SaveResult(ToErrorCode(outcome.Status), string.Empty, null);
-        }
-
-        var data = new MailClaimResultData
-        {
-            mailId = mailId,
-            gained = BuildGained(outcome.Gold, outcome.Items),
-            balance = BuildBalance(outcome.GoldBalance),
-            inventoryDelta = outcome.Delta,
-        };
-
-        _logger.ZLogInformation($"메일 수령: userId {userId:@UserId}, mailId {mailId:@MailId}, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
-
-        // 재화 원장(6.1). 출석·거래 대금·순위 보상·신규 지원금이 전부 이 자리로 들어온다 —
-        // 우편함에 부채로 떠 있던 재화가 실제로 경제에 풀리는 순간이다.
-        if (outcome.Gold > 0)
-        {
-            _eventLogger.CurrencyGained(
-                userId, outcome.Gold, outcome.GoldBalance, CurrencySource.MailClaim, mailId);
-        }
-
-        // 아이템 원장(6.2). 거래 구매·반송·출석 보상·신규 지원금이 실제로 가방에 들어오는 지점이 여기다 —
-        // 발급(mail.issue)은 건수만 담으므로 품목별 유통량은 이 행들이 유일한 근거다.
-        EmitClaimedItems(
-            userId, mailId, outcome.Category, outcome.Items, new GrantedItemIds(outcome.Delta));
-
-        return new SaveResult(ErrorCode.Success, "Claimed", data);
     }
 
     /// <summary>
@@ -124,51 +142,60 @@ public sealed class MailService : IMailService
     /// </summary>
     public async Task<SaveResult> ClaimAllAsync(long userId)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-        var outcome = await _mailRepository.ApplyClaimAllAsync(userId, now);
-
-        if (outcome.Status != MailClaimStatus.Ok)
-        {
-            return new SaveResult(ToErrorCode(outcome.Status), string.Empty, null);
-        }
-
-        var data = new MailClaimAllResultData
-        {
-            claimedMailIds = outcome.ClaimedMailIds.ToList(),
-            gained = BuildGained(outcome.Gold, outcome.Items),
-            balance = BuildBalance(outcome.GoldBalance),
-            inventoryDelta = outcome.Delta,
-        };
-
-        _logger.ZLogInformation($"메일 일괄 수령: userId {userId:@UserId}, mails {outcome.ClaimedMailIds.Count:@MailCount}건, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
-
-        // 두 원장 모두 지급은 합계 한 번이지만 **메일 1건당** 남긴다(ref_id = mail_id, 6.1·6.2).
-        // 재화 잔액은 지급 전 잔액에서 메일 순서대로 누적해 채운다. 한 트랜잭션 안의 값이라 중간 잔액이
-        // DB에 실재하지는 않지만, 합이 정확하고 마지막 행이 실제 잔액과 일치한다.
-        // 아이템 개체 id는 지급 순서대로 하나의 목록에서 꺼내므로 메일을 넘나들어도 중복되지 않는다.
-        var runningBalance = outcome.GoldBalance - outcome.Gold;
-        var granted = new GrantedItemIds(outcome.Delta);
-        foreach (var claimed in outcome.ClaimedMails)
-        {
-            var gold = claimed.Attachments
-                .Where(a => a.RewardType == Constants.RewardType.Gold)
-                .Sum(a => a.Quantity);
-            if (gold > 0)
+            if (!_masterData.IsLoaded)
             {
-                runningBalance += gold;
-                _eventLogger.CurrencyGained(
-                    userId, gold, runningBalance, CurrencySource.MailClaim, claimed.MailId);
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
             }
 
-            EmitClaimedItems(userId, claimed.MailId, claimed.Category, claimed.Attachments, granted);
-        }
+            var now = DateTimeUtil.NowUnixSeconds();
+            var outcome = await _mailRepository.ApplyClaimAllAsync(userId, now);
 
-        return new SaveResult(ErrorCode.Success, "Claimed all", data);
+            if (outcome.Status != MailClaimStatus.Ok)
+            {
+                return new SaveResult(ToErrorCode(outcome.Status), string.Empty, null);
+            }
+
+            var data = new MailClaimAllResultData
+            {
+                claimedMailIds = outcome.ClaimedMailIds.ToList(),
+                gained = BuildGained(outcome.Gold, outcome.Items),
+                balance = BuildBalance(outcome.GoldBalance),
+                inventoryDelta = outcome.Delta,
+            };
+
+            _logger.ZLogInformation($"메일 일괄 수령: userId {userId:@UserId}, mails {outcome.ClaimedMailIds.Count:@MailCount}건, gold {outcome.Gold:@Gold}, items {outcome.Items.Count:@ItemKinds}종");
+
+            // 두 원장 모두 지급은 합계 한 번이지만 **메일 1건당** 남긴다(ref_id = mail_id, 6.1·6.2).
+            // 재화 잔액은 지급 전 잔액에서 메일 순서대로 누적해 채운다. 한 트랜잭션 안의 값이라 중간 잔액이
+            // DB에 실재하지는 않지만, 합이 정확하고 마지막 행이 실제 잔액과 일치한다.
+            // 아이템 개체 id는 지급 순서대로 하나의 목록에서 꺼내므로 메일을 넘나들어도 중복되지 않는다.
+            var runningBalance = outcome.GoldBalance - outcome.Gold;
+            var granted = new GrantedItemIds(outcome.Delta);
+            foreach (var claimed in outcome.ClaimedMails)
+            {
+                var gold = claimed.Attachments
+                    .Where(a => a.RewardType == Constants.RewardType.Gold)
+                    .Sum(a => a.Quantity);
+                if (gold > 0)
+                {
+                    runningBalance += gold;
+                    _eventLogger.CurrencyGained(
+                        userId, gold, runningBalance, CurrencySource.MailClaim, claimed.MailId);
+                }
+
+                EmitClaimedItems(userId, claimed.MailId, claimed.Category, claimed.Attachments, granted);
+            }
+
+            return new SaveResult(ErrorCode.Success, "Claimed all", data);
+        }
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"ClaimAllAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>

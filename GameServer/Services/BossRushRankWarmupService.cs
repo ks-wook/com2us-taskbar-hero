@@ -40,47 +40,57 @@ public sealed class BossRushRankWarmupService : IBossRushRankWarmupService
     /// </summary>
     public async Task<BossRushRankWarmupResult> WarmUpAsync(bool force, CancellationToken cancellationToken = default)
     {
-        var season = await _repository.GetRunningSeasonAsync();
-        if (season is null)
+        try
         {
-            _logger.ZLogInformation($"보스러시 랭킹 캐시 워밍업: 진행 중 시즌이 없어 적재를 건너뜁니다");
-            return new BossRushRankWarmupResult(Constants.BossRush.RankWarmupStatus.NoSeason, 0, 0, 0);
-        }
+            var season = await _repository.GetRunningSeasonAsync();
+            if (season is null)
+            {
+                _logger.ZLogInformation($"보스러시 랭킹 캐시 워밍업: 진행 중 시즌이 없어 적재를 건너뜁니다");
+                return new BossRushRankWarmupResult(Constants.BossRush.RankWarmupStatus.NoSeason, 0, 0, 0);
+            }
 
-        // 시즌 메타 캐시는 리더보드 상태와 무관하게 항상 최신으로 맞춘다(조회 경로가 이 값을 먼저 본다).
-        await _rankCache.SetCurrentSeasonAsync(season);
+            // 시즌 메타 캐시는 리더보드 상태와 무관하게 항상 최신으로 맞춘다(조회 경로가 이 값을 먼저 본다).
+            await _rankCache.SetCurrentSeasonAsync(season);
 
-        var exists = await _rankCache.ExistsAsync(season.SeasonId);
-        if (exists is null)
-        {
-            // 캐시를 아예 쓸 수 없다 — 랭킹 조회는 MySQL 폴백으로 돌아가지만 적재는 실패다.
-            _logger.ZLogError($"보스러시 랭킹 캐시 워밍업 실패(Redis 접근 불가): seasonId {season.SeasonId:@SeasonId}");
+            var exists = await _rankCache.ExistsAsync(season.SeasonId);
+            if (exists is null)
+            {
+                // 캐시를 아예 쓸 수 없다 — 랭킹 조회는 MySQL 폴백으로 돌아가지만 적재는 실패다.
+                _logger.ZLogError($"보스러시 랭킹 캐시 워밍업 실패(Redis 접근 불가): seasonId {season.SeasonId:@SeasonId}");
+                return new BossRushRankWarmupResult(
+                    Constants.BossRush.RankWarmupStatus.CacheUnavailable, season.SeasonId, 0, 0);
+            }
+
+            if (exists.Value && !force)
+            {
+                var current = await _rankCache.CountAsync(season.SeasonId) ?? 0;
+                _logger.ZLogInformation($"보스러시 랭킹 캐시 워밍업: seasonId {season.SeasonId:@SeasonId} 리더보드가 이미 채워져 있어 건너뜁니다({current:@Members}명)");
+                return new BossRushRankWarmupResult(
+                    Constants.BossRush.RankWarmupStatus.AlreadyWarm, season.SeasonId, 0, current);
+            }
+
+            var (restored, failed) = await RestoreLeaderboardAsync(season, cancellationToken);
+            var members = await _rankCache.CountAsync(season.SeasonId) ?? 0;
+
+            if (failed > 0)
+            {
+                // 일부만 들어간 리더보드는 순위가 틀리므로 성공으로 보고하지 않는다(호출자가 다시 돌려야 한다).
+                _logger.ZLogError($"보스러시 랭킹 캐시 워밍업 부분 실패: seasonId {season.SeasonId:@SeasonId} 적재 {restored:@Restored}건 · 실패 {failed:@Failed}건");
+                return new BossRushRankWarmupResult(
+                    Constants.BossRush.RankWarmupStatus.CacheUnavailable, season.SeasonId, restored, members);
+            }
+
+            _logger.ZLogInformation($"보스러시 랭킹 캐시 워밍업 완료: seasonId {season.SeasonId:@SeasonId} {restored:@Restored}건 적재(등재 {members:@Members}명)");
             return new BossRushRankWarmupResult(
-                Constants.BossRush.RankWarmupStatus.CacheUnavailable, season.SeasonId, 0, 0);
+                Constants.BossRush.RankWarmupStatus.Restored, season.SeasonId, restored, members);
         }
-
-        if (exists.Value && !force)
+        catch (Exception ex)
         {
-            var current = await _rankCache.CountAsync(season.SeasonId) ?? 0;
-            _logger.ZLogInformation($"보스러시 랭킹 캐시 워밍업: seasonId {season.SeasonId:@SeasonId} 리더보드가 이미 채워져 있어 건너뜁니다({current:@Members}명)");
+            _logger.ZLogError(
+                ex, $"WarmUpAsync 처리 중 예외: status {Constants.BossRush.RankWarmupStatus.Failed:@Status}");
             return new BossRushRankWarmupResult(
-                Constants.BossRush.RankWarmupStatus.AlreadyWarm, season.SeasonId, 0, current);
+                Constants.BossRush.RankWarmupStatus.Failed, 0, 0, 0);
         }
-
-        var (restored, failed) = await RestoreLeaderboardAsync(season, cancellationToken);
-        var members = await _rankCache.CountAsync(season.SeasonId) ?? 0;
-
-        if (failed > 0)
-        {
-            // 일부만 들어간 리더보드는 순위가 틀리므로 성공으로 보고하지 않는다(호출자가 다시 돌려야 한다).
-            _logger.ZLogError($"보스러시 랭킹 캐시 워밍업 부분 실패: seasonId {season.SeasonId:@SeasonId} 적재 {restored:@Restored}건 · 실패 {failed:@Failed}건");
-            return new BossRushRankWarmupResult(
-                Constants.BossRush.RankWarmupStatus.CacheUnavailable, season.SeasonId, restored, members);
-        }
-
-        _logger.ZLogInformation($"보스러시 랭킹 캐시 워밍업 완료: seasonId {season.SeasonId:@SeasonId} {restored:@Restored}건 적재(등재 {members:@Members}명)");
-        return new BossRushRankWarmupResult(
-            Constants.BossRush.RankWarmupStatus.Restored, season.SeasonId, restored, members);
     }
 
     /// <summary>

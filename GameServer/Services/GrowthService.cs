@@ -40,65 +40,74 @@ public sealed class GrowthService : IGrowthService
     /// </summary>
     public async Task<SaveResult> SkillLevelUpAsync(long userId, int characterId, int skillCode)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        // 마스터 검증(직업 소속·최대 레벨·포인트)을 트랜잭션 내부 DB 값(직업·레벨·현재/사용 포인트)으로 판정하는 델리게이트.
-        var outcome = await _growthRepository.ApplySkillLevelUpAsync(userId, characterId, skillCode,
-            (classCode, charLevel, curLevel, spent) =>
+            if (!_masterData.IsLoaded)
             {
-                var skill = _masterData.GetSkill(skillCode);
-                if (skill is null)
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            // 마스터 검증(직업 소속·최대 레벨·포인트)을 트랜잭션 내부 DB 값(직업·레벨·현재/사용 포인트)으로 판정하는 델리게이트.
+            var outcome = await _growthRepository.ApplySkillLevelUpAsync(userId, characterId, skillCode,
+                (classCode, charLevel, curLevel, spent) =>
                 {
-                    return (SkillLevelUpStatus.SkillNotFound, 0);
-                }
+                    var skill = _masterData.GetSkill(skillCode);
+                    if (skill is null)
+                    {
+                        return (SkillLevelUpStatus.SkillNotFound, 0);
+                    }
 
-                if (skill.ClassCode != classCode)
-                {
-                    return (SkillLevelUpStatus.ClassMismatch, 0);
-                }
+                    if (skill.ClassCode != classCode)
+                    {
+                        return (SkillLevelUpStatus.ClassMismatch, 0);
+                    }
 
-                if (curLevel >= skill.MaxLevel)
-                {
-                    return (SkillLevelUpStatus.MaxLevel, 0);
-                }
+                    if (curLevel >= skill.MaxLevel)
+                    {
+                        return (SkillLevelUpStatus.MaxLevel, 0);
+                    }
 
-                var available = _masterData.SkillPointsForLevel(charLevel) - spent;
-                if (available < Constants.Skill.PointPerLevel)
-                {
-                    return (SkillLevelUpStatus.InsufficientPoint, 0);
-                }
+                    var available = _masterData.SkillPointsForLevel(charLevel) - spent;
+                    if (available < Constants.Skill.PointPerLevel)
+                    {
+                        return (SkillLevelUpStatus.InsufficientPoint, 0);
+                    }
 
-                return (SkillLevelUpStatus.Ok, available - Constants.Skill.PointPerLevel);
-            });
+                    return (SkillLevelUpStatus.Ok, available - Constants.Skill.PointPerLevel);
+                });
 
-        switch (outcome.Status)
-        {
-            case SkillLevelUpStatus.InvalidCharacter:
-                return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
-            case SkillLevelUpStatus.SkillNotFound:
-                return new SaveResult(ErrorCode.InvalidGrowthTarget, string.Empty, null);
-            case SkillLevelUpStatus.ClassMismatch:
-                return new SaveResult(ErrorCode.SkillClassMismatch, string.Empty, null);
-            case SkillLevelUpStatus.MaxLevel:
-                return new SaveResult(ErrorCode.SkillMaxLevel, string.Empty, null);
-            case SkillLevelUpStatus.InsufficientPoint:
-                return new SaveResult(ErrorCode.InsufficientSkillPoint, string.Empty, null);
+            switch (outcome.Status)
+            {
+                case SkillLevelUpStatus.InvalidCharacter:
+                    return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
+                case SkillLevelUpStatus.SkillNotFound:
+                    return new SaveResult(ErrorCode.InvalidGrowthTarget, string.Empty, null);
+                case SkillLevelUpStatus.ClassMismatch:
+                    return new SaveResult(ErrorCode.SkillClassMismatch, string.Empty, null);
+                case SkillLevelUpStatus.MaxLevel:
+                    return new SaveResult(ErrorCode.SkillMaxLevel, string.Empty, null);
+                case SkillLevelUpStatus.InsufficientPoint:
+                    return new SaveResult(ErrorCode.InsufficientSkillPoint, string.Empty, null);
+            }
+
+            var data = new SkillLevelUpResultData
+            {
+                characterId = characterId,
+                skillCode = skillCode,
+                level = outcome.NewLevel,
+                cost = new SkillPointCostDto { skillPoint = Constants.Skill.PointPerLevel },
+                skillPoint = outcome.AvailablePoints,
+            };
+
+            _logger.ZLogInformation($"스킬 레벨업: userId {userId:@UserId}, characterId {characterId:@CharacterId}, skillCode {skillCode:@SkillCode}, level {outcome.NewLevel:@Level}");
+            return new SaveResult(ErrorCode.Success, "Skill leveled up", data);
         }
-
-        var data = new SkillLevelUpResultData
+        catch (Exception ex)
         {
-            characterId = characterId,
-            skillCode = skillCode,
-            level = outcome.NewLevel,
-            cost = new SkillPointCostDto { skillPoint = Constants.Skill.PointPerLevel },
-            skillPoint = outcome.AvailablePoints,
-        };
-
-        _logger.ZLogInformation($"스킬 레벨업: userId {userId:@UserId}, characterId {characterId:@CharacterId}, skillCode {skillCode:@SkillCode}, level {outcome.NewLevel:@Level}");
-        return new SaveResult(ErrorCode.Success, "Skill leveled up", data);
+            _logger.ZLogError(
+                ex, $"SkillLevelUpAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -107,28 +116,37 @@ public sealed class GrowthService : IGrowthService
     /// </summary>
     public async Task<SaveResult> SkillResetAsync(long userId, int characterId)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            if (!_masterData.IsLoaded)
+            {
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            var outcome = await _growthRepository.ApplySkillResetAsync(userId, characterId,
+                charLevel => _masterData.SkillPointsForLevel(charLevel));
+
+            if (outcome.Status == SkillResetStatus.InvalidCharacter)
+            {
+                return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
+            }
+
+            var data = new SkillResetResultData
+            {
+                characterId = characterId,
+                resetSkillCount = outcome.ResetCount,
+                skillPoint = outcome.AvailablePoints,
+            };
+
+            _logger.ZLogInformation($"스킬 초기화: userId {userId:@UserId}, characterId {characterId:@CharacterId}, resetCount {outcome.ResetCount:@ResetCount}");
+            return new SaveResult(ErrorCode.Success, "Skills reset", data);
         }
-
-        var outcome = await _growthRepository.ApplySkillResetAsync(userId, characterId,
-            charLevel => _masterData.SkillPointsForLevel(charLevel));
-
-        if (outcome.Status == SkillResetStatus.InvalidCharacter)
+        catch (Exception ex)
         {
-            return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
+            _logger.ZLogError(
+                ex, $"SkillResetAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        var data = new SkillResetResultData
-        {
-            characterId = characterId,
-            resetSkillCount = outcome.ResetCount,
-            skillPoint = outcome.AvailablePoints,
-        };
-
-        _logger.ZLogInformation($"스킬 초기화: userId {userId:@UserId}, characterId {characterId:@CharacterId}, resetCount {outcome.ResetCount:@ResetCount}");
-        return new SaveResult(ErrorCode.Success, "Skills reset", data);
     }
 
     /// <summary>
@@ -137,72 +155,81 @@ public sealed class GrowthService : IGrowthService
     /// </summary>
     public async Task<SaveResult> SkillEquipAsync(long userId, int characterId, IReadOnlyList<int> skillCodes)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        var codes = skillCodes ?? new List<int>();
-
-        var outcome = await _growthRepository.ApplySkillEquipAsync(userId, characterId, codes,
-            (classCode, levels) =>
+            if (!_masterData.IsLoaded)
             {
-                if (codes.Count > Constants.Skill.MaxActiveEquipped)
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            var codes = skillCodes ?? new List<int>();
+
+            var outcome = await _growthRepository.ApplySkillEquipAsync(userId, characterId, codes,
+                (classCode, levels) =>
                 {
-                    return SkillEquipStatus.LimitExceeded;
-                }
-
-                foreach (var code in codes)
-                {
-                    var skill = _masterData.GetSkill(code);
-                    if (skill is null)
+                    if (codes.Count > Constants.Skill.MaxActiveEquipped)
                     {
-                        return SkillEquipStatus.SkillNotFound;
+                        return SkillEquipStatus.LimitExceeded;
                     }
 
-                    if (skill.ClassCode != classCode)
+                    foreach (var code in codes)
                     {
-                        return SkillEquipStatus.ClassMismatch;
+                        var skill = _masterData.GetSkill(code);
+                        if (skill is null)
+                        {
+                            return SkillEquipStatus.SkillNotFound;
+                        }
+
+                        if (skill.ClassCode != classCode)
+                        {
+                            return SkillEquipStatus.ClassMismatch;
+                        }
+
+                        if (skill.SkillType != Constants.SkillType.Active)
+                        {
+                            return SkillEquipStatus.NotActive;
+                        }
+
+                        if (levels.GetValueOrDefault(code, 0) < 1)
+                        {
+                            return SkillEquipStatus.NotLearned;
+                        }
                     }
 
-                    if (skill.SkillType != Constants.SkillType.Active)
-                    {
-                        return SkillEquipStatus.NotActive;
-                    }
+                    return SkillEquipStatus.Ok;
+                });
 
-                    if (levels.GetValueOrDefault(code, 0) < 1)
-                    {
-                        return SkillEquipStatus.NotLearned;
-                    }
-                }
+            switch (outcome.Status)
+            {
+                case SkillEquipStatus.InvalidCharacter:
+                    return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
+                case SkillEquipStatus.SkillNotFound:
+                    return new SaveResult(ErrorCode.InvalidGrowthTarget, string.Empty, null);
+                case SkillEquipStatus.ClassMismatch:
+                    return new SaveResult(ErrorCode.SkillClassMismatch, string.Empty, null);
+                case SkillEquipStatus.NotActive:
+                    return new SaveResult(ErrorCode.SkillNotActive, string.Empty, null);
+                case SkillEquipStatus.NotLearned:
+                    return new SaveResult(ErrorCode.SkillNotLearned, string.Empty, null);
+                case SkillEquipStatus.LimitExceeded:
+                    return new SaveResult(ErrorCode.ActiveSkillLimitExceeded, string.Empty, null);
+            }
 
-                return SkillEquipStatus.Ok;
-            });
+            var data = new SkillEquipResultData
+            {
+                characterId = characterId,
+                equipped = outcome.Equipped,
+            };
 
-        switch (outcome.Status)
-        {
-            case SkillEquipStatus.InvalidCharacter:
-                return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
-            case SkillEquipStatus.SkillNotFound:
-                return new SaveResult(ErrorCode.InvalidGrowthTarget, string.Empty, null);
-            case SkillEquipStatus.ClassMismatch:
-                return new SaveResult(ErrorCode.SkillClassMismatch, string.Empty, null);
-            case SkillEquipStatus.NotActive:
-                return new SaveResult(ErrorCode.SkillNotActive, string.Empty, null);
-            case SkillEquipStatus.NotLearned:
-                return new SaveResult(ErrorCode.SkillNotLearned, string.Empty, null);
-            case SkillEquipStatus.LimitExceeded:
-                return new SaveResult(ErrorCode.ActiveSkillLimitExceeded, string.Empty, null);
+            _logger.ZLogInformation($"액티브 스킬 장착: userId {userId:@UserId}, characterId {characterId:@CharacterId}, count {outcome.Equipped.Count:@Count}");
+            return new SaveResult(ErrorCode.Success, "Active skills equipped", data);
         }
-
-        var data = new SkillEquipResultData
+        catch (Exception ex)
         {
-            characterId = characterId,
-            equipped = outcome.Equipped,
-        };
-
-        _logger.ZLogInformation($"액티브 스킬 장착: userId {userId:@UserId}, characterId {characterId:@CharacterId}, count {outcome.Equipped.Count:@Count}");
-        return new SaveResult(ErrorCode.Success, "Active skills equipped", data);
+            _logger.ZLogError(
+                ex, $"SkillEquipAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -211,52 +238,61 @@ public sealed class GrowthService : IGrowthService
     /// </summary>
     public async Task<SaveResult> RuneUpgradeAsync(long userId, int runeCode)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        var rune = _masterData.GetRune(runeCode);
-        if (rune is null)
-        {
-            return new SaveResult(ErrorCode.InvalidGrowthTarget, string.Empty, null);
-        }
-
-        var outcome = await _growthRepository.ApplyRuneUpgradeAsync(
-            userId, runeCode, rune.PrereqCode, rune.MaxLevel,
-            currentLevel => _masterData.RuneUpgradeCost(rune, currentLevel));
-
-        switch (outcome.Status)
-        {
-            case RuneUpgradeStatus.PrereqNotMet:
-                return new SaveResult(ErrorCode.RunePrereqNotMet, string.Empty, null);
-            case RuneUpgradeStatus.MaxLevel:
-                return new SaveResult(ErrorCode.RuneMaxLevel, string.Empty, null);
-            case RuneUpgradeStatus.InsufficientCurrency:
-                return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
-        }
-
-        var data = new RuneUpgradeResultData
-        {
-            runeCode = runeCode,
-            level = outcome.NewLevel,
-            cost = new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.Cost },
-            balance = new List<CurrencyDto>
+            if (!_masterData.IsLoaded)
             {
-                new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
-            },
-        };
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
 
-        _logger.ZLogInformation($"룬 업그레이드: userId {userId:@UserId}, runeCode {runeCode:@RuneCode}, level {outcome.NewLevel:@Level}, cost {outcome.Cost:@Cost}");
+            var rune = _masterData.GetRune(runeCode);
+            if (rune is null)
+            {
+                return new SaveResult(ErrorCode.InvalidGrowthTarget, string.Empty, null);
+            }
 
-        // 재화 원장(6.1). 룬은 도메인 로그 테이블이 없어 이 행이 유일한 기록이다 —
-        // 룬별 투자 편중은 ref_id로, 도달 레벨은 룬별 행 수의 누적으로 나온다.
-        if (outcome.Cost > 0)
-        {
-            _eventLogger.CurrencySpent(
-                userId, outcome.Cost, outcome.GoldBalance, CurrencySource.RuneUpgrade, runeCode);
+            var outcome = await _growthRepository.ApplyRuneUpgradeAsync(
+                userId, runeCode, rune.PrereqCode, rune.MaxLevel,
+                currentLevel => _masterData.RuneUpgradeCost(rune, currentLevel));
+
+            switch (outcome.Status)
+            {
+                case RuneUpgradeStatus.PrereqNotMet:
+                    return new SaveResult(ErrorCode.RunePrereqNotMet, string.Empty, null);
+                case RuneUpgradeStatus.MaxLevel:
+                    return new SaveResult(ErrorCode.RuneMaxLevel, string.Empty, null);
+                case RuneUpgradeStatus.InsufficientCurrency:
+                    return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+            }
+
+            var data = new RuneUpgradeResultData
+            {
+                runeCode = runeCode,
+                level = outcome.NewLevel,
+                cost = new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.Cost },
+                balance = new List<CurrencyDto>
+                {
+                    new CurrencyDto { currencyType = Constants.Currency.GoldType, amount = outcome.GoldBalance },
+                },
+            };
+
+            _logger.ZLogInformation($"룬 업그레이드: userId {userId:@UserId}, runeCode {runeCode:@RuneCode}, level {outcome.NewLevel:@Level}, cost {outcome.Cost:@Cost}");
+
+            // 재화 원장(6.1). 룬은 도메인 로그 테이블이 없어 이 행이 유일한 기록이다 —
+            // 룬별 투자 편중은 ref_id로, 도달 레벨은 룬별 행 수의 누적으로 나온다.
+            if (outcome.Cost > 0)
+            {
+                _eventLogger.CurrencySpent(
+                    userId, outcome.Cost, outcome.GoldBalance, CurrencySource.RuneUpgrade, runeCode);
+            }
+
+            return new SaveResult(ErrorCode.Success, "Rune upgraded", data);
         }
-
-        return new SaveResult(ErrorCode.Success, "Rune upgraded", data);
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"RuneUpgradeAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 }

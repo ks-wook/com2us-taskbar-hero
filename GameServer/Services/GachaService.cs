@@ -41,29 +41,38 @@ public sealed class GachaService : IGachaService
     /// </summary>
     public async Task<SaveResult> GetBannersAsync(long userId)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-        var banners = new List<GachaBannerDto>();
-
-        foreach (var banner in _masterData.OpenGachaBanners(now))
-        {
-            var counts = await _gachaRepository.LoadCountersAsync(userId, banner.GachaCode, banner.PityGrades);
-            banners.Add(new GachaBannerDto
+            if (!_masterData.IsLoaded)
             {
-                gachaCode = banner.GachaCode,
-                sortOrder = banner.SortOrder,
-                openAt = banner.OpenAt,
-                closeAt = banner.CloseAt,
-                counters = ToCounterDtos(banner, counts),
-            });
-        }
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
 
-        var data = new GachaBannerListResultData { serverTime = now, banners = banners };
-        return new SaveResult(ErrorCode.Success, "OK", data);
+            var now = DateTimeUtil.NowUnixSeconds();
+            var banners = new List<GachaBannerDto>();
+
+            foreach (var banner in _masterData.OpenGachaBanners(now))
+            {
+                var counts = await _gachaRepository.LoadCountersAsync(userId, banner.GachaCode, banner.PityGrades);
+                banners.Add(new GachaBannerDto
+                {
+                    gachaCode = banner.GachaCode,
+                    sortOrder = banner.SortOrder,
+                    openAt = banner.OpenAt,
+                    closeAt = banner.CloseAt,
+                    counters = ToCounterDtos(banner, counts),
+                });
+            }
+
+            var data = new GachaBannerListResultData { serverTime = now, banners = banners };
+            return new SaveResult(ErrorCode.Success, "OK", data);
+        }
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"GetBannersAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -76,91 +85,100 @@ public sealed class GachaService : IGachaService
     /// </summary>
     public async Task<SaveResult> PullAsync(long userId, int gachaCode, int pullType)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
-        }
-
-        // 상품 종류는 공유 enum이 정의한 값만 받는다(신규 에러 코드를 만들지 않고 InvalidRequest를 재사용).
-        if (pullType != (int)GachaPullType.Single && pullType != (int)GachaPullType.Multi)
-        {
-            return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
-        }
-
-        var banner = _masterData.GetGacha(gachaCode);
-        if (banner is null)
-        {
-            return new SaveResult(ErrorCode.GachaNotFound, string.Empty, null);
-        }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-
-        // 목록 조회 시점에 열려 있었다는 사실이 뽑는 시점의 허가가 되지 않는다 — 비용 차감 전에 다시 판정한다(§6.1).
-        if (!banner.IsOpenAt(now))
-        {
-            return new SaveResult(ErrorCode.GachaNotAvailable, string.Empty, null);
-        }
-
-        bool multi = pullType == (int)GachaPullType.Multi;
-        long cost = multi ? banner.CostMulti : banner.CostSingle;
-        int drawCount = multi ? banner.MultiCount : 1;
-
-        var outcome = await _gachaRepository.ApplyPullAsync(
-            userId, banner, pullType, cost,
-            counters => RollAll(banner, drawCount, multi, counters),
-            now);
-
-        switch (outcome.Status)
-        {
-            case GachaPullStatus.InsufficientCurrency:
-                return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
-            case GachaPullStatus.InventoryFull:
-                return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
-            case GachaPullStatus.PoolEmpty:
-                // 플레이어 실수가 아니라 마스터 데이터 결함이므로 Error로 남긴다(기획서 §6.8).
-                _logger.ZLogError($"가챠 후보 풀 없음(전체 롤백): {gachaCode:@GachaCode} pullType {pullType:@PullType}");
-                return new SaveResult(ErrorCode.GachaPoolEmpty, string.Empty, null);
-        }
-
-        var data = new GachaPullResultData
-        {
-            gachaCode = banner.GachaCode,
-            pullId = outcome.PullId,
-            pullType = pullType,
-            pulledAt = outcome.PulledAt,
-            results = outcome.Entries.Select(e => new GachaResultItemDto
+            if (!_masterData.IsLoaded)
             {
-                seq = e.Seq,
-                grade = e.Grade,
-                itemCode = e.ItemCode,
-                quantity = e.Quantity,
-                isPity = e.PityApplied,
-                isGuaranteed = e.Guaranteed,
-            }).ToList(),
-            cost = new CurrencyDto { currencyType = banner.CostCurrencyCode, amount = outcome.CostAmount },
-            balance = new List<CurrencyDto>
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            // 상품 종류는 공유 enum이 정의한 값만 받는다(신규 에러 코드를 만들지 않고 InvalidRequest를 재사용).
+            if (pullType != (int)GachaPullType.Single && pullType != (int)GachaPullType.Multi)
             {
-                new CurrencyDto { currencyType = banner.CostCurrencyCode, amount = outcome.Balance },
-            },
-            counters = ToCounterDtos(banner, outcome.Counters),
-            inventoryDelta = outcome.Delta,
-        };
+                return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
+            }
 
-        // 재화 원장(6.1). 1연/10연 어느 쪽이든 비용은 요청당 1행이고, 결과는 같은 pull_id로 이어진다.
-        if (outcome.CostAmount > 0)
-        {
-            _eventLogger.CurrencySpent(
-                userId, outcome.CostAmount, outcome.Balance, CurrencySource.GachaPull, outcome.PullId);
+            var banner = _masterData.GetGacha(gachaCode);
+            if (banner is null)
+            {
+                return new SaveResult(ErrorCode.GachaNotFound, string.Empty, null);
+            }
+
+            var now = DateTimeUtil.NowUnixSeconds();
+
+            // 목록 조회 시점에 열려 있었다는 사실이 뽑는 시점의 허가가 되지 않는다 — 비용 차감 전에 다시 판정한다(§6.1).
+            if (!banner.IsOpenAt(now))
+            {
+                return new SaveResult(ErrorCode.GachaNotAvailable, string.Empty, null);
+            }
+
+            bool multi = pullType == (int)GachaPullType.Multi;
+            long cost = multi ? banner.CostMulti : banner.CostSingle;
+            int drawCount = multi ? banner.MultiCount : 1;
+
+            var outcome = await _gachaRepository.ApplyPullAsync(
+                userId, banner, pullType, cost,
+                counters => RollAll(banner, drawCount, multi, counters),
+                now);
+
+            switch (outcome.Status)
+            {
+                case GachaPullStatus.InsufficientCurrency:
+                    return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+                case GachaPullStatus.InventoryFull:
+                    return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
+                case GachaPullStatus.PoolEmpty:
+                    // 플레이어 실수가 아니라 마스터 데이터 결함이므로 Error로 남긴다(기획서 §6.8).
+                    _logger.ZLogError($"가챠 후보 풀 없음(전체 롤백): {gachaCode:@GachaCode} pullType {pullType:@PullType}");
+                    return new SaveResult(ErrorCode.GachaPoolEmpty, string.Empty, null);
+            }
+
+            var data = new GachaPullResultData
+            {
+                gachaCode = banner.GachaCode,
+                pullId = outcome.PullId,
+                pullType = pullType,
+                pulledAt = outcome.PulledAt,
+                results = outcome.Entries.Select(e => new GachaResultItemDto
+                {
+                    seq = e.Seq,
+                    grade = e.Grade,
+                    itemCode = e.ItemCode,
+                    quantity = e.Quantity,
+                    isPity = e.PityApplied,
+                    isGuaranteed = e.Guaranteed,
+                }).ToList(),
+                cost = new CurrencyDto { currencyType = banner.CostCurrencyCode, amount = outcome.CostAmount },
+                balance = new List<CurrencyDto>
+                {
+                    new CurrencyDto { currencyType = banner.CostCurrencyCode, amount = outcome.Balance },
+                },
+                counters = ToCounterDtos(banner, outcome.Counters),
+                inventoryDelta = outcome.Delta,
+            };
+
+            // 재화 원장(6.1). 1연/10연 어느 쪽이든 비용은 요청당 1행이고, 결과는 같은 pull_id로 이어진다.
+            if (outcome.CostAmount > 0)
+            {
+                _eventLogger.CurrencySpent(
+                    userId, outcome.CostAmount, outcome.Balance, CurrencySource.GachaPull, outcome.PullId);
+            }
+
+            // 지급 트랜잭션이 커밋된 뒤에 방출한다(4.2). 회차마다 1행이라 10연이면 10행이 같은 pull_id로 묶인다.
+            EmitPullItems(userId, banner.GachaCode, outcome.PullId, outcome.Entries);
+
+            // 아이템 원장(6.2). 등급 실측은 위 gacha.pull_item이 답하고, 여기는 **아이템 유통량**이다 —
+            // 같은 코드가 여러 회차에 나오면 적재도 한 번에 이뤄지므로 코드별로 합쳐 남긴다.
+            EmitPullItemFlow(userId, outcome.PullId, outcome.Entries, outcome.Delta);
+
+            return new SaveResult(ErrorCode.Success, "GachaPulled", data);
         }
-
-        // 지급 트랜잭션이 커밋된 뒤에 방출한다(4.2). 회차마다 1행이라 10연이면 10행이 같은 pull_id로 묶인다.
-        EmitPullItems(userId, banner.GachaCode, outcome.PullId, outcome.Entries);
-
-        // 아이템 원장(6.2). 등급 실측은 위 gacha.pull_item이 답하고, 여기는 **아이템 유통량**이다 —
-        // 같은 코드가 여러 회차에 나오면 적재도 한 번에 이뤄지므로 코드별로 합쳐 남긴다.
-        EmitPullItemFlow(userId, outcome.PullId, outcome.Entries, outcome.Delta);
-
-        return new SaveResult(ErrorCode.Success, "GachaPulled", data);
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"PullAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
@@ -209,35 +227,44 @@ public sealed class GachaService : IGachaService
     /// </summary>
     public async Task<SaveResult> GetHistoryAsync(long userId, int gachaCode, long cursor, int limit)
     {
-        int size = limit <= 0 ? Constants.Gacha.HistoryDefaultLimit : Math.Min(limit, Constants.Gacha.HistoryMaxLimit);
-        long safeCursor = cursor < 0 ? 0 : cursor;
-
-        var page = await _gachaRepository.GetHistoryAsync(userId, Math.Max(gachaCode, 0), safeCursor, size);
-
-        var data = new GachaHistoryResultData
+        try
         {
-            pulls = page.Entries.Select(e => new GachaHistoryEntryDto
-            {
-                pullId = e.PullId,
-                gachaCode = e.GachaCode,
-                pullType = e.PullType,
-                cost = new CurrencyDto { currencyType = e.CostCurrencyCode, amount = e.CostAmount },
-                pulledAt = e.PulledAt,
-                items = e.Items.Select(i => new GachaHistoryItemDto
-                {
-                    seq = i.Seq,
-                    itemCode = i.ItemCode,
-                    grade = i.Grade,
-                    quantity = i.Quantity,
-                    isPity = i.PityApplied,
-                    isGuaranteed = i.Guaranteed,
-                }).ToList(),
-            }).ToList(),
-            nextCursor = page.NextCursor,
-            hasMore = page.HasMore,
-        };
+            int size = limit <= 0 ? Constants.Gacha.HistoryDefaultLimit : Math.Min(limit, Constants.Gacha.HistoryMaxLimit);
+            long safeCursor = cursor < 0 ? 0 : cursor;
 
-        return new SaveResult(ErrorCode.Success, "OK", data);
+            var page = await _gachaRepository.GetHistoryAsync(userId, Math.Max(gachaCode, 0), safeCursor, size);
+
+            var data = new GachaHistoryResultData
+            {
+                pulls = page.Entries.Select(e => new GachaHistoryEntryDto
+                {
+                    pullId = e.PullId,
+                    gachaCode = e.GachaCode,
+                    pullType = e.PullType,
+                    cost = new CurrencyDto { currencyType = e.CostCurrencyCode, amount = e.CostAmount },
+                    pulledAt = e.PulledAt,
+                    items = e.Items.Select(i => new GachaHistoryItemDto
+                    {
+                        seq = i.Seq,
+                        itemCode = i.ItemCode,
+                        grade = i.Grade,
+                        quantity = i.Quantity,
+                        isPity = i.PityApplied,
+                        isGuaranteed = i.Guaranteed,
+                    }).ToList(),
+                }).ToList(),
+                nextCursor = page.NextCursor,
+                hasMore = page.HasMore,
+            };
+
+            return new SaveResult(ErrorCode.Success, "OK", data);
+        }
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"GetHistoryAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>

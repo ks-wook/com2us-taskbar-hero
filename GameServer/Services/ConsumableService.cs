@@ -45,46 +45,55 @@ public sealed class ConsumableService : IConsumableService
     /// </summary>
     public async Task<SaveResult> UseAsync(long userId, long itemId)
     {
-        if (!_masterData.IsLoaded)
+        try
         {
-            return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            if (!_masterData.IsLoaded)
+            {
+                return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+            }
+
+            var now = DateTimeUtil.NowUnixSeconds();
+
+            var outcome = await _consumableRepository.ApplyUseAsync(
+                userId, itemId,
+                itemCode => Decide(itemCode),
+                (prev, durationSec) => PlanBuffWindow(prev, durationSec, now),
+                now);
+
+            if (outcome.Status != ConsumableUseStatus.Ok)
+            {
+                return new SaveResult(ToErrorCode(outcome.Status), string.Empty, null);
+            }
+
+            // 버프 부여는 재화 지급과 같은 이득 반영이므로 성공 사실을 남긴다(사용자 실수는 로깅하지 않는다 — 로깅 규칙).
+            _logger.ZLogInformation(
+                $"소모품 사용: user {userId:@UserId} item {outcome.ItemCode:@ItemCode} buffType {outcome.Buff!.BuffType:@BuffType} expiresAt {outcome.Buff.ExpiresAt:@ExpiresAt}");
+
+            var data = new ConsumableUseResultData
+            {
+                itemId = itemId,
+                itemCode = outcome.ItemCode,
+                remainingQuantity = outcome.RemainingQuantity,
+                buff = ToDto(outcome.Buff!),
+                activeBuffs = outcome.ActiveBuffs.Select(ToDto).ToList(),
+                inventoryDelta = outcome.Delta,
+            };
+
+            // 아이템 원장(6.2). 소모품은 도메인 로그 테이블이 없어 **이 행이 사용의 유일한 기록**이다 —
+            // 어떤 버프를 얼마나 쓰는지는 item_code로 consumable_master를 보면 나오므로 버프 컬럼을 두지 않는다.
+            // 차감 트랜잭션이 커밋된 뒤에 방출한다(4.2).
+            _eventLogger.ItemRemoved(
+                userId, outcome.ItemCode, _masterData.GetItem(outcome.ItemCode), 1,
+                null, ItemFlowReason.ConsumableUse, 0);
+
+            return new SaveResult(ErrorCode.Success, "Consumable used", data);
         }
-
-        var now = DateTimeUtil.NowUnixSeconds();
-
-        var outcome = await _consumableRepository.ApplyUseAsync(
-            userId, itemId,
-            itemCode => Decide(itemCode),
-            (prev, durationSec) => PlanBuffWindow(prev, durationSec, now),
-            now);
-
-        if (outcome.Status != ConsumableUseStatus.Ok)
+        catch (Exception ex)
         {
-            return new SaveResult(ToErrorCode(outcome.Status), string.Empty, null);
+            _logger.ZLogError(
+                ex, $"UseAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
         }
-
-        // 버프 부여는 재화 지급과 같은 이득 반영이므로 성공 사실을 남긴다(사용자 실수는 로깅하지 않는다 — 로깅 규칙).
-        _logger.ZLogInformation(
-            $"소모품 사용: user {userId:@UserId} item {outcome.ItemCode:@ItemCode} buffType {outcome.Buff!.BuffType:@BuffType} expiresAt {outcome.Buff.ExpiresAt:@ExpiresAt}");
-
-        var data = new ConsumableUseResultData
-        {
-            itemId = itemId,
-            itemCode = outcome.ItemCode,
-            remainingQuantity = outcome.RemainingQuantity,
-            buff = ToDto(outcome.Buff!),
-            activeBuffs = outcome.ActiveBuffs.Select(ToDto).ToList(),
-            inventoryDelta = outcome.Delta,
-        };
-
-        // 아이템 원장(6.2). 소모품은 도메인 로그 테이블이 없어 **이 행이 사용의 유일한 기록**이다 —
-        // 어떤 버프를 얼마나 쓰는지는 item_code로 consumable_master를 보면 나오므로 버프 컬럼을 두지 않는다.
-        // 차감 트랜잭션이 커밋된 뒤에 방출한다(4.2).
-        _eventLogger.ItemRemoved(
-            userId, outcome.ItemCode, _masterData.GetItem(outcome.ItemCode), 1,
-            null, ItemFlowReason.ConsumableUse, 0);
-
-        return new SaveResult(ErrorCode.Success, "Consumable used", data);
     }
 
     /// <summary>
@@ -96,16 +105,25 @@ public sealed class ConsumableService : IConsumableService
     /// </summary>
     public async Task<SaveResult> GetActiveBuffsAsync(long userId)
     {
-        var now = DateTimeUtil.NowUnixSeconds();
-        var buffs = await _consumableRepository.GetActiveBuffsAsync(userId, now);
-
-        var data = new ActiveBuffListResultData
+        try
         {
-            serverTime = now,
-            activeBuffs = buffs.Select(ToDto).ToList(),
-        };
+            var now = DateTimeUtil.NowUnixSeconds();
+            var buffs = await _consumableRepository.GetActiveBuffsAsync(userId, now);
 
-        return new SaveResult(ErrorCode.Success, "Active buffs loaded", data);
+            var data = new ActiveBuffListResultData
+            {
+                serverTime = now,
+                activeBuffs = buffs.Select(ToDto).ToList(),
+            };
+
+            return new SaveResult(ErrorCode.Success, "Active buffs loaded", data);
+        }
+        catch (Exception ex)
+        {
+            _logger.ZLogError(
+                ex, $"GetActiveBuffsAsync 처리 중 예외: errorCode {(int)ErrorCode.ServerError:@ErrorCode}({ErrorCode.ServerError:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.ServerError, string.Empty, null);
+        }
     }
 
     /// <summary>
