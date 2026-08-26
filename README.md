@@ -7,50 +7,55 @@
 
 ## 서버 실행 방법
 
-로컬 실행 방법은 두 가지다. **도커로 전부 띄우는 방식**(`server_up_with_docker.py`)과, **이미 떠 있는 MySQL·Redis에 서버 2개만 붙이는 방식**(`server_up.py`)이다. 두 방식은 같은 포트(5160·5247)를 쓰므로 **동시에 띄울 수 없다.**
+로컬 실행 방법은 두 가지다. 
+* **도커로 전부 띄우는 방식(`server_up_with_docker.py`)** 
+* **로컬에서 MySQL·Redis를 별도로 띄우고 서버 2개만 실행하는 방식**(`server_up.py`)
 
 ### 방법 1 — 도커로 전부 띄우기 (`server_up_with_docker.py`)
+
+**필요한 것**: Docker Desktop · .NET SDK 10 · Python 3.7+ (클라이언트 개발 시 Unity `6000.5.3f1`)
 
 저장소 루트에서 **`server_up_with_docker.py` 스크립트를 실행하면** docker-compose 기반으로 로컬 실행에 필요한 컨테이너들이 세팅되어 실행된다.
 
 ```powershell
-git clone <repo> && cd com2us-taskbar-hero
 python server_up_with_docker.py
 ```
 
-스크립트가 사전 점검(도커 접속·포트 충돌) → 서버 이미지 재빌드 → `docker compose up -d`(mysql · redis · accountserver · gameserver) → 컨테이너 healthy 대기 → MySQL 스키마 확인 → 보스러시 랭킹 캐시 적재까지 순서대로 처리한다.
+아래의 작업들이 순자적으로 진행되며, 별도로 세팅은 필요없다.
 
-**필요한 것**: Docker Desktop · .NET SDK 10 · Python 3.7+ (클라이언트 개발 시 Unity `6000.5.3f1`)
+* 스크립트가 사전 점검(도커 접속·포트 충돌) 
+* 서버 이미지 재빌드 → `docker compose up -d`(mysql · redis · accountserver · gameserver)
+* 컨테이너 healthy 대기
+* MySQL 스키마 확인 
+* 보스러시 랭킹 캐시 적재까지 순서대로 처리한다.
+
 
 ### 방법 2 — 컨테이너 없이 서버만 띄우기 (`server_up.py`)
 
-**MySQL·Redis가 이 PC에서 이미 돌고 있을 때** 쓴다. 컨테이너는 만들지 않고 **AccountServer·GameServer 두 개만** `dotnet watch run`으로 각각 **새 콘솔 창**에 띄운다(코드를 고치면 watch가 자동으로 다시 올린다. 마스터 데이터 값은 서버 재기동 필요).
+**필요한 것**: .NET SDK 10 · Python 3.7+ · **이미 실행 중인 MySQL·Redis**
+
+**MySQL·Redis가 이 PC에서 설치되어 실행 중일 때** 쓴다. 컨테이너는 만들지 않고 **AccountServer·GameServer 두 개만** `dotnet watch run`으로 각각 **새 콘솔 창**에 띄운다.
 
 ```powershell
 python server_up.py
 ```
 
-실행하면 MySQL 주소·포트·계정·비밀번호와 Redis 주소를 차례로 묻는다(엔터 = 기본값 `localhost:3306` · `127.0.0.1:6379`, **비밀번호만 기본값이 없다**). 마지막으로 **MySQL 테이블을 새로 세팅할지**(기본 y) 묻는다 — 로컬 MySQL에는 컨테이너의 init SQL 같은 장치가 없어 **처음 한 번은 y로 세팅해야 한다.** 다만 적용되는 SQL(`docs/공통/db-schema.sql` → `docs/세부/master-data/master-data-schema.sql`)이 `DROP TABLE` 후 재생성하므로 **기존 세이브 데이터가 지워진다** — 이어서 개발하던 데이터가 있으면 n으로 답한다.
+실행하면 MySQL 주소·포트·계정·비밀번호와 Redis 주소를 차례로 묻는다.
+<br/>(엔터 = 기본값 `localhost:3306` · `127.0.0.1:6379`, **비밀번호만 기본값이 없다**) 
+<br/>마지막으로 **MySQL 테이블을 새로 세팅할지**(기본 y) 묻는다 — 로컬 MySQL에는 컨테이너의 init SQL 같은 장치가 없어 **처음 한 번은 y로 세팅해야 한다.** 
 
-이후 사전 점검(dotnet SDK · 토큰 서명 키 · MySQL·Redis 응답 · 포트 5160/5247 선점) → 스키마 적용·확인 → 선(先) 빌드 → 두 서버 watch 기동 → 준비 대기 → 보스러시 랭킹 캐시 적재 순으로 진행한다.
+* 다만 적용되는 SQL(`docs/공통/db-schema.sql` → `docs/세부/master-data/master-data-schema.sql`)이 `DROP TABLE` 후 재생성하므로 **기존 세이브 데이터가 지워진다** 
+    * 개발 편의상 DB 버전 관리를 생략하기 위해 수정사항이 있을 경우 기존 데이터를 마이그레이션 하지 않고, 테이블을 밀어버린 후 재생성 하니 주의할 것.
+    * 마스터 데이터의 경우 테이블을 밀어도 `master-data-schema.sql` 쿼리문을 실행하여 다시 세팅된다.
+
+<br/> 이후 아래의 작업들이 순차적으로 진행되며, **서버 실행전에 Mysql과 redis는 이미 실행 중 이어야 한다.**
+* 사전 점검(dotnet SDK · MySQL·Redis 응답 · 포트 5160/5247 선점)
+* 스키마 적용·확인 → 선(先) 빌드 → 두 서버 watch 기동
+* 준비 대기
+* 보스러시 랭킹 캐시 적재 순으로 진행한다.
 
 접속 정보의 정본은 각 서버의 `appsettings.json`이며, 스크립트는 **호스트·포트(그리고 준 경우 계정·비밀번호)만 갈아 끼워 환경 변수로 덮어쓴다** — 설정 파일은 고치지 않는다.
 
-**주요 옵션**
-
-| 옵션 | 설명 |
-|---|---|
-| `--mysql-host` · `--mysql-port` · `--mysql-user` · `--mysql-password` | MySQL 접속 정보를 미리 지정(묻지 않음) |
-| `--redis 127.0.0.1:36379` | Redis 주소 지정 |
-| `--no-prompt` | 아무것도 묻지 않고 기본값으로 진행(스크립트 호출용) |
-| `--init-schema` / `--no-init-schema` | 테이블 세팅을 묻지 않고 적용 / 건너뜀 |
-| `--use-appsettings` | 접속 정보를 덮어쓰지 않고 `appsettings.json` 값 그대로 사용 |
-| `--warmup-only` | 이미 떠 있는 GameServer에 랭킹 캐시 적재만 지시 |
-| `--stop` | 이 방식으로 띄운 서버(앱 + watch 래퍼) 종료 |
-
-**필요한 것**: .NET SDK 10 · Python 3.7+ · **이미 실행 중인 MySQL·Redis**
-
-> **MySQL·Redis는 이 스크립트가 띄우지도, 끄지도 않는다.** 로컬 설치본을 켜 두거나, 의존 서비스만 컨테이너로 쓰려면 `docker compose up -d mysql redis` 로 띄운 뒤 `python server_up.py --mysql-port 33306 --redis 127.0.0.1:36379` 로 붙인다. Redis 인스턴스는 **하나만** 띄운다(서버가 보는 주소는 하나뿐이라 두 개가 떠 있으면 어디에 썼는지 헷갈린다).
 
 **접속 주소(로컬 기준)**
 
