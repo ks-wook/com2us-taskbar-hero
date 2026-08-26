@@ -67,9 +67,9 @@
       AccountServer/appsettings.json의 Security:SecretKey(로컬 개발용 기본값)를 쓴다. 다른 키로
       돌리려면 .env나 호스트 환경에 `Security__SecretKey=<값>` 을 두면 기본값을 덮어쓴다.
       (Grafana만 예외 — full 모드에서 다른 PC라면 위의 .env 두 줄이 필요하다.)
-    · 컨테이너 서버와 콘솔 서버(server_up.py · watch-all.ps1)는 같은 5160·5247 포트를 쓰므로 동시에
+    · 컨테이너 서버와 콘솔 서버(server_up.py)는 같은 5160·5247 포트를 쓰므로 동시에
       띄울 수 없다. 핫 리로드로 개발할 때는 `python server_up.py`를 쓴다(랭킹 캐시 적재까지 그쪽이
-      한다). watch-all.ps1로 띄웠다면 랭킹 캐시는 `--warmup-only`로 따로 적재한다.
+      한다).
     · 서버가 포함되면 이미지를 자동으로 다시 빌드한다. 서버 이미지는 소스를 COPY해 굽기 때문에
       (핫 리로드 없음) 재빌드를 건너뛰면 옛 바이너리가 그대로 뜬다.
     · **스키마·마스터 데이터는 데이터 볼륨이 빈 첫 기동에만 만들어진다** — compose가 docs/의 스키마
@@ -165,7 +165,7 @@ _USE_COLOR = False
 
 # ── 출력 ────────────────────────────────────────────────────────────────
 def setup_console() -> None:
-    """한글·기호가 깨지지 않게 콘솔 출력을 UTF-8로 맞춘다(watch-all.ps1이 하는 일과 같다)."""
+    """한글·기호가 깨지지 않게 콘솔 출력을 UTF-8로 맞춘다."""
     if os.name == "nt":
         try:
             import ctypes
@@ -735,7 +735,7 @@ def main() -> int:
         # 무엇이 쥐고 있느냐에 따라 할 일이 다르다 — 서버 포트는 콘솔 실행과의 충돌이고,
         # 나머지는 그 PC에 이미 깔린 로컬 MySQL·Redis·Postgres 같은 별개 프로그램이다.
         if any(service in SOURCE_BUILT for service, _ in busy):
-            say("콘솔로 띄운 서버(server_up.py · watch-all.ps1 · dotnet run)가 있으면 먼저 종료하세요.", "warn")
+            say("콘솔로 띄운 서버(server_up.py · dotnet run)가 있으면 먼저 종료하세요.", "warn")
             say("서버는 콘솔로 계속 쓰고 의존 서비스만 띄우려면:  docker compose up -d mysql redis", "warn")
         if any(service not in SOURCE_BUILT for service, _ in busy):
             say("그 포트를 쓰는 로컬 프로그램(로컬 MySQL·Redis·Postgres 등)을 멈추거나,", "warn")

@@ -52,7 +52,7 @@
     두면 서버 설정을 고쳤을 때 둘이 조용히 어긋난다. **파일은 고치지 않는다**(git 변경이 남지 않는다).
     appsettings 값을 그대로 쓰고 싶으면 --use-appsettings 로 이 덮어쓰기를 끈다.
 
-왜 선(先) 빌드가 필요한가 (watch-all.ps1 과 같은 이유)
+왜 선(先) 빌드가 필요한가
     두 서버는 TaskbarHero.Common(net10.0)을 ProjectReference로 참조하고, Common의 obj/bin은 Unity
     로컬 패키지 격리를 위해 artifacts/ 로 재배치되어 **두 서버가 같은 출력 폴더를 공유한다.** 두
     watch를 동시에 띄우면 두 MSBuild가 그 폴더에 Common을 동시 빌드하다 파일 잠금(MSB3713/CS2012)이
