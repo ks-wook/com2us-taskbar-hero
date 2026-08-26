@@ -9,7 +9,7 @@
 
 사용법 (저장소 루트에서 실행한다 — docker compose가 이 위치를 기준으로 돈다)
     python server_up_with_docker.py               # **아무것도 묻지 않는다** — 서버 이미지 재빌드 + 게임 필수
-                                                  #   5개(accountserver · gameserver · batchserver · mysql · redis) 기동
+                                                  #   4개(accountserver · gameserver · mysql · redis) 기동
                                                   #   + 보스러시 랭킹 캐시 적재
     python server_up_with_docker.py --mode full   # 로그 파이프라인(fluentd·logdb·Grafana)까지 전부
     python server_up_with_docker.py -i            # 무엇을 띄울지·재빌드할지 메뉴로 고른다
@@ -19,7 +19,7 @@
     -i 로 물을 때도 옵션으로 명시한 항목은 묻지 않는다.
 
 띄우는 것 — 둘 중 하나다(대화형 메뉴의 1번·2번이 각각 이것이다)
-    dev (기본)  mysql · redis · accountserver · gameserver · batchserver
+    dev (기본)  mysql · redis · accountserver · gameserver
                 게임이 도는 최소 구성. GameServer는 이벤트 로그를 파일로 계속 쓰고, 그 파일을
                 걷어 적재·조회하는 쪽(fluentd·logdb·Grafana)만 빠진다.
     full        dev + timescaledb(logdb) · fluentd · grafana
@@ -107,16 +107,16 @@ ROOT = Path(__file__).resolve().parent
 #          GF_SERVER_ROOT_URL 기본값이 작성자의 테일스케일 주소라 저장소 루트 .env에 두 줄이 필요하다:
 #            GRAFANA_ROOT_URL=http://localhost:3000/
 #            GRAFANA_DOMAIN=localhost
-GROUP_DEV = ["mysql", "redis", "accountserver", "gameserver", "batchserver"]
+GROUP_DEV = ["mysql", "redis", "accountserver", "gameserver"]
 GROUPS = {
     "dev": GROUP_DEV,
-    "full": ["mysql", "redis", "timescaledb", "fluentd", "grafana"] + ["accountserver", "gameserver", "batchserver"],
+    "full": ["mysql", "redis", "timescaledb", "fluentd", "grafana"] + ["accountserver", "gameserver"],
 }
 DEFAULT_MODE = "dev"
 
 # 대화형 메뉴 — (번호, 모드, 이름, 포함되는 것). 사용자가 보는 문구는 이 표가 정본이다.
 MODE_MENU = (
-    ("1", "dev", "게임 서버 필수만", "MySQL · Redis · AccountServer · GameServer · BatchServer"),
+    ("1", "dev", "게임 서버 필수만", "MySQL · Redis · AccountServer · GameServer"),
     ("2", "full", "로그까지 전부", "1번 + logdb(TimescaleDB) · fluentd · Grafana"),
 )
 DEFAULT_MODE_KEY = next(key for key, mode, _, _ in MODE_MENU if mode == DEFAULT_MODE)
@@ -150,7 +150,7 @@ DEFAULT_GAME_URL = "http://localhost:5247"
 GAME_HEALTH_PATH = "/openapi/v1.json"
 WARMUP_PATH = "/api/admin/boss-rush/rank/warmup"
 
-# 서버가 돌려주는 워밍업 결과 상태값(GameServer.Core/Constants.cs 의 RankWarmupStatus 와 같은 문자열).
+# 서버가 돌려주는 워밍업 결과 상태값(GameServer/Constants.cs 의 RankWarmupStatus 와 같은 문자열).
 WARMUP_CACHE_UNAVAILABLE = "cache-unavailable"
 WARMUP_NO_SEASON = "no-season"
 
@@ -623,6 +623,11 @@ def resolve_options(args: argparse.Namespace) -> tuple[str, list[str], bool, boo
 
     services = list(GROUPS[mode])
 
+    # ①-b BatchServer(주기 배치 워커)는 **기본으로 띄우지 않는다** — 거래 만료 반송·메일 보관 GC·
+    #     시즌 정산·히스토리 집계라 즉시성이 없어 개발 중에는 대개 필요하지 않다. --with-batch로 추가한다.
+    if args.with_batch and "batchserver" not in services:
+        services.append("batchserver")
+
     # ② 서버 이미지 재빌드. 이미지에 소스가 구워져 있어 건너뛰면 옛 바이너리가 뜬다.
     if args.build:
         rebuild = True
@@ -691,6 +696,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--down", action="store_true", help="그 묶음을 중지한다(볼륨·데이터는 남는다)")
     parser.add_argument("--warmup-only", action="store_true", help="컨테이너는 건드리지 않고 랭킹 캐시 적재만 지시한다")
     parser.add_argument("--no-warmup", action="store_true", help="랭킹 캐시 적재 단계를 건너뛴다")
+    parser.add_argument("--with-batch", action="store_true",
+                        help="batchserver(주기 배치 워커)도 함께 띄운다(기본은 띄우지 않는다)")
     parser.add_argument("--force-warmup", action="store_true", help="리더보드가 이미 채워져 있어도 다시 적재한다")
     parser.add_argument("--admin-key", help="관리 API 키(기본: TASKBAR_HERO_ADMIN_KEY -> appsettings.json)")
     parser.add_argument("--game-url", default=DEFAULT_GAME_URL, help=f"GameServer 주소(기본 {DEFAULT_GAME_URL})")

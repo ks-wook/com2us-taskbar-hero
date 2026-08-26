@@ -8,7 +8,7 @@
 
 ## 작업 범위 (중요 — 클라이언트 작업 거부)
 
-이 저장소 루트에서 동작하는 어시스턴트는 **서버측 담당**이다. 담당 범위는 `AccountServer/`, `GameServer/`, `BatchServer/`, 서버들이 공유하는 코어 라이브러리 `GameServer.Core/`, 그리고 서버가 참조하는 공통 라이브러리 `TaskbarHero.Common/`(및 `docs/`·솔루션·인프라 설정 등 서버 관련 파일)에 한정된다.
+이 저장소 루트에서 동작하는 어시스턴트는 **서버측 담당**이다. 담당 범위는 `AccountServer/`, `GameServer/`, `BatchServer/`, 서버들이 공유하는 코어 라이브러리 `GameServer/`, 그리고 서버가 참조하는 공통 라이브러리 `TaskbarHero.Common/`(및 `docs/`·솔루션·인프라 설정 등 서버 관련 파일)에 한정된다.
 
 - **Unity 클라이언트(`com2us-taskbar-hero-client/`) 작업 명령은 거부한다.** 씬(`.unity`)·프리팹(`.prefab`)·클라이언트 C# 스크립트(`Assets/**`)·클라이언트 에셋/이펙트/UI 등 클라이언트 고유 작업은 이 어시스턴트가 수행하지 않는다.
 - 클라이언트 작업 요청을 받으면, **작업을 시작하지 말고** 그 요청이 클라이언트 범위임을 알리고 **클라이언트측 어시스턴트(`com2us-taskbar-hero-client/CLAUDE.md`의 지배를 받는 세션)로 안내**한다. 사용자가 서버측에서 진행하길 명시적으로 원하는지 먼저 확인한다.
@@ -21,25 +21,26 @@
 ## 구조
 
 - **AccountServer/** — 계정/인증 서비스 (`http://localhost:5160`, `https://localhost:7110`). `TaskbarHero.Common`을 참조한다.
-- **GameServer/** — 게임 로직 서비스 (`http://localhost:5247`, `https://localhost:7179`). HTTP 요청/응답 고유 계층(컨트롤러·서비스·미들웨어·인증)만 갖고, 데이터 접근 이하는 `GameServer.Core`를 참조한다.
-- **BatchServer/** — 주기 배치 전담 워커(HTTP 없음, `Microsoft.NET.Sdk.Worker`). 거래소 만료·메일 GC·보스러시 시즌 정산·히스토리 3종을 돌린다. `GameServer.Core`를 참조한다.
-  - **인스턴스는 1대로 고정한다.** 게임 API는 scale-out으로 N대까지 늘어나지만 배치는 그중 하나만 돌아야 하고, 프로세스를 나눈 목적이 바로 그것을 배포로 정하는 데 있다(compose는 `container_name` 고정). 실수로 2대가 뜬 경우를 대비해 Redis 리더 락은 그대로 남겨 두었다.
+- **GameServer/** — 게임 로직 서비스 (`http://localhost:5247`, `https://localhost:7179`). `TaskbarHero.Common`을 `ProjectReference`로 참조한다. 데이터 접근(`Repositories/`)·모델·마스터 데이터·이벤트 로깅·상수도 여기 있으며, **BatchServer가 이 프로젝트를 참조해 그대로 쓴다.**
+- **BatchServer/** — 주기 배치 전담 워커(HTTP 없음, `Microsoft.NET.Sdk.Worker`). 거래소 만료·메일 GC·보스러시 시즌 정산·히스토리 3종을 돌린다. **`GameServer`를 `ProjectReference`로 참조한다** — 배치가 쓰는 계층이 전부 그쪽에 있어 별도 공유 라이브러리를 두지 않았다(exe 프로젝트 참조는 정상 동작한다).
+  - **인스턴스는 1대로 고정한다.** 게임 API는 scale-out으로 N대까지 늘어나지만 배치는 그중 하나만 돌아야 하고, 프로세스를 나눈 목적이 바로 그것을 배포로 정하는 데 있다(compose는 `container_name` 고정). **그래서 분산 락을 쓰지 않는다** — 잠글 상대가 없다.
+  - **발화 시각은 절대 시각이다.** 대기 간격이 아니라 유닉스초가 실행 시점을 정한다(기본은 발화 간격 버킷 경계, 일 단위는 KST 05시, 보스러시 정산은 시즌 `end_at`). 프로세스를 언제 띄웠든 늘 같은 시각에 돈다.
   - 무거운 일 단위 집계가 게임 API의 커넥션 풀·스레드풀과 경합하지 않는 것도 분리의 실질적인 이득이다.
-- **GameServer.Core/** — GameServer와 BatchServer가 **공유하는 서버 전용 코어 라이브러리**(`net10.0` 클래스 라이브러리). 데이터 접근(`Repositories/` — GameDb·MasterDb·MemoryDb) · 도메인 모델(`Models/`) · 마스터 데이터(`MasterData/`) · 이벤트 로깅(`Logging/`) · 유틸(`Util/`) · `Constants.cs` · `Enums.cs`를 담는다.
+- **GameServer/** — GameServer와 BatchServer가 **공유하는 서버 전용 코어 라이브러리**(`net10.0` 클래스 라이브러리). 데이터 접근(`Repositories/` — GameDb·MasterDb·MemoryDb) · 도메인 모델(`Models/`) · 마스터 데이터(`MasterData/`) · 이벤트 로깅(`Logging/`) · 유틸(`Util/`) · `Constants.cs` · `Enums.cs`를 담는다.
   - **네임스페이스는 `GameServer.*`를 그대로 쓴다** — 어셈블리 이름과 네임스페이스는 무관하므로, 이렇게 두면 두 호스트의 `using`을 고칠 필요가 없다. 새 파일도 이 규칙을 따른다.
-  - `TaskbarHero.Common`과 혼동하지 말 것. 그쪽은 **Unity가 소스를 직접 컴파일**하는 클라 공유 패키지라 `netstandard2.0`·`LangVersion 9`·의존성 0을 지켜야 한다. **서버끼리 공유할 코드는 반드시 `GameServer.Core`에 둔다.**
+  - `TaskbarHero.Common`과 혼동하지 말 것. 그쪽은 **Unity가 소스를 직접 컴파일**하는 클라 공유 패키지라 `netstandard2.0`·`LangVersion 9`·의존성 0을 지켜야 한다. **서버 전용 코드는 여기(`TaskbarHero.Common`)에 절대 넣지 않는다.**
   - 웹 스택에 의존하는 것은 여기 두지 않는다. 요청 상관 ID(`req_id`)처럼 호스트마다 다른 값은 `IRequestIdAccessor`로 추상화하고 구현을 각 호스트가 등록한다(GameServer=`HttpRequestIdAccessor`, BatchServer=`NullRequestIdAccessor`).
 - **TaskbarHero.Common/** — 서버-클라이언트 공통 라이브러리(**멀티타겟 `netstandard2.0;net10.0`**). 원래 git 서브모듈(별도 저장소)이었으나 서브모듈을 해제하고 이 솔루션에 포함된 일반 프로젝트로 전환했다. Unity 클라이언트와 공유하므로 `netstandard2.0`을 유지하되, 서버(net10.0)가 동일 TFM 출력을 참조해 `dotnet watch`의 교차 TFM 상관 경고를 없애기 위해 `net10.0`도 함께 타겟팅한다(Unity는 asmdef로 소스를 직접 컴파일하므로 TFM 목록과 무관). `TaskbarHero.Common/ErrorCode.cs`의 `ErrorCode`는 클라이언트와 공유하는 에러 코드이므로, 그 숫자 값은 변경하면 안 되는 계약(contract)으로 취급한다(정본 목록: `docs/공통/error-code-정의.md`).
   - **소비 방식(이중)**: 서버 프로젝트들은 `ProjectReference`로 참조한다(`AccountServer`는 직접, `GameServer`·`BatchServer`는 `GameServer.Core`를 통해서도). **Unity 클라이언트는 이 폴더를 로컬 UPM 패키지로 소비한다** — `com2us-taskbar-hero-client/Packages/manifest.json`에 `"com.com2us.taskbarhero.common": "file:../../TaskbarHero.Common"`로 등록되어 있고, 폴더 안의 `package.json` + `TaskbarHero.Common.asmdef`로 Unity가 소스를 직접 컴파일한다(별도 빌드/DLL 복사 없음).
   - **빌드 산출물 격리**: Unity가 이 폴더의 `.cs`를 직접 컴파일하므로, `Directory.Build.props`가 MSBuild의 `obj/bin`을 폴더 밖 `artifacts/`로 재배치한다. **이 폴더 안에 `obj/`·`bin/`을 만들지 말 것**(Unity가 생성 `.cs`를 중복 컴파일해 깨진다).
 
-`com2us-taskbar-hero.slnx`는 솔루션 파일(XML 형식의 `.slnx`)이며 `TaskbarHero.Common` · `AccountServer` · `GameServer.Core` · `GameServer` · `BatchServer` 다섯 프로젝트를 포함한다. 참조 방향은 `GameServer`·`BatchServer` → `GameServer.Core` → `TaskbarHero.Common`이고, `AccountServer`는 `TaskbarHero.Common`만 참조한다.
+`com2us-taskbar-hero.slnx`는 솔루션 파일(XML 형식의 `.slnx`)이며 `TaskbarHero.Common` · `AccountServer` · `GameServer` · `BatchServer` 네 프로젝트를 포함한다. 참조 방향은 `BatchServer` → `GameServer` → `TaskbarHero.Common`이고, `AccountServer`는 `TaskbarHero.Common`만 참조한다.
 
 ## 명령어
 
 - 전체 빌드: `dotnet build com2us-taskbar-hero.slnx`
 - 서버 실행: `dotnet run --project GameServer` 또는 `dotnet run --project AccountServer` (HTTPS 프로필은 `--launch-profile https` 추가)
-- 배치 워커 실행: `dotnet run --project BatchServer` (HTTP를 열지 않으며 콘솔 로그로만 동작을 확인한다)
+- 배치 워커 실행: `dotnet run --project BatchServer` (HTTP를 열지 않으며 콘솔 로그로만 동작을 확인한다). 부트스트랩 스크립트는 **기본으로 배치를 띄우지 않는다** — `python server_up.py --with-batch` / `python server_up_with_docker.py --with-batch`.
 - OpenAPI 문서는 Development 환경에서만 `/openapi/v1.json`에 매핑된다.
 - Swagger UI는 Development 환경에서만 `/swagger`에서 제공된다(`Swashbuckle.AspNetCore.SwaggerUI`가 위 OpenAPI 문서를 렌더링). 예: AccountServer `http://localhost:5160/swagger`, GameServer `http://localhost:5247/swagger`.
 
@@ -58,11 +59,11 @@
 - **컨트롤러는 HTTP 응답 메서드만 포함**: 컨트롤러 클래스에는 엔드포인트 액션 메서드(`[HttpGet]`/`[HttpPost]` 등이 붙은 HTTP 요청/응답 처리 메서드)만 둔다. 그 외 로직은 **private 헬퍼라도 예외 없이** 컨트롤러 밖으로 분리한다:
   - **컨트롤러 공통 보조 메서드**(인증 userId 추출, 공통 응답 변환, ErrorCode ↔ HTTP 상태/메시지 매핑 등)는 **베이스 컨트롤러 클래스**(`ControllerBase`를 상속한 추상 클래스, 예: `GameApiControllerBase`·`AccountApiControllerBase`)에 `protected`/`private static`으로 구현하고, 각 컨트롤러가 이를 **상속**해 사용한다.
   - 컨트롤러 작업 시 이 규칙을 매번 확인한다.
-- **상수는 예외 없이 `Constants.cs`에 선언**: 매직 넘버·고정 문자열·불변 값(`const`, 그리고 숫자·문자열·`TimeSpan` 같은 값을 담은 `static readonly`)은 **`Constants.cs`**에만 선언한다(게임 쪽은 `GameServer.Core/Constants.cs` 하나이며 `GameServer`·`BatchServer`가 공유한다. `AccountServer`에는 아직 없으므로 상수가 처음 필요해지면 `AccountServer/Constants.cs`를 만들어 거기에 넣는다). 서비스·컨트롤러·리포지토리·미들웨어·배치 클래스 안에는 **private 상수라도 두지 않는다** — 같은 성격의 값이 여러 파일에 흩어지면 어디에 있는지 찾을 수 없고, 두 곳에서 각자 정의한 값이 조용히 어긋난다.
+- **상수는 예외 없이 `Constants.cs`에 선언**: 매직 넘버·고정 문자열·불변 값(`const`, 그리고 숫자·문자열·`TimeSpan` 같은 값을 담은 `static readonly`)은 **`Constants.cs`**에만 선언한다(게임 쪽은 `GameServer/Constants.cs` 하나이며 `GameServer`·`BatchServer`가 공유한다. `AccountServer`에는 아직 없으므로 상수가 처음 필요해지면 `AccountServer/Constants.cs`를 만들어 거기에 넣는다). 서비스·컨트롤러·리포지토리·미들웨어·배치 클래스 안에는 **private 상수라도 두지 않는다** — 같은 성격의 값이 여러 파일에 흩어지면 어디에 있는지 찾을 수 없고, 두 곳에서 각자 정의한 값이 조용히 어긋난다.
   - 값이 아니라 **동작 설정 객체 인스턴스**(예: `JsonSerializerOptions`)는 상수가 아니므로 그 객체를 쓰는 클래스에 `static readonly`로 둔다.
   - 도메인별 중첩 static 클래스(`Constants.BossRush`·`Constants.Trade`·`Constants.EventLog` 등) 중 **그 값이 속한 도메인 블록**에 넣고, 없으면 새 중첩 클래스를 만든다. 값의 의미와 그 값이어야 하는 이유는 `/// <summary>` 주석으로 남긴다.
   - 새 상수를 만들거나 기존 상수를 옮길 때 이 규칙을 매번 확인한다. 상수가 필요해지면 **선언 위치를 고민하지 않고 곧바로 `Constants.cs`**에 넣는다.
-  - 예외는 **`GameServer.Core/Logging/EventFields.cs`의 로그 필드 값 집합**(`CurrencyDirection`·`CurrencySource`·`ItemFlowReason`)뿐이다 — 로그 이벤트 `record`와 1:1로 붙어 있어야 카탈로그(`docs/공통/로그-이벤트-정의.md` 5~7장)와 대조하기 쉬운 정의 전용 파일이다. 이 파일 외의 어디에도 상수를 새로 만들지 않는다.
+  - 예외는 **`GameServer/Logging/EventFields.cs`의 로그 필드 값 집합**(`CurrencyDirection`·`CurrencySource`·`ItemFlowReason`)뿐이다 — 로그 이벤트 `record`와 1:1로 붙어 있어야 카탈로그(`docs/공통/로그-이벤트-정의.md` 5~7장)와 대조하기 쉬운 정의 전용 파일이다. 이 파일 외의 어디에도 상수를 새로 만들지 않는다.
 - **기능 구현 시 빌드 및 테스트 진행**: 기능을 구현하면 반드시 빌드(`dotnet build`)로 컴파일을 확인하고, 실제 동작을 테스트로 검증한다. 빌드 성공과 테스트 통과를 확인하기 전에는 작업을 완료로 간주하지 않는다.
 - **어시스턴트는 서버를 포어그라운드로만 띄운다**: 서버(`GameServer`·`AccountServer`·`BatchServer`)를 어시스턴트가 띄울 수 있으나, **반드시 사용자가 볼 수 있는 별도 콘솔 창(포어그라운드)** 으로만 띄운다. **숨김·백그라운드 기동은 금지**한다 — `Start-Process -WindowStyle Hidden`·`Start-Job`·harness `run_in_background`·`&`·`nohup` 등. 숨겨진 서버는 세션이 끝나도 남아 `bin/` 파일을 잠그고(MSB3021/MSB3027), 다음 테스트가 **옛 바이너리를 검증**하게 만든다.
   - 기동 명령(창이 뜨고 로그가 사용자에게 그대로 보인다):
@@ -83,7 +84,7 @@
       ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force } catch {} }
     ```
   - 잔여 확인도 **두 가지를 모두** 센다(앱 프로세스만 세면 래퍼를 놓친다).
-  - 배치(`PeriodicBatchScheduler` 파생)는 이제 **BatchServer 프로세스**에서 돈다 — 배치 동작을 확인하려면 그 워커를 띄워야 한다(GameServer만 띄우면 배치는 돌지 않는다). Redis 리더 락(`batch:lock:{배치키}`)은 주기 종료 시 해제되므로 보통은 신경 쓸 필요가 없다. 다만 **직전 워커를 강제 종료(Stop-Process)해 락이 남은 경우** TTL(최대 5분)이 지나기 전에는 그 배치가 스킵되니, 배치 동작을 즉시 확인해야 하면 해당 락 키를 지우고 기동한다.
+  - 배치(`PeriodicBatchScheduler` 파생)는 **BatchServer 프로세스**에서 돈다 — 배치 동작을 확인하려면 그 워커를 띄워야 한다(GameServer만 띄우면 배치는 돌지 않는다). 실행 스크립트는 **기본으로 배치를 띄우지 않으므로** `--with-batch`를 붙인다. 분산 락이 없어 강제 종료 후 남는 락 키 같은 것도 없다.
 - **서비스 클래스 메서드 주석 필수**: 서비스 클래스(`*Service`, 예: `AuthService`·`SaveService`·`StageService`)에 속한 **모든 메서드**(public·private 헬퍼·생성자 포함)에는 그 메서드가 **어떤 로직을 수행하는지** 설명하는 `/// <summary>` 주석을 반드시 작성한다. 새 서비스 메서드를 추가하거나 기존 메서드를 수정할 때 이 규칙을 매번 확인한다.
 - **로깅 규칙 준수**: 서버에 로그를 추가·수정할 때는 [`docs/공통/로깅-규칙.md`](docs/공통/로깅-규칙.md)를 따른다. 로거는 `ILogger<T>` 생성자 주입, 기록은 **ZLogger 확장 메서드**(`logger.ZLogInformation($"... {userId:@UserId}")` — 값마다 `:@PascalCase`로 필드 이름 지정, 표준 `Log*` 직접 호출·문자열 `+` 연결 금지), 레벨 기준(사용자 실수는 로깅 안 함, 경합은 Warning, 서버 결함은 Error), 로깅은 서비스/미들웨어에서(컨트롤러 금지), 비밀번호·토큰·PII 미노출을 매번 확인한다.
 - **기능 설계·구현 시 통합 문서 동기화 및 정합성 체크**: 기능을 설계(기획서 작성)하거나 구현·변경하면, 해당 **세부 기획서**(`docs/세부/<기능>-기획서.md`)와 함께 아래 **공통 통합 문서를 같은 작업에서 갱신**한다. 정본은 세부 기획서이고 이 셋은 기획서를 가로질러 모은 **집약 참조본**이므로, 어느 하나만 바뀌면 곧 불일치가 된다.

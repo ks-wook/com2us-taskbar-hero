@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-"""도커 없이 서버 3개(API 2 + 배치 워커 1)를 dotnet watch(핫 리로드)로 띄우는 부트스트랩 — 랭킹 캐시 적재까지.
+"""도커 없이 게임 API 서버 2개를 dotnet watch(핫 리로드)로 띄우는 부트스트랩 — 랭킹 캐시 적재까지.
 
 이 스크립트가 전제하는 것 (server_up_with_docker.py 와 다른 점이 이것뿐이다)
     **MySQL·Redis가 이 PC에서 이미 돌고 있다**(스크립트가 만들어 주지 않는다). 컨테이너는 만들지 않고
-    **AccountServer·GameServer·BatchServer 세 개**를 띄운다 — 의존 서비스는 응답만 확인하고, 없으면 거기서 멈춘다.
+    **AccountServer·GameServer 두 개**를 띄운다 — 의존 서비스는 응답만 확인하고, 없으면 거기서 멈춘다.
+    BatchServer(주기 배치 워커)는 기본으로 띄우지 않는다(--with-batch 로 추가).
     도커를 쓰는 쪽은 `python server_up_with_docker.py`다(컨테이너 5~8개 + 서버까지 전부 컨테이너로).
 
 사용법 (저장소 루트에서 실행한다 — 프로젝트 경로를 이 위치 기준으로 찾는다)
@@ -37,7 +38,8 @@
        접속 자체가 안 되면(계정·비밀번호 불일치) 여기서 멈춘다 — 그대로 띄우면 서버는 뜨고
        모든 요청이 DB 오류로 죽는다. 테이블이 하나도 없으면 무엇을 실행하면 되는지 알려 주고 멈춘다.
     ③ 선(先) 빌드 — 솔루션을 직렬로 한 번 빌드한다(아래 「왜 선빌드가 필요한가」)
-    ④ AccountServer(:5160) · GameServer(:5247) · BatchServer(포트 없음)를 각각 `dotnet watch run`으로 **새 콘솔 창**에 띄운다
+    ④ AccountServer(:5160) · GameServer(:5247)를 각각 `dotnet watch run`으로 **새 콘솔 창**에 띄운다
+      (--with-batch 면 BatchServer도 함께. 그쪽은 HTTP를 열지 않아 헬스 체크 대상이 아니다)
     ⑤ 두 서버 준비 대기(OpenAPI 문서 응답)
     ⑥ 보스러시 랭킹 캐시 적재(관리 API 1회 호출)
 
@@ -114,11 +116,23 @@ SOLUTION = ROOT / "com2us-taskbar-hero.slnx"
 # ── 띄울 서버 ───────────────────────────────────────────────────────────
 #   (프로젝트 폴더, 표시 이름, 호스트 포트). watch는 프로젝트 1개 대상이라 각자 콘솔을 하나 쓴다.
 #   포트가 None이면 HTTP를 열지 않는 프로세스다(BatchServer) — 포트 선점 검사와 헬스 체크에서 빠진다.
-SERVERS = (
+#
+#   **BatchServer는 기본으로 띄우지 않는다.** 게임 API 둘만 있으면 게임은 정상 동작한다 — 배치가 하는 일은
+#   거래 만료 반송·메일 보관 GC·시즌 정산·히스토리 집계라 즉시성이 없고, 개발 중에는 대개 필요하지 않다.
+#   필요하면 `--with-batch`로 함께 띄운다. 뺀 실행에서는 이 스크립트가 배치를 아예 모르는 상태로 돈다
+#   (설정 읽기·포트 검사·기동 전부에서 빠진다).
+API_SERVERS = (
     ("AccountServer", "AccountServer", 5160),
     ("GameServer", "GameServer", 5247),
-    ("BatchServer", "BatchServer", None),
 )
+BATCH_SERVER = ("BatchServer", "BatchServer", None)
+
+
+def servers_for(args: argparse.Namespace) -> tuple:
+    """이번 실행에서 띄울 서버 목록. 기본은 API 두 개이고, --with-batch면 BatchServer를 더한다."""
+    return API_SERVERS + (BATCH_SERVER,) if args.with_batch else API_SERVERS
+
+
 LAUNCH_PROFILE = "http"
 
 # ── 로컬 의존 서비스 기본값 ─────────────────────────────────────────────
@@ -154,7 +168,7 @@ DEFAULT_GAME_URL = "http://localhost:5247"
 HEALTH_PATH = "/openapi/v1.json"
 WARMUP_PATH = "/api/admin/boss-rush/rank/warmup"
 
-# 서버가 돌려주는 워밍업 결과 상태값(GameServer.Core/Constants.cs 의 RankWarmupStatus 와 같은 문자열).
+# 서버가 돌려주는 워밍업 결과 상태값(GameServer/Constants.cs 의 RankWarmupStatus 와 같은 문자열).
 WARMUP_CACHE_UNAVAILABLE = "cache-unavailable"
 WARMUP_NO_SEASON = "no-season"
 
@@ -252,19 +266,25 @@ def build_mysql_conn(base: str, host: str, port: int, user: str | None, password
     return conn
 
 
-def resolve_child_env(args: argparse.Namespace) -> dict[str, dict[str, str]]:
+def resolve_child_env(args: argparse.Namespace, servers) -> dict[str, dict[str, str]]:
     """
     서버별로 자식 프로세스에 넘길 환경 변수를 만든다(빈 dict면 appsettings 값을 그대로 쓴다).
 
-    --use-appsettings면 아무것도 덮어쓰지 않는다. 그 외에는 MySQL 접속 문자열 3개와 Redis 주소를
+    --use-appsettings면 아무것도 덮어쓰지 않는다. 그 외에는 MySQL 접속 문자열과 Redis 주소를
     로컬 설치본 기준으로 바꿔 넣는다. 접속 문자열을 못 읽으면(설정 파일이 깨졌거나 키가 사라졌으면)
     조용히 기본값으로 진행하지 않고 실패시킨다 — 어긋난 주소로 뜨면 원인이 SQL 오류로만 드러난다.
+
+    **띄우지 않는 서버의 설정은 읽지 않는다** — --no-batch면 BatchServer/appsettings.json이
+    없거나 깨져 있어도 이 스크립트는 영향을 받지 않아야 한다.
     """
-    env_by_server: dict[str, dict[str, str]] = {name: {} for name, _, _ in SERVERS}
+    selected = {name for name, _, _ in servers}
+    env_by_server: dict[str, dict[str, str]] = {name: {} for name in selected}
     if args.use_appsettings:
         return env_by_server
 
     for server, keys, env_name in MYSQL_SETTINGS:
+        if server not in selected:
+            continue
         base = read_json_setting(ROOT / server / "appsettings.json", keys)
         if not base:
             say(f"{server}/appsettings.json 에서 {':'.join(keys)} 를 읽지 못했습니다.", "err")
@@ -532,7 +552,7 @@ def check_dependencies(args: argparse.Namespace) -> bool:
 
 def check_server_ports() -> bool:
     """서버 포트(5160·5247)가 비어 있는지 확인한다 — 컨테이너 서버와 동시에 띄울 수 없다."""
-    busy = [f"{port}({label})" for _, label, port in SERVERS if port and port_taken(port)]
+    busy = [f"{port}({label})" for _, label, port in API_SERVERS if port_taken(port)]
     if not busy:
         return True
 
@@ -918,7 +938,7 @@ def parse_args() -> argparse.Namespace:
     """명령행 인자를 읽는다(기본: 선빌드 + 두 서버 watch 기동 + 랭킹 캐시 적재)."""
     parser = argparse.ArgumentParser(
         prog="server_up.py",
-        description="도커 없이 서버 3개(API 2 + 배치 워커 1)를 dotnet watch로 띄운다(로컬 MySQL·Redis 전제) + 랭킹 캐시 적재.",
+        description="도커 없이 게임 API 서버 2개를 dotnet watch로 띄운다(로컬 MySQL·Redis 전제) + 랭킹 캐시 적재.",
     )
     parser.add_argument("--mysql-host", default=None, help=f"로컬 MySQL 호스트(생략하면 물어본다. 기본 {DEFAULT_MYSQL_HOST})")
     parser.add_argument("--mysql-port", type=int, default=None, help=f"로컬 MySQL 포트(생략하면 물어본다. 기본 {DEFAULT_MYSQL_PORT})")
@@ -939,6 +959,8 @@ def parse_args() -> argparse.Namespace:
                         help="묻지 않고 테이블 세팅을 건너뛴다")
     parser.add_argument("--skip-deps-check", action="store_true", help="로컬 MySQL·Redis 응답 확인을 건너뛴다")
     parser.add_argument("--no-build", action="store_true", help="선 빌드를 건너뛴다(공유 출력 경합 위험 — 상단 설명)")
+    parser.add_argument("--with-batch", action="store_true",
+                        help="BatchServer(주기 배치 워커)도 함께 띄운다(기본은 띄우지 않는다)")
     parser.add_argument("--warmup-only", action="store_true", help="서버를 띄우지 않고 랭킹 캐시 적재만 지시한다")
     parser.add_argument("--no-warmup", action="store_true", help="랭킹 캐시 적재 단계를 건너뛴다")
     parser.add_argument("--force-warmup", action="store_true", help="리더보드가 이미 채워져 있어도 다시 적재한다")
@@ -1001,8 +1023,11 @@ def main() -> int:
     if not verify_schema(args):
         return 1
 
+    # 이번 실행에서 띄울 서버를 먼저 확정한다 — 아래 설정 읽기·기동·헬스 확인이 모두 이 목록을 따른다.
+    servers = servers_for(args)
+
     # 접속 정보(환경 변수 덮어쓰기)는 기동 직전에 확정한다 — 설정을 못 읽으면 여기서 멈춘다.
-    env_by_server = resolve_child_env(args)
+    env_by_server = resolve_child_env(args, servers)
 
     # ── 선 빌드 ──
     print()
@@ -1014,14 +1039,16 @@ def main() -> int:
     # ── watch 기동 ──
     print()
     say("서버를 dotnet watch로 띄웁니다(각자 새 콘솔 창).", "info")
-    for project, label, _ in SERVERS:
+    if args.with_batch:
+        say("  BatchServer도 함께 띄웁니다(주기 배치가 돕니다).", "dim")
+    for project, label, _ in servers:
         if not start_watch(project, label, env_by_server[project]):
             return 1
 
     # ── 준비 대기 ──
     print()
     say("준비 상태 확인 중(첫 기동은 빌드 때문에 시간이 걸립니다)...", "dim")
-    pending = [label for _, label, port in SERVERS if port and not wait_health(label, port, args.timeout)]
+    pending = [label for _, label, port in servers if port and not wait_health(label, port, args.timeout)]
     if pending:
         print()
         say(f"아직 준비되지 않은 서버: {', '.join(pending)}", "warn")
