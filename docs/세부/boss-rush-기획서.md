@@ -77,7 +77,7 @@
 - **동시성**: 같은 계정의 중복 `clear`는 런 행 잠금 + 조건부 상태 전이(`status=1`일 때만 종결)로 직렬화한다 — 뒤에 온 요청은 0행을 받아 `BossRushRunAlreadyFinished(13004)`가 되며 기록이 이중 처리되지 않는다. 거래소가 쓰는 것과 같은 방식이다([거래소 기획서](trade-기획서.md) 7.4).
 - **랭킹 조회 성능**: 상위 목록은 `ZRANGE`(O(log N + M)), 내 순위는 `ZRANK`(O(log N))로 처리하고, 그 범위의 `user_id`에 대해서만 MySQL에서 닉네임·기록을 읽는다(`WHERE user_id IN (…)`, 최대 100건). 전체 정렬 스캔을 매 조회마다 하지 않는다.
 - **만료 판정은 읽는 시점에 한다.** 버려진 런을 정리하는 배치를 두지 않는다 — 런 만료는 반송할 자산이 없어 배치가 할 일이 `status` 컬럼 정리뿐이므로, 런을 읽는 경로(`clear`·`info`·`enter`)가 `started_at` 나이를 함께 검사한다(거래소의 만료 판정 규약과 동일, [거래소 기획서](trade-기획서.md) 7.6).
-- **배치 중복 실행 방지**: 시즌 정산 배치는 기존 `PeriodicBatchScheduler` 골격을 상속해 Redis 리더 락(`batch:lock:{배치키}`)을 사용한다. **랭킹 캐시 최초 적재는 배치가 아니라 관리 API**이고 호출자가 부트스트랩 스크립트 하나뿐이라 락을 쓰지 않는다(6.3).
+- **배치 중복 실행 방지**: 시즌 정산 배치는 **BatchServer**(주기 배치 전담 워커) 1대에서만 돌므로 분산 락을 쓰지 않는다. 발화 시각은 진행 중 시즌의 `end_at`(절대 시각)이다. **랭킹 캐시 최초 적재는 배치가 아니라 관리 API**이고 호출자가 부트스트랩 스크립트 하나뿐이라 역시 락이 필요 없다(6.3).
 
 ## 4. 데이터 모델
 
@@ -249,7 +249,7 @@ erDiagram
 - **`enter`·`clear`는 이 캐시를 쓰지 않는다.** 두 경로는 이미 MySQL 트랜잭션 안에 있어 `boss_rush_season`을 직접 읽는 편이 권위 있고, 정산 직후 캐시가 아직 갱신되지 않은 순간에는 랭킹 조회가 잠시 옛 시즌을 보여 주더라도 도전 개시는 `BossRushSeasonClosed(13007)`로 정확히 거부된다.
 - **종료된 시즌을 `seasonId` 명시로 조회**하면 그 시즌 메타는 캐시에 없으므로 `boss_rush_season`을 1행 읽는다(뜨거운 경로가 아니라 캐싱하지 않는다).
 
-**배치 락 키** — `batch:lock:bossrush-season`(시즌 정산). 기존 골격 규약(`batch:lock:{배치키}`)과 동일.
+**배치 락 키** — 없다. 시즌 정산은 BatchServer 1대에서만 돌아 잠글 상대가 없다.
 
 ## 5. API 명세
 
@@ -586,7 +586,7 @@ COMMIT
 
 ### 6.4 시즌 정산 배치
 
-`BossRushSeasonBatchScheduler`(`PeriodicBatchScheduler` 상속, 락 키 `batch:lock:bossrush-season`, 주기 `appsettings`의 `BossRushSeasonBatch:IntervalSeconds` 기본 **600초**).
+`BossRushSeasonBatchScheduler`(`PeriodicBatchScheduler` 상속, BatchServer 프로세스. 발화 시각은 진행 중 시즌의 `end_at`이고, 진행 중 시즌이 없을 때의 재확인 간격만 `appsettings`의 `BossRushSeasonBatch:IntervalSeconds` 기본 **600초**).
 
 ```
 1) 대상 선점: UPDATE boss_rush_season SET status = 2 WHERE status = 1 AND end_at <= now

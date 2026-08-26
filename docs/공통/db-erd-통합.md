@@ -69,7 +69,7 @@
 |---|---|---|
 | MySQL (Account DB) | `AccountServer` | 계정·인증 토큰 영속 저장 |
 | Redis | `AccountServer` 발급 / `GameServer` 검증 | 인증 토큰 캐시(`auth:token:{userId}`) — **필수 의존**(없으면 인증 불가) |
-| Redis | `GameServer` | 배치 리더 락(`batch:lock:{배치키}`) — 거래 만료·메일 GC·보스러시 시즌 정산 등 주기 배치의 중복 실행 방지 |
+| Redis | `BatchServer` | (배치 전용 키 없음) — 배치는 분산 락을 쓰지 않는다. BatchServer가 1대로 뜨는 것을 배포가 보장하므로 잠글 상대가 없고, 발화 시각이 절대 시각이라 인스턴스별 위상 차이도 생기지 않는다 |
 | Redis | `GameServer` | **보스러시 랭킹 리더보드**(`rank:bossrush:{seasonId}`, Sorted Set, 점수 = `clearMs × 10^7 + (recordedAt − season.start_at)`) — 시즌 순위 조회 전용 **파생 인덱스**. 정본은 MySQL `boss_rush_record`이며 ZADD는 커밋 이후에만 하고, 유실 시 관리 API(`POST /api/admin/boss-rush/rank/warmup`, 부트스트랩 스크립트 `server_up_with_docker.py`가 호출)로 정본에서 재적재하고 장애 시 MySQL 정렬 조회로 폴백한다. `ZRANK`(내 순위)·`ZRANGE`(페이지)가 O(log N + M)이라 **전체 등재 유저를 순위 상한 없이 페이징**할 수 있다([보스러시 기획서](../세부/boss-rush-기획서.md) 4.3·6.3) |
 | Redis | `GameServer` | **보스러시 조회 캐시 2종** — `player:nickname`(Hash, `userId`→`nickname`, TTL 없음, **lazy 채움**·정본은 `game_player.nickname`)과 `bossrush:season:current`(Hash, `seasonId`·`startAt`·`endAt`·`status`, 시즌 정산 배치가 갱신·정본은 `boss_rush_season`). 이 둘이 있어 **현재 시즌 랭킹 조회는 정상 경로에서 MySQL을 건드리지 않는다**(같은 문서 4.3) |
 | MySQL (Game DB) | `GameServer` | 플레이어 진행 세이브 데이터. **가방 조회(`inventory/list`)를 포함한 개인 데이터 읽기에는 캐시를 두지 않는다** — `(user_id, slot)` 인덱스 keyset 질의로 직접 읽는다([인벤토리 기획서](../세부/inventory-item-cube-기획서.md) 6.5). **유일한 캐시 예외는 보스러시 랭킹**이다 — 순위는 "정렬된 전체 집합에서의 위치"라 개인 행 조회로 답할 수 없어 Redis Sorted Set을 파생 인덱스로 둔다 |

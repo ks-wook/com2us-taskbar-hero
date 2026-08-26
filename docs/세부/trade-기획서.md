@@ -402,7 +402,7 @@ SELECT listing_id, seller_user_id, item_code, enhance_level, quantity, price, cr
 
 **하지 말 것(이번에 제거한 구조)** — **완전 집합을 캐시하고 스냅샷을 건당 `GET`으로 읽는 방식.** 커맨드 수가 `O(전체 등록 수)`라서 규모가 커질수록 **DB보다 나빠진다**(10,000건이면 `ZRANGE` 1 + `GET` 10,000 = 10,001커맨드·약 1.6MB vs 페이지 조회 1쿼리·약 3KB). 자료구조를 Hash로 바꿔도 전량을 받아오는 것은 그대로다 — 문제는 자료구조가 아니라 **캐시 단위**였다.
 
-**Redis를 쓰는 곳과의 경계** — GameServer의 Redis 용도는 **인증 토큰 검증**과 **배치 리더 락**(`batch:lock:{배치키}`)뿐이다. 거래소·인벤토리 등 게임 데이터 조회는 전부 MySQL 직접 경로다([인벤토리 기획서](inventory-item-cube-기획서.md) 6.5도 같은 판단).
+**Redis를 쓰는 곳과의 경계** — GameServer의 Redis 용도는 **인증 토큰 검증**과 **보스러시 랭킹 캐시**뿐이다(배치 분산 락은 BatchServer 분리로 없앴다). 거래소·인벤토리 등 게임 데이터 조회는 전부 MySQL 직접 경로다([인벤토리 기획서](inventory-item-cube-기획서.md) 6.5도 같은 판단).
 
 ### 7.4 동시성 — 애플리케이션 락을 두지 않는다
 
@@ -463,9 +463,9 @@ SELECT listing_id, seller_user_id, item_code, enhance_level, quantity, price, cr
 | 1주기 상한 | **최대 1000건**, `listing_id` 오름차순 | 주기(1시간)보다 넉넉히 잡아, 서버가 한동안 내려가 있다 올라왔을 때 밀린 물량을 한 주기에 소화한다. 초과분은 다음 주기로 이월되며 상한 도달은 요약 로그로 확인 |
 | 종료 | `stoppingToken` 취소 시 처리 중인 1건만 마무리하고 루프 종료 | `OperationCanceledException`은 정상 종료로 처리 |
 | 설정 | `appsettings.json`에 `"TradeExpireBatch": { "IntervalSeconds": 3600, "BatchSize": 1000 }` | 설정이 없으면 코드 기본값(동일 수치)으로 동작. 반송 지연 상한을 더 줄이려면 `IntervalSeconds`만 낮춘다(코드 변경 불필요) |
-| 리더 락 | `batch:lock:trade-expire`를 `SET NX`로 잡고 **주기가 끝나면 소유자 확인 후 즉시 해제**(Lua CAS) | TTL은 주기가 아니라 **1주기 실행 시간의 상한**(= min(주기, 5분))이며, 락을 잡은 채 프로세스가 죽었을 때 자동으로 풀리게 하는 안전망이다. 주기와 같게 두면 재기동 시 그 주기만큼 배치가 멈춘다. "주기당 1회"는 락이 아니라 각 인스턴스의 타이머가 페이싱하고, 중복 실행은 조건부 갱신 선점의 멱등성이 흡수한다 |
+| 중복 실행 | 분산 락을 쓰지 않는다 — 이 배치는 **BatchServer 1대**에서만 돌고, 그것을 배포가 보장한다(compose `container_name` 고정) | 발화 시각이 **절대 시각**(매시 정각 기준 1시간 버킷)이라 프로세스를 언제 띄웠든 같은 시각에 돈다. 어떤 이유로 두 번 돌더라도 조건부 갱신 선점이 멱등성을 보장한다 |
 | DI 등록 | `builder.Services.AddHostedService<TradeExpireBatchScheduler>()` | `Program.cs` |
-| 의존성 수명 | 호스티드 서비스는 싱글턴이므로 scoped 리포지토리를 직접 주입받지 않고, **주기마다 `IServiceScopeFactory`로 스코프를 생성**해 `ITradeRepository`를 해석한다 | 리더 락(`batch:lock:trade-expire`)만 Redis를 쓴다 |
+| 의존성 수명 | 호스티드 서비스는 싱글턴이므로 scoped 리포지토리를 직접 주입받지 않고, **발화마다 `IServiceScopeFactory`로 스코프를 생성**해 `ITradeRepository`를 해석한다 | 이 배치는 Redis를 쓰지 않는다 |
 | 시간 기준 | `DateTimeOffset.UtcNow.ToUnixTimeSeconds()` | 거래·메일과 동일한 Unix ts 기준 |
 
 > **공통 골격** — 주기 루프·설정 바인딩·스코프 생성·요약 로깅은 메일 GC 배치([mail 기획서 6.5](mail-기획서.md))도 동일하게 필요하다. 추상 클래스 `PeriodicBatchScheduler`(파생이 `IntervalSeconds`·`BatchSize`·`RunCycleAsync(scope, ct)`만 구현)로 골격을 분리해 두 배치가 재사용한다.
@@ -503,7 +503,7 @@ for listingId in ids:                                  # 등록 1건 = 트랜잭
 |---|---|---|
 | 건별 예외(DB 오류 등) | 해당 건만 롤백하고 **다음 건 계속**(주기 전체를 중단하지 않음) | Error(`listingId` 포함) |
 | 경합 스킵(조건부 갱신 0행 — 그 사이 구매·취소로 닫힘) | 다음 주기로 이월할 것도 없이 그 건만 건너뜀 | 로그 없음(정상 동작) — 요약 카운트에만 포함 |
-| Redis 장애 | 만료 처리 자체는 그대로 진행(캐시·락을 쓰지 않는다). 단 **리더 락을 못 잡으면 그 주기를 건너뛴다** | Warning(주기당 1회로 억제) |
+| Redis 장애 | 만료 처리는 영향을 받지 않는다 — 이 배치는 Redis를 쓰지 않는다(캐시도 락도 없다) | — |
 | 주기 요약 | 대상 0건이면 로그 생략(소음 방지) | Information: `만료 배치: 처리 {Count}건, 스킵 {Skipped}건, 실패 {Failed}건` |
 | 루프 자체의 미처리 예외 | 잡아서 로그 후 **루프 유지**(배치 사망으로 만료가 영구 방치되는 것 방지) | Error |
 
