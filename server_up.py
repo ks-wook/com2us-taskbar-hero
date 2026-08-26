@@ -1,9 +1,9 @@
 #!/usr/bin/env python
-"""도커 없이 서버 2개만 dotnet watch(핫 리로드)로 띄우는 부트스트랩 — 랭킹 캐시 적재까지.
+"""도커 없이 서버 3개(API 2 + 배치 워커 1)를 dotnet watch(핫 리로드)로 띄우는 부트스트랩 — 랭킹 캐시 적재까지.
 
 이 스크립트가 전제하는 것 (server_up_with_docker.py 와 다른 점이 이것뿐이다)
     **MySQL·Redis가 이 PC에서 이미 돌고 있다**(스크립트가 만들어 주지 않는다). 컨테이너는 만들지 않고
-    **AccountServer·GameServer 두 개만** 띄운다 — 의존 서비스는 응답만 확인하고, 없으면 거기서 멈춘다.
+    **AccountServer·GameServer·BatchServer 세 개**를 띄운다 — 의존 서비스는 응답만 확인하고, 없으면 거기서 멈춘다.
     도커를 쓰는 쪽은 `python server_up_with_docker.py`다(컨테이너 5~8개 + 서버까지 전부 컨테이너로).
 
 사용법 (저장소 루트에서 실행한다 — 프로젝트 경로를 이 위치 기준으로 찾는다)
@@ -37,7 +37,7 @@
        접속 자체가 안 되면(계정·비밀번호 불일치) 여기서 멈춘다 — 그대로 띄우면 서버는 뜨고
        모든 요청이 DB 오류로 죽는다. 테이블이 하나도 없으면 무엇을 실행하면 되는지 알려 주고 멈춘다.
     ③ 선(先) 빌드 — 솔루션을 직렬로 한 번 빌드한다(아래 「왜 선빌드가 필요한가」)
-    ④ AccountServer(:5160) · GameServer(:5247)를 각각 `dotnet watch run`으로 **새 콘솔 창**에 띄운다
+    ④ AccountServer(:5160) · GameServer(:5247) · BatchServer(포트 없음)를 각각 `dotnet watch run`으로 **새 콘솔 창**에 띄운다
     ⑤ 두 서버 준비 대기(OpenAPI 문서 응답)
     ⑥ 보스러시 랭킹 캐시 적재(관리 API 1회 호출)
 
@@ -113,9 +113,11 @@ SOLUTION = ROOT / "com2us-taskbar-hero.slnx"
 
 # ── 띄울 서버 ───────────────────────────────────────────────────────────
 #   (프로젝트 폴더, 표시 이름, 호스트 포트). watch는 프로젝트 1개 대상이라 각자 콘솔을 하나 쓴다.
+#   포트가 None이면 HTTP를 열지 않는 프로세스다(BatchServer) — 포트 선점 검사와 헬스 체크에서 빠진다.
 SERVERS = (
     ("AccountServer", "AccountServer", 5160),
     ("GameServer", "GameServer", 5247),
+    ("BatchServer", "BatchServer", None),
 )
 LAUNCH_PROFILE = "http"
 
@@ -135,6 +137,8 @@ MYSQL_SETTINGS = (
     ("AccountServer", ("ConnectionStrings", "AccountDb"), "ConnectionStrings__AccountDb"),
     ("GameServer", ("ConnectionStrings", "GameDb"), "ConnectionStrings__GameDb"),
     ("GameServer", ("ConnectionStrings", "MasterDb"), "ConnectionStrings__MasterDb"),
+    ("BatchServer", ("ConnectionStrings", "GameDb"), "ConnectionStrings__GameDb"),
+    ("BatchServer", ("ConnectionStrings", "MasterDb"), "ConnectionStrings__MasterDb"),
 )
 REDIS_ENV = "Redis__ConnectionString"
 
@@ -150,7 +154,7 @@ DEFAULT_GAME_URL = "http://localhost:5247"
 HEALTH_PATH = "/openapi/v1.json"
 WARMUP_PATH = "/api/admin/boss-rush/rank/warmup"
 
-# 서버가 돌려주는 워밍업 결과 상태값(GameServer/Constants.cs 의 RankWarmupStatus 와 같은 문자열).
+# 서버가 돌려주는 워밍업 결과 상태값(GameServer.Core/Constants.cs 의 RankWarmupStatus 와 같은 문자열).
 WARMUP_CACHE_UNAVAILABLE = "cache-unavailable"
 WARMUP_NO_SEASON = "no-season"
 
@@ -528,12 +532,12 @@ def check_dependencies(args: argparse.Namespace) -> bool:
 
 def check_server_ports() -> bool:
     """서버 포트(5160·5247)가 비어 있는지 확인한다 — 컨테이너 서버와 동시에 띄울 수 없다."""
-    busy = [f"{port}({label})" for _, label, port in SERVERS if port_taken(port)]
+    busy = [f"{port}({label})" for _, label, port in SERVERS if port and port_taken(port)]
     if not busy:
         return True
 
     say(f"이미 사용 중인 포트: {', '.join(busy)}", "err")
-    say("컨테이너 서버가 떠 있다면 먼저 내리세요:  docker compose stop accountserver gameserver", "warn")
+    say("컨테이너 서버가 떠 있다면 먼저 내리세요:  docker compose stop accountserver gameserver batchserver", "warn")
     say("콘솔로 띄운 서버가 남아 있으면:  python server_up.py --stop", "warn")
     return False
 
@@ -877,7 +881,7 @@ def stop_servers() -> int:
     """
     이 방식으로 띄운 서버를 종료한다 — **앱 프로세스와 watch/run 래퍼를 모두** 잡는다.
 
-    래퍼(dotnet.exe)가 살아 있으면 자식(GameServer.exe·AccountServer.exe)을 다시 띄워, 종료했다고
+    래퍼(dotnet.exe)가 살아 있으면 자식(GameServer.exe·AccountServer.exe·BatchServer.exe)을 다시 띄워, 종료했다고
     본 직후에 서버가 되살아난다. 그래서 둘을 함께 끊고 남은 수를 다시 센다.
     """
     if os.name != "nt":
@@ -885,15 +889,15 @@ def stop_servers() -> int:
         return 1
 
     script = (
-        "$names = 'GameServer','AccountServer';"
+        "$names = 'GameServer','AccountServer','BatchServer';"
         "Get-Process -Name $names -ErrorAction SilentlyContinue | Stop-Process -Force;"
         "Get-CimInstance Win32_Process -Filter \"Name='dotnet.exe'\" |"
-        "  Where-Object { $_.CommandLine -match 'GameServer|AccountServer' } |"
+        "  Where-Object { $_.CommandLine -match 'GameServer|AccountServer|BatchServer' } |"
         "  ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force } catch {} };"
         "Start-Sleep -Milliseconds 500;"
         "$app = @(Get-Process -Name $names -ErrorAction SilentlyContinue).Count;"
         "$wrap = @(Get-CimInstance Win32_Process -Filter \"Name='dotnet.exe'\" |"
-        "  Where-Object { $_.CommandLine -match 'GameServer|AccountServer' }).Count;"
+        "  Where-Object { $_.CommandLine -match 'GameServer|AccountServer|BatchServer' }).Count;"
         "Write-Output \"$app $wrap\""
     )
     result = subprocess.run(["powershell", "-NoProfile", "-Command", script],
@@ -914,7 +918,7 @@ def parse_args() -> argparse.Namespace:
     """명령행 인자를 읽는다(기본: 선빌드 + 두 서버 watch 기동 + 랭킹 캐시 적재)."""
     parser = argparse.ArgumentParser(
         prog="server_up.py",
-        description="도커 없이 서버 2개만 dotnet watch로 띄운다(로컬 MySQL·Redis 전제) + 랭킹 캐시 적재.",
+        description="도커 없이 서버 3개(API 2 + 배치 워커 1)를 dotnet watch로 띄운다(로컬 MySQL·Redis 전제) + 랭킹 캐시 적재.",
     )
     parser.add_argument("--mysql-host", default=None, help=f"로컬 MySQL 호스트(생략하면 물어본다. 기본 {DEFAULT_MYSQL_HOST})")
     parser.add_argument("--mysql-port", type=int, default=None, help=f"로컬 MySQL 포트(생략하면 물어본다. 기본 {DEFAULT_MYSQL_PORT})")
@@ -1017,7 +1021,7 @@ def main() -> int:
     # ── 준비 대기 ──
     print()
     say("준비 상태 확인 중(첫 기동은 빌드 때문에 시간이 걸립니다)...", "dim")
-    pending = [label for _, label, port in SERVERS if not wait_health(label, port, args.timeout)]
+    pending = [label for _, label, port in SERVERS if port and not wait_health(label, port, args.timeout)]
     if pending:
         print()
         say(f"아직 준비되지 않은 서버: {', '.join(pending)}", "warn")

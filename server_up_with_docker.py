@@ -9,7 +9,7 @@
 
 사용법 (저장소 루트에서 실행한다 — docker compose가 이 위치를 기준으로 돈다)
     python server_up_with_docker.py               # **아무것도 묻지 않는다** — 서버 이미지 재빌드 + 게임 필수
-                                                  #   4개(accountserver · gameserver · mysql · redis) 기동
+                                                  #   5개(accountserver · gameserver · batchserver · mysql · redis) 기동
                                                   #   + 보스러시 랭킹 캐시 적재
     python server_up_with_docker.py --mode full   # 로그 파이프라인(fluentd·logdb·Grafana)까지 전부
     python server_up_with_docker.py -i            # 무엇을 띄울지·재빌드할지 메뉴로 고른다
@@ -19,7 +19,7 @@
     -i 로 물을 때도 옵션으로 명시한 항목은 묻지 않는다.
 
 띄우는 것 — 둘 중 하나다(대화형 메뉴의 1번·2번이 각각 이것이다)
-    dev (기본)  mysql · redis · accountserver · gameserver
+    dev (기본)  mysql · redis · accountserver · gameserver · batchserver
                 게임이 도는 최소 구성. GameServer는 이벤트 로그를 파일로 계속 쓰고, 그 파일을
                 걷어 적재·조회하는 쪽(fluentd·logdb·Grafana)만 빠진다.
     full        dev + timescaledb(logdb) · fluentd · grafana
@@ -107,22 +107,23 @@ ROOT = Path(__file__).resolve().parent
 #          GF_SERVER_ROOT_URL 기본값이 작성자의 테일스케일 주소라 저장소 루트 .env에 두 줄이 필요하다:
 #            GRAFANA_ROOT_URL=http://localhost:3000/
 #            GRAFANA_DOMAIN=localhost
-GROUP_DEV = ["mysql", "redis", "accountserver", "gameserver"]
+GROUP_DEV = ["mysql", "redis", "accountserver", "gameserver", "batchserver"]
 GROUPS = {
     "dev": GROUP_DEV,
-    "full": ["mysql", "redis", "timescaledb", "fluentd", "grafana"] + ["accountserver", "gameserver"],
+    "full": ["mysql", "redis", "timescaledb", "fluentd", "grafana"] + ["accountserver", "gameserver", "batchserver"],
 }
 DEFAULT_MODE = "dev"
 
 # 대화형 메뉴 — (번호, 모드, 이름, 포함되는 것). 사용자가 보는 문구는 이 표가 정본이다.
 MODE_MENU = (
-    ("1", "dev", "게임 서버 필수만", "MySQL · Redis · AccountServer · GameServer"),
+    ("1", "dev", "게임 서버 필수만", "MySQL · Redis · AccountServer · GameServer · BatchServer"),
     ("2", "full", "로그까지 전부", "1번 + logdb(TimescaleDB) · fluentd · Grafana"),
 )
 DEFAULT_MODE_KEY = next(key for key, mode, _, _ in MODE_MENU if mode == DEFAULT_MODE)
 
-# 헬스체크가 없는 서비스(= "running"이면 준비된 것으로 본다).
-NO_HEALTHCHECK = {"fluentd"}
+# 헬스체크가 없는 서비스(= "running"이면 준비된 것으로 본다). batchserver는 HTTP를 열지 않아
+# 걸 엔드포인트가 없으므로 여기 든다 — 실제 동작은 콘솔 로그(docker compose logs -f batchserver)로 본다.
+NO_HEALTHCHECK = {"fluentd", "batchserver"}
 
 # 컨테이너가 호스트 포트를 점유하는 서비스. 다른 PC에는 로컬 MySQL·Redis·Postgres가 이미 깔려
 # 있을 수 있어, compose의 bind 실패보다 **먼저** 무엇이 겹쳤는지 알려 준다(서버 포트는 콘솔 실행과의
@@ -137,9 +138,9 @@ SERVICE_PORTS = {
     "gameserver": 5247,
 }
 
-# 소스를 COPY해 굽는 이미지(= 두 서버). 포트 충돌 안내를 "콘솔 서버와의 충돌"과 "그 PC의 다른
-# 프로그램"으로 가르는 기준으로도 쓴다.
-SOURCE_BUILT = ("accountserver", "gameserver")
+# 소스를 COPY해 굽는 이미지(= 세 서버). 포트 충돌 안내를 "콘솔 서버와의 충돌"과 "그 PC의 다른
+# 프로그램"으로 가르는 기준으로도 쓴다. batchserver는 호스트 포트를 쓰지 않아 SERVICE_PORTS에는 없다.
+SOURCE_BUILT = ("accountserver", "gameserver", "batchserver")
 
 # 스키마 확인용 접속 정보(docker-compose.yml의 mysql 서비스와 같은 값. 로컬 개발용 고정 계정이다).
 MYSQL_ROOT_PASSWORD = "taskbar_hero_dev"
@@ -149,7 +150,7 @@ DEFAULT_GAME_URL = "http://localhost:5247"
 GAME_HEALTH_PATH = "/openapi/v1.json"
 WARMUP_PATH = "/api/admin/boss-rush/rank/warmup"
 
-# 서버가 돌려주는 워밍업 결과 상태값(GameServer/Constants.cs 의 RankWarmupStatus 와 같은 문자열).
+# 서버가 돌려주는 워밍업 결과 상태값(GameServer.Core/Constants.cs 의 RankWarmupStatus 와 같은 문자열).
 WARMUP_CACHE_UNAVAILABLE = "cache-unavailable"
 WARMUP_NO_SEASON = "no-season"
 
@@ -667,6 +668,7 @@ def print_summary(services: list[str], state: dict[str, str], pending: list[str]
         ("grafana", "Grafana      : http://localhost:3000"),
         ("accountserver", "AccountServer: http://localhost:5160/swagger"),
         ("gameserver", "GameServer   : http://localhost:5247/swagger"),
+        ("batchserver", "BatchServer  : 포트 없음 — docker compose logs -f batchserver 로 확인"),
     ]
     for service, line in addresses:
         if service in services:
@@ -785,7 +787,7 @@ def main() -> int:
     print()
     say("코드를 고치면 이 스크립트를 다시 실행하세요(이미지 재빌드 후 재기동).", "dim")
     if "fluentd" in services:
-        say("이벤트 로그는 GameServer/logs/event 에 쌓이고 fluentd가 logdb로 옮깁니다.", "dim")
+        say("이벤트 로그는 GameServer/logs/event 에 쌓이고(GameServer·BatchServer 공용) fluentd가 logdb로 옮깁니다.", "dim")
 
     return 1 if pending else 0
 

@@ -21,9 +21,9 @@ public sealed class OnlineUserHistoryBatchScheduler : PeriodicBatchScheduler
 
     /// <summary>설정에서 실행 주기·활동 창을 읽는다(없거나 0 이하이면 기본값).</summary>
     public OnlineUserHistoryBatchScheduler(
-        IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
+        IServiceScopeFactory scopeFactory, IConfiguration configuration,
         ILogger<OnlineUserHistoryBatchScheduler> logger, IEventLogger eventLogger)
-        : base(scopeFactory, batchLock, logger, eventLogger)
+        : base(scopeFactory, logger, eventLogger)
     {
         var interval = configuration.GetValue(
             "OnlineUserHistoryBatch:IntervalSeconds", Constants.Batch.OnlineUserHistory.DefaultIntervalSeconds);
@@ -39,6 +39,12 @@ public sealed class OnlineUserHistoryBatchScheduler : PeriodicBatchScheduler
     protected override string BatchName => "동시 접속 히스토리 배치";
 
     protected override string BatchKey => "history-online-user";
+
+    /// <summary>
+    /// 기동 시 현재 버킷을 <b>따라잡지 않는다</b> — 이 배치는 발화 1회가 곧 동접 그래프의 점 하나라,
+    /// 재기동할 때마다 같은 5분 구간에 점이 하나 더 찍히면 추이가 부풀려진다. 다음 경계(:00·:05·:10…)부터 시작한다.
+    /// </summary>
+    protected override bool CatchUpOnStart => false;
 
     /// <summary>
     /// 1주기 작업: 활동 창(기본 10분) 안에 하트비트를 보낸 계정 수를 세어 <c>history.online_user</c> 1행을 낸다.

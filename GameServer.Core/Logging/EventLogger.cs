@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using ZLogger;
@@ -31,13 +31,13 @@ public sealed class EventLogger : IEventLogger
     /// </summary>
 
     private readonly ILogger _logger;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IRequestIdAccessor _requestId;
 
-    /// <summary>전용 카테고리 로거를 만들고, req_id를 찾기 위한 HttpContext 접근자를 주입받는다.</summary>
-    public EventLogger(ILoggerFactory loggerFactory, IHttpContextAccessor httpContextAccessor)
+    /// <summary>전용 카테고리 로거를 만들고, req_id 공급자를 주입받는다.</summary>
+    public EventLogger(ILoggerFactory loggerFactory, IRequestIdAccessor requestId)
     {
         _logger = loggerFactory.CreateLogger(Constants.EventLog.Category);
-        _httpContextAccessor = httpContextAccessor;
+        _requestId = requestId;
     }
 
     /// <summary>
@@ -59,7 +59,7 @@ public sealed class EventLogger : IEventLogger
             line["uid"] = uid.Value;
         }
 
-        var requestId = _httpContextAccessor.HttpContext?.TraceIdentifier;
+        var requestId = _requestId.Current;
         if (!string.IsNullOrEmpty(requestId))
         {
             line["req_id"] = requestId;

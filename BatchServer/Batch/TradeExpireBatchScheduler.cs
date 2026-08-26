@@ -1,7 +1,6 @@
 ﻿using GameServer.MasterData;
 using GameServer.Repositories.GameDb;
 using GameServer.Repositories.GameDb.Interfaces;
-using GameServer.Services;
 using ZLogger;
 using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories.MasterDb;
@@ -35,9 +34,9 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
 
     /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터와 이벤트 로거를 주입받는다.</summary>
     public TradeExpireBatchScheduler(
-        IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
+        IServiceScopeFactory scopeFactory, IConfiguration configuration,
         MasterDbProvider masterData, ILogger<TradeExpireBatchScheduler> logger, IEventLogger eventLogger)
-        : base(scopeFactory, batchLock, logger, eventLogger)
+        : base(scopeFactory, logger, eventLogger)
     {
         _eventLogger = eventLogger;
         var interval = configuration.GetValue(

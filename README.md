@@ -34,7 +34,7 @@ python server_up_with_docker.py
 
 **필요한 것**: .NET SDK 10 · Python 3.7+ · **이미 실행 중인 MySQL·Redis**
 
-**MySQL·Redis가 이 PC에서 설치되어 실행 중일 때** 쓴다. 컨테이너는 만들지 않고 **AccountServer·GameServer 두 개만** `dotnet watch run`으로 각각 **새 콘솔 창**에 띄운다.
+**MySQL·Redis가 이 PC에서 설치되어 실행 중일 때** 쓴다. 컨테이너는 만들지 않고 **AccountServer·GameServer·BatchServer 세 개**를 `dotnet watch run`으로 각각 **새 콘솔 창**에 띄운다.
 
 ```powershell
 python server_up.py
@@ -51,7 +51,7 @@ python server_up.py
 <br/> 이후 아래의 작업들이 순차적으로 진행되며, **서버 실행전에 Mysql과 redis는 이미 실행 중 이어야 한다.**
 * 사전 점검(dotnet SDK · MySQL·Redis 응답 · 포트 5160/5247 선점)
 * 스키마 적용·확인 
-* 두 서버(GameServer, AccountServer) watch 기동
+* 세 서버(GameServer, AccountServer, BatchServer) watch 기동
 * 보스러시 랭킹 캐시 적재 순으로 진행한다.
 
 접속 정보의 정본은 각 서버의 `appsettings.json`이며, 스크립트는 **호스트·포트(그리고 준 경우 계정·비밀번호)만 갈아 끼워 환경 변수로 덮어쓴다** — 설정 파일은 고치지 않는다.
@@ -91,6 +91,8 @@ python server_up.py
 
 - **AccountServer** — 계정/인증 서비스 (`http://localhost:5160`)
 - **GameServer** — 게임 로직 서비스 (`http://localhost:5247`)
+- **BatchServer** — 주기 배치 전담 워커(HTTP 없음). 게임 API를 여러 대로 늘려도 배치는 이 프로세스 1대만 돈다
+- **GameServer.Core** — GameServer·BatchServer가 공유하는 서버 전용 코어(데이터 접근·모델·마스터 데이터·로깅·상수)
 - **TaskbarHero.Common** — 서버-클라 공유 라이브러리
 
 전체 개발 로드맵은 [docs/서버-개발-계획.md](docs/서버-개발-계획.md)를 정본으로 한다. 아래 현황판은 서버/클라 작업 진척을 추적하기 위한 체크리스트다.

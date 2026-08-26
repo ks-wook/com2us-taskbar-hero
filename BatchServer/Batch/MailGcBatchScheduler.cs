@@ -23,9 +23,9 @@ public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
 
     /// <summary>설정에서 실행 주기·1회 처리 상한을 읽는다(없거나 0 이하이면 기본값).</summary>
     public MailGcBatchScheduler(
-        IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
+        IServiceScopeFactory scopeFactory, IConfiguration configuration,
         ILogger<MailGcBatchScheduler> logger, IEventLogger eventLogger)
-        : base(scopeFactory, batchLock, logger, eventLogger)
+        : base(scopeFactory, logger, eventLogger)
     {
         var interval = configuration.GetValue("MailGcBatch:IntervalSeconds", Constants.Batch.MailGc.DefaultIntervalSeconds);
         var batchSize = configuration.GetValue("MailGcBatch:BatchSize", Constants.Batch.MailGc.DefaultBatchSize);

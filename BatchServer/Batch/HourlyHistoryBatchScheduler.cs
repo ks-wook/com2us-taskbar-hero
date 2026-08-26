@@ -22,9 +22,9 @@ public sealed class HourlyHistoryBatchScheduler : PeriodicBatchScheduler
 
     /// <summary>설정에서 실행 주기를 읽는다(없거나 0 이하이면 기본값 1시간).</summary>
     public HourlyHistoryBatchScheduler(
-        IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
+        IServiceScopeFactory scopeFactory, IConfiguration configuration,
         ILogger<HourlyHistoryBatchScheduler> logger, IEventLogger eventLogger)
-        : base(scopeFactory, batchLock, logger, eventLogger)
+        : base(scopeFactory, logger, eventLogger)
     {
         var interval = configuration.GetValue(
             "HourlyHistoryBatch:IntervalSeconds", Constants.Batch.HourlyHistory.DefaultIntervalSeconds);
@@ -38,6 +38,12 @@ public sealed class HourlyHistoryBatchScheduler : PeriodicBatchScheduler
     protected override string BatchName => "시간 단위 히스토리 배치";
 
     protected override string BatchKey => "history-hourly";
+
+    /// <summary>
+    /// 기동 시 현재 버킷을 <b>따라잡지 않는다</b> — 재화 유통·호가는 발화 1회가 곧 시계열의 점 하나라,
+    /// 재기동할 때마다 같은 시간대에 점이 하나 더 찍히면 추이가 부풀려진다. 다음 정시부터 시작한다.
+    /// </summary>
+    protected override bool CatchUpOnStart => false;
 
     /// <summary>
     /// 1주기 작업: 재화 종류별 유통 스냅샷과 판매중 아이템별 호가 스냅샷을 세어 각각 1행씩 방출한다.

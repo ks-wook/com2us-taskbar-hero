@@ -27,9 +27,9 @@ public sealed class DailyHistoryBatchScheduler : PeriodicBatchScheduler
 
     /// <summary>설정에서 실행 주기(재시도 간격)·실행 시각(KST 시)을 읽는다(없거나 범위 밖이면 기본값).</summary>
     public DailyHistoryBatchScheduler(
-        IServiceScopeFactory scopeFactory, IBatchLock batchLock, IConfiguration configuration,
+        IServiceScopeFactory scopeFactory, IConfiguration configuration,
         ILogger<DailyHistoryBatchScheduler> logger, IEventLogger eventLogger)
-        : base(scopeFactory, batchLock, logger, eventLogger)
+        : base(scopeFactory, logger, eventLogger)
     {
         var interval = configuration.GetValue(
             "DailyHistoryBatch:IntervalSeconds", Constants.Batch.DailyHistory.DefaultIntervalSeconds);

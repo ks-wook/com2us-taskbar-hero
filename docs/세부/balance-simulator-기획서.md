@@ -50,7 +50,7 @@
 
 ### 2.3 난수가 `Random.Shared` 직접 호출이라 재현이 불가능하다
 
-`GameServer/Repositories/MasterDb/MasterDbProvider.cs`의 5개 지점(`:281`, `:364`, `:396`, `:403`, `:416`)이 `Random.Shared`를 직접 부른다. 시드를 주입할 수 없으므로:
+`GameServer.Core/Repositories/MasterDb/MasterDbProvider.cs`의 5개 지점(`:281`, `:364`, `:396`, `:403`, `:416`)이 `Random.Shared`를 직접 부른다. 시드를 주입할 수 없으므로:
 
 - **드랍·가챠 결과를 재현할 수 없다** → 같은 조건으로 두 번 돌려도 결과가 다르다.
 - **확률 자체를 테스트할 수 없다** → "가챠 천장이 정말 지정 횟수에 터지는가"를 검증할 방법이 없다.
@@ -115,7 +115,7 @@
 추출이 가능하려면 계산이 인프라와 분리돼야 하는데, 서버·클라이언트 양쪽 모두 분리돼 있지 않다. 서버는 DB 트랜잭션에 묶여 있고:
 
 ```csharp
-// GameServer/Repositories/GameDb/StageRepository.cs:172 — 레벨업 계산을 델리게이트로 넘긴다
+// GameServer.Core/Repositories/GameDb/StageRepository.cs:172 — 레벨업 계산을 델리게이트로 넘긴다
 public async Task<ClearOutcome> ApplyClearAsync(
     long userId, int expectedAct, int expectedDifficulty, int expectedStage,
     long baseGold, long baseExp, DroppedItem? dropped,
@@ -456,8 +456,8 @@ public interface IRandomSource
 | 목표 클리어 시간(30~50초 · 보스 60초)과 지역별 기준 파티 | [master-data-값.md §9.1](master-data/master-data-값.md) |
 | 전투 수식·DPS 기준 | [master-data-값.md:714~748](master-data/master-data-값.md) · `master-data-schema.sql:751~764` |
 | `ApplyExp` 중복 | `GameServer/Services/StageService.cs:173` · `GameServer/Services/OfflineService.cs:131` |
-| `Random.Shared` 직접 호출 | `GameServer/Repositories/MasterDb/MasterDbProvider.cs:281,364,396,403,416` |
-| 델리게이트 우회 | `GameServer/Repositories/GameDb/StageRepository.cs:172` |
+| `Random.Shared` 직접 호출 | `GameServer.Core/Repositories/MasterDb/MasterDbProvider.cs:281,364,396,403,416` |
+| 델리게이트 우회 | `GameServer.Core/Repositories/GameDb/StageRepository.cs:172` |
 | 서버 전투 계산 부재 | `GameServer/Services`·`Repositories` 전역 (데미지 계산 0건) |
 | 클라이언트 전투 루프·피해 산출 | `Assets/Scripts/Battle/BattleDevController.cs` (2,070줄) |
 | 방어 경감식 `MitigatedDamage` · 근거 | `Assets/Scripts/Battle/BattleDevController.cs:1622` |

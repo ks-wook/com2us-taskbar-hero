@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <!--
+    주기 배치 전담 워커. HTTP를 받지 않으므로 Web SDK가 아니라 Worker SDK를 쓴다.
+
+    **인스턴스는 1대로 고정한다**(docker-compose는 container_name 고정, 오케스트레이터라면 replicas: 1).
+    배치를 GameServer에서 떼어낸 이유가 그것이다 — 게임 API를 N대로 늘려도 배치는 늘어나지 않는다.
+    다만 "정확히 1대"의 책임이 코드에서 배포로 넘어가므로, 실수로 2대가 뜬 경우를 대비해
+    Redis 발화 락(IBatchLock)은 그대로 남겨 둔다(비용이 사실상 없는 이중 방어).
+
+    데이터 접근·모델·마스터 데이터·로깅·상수는 GameServer.Core를 GameServer와 공유한다.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!--
+      네임스페이스는 GameServer.Core와 마찬가지로 `GameServer.*`를 쓴다(배치 클래스는 `GameServer.Batch`).
+      게임 서버 코드베이스 전체를 한 네임스페이스 트리에 두어, 파일이 어느 프로젝트에 있든 using이 같게 한다.
+    -->
+    <RootNamespace>GameServer</RootNamespace>
+    <AssemblyName>BatchServer</AssemblyName>
+    <UserSecretsId>batchserver-taskbar-hero</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="ZLogger" Version="2.5.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GameServer.Core\GameServer.Core.csproj" />
+  </ItemGroup>
+
+</Project>

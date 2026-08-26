@@ -15,10 +15,10 @@
 | [**큐브**](#큐브) (합성 / 분해=연금술 / 제작) | GameCubeController | Game | `POST /api/game/cube/combine` · `dismantle` · `craft` |
 | [**가챠**](#가챠뽑기) (배너 조회 / 뽑기 1연·10연 / 뽑기 기록 조회) | GameGachaController | Game | `POST /api/game/gacha/banners` · `pull` · `history` |
 | [**성장**](#성장스킬룬) (스킬 레벨업·초기화·장착 / 룬 업그레이드) | GameGrowthController | Game | `POST /api/game/growth/skill/levelup` · `skill/reset` · `skill/equip` · `rune/upgrade` |
-| [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchScheduler(배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
-| [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchScheduler(배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
+| [**거래소/교역선**](#거래소교역선) (목록 조회=본인 제외·mine 옵션 / 판매 등록=에스크로 / 구매 / 취소(status 3) / 만료 배치(status 4)) | GameTradeController · TradeExpireBatchScheduler(BatchServer 배치) | Game | `POST /api/game/trade/list` · `register` · `buy` · `cancel` |
+| [**메일**](#메일) (우편함 조회 / 첨부 수령 / 일괄 수령 / 보관 GC 배치) | GameMailController · MailGcBatchScheduler(BatchServer 배치) | Game | `POST /api/game/mail/list` · `claim` · `claim-all` |
 | [**출석부 보상**](#출석부-보상) (이번달 진행도 조회 / 오늘자 보상 획득→메일 발급, 일차 = 누적 출석 순번 1~30) | GameAttendanceController | Game | `POST /api/game/attendance/status` · `claim` |
-| [**보스러시/랭킹**](#보스러시랭킹) (정보 조회 / 도전 시작 / 클리어 보고=클라 측정 시간 기록 / 랭킹 목록 / 내 순위 / 랭킹 캐시 적재=관리 API / 시즌 정산 배치) | GameBossRushController · AdminBossRushController · BossRushSeasonBatchScheduler(배치) | Game | `POST /api/game/boss-rush/info` · `enter` · `clear` · `rank` · `my-rank` · `POST /api/admin/boss-rush/rank/warmup` |
+| [**보스러시/랭킹**](#보스러시랭킹) (정보 조회 / 도전 시작 / 클리어 보고=클라 측정 시간 기록 / 랭킹 목록 / 내 순위 / 랭킹 캐시 적재=관리 API / 시즌 정산 배치) | GameBossRushController · AdminBossRushController · BossRushSeasonBatchScheduler(BatchServer 배치) | Game | `POST /api/game/boss-rush/info` · `enter` · `clear` · `rank` · `my-rank` · `POST /api/admin/boss-rush/rank/warmup` |
 
 > **가방 변경분 공통 규약(`inventoryDelta`)** — 가방을 바꾸는 액션(`cube/*`·`gacha/pull`·`consumable/use`·`mail/claim`·`mail/claim-all`·`stage/clear`·`trade/register`·`trade/cancel`)은 변경분을 응답에 담는다. 클라이언트는 응답만으로 가방을 갱신하며 **액션 뒤에 `/load`·`/inventory/list`를 재조회하지 않는다**([인벤토리/아이템/큐브 기획서](../docs/세부/inventory-item-cube-기획서.md) 5.0).
 >
@@ -46,6 +46,7 @@
 | `클라이언트` | Unity 클라이언트(actor) |
 | `AccountServer` | 계정/인증 서버 프로세스(컨트롤러·서비스·리포지토리·토큰 캐시 포함) |
 | `GameServer` | 게임 로직 서버 프로세스(컨트롤러·서비스·리포지토리 포함) |
+| `BatchServer` | 주기 배치 전담 워커 프로세스(HTTP 없음). 배치 다이어그램의 서버 참여자는 이쪽이다 |
 | `MySQL(account)` / `MySQL(game)` | 각 서버가 쓰는 MySQL 스키마 |
 | `Redis` | 인증 토큰 캐시(`auth:token:{userId}`) |
 
@@ -1024,14 +1025,14 @@ sequenceDiagram
 
 ### 거래소 만료 배치 — TradeExpireBatchScheduler (엔드포인트 없음)
 
-등록 후 3일이 지난 판매중 등록을 `status=4`(만료)로 닫고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchScheduler`)로, 기동 직후 1회 + **1시간 주기**(설정 `TradeExpireBatch`)로 실행되고 1회 최대 1000건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:trade-expire`)을 획득한 인스턴스만 실행한다.
+등록 후 3일이 지난 판매중 등록을 `status=4`(만료)로 닫고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). **BatchServer 프로세스**의 `BackgroundService`(공통 골격 `PeriodicBatchScheduler`)로, 기동 직후 1회 + **1시간 주기**(설정 `TradeExpireBatch`)로 실행되고 1회 최대 1000건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:trade-expire`)을 획득한 인스턴스만 실행한다.
 
 **이 배치는 만료를 판정하지 않는다.** 목록 조회·구매·등록 한도가 `expires_at > now`를 직접 검사해 만료를 즉시 반영하므로, 배치의 역할은 **에스크로 아이템 반송과 `status` 정리**뿐이고 주기가 판매 기간(3일)의 정확도에 영향을 주지 않는다. 주기가 결정하는 것은 판매자가 아이템을 되돌려받기까지의 **지연 상한**이며, 3일을 기다린 판매자를 더 기다리게 하지 않도록 **1시간**으로 잡았다(대상 조회가 `idx_trade_expire` 커버링이라 빈 주기 비용이 사실상 없다).
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant S as GameServer
+    participant S as BatchServer
     participant R as Redis
     participant DB as MySQL(game)
 
@@ -1332,12 +1333,12 @@ sequenceDiagram
 
 ### 메일 보관 GC 배치 — MailGcBatchScheduler (엔드포인트 없음)
 
-발급(수신) 후 7일이 지난 메일을 열람·수령 여부와 무관하게 삭제한다(mail 기획서 6.5). GameServer 프로세스 내 `BackgroundService`(공통 골격 `PeriodicBatchScheduler`)로, 기동 직후 1회 + 1시간 주기(설정 `MailGcBatch`)로 실행되고 1회 최대 500건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:mail-gc`)을 먼저 획득한 인스턴스만 실행해 scale-out 시 중복 실행을 방지한다.
+발급(수신) 후 7일이 지난 메일을 열람·수령 여부와 무관하게 삭제한다(mail 기획서 6.5). **BatchServer 프로세스**의 `BackgroundService`(공통 골격 `PeriodicBatchScheduler`)로, 기동 직후 1회 + 1시간 주기(설정 `MailGcBatch`)로 실행되고 1회 최대 500건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:mail-gc`)을 먼저 획득한 인스턴스만 실행한다 — BatchServer는 1대로 뜨므로 정상 운영에서는 늘 획득하며, 이 락은 실수로 2대가 뜬 경우를 위한 이중 방어다.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant S as GameServer
+    participant S as BatchServer
     participant R as Redis
     participant DB as MySQL(game)
 
@@ -1594,7 +1595,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant S as GameServer
+    participant S as BatchServer
     participant R as Redis
     participant DB as MySQL(game)
 

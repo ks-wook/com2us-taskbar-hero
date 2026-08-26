@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    게임 서버들이 공유하는 코어 라이브러리 — GameServer(웹 API)와 BatchServer(주기 배치 워커)가 함께 쓴다.
+    담는 것: 데이터 접근(Repositories: GameDb·MasterDb·MemoryDb) · 도메인 모델(Models) ·
+             마스터 데이터 적재/조회(MasterData) · 이벤트 로깅(Logging) · 공용 유틸(Util) ·
+             상수(Constants.cs) · 열거형(Enums.cs).
+    담지 않는 것: Controllers · Services · Middleware · Auth — 웹 API 고유 계층이라 GameServer에 남는다.
+
+    **TaskbarHero.Common과 혼동하지 말 것.** 그쪽은 Unity 클라이언트가 로컬 UPM 패키지로 소스를 직접
+    컴파일하는 공유 라이브러리라 netstandard2.0·LangVersion 9·의존성 0을 지켜야 한다. 이 프로젝트는
+    **서버 전용**이며 net10.0에 DB·Redis 의존성을 그대로 갖는다.
+
+    네임스페이스는 이전한 뒤에도 GameServer.* 를 그대로 쓴다 — 어셈블리 이름과 네임스페이스는 무관하므로,
+    이렇게 두면 Controllers·Services의 using을 한 줄도 고치지 않아도 된다.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>GameServer</RootNamespace>
+    <AssemblyName>GameServer.Core</AssemblyName>
+  </PropertyGroup>
+
+  <!--
+    Web SDK가 암묵적으로 넣어 주던 using을 여기서 명시한다. 이 프로젝트는 일반 클래스 라이브러리라
+    기본 implicit usings에 Microsoft.Extensions.* 가 없는데, 이전한 파일들은 그 전제로 쓰여 있다.
+    파일마다 using을 추가하는 대신 여기서 한 번에 선언해 **이전한 소스를 한 줄도 고치지 않는다**.
+  -->
+  <ItemGroup>
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CloudStructures" Version="3.4.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageReference Include="MySqlConnector" Version="2.6.1" />
+    <PackageReference Include="SqlKata" Version="4.0.1" />
+    <PackageReference Include="SqlKata.Execution" Version="4.0.1" />
+    <PackageReference Include="ZLogger" Version="2.5.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TaskbarHero.Common\TaskbarHero.Common.csproj" />
+  </ItemGroup>
+
+</Project>

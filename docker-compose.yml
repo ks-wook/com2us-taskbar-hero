@@ -307,6 +307,42 @@ services:
       retries: 5
       start_period: 20s
 
+  # 주기 배치 전담 워커. HTTP를 받지 않으며(포트 없음), 게임 DB·마스터 DB·Redis만 쓴다.
+  #
+  #   **반드시 1대만 띄운다.** 게임 API(gameserver)는 scale-out으로 늘려도 배치는 늘리지 않는 것이
+  #   프로세스를 나눈 목적이다 — container_name을 고정해 `--scale batchserver=N`이 거부되게 한다.
+  #   오케스트레이터로 옮길 때는 replicas: 1 + 롤링 중 겹침 방지(strategy: Recreate)를 지정한다.
+  #
+  #   무거운 일 단위 집계(player_item·player_character·player_skill 전체 GROUP BY)가 여기서 도므로,
+  #   그 부하가 gameserver의 커넥션 풀·스레드풀과 경합하지 않는다.
+  batchserver:
+    build:
+      context: .
+      dockerfile: BatchServer/Dockerfile
+    image: taskbar-hero-batchserver
+    container_name: taskbar-hero-batchserver
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Seoul
+      # Worker 호스트라 ASPNETCORE_ENVIRONMENT가 아니라 DOTNET_ENVIRONMENT를 읽는다.
+      DOTNET_ENVIRONMENT: Development
+      # 게임 DB + 마스터 DB(기동 시 인메모리로 적재) 두 개를 쓴다.
+      ConnectionStrings__GameDb: "Server=mysql;Port=3306;Database=taskbar_hero_game;Uid=root;Pwd=taskbar_hero_dev;"
+      ConnectionStrings__MasterDb: "Server=mysql;Port=3306;Database=taskbar_hero_master;Uid=root;Pwd=taskbar_hero_dev;"
+      # 배치 리더 락(batch:lock:{배치키}) + 보스러시 랭킹 캐시.
+      Redis__ConnectionString: "redis:6379"
+    volumes:
+      # **gameserver와 같은 호스트 디렉터리**에 이벤트 로그를 쓴다 — fluentd가 그 폴더 하나만
+      # in_tail 하므로, 어느 프로세스가 냈든 같은 파이프라인으로 흘러가야 한다.
+      # 파일명은 event-batch-*.json 이라 gameserver의 event-*.json과 겹치지 않는다.
+      - ./GameServer/logs/event:/app/logs/event
+    depends_on:
+      # 마스터 데이터를 기동 시 1회 적재하므로 MySQL이 healthy(= 스키마 생성 완료)여야 한다.
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   taskbar-hero-mysql-data:
   taskbar-hero-redis-data:
