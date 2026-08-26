@@ -12,7 +12,7 @@ namespace GameServer.Batch;
 /// <para><b>둘을 한 배치로 묶는 이유</b>는 주기가 같기 때문만이 아니다 — 유통 총량과 시세는 함께 읽어야
 /// 뜻이 생기는 짝이다(총량이 늘면서 호가가 오르면 인플레이션, 총량이 그대로인데 호가만 오르면 품귀).
 /// 배치를 나누면 두 스냅샷의 시각이 어긋나 그 비교가 흐려진다.</para>
-/// <para>설정: appsettings "HourlyHistoryBatch" 섹션(IntervalSeconds 기본 3600).</para>
+/// <para><b>실행 시각: 매시 00분</b> — 값은 <see cref="BatchSettingConstants.HourlyHistory"/>에 있다.</para>
 /// </summary>
 public sealed class HourlyHistoryBatchScheduler : PeriodicBatchScheduler
 {
@@ -27,8 +27,8 @@ public sealed class HourlyHistoryBatchScheduler : PeriodicBatchScheduler
         : base(scopeFactory, logger, eventLogger)
     {
         var interval = configuration.GetValue(
-            "HourlyHistoryBatch:IntervalSeconds", Constants.Batch.HourlyHistory.DefaultIntervalSeconds);
-        _intervalSeconds = interval > 0 ? interval : Constants.Batch.HourlyHistory.DefaultIntervalSeconds;
+            BatchSettingConstants.HourlyHistory.IntervalSecondsKey, BatchSettingConstants.HourlyHistory.DefaultIntervalSeconds);
+        _intervalSeconds = interval > 0 ? interval : BatchSettingConstants.HourlyHistory.DefaultIntervalSeconds;
         _logger = logger;
         _eventLogger = eventLogger;
     }
@@ -40,7 +40,7 @@ public sealed class HourlyHistoryBatchScheduler : PeriodicBatchScheduler
     protected override string BatchKey => "history-hourly";
 
     /// <summary>
-    /// 기동 시 현재 버킷을 <b>따라잡지 않는다</b> — 재화 유통·호가는 발화 1회가 곧 시계열의 점 하나라,
+    /// 기동 시 지나간 실행을 <b>따라잡지 않는다</b> — 재화 유통·호가는 1회 실행이 곧 시계열의 점 하나라,
     /// 재기동할 때마다 같은 시간대에 점이 하나 더 찍히면 추이가 부풀려진다. 다음 정시부터 시작한다.
     /// </summary>
     protected override bool CatchUpOnStart => false;

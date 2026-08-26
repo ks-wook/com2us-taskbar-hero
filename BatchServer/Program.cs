@@ -1,4 +1,4 @@
-using CloudStructures;
+﻿using CloudStructures;
 using GameServer;
 using GameServer.Batch;
 using GameServer.Logging;
@@ -18,7 +18,7 @@ using ZLogger.Providers;
 //
 // **이 프로세스는 1대만 뜬다**(compose는 container_name 고정). 게임 API를 N대로 늘려도
 // 배치는 늘지 않는 것이 분리의 목적이다. 그래서 **분산 락을 쓰지 않는다** — "N대 중 하나만"을 매 발화마다
-// 맞출 이유가 없다. 배치는 모두 **절대 시각**(버킷 경계·KST 정각·시즌 end_at)에 발화하므로, 프로세스를
+// 맞출 이유가 없다. 배치는 모두 **정해진 시각**(매시 00분·KST 05시·시즌 end_at)에 실행되므로, 프로세스를
 // 언제 띄웠는지와 무관하게 늘 같은 시각에 돈다.
 
 // DB 조회는 SqlKata 제네릭 매핑(.GetAsync<T>/.FirstOrDefaultAsync<T>)으로 POCO에 매핑한다(dynamic 금지, CLAUDE.md 규칙).
@@ -109,34 +109,34 @@ builder.Services.AddScoped<ITradeRepository, TradeRepository>();
 
 // ── 주기 배치(BackgroundService) ───────────────────────────────────────────────────────────────
 // 여섯 배치 모두 공통 골격 PeriodicBatchScheduler를 상속하며, 그 골격이 다음을 보장한다:
-//   · **발화 시각이 절대 시각이다.** 대기 간격이 아니라 유닉스초가 실행 시점을 정한다 — 기본은 발화 간격으로
-//     나눈 버킷 경계(5분 배치면 매시 :00·:05·:10…), 일 단위는 KST 05시 정각, 보스러시 정산은 시즌 end_at이다.
-//     **프로세스를 언제 띄웠는지와 무관하게 늘 같은 시각에 돈다** — 재기동으로 집계 시각이 밀리지 않는다.
-//   · 밀린 발화는 현재 버킷 하나로 접는다. 기동 직후 그 버킷을 따라잡을지는 배치마다 다르다
-//     (드레인·덮어쓰기 스냅샷은 따라잡고, 시계열의 점이 되는 스냅샷은 다음 경계부터 시작한다).
-//   · 순차 루프라 이전 발화의 작업이 끝나야 다음 발화 시각을 계산한다(재진입 불가).
+//   · **실행 시각이 고정이다.** 프로세스를 언제 띄웠든 정해진 시각에 돈다 — 재기동으로 집계 시각이 밀리지 않는다.
+//   · 밀린 실행은 한 번으로 접는다. 기동 직후 지나간 실행을 따라잡을지는 배치마다 다르다.
+//   · 순차 루프라 이전 작업이 끝나야 다음 실행 시각을 계산한다(재진입 불가).
 //   · **분산 락이 없다.** 이 프로세스가 1대인 것을 배포가 보장하므로 잠글 상대가 없다.
 //   · 1회 실패는 Error 로그만 남기고 루프를 유지한다(배치 사망으로 대상이 영구 방치되는 것 방지).
-// 발화 간격·1회 처리 상한은 appsettings에서 조절하며, 값이 없거나 0 이하이면 각 배치의 기본값을 쓴다.
+// 실행 시각·주기·1회 처리 상한은 **BatchSettingConstants.cs**에 모여 있다(파일 상단에 여섯 배치의
+// 실행 시각 요약표). appsettings가 기본값을 덮어쓰며, 값이 없거나 0 이하이면 기본값을 쓴다.
 
 // 거래소 만료 배치(등록 3일 경과 → status 정리 + 에스크로 아이템 메일 반송, trade 기획서 7.6).
-//   발화 시각: **매시 정각 기준 1시간 버킷** — appsettings "TradeExpireBatch:IntervalSeconds"(기본 3600).
-//   1회 처리 상한 1000건("BatchSize") — 주기보다 넉넉히 잡아 프로세스가 내려가 있던 동안 밀린 물량을 소화한다.
+//   실행 시각: **매시 00분** — 값은 BatchSettingConstants.TradeExpire.
+//   1회 처리 상한은 주기보다 넉넉히 잡아 프로세스가 내려가 있던 동안 밀린 물량을 소화한다.
 //   **만료 판정은 이 배치가 하지 않는다.** 목록·단건 조회·구매·등록 한도 쿼리가 모두 `expires_at > now`를
 //   직접 검사하므로(TradeRepository), 만료된 매물은 배치를 기다리지 않고 즉시 목록에서 빠진다.
 //   따라서 이 주기는 **에스크로 아이템이 메일로 반송되기까지의 지연 상한**만 결정한다.
 builder.Services.AddHostedService<TradeExpireBatchScheduler>();
 
 // 메일 보관 GC 배치(발급 7일 경과 메일 삭제, mail 기획서 6.5).
-//   발화 시각: **매시 정각 기준 1시간 버킷** — appsettings "MailGcBatch:IntervalSeconds"(기본 3600). 1회 처리 상한 500건.
-//   보관 기간(7일)에 비해 삭제가 몇 분~한 시간 늦어도 사용자에게 보이는 차이가 없어 시간 단위로 넉넉히 잡았다.
+//   실행 시각: **매시 00분** — 값은 BatchSettingConstants.MailGc.
+//   보관 기간(Constants.Mail.RetentionSeconds)에 비해 삭제가 몇 분~한 시간 늦어도 사용자에게 보이는 차이가
+//   없어 시간 단위로 넉넉히 잡았다.
 builder.Services.AddHostedService<MailGcBatchScheduler>();
 
 // 보스러시 시즌 정산 배치(주간 시즌 종료 → 순위 확정 + 1~3위 골드 보상 메일 발급 → 다음 시즌 개시, 기획서 6.4).
 //   **폴링하지 않는다** — 정산이 필요한 순간은 진행 중 시즌의 end_at 하나뿐이라 **그 시각을 그대로 발화
 //   시각으로 삼는다**. 며칠 뒤여도 그때까지 통째로 자고 정확히 그 시각에 깨어난다. 진행 중 시즌이 없으면
-//   (첫 시즌 미등록·마스터 미적재) 기본 간격 버킷으로 되돌아가 다시 살핀다.
-//   1회(페이지) 처리 상한 500건("BatchSize") — 페이지 단위 트랜잭션으로 쪼개 긴 잠금을 만들지 않는다.
+//   (첫 시즌 미등록·마스터 미적재) 기본 간격으로 되돌아가 다시 살핀다.
+//   1회(페이지) 처리 상한(BatchSettingConstants.BossRushSeason.DefaultBatchSize) — 페이지 단위 트랜잭션으로 쪼개
+//   긴 잠금을 만들지 않는다.
 //   정산은 final_rank=0 조건부 갱신이라 멱등하며, 중간에 죽어도 다음 발화가 남은 행만 이어서 처리한다.
 //   **랭킹 캐시 워밍업은 이 배치가 하지 않는다** — 부트스트랩 스크립트가 GameServer의 관리 API로 지시한다.
 builder.Services.AddHostedService<BossRushSeasonBatchScheduler>();

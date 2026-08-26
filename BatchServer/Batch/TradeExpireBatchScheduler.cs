@@ -20,9 +20,9 @@ namespace GameServer.Batch;
 /// <c>expires_at &gt; now</c>로 직접 하므로, 만료된 매물은 배치를 기다리지 않고 즉시 목록에서 빠지고 구매도 거부된다.
 /// 배치가 남아서 하는 일은 <b>에스크로 아이템 반송과 status 정리</b>뿐이라 주기가 판매 기간(3일)의 정확도에
 /// 영향을 주지 않는다(§7.6). 다만 <b>주기가 곧 판매자가 아이템을 되돌려받기까지의 지연 상한</b>이므로,
-/// 3일을 기다린 판매자를 더 기다리게 하지 않도록 <b>1시간</b>으로 잡는다 — 대상 조회가
+/// 3일을 기다린 판매자를 더 기다리게 하지 않도록 짧게 잡는다 — 대상 조회가
 /// <c>idx_trade_expire</c>를 커버링으로 타고 0건이면 로그도 남기지 않아 빈 주기 비용이 사실상 없다.</para>
-/// 설정: appsettings "TradeExpireBatch" 섹션(IntervalSeconds 기본 3600=1시간 · BatchSize 기본 1000).
+/// <para><b>실행 시각: 매시 00분</b> — 값은 <see cref="BatchSettingConstants.TradeExpire"/>에 있다.</para>
 /// </summary>
 public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
 {
@@ -40,10 +40,11 @@ public sealed class TradeExpireBatchScheduler : PeriodicBatchScheduler
     {
         _eventLogger = eventLogger;
         var interval = configuration.GetValue(
-            "TradeExpireBatch:IntervalSeconds", Constants.Batch.TradeExpire.DefaultIntervalSeconds);
-        var batchSize = configuration.GetValue("TradeExpireBatch:BatchSize", Constants.Batch.TradeExpire.DefaultBatchSize);
-        _intervalSeconds = interval > 0 ? interval : Constants.Batch.TradeExpire.DefaultIntervalSeconds;
-        _batchSize = batchSize > 0 ? batchSize : Constants.Batch.TradeExpire.DefaultBatchSize;
+            BatchSettingConstants.TradeExpire.IntervalSecondsKey, BatchSettingConstants.TradeExpire.DefaultIntervalSeconds);
+        var batchSize = configuration.GetValue(
+            BatchSettingConstants.TradeExpire.BatchSizeKey, BatchSettingConstants.TradeExpire.DefaultBatchSize);
+        _intervalSeconds = interval > 0 ? interval : BatchSettingConstants.TradeExpire.DefaultIntervalSeconds;
+        _batchSize = batchSize > 0 ? batchSize : BatchSettingConstants.TradeExpire.DefaultBatchSize;
         _masterData = masterData;
         _logger = logger;
     }

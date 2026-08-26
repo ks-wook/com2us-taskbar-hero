@@ -27,7 +27,8 @@ namespace GameServer.Batch;
 /// <para><b>랭킹 캐시 최초 적재(워밍업)는 이 배치가 하지 않는다</b> — 서버 밖의 부트스트랩 스크립트
 /// (<c>server_up_with_docker.py</c>)가 기동을 확인한 뒤 관리 API <c>POST /api/admin/boss-rush/rank/warmup</c>을
 /// 한 번 호출한다(6.3). 정산이 만드는 캐시 변화(리더보드 TTL·다음 시즌 메타)는 그대로 이 배치가 낸다.</para>
-/// 설정: appsettings "BossRushSeasonBatch" 섹션(IntervalSeconds 기본 600=10분 · BatchSize 기본 500).
+/// <para><b>실행 시각: 진행 중 시즌의 종료 시각(<c>end_at</c>)</b>. 시즌이 없을 때만 매시 00 10 20 30 40 50분에
+/// 다시 살핀다 — 값은 <see cref="BatchSettingConstants.BossRushSeason"/>에 있다.</para>
 /// </summary>
 public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 {
@@ -45,11 +46,11 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     {
         _eventLogger = eventLogger;
         var interval = configuration.GetValue(
-            "BossRushSeasonBatch:IntervalSeconds", Constants.Batch.BossRushSeason.DefaultIntervalSeconds);
+            BatchSettingConstants.BossRushSeason.IntervalSecondsKey, BatchSettingConstants.BossRushSeason.DefaultIntervalSeconds);
         var batchSize = configuration.GetValue(
-            "BossRushSeasonBatch:BatchSize", Constants.Batch.BossRushSeason.DefaultBatchSize);
-        _intervalSeconds = interval > 0 ? interval : Constants.Batch.BossRushSeason.DefaultIntervalSeconds;
-        _batchSize = batchSize > 0 ? batchSize : Constants.Batch.BossRushSeason.DefaultBatchSize;
+            BatchSettingConstants.BossRushSeason.BatchSizeKey, BatchSettingConstants.BossRushSeason.DefaultBatchSize);
+        _intervalSeconds = interval > 0 ? interval : BatchSettingConstants.BossRushSeason.DefaultIntervalSeconds;
+        _batchSize = batchSize > 0 ? batchSize : BatchSettingConstants.BossRushSeason.DefaultBatchSize;
         _masterData = masterData;
         _logger = logger;
     }
@@ -59,7 +60,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     /// <summary>
     /// 발화 시각 = <b>진행 중 시즌의 종료 시각</b>(<c>end_at</c>). 정산이 필요한 순간은 그때 하나뿐이고 그 값은
     /// 이미 DB에 있으므로, 며칠 뒤여도 <b>그때까지 통째로 자고 정확히 그 시각에 깨어난다</b>(폴링 아님).
-    /// <para>진행 중 시즌이 없거나 마스터가 아직 안 올라왔으면 <b>기본 간격 버킷</b>으로 되돌아가 다시 살핀다 —
+    /// <para>진행 중 시즌이 없거나 마스터가 아직 안 올라왔으면 <b>기본 간격</b>으로 되돌아가 다시 살핀다 —
     /// 정상 운영에서는 오지 않는 상태이고(정산이 항상 다음 시즌을 연다), 여기서 무기한 자면 첫 시즌이
     /// 등록돼도 아무도 깨우지 못해 배치가 영구히 멈춘다.</para>
     /// </summary>
@@ -121,7 +122,7 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
 
         // ③ 시즌 종료 + 리더보드 TTL.
         await repository.CloseSeasonAsync(season.SeasonId, nowUnix);
-        await rankCache.ExpireAsync(season.SeasonId, Constants.Batch.BossRushSeason.ClosedSeasonTtl);
+        await rankCache.ExpireAsync(season.SeasonId, BatchSettingConstants.BossRushSeason.ClosedSeasonTtl);
 
         // ④ 다음 시즌 개시 + 시즌 메타 캐시 갱신(정산의 마지막 단계, 기획서 6.4).
         var next = await repository.StartNextSeasonAsync(

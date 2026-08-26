@@ -13,7 +13,8 @@ namespace GameServer.Batch;
 /// 단 <b>미수령 무기한 메일(expires_at=0)은 보관</b>한다 — 거래소 구매 아이템처럼 만료를 두지 않기로 한
 /// 메일까지 지우면 무기한 발급이 무의미해지기 때문이다(수령 후에는 보관 기한이 지나면 정리된다).
 /// 전용 삭제 API는 두지 않으며, 1회 처리 건수를 제한해 밀린 분량은 다음 주기로 이월한다.
-/// 설정: appsettings "MailGcBatch" 섹션(IntervalSeconds 기본 3600 · BatchSize 기본 500, 잠정).
+/// <para><b>실행 시각: 매시 00분</b> — 값은 <see cref="BatchSettingConstants.MailGc"/>에 있다
+/// (보관 기간은 <see cref="Constants.Mail.RetentionSeconds"/>).</para>
 /// </summary>
 public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
 {
@@ -27,10 +28,12 @@ public sealed class MailGcBatchScheduler : PeriodicBatchScheduler
         ILogger<MailGcBatchScheduler> logger, IEventLogger eventLogger)
         : base(scopeFactory, logger, eventLogger)
     {
-        var interval = configuration.GetValue("MailGcBatch:IntervalSeconds", Constants.Batch.MailGc.DefaultIntervalSeconds);
-        var batchSize = configuration.GetValue("MailGcBatch:BatchSize", Constants.Batch.MailGc.DefaultBatchSize);
-        _intervalSeconds = interval > 0 ? interval : Constants.Batch.MailGc.DefaultIntervalSeconds;
-        _batchSize = batchSize > 0 ? batchSize : Constants.Batch.MailGc.DefaultBatchSize;
+        var interval = configuration.GetValue(
+            BatchSettingConstants.MailGc.IntervalSecondsKey, BatchSettingConstants.MailGc.DefaultIntervalSeconds);
+        var batchSize = configuration.GetValue(
+            BatchSettingConstants.MailGc.BatchSizeKey, BatchSettingConstants.MailGc.DefaultBatchSize);
+        _intervalSeconds = interval > 0 ? interval : BatchSettingConstants.MailGc.DefaultIntervalSeconds;
+        _batchSize = batchSize > 0 ? batchSize : BatchSettingConstants.MailGc.DefaultBatchSize;
         _logger = logger;
     }
 

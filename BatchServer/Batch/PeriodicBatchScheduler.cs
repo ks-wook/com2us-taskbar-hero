@@ -177,21 +177,21 @@ public abstract class PeriodicBatchScheduler : BackgroundService
 
                 // 발화 시각 계산 자체가 실패했다면(DB 장애 등) lastFire가 그대로라 곧바로 같은 계산을 다시 한다.
                 // 그 사이를 쉬지 않고 도는 것만 막는다.
-                await WaitAsync(Constants.Batch.ErrorRetryDelay, stoppingToken);
+                await WaitAsync(BatchSettingConstants.ErrorRetryDelay, stoppingToken);
             }
         }
     }
 
     /// <summary>
-    /// 지정 시간만큼 잔다. 상한(<c>Constants.Batch.MaxWait</c>)을 넘으면 잘라서 자고 루프가 발화 시각을 다시
+    /// 지정 시간만큼 잔다. 상한(<c>BatchSettingConstants.MaxWait</c>)을 넘으면 잘라서 자고 루프가 발화 시각을 다시
     /// 계산한다 — 대기 API의 한계를 넘기지 않으면서, 며칠 뒤 발화도 폴링 없이 기다리기 위해서다.
     /// 종료 요청으로 취소되면 조용히 돌아간다(루프 조건이 종료를 판정한다).
     /// </summary>
     private static async Task WaitAsync(TimeSpan duration, CancellationToken stoppingToken)
     {
-        if (duration > Constants.Batch.MaxWait)
+        if (duration > BatchSettingConstants.MaxWait)
         {
-            duration = Constants.Batch.MaxWait;
+            duration = BatchSettingConstants.MaxWait;
         }
 
         try

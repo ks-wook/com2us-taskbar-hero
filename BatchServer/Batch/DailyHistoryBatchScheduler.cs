@@ -15,8 +15,8 @@ namespace GameServer.Batch;
 /// 전체를 GROUP BY 하는 무거운 집계라, 나누면 무거운 스캔이 하루에 여섯 번 서로 다른 시각에 흩어진다.
 /// 한 번에 몰아 돌려야 트래픽이 낮은 시간대에 가둘 수 있고, 여섯 스냅샷이 <b>같은 시점의 상태</b>가 되어
 /// 서로 나눠 볼 수 있다(예: 착용률 = <c>equip_item</c> ÷ <c>item_supply</c>).</para>
-/// <para><b>폴링하지 않는다</b> — 다음 실행 시각(KST <c>RunHourKst</c>시)까지 자고 정확히 그때 깨어난다.</para>
-/// <para>설정: appsettings "DailyHistoryBatch" 섹션(IntervalSeconds 기본 86400 · RunHourKst 기본 5).</para>
+/// <para><b>폴링하지 않는다</b> — 다음 실행 시각까지 자고 정확히 그때 깨어난다.</para>
+/// <para><b>실행 시각: 매일 KST 05시 00분</b> — 값은 <see cref="BatchSettingConstants.DailyHistory"/>에 있다.</para>
 /// </summary>
 public sealed class DailyHistoryBatchScheduler : PeriodicBatchScheduler
 {
@@ -32,11 +32,15 @@ public sealed class DailyHistoryBatchScheduler : PeriodicBatchScheduler
         : base(scopeFactory, logger, eventLogger)
     {
         var interval = configuration.GetValue(
-            "DailyHistoryBatch:IntervalSeconds", Constants.Batch.DailyHistory.DefaultIntervalSeconds);
+            BatchSettingConstants.DailyHistory.IntervalSecondsKey, BatchSettingConstants.DailyHistory.DefaultIntervalSeconds);
         var runHour = configuration.GetValue(
-            "DailyHistoryBatch:RunHourKst", Constants.Batch.DailyHistory.DefaultRunHourKst);
-        _intervalSeconds = interval > 0 ? interval : Constants.Batch.DailyHistory.DefaultIntervalSeconds;
-        _runHourKst = runHour >= 0 && runHour <= 23 ? runHour : Constants.Batch.DailyHistory.DefaultRunHourKst;
+            BatchSettingConstants.DailyHistory.RunHourKstKey, BatchSettingConstants.DailyHistory.DefaultRunHourKst);
+        _intervalSeconds = interval > 0 ? interval : BatchSettingConstants.DailyHistory.DefaultIntervalSeconds;
+        _runHourKst =
+            runHour >= BatchSettingConstants.DailyHistory.MinRunHourKst
+            && runHour <= BatchSettingConstants.DailyHistory.MaxRunHourKst
+                ? runHour
+                : BatchSettingConstants.DailyHistory.DefaultRunHourKst;
         _logger = logger;
         _eventLogger = eventLogger;
     }
@@ -48,7 +52,7 @@ public sealed class DailyHistoryBatchScheduler : PeriodicBatchScheduler
     protected override string BatchKey => "history-daily";
 
     /// <summary>
-    /// 발화 시각 = <b>KST <c>RunHourKst</c>시 정각</b>. 버킷 경계(기본 구현)가 아니라 벽시계 시각이라,
+    /// 실행 시각 = <b>KST 05시 00분</b>(<see cref="BatchSettingConstants.DailyHistory.DefaultRunHourKst"/>). 벽시계 시각이라,
     /// 프로세스를 언제 띄웠든 늘 같은 시각에 돈다.
     /// <para>오늘분을 아직 다루지 않았으면 <b>오늘 그 시각</b>을 돌려준다 — 이미 지난 시각이면 골격이 곧바로
     /// 발화하므로, 예정 시각에 프로세스가 내려가 있었어도 <b>그날의 스냅샷이 비지 않는다</b>. 적재 테이블이
@@ -66,10 +70,15 @@ public sealed class DailyHistoryBatchScheduler : PeriodicBatchScheduler
         return new(todayFire > lastFireUnix ? todayFire : todayFire + DateTimeUtil.SecondsPerDay);
     }
 
-    /// <summary>주어진 KST 날짜의 실행 시각(<c>RunHourKst</c>시 정각)을 유닉스초로 환산한다.</summary>
+    /// <summary>
+    /// 주어진 KST 날짜의 실행 시각(기본 05시 00분 00초)을 유닉스초로 환산한다.
+    /// </summary>
     private long RunAtUnix(DateTimeOffset kst)
         => DateTimeUtil.ToUnixSeconds(
-            new DateTimeOffset(kst.Year, kst.Month, kst.Day, _runHourKst, 0, 0, DateTimeUtil.KstOffset));
+            new DateTimeOffset(
+                kst.Year, kst.Month, kst.Day, _runHourKst,
+                BatchSettingConstants.DailyHistory.RunMinute, BatchSettingConstants.DailyHistory.RunSecond,
+                DateTimeUtil.KstOffset));
 
     /// <summary>
     /// 1주기 작업: 상태 스냅샷 6종을 차례로 집계해 방출한다. <c>log_date</c>는 <b>집계를 돌린 시점의 KST 날짜</b>이며
