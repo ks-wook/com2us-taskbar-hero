@@ -1,6 +1,6 @@
 # BatchServer 컨테이너 이미지(주기 배치 전담 워커, 로컬 개발용).
 #
-#   빌드 컨텍스트는 **저장소 루트**다 — 이 워커가 GameServer.Core와 TaskbarHero.Common을
+#   빌드 컨텍스트는 **저장소 루트**다 — 이 워커가 GameServer와 TaskbarHero.Common을
 #   ProjectReference로 참조하므로 세 프로젝트 폴더가 모두 컨텍스트에 있어야 한다.
 #     docker compose build batchserver     (compose가 context: . 로 지정)
 #     docker build -f BatchServer/Dockerfile -t taskbar-hero-batchserver .
@@ -18,12 +18,12 @@ WORKDIR /src
 # 복원(restore)만 먼저 하도록 프로젝트 파일을 따로 복사한다 — 소스만 바뀐 재빌드에서
 # NuGet 복원 레이어를 캐시로 재사용한다.
 COPY TaskbarHero.Common/TaskbarHero.Common.csproj TaskbarHero.Common/
-COPY GameServer.Core/GameServer.Core.csproj GameServer.Core/
+COPY GameServer/GameServer.csproj GameServer/
 COPY BatchServer/BatchServer.csproj BatchServer/
 RUN dotnet restore BatchServer/BatchServer.csproj
 
 COPY TaskbarHero.Common/ TaskbarHero.Common/
-COPY GameServer.Core/ GameServer.Core/
+COPY GameServer/ GameServer/
 COPY BatchServer/ BatchServer/
 
 # TaskbarHero.Common/Directory.Build.props는 obj/bin을 폴더 밖 artifacts/로 재배치한다

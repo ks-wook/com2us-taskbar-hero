@@ -377,41 +377,32 @@ public static class Constants
     public static class Batch
     {
         /// <summary>
-        /// 다음 주기 대기의 하한(1초). <b>0·음수 대기로 루프가 쉬지 않고 도는 것만</b> 막는 안전장치다.
-        /// 크게 잡으면 발화 시각이 코앞인 정상 대기까지 뒤로 밀려 정확도가 깨진다.
+        /// 1회 대기의 상한(7일). 대기 API의 한계를 넘기지 않기 위한 값이며, 상한에 걸리면 잘라서 자고 루프가
+        /// 발화 시각을 다시 계산한다(폴링이 되지 않는다). 가장 긴 발화 간격(보스러시 시즌 1주)보다 크게 잡는다.
         /// </summary>
-        public static readonly TimeSpan MinDelay = TimeSpan.FromSeconds(1);
+        public static readonly TimeSpan MaxWait = TimeSpan.FromDays(7);
 
         /// <summary>
-        /// 리더 락 TTL의 상한(5분). 1주기 실행 시간의 상한으로 잡는다 — 1주기가 <c>BatchSize</c>로 제한된
-        /// 짧은 트랜잭션의 반복이라 수 초 규모이므로 5분은 충분한 여유다.
+        /// 발화 처리가 예외로 끝났을 때의 재시도 대기(1분). 발화 시각 계산 자체가 실패하면(DB 장애 등)
+        /// 곧바로 같은 계산을 다시 하게 되므로, <b>그 사이를 쉬지 않고 도는 것만</b> 막는다.
         /// </summary>
-        public static readonly TimeSpan MaxLockTtl = TimeSpan.FromMinutes(5);
+        public static readonly TimeSpan ErrorRetryDelay = TimeSpan.FromMinutes(1);
 
         /// <summary>보스러시 시즌 정산 배치(appsettings "BossRushSeasonBatch").</summary>
         public static class BossRushSeason
         {
             /// <summary>
-            /// 기본 주기 10분. 이 배치는 <b>정상 경로에서 이 주기로 돌지 않는다</b> — 진행 중 시즌이 있으면 그
-            /// 종료 시각까지, 없으면 무기한 자기 때문이다. 남은 쓰임은 ①리더 락 TTL 산정과 ②주기가 실제로 돌지
-            /// 못했을 때(리더 락 스킵·예외)의 재시도 간격이다.
+            /// 기본 발화 간격 10분. 이 배치는 <b>정상 경로에서 이 간격으로 돌지 않는다</b> — 발화 시각이 진행 중
+            /// 시즌의 <c>end_at</c>이기 때문이다. 남은 쓰임은 <b>진행 중 시즌이 없을 때</b>(첫 시즌 미등록·마스터
+            /// 미적재) 다시 살피는 간격뿐이다.
             /// </summary>
             public const int DefaultIntervalSeconds = 10 * 60;
 
             /// <summary>1주기(정산 페이지) 처리 상한. 페이지 단위 트랜잭션으로 쪼개 긴 잠금을 만들지 않는다.</summary>
             public const int DefaultBatchSize = 500;
 
-            /// <summary>
-            /// 종료 시각이 이미 지났는데도 정산되지 않은 시즌이 남아 있을 때(다른 인스턴스가 정산 중이라 리더 락을
-            /// 놓쳤거나 직전 주기가 실패한 경우)의 재시도 간격. 그 상황에서만 쓰이므로 짧게 잡아도 안전하다.
-            /// </summary>
-            public static readonly TimeSpan PastDueRetryDelay = TimeSpan.FromMinutes(1);
-
             /// <summary>종료된 시즌 리더보드에 거는 TTL(7일). 과거 키가 무한히 쌓이지 않게 한다(기획서 4.3).</summary>
             public static readonly TimeSpan ClosedSeasonTtl = TimeSpan.FromDays(7);
-
-            /// <summary>기상 시각을 아는 배치이므로 대기 상한을 사실상 풀어 둔다(주기에 잘려 폴링으로 돌아가지 않게).</summary>
-            public static readonly TimeSpan MaxDelay = TimeSpan.FromDays(7);
         }
 
         /// <summary>메일 GC 배치(appsettings "MailGcBatch").</summary>
@@ -462,9 +453,8 @@ public static class Constants
         public static class DailyHistory
         {
             /// <summary>
-            /// 기본 실행 주기 1일. <b>정상 경로에서 이 주기로 돌지 않는다</b> — 다음 실행 시각(KST
-            /// <see cref="DefaultRunHourKst"/>시)까지 자기 때문이다. 남은 쓰임은 리더 락 TTL 산정과,
-            /// 주기가 실제로 돌지 못했을 때(리더 락 스킵·예외)의 재시도 간격이다.
+            /// 기본 발화 간격 1일. 발화 시각은 버킷 경계가 아니라 KST <see cref="DefaultRunHourKst"/>시
+            /// 정각이므로, 이 값은 실질적으로 쓰이지 않는다(설정 파일의 대칭을 위해 남겨 둔다).
             /// </summary>
             public const int DefaultIntervalSeconds = (int)DateTimeUtil.SecondsPerDay;
 
@@ -473,13 +463,10 @@ public static class Constants
             /// <c>player_skill</c> 전체를 GROUP BY 하는 무거운 집계라 <b>트래픽이 낮은 시간대</b>에 몰아 돌린다(7장).
             /// </summary>
             public const int DefaultRunHourKst = 5;
-
-            /// <summary>기상 시각을 아는 배치이므로 대기 상한을 사실상 풀어 둔다(주기에 잘려 폴링으로 돌아가지 않게).</summary>
-            public static readonly TimeSpan MaxDelay = TimeSpan.FromDays(2);
         }
     }
 
-    /// <summary>Redis 키. 배치 리더 락(<c>batch:lock:{BatchKey}</c>)은 <c>BatchLock</c>이 조립한다.</summary>
+    /// <summary>Redis 키. 인증 토큰·보스러시 랭킹 캐시에 쓴다(배치 리더 락은 없앴다 — BatchServer가 1대다).</summary>
     public static class RedisKey
     {
         /// <summary>닉네임 캐시 키(시즌·콘텐츠 무관 전역 Hash, TTL 없음).</summary>

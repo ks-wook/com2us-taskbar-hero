@@ -5,18 +5,17 @@
 
     **인스턴스는 1대로 고정한다**(docker-compose는 container_name 고정, 오케스트레이터라면 replicas: 1).
     배치를 GameServer에서 떼어낸 이유가 그것이다 — 게임 API를 N대로 늘려도 배치는 늘어나지 않는다.
-    다만 "정확히 1대"의 책임이 코드에서 배포로 넘어가므로, 실수로 2대가 뜬 경우를 대비해
-    Redis 발화 락(IBatchLock)은 그대로 남겨 둔다(비용이 사실상 없는 이중 방어).
+    그래서 분산 락을 쓰지 않는다: "N대 중 하나만"을 매 발화마다 맞출 상대가 없다.
 
-    데이터 접근·모델·마스터 데이터·로깅·상수는 GameServer.Core를 GameServer와 공유한다.
+    데이터 접근·모델·마스터 데이터·이벤트 로깅·상수는 **GameServer 프로젝트를 참조해 그대로 쓴다.**
   -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <!--
-      네임스페이스는 GameServer.Core와 마찬가지로 `GameServer.*`를 쓴다(배치 클래스는 `GameServer.Batch`).
-      게임 서버 코드베이스 전체를 한 네임스페이스 트리에 두어, 파일이 어느 프로젝트에 있든 using이 같게 한다.
+      네임스페이스는 `GameServer.*`를 쓴다(배치 클래스는 `GameServer.Batch`) — 게임 서버 코드베이스를
+      한 트리에 두어, 파일이 어느 프로젝트에 있든 using이 같게 한다.
     -->
     <RootNamespace>GameServer</RootNamespace>
     <AssemblyName>BatchServer</AssemblyName>
@@ -29,7 +28,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GameServer.Core\GameServer.Core.csproj" />
+    <!--
+      GameServer(웹 프로젝트)를 라이브러리처럼 참조한다 — 배치가 쓰는 리포지토리·모델·마스터 데이터·
+      이벤트 로깅·상수가 모두 그쪽에 있다. exe 프로젝트를 참조하는 것은 .NET에서 정상 동작한다
+      (ASP.NET Core 통합 테스트가 늘 쓰는 방식). 부수적으로 ASP.NET 스택이 따라오지만 워커 동작에는
+      영향이 없고, 이 워커는 컨트롤러·미들웨어를 등록하지 않으므로 HTTP를 열지도 않는다.
+    -->
+    <ProjectReference Include="..\GameServer\GameServer.csproj" />
   </ItemGroup>
 
 </Project>

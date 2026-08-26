@@ -14,11 +14,12 @@ using ZLogger;
 using ZLogger.Providers;
 
 // 배치 전담 워커. HTTP를 받지 않으므로 컨트롤러·인증 미들웨어·OpenAPI가 없고,
-// 데이터 접근·마스터 데이터·이벤트 로깅은 GameServer.Core를 GameServer와 공유한다.
+// 데이터 접근·마스터 데이터·이벤트 로깅은 GameServer 프로젝트를 참조해 그대로 쓴다.
 //
 // **이 프로세스는 1대만 뜬다**(compose는 container_name 고정). 게임 API를 N대로 늘려도
-// 배치는 늘지 않는 것이 분리의 목적이다. 다만 "정확히 1대"를 배포가 보장하므로, 실수로 2대가
-// 뜬 경우를 대비해 Redis 발화 락(IBatchLock)은 그대로 둔다.
+// 배치는 늘지 않는 것이 분리의 목적이다. 그래서 **분산 락을 쓰지 않는다** — "N대 중 하나만"을 매 발화마다
+// 맞출 이유가 없다. 배치는 모두 **절대 시각**(버킷 경계·KST 정각·시즌 end_at)에 발화하므로, 프로세스를
+// 언제 띄웠는지와 무관하게 늘 같은 시각에 돈다.
 
 // DB 조회는 SqlKata 제네릭 매핑(.GetAsync<T>/.FirstOrDefaultAsync<T>)으로 POCO에 매핑한다(dynamic 금지, CLAUDE.md 규칙).
 // snake_case 컬럼 → PascalCase 프로퍼티 자동 매핑을 위해 Dapper 규칙을 켠다(SqlKata.Execution이 Dapper로 실행).
@@ -89,16 +90,14 @@ builder.Services.AddSingleton<MasterDbProvider>();
 //   무상태이고 마스터가 싱글턴이라 싱글턴으로 둔다. 레벨·큐브 계산기는 배치가 쓰지 않아 등록하지 않는다.
 builder.Services.AddSingleton<IItemLookup, ItemLookup>();
 
-// Redis(CloudStructures) — 배치 발화 락과 보스러시 랭킹 캐시에 쓴다.
+// Redis(CloudStructures) — 보스러시 랭킹 캐시(리더보드 TTL·다음 시즌 메타)에 쓴다.
 //   인증 토큰은 읽지 않는다(요청을 받지 않으므로 AuthTokenReader를 등록하지 않는다).
+//   배치 리더 락은 없앴다 — 이 프로세스가 1대이므로 잠글 상대가 없다.
 builder.Services.AddSingleton(_ =>
 {
     var connectionString = builder.Configuration.GetValue("Redis:ConnectionString", "127.0.0.1:36379")!;
     return new RedisConnection(new RedisConfig("batch", connectionString));
 });
-
-// 배치 리더 락(batch:lock:{배치키}). PeriodicBatchScheduler(싱글턴 BackgroundService)가 주입받으므로 싱글턴.
-builder.Services.AddSingleton<IBatchLock, BatchLock>();
 
 // 배치가 쓰는 데이터 접근만 등록한다 — 게임 API 전용 리포지토리(세이브·스테이지·인벤토리·성장·큐브·
 // 소모품·출석·가챠·오프라인)는 이 프로세스에 필요 없다.
@@ -110,17 +109,18 @@ builder.Services.AddScoped<ITradeRepository, TradeRepository>();
 
 // ── 주기 배치(BackgroundService) ───────────────────────────────────────────────────────────────
 // 여섯 배치 모두 공통 골격 PeriodicBatchScheduler를 상속하며, 그 골격이 다음을 보장한다:
-//   · 기동 직후 즉시 1회 실행 → 그 뒤 각자의 주기(Interval)로 반복.
-//     프로세스가 내려가 있던 동안 쌓인 대상을 첫 주기까지 기다리지 않고 바로 소화한다.
-//   · 이전 주기가 끝난 뒤에야 다음 대기가 시작되므로 재진입(주기 겹침)이 구조적으로 불가능하다.
-//     따라서 아래 "주기"는 정확히는 "이전 주기 종료 후 다음 실행까지의 간격"이다.
-//   · 주기마다 Redis 리더 락(batch:lock:{배치키}, SET NX)을 먼저 잡는다. 이 프로세스는 1대로 뜨므로
-//     정상 운영에서는 늘 획득하며, **실수로 2대가 뜬 경우를 위한 이중 방어**로 남겨 둔 것이다.
-//   · 1주기 실패는 Error 로그만 남기고 루프를 유지한다(배치 사망으로 대상이 영구 방치되는 것 방지).
-// 주기·1회 처리 상한은 appsettings에서 조절하며, 값이 없거나 0 이하이면 각 배치의 기본값을 쓴다.
+//   · **발화 시각이 절대 시각이다.** 대기 간격이 아니라 유닉스초가 실행 시점을 정한다 — 기본은 발화 간격으로
+//     나눈 버킷 경계(5분 배치면 매시 :00·:05·:10…), 일 단위는 KST 05시 정각, 보스러시 정산은 시즌 end_at이다.
+//     **프로세스를 언제 띄웠는지와 무관하게 늘 같은 시각에 돈다** — 재기동으로 집계 시각이 밀리지 않는다.
+//   · 밀린 발화는 현재 버킷 하나로 접는다. 기동 직후 그 버킷을 따라잡을지는 배치마다 다르다
+//     (드레인·덮어쓰기 스냅샷은 따라잡고, 시계열의 점이 되는 스냅샷은 다음 경계부터 시작한다).
+//   · 순차 루프라 이전 발화의 작업이 끝나야 다음 발화 시각을 계산한다(재진입 불가).
+//   · **분산 락이 없다.** 이 프로세스가 1대인 것을 배포가 보장하므로 잠글 상대가 없다.
+//   · 1회 실패는 Error 로그만 남기고 루프를 유지한다(배치 사망으로 대상이 영구 방치되는 것 방지).
+// 발화 간격·1회 처리 상한은 appsettings에서 조절하며, 값이 없거나 0 이하이면 각 배치의 기본값을 쓴다.
 
 // 거래소 만료 배치(등록 3일 경과 → status 정리 + 에스크로 아이템 메일 반송, trade 기획서 7.6).
-//   실행 주기: **3600초 = 1시간** — appsettings "TradeExpireBatch:IntervalSeconds"(기본 3600).
+//   발화 시각: **매시 정각 기준 1시간 버킷** — appsettings "TradeExpireBatch:IntervalSeconds"(기본 3600).
 //   1회 처리 상한 1000건("BatchSize") — 주기보다 넉넉히 잡아 프로세스가 내려가 있던 동안 밀린 물량을 소화한다.
 //   **만료 판정은 이 배치가 하지 않는다.** 목록·단건 조회·구매·등록 한도 쿼리가 모두 `expires_at > now`를
 //   직접 검사하므로(TradeRepository), 만료된 매물은 배치를 기다리지 않고 즉시 목록에서 빠진다.
@@ -128,33 +128,33 @@ builder.Services.AddScoped<ITradeRepository, TradeRepository>();
 builder.Services.AddHostedService<TradeExpireBatchScheduler>();
 
 // 메일 보관 GC 배치(발급 7일 경과 메일 삭제, mail 기획서 6.5).
-//   실행 주기: **3600초 = 1시간** — appsettings "MailGcBatch:IntervalSeconds"(기본 3600). 1회 처리 상한 500건.
+//   발화 시각: **매시 정각 기준 1시간 버킷** — appsettings "MailGcBatch:IntervalSeconds"(기본 3600). 1회 처리 상한 500건.
 //   보관 기간(7일)에 비해 삭제가 몇 분~한 시간 늦어도 사용자에게 보이는 차이가 없어 시간 단위로 넉넉히 잡았다.
 builder.Services.AddHostedService<MailGcBatchScheduler>();
 
 // 보스러시 시즌 정산 배치(주간 시즌 종료 → 순위 확정 + 1~3위 골드 보상 메일 발급 → 다음 시즌 개시, 기획서 6.4).
-//   **폴링하지 않는다** — 정산이 필요한 순간은 진행 중 시즌의 end_at 하나뿐이라 그 시각까지 자고 정확히
-//   그때 깨어난다. 진행 중 시즌이 없으면 무기한 대기하며 외부에서 Wake()로 깨운다.
+//   **폴링하지 않는다** — 정산이 필요한 순간은 진행 중 시즌의 end_at 하나뿐이라 **그 시각을 그대로 발화
+//   시각으로 삼는다**. 며칠 뒤여도 그때까지 통째로 자고 정확히 그 시각에 깨어난다. 진행 중 시즌이 없으면
+//   (첫 시즌 미등록·마스터 미적재) 기본 간격 버킷으로 되돌아가 다시 살핀다.
 //   1회(페이지) 처리 상한 500건("BatchSize") — 페이지 단위 트랜잭션으로 쪼개 긴 잠금을 만들지 않는다.
-//   정산은 final_rank=0 조건부 갱신이라 멱등하며, 중간에 죽어도 다음 주기가 남은 행만 이어서 처리한다.
+//   정산은 final_rank=0 조건부 갱신이라 멱등하며, 중간에 죽어도 다음 발화가 남은 행만 이어서 처리한다.
 //   **랭킹 캐시 워밍업은 이 배치가 하지 않는다** — 부트스트랩 스크립트가 GameServer의 관리 API로 지시한다.
-// 싱글턴으로도 등록해 DI에서 꺼낼 수 있게 한다 — AddHostedService만으로는 IHostedService로만 잡혀
-// 인스턴스를 해석할 수 없다. 무기한 대기에 들어간 배치를 Wake()로 깨우려면 이 배선이 필요하다.
-builder.Services.AddSingleton<BossRushSeasonBatchScheduler>();
-builder.Services.AddHostedService(sp => sp.GetRequiredService<BossRushSeasonBatchScheduler>());
+builder.Services.AddHostedService<BossRushSeasonBatchScheduler>();
 
 // 히스토리(주기 스냅샷) 배치 3종 — 로그 이벤트 정의 7장.
 //   액션 로그가 **변화**를 담는 데 반해 이쪽은 **총량과 현재 상태**를 담는다. 게임 DB를 세어 이벤트 로그
 //   1줄을 내보내는 것이 전부다(이 프로세스도 logdb에 접속하지 않는다).
 //   주기별로 셋으로 나눈 기준은 "같은 시점의 스냅샷이어야 서로 나눠 볼 수 있는가"다.
 //   ① 5분 — 동시 접속(history.online_user). 하트비트를 액션 로그로 남기면 그것 하나가 전체 볼륨을
-//      넘으므로, 같은 주기에 접속자 수만 세어 1행으로 대신한다.
+//      넘으므로, 같은 주기에 접속자 수만 세어 1행으로 대신한다. **기동 시 따라잡지 않는다** — 발화 1회가
+//      곧 그래프의 점 하나라, 재기동할 때마다 같은 구간에 점이 하나 더 찍히면 추이가 부풀려진다.
 //   ② 1시간 — 재화 유통 총량 + 거래소 호가. 둘은 함께 읽어야 뜻이 생기는 짝이라(총량↑·호가↑=인플레이션,
-//      총량 유지·호가↑=품귀) 한 배치에서 같은 시각 기준으로 낸다.
+//      총량 유지·호가↑=품귀) 한 배치에서 같은 시각 기준으로 낸다. ①과 같은 이유로 기동 시 따라잡지 않는다.
 //   ③ 1일 — 상태 스냅샷 6종(아이템 유통량·진행도·착용 장비·파티 조합·스킬 조합·스킬 투자). player_item·
 //      player_character·player_skill 전체를 GROUP BY 하는 무거운 집계라 **트래픽이 낮은 시간대(KST 05시)**에
 //      몰아 돌린다. **이 무거운 집계가 게임 API의 커넥션·스레드와 경합하지 않는 것**이 프로세스를 나눈
-//      실질적인 이득이다. 적재 테이블이 (log_date, …) 자연 키 PK라 같은 날 다시 돌면 덮어쓴다.
+//      실질적인 이득이다. 적재 테이블이 (log_date, …) 자연 키 PK라 같은 날 다시 돌면 덮어쓰므로,
+//      예정 시각을 지나 기동하면 그날분을 **따라잡는다**(그날의 스냅샷이 비지 않는다).
 builder.Services.AddHostedService<OnlineUserHistoryBatchScheduler>();
 builder.Services.AddHostedService<HourlyHistoryBatchScheduler>();
 builder.Services.AddHostedService<DailyHistoryBatchScheduler>();

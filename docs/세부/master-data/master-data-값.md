@@ -1052,7 +1052,7 @@ attack = max(1, round(monster_master.attack × 1.18^(monster_level - 1)))
 >
 > **보스러시(`boss_rush_spawn`)도 같은 레벨을 쓴다** — 라운드 `r`은 Act `r`의 보스 스테이지 한 판이므로 등장 레벨이 그 지역 s7~10 구간·보스 레벨과 같고, 마리 수만 라운드 총 체력이 종전과 같아지도록 잡았다([보스러시 기획서](../boss-rush-기획서.md) 4.1).
 >
-> ⚠️ **10 스테이지 구성은 서버 진행 시퀀스와 클라이언트 상수에 함께 걸려 있다** — 서버는 `GameServer.Core/MasterData/StageCoords.cs`(`StagesPerAct`·`BossStage`·`TotalStages` = 10·10·100), 클라이언트는 `StagePanelController`·`DungeonBattleFlow`의 `StagesPerRegion` 상수를 이 값과 맞춰야 한다.
+> ⚠️ **10 스테이지 구성은 서버 진행 시퀀스와 클라이언트 상수에 함께 걸려 있다** — 서버는 `GameServer/MasterData/StageCoords.cs`(`StagesPerAct`·`BossStage`·`TotalStages` = 10·10·100), 클라이언트는 `StagePanelController`·`DungeonBattleFlow`의 `StagesPerRegion` 상수를 이 값과 맞춰야 한다.
 
 ## 12. gacha_master (가챠/뽑기)
 

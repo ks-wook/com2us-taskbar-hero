@@ -18,8 +18,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- 데이터 접근·모델·마스터 데이터·로깅·상수는 GameServer.Core에 있다(BatchServer와 공유). -->
-    <ProjectReference Include="..\GameServer.Core\GameServer.Core.csproj" />
     <ProjectReference Include="..\TaskbarHero.Common\TaskbarHero.Common.csproj" />
   </ItemGroup>
 

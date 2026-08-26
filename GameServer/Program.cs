@@ -81,7 +81,7 @@ builder.Services.AddOpenApi();
 // 이벤트 로그 방출기. req_id를 HttpContext.TraceIdentifier에서 얻으므로 접근자를 함께 등록한다.
 builder.Services.AddHttpContextAccessor();
 
-// 이벤트 로거는 GameServer.Core에 있어 웹 스택을 모른다(BatchServer와 공유하기 때문).
+// 이벤트 로거는 웹 스택을 몰라야 한다(BatchServer도 같은 로거를 쓰기 때문).
 //   req_id를 어디서 얻는지만 호스트가 정해 주입한다 — 여기서는 HttpContext.TraceIdentifier.
 builder.Services.AddSingleton<IRequestIdAccessor, HttpRequestIdAccessor>();
 builder.Services.AddSingleton<IEventLogger, EventLogger>();
@@ -189,9 +189,9 @@ builder.Services.AddScoped<ITradeService, TradeService>();
 //     · 일 단위 히스토리는 player_item·player_character·player_skill 전체를 GROUP BY 하는 무거운
 //       집계다. 같은 프로세스에 있으면 그 부하가 게임 API의 커넥션 풀·스레드풀과 직접 경합한다.
 //     · 배치가 죽어도 게임 API는 살아 있고, 배치만 따로 재시작할 수 있다.
-//   공유하는 것: 데이터 접근·모델·마스터 데이터·이벤트 로깅·상수 = GameServer.Core(두 프로젝트가 참조).
+//   공유하는 것: 배치는 이 프로젝트를 ProjectReference로 참조해 리포지토리·모델·마스터 데이터·이벤트 로깅·상수를 그대로 쓴다.
 //   여기 남는 것: 컨트롤러·서비스·미들웨어·인증 — 요청/응답 고유 계층.
-//   배치가 쓰는 리포지토리(History·Mail·Trade·BossRush)와 리더 락은 BatchServer/Program.cs에서 등록한다.
+//   배치가 쓰는 리포지토리(History·Mail·Trade·BossRush)는 BatchServer/Program.cs에서 등록한다.
 
 var app = builder.Build();
 

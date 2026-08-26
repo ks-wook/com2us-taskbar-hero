@@ -1,7 +1,7 @@
 # GameServer 컨테이너 이미지(로컬 개발용).
 #
-#   빌드 컨텍스트는 **저장소 루트**다 — 이 서버가 GameServer.Core와 TaskbarHero.Common을
-#   ProjectReference로 참조하므로 세 프로젝트 폴더가 모두 컨텍스트에 있어야 한다.
+#   빌드 컨텍스트는 **저장소 루트**다 — 이 서버가 TaskbarHero.Common을 ProjectReference로
+#   참조하므로 두 프로젝트 폴더가 모두 컨텍스트에 있어야 한다.
 #     docker compose build gameserver      (compose가 context: . 로 지정)
 #     docker build -f GameServer/Dockerfile -t taskbar-hero-gameserver .
 #
@@ -15,12 +15,10 @@ WORKDIR /src
 # 복원(restore)만 먼저 하도록 프로젝트 파일을 따로 복사한다 — 소스만 바뀐 재빌드에서
 # NuGet 복원 레이어를 캐시로 재사용한다.
 COPY TaskbarHero.Common/TaskbarHero.Common.csproj TaskbarHero.Common/
-COPY GameServer.Core/GameServer.Core.csproj GameServer.Core/
 COPY GameServer/GameServer.csproj GameServer/
 RUN dotnet restore GameServer/GameServer.csproj
 
 COPY TaskbarHero.Common/ TaskbarHero.Common/
-COPY GameServer.Core/ GameServer.Core/
 COPY GameServer/ GameServer/
 
 # TaskbarHero.Common/Directory.Build.props는 obj/bin을 폴더 밖 artifacts/로 재배치한다

@@ -30,7 +30,7 @@
 #   Security__SecretKey=<임의의 64자 정도 문자열>
 # 콘솔 실행(dotnet run / server_up.py)도 같은 appsettings를 읽으며, User Secrets를 두면 그쪽이 이긴다.
 #
-# Redis는 두 서버의 인증 토큰 캐시·배치 리더 락 저장소이며 127.0.0.1:36379로 노출한다(컨테이너 안은 6379)
+# Redis는 인증 토큰 캐시·보스러시 랭킹 캐시 저장소이며 127.0.0.1:36379로 노출한다(컨테이너 안은 6379)
 # (appsettings의 `Redis:ConnectionString`과 동일). 저장소 내 Windows 바이너리
 # `Redis-8.8.0-Windows-x64-cygwin-with-Service/`도 그대로 쓸 수 있으나, 같은 6379를
 # 쓰므로 둘 중 하나만 띄운다.
@@ -285,7 +285,7 @@ services:
       # 게임 DB + 마스터 DB(기동 시 인메모리로 적재) 두 개를 쓴다.
       ConnectionStrings__GameDb: "Server=mysql;Port=3306;Database=taskbar_hero_game;Uid=root;Pwd=taskbar_hero_dev;"
       ConnectionStrings__MasterDb: "Server=mysql;Port=3306;Database=taskbar_hero_master;Uid=root;Pwd=taskbar_hero_dev;"
-      # 인증 토큰 조회(AccountServer가 넣은 토큰) + 주기 배치 리더 락 저장소.
+      # 인증 토큰 조회(AccountServer가 넣은 토큰) + 보스러시 랭킹 캐시.
       Redis__ConnectionString: "redis:6379"
     ports:
       - "5247:5247"
@@ -313,9 +313,14 @@ services:
   #   프로세스를 나눈 목적이다 — container_name을 고정해 `--scale batchserver=N`이 거부되게 한다.
   #   오케스트레이터로 옮길 때는 replicas: 1 + 롤링 중 겹침 방지(strategy: Recreate)를 지정한다.
   #
+  #   **기본 구성에서는 뜨지 않는다** — `profiles: ["batch"]`라 `docker compose up -d`가 건너뛴다.
+  #   띄우려면 이름을 직접 대거나(`docker compose up -d batchserver`) 프로필을 켠다
+  #   (`docker compose --profile batch up -d`). 부트스트랩은 `server_up_with_docker.py --with-batch`.
+  #
   #   무거운 일 단위 집계(player_item·player_character·player_skill 전체 GROUP BY)가 여기서 도므로,
   #   그 부하가 gameserver의 커넥션 풀·스레드풀과 경합하지 않는다.
   batchserver:
+    profiles: ["batch"]
     build:
       context: .
       dockerfile: BatchServer/Dockerfile
@@ -329,7 +334,7 @@ services:
       # 게임 DB + 마스터 DB(기동 시 인메모리로 적재) 두 개를 쓴다.
       ConnectionStrings__GameDb: "Server=mysql;Port=3306;Database=taskbar_hero_game;Uid=root;Pwd=taskbar_hero_dev;"
       ConnectionStrings__MasterDb: "Server=mysql;Port=3306;Database=taskbar_hero_master;Uid=root;Pwd=taskbar_hero_dev;"
-      # 배치 리더 락(batch:lock:{배치키}) + 보스러시 랭킹 캐시.
+      # 보스러시 랭킹 캐시(리더보드 TTL·다음 시즌 메타). 배치 분산 락은 쓰지 않는다 — 이 워커는 1대다.
       Redis__ConnectionString: "redis:6379"
     volumes:
       # **gameserver와 같은 호스트 디렉터리**에 이벤트 로그를 쓴다 — fluentd가 그 폴더 하나만

@@ -92,7 +92,6 @@ python server_up.py
 - **AccountServer** — 계정/인증 서비스 (`http://localhost:5160`)
 - **GameServer** — 게임 로직 서비스 (`http://localhost:5247`)
 - **BatchServer** — 주기 배치 전담 워커(HTTP 없음). 게임 API를 여러 대로 늘려도 배치는 이 프로세스 1대만 돈다
-- **GameServer.Core** — GameServer·BatchServer가 공유하는 서버 전용 코어(데이터 접근·모델·마스터 데이터·로깅·상수)
 - **TaskbarHero.Common** — 서버-클라 공유 라이브러리
 
 전체 개발 로드맵은 [docs/서버-개발-계획.md](docs/서버-개발-계획.md)를 정본으로 한다. 아래 현황판은 서버/클라 작업 진척을 추적하기 위한 체크리스트다.

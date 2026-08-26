@@ -46,7 +46,7 @@
 | `클라이언트` | Unity 클라이언트(actor) |
 | `AccountServer` | 계정/인증 서버 프로세스(컨트롤러·서비스·리포지토리·토큰 캐시 포함) |
 | `GameServer` | 게임 로직 서버 프로세스(컨트롤러·서비스·리포지토리 포함) |
-| `BatchServer` | 주기 배치 전담 워커 프로세스(HTTP 없음). 배치 다이어그램의 서버 참여자는 이쪽이다 |
+| `BatchServer` | 주기 배치 전담 워커 프로세스(HTTP 없음, 1대 고정). 배치 다이어그램의 서버 참여자는 이쪽이다 |
 | `MySQL(account)` / `MySQL(game)` | 각 서버가 쓰는 MySQL 스키마 |
 | `Redis` | 인증 토큰 캐시(`auth:token:{userId}`) |
 
@@ -1025,7 +1025,7 @@ sequenceDiagram
 
 ### 거래소 만료 배치 — TradeExpireBatchScheduler (엔드포인트 없음)
 
-등록 후 3일이 지난 판매중 등록을 `status=4`(만료)로 닫고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). **BatchServer 프로세스**의 `BackgroundService`(공통 골격 `PeriodicBatchScheduler`)로, 기동 직후 1회 + **1시간 주기**(설정 `TradeExpireBatch`)로 실행되고 1회 최대 1000건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:trade-expire`)을 획득한 인스턴스만 실행한다.
+등록 후 3일이 지난 판매중 등록을 `status=4`(만료)로 닫고 아이템을 판매자에게 메일로 반송한다(trade 기획서 7.6). **BatchServer 프로세스**의 `BackgroundService`(공통 골격 `PeriodicBatchScheduler`)로, **매시 정각 기준 1시간 버킷**(설정 `TradeExpireBatch`)에 발화하고 1회 최대 1000건만 처리한다(초과분은 다음 발화 이월). BatchServer가 1대이므로 분산 락을 쓰지 않는다.
 
 **이 배치는 만료를 판정하지 않는다.** 목록 조회·구매·등록 한도가 `expires_at > now`를 직접 검사해 만료를 즉시 반영하므로, 배치의 역할은 **에스크로 아이템 반송과 `status` 정리**뿐이고 주기가 판매 기간(3일)의 정확도에 영향을 주지 않는다. 주기가 결정하는 것은 판매자가 아이템을 되돌려받기까지의 **지연 상한**이며, 3일을 기다린 판매자를 더 기다리게 하지 않도록 **1시간**으로 잡았다(대상 조회가 `idx_trade_expire` 커버링이라 빈 주기 비용이 사실상 없다).
 
@@ -1033,13 +1033,10 @@ sequenceDiagram
 sequenceDiagram
     autonumber
     participant S as BatchServer
-    participant R as Redis
     participant DB as MySQL(game)
 
-    S->>R: 리더 락 획득(batch:lock:trade-expire, SET NX + TTL=min(주기,5분) — 죽었을 때 풀리는 안전망)
-    alt 미획득(다른 인스턴스가 실행 중)
-        S->>S: 이번 주기 스킵
-    else 획득
+    Note over S: TradeExpireBatchScheduler — 매시 정각 기준 1시간 버킷에 발화(절대 시각·재진입 없음)
+    loop 매 발화
         S->>DB: 만료 대상 조회(trade_listing, status=1 이면서 expires_at 경과, 최대 1000건)
         DB-->>S: listingId 목록
         loop 등록 1건씩
@@ -1049,7 +1046,7 @@ sequenceDiagram
                 S->>S: 스킵
             else 선점 성공
                 S->>DB: 반송 스냅샷 조회 후 반송 메일 데이터 적재(판매자, 템플릿 202, 만료 없음)
-                    end
+            end
         end
         S->>S: 요약 로그 1줄(처리 n건 / 스킵 s건 / 실패 f건)
     end
@@ -1058,7 +1055,7 @@ sequenceDiagram
 - **골드 이동은 없다.** 만료 반송은 에스크로 아이템을 메일 첨부로 되돌릴 뿐이다.
 - 메일 첨부가 **강화 단계를 보존**하므로 반송 장비는 등록 당시 강화 단계 그대로 돌아온다(`player_mail_reward.enhance_level`).
 - 건별 예외는 그 건만 실패로 세고 다음 건을 계속 처리한다(주기 전체를 중단하지 않는다).
-- **리더 락은 주기가 끝나면 해제한다**(소유자 확인 Lua CAS). TTL은 주기가 아니라 `min(주기, 5분)`이며 "락을 잡은 채 프로세스가 죽었을 때 풀리게 하는 안전망"일 뿐이라, 재기동 후 곧바로 다시 실행된다(주기를 하루로 늘려도 하루 동안 멈추지 않는다).
+- **분산 락이 없다.** BatchServer가 1대로 뜨는 것을 배포가 보장하므로 잠글 상대가 없다. 발화 시각이 **절대 시각**(매시 정각 기준 버킷)이라 프로세스를 언제 띄웠든 같은 시각에 돈다.
 
 ## 가챠(뽑기)
 
@@ -1333,32 +1330,26 @@ sequenceDiagram
 
 ### 메일 보관 GC 배치 — MailGcBatchScheduler (엔드포인트 없음)
 
-발급(수신) 후 7일이 지난 메일을 열람·수령 여부와 무관하게 삭제한다(mail 기획서 6.5). **BatchServer 프로세스**의 `BackgroundService`(공통 골격 `PeriodicBatchScheduler`)로, 기동 직후 1회 + 1시간 주기(설정 `MailGcBatch`)로 실행되고 1회 최대 500건만 처리한다(초과분은 다음 주기 이월). 주기마다 Redis 리더 락(`batch:lock:mail-gc`)을 먼저 획득한 인스턴스만 실행한다 — BatchServer는 1대로 뜨므로 정상 운영에서는 늘 획득하며, 이 락은 실수로 2대가 뜬 경우를 위한 이중 방어다.
+발급(수신) 후 7일이 지난 메일을 열람·수령 여부와 무관하게 삭제한다(mail 기획서 6.5). **BatchServer 프로세스**의 `BackgroundService`(공통 골격 `PeriodicBatchScheduler`)로, **매시 정각 기준 1시간 버킷**(설정 `MailGcBatch`)에 발화하고 1회 최대 500건만 처리한다(초과분은 다음 발화 이월). BatchServer가 1대이므로 분산 락을 쓰지 않는다.
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant S as BatchServer
-    participant R as Redis
     participant DB as MySQL(game)
 
-    Note over S: MailGcBatchScheduler — 기동 직후 1회 실행 후 1시간 주기 반복(재진입 없음)
-    loop 매 주기
-        S->>R: 리더 락 시도(batch:lock:mail-gc, SET NX + TTL=min(주기,5분) — 주기 종료 시 소유자 확인 후 해제)
-        alt 락 미획득(다른 인스턴스가 이번 주기 실행)
-            S->>S: 스킵(Debug 로그)
-        else 락 획득(Redis 장애 시에도 락 없이 진행 — 축소 운전)
-            S->>S: 삭제 기준 시각 산출(now − 7일)
-            S->>DB: 보관 기한 경과 메일 데이터 확인(발급 시각 기준, mail_id 오름차순 최대 500건)
-            alt 대상 없음
-                S->>S: 종료(로그 생략 — 소음 방지)
-            else 대상 있음
-                S->>DB: 메일 데이터 삭제(첨부 player_mail_reward는 FK CASCADE로 함께 삭제)
-                S->>S: 요약 로그(삭제 N건)
-            end
+    Note over S: MailGcBatchScheduler — 매시 정각 기준 1시간 버킷에 발화(절대 시각·재진입 없음)
+    loop 매 발화
+        S->>S: 삭제 기준 시각 산출(now − 7일)
+        S->>DB: 보관 기한 경과 메일 데이터 확인(발급 시각 기준, mail_id 오름차순 최대 500건)
+        alt 대상 없음
+            S->>S: 종료(로그 생략 — 소음 방지)
+        else 대상 있음
+            S->>DB: 메일 데이터 삭제(첨부 player_mail_reward는 FK CASCADE로 함께 삭제)
+            S->>S: 요약 로그(삭제 N건)
         end
     end
-    Note over S: 주기 실행 실패는 Error 로그 후 루프 유지(다음 주기에 재시도)
+    Note over S: 발화 실행 실패는 Error 로그 후 루프 유지(다음 발화에 재시도)
 ```
 
 
@@ -1599,37 +1590,28 @@ sequenceDiagram
     participant R as Redis
     participant DB as MySQL(game)
 
-    Note over S: BossRushSeasonBatchScheduler — 기동 직후 1회 실행 후 진행 중 시즌의 end_at까지 대기했다가 그 시각에 실행(폴링 없음·재진입 없음)
-    loop 매 주기
-        S->>R: 리더 락 시도(batch:lock:bossrush-season, SET NX + TTL=min(주기,5분))
-        alt 락 미획득(다른 인스턴스가 이번 주기 실행)
-            S->>S: 스킵(Debug 로그)
-        else 락 획득(Redis 장애 시에도 락 없이 진행 — 축소 운전)
-            S->>DB: 진행 중 시즌 확인
-            alt 진행 중 시즌 없음
-                S->>S: 종료(시즌을 만들지 않는다 — 정산할 대상이 없으므로 무기한 대기, 외부 기상 신호로만 재개)
-                Note over S,DB: 이 배치가 여는 것은 다음 시즌뿐이다 — 첫 시즌 1행은 스키마 초기화 SQL(db-schema.sql)이 심는다
+    Note over S: BossRushSeasonBatchScheduler — 진행 중 시즌의 end_at을 발화 시각으로 삼는다(폴링 없음·재진입 없음)
+    loop 매 발화
+        S->>DB: 종료 시각 지난 시즌 선점(status 1 → 2, 조건부 갱신)
+        alt 정산 대상 없음
+            S->>S: 종료(로그 생략 — 소음 방지)
+            Note over S,DB: 이 배치가 여는 것은 다음 시즌뿐이다 — 첫 시즌 1행은 스키마 초기화 SQL(db-schema.sql)이 심는다
+        else 선점 성공
+            loop 순위 미확정 기록(페이지 단위, 각 페이지가 1트랜잭션)
+                S->>DB: final_rank=0 기록을 (best_clear_ms, recorded_at) 순으로 조회
+                S->>S: 순위 산출 + 보상 구간 매칭(boss_rush_rank_reward — 1~3위만)
+                Note over S,DB: 트랜잭션 — 순위 보상 메일 발급(템플릿 501) + final_rank 조건부 확정(멱등)
+                S->>DB: player_mail + player_mail_reward INSERT(골드 1건) → boss_rush_record UPDATE
             end
-            S->>DB: 종료 시각 지난 시즌 선점(status 1 → 2, 조건부 갱신)
-            alt 정산 대상 없음
-                S->>S: 종료(로그 생략 — 소음 방지)
-            else 선점 성공
-                loop 순위 미확정 기록(페이지 단위, 각 페이지가 1트랜잭션)
-                    S->>DB: final_rank=0 기록을 (best_clear_ms, recorded_at) 순으로 조회
-                    S->>S: 순위 산출 + 보상 구간 매칭(boss_rush_rank_reward — 1~3위만)
-                    Note over S,DB: 트랜잭션 — 순위 보상 메일 발급(템플릿 501) + final_rank 조건부 확정(멱등)
-                    S->>DB: player_mail + player_mail_reward INSERT(골드 1건) → boss_rush_record UPDATE
-                end
-                S->>DB: 시즌 종료 처리(status=3, settled_at)
-                S->>R: 종료 시즌 리더보드 TTL 7일
-                S->>DB: 다음 시즌 개시(start_at 유니크로 중복 방지)
-                S->>R: 현재 시즌 메타 캐시 갱신
-                S->>S: 요약 로그(순위 확정 N건 · 보상 발급 M건)
-                S->>S: 다음 기상 시각 = 새 시즌의 end_at
-            end
+            S->>DB: 시즌 종료 처리(status=3, settled_at)
+            S->>R: 종료 시즌 리더보드 TTL 7일
+            S->>DB: 다음 시즌 개시(start_at 유니크로 중복 방지)
+            S->>R: 현재 시즌 메타 캐시 갱신
+            S->>S: 요약 로그(순위 확정 N건 · 보상 발급 M건)
         end
     end
-    Note over S: 주기 실행 실패는 Error 로그 후 루프 유지(final_rank=0 조건이 재진입 멱등성을 보장)
+    Note over S: 다음 발화 시각은 DB의 진행 중 시즌 end_at을 다시 읽어 정한다(진행 중 시즌이 없으면 기본 간격 버킷으로 재확인)
+    Note over S: 발화 실행 실패는 Error 로그 후 루프 유지(final_rank=0 조건이 재진입 멱등성을 보장)
 ```
 
 > **버려진 런을 정리하는 배치는 두지 않는다.** 만료된 런에는 반송할 자산이 없어 배치가 할 일이 `status`
