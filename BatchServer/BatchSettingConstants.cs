@@ -1,4 +1,4 @@
-using GameServer.Util;
+﻿using GameServer.Util;
 
 namespace GameServer;
 
@@ -41,6 +41,13 @@ public static class BatchSettingConstants
 
         /// <summary>종료된 시즌 랭킹 캐시 보관 기간(7일).</summary>
         public static readonly TimeSpan ClosedSeasonTtl = TimeSpan.FromDays(7);
+
+        /// <summary>
+        /// 미완료 시즌 이어받기(복구)를 연속으로 몇 번까지 다시 시도할지(5회). 한 건도 확정하지 못한 시도만 센다.
+        /// 재시도로 풀리는 원인(재기동·DB 순단)은 보통 첫 시도에서 끝나고, 그렇지 않은 원인은 코드·데이터 결함이라
+        /// 계속 돌려도 낫지 않는다 — 상한이 없으면 발화마다 같은 정산을 다시 돌려 DB와 로그만 소모한다.
+        /// </summary>
+        public const int MaxRecoveryAttempts = 5;
     }
 
     /// <summary>메일 GC — 매시 00분. 보관 기간(<c>Constants.Mail.RetentionSeconds</c>) 지난 메일을 삭제한다.</summary>

@@ -138,6 +138,8 @@ builder.Services.AddHostedService<MailGcBatchScheduler>();
 //   1회(페이지) 처리 상한(BatchSettingConstants.BossRushSeason.DefaultBatchSize) — 페이지 단위 트랜잭션으로 쪼개
 //   긴 잠금을 만들지 않는다.
 //   정산은 final_rank=0 조건부 갱신이라 멱등하며, 중간에 죽어도 다음 발화가 남은 행만 이어서 처리한다.
+//   **이어받기 재시도는 5회까지**(BatchSettingConstants.BossRushSeason.MaxRecoveryAttempts) — 한 건도 확정하지
+//   못한 시도가 그만큼 연속되면 재시도로 풀리지 않는 원인이므로, 발화마다 DB를 다시 두드리지 않고 멈춘다.
 //   **랭킹 캐시 워밍업은 이 배치가 하지 않는다** — 부트스트랩 스크립트가 GameServer의 관리 API로 지시한다.
 builder.Services.AddHostedService<BossRushSeasonBatchScheduler>();
 

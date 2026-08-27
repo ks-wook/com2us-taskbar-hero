@@ -18,6 +18,10 @@ namespace GameServer.Batch;
 /// <para><b>멱등</b>하다 — 순위 확정은 <c>final_rank = 0</c> 조건부 갱신이라 재진입 시 이미 처리한 행은
 /// 0행이 되어 스킵되고, 다음 시즌 개시는 <c>start_at</c> 유니크가 중복을 막는다. 배치가 중간에 죽어도
 /// 다음 주기가 남은 행만 이어서 처리한다.</para>
+/// <para><b>이어받기는 무한정 반복하지 않는다</b> — 한 건도 확정하지 못한 복구 시도가
+/// <see cref="BatchSettingConstants.BossRushSeason.MaxRecoveryAttempts"/>회(5회) 연속되면 자동 복구를 멈추고
+/// Error로 알린다. 그런 원인은 재시도로 풀리지 않으므로, 계속 돌리면 결함이 곧 정산 쿼리 반복으로 번진다.
+/// 확정이 한 건이라도 있었으면 진전이 있는 것이라 횟수를 다시 0으로 돌린다.</para>
 /// <para><b>시즌을 새로 만들지 않는다</b> — 진행 중 시즌이 없으면 그 발화는 아무 일도 하지 않고 끝낸다.
 /// 이 배치가 여는 것은 <b>다음</b> 시즌뿐이고, <b>첫 시즌 1행은 스키마 초기화 SQL</b>(<c>docs/공통/db-schema.sql</c>)이
 /// 심는다 — 그 행이 없으면 보스러시는 계속 닫힌 상태로 남는다.</para>
@@ -37,6 +41,11 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<BossRushSeasonBatchScheduler> _logger;
     private readonly IEventLogger _eventLogger;
+
+    // 이어받기(복구)를 시도하고 있는 시즌과, 그 시즌에서 **한 건도 확정하지 못한** 연속 시도 횟수.
+    // 상한(BatchSettingConstants.BossRushSeason.MaxRecoveryAttempts)에 닿으면 자동 복구를 멈춘다.
+    private long _recoverySeasonId;
+    private int _recoveryFailures;
 
     /// <summary>설정에서 실행 주기·1회 처리 상한을 읽고(없거나 0 이하이면 기본값), 마스터 데이터와 이벤트 로거를 주입받는다.</summary>
     public BossRushSeasonBatchScheduler(
@@ -97,6 +106,8 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     /// 이어받는다. ③을 ④보다 앞에 두는 것도 같은 이유다(중간에 죽어도 복구 진입점이 남는다).</para>
     /// <para><b>진행 중 시즌 확인은 여기서 하지 않는다</b> — 발화 시각 계산이 이미 그 일을 하고, 정산 대상
     /// 자체는 ①의 조건부 갱신이 원자적으로 고른다. 정산할 시즌이 없으면 조용히 끝낸다(로그 소음 방지).</para>
+    /// <para>①의 이어받기에는 <b>재시도 상한 5회</b>가 걸린다 — 진전 없는 복구가 그만큼 연속되면 시즌을 정산 중으로
+    /// 남긴 채 아무 일도 하지 않는다(사람이 원인을 고치고 배치를 다시 띄워야 이어서 정산한다).</para>
     /// </summary>
     protected override async Task<BatchCycleResult> RunCycleAsync(IServiceScope scope, CancellationToken stoppingToken)
     {
@@ -118,8 +129,22 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         var season = await repository.GetSettlingSeasonAsync();
         if (season is not null)
         {
+            // 다른 시즌을 이어받기 시작했으면 횟수를 새로 센다.
+            if (season.SeasonId != _recoverySeasonId)
+            {
+                _recoverySeasonId = season.SeasonId;
+                _recoveryFailures = 0;
+            }
+
+            // 상한에 닿았으면 더 돌리지 않는다 — 원인이 재시도로 풀리지 않는 종류라는 뜻이고, 계속 시도하면
+            // 정산 쿼리가 발화마다 DB를 다시 두드린다. 상한 도달 로그는 아래에서 1회만 남긴다.
+            if (_recoveryFailures >= BatchSettingConstants.BossRushSeason.MaxRecoveryAttempts)
+            {
+                return BatchCycleResult.Idle;
+            }
+
             _logger.ZLogWarning(
-                $"보스러시 정산 미완료 시즌 감지 — 이어서 정산합니다: seasonId {season.SeasonId:@SeasonId} (종료 {season.EndAt:@EndAt})");
+                $"보스러시 정산 미완료 시즌 감지 — 이어서 정산합니다: seasonId {season.SeasonId:@SeasonId} (종료 {season.EndAt:@EndAt}) 복구 시도 {_recoveryFailures + 1:@Attempt}/{BatchSettingConstants.BossRushSeason.MaxRecoveryAttempts:@AttemptLimit}");
         }
         else
         {
@@ -153,9 +178,20 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
             }
             else
             {
+                // 확정이 한 건이라도 있었으면 이어받기가 먹히고 있다는 뜻이라 횟수를 되돌린다.
+                // 한 건도 없었으면 재시도로 풀리지 않는 원인이므로 횟수를 올린다.
+                _recoverySeasonId = season.SeasonId;
+                _recoveryFailures = settled > 0 ? 0 : _recoveryFailures + 1;
+
                 // 남은 대상이 있는데 한 건도 진전되지 않았다 — 코드·데이터 결함이라 재시도만으로 풀리지 않는다.
                 _logger.ZLogError(
                     $"보스러시 시즌 정산 진전 없음: seasonId {season.SeasonId:@SeasonId} 확정 {settled:@Settled}건 · 실패 {failed:@Failed}건 — 원인 확인이 필요합니다(다음 발화에서 재시도).");
+
+                if (_recoveryFailures >= BatchSettingConstants.BossRushSeason.MaxRecoveryAttempts)
+                {
+                    _logger.ZLogError(
+                        $"보스러시 정산 자동 복구 중단: seasonId {season.SeasonId:@SeasonId} 연속 실패 {_recoveryFailures:@Failures}회(상한 {BatchSettingConstants.BossRushSeason.MaxRecoveryAttempts:@AttemptLimit}) — 시즌은 정산 중으로 남습니다. 원인을 고친 뒤 배치를 다시 띄워야 이어서 정산합니다.");
+                }
             }
 
             return new BatchCycleResult(settled, 0, failed);
@@ -172,6 +208,10 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         // ④ 시즌 종료(정산 중 → 종료) + 리더보드 TTL. 여기까지 와야 이 시즌의 정산이 끝난 것이다.
         await repository.CloseSeasonAsync(season.SeasonId, nowUnix);
         await rankCache.ExpireAsync(season.SeasonId, BatchSettingConstants.BossRushSeason.ClosedSeasonTtl);
+
+        // 이 시즌 정산이 끝났으므로 복구 횟수를 비운다.
+        _recoverySeasonId = 0;
+        _recoveryFailures = 0;
 
         _logger.ZLogInformation($"보스러시 시즌 정산 완료: seasonId {season.SeasonId:@SeasonId} 순위 확정 {settled:@Settled}건 · 보상 발급 {rewarded:@Rewarded}건 → 다음 시즌 {next.SeasonId:@NextSeasonId}");
 
