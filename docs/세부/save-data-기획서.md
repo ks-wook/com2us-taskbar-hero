@@ -439,7 +439,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 }
 ```
 
-- `nickname`: **최초 캐릭터 생성(계정 초기화) 시에만** 사용하며, 이후 호출에서는 무시한다.
+- `nickname`: **최초 캐릭터 생성(계정 초기화) 시에만** 사용하며, 이후 호출에서는 무시한다. 비어 있으면 `InvalidRequest(1006)`, **12자를 초과하면 `NicknameTooLong(1007)`** 으로 DB에 닿기 전에 거절한다(클라이언트도 입력 단계에서 같은 길이로 막으므로, 이 코드가 나오면 그 검사를 우회한 요청이다). 최대 길이는 `GameServer` `Constants.Player.NicknameMaxLength`(12)이며 회원가입 검증(`AccountServer` `Constants.Auth.MaxNicknameLength`)과 같은 값을 유지한다.
 - `classCode`: 생성할 캐릭터의 직업. **이미 보유한 캐릭터의 직업과 중복될 수 없다.**
 - `gender`: 캐릭터 성별(`1`:남 `2`:여). **캐릭터마다 따로 고르며 중복 제약이 없다**(파티 3인이 모두 같은 성별이어도 된다). 외형(남/여 스프라이트)만 가르는 값이라 스탯·생성 비용에는 영향을 주지 않고, **생성 시 확정되어 이후 변경 API를 두지 않는다**. 그 외 값은 `InvalidGender(2007)`이며, 필드를 보내지 않으면 `1`(남)로 저장된다.
 
@@ -460,7 +460,7 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 - `characterId`: 서버가 배정한 캐릭터 고유 식별자(생성 순번).
 - `slot`: 서버가 자동 배정한 파티 자리. 빈 자리가 없으면 **`0`(미편성)** 으로 생성되며, 이 경우 클라이언트는 5.5로 편성을 유도한다.
 - `cost`·`balance`: 소모한 골드와 차감 후 잔액. **최초 생성은 무료라 `cost.amount=0`, `balance`는 빈 목록**이다. 생성 **전** 안내 비용은 클라이언트가 마스터 `character_create_cost` 번들에서 다음 생성 순번 값을 조회해 표시한다.
-- 오류: `InvalidClassCode(2005)`(존재하지 않는 직업), `InvalidGender(2007)`(1·2 외의 성별 값), `InvalidCharacterId(2006)`(**이미 보유한 직업과 중복** — 전 직업을 보유한 상태의 생성 요청도 반드시 중복이므로 이 코드로 걸린다), `InsufficientCurrency(4005)`(생성 골드 부족).
+- 오류: `InvalidClassCode(2005)`(존재하지 않는 직업), `InvalidGender(2007)`(1·2 외의 성별 값), `InvalidCharacterId(2006)`(**이미 보유한 직업과 중복** — 전 직업을 보유한 상태의 생성 요청도 반드시 중복이므로 이 코드로 걸린다), `InsufficientCurrency(4005)`(생성 골드 부족), `NicknameTooLong(1007)`(최초 생성 닉네임 12자 초과).
 - **파티가 가득 차 있어도 생성은 가능하다** — 보유와 편성이 분리되어 있으므로 새 캐릭터는 미편성(`slot=0`)으로 들어간다. 따라서 본 엔드포인트는 `PlayerAlreadyExists(2004)`를 반환하지 않는다.
 
 ---
@@ -570,6 +570,8 @@ Base URL(개발): `http://localhost:5247` (GameServer). 모든 API는 **POST**, 
 | PartySlotOccupied | 2010 | 파티 자리 지정 오류(정원 초과·범위 밖·같은 자리 중복, 5.5) |
 
 > `2003`(구 `SaveVersionMismatch`)은 세이브 스키마 버전(`data_version`) 제거로 폐기했다. 값 혼선을 막기 위해 재사용하지 않고 **결번**으로 둔다.
+
+최초 캐릭터 생성의 **닉네임 길이 초과는 계정 도메인 코드 `NicknameTooLong(1007)`을 그대로 쓴다** — 회원가입(`signup`)과 같은 닉네임 규칙이라 세이브 도메인에 코드를 새로 두지 않는다.
 
 인벤토리 페이지 조회(5.2)는 세이브 없음(`SaveNotFound(2001)`) 외에 전용 에러 코드를 쓰지 않는다. 페이지 간 정합성을 검증하지 않으므로 그에 대응하는 코드도 없다.
 

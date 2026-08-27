@@ -52,6 +52,9 @@
 | InvalidToken | 1004 | 토큰 무효(서명/형식 오류) |
 | ExpiredToken | 1005 | 토큰 만료 또는 폐기됨 |
 | InvalidRequest | 1006 | 요청 파라미터 오류(형식/길이) |
+| NicknameTooLong | 1007 | 닉네임이 최대 길이(12자)를 초과 |
+
+- **`NicknameTooLong(1007)`은 닉네임 길이 초과 전용이다.** 닉네임을 받는 두 경로(`POST /api/auth/signup`의 `nickname`, `POST /api/game/create-character`의 최초 생성 `nickname`)가 같은 코드를 쓴다. 클라이언트도 입력 단계에서 12자까지만 보내므로, 이 코드가 나오면 그 검사를 우회한 요청이다. 닉네임이 **비어 있는** 경우는 형식 오류라 `InvalidRequest(1006)`이다.
 
 ### 2.3 세이브 데이터 (2000번대)
 
@@ -224,6 +227,7 @@ namespace TaskbarHero.Common
         InvalidToken = 1004,
         ExpiredToken = 1005,
         InvalidRequest = 1006,
+        NicknameTooLong = 1007,
 
         // 세이브 데이터 (2000번대)
         SaveNotFound = 2001,

@@ -34,7 +34,7 @@
 
 | 경로 | 기능 | 인증 | 요청 `data`(또는 body) | 응답 주요 | 주요 에러 |
 |---|---|---|---|---|---|
-| `POST /api/auth/signup` | 계정 생성(회원가입) | 무인증 | `{ email, password, nickname }` | `userId` | `DuplicateEmail(1003)`, `InvalidRequest(1006)` |
+| `POST /api/auth/signup` | 계정 생성(회원가입) | 무인증 | `{ email, password, nickname }` | `userId` | `DuplicateEmail(1003)`, `InvalidRequest(1006)`, `NicknameTooLong(1007)` |
 | `POST /api/auth/login` | 로그인·인증 토큰 발급 | 무인증 | `{ email, password }` | `userId`, `token` | `UserNotFound(1001)`, `InvalidPassword(1002)` |
 | `POST /api/auth/logout` | 로그아웃(토큰 무효화) | 인증 | `{}` | — | `InvalidToken(1004)`, `ExpiredToken(1005)`, `InvalidRequest(1006)` |
 | `POST /api/auth/validate` | 자동 로그인 검증(저장된 세션 유효성 확인) | 인증 | `{}` | `userId` | `InvalidToken(1004)`, `ExpiredToken(1005)`, `InvalidRequest(1006)` |
@@ -53,13 +53,13 @@
 |---|---|---|---|---|
 | `POST /api/game/load` | 접속 시 코어 세이브 스냅샷 로드(고정 크기 데이터 전량, 가방 아이템 제외) | `{}` | `player`, `characters[]`, `currencies[]`, `equipped[]`, `skills[]`, `runes[]`, `cube`, `activeBuffs[]`, `inventoryTotal`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
 | `POST /api/game/inventory/list` | 가방 아이템 페이지 조회(`slot` 커서 keyset 페이징) | `{ cursor, limit }` | `items[]`, `nextCursor`, `hasMore`, `total` | `SaveNotFound(2001)` |
-| `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정 + 직업 기본 무기 장착 + 기본 액티브 스킬 습득·장착) | `{ nickname, classCode, gender }` | `characterId`, `classCode`, `gender`, `level`, `cost`, `balance` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `InvalidGender(2007)`, `PlayerAlreadyExists(2004)`, `InsufficientCurrency(4005)` |
+| `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정 + 직업 기본 무기 장착 + 기본 액티브 스킬 습득·장착) | `{ nickname, classCode, gender }` | `characterId`, `classCode`, `gender`, `level`, `cost`, `balance` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `InvalidGender(2007)`, `PlayerAlreadyExists(2004)`, `InsufficientCurrency(4005)`, `NicknameTooLong(1007)` |
 | `POST /api/game/party/arrange` | 파티 편성 저장(저장 후 파티 **전체 스냅샷**) | `{ members:[{ characterId, slot }] }`(1~3개) | `characters[]`(보유 전체, 자리 순) | `CannotRemoveLastCharacter(2008)`, `CharacterNotFound(2009)`, `PartySlotOccupied(2010)`, `InvalidCharacterId(2006)` |
 | `POST /api/game/update-last-active` | 접속 시각 갱신(heartbeat, 오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
 
 - **로드는 2단계**다. 크기가 고정된 데이터(플레이어·캐릭터·재화·장착 장비·스킬·룬·큐브)는 `load`가 한 번에 내려주고, 무한히 커질 수 있는 **가방 아이템만** `inventory/list`가 페이징한다. 접속 직후에는 `load`만 호출하고, 가방은 **창고 UI를 열 때마다** 조회한다(자동 전투 전리품이 계속 적재되므로 로컬 캐시를 신뢰하지 않는다). 이 조회는 **캐시 없이 MySQL을 직접 읽는다** — `cursor`·`limit`을 그대로 질의로 넘겨 `(user_id, slot)` 인덱스로 필요한 구간만 읽으므로 캐시를 둘 이유가 없다([인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 6.5).
 - **페이지 간 정합성은 서버가 검증하지 않는다.** 클라이언트가 페이지를 이어붙일 때 `itemId`를 키로 중복 제거하고 나중 페이지를 우선한다([세이브 데이터 기획서](../세부/save-data-기획서.md) 5.2).
-- 캐릭터는 **한 번에 1개씩** 생성(`create-character`), 계정당 최대 3개·**직업 중복 불가**. `nickname`은 최초 생성 시에만 사용. 캐릭터·성장 상태 조회는 별도 API 없이 `load` 스냅샷 사용.
+- 캐릭터는 **한 번에 1개씩** 생성(`create-character`), 계정당 최대 3개·**직업 중복 불가**. `nickname`은 최초 생성 시에만 사용하며 **최대 12자**(초과 시 `NicknameTooLong(1007)`). 캐릭터·성장 상태 조회는 별도 API 없이 `load` 스냅샷 사용.
 - **성별(`gender`)**: `1`(남)·`2`(여) 중 하나를 생성 시 함께 보내며, 그 외 값은 `InvalidGender(2007)`. 외형만 가르는 값이라 직업 중복 제약·스탯·비용에는 영향이 없고, 요청에 필드가 없으면 `1`(남)로 저장된다. **생성 이후 변경 API는 없다.** `load`의 `characters[]`에도 `gender`가 포함된다.
 - **파티 편성은 이동 절차가 아니라 스냅샷**이다(`party/arrange`). `members`가 곧 최종 파티이며 **목록에 없는 보유 캐릭터는 자동으로 미편성(`slot=0`)** 이 되므로, 추가·추방·교체·자리 바꾸기가 이 호출 하나로 표현된다. 멱등이고 골드를 쓰지 않으며 캐릭터를 삭제하지도 않는다. 응답의 `characters[]`로 편성 화면을 다시 그리면 되고 재조회가 필요 없다.
 - **기본 무기 장착 상태로 생성**: 생성되는 캐릭터는 그 직업의 **최저 등급 무기**(마스터 `item_master`에서 `equip_slot=1`·`class_req` 일치 중 가장 낮은 등급)를 1개 지급받아 무기 슬롯에 장착한 상태로 시작한다 — 캐릭터 삽입과 **같은 트랜잭션**이며, 장착 중이라 가방 칸을 쓰지 않는다(`inventoryTotal` 불변). 응답 필드는 늘지 않으므로 클라이언트는 생성 직후의 `load` 응답 `equipped[]`로 확인한다([세이브 데이터 기획서](../세부/save-data-기획서.md) 5.3).

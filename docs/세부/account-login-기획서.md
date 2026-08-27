@@ -219,7 +219,19 @@ Base URL(개발): `http://localhost:5160` (AccountServer)
 }
 ```
 
-- 검증: 이메일 형식, 비밀번호 최소 6자. 저장 시 `BCrypt.HashPassword(password)`.
+**Response (닉네임 길이 초과, 400 Bad Request)**
+```json
+{
+  "success": false,
+  "errorCode": 1007,
+  "userId": 0,
+  "message": "Nickname too long"
+}
+```
+
+- 검증: 이메일 형식, 비밀번호 최소 6자, 닉네임 필수·**최대 12자**. 저장 시 `BCrypt.HashPassword(password)`.
+- **닉네임 길이 초과는 전용 코드 `NicknameTooLong(1007)`으로 내린다** — 클라이언트가 회원가입 화면에서 12자까지만 입력·전송하도록 막고 있으므로, 서버까지 도달한 13자 이상은 그 검사를 우회한 요청이다. "닉네임이 길다"를 그대로 안내할 수 있게 형식 오류(`InvalidRequest(1006)`)와 구분한다. 닉네임이 비어 있는 경우는 `InvalidRequest(1006)`이다.
+- 최대 길이는 `AccountServer` `Constants.Auth.MaxNicknameLength`(12)이며, 캐릭터 생성 경로의 `GameServer` `Constants.Player.NicknameMaxLength`와 같은 값을 유지한다. `users.nickname` 컬럼은 `VARCHAR(50)`이라 이 검증이 DB 길이 오류보다 앞에서 걸러 준다.
 
 ---
 
@@ -423,6 +435,7 @@ POST 요청 body(JSON): { userId, token, data }
 | InvalidToken | 1004 | 토큰 무효(서명/형식 오류) | "Invalid token" |
 | ExpiredToken | 1005 | 토큰 만료 또는 폐기됨 | "Expired token" |
 | InvalidRequest | 1006 | 요청 파라미터 오류(형식/길이) | "Invalid request" |
+| NicknameTooLong | 1007 | 닉네임이 최대 길이(12자)를 초과 | "Nickname too long" |
 
 ## 7. 미결 사항 / TODO
 
