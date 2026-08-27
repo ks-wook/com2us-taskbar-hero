@@ -30,13 +30,19 @@ public sealed class EventLogger : IEventLogger
     /// 적재되는 시각은 수집 시각이 아니라 <b>서버가 찍은 이 값</b>이다(9.1).
     /// </summary>
 
-    private readonly ILogger _logger;
+    private readonly ILogger _eventSink;
+    private readonly ILogger<EventLogger> _logger;
     private readonly IRequestIdAccessor _requestId;
 
-    /// <summary>전용 카테고리 로거를 만들고, req_id 공급자를 주입받는다.</summary>
-    public EventLogger(ILoggerFactory loggerFactory, IRequestIdAccessor requestId)
+    /// <summary>
+    /// 전용 카테고리 로거(<paramref name="loggerFactory"/>)를 만들고, 방출 실패를 알릴 운영 로거와
+    /// req_id 공급자를 주입받는다. 두 로거는 경로가 다르다 — 전용 카테고리는 필터가 JSON 파일 sink로만
+    /// 보내므로, 사람이 읽어야 할 실패 보고를 그쪽에 내면 이벤트 라인 사이에 섞여 적재를 깨뜨린다.
+    /// </summary>
+    public EventLogger(ILoggerFactory loggerFactory, ILogger<EventLogger> logger, IRequestIdAccessor requestId)
     {
-        _logger = loggerFactory.CreateLogger(Constants.EventLog.Category);
+        _eventSink = loggerFactory.CreateLogger(Constants.EventLog.Category);
+        _logger = logger;
         _requestId = requestId;
     }
 
@@ -46,6 +52,25 @@ public sealed class EventLogger : IEventLogger
     /// 수집기에 변환 단계가 없어지기 때문이다(4.1).
     /// </summary>
     public void Action(string tag, long? uid, IEventFields fields, int? errorCode = null)
+    {
+        // 이벤트 로그는 집계용 파생 기록이다 — 방출에 실패해도 이미 커밋된 처리를 되돌릴 이유가 없다.
+        // 예외를 그대로 올리면 호출부(서비스)의 공통 catch가 **성공한 요청을 ServerError(500)로** 만든다.
+        // 그래서 여기서 흡수하고, 유실 사실은 운영 로그에 Error로 남긴다(로깅 규칙 5장 — 서버 결함).
+        try
+        {
+            Emit(tag, uid, fields, errorCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.ZLogError(ex, $"이벤트 로그 방출 실패: tag {tag:@Tag}, uid {uid:@UserId}");
+        }
+    }
+
+    /// <summary>
+    /// 공통 필드와 이벤트 고유 필드를 합쳐 실제 JSON 라인을 만들고 전용 sink로 보낸다.
+    /// 실패는 <see cref="Action"/>이 흡수하므로, 이 메서드는 예외를 그대로 올린다.
+    /// </summary>
+    private void Emit(string tag, long? uid, IEventFields fields, int? errorCode)
     {
         var line = new JsonObject
         {
@@ -82,6 +107,6 @@ public sealed class EventLogger : IEventLogger
         }
 
         // 메시지 자체가 완성된 JSON 라인이다 — 파일 sink는 접두사 없이 이 문자열만 쓴다.
-        _logger.ZLogInformation($"{line.ToJsonString()}");
+        _eventSink.ZLogInformation($"{line.ToJsonString()}");
     }
 }
