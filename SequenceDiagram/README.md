@@ -77,9 +77,9 @@ sequenceDiagram
     participant DB as MySQL(account)
 
     C->>S: POST /signup { email, password, nickname }
-    S->>S: 입력 검증(이메일 형식·비번 6자↑·닉네임)
+    S->>S: 입력 검증(이메일 형식·비번 6자↑·닉네임 필수·닉네임 12자↓)
     alt 검증 실패
-        S-->>C: 실패 { errorCode: InvalidRequest(1006) }
+        S-->>C: 실패 { errorCode: InvalidRequest(1006) / NicknameTooLong(1007) }
     else 검증 통과
         S->>DB: 동일 이메일 계정 데이터 확인
         DB-->>S: 존재 여부
@@ -265,10 +265,15 @@ sequenceDiagram
         S->>S: 직업 기본 액티브 스킬 확정(인메모리 마스터 skill_master — skill_type 1·class_code 일치 중 최소 skill_code, 없으면 습득 생략)
         S->>DB: 플레이어 세이브 데이터 확인
         alt 신규 계정(최초 생성)
-            S->>S: 신규 가입 지원금 메일 초안 렌더링(인메모리 마스터 — 문구 템플릿 101 + 첨부 newbie_reward_master)
-            S->>DB: 단일 트랜잭션 — 플레이어·첫 캐릭터(직업·성별, 파티 1번 자리)·기본 무기(장착 상태)·기본 스킬(레벨 1·장착)·큐브·출석 진행도 + 지원금 메일 적재
-            Note over S,DB: 계정당 1행(game_player)이라 이 트랜잭션은 생애 1회만 성공 → 지원금 중복 지급 불가
-            S-->>C: 성공 { characterId 1, slot 1, 무료 cost 0 }
+            S->>S: 닉네임 검증(비어 있지 않음 · 12자 이하)
+            alt 닉네임 없음 / 12자 초과
+                S-->>C: 실패 { errorCode: InvalidRequest(1006) / NicknameTooLong(1007) }
+            else 닉네임 유효
+                S->>S: 신규 가입 지원금 메일 초안 렌더링(인메모리 마스터 — 문구 템플릿 101 + 첨부 newbie_reward_master)
+                S->>DB: 단일 트랜잭션 — 플레이어·첫 캐릭터(직업·성별, 파티 1번 자리)·기본 무기(장착 상태)·기본 스킬(레벨 1·장착)·큐브·출석 진행도 + 지원금 메일 적재
+                Note over S,DB: 계정당 1행(game_player)이라 이 트랜잭션은 생애 1회만 성공 → 지원금 중복 지급 불가
+                S-->>C: 성공 { characterId 1, slot 1, 무료 cost 0 }
+            end
         else 기존 계정(추가 생성)
             S->>DB: 보유 캐릭터 데이터 확인(식별자·직업·파티 자리)
             S->>S: 직업 중복만 검사(보유 수 상한 없음) + 새 식별자·빈 파티 자리 배정(없으면 slot 0) + 마스터에서 생성 순번의 정액 비용 조회

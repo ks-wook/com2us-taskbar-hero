@@ -3,6 +3,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using TaskbarHero.Client.Managers;
+using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 
 namespace TaskbarHero.Client.UI
@@ -161,6 +162,14 @@ namespace TaskbarHero.Client.UI
             if (password.Length < MinPasswordLength)
             {
                 ShowModal("회원가입", $"비밀번호는 {MinPasswordLength}자 이상이어야 합니다.");
+                return;
+            }
+
+            // 닉네임 길이는 서버도 NicknameTooLong(1007)으로 거른다. 문구를 한곳(ErrorMessages)에서 가져와
+            // 여기서 막았을 때와 서버 응답을 받았을 때 같은 안내가 뜨게 한다.
+            if (nickname.Length > ErrorMessages.MaxNicknameLength)
+            {
+                ShowModal("회원가입", ErrorMessages.ForCode(ErrorCode.NicknameTooLong, null));
                 return;
             }
 

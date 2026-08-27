@@ -17,6 +17,7 @@ namespace TaskbarHero.Common
         InvalidToken = 1004,
         ExpiredToken = 1005,
         InvalidRequest = 1006,
+        NicknameTooLong = 1007,
 
         // 세이브 데이터 (2000번대)
         SaveNotFound = 2001,

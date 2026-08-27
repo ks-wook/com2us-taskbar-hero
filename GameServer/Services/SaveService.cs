@@ -133,6 +133,8 @@ public sealed class SaveService : ISaveService
     /// 그 직업의 <b>첫 번째 액티브 스킬</b>도 레벨 1로 습득·장착한 상태로 시작한다
     /// (맨손·무스킬로 전투에 나가지 않게 하기 위함 — 지급·습득은 캐릭터 삽입과 같은 트랜잭션에서 처리한다).
     /// 동시 초기화·중복 생성 경합은 UNIQUE 위반을 잡아 에러 코드로 변환한다.
+    /// <para>닉네임은 최초 생성에서만 쓰이며, 비어 있으면 InvalidRequest, 최대 길이를 넘으면 NicknameTooLong으로
+    /// DB에 닿기 전에 거절한다.</para>
     /// </summary>
     public async Task<SaveResult> CreateCharacterAsync(long userId, string? nickname, int classCode, int gender)
     {
@@ -172,14 +174,22 @@ public sealed class SaveService : ISaveService
                     return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
                 }
 
+                var trimmedNickname = nickname.Trim();
+
+                // 클라이언트가 입력 단계에서 막는 길이다. 넘어왔다면 우회 요청이므로 DB에 닿기 전에 막는다.
+                if (trimmedNickname.Length > Constants.Player.NicknameMaxLength)
+                {
+                    return new SaveResult(ErrorCode.NicknameTooLong, string.Empty, null);
+                }
+
                 var nowUnix = DateTimeUtil.NowUnixSeconds();
-                var welcomeMail = ComposeNewbieRewardMail(nickname.Trim(), nowUnix);
+                var welcomeMail = ComposeNewbieRewardMail(trimmedNickname, nowUnix);
 
                 CreatePlayerOutcome created;
                 try
                 {
                     created = await _saveRepository.CreatePlayerWithFirstCharacterAsync(
-                        userId, nickname.Trim(), classCode, gender, Constants.Inventory.BaseCapacity,
+                        userId, trimmedNickname, classCode, gender, Constants.Inventory.BaseCapacity,
                         nowUnix, welcomeMail, startingWeapon, startingSkillCode);
                 }
                 catch (MySqlException ex) when (ex.Number == Constants.MySqlError.DuplicateEntry)

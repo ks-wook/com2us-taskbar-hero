@@ -6,6 +6,10 @@ namespace TaskbarHero.Client.UI
     /// <summary>서버 에러 코드/네트워크 오류를 사용자에게 보여줄 한글 메시지로 변환한다.</summary>
     public static class ErrorMessages
     {
+        /// <summary>닉네임 최대 길이. 서버(AccountServer <c>Constants.Auth.MaxNicknameLength</c> = 12)와 같은 값이며,
+        /// 클라 선검사와 서버 <c>NicknameTooLong</c> 응답이 같은 문구를 쓰도록 여기서 한 번만 정의한다.</summary>
+        public const int MaxNicknameLength = 12;
+
         public static string ToKorean(NetworkError error)
         {
             if (error == null)
@@ -33,6 +37,8 @@ namespace TaskbarHero.Client.UI
                     return "이미 사용 중인 이메일입니다.";
                 case ErrorCode.InvalidRequest:
                     return "입력 값을 확인하세요.";
+                case ErrorCode.NicknameTooLong:
+                    return "닉네임은 " + MaxNicknameLength + "글자 까지 가능합니다.";
                 case ErrorCode.InvalidToken:
                 case ErrorCode.ExpiredToken:
                     return "인증이 만료되었습니다. 다시 로그인하세요.";

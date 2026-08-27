@@ -72,6 +72,7 @@ public abstract class GameApiControllerBase : ControllerBase
     private static string ErrorMessage(ErrorCode code) => code switch
     {
         ErrorCode.InvalidRequest => "Invalid request",
+        ErrorCode.NicknameTooLong => "Nickname too long",
         ErrorCode.InvalidSaveData => "Invalid save data",
         ErrorCode.PlayerAlreadyExists => "Player already exists",
         ErrorCode.InvalidClassCode => "Invalid class code",

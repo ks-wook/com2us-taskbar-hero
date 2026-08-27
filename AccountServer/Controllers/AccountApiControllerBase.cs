@@ -22,6 +22,7 @@ public abstract class AccountApiControllerBase : ControllerBase
         ErrorCode.Success => StatusCodes.Status200OK,
         ErrorCode.DuplicateEmail => StatusCodes.Status409Conflict,
         ErrorCode.InvalidRequest => StatusCodes.Status400BadRequest,
+        ErrorCode.NicknameTooLong => StatusCodes.Status400BadRequest,
         // 인증 실패 계열은 401.
         ErrorCode.UserNotFound => StatusCodes.Status401Unauthorized,
         ErrorCode.InvalidPassword => StatusCodes.Status401Unauthorized,
@@ -36,6 +37,7 @@ public abstract class AccountApiControllerBase : ControllerBase
     {
         ErrorCode.DuplicateEmail => "Duplicate email",
         ErrorCode.InvalidRequest => "Invalid request",
+        ErrorCode.NicknameTooLong => "Nickname too long",
         ErrorCode.UserNotFound => "User not found",
         ErrorCode.InvalidPassword => "Invalid password",
         ErrorCode.InvalidToken => "Invalid token",

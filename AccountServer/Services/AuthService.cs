@@ -19,13 +19,6 @@ namespace AccountServer.Services;
 /// </summary>
 public sealed class AuthService : IAuthService
 {
-    // 계정/로그인 기획서 5.1: 비밀번호 최소 6자.
-    private const int MinPasswordLength = 6;
-    private const int MaxNicknameLength = 50;
-
-    // MySQL 중복 키(UNIQUE) 위반 에러 번호.
-    private const int MySqlDuplicateEntry = 1062;
-
     private readonly IUserRepository _userRepository;
     private readonly IAuthTokenRepository _authTokenRepository;
     private readonly IAuthTokenCache _authTokenCache;
@@ -51,7 +44,7 @@ public sealed class AuthService : IAuthService
     }
 
     /// <summary>
-    /// 회원가입을 처리한다. 입력(이메일 형식·비밀번호 최소 길이·닉네임)을 검증하고, 이메일 중복을 선검사한 뒤
+    /// 회원가입을 처리한다. 입력(이메일 형식·비밀번호 최소 길이·닉네임 필수/최대 길이)을 검증하고, 이메일 중복을 선검사한 뒤
     /// 비밀번호를 BCrypt로 해시해 사용자 행을 삽입한다. 동시 삽입 경합은 UNIQUE 위반을 잡아 DuplicateEmail로 변환하고,
     /// 그 밖의 예외는 ServerError로 변환한다.
     /// </summary>
@@ -59,13 +52,13 @@ public sealed class AuthService : IAuthService
     {
         try
         {
-            // 1. 입력 검증 — 이메일 형식, 비밀번호 최소 6자, 닉네임 필수.
-            var invalidField = FindInvalidSignupField(request);
-            if (invalidField is not null)
+            // 1. 입력 검증 — 이메일 형식, 비밀번호 최소 6자, 닉네임 필수·최대 12자.
+            var (validationCode, invalidField) = ValidateSignup(request);
+            if (validationCode != ErrorCode.Success)
             {
                 _logger.ZLogDebug(
-                    $"회원가입 거절: errorCode {(int)ErrorCode.InvalidRequest:@ErrorCode}({ErrorCode.InvalidRequest:@ErrorName}), 잘못된 항목 {invalidField:@Field}");
-                return new SignupResult(ErrorCode.InvalidRequest, 0);
+                    $"회원가입 거절: errorCode {(int)validationCode:@ErrorCode}({validationCode:@ErrorName}), 잘못된 항목 {invalidField:@Field}");
+                return new SignupResult(validationCode, 0);
             }
 
             var email = request.email!.Trim();
@@ -89,7 +82,7 @@ public sealed class AuthService : IAuthService
                 _logger.ZLogInformation($"회원가입 성공: userId {userId:@UserId}");
                 return new SignupResult(ErrorCode.Success, userId);
             }
-            catch (MySqlException ex) when (ex.Number == MySqlDuplicateEntry)
+            catch (MySqlException ex) when (ex.Number == Constants.MySqlError.DuplicateEntry)
             {
                 // 선검사 통과 후 동시 요청이 먼저 삽입한 경합(race). UNIQUE 인덱스가 막아준다.
                 _logger.ZLogWarning(
@@ -252,25 +245,35 @@ public sealed class AuthService : IAuthService
         return ErrorCode.Success;
     }
 
-    /// <summary>회원가입 입력에서 규칙을 어긴 항목 이름을 돌려준다(모두 정상이면 null). 거절 로그에 그대로 실린다.</summary>
-    private static string? FindInvalidSignupField(SignupRequest request)
+    /// <summary>
+    /// 회원가입 입력을 검증해 (에러 코드, 어긴 항목 이름)을 돌려준다(모두 정상이면 Success와 null).
+    /// 항목 이름은 거절 로그에 그대로 실린다. 닉네임 길이 초과만 전용 코드(NicknameTooLong)로 구분해,
+    /// 클라이언트가 "닉네임이 길다"를 그대로 안내할 수 있게 한다.
+    /// </summary>
+    private static (ErrorCode Code, string? Field) ValidateSignup(SignupRequest request)
     {
         if (!IsValidEmail(request.email))
         {
-            return "email";
+            return (ErrorCode.InvalidRequest, "email");
         }
 
-        if (string.IsNullOrEmpty(request.password) || request.password.Length < MinPasswordLength)
+        if (string.IsNullOrEmpty(request.password) || request.password.Length < Constants.Auth.MinPasswordLength)
         {
-            return "password";
+            return (ErrorCode.InvalidRequest, "password");
         }
 
-        if (string.IsNullOrWhiteSpace(request.nickname) || request.nickname.Length > MaxNicknameLength)
+        if (string.IsNullOrWhiteSpace(request.nickname))
         {
-            return "nickname";
+            return (ErrorCode.InvalidRequest, "nickname");
         }
 
-        return null;
+        // 클라이언트가 입력 단계에서 막는 길이다. 넘어왔다면 우회 요청이므로 서버가 다시 막는다.
+        if (request.nickname!.Trim().Length > Constants.Auth.MaxNicknameLength)
+        {
+            return (ErrorCode.NicknameTooLong, "nickname");
+        }
+
+        return (ErrorCode.Success, null);
     }
 
     /// <summary>로그인 입력에서 규칙을 어긴 항목 이름을 돌려준다(모두 정상이면 null).</summary>
@@ -281,7 +284,7 @@ public sealed class AuthService : IAuthService
             return "email";
         }
 
-        if (string.IsNullOrEmpty(request.password) || request.password.Length < MinPasswordLength)
+        if (string.IsNullOrEmpty(request.password) || request.password.Length < Constants.Auth.MinPasswordLength)
         {
             return "password";
         }
