@@ -213,9 +213,7 @@ public sealed class OfflineRepository : GameDbBase, IOfflineRepository
 
         if (rowId is null)
         {
-            throw new InvalidOperationException(
-                $"재화 행이 없어 적립하지 못했습니다(userId {userId}, currencyCode {currencyCode}). " +
-                "세이브 생성 시 만들어져 있어야 하는 행입니다.");
+            throw new CurrencyRowMissingException(userId, currencyCode);
         }
 
         await db.StatementAsync(

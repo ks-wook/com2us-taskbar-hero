@@ -1,4 +1,4 @@
-using GameServer.Auth;
+﻿using GameServer.Auth;
 using Microsoft.AspNetCore.Mvc;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
@@ -65,6 +65,8 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.ExpiredToken => StatusCodes.Status401Unauthorized,
         // 서비스가 예외를 잡아 일반화한 코드. 전역 예외 처리기의 응답과 같은 500으로 맞춘다.
         ErrorCode.ServerError => StatusCodes.Status500InternalServerError,
+        // 재화 행 부재는 사용자가 고칠 수 없는 데이터 결함이라 400이 아니라 500이다.
+        ErrorCode.CurrencyRowMissing => StatusCodes.Status500InternalServerError,
         // 나머지 검증 실패는 400.
         _ => StatusCodes.Status400BadRequest,
     };
@@ -137,6 +139,7 @@ public abstract class GameApiControllerBase : ControllerBase
         ErrorCode.InvalidToken => "Invalid token",
         ErrorCode.ExpiredToken => "Expired token",
         ErrorCode.ServerError => "Internal server error",
+        ErrorCode.CurrencyRowMissing => "Currency row missing",
         _ => code.ToString(),
     };
 }

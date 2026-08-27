@@ -29,6 +29,15 @@ public sealed class ConcurrencyConflictException(string what)
     : Exception($"같은 계정의 다른 요청이 먼저 {what}을(를) 바꿨습니다. 트랜잭션을 다시 실행합니다.");
 
 /// <summary>
+/// 재화 행이 없어 지급·차감을 하지 못했다는 신호. <b>정상 경로로는 발생하지 않는다</b> — 재화 행은 세이브를 만들 때
+/// 잔액 0으로 함께 만들고 코드 어디서도 지우지 않으므로, 없다는 것은 DB를 직접 손댄 뒤처럼 그 규칙이 밖에서 깨졌다는 뜻이다.
+/// <para>차감 쪽에서 값(<c>null</c>)으로 돌려주면 잔액 부족과 구분되지 않아, 골드를 가진 사용자가 "골드가 부족합니다"를
+/// 보고 서버에는 기록이 한 줄도 남지 않는다. 사용자 실수가 아니라 서버 결함이므로 예외로 알린다.</para>
+/// </summary>
+public sealed class CurrencyRowMissingException(long userId, int currencyCode)
+    : Exception($"재화 행이 없습니다(userId {userId}, currencyCode {currencyCode}). 세이브 생성 시 만들어져 있어야 하는 행입니다.");
+
+/// <summary>
 /// MySQL 세이브 DB(GameDb) 계층의 공통 기반 — <b>커넥션 개시와 트랜잭션 커밋/롤백 규약</b>을 한곳에 모은다.
 /// <para>연결 문자열은 <see cref="GameDbFactory"/>가 계속 보유하고(싱글턴 1개) 이 클래스는 그것을 주입받아 쓴다.
 /// 상속으로 물려주는 것은 연결이 아니라 <b>규약</b>이다 — Redis 계층의

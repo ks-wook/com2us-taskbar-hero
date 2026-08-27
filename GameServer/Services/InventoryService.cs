@@ -268,6 +268,14 @@ public sealed class InventoryService : IInventoryService
             }
             return new SaveResult(ErrorCode.Success, "Enhanced", data);
         }
+        catch (CurrencyRowMissingException ex)
+        {
+            // 재화 행이 없다 = 세이브 생성 때 만들어진 행이 코드 밖에서 사라졌다는 뜻이다. 잔액 부족으로 돌려주면
+            // 서버 결함이 사용자 실수로 응답되고 기록도 남지 않으므로, 구분된 코드로 올린다(7.2).
+            _logger.ZLogError(
+                ex, $"재화 행 없음: errorCode {(int)ErrorCode.CurrencyRowMissing:@ErrorCode}({ErrorCode.CurrencyRowMissing:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.CurrencyRowMissing, string.Empty, null);
+        }
         catch (Exception ex)
         {
             _logger.ZLogError(
@@ -338,6 +346,14 @@ public sealed class InventoryService : IInventoryService
             }
 
             return new SaveResult(ErrorCode.Success, "Expanded", data);
+        }
+        catch (CurrencyRowMissingException ex)
+        {
+            // 재화 행이 없다 = 세이브 생성 때 만들어진 행이 코드 밖에서 사라졌다는 뜻이다. 잔액 부족으로 돌려주면
+            // 서버 결함이 사용자 실수로 응답되고 기록도 남지 않으므로, 구분된 코드로 올린다(7.2).
+            _logger.ZLogError(
+                ex, $"재화 행 없음: errorCode {(int)ErrorCode.CurrencyRowMissing:@ErrorCode}({ErrorCode.CurrencyRowMissing:@ErrorName}), userId {userId:@UserId}");
+            return new SaveResult(ErrorCode.CurrencyRowMissing, string.Empty, null);
         }
         catch (Exception ex)
         {

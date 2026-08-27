@@ -588,7 +588,7 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
 
     /// <summary>
     /// 재화를 <paramref name="amount"/>만큼 차감한다. 잔액이 부족하면 <b>아무것도 바꾸지 않고</b> null을 돌려주고,
-    /// 성공하면 차감 후 잔액을 돌려준다.
+    /// 성공하면 차감 후 잔액을 돌려준다. 재화 행 자체가 없으면 <see cref="CurrencyRowMissingException"/>을 던진다.
     /// <para><b>읽어서 계산한 값을 쓰지 않는다.</b> 잠금 없는 <c>SELECT</c>는 스냅샷 읽기라 동시에 도는 다른
     /// 트랜잭션의 변경을 보지 못한다 — 같은 계정의 요청 둘이 겹치면 양쪽이 같은 잔액을 읽고 각자 계산한 값을
     /// 덮어써 한쪽 차감이 사라진다. <c>quantity = quantity - @amount</c>로 DB가 직접 계산하게 하면 그 갱신은
@@ -609,9 +609,11 @@ public sealed class TradeRepository : GameDbBase, ITradeRepository
             return rowId is null ? 0 : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
         }
 
+        // 재화 행이 없으면 잔액 부족과 같은 값으로 돌려주지 않는다 — 서버 결함이 사용자 실수로 응답되고
+        // 기록도 남지 않는다. 정상 경로로는 발생하지 않는 상황이라 예외로 알린다.
         if (rowId is null)
         {
-            return null;
+            throw new CurrencyRowMissingException(userId, currencyCode);
         }
 
         var affected = await db.StatementAsync(
