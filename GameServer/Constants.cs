@@ -384,6 +384,19 @@ public static class Constants
         public const int RankWarmupPageSize = 500;
 
         /// <summary>
+        /// 리더보드 적재 완료 마커(<see cref="RedisKey.BossRushLeaderboardReadyFormat"/>)에 넣는 값.
+        /// 키의 존재 자체가 신호라 값은 무엇이든 되지만, 비워 두면 Redis에서 눈으로 확인하기 어려워 1을 쓴다.
+        /// </summary>
+        public const string RankReadyMarkerValue = "1";
+
+        /// <summary>
+        /// 리더보드 자동 재적재 락의 수명(2분). 재적재 도중 프로세스가 죽어 락을 풀지 못해도 이 시간이 지나면
+        /// 다른 요청이 다시 시도할 수 있다. 시즌 등재 인원이 늘어 재적재가 이보다 오래 걸리면 두 인스턴스가
+        /// 겹칠 수 있으나, 적재는 member 단위 덮어쓰기(ZADD)라 겹쳐도 결과가 같다.
+        /// </summary>
+        public static readonly TimeSpan RankRebuildLockTtl = TimeSpan.FromMinutes(2);
+
+        /// <summary>
         /// 랭킹 캐시 워밍업 결과 상태값(관리 API 응답 <c>status</c>). 외부 스크립트가 이 문자열로
         /// 성공/재적재 여부를 판정하므로 <b>값을 바꾸면 스크립트도 함께 고쳐야 한다</b>
         /// (<c>server_up_with_docker.py</c>).
@@ -393,7 +406,7 @@ public static class Constants
             /// <summary>진행 중 시즌이 없어 적재할 대상이 없다(정상, 재적재 0건).</summary>
             public const string NoSeason = "no-season";
 
-            /// <summary>리더보드 키가 이미 있어 재구축을 건너뛰었다(정상).</summary>
+            /// <summary>적재 완료 마커가 있어(= 전량 적재된 리더보드) 재구축을 건너뛰었다(정상).</summary>
             public const string AlreadyWarm = "already-warm";
 
             /// <summary>MySQL에서 읽어 리더보드를 재구축했다.</summary>
@@ -418,7 +431,10 @@ public static class Constants
     // 인프라 — Redis 키 · 인증 · 로깅
     // ────────────────────────────────────────────────────────────────
 
-    /// <summary>Redis 키. 인증 토큰·보스러시 랭킹 캐시에 쓴다(배치 리더 락은 없앴다 — BatchServer가 1대다).</summary>
+    /// <summary>
+    /// Redis 키. 인증 토큰·보스러시 랭킹 캐시에 쓴다(배치 리더 락은 없앴다 — BatchServer가 1대다).
+    /// 남은 락은 랭킹 캐시 재적재용 하나뿐이며, 그것은 <b>게임 API가 N대로 뜨기 때문</b>에 필요하다.
+    /// </summary>
     public static class RedisKey
     {
         /// <summary>닉네임 캐시 키(시즌·콘텐츠 무관 전역 Hash, TTL 없음).</summary>
@@ -426,6 +442,26 @@ public static class Constants
 
         /// <summary>현재 보스러시 시즌 메타 캐시 키(Hash).</summary>
         public const string BossRushCurrentSeason = "bossrush:season:current";
+
+        /// <summary>시즌 리더보드 키(Sorted Set). <c>{0}</c> = seasonId.</summary>
+        public const string BossRushLeaderboardFormat = "rank:bossrush:{0}";
+
+        /// <summary>
+        /// 리더보드 적재 완료 마커 키(String). <c>{0}</c> = seasonId.
+        /// <para><b>리더보드 키가 있다는 것만으로는 캐시를 믿을 수 없다</b> — 클리어 보고의 ZADD가 키를
+        /// 새로 만들 수 있어, Redis를 껐다 켠 뒤 누군가 기록을 갱신하면 <b>그 한 명만 든 리더보드</b>가
+        /// 생긴다. 그 상태는 비어 있는 것보다 위험하다(틀린 순위표가 정상으로 보인다). 그래서 워밍업이
+        /// 시즌 기록을 <b>전량</b> 적재했을 때만 이 마커를 세우고, 조회는 마커가 있을 때만 캐시를 쓴다.</para>
+        /// </summary>
+        public const string BossRushLeaderboardReadyFormat = "rank:bossrush:{0}:ready";
+
+        /// <summary>
+        /// 리더보드 자동 재적재 락 키(String, SET NX). <c>{0}</c> = seasonId.
+        /// <para>게임 API는 scale-out으로 N대가 뜨므로, 마커 부재를 동시에 감지한 인스턴스들이 저마다
+        /// 재적재를 시작하면 같은 ZADD가 중복으로 돈다. 이 키를 잡은 하나만 재적재한다
+        /// (BatchServer가 락을 쓰지 않는 것은 인스턴스 1대 고정이라서지, 게임 API에는 그 전제가 없다).</para>
+        /// </summary>
+        public const string BossRushLeaderboardRebuildLockFormat = "rank:bossrush:{0}:rebuilding";
     }
 
     /// <summary>인증(게임 서버 미들웨어).</summary>

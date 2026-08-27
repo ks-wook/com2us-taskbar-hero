@@ -1398,7 +1398,7 @@ sequenceDiagram
         alt 세이브 없음
             S-->>C: 실패 { errorCode: SaveNotFound(2001) }
         else 정상
-            S->>R: 내 순위 조회(ZRANK + 1)
+            S->>S: 내 순위 조회 — 적재 완료 마커가 있으면 ZRANK + 1, 없으면 정본에서 계산
             S->>S: 해금 판정(max_stage_cleared >= unlock_stage_sequence)
             S->>S: 진행 중 런 나이 검사 — 런 수명 지났으면 activeRun을 null로
             S-->>C: 성공 { serverTime, unlocked, unlockStageSequence, maxStageCleared, season, myRecord, activeRun }
@@ -1466,7 +1466,10 @@ sequenceDiagram
                 S->>DB: 시즌 최고 기록 조건부 UPSERT(개선된 경우만. 시즌이 진행 중이 아니면 생략)
                 Note over S,DB: 커밋 — 보상 지급 없음(런 상태와 최고 기록만 바뀐다)
                 S->>R: 기록 갱신 시 ZADD(커밋 이후에만 — Redis에는 롤백이 없다. 점수 = clearMs × 10^7 + 시즌 상대 초)
-                S->>R: ZRANK로 순위 산출(미갱신이어도 현재 순위를 내려준다)
+                opt ZADD 실패
+                    S->>R: 적재 완료 마커 내리기(DEL :ready) — 나만 빠진 리더보드를 믿지 않게 한다
+                end
+                S->>S: 순위 산출 — 마커가 있으면 ZRANK + 1, 없으면 정본에서 계산(미갱신이어도 현재 순위를 내려준다)
                 S-->>C: 성공 { runId, seasonId, clearMs, isNewRecord, bestClearMs, rank }
             end
         end
@@ -1487,12 +1490,17 @@ sequenceDiagram
     alt 존재하지 않는 시즌
         S-->>C: 실패 { errorCode: BossRushSeasonClosed(13007) }
     else 정상
-        S->>R: ZRANGE(offset ~ offset+limit-1, WITHSCORES) + ZCARD
-        alt 캐시 사용 가능(source=1)
+        S->>R: 적재 완료 마커 확인(EXISTS rank:bossrush:{seasonId}:ready)
+        alt 마커 있음 — 리더보드 신뢰 가능(source=1)
+            S->>R: ZRANGE(offset ~ offset+limit-1, WITHSCORES) + ZCARD
             S->>S: 점수에서 clearMs·recordedAt 복원(순위 = offset + 인덱스 + 1)
-        else 캐시 장애(source=2, 축소 운전)
+        else 마커 없음 · Redis 장애(source=2, 축소 운전)
             S->>DB: 종료 시즌은 final_rank로, 진행 중 시즌은 (best_clear_ms, recorded_at) 정렬로 한 페이지 조회
             S->>DB: 등재 인원 COUNT
+            opt 마커만 없음(Redis는 살아 있음) · 진행 중 시즌
+                S->>R: 재적재 락 SET NX(rank:bossrush:{seasonId}:rebuilding, TTL 2분)
+                S->>S: 락을 잡았으면 백그라운드 재적재 시작(응답은 기다리지 않는다)
+            end
         end
         S->>R: 표시 이름 조회(HMGET player:nickname)
         alt 캐시 미스 있음
@@ -1518,11 +1526,15 @@ sequenceDiagram
     alt 존재하지 않는 시즌
         S-->>C: 실패 { errorCode: BossRushSeasonClosed(13007) }
     else 정상
-        S->>R: ZRANK + ZSCORE + ZCARD
-        alt 캐시 사용 가능(source=1)
-            S->>S: 미등재면 myRank = null
-        else 캐시 장애(source=2)
+        S->>R: 적재 완료 마커 확인(EXISTS rank:bossrush:{seasonId}:ready)
+        alt 마커 있음 — 리더보드 신뢰 가능(source=1)
+            S->>R: ZRANK + ZSCORE + ZCARD
+            S->>S: 미등재면 myRank = null(전량 적재된 리더보드에 없다 = 기록이 없다)
+        else 마커 없음 · Redis 장애(source=2)
             S->>DB: 종료 시즌은 final_rank, 진행 중 시즌은 "앞선 기록 수 + 1"로 계산
+            opt 마커만 없음(Redis는 살아 있음) · 진행 중 시즌
+                S->>R: 재적재 락 SET NX → 잡았으면 백그라운드 재적재
+            end
         end
         S->>R: 표시 이름 조회(HMGET, 미스는 MySQL 백필)
         S-->>C: 성공 { seasonId, totalEntries, source, myRank }
@@ -1532,10 +1544,14 @@ sequenceDiagram
 
 ### 랭킹 캐시 적재(관리) — `POST /api/admin/boss-rush/rank/warmup`
 
-랭킹 캐시는 **서버가 스스로 적재하지 않는다.** 부트스트랩 스크립트(`python server_up_with_docker.py`)가 컨테이너와 서버를
-띄우고 헬스 체크를 통과한 뒤 이 관리 API를 한 번 호출한다. 예전에는 시즌 정산 배치가 Redis 리더 락을 쥔 채 매
-주기 앞단에서 이 일을 했지만, 적재 시점이 배치 주기에 묶여 보이지 않았다 — 지금은 **기동 절차의 명시적인 한
-단계**이고 호출자가 하나뿐이라 중복 재구축을 막을 분산 락이 필요하지 않다(보스러시 기획서 6.3).
+적재 경로는 둘이다. 하나는 **기동 절차** — 부트스트랩 스크립트(`python server_up_with_docker.py`)가 컨테이너와 서버를
+띄우고 헬스 체크를 통과한 뒤 이 관리 API를 한 번 호출한다(아래 다이어그램). 다른 하나는 **조회가 미적재 리더보드를
+만났을 때의 자동 재적재**로, 같은 서비스를 백그라운드에서 태운다(위 랭킹 조회 다이어그램).
+
+자동 경로가 있어 **호출자가 하나라는 전제가 깨졌고**, 게임 API는 scale-out으로 N대가 뜨므로 중복 재구축을 막을
+락(`rank:bossrush:{seasonId}:rebuilding`)을 쓴다. 판정 기준도 리더보드 키의 존재가 아니라 **적재 완료 마커**다 —
+클리어 보고의 ZADD가 키를 새로 만들 수 있어, 키만 보면 "한 명만 든 리더보드"를 이미 채워진 것으로 오인한다
+(보스러시 기획서 6.3).
 
 ```mermaid
 sequenceDiagram
@@ -1560,21 +1576,25 @@ sequenceDiagram
             S-->>T: 200 성공 { status: "no-season", restored: 0 }
         else 진행 중 시즌 있음
             S->>R: 현재 시즌 메타 캐시 갱신(bossrush:season:current)
-            S->>R: EXISTS rank:bossrush:{seasonId}
+            S->>R: EXISTS rank:bossrush:{seasonId}:ready (적재 완료 마커)
             alt Redis 접근 불가
                 S-->>T: 503 실패 { status: "cache-unavailable" }
-            else 리더보드 이미 존재 & force 아님
+            else 마커 있음 & force 아님
                 S->>R: ZCARD로 등재 인원 확인
                 S-->>T: 200 성공 { status: "already-warm", members: N }
-            else 비어 있음(또는 force)
+            else 마커 없음(또는 force)
+                S->>R: 마커 내리기(DEL :ready) — 적재 중에는 조회가 정본을 보게 한다
+                S->>R: 리더보드 비우기(DEL) — ZADD는 정본에서 사라진 멤버를 지우지 않는다
                 loop 기록 페이지(500건 단위, 정렬 순서)
                     S->>DB: boss_rush_record 스캔(season_id, offset, limit)
                     S->>R: ZADD(score = clearMs × 10^7 + (recordedAt − season.start_at))
                 end
                 S->>R: ZCARD로 등재 인원 확인
                 alt 일부 ZADD 실패
+                    S->>S: 마커를 세우지 않는다(조회는 계속 폴백 · 다음 재적재가 다시 시도)
                     S-->>T: 503 실패 { status: "cache-unavailable", restored: N }
                 else 전량 적재
+                    S->>R: 적재 완료 마커 세우기(SET :ready) — 이 시점부터 조회가 캐시를 쓴다
                     S-->>T: 200 성공 { status: "restored", restored: N, members: N }
                 end
             end
@@ -1582,8 +1602,8 @@ sequenceDiagram
     end
 ```
 
-> **몇 번을 호출해도 안전하다.** 정본이 MySQL이고 ZADD는 `userId` 단위 덮어쓰기이며 점수는 기록에서 결정론적으로
-> 계산되므로, 같은 상태에 다시 호출하면 같은 리더보드가 된다. 적재 로직(점수 인코딩·키 이름)은 **서버 코드에만**
+> **몇 번을 호출해도 안전하다.** 정본이 MySQL이고 재적재는 리더보드를 비우고 다시 채우며 점수는 기록에서
+> 결정론적으로 계산되므로, 같은 상태에 다시 호출하면 같은 리더보드가 된다. 적재 로직(점수 인코딩·키 이름)은 **서버 코드에만**
 > 있고 스크립트는 지시와 결과 판정만 한다 — 스크립트가 MySQL·Redis에 직접 붙으면 인코딩 규칙이 두 언어에
 > 복제돼 조용히 어긋난다.
 

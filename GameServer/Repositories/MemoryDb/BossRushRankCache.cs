@@ -1,6 +1,7 @@
 using CloudStructures;
 using CloudStructures.Structures;
 using GameServer.Repositories.MemoryDb.Interfaces;
+using StackExchange.Redis;
 using TaskbarHero.Common;
 using GameServer.Models;
 
@@ -10,9 +11,14 @@ namespace GameServer.Repositories.MemoryDb;
 public sealed record BossRushCachedRank(int Rank, long UserId, int ClearMs, long RecordedAt);
 
 /// <summary>
-/// 보스러시 랭킹 조회용 Redis 계층(기획서 4.3). 키 3종을 다룬다 —
-/// 리더보드 <c>rank:bossrush:{seasonId}</c>(Sorted Set), 닉네임 캐시 <c>player:nickname</c>(Hash),
-/// 현재 시즌 메타 <c>bossrush:season:current</c>(Hash).
+/// 보스러시 랭킹 조회용 Redis 계층(기획서 4.3). 키 5종을 다룬다 —
+/// 리더보드 <c>rank:bossrush:{seasonId}</c>(Sorted Set), 그 리더보드의 적재 완료 마커
+/// <c>rank:bossrush:{seasonId}:ready</c>와 재적재 락 <c>rank:bossrush:{seasonId}:rebuilding</c>(String),
+/// 닉네임 캐시 <c>player:nickname</c>(Hash), 현재 시즌 메타 <c>bossrush:season:current</c>(Hash).
+/// <para><b>리더보드 키의 존재는 신뢰의 근거가 되지 못한다</b> — 클리어 보고의 ZADD가 키를 새로 만들 수
+/// 있어, Redis를 재기동한 뒤 한 명이 기록을 갱신하면 <b>그 한 명만 든 리더보드</b>가 생긴다. 비어 있는
+/// 것보다 나쁜 상태다(틀린 순위표가 정상으로 보인다). 그래서 신뢰 판정은 <b>적재 완료 마커</b>가 맡고,
+/// 마커는 워밍업이 시즌 기록을 전량 넣었을 때만 세워진다(<see cref="IsReadyAsync"/>).</para>
 /// <para><b>정본이 아니다.</b> 리더보드는 MySQL <c>boss_rush_record</c>에서 파생된 조회 인덱스이고,
 /// 닉네임·시즌 메타도 각각 <c>game_player.nickname</c>·<c>boss_rush_season</c>의 캐시다. 그래서 모든 접근을
 /// <see cref="MemoryDbBase.SafeAsync{T}"/>로 감싸 실패 시 null·기본값을 돌려주고 호출측이 MySQL로 폴백한다
@@ -94,13 +100,50 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
             return (IReadOnlyList<BossRushCachedRank>?)result;
         }, null, "랭킹 목록 조회");
 
-    /// <summary>리더보드 키 존재 여부(워밍업 필요 판단). 실패는 null.</summary>
-    public Task<bool?> ExistsAsync(int seasonId)
-        => SafeAsync(async () => (bool?)await Board(seasonId).ExistsAsync(), null, "리더보드 존재 확인");
+    /// <summary>적재 완료 마커의 존재 여부. 없으면 false, Redis를 쓸 수 없으면 null.</summary>
+    public Task<bool?> IsReadyAsync(int seasonId)
+        => SafeAsync(async () => (bool?)await ReadyMarker(seasonId).ExistsAsync(), null, "리더보드 적재 상태 확인");
 
-    /// <summary>종료 시즌 리더보드에 TTL을 건다. 실패는 Warning만 남긴다(과거 키가 남아도 조회에 문제없다).</summary>
+    /// <summary>적재 완료 마커를 세운다. TTL은 걸지 않는다 — 시즌 종료 시 리더보드와 함께 만료된다.</summary>
+    public Task MarkReadyAsync(int seasonId)
+        => SafeAsync(
+            () => ReadyMarker(seasonId).SetAsync(Constants.BossRush.RankReadyMarkerValue),
+            "리더보드 적재 완료 표시");
+
+    /// <summary>적재 완료 마커를 지운다(재적재 시작·리더보드 반영 실패). 이후 조회는 정본으로 폴백한다.</summary>
+    public Task ClearReadyAsync(int seasonId)
+        => SafeAsync(() => ReadyMarker(seasonId).DeleteAsync(), "리더보드 적재 상태 무효화");
+
+    /// <summary>리더보드를 통째로 비운다(재적재 직전). 정본에서 사라진 멤버를 남기지 않기 위해서다.</summary>
+    public Task ClearBoardAsync(int seasonId)
+        => SafeAsync(() => Board(seasonId).DeleteAsync(), "리더보드 비우기");
+
+    /// <summary>
+    /// SET NX로 자동 재적재 락을 잡는다. <b>실패를 false로 흡수한다</b> — Redis를 쓸 수 없으면 재적재도
+    /// 못 하므로, 잡지 못한 것과 같게 다뤄 호출측이 조용히 넘어가게 한다.
+    /// </summary>
+    public Task<bool> TryAcquireRebuildLockAsync(int seasonId, TimeSpan ttl)
+        => SafeAsync(
+            () => RebuildLock(seasonId).SetAsync(Constants.BossRush.RankReadyMarkerValue, ttl, When.NotExists),
+            false, "리더보드 재적재 락 획득");
+
+    /// <summary>자동 재적재 락을 푼다. 실패해도 TTL로 만료되므로 Warning만 남긴다.</summary>
+    public Task ReleaseRebuildLockAsync(int seasonId)
+        => SafeAsync(() => RebuildLock(seasonId).DeleteAsync(), "리더보드 재적재 락 해제");
+
+    /// <summary>
+    /// 종료 시즌 리더보드에 TTL을 건다. 실패는 Warning만 남긴다(과거 키가 남아도 조회에 문제없다).
+    /// <b>적재 완료 마커에도 같은 TTL을 건다</b> — 리더보드만 사라지고 마커가 남으면 그 시즌 조회가
+    /// 빈 랭킹을 정상값으로 믿게 된다.
+    /// </summary>
     public Task ExpireAsync(int seasonId, TimeSpan ttl)
-        => SafeAsync(() => Board(seasonId).ExpireAsync(ttl), "리더보드 TTL 설정");
+        => SafeAsync(
+            async () =>
+            {
+                await Board(seasonId).ExpireAsync(ttl);
+                await ReadyMarker(seasonId).ExpireAsync(ttl);
+            },
+            "리더보드 TTL 설정");
 
     /// <summary>HMGET으로 닉네임을 읽는다. 미스는 결과에서 빠지고, 호출측이 MySQL에서 백필한다.</summary>
     public Task<IReadOnlyDictionary<long, string>> GetNicknamesAsync(IReadOnlyCollection<long> userIds)
@@ -189,7 +232,15 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
         => long.TryParse(member, out var userId) ? userId : 0;
 
     private RedisSortedSet<string> Board(int seasonId)
-        => new(Connection, $"rank:bossrush:{seasonId}", null);
+        => new(Connection, string.Format(Constants.RedisKey.BossRushLeaderboardFormat, seasonId), null);
+
+    /// <summary>적재 완료 마커 구조체 — 이 키가 있어야 리더보드를 전량 적재된 것으로 본다.</summary>
+    private RedisString<string> ReadyMarker(int seasonId)
+        => new(Connection, string.Format(Constants.RedisKey.BossRushLeaderboardReadyFormat, seasonId), null);
+
+    /// <summary>자동 재적재 락 구조체(SET NX + TTL).</summary>
+    private RedisString<string> RebuildLock(int seasonId)
+        => new(Connection, string.Format(Constants.RedisKey.BossRushLeaderboardRebuildLockFormat, seasonId), null);
 
     /// <summary>닉네임 캐시 구조체(field = userId 문자열).</summary>
     private RedisDictionary<string, string> Nicknames()

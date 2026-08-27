@@ -4,6 +4,7 @@ using GameServer.Repositories.GameDb.Interfaces;
 using TaskbarHero.Common;
 using TaskbarHero.Common.Dto;
 using ZLogger;
+using GameServer.Repositories.MemoryDb;
 using GameServer.Repositories.MemoryDb.Interfaces;
 using GameServer.Repositories.MasterDb;
 using GameServer.Models;
@@ -23,20 +24,72 @@ public sealed class BossRushService : IBossRushService
 {
     private readonly IBossRushRepository _repository;
     private readonly IBossRushRankCache _rankCache;
+    private readonly IBossRushRankWarmupService _warmupService;
     private readonly MasterDbProvider _masterData;
     private readonly ILogger<BossRushService> _logger;
     private readonly IEventLogger _eventLogger;
 
-    /// <summary>의존성(보스러시 리포지토리·랭킹 캐시·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.</summary>
+    /// <summary>
+    /// 의존성(보스러시 리포지토리·랭킹 캐시·마스터 데이터·운영 로거·이벤트 로거)을 주입받는다.
+    /// 워밍업 서비스도 받는다 — 조회가 적재되지 않은 리더보드를 만나면 재적재를 걸어야 하기 때문이다.
+    /// </summary>
     public BossRushService(
         IBossRushRepository repository, IBossRushRankCache rankCache,
+        IBossRushRankWarmupService warmupService,
         MasterDbProvider masterData, ILogger<BossRushService> logger, IEventLogger eventLogger)
     {
         _repository = repository;
         _rankCache = rankCache;
+        _warmupService = warmupService;
         _masterData = masterData;
         _logger = logger;
         _eventLogger = eventLogger;
+    }
+
+    /// <summary>
+    /// 이 시즌 리더보드를 조회에 써도 되는지 판정하고, 적재되지 않았으면 <b>자동 재적재를 건다</b>.
+    /// <para><b>리더보드 키의 존재로 판단할 수 없다</b> — 없는 키의 ZCARD·ZRANGE는 예외가 아니라
+    /// "0명·빈 목록"을 돌려주므로, 그대로 쓰면 캐시가 비었을 때 <b>빈 랭킹이 정상 응답으로</b> 나간다.
+    /// 캐시는 정본의 파생이라 비어 있다는 사실이 "기록이 없다"의 근거가 되어서는 안 된다.</para>
+    /// <para>재적재는 <b>진행 중 시즌</b>에만 건다 — 종료된 시즌은 TTL로 캐시가 사라지는 게 정상이라
+    /// 되살릴 이유가 없고, 그대로 두면 과거 시즌을 열어 볼 때마다 재적재가 걸린다. Redis 자체를 쓸 수
+    /// 없을 때(<c>null</c>)도 걸지 않는다 — 적재할 곳이 없다.</para>
+    /// </summary>
+    private async Task<bool> IsRankCacheUsableAsync(int seasonId, bool closed)
+    {
+        var ready = await _rankCache.IsReadyAsync(seasonId);
+        if (ready == true)
+        {
+            return true;
+        }
+
+        if (ready == false && !closed)
+        {
+            _warmupService.RequestRebuild(seasonId);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// 본인 순위 번호를 얻는다 — 리더보드를 믿을 수 있으면 ZRANK로, 아니면 <b>정본에서</b> 읽는다.
+    /// 기록이 없으면 0이다.
+    /// <para>캐시가 살아 있어도 ZRANK가 비면 정본을 한 번 더 확인한다 — 클리어 보고의 리더보드 반영이
+    /// 실패했을 때 그 사람만 캐시에서 빠지는데, 그 경우까지 "기록 없음"으로 응답하지 않기 위해서다.</para>
+    /// </summary>
+    private async Task<int> ResolveMyRankAsync(int seasonId, bool closed, long userId)
+    {
+        if (await IsRankCacheUsableAsync(seasonId, closed))
+        {
+            var cachedRank = await _rankCache.GetRankAsync(seasonId, userId);
+            if (cachedRank is not null)
+            {
+                return cachedRank.Value;
+            }
+        }
+
+        var row = await _repository.GetMyRankAsync(seasonId, userId, closed);
+        return row?.Rank ?? 0;
     }
 
     /// <summary>
@@ -107,8 +160,11 @@ public sealed class BossRushService : IBossRushService
             BossRushMyRecordDto? myRecord = null;
             if (snapshot.MyRecord is not null && season is not null)
             {
-                var myRank = await _rankCache.GetRankAsync(season.SeasonId, userId);
-                myRecord = snapshot.MyRecord.ToDto(myRank ?? 0);
+                // 기록이 있다는 것은 정본이 확정한 사실이다 — 순위만 캐시에서 얻되, 캐시가 적재되지
+                // 않았으면 정본에서 읽는다(그러지 않으면 기록은 있는데 순위가 0으로 나간다).
+                var myRank = await ResolveMyRankAsync(
+                    season.SeasonId, season.Status == (int)BossRushSeasonStatus.Closed, userId);
+                myRecord = snapshot.MyRecord.ToDto(myRank);
             }
 
             var activeRun = snapshot.ActiveRun is not null
@@ -265,14 +321,21 @@ public sealed class BossRushService : IBossRushService
             var rank = 0;
             if (outcome.RankEligible)
             {
-                if (outcome.IsNewRecord)
+                if (outcome.IsNewRecord
+                    && !await _rankCache.UpsertAsync(
+                        outcome.SeasonId, outcome.SeasonStartAt, userId, outcome.BestClearMs, outcome.RecordedAt))
                 {
-                    await _rankCache.UpsertAsync(
-                        outcome.SeasonId, outcome.SeasonStartAt, userId, outcome.BestClearMs, outcome.RecordedAt);
+                    // **반영 실패를 버리지 않는다** — 기록은 정본에 들어갔는데 리더보드에는 이 사람만 빠진
+                    // 상태다. 리더보드 자체는 멀쩡해 보이므로 아무도 폴백하지 않고, 다음 기록 갱신 전까지
+                    // 이 사람은 랭킹에서 사라진다. 마커를 내려 다음 조회가 정본을 보고 재적재를 걸게 한다.
+                    await _rankCache.ClearReadyAsync(outcome.SeasonId);
+                    _logger.ZLogWarning(
+                        $"보스러시 리더보드 반영 실패 — 랭킹 캐시를 재적재 대상으로 내립니다: seasonId {outcome.SeasonId:@SeasonId} userId {userId:@UserId}");
                 }
 
                 // 기록을 갱신하지 못했어도 순위는 내려준다 — 다른 유저가 올라와 순위가 밀렸을 수 있다.
-                rank = await _rankCache.GetRankAsync(outcome.SeasonId, userId) ?? 0;
+                // 클리어 보고는 진행 중 시즌에만 들어오므로 종료 시즌(final_rank) 경로가 아니다.
+                rank = await ResolveMyRankAsync(outcome.SeasonId, false, userId);
             }
 
             var data = new BossRushClearResultData
@@ -326,15 +389,23 @@ public sealed class BossRushService : IBossRushService
             var safeOffset = Math.Max(offset, 0);
             var safeLimit = limit <= 0 ? Constants.BossRush.RankDefaultLimit : Math.Min(limit, rule.RankPageLimit);
 
+            var closed = season.Status == (int)BossRushSeasonStatus.Closed;
+
+            // 리더보드를 믿을 수 있을 때만 읽는다 — 적재되지 않은 리더보드는 ZCARD가 0을 돌려주므로
+            // 그대로 읽으면 "등재 0명"이 정상 응답으로 나간다(캐시 부재가 오답이 되는 자리다).
             var source = BossRushRankSource.RankCache;
-            var cached = await _rankCache.GetPageAsync(season.SeasonId, season.StartAt, safeOffset, safeLimit);
-            var total = await _rankCache.CountAsync(season.SeasonId);
+            IReadOnlyList<BossRushCachedRank>? cached = null;
+            int? total = null;
+            if (await IsRankCacheUsableAsync(season.SeasonId, closed))
+            {
+                cached = await _rankCache.GetPageAsync(season.SeasonId, season.StartAt, safeOffset, safeLimit);
+                total = await _rankCache.CountAsync(season.SeasonId);
+            }
 
             List<BossRushRankRow> rows;
             if (cached is null || total is null)
             {
                 source = BossRushRankSource.Database;
-                var closed = season.Status == (int)BossRushSeasonStatus.Closed;
                 rows = (await _repository.GetRankPageAsync(season.SeasonId, safeOffset, safeLimit, closed)).ToList();
                 total = await _repository.CountEntriesAsync(season.SeasonId);
             }
@@ -382,21 +453,29 @@ public sealed class BossRushService : IBossRushService
                 return new SaveResult(ErrorCode.BossRushSeasonClosed, string.Empty, null);
             }
 
+            var closed = season.Status == (int)BossRushSeasonStatus.Closed;
+
+            // 적재되지 않은 리더보드에서는 "내가 없다"가 곧 "기록이 없다"가 아니다 — 아무도 없는 것이다.
+            // 그래서 캐시에 물어보기 전에 믿을 수 있는 리더보드인지부터 가른다.
             var source = BossRushRankSource.RankCache;
-            var cachedEntry = await _rankCache.GetMyEntryAsync(season.SeasonId, season.StartAt, userId);
-            var total = await _rankCache.CountAsync(season.SeasonId);
+            BossRushCachedRank? cachedEntry = null;
+            int? total = null;
+            if (await IsRankCacheUsableAsync(season.SeasonId, closed))
+            {
+                cachedEntry = await _rankCache.GetMyEntryAsync(season.SeasonId, season.StartAt, userId);
+                total = await _rankCache.CountAsync(season.SeasonId);
+            }
 
             BossRushRankRow? row;
             if (total is null)
             {
                 source = BossRushRankSource.Database;
-                var closed = season.Status == (int)BossRushSeasonStatus.Closed;
                 row = await _repository.GetMyRankAsync(season.SeasonId, userId, closed);
                 total = await _repository.CountEntriesAsync(season.SeasonId);
             }
             else if (cachedEntry is null)
             {
-                // 캐시는 살아 있는데 내가 없다 = 그 시즌에 기록이 없다(폴백 대상이 아니다).
+                // 전량 적재된 리더보드에 내가 없다 = 그 시즌에 기록이 없다(폴백 대상이 아니다).
                 row = null;
             }
             else
