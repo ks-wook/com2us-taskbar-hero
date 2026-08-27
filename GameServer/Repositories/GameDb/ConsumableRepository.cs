@@ -59,8 +59,11 @@ public sealed class ConsumableRepository : GameDbBase, IConsumableRepository
     /// <para>6) player_buff INSERT/UPDATE — 버프 부여 또는 연장</para>
     /// <para>7) player_buff SELECT — 갱신 후 계정 활성 버프 전체(응답 activeBuffs)</para>
     /// <para><b>이중 차감 방지</b>는 5단계의 <b>조건부 갱신</b>이 담당한다 — 조회 시점 수량을 WHERE에 넣어(CAS)
-    /// 영향 행이 0이면 다른 요청이 먼저 소모한 것으로 보고 롤백한다. 계정당 단일 세션 정책이라 경합 자체가 제한적이며,
-    /// 행 잠금(FOR UPDATE)은 다른 리포지토리와 동일하게 쓰지 않는다.</para>
+    /// 영향 행이 0이면 다른 요청이 먼저 소모한 것으로 보고 롤백한다.</para>
+    /// <para>다른 리포지토리는 계산 입력을 잠금 조회(FOR UPDATE)로 읽고 CAS가 어긋나면
+    /// <see cref="ConcurrencyConflictException"/>으로 재실행하지만, 여기는 1)을 잠금 없이 읽고 CAS 0행을
+    /// <see cref="ConsumableUseStatus.ItemNotFound"/>로 돌려준다 — 같은 소모품 사용이 겹치면(연타) 한쪽이 거절될 수 있다.
+    /// 그때도 전체 롤백이라 차감도 버프도 남지 않으므로, 다시 누르면 정상 처리된다.</para>
     /// </remarks>
     public async Task<ConsumableUseOutcome> ApplyUseAsync(
         long userId, long itemId,

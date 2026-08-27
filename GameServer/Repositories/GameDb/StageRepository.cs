@@ -109,9 +109,10 @@ public sealed class StageRepository : GameDbBase, IStageRepository
     /// <para>5) player_item 전리품 적재 — 스택 가능하면 기존 스택 병합, 아니면 빈 칸에 INSERT
     ///    (용량 초과면 롤백하지 않고 전리품만 폐기 → LootStored=false, 골드·경험치·진행도는 그대로 반영)</para>
     /// <para>6) game_player 진행도 UPDATE — 프런티어 클리어면 max_stage_cleared 갱신 + 다음 스테이지로 전진, 재파밍이면 updated_at만 갱신</para>
-    /// ⚠️ 원자성은 보장하지만 game_player 행에 잠금(FOR UPDATE 등)을 걸지 않으므로, 동일 userId의 동시 요청은
-    ///    1)의 검증을 함께 통과할 수 있다(중복 전리품 지급·경험치 lost update·슬롯 유니크 충돌). 백로그 과제.
-    ///    <b>골드는 여기서 빠진다</b> — 3)이 <c>quantity = quantity + N</c> 원자 가산이라 읽은 값을 덮어쓰지 않는다.
+    /// <para>같은 userId의 클리어가 겹쳐도 결과가 조용히 어긋나지 않는다 — game_player 행에 잠금(FOR UPDATE)을
+    ///    걸지 않는 대신 <b>관측값으로 CAS</b>를 건다. 4)는 잠금 조회 뒤 level·exp CAS, 6)의 프런티어 전진은
+    ///    max_stage_cleared CAS이고, 어긋나면 <see cref="ConcurrencyConflictException"/>으로 트랜잭션째 재실행된다.
+    ///    골드는 3)이 <c>quantity = quantity + N</c> 원자 가산이라 읽은 값을 덮어쓰지 않는다.</para>
     /// </remarks>
     public async Task<ClearOutcome> ApplyClearAsync(
         long userId,
