@@ -120,6 +120,14 @@ public sealed class CubeService : ICubeService
             }
 
             var list = items ?? new List<CubeDismantleItemDto>();
+
+            // JSON 배열에는 null 요소가 들어올 수 있다(예: items:[null]). 아래에서 그대로 읽으면
+            // NullReferenceException이 나고 잘못된 요청이 서버 결함(500)으로 나가므로 여기서 형식 오류로 거른다.
+            if (list.Contains(null))
+            {
+                return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
+            }
+
             var pairs = list.Select(i => (i.itemId, i.count)).ToList();
             // 빈 목록·중복 id는 잘못된 요청으로 거부.
             if (pairs.Count == 0 || pairs.Select(p => p.itemId).Distinct().Count() != pairs.Count)

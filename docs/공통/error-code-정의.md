@@ -54,6 +54,7 @@
 | InvalidRequest | 1006 | 요청 파라미터 오류(형식/길이) |
 | NicknameTooLong | 1007 | 닉네임이 최대 길이(12자)를 초과 |
 
+- **요청 목록에 `null` 요소가 섞이면 `InvalidRequest(1006)`이다.** `{ "members": [null] }`처럼 목록 요소가 비어 오는 요청은 목록을 받는 세 요청(`party/arrange`·`cube/dismantle`·`boss-rush/clear`)의 형식 검증이 DB에 닿기 전에 이 코드로 거절한다. 요소를 그대로 읽으면 `NullReferenceException`이 나 잘못된 요청이 `ServerError(11001)`·500으로 나가므로, 서버 결함과 구분하기 위해 형식 오류로 잡는다.
 - **`NicknameTooLong(1007)`은 닉네임 길이 초과 전용이다.** 닉네임을 받는 두 경로(`POST /api/auth/signup`의 `nickname`, `POST /api/game/create-character`의 최초 생성 `nickname`)가 같은 코드를 쓴다. 클라이언트도 입력 단계에서 12자까지만 보내므로, 이 코드가 나오면 그 검사를 우회한 요청이다. 닉네임이 **비어 있는** 경우는 형식 오류라 `InvalidRequest(1006)`이다.
 
 ### 2.3 세이브 데이터 (2000번대)

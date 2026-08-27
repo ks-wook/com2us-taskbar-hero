@@ -211,7 +211,9 @@ public sealed class BossRushService : IBossRushService
                 return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
             }
 
-            if (request.runId <= 0 || request.clearMs <= 0)
+            // JSON 배열에는 null 요소가 들어올 수 있다(예: rounds:[null]). 아래 정합성 검사가 요소를 그대로
+            // 읽으므로, 그 전에 형식 오류로 거른다(읽으면 NullReferenceException → 잘못된 요청이 500으로 나간다).
+            if (request.runId <= 0 || request.clearMs <= 0 || (request.rounds is not null && request.rounds.Contains(null)))
             {
                 return new SaveResult(ErrorCode.InvalidRequest, string.Empty, null);
             }

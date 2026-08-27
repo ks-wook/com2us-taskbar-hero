@@ -325,7 +325,7 @@ public sealed class SaveService : ISaveService
 
     /// <summary>
     /// 파티 편성 스냅샷 요청의 형식을 검증한다. 위반이면 그 에러 코드를, 정상이면 null을 반환한다.
-    /// 검사 항목: 빈 목록(파티는 최소 1명), 정원 초과(3명), 자리 범위(1~3), 자리 중복, 같은 캐릭터 중복 지정.
+    /// 검사 항목: 빈 목록(파티는 최소 1명), 정원 초과(3명), 목록 요소 null, 자리 범위(1~3), 자리 중복, 같은 캐릭터 중복 지정.
     /// 보유 여부는 DB를 봐야 하므로 여기서 검사하지 않는다(리포지토리 트랜잭션에서 확인).
     /// </summary>
     private static ErrorCode? ValidatePartySnapshot(IReadOnlyList<PartyMemberDto>? members)
@@ -345,6 +345,13 @@ public sealed class SaveService : ISaveService
         var usedCharacters = new HashSet<int>();
         foreach (var member in members)
         {
+            // JSON 배열에는 null 요소가 들어올 수 있다(예: members:[null]). 아래에서 그대로 읽으면
+            // NullReferenceException이 나고 잘못된 요청이 서버 결함(500)으로 나가므로 여기서 형식 오류로 거른다.
+            if (member is null)
+            {
+                return ErrorCode.InvalidRequest;
+            }
+
             // 미편성(0)은 "목록에 담지 않는 것"으로 표현하므로 자리 값은 1~3만 허용한다.
             if (member.slot < 1 || member.slot > Constants.Party.MaxSlots || !usedSlots.Add(member.slot))
             {

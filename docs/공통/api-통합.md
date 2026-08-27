@@ -54,7 +54,7 @@
 | `POST /api/game/load` | 접속 시 코어 세이브 스냅샷 로드(고정 크기 데이터 전량, 가방 아이템 제외) | `{}` | `player`, `characters[]`, `currencies[]`, `equipped[]`, `skills[]`, `runes[]`, `cube`, `activeBuffs[]`, `inventoryTotal`, `offlineElapsedSec` | (신규는 `{ isNew:true }`) |
 | `POST /api/game/inventory/list` | 가방 아이템 페이지 조회(`slot` 커서 keyset 페이징) | `{ cursor, limit }` | `items[]`, `nextCursor`, `hasMore`, `total` | `SaveNotFound(2001)` |
 | `POST /api/game/create-character` | 캐릭터 1개 생성(빈 슬롯 배정 + 직업 기본 무기 장착 + 기본 액티브 스킬 습득·장착) | `{ nickname, classCode, gender }` | `characterId`, `classCode`, `gender`, `level`, `cost`, `balance` | `InvalidClassCode(2005)`, `InvalidCharacterId(2006)`, `InvalidGender(2007)`, `PlayerAlreadyExists(2004)`, `InsufficientCurrency(4005)`, `NicknameTooLong(1007)` |
-| `POST /api/game/party/arrange` | 파티 편성 저장(저장 후 파티 **전체 스냅샷**) | `{ members:[{ characterId, slot }] }`(1~3개) | `characters[]`(보유 전체, 자리 순) | `CannotRemoveLastCharacter(2008)`, `CharacterNotFound(2009)`, `PartySlotOccupied(2010)`, `InvalidCharacterId(2006)` |
+| `POST /api/game/party/arrange` | 파티 편성 저장(저장 후 파티 **전체 스냅샷**) | `{ members:[{ characterId, slot }] }`(1~3개) | `characters[]`(보유 전체, 자리 순) | `CannotRemoveLastCharacter(2008)`, `CharacterNotFound(2009)`, `PartySlotOccupied(2010)`, `InvalidCharacterId(2006)`, `InvalidRequest(1006)` |
 | `POST /api/game/update-last-active` | 접속 시각 갱신(heartbeat, 오프라인 경과 기준) | `{}` | `lastActiveAt` | — |
 
 - **로드는 2단계**다. 크기가 고정된 데이터(플레이어·캐릭터·재화·장착 장비·스킬·룬·큐브)는 `load`가 한 번에 내려주고, 무한히 커질 수 있는 **가방 아이템만** `inventory/list`가 페이징한다. 접속 직후에는 `load`만 호출하고, 가방은 **창고 UI를 열 때마다** 조회한다(자동 전투 전리품이 계속 적재되므로 로컬 캐시를 신뢰하지 않는다). 이 조회는 **캐시 없이 MySQL을 직접 읽는다** — `cursor`·`limit`을 그대로 질의로 넘겨 `(user_id, slot)` 인덱스로 필요한 구간만 읽으므로 캐시를 둘 이유가 없다([인벤토리/아이템/큐브 기획서](../세부/inventory-item-cube-기획서.md) 6.5).
@@ -87,7 +87,7 @@
 | `POST /api/game/inventory/expand` | 인벤토리 용량 확장(골드 소모) | `{ count }` | `inventoryCapacity`, `cost`, `balance` | `InsufficientCurrency(4005)`, `InventoryCapacityMax(4008)` |
 | `POST /api/game/inventory/move` | 인벤토리 배치 이동/교환(드래그 저장) | `{ itemId, toSlot }` | `moved`, `swapped` | `ItemNotFound(4001)`, `InvalidInventorySlot(4009)` |
 | `POST /api/game/cube/combine` | 큐브 합성(동급 아이템 3개→상위 등급 1개, 슬롯·클래스 무관) | `{ itemIds[] }` | `consumed`, `result`, `cube`, `inventoryDelta` | `ItemNotFound(4001)`, `ItemEquipped(4007)`, `CubeRecipeNotMet(4010)` |
-| `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{itemId,count}] }` | `gold`, `cubeExp`, `cube`, `balance`, `inventoryDelta` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)` |
+| `POST /api/game/cube/dismantle` | 큐브 분해(아이템→골드 전환) | `{ items:[{itemId,count}] }` | `gold`, `cubeExp`, `cube`, `balance`, `inventoryDelta` | `ItemNotFound(4001)`, `InsufficientQuantity(4006)`, `ItemEquipped(4007)`, `InvalidRequest(1006)` |
 | `POST /api/game/cube/craft` | 큐브 제작(레시피로 아이템 생성) | `{ recipeCode }` | `consumed`, `gained`, `cube`, `balance`, `inventoryDelta` | `CubeRecipeNotMet(4010)`, `CubeLevelInsufficient(4011)`, `InsufficientCurrency(4005)`, `InventoryFull(4002)` |
 | `POST /api/game/consumable/use` | 소모품 1개 사용 → 계정 획득량 버프 부여·연장(경험치·골드 부스터) | `{ itemId }` | `itemCode`, `remainingQuantity`, `buff`, `activeBuffs`, `inventoryDelta` | `ItemNotFound(4001)`, `ItemNotConsumable(4020)`, `InsufficientQuantity(4006)`, `BuffDurationLimitExceeded(4021)`, `MasterDataNotLoaded(10001)` |
 | `POST /api/game/consumable/buffs` | 적용 중인 획득량 버프 조회(버프 UI 재동기화용 경량 조회) | 없음 | `serverTime`, `activeBuffs` | 인증 실패 계열만 |
