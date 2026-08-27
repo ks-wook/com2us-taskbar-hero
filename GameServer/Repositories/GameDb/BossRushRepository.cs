@@ -383,7 +383,9 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
 
         query = useFinalRank
             ? query.Where("final_rank", ">", 0).OrderBy("final_rank")
-            : query.OrderBy("best_clear_ms", "recorded_at");
+            // 동점(기록·달성 시각까지 동일)에서는 user_id를 최종 기준으로 둔다 — 이 기준이 없으면 순서가
+            // 미정의라 같은 조회를 두 번 해도 순위가 뒤바뀔 수 있고, 정산이 확정한 순위와도 어긋난다.
+            : query.OrderBy("best_clear_ms", "recorded_at", "user_id");
 
         var rows = await query.Offset(offset).Limit(limit).GetAsync<BossRushRankRecordRow>();
 
@@ -465,7 +467,7 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
         var rows = await db.Query("boss_rush_record")
             .Select("user_id", "best_clear_ms", "recorded_at")
             .Where("season_id", seasonId)
-            .OrderBy("best_clear_ms", "recorded_at")
+            .OrderBy("best_clear_ms", "recorded_at", "user_id")
             .Offset(offset)
             .Limit(limit)
             .GetAsync<BossRushSettleRow>();
@@ -474,8 +476,25 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
     }
 
     /// <summary>
-    /// 정산 대상 시즌을 조건부 갱신으로 선점한다(status 1 → 2, end_at 경과분만). 0행이면 다른 인스턴스가
-    /// 이미 선점했거나 정산할 시즌이 없다.
+    /// <b>정산 중(status=2)으로 남아 있는 시즌</b>을 읽는다. 정산은 시작할 때 이 상태로 바꾸고 끝나야 종료(3)로
+    /// 넘어가므로, 이 상태로 남아 있다는 것은 <b>직전 정산이 끝까지 돌지 못했다</b>는 뜻이다(프로세스 종료·예외).
+    /// 배치가 이어서 정산하는 진입점이며, 정산이 멱등해 같은 코드를 다시 태우면 남은 사람만 처리된다.
+    /// </summary>
+    public async Task<BossRushSeason?> GetSettlingSeasonAsync()
+    {
+        using var db = Db();
+        var row = await db.Query("boss_rush_season")
+            .Select("season_id", "start_at", "end_at", "status")
+            .Where("status", (int)BossRushSeasonStatus.Settling)
+            .OrderBy("season_id")
+            .FirstOrDefaultAsync<BossRushSeasonRow>();
+
+        return row is null ? null : new BossRushSeason(row.SeasonId, row.StartAt, row.EndAt, row.Status);
+    }
+
+    /// <summary>
+    /// 정산 대상 시즌을 선점한다(status 1 → 2, end_at 경과분만). 정산 중임을 <b>DB에 남기는 표식</b>이며,
+    /// 끝나지 못하면 그대로 남아 다음 발화가 <see cref="GetSettlingSeasonAsync"/>로 이어받는다.
     /// </summary>
     public async Task<BossRushSeason?> ClaimSeasonForSettlementAsync(long nowUnix)
     {
@@ -510,7 +529,8 @@ public sealed class BossRushRepository : GameDbBase, IBossRushRepository
             .Select("user_id", "best_clear_ms", "recorded_at")
             .Where("season_id", seasonId)
             .Where("final_rank", 0)
-            .OrderBy("best_clear_ms", "recorded_at")
+            // 정산 순위의 동점 기준. 조회·폴백 경로와 같아야 확정 순위와 표시 순위가 어긋나지 않는다.
+            .OrderBy("best_clear_ms", "recorded_at", "user_id")
             .Limit(limit)
             .GetAsync<BossRushSettleRow>();
 

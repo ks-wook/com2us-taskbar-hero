@@ -73,6 +73,14 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         }
 
         var repository = scope.ServiceProvider.GetRequiredService<IBossRushRepository>();
+
+        // 정산 중(2)으로 남은 시즌이 있으면 직전 정산이 완주하지 못한 것이다 — 다음 시즌의 종료 시각까지
+        // 자면 그동안 복구가 미뤄지므로(그 사이 순위·보상이 확정되지 않는다) 기본 간격으로 곧바로 이어서 돈다.
+        if (await repository.GetSettlingSeasonAsync() is not null)
+        {
+            return BucketFireTime(lastFireUnix, nowUnix);
+        }
+
         var current = await repository.GetRunningSeasonAsync();
 
         return current?.EndAt ?? BucketFireTime(lastFireUnix, nowUnix);
@@ -83,8 +91,10 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     protected override string BatchKey => "bossrush-season";
 
     /// <summary>
-    /// 1회 작업: ①종료 시각이 지난 시즌 선점 → ②순위 확정·보상 메일 발급 → ③시즌 종료·리더보드 TTL →
-    /// ④다음 시즌 개시.
+    /// 1회 작업: ①정산할 시즌 선정(정산 중으로 남은 시즌을 먼저 이어받고, 없으면 종료 시각이 지난 시즌 선점)
+    /// → ②순위 확정·보상 메일 발급 → ③다음 시즌 개시 → ④시즌 종료·리더보드 TTL.
+    /// <para>②가 완주하지 못하면 ③·④로 가지 않고 시즌을 <b>정산 중</b>으로 남긴다 — 다음 발화가 ①에서
+    /// 이어받는다. ③을 ④보다 앞에 두는 것도 같은 이유다(중간에 죽어도 복구 진입점이 남는다).</para>
     /// <para><b>진행 중 시즌 확인은 여기서 하지 않는다</b> — 발화 시각 계산이 이미 그 일을 하고, 정산 대상
     /// 자체는 ①의 조건부 갱신이 원자적으로 고른다. 정산할 시즌이 없으면 조용히 끝낸다(로그 소음 방지).</para>
     /// </summary>
@@ -101,14 +111,26 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         var now = DateTimeUtil.UtcNow;
         var nowUnix = DateTimeUtil.ToUnixSeconds(now);
 
-        // ① 종료 시각이 지난 시즌 선점(조건부 갱신 0행이면 정산할 시즌 없음).
-        var season = await repository.ClaimSeasonForSettlementAsync(nowUnix);
-        if (season is null)
+        // ① 정산할 시즌 선정.
+        //    **정산 중(2)으로 남은 시즌을 먼저 본다** — 그 상태로 남아 있다는 것은 직전 정산이 끝까지 돌지
+        //    못했다는 뜻이므로(프로세스 종료·예외), 새 시즌을 집기 전에 그 시즌부터 이어서 끝낸다.
+        //    정산은 멱등하므로(순위 확정은 final_rank=0 조건부 갱신) 같은 코드를 다시 태우면 남은 사람만 처리된다.
+        var season = await repository.GetSettlingSeasonAsync();
+        if (season is not null)
         {
-            return BatchCycleResult.Idle;
+            _logger.ZLogWarning(
+                $"보스러시 정산 미완료 시즌 감지 — 이어서 정산합니다: seasonId {season.SeasonId:@SeasonId} (종료 {season.EndAt:@EndAt})");
         }
+        else
+        {
+            season = await repository.ClaimSeasonForSettlementAsync(nowUnix);
+            if (season is null)
+            {
+                return BatchCycleResult.Idle;
+            }
 
-        _logger.ZLogInformation($"보스러시 시즌 정산 시작: seasonId {season.SeasonId:@SeasonId} (종료 {season.EndAt:@EndAt})");
+            _logger.ZLogInformation($"보스러시 시즌 정산 시작: seasonId {season.SeasonId:@SeasonId} (종료 {season.EndAt:@EndAt})");
+        }
 
         var template = _masterData.GetMailTemplate(Constants.MailTemplate.BossRushRankReward);
         if (template is null)
@@ -118,16 +140,38 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
         }
 
         // ② 순위 확정 + 보상 메일 발급.
-        var (settled, rewarded, failed) = await SettleAsync(repository, season, template, nowUnix, stoppingToken);
+        var (settled, rewarded, failed, completed) = await SettleAsync(repository, season, template, nowUnix, stoppingToken);
 
-        // ③ 시즌 종료 + 리더보드 TTL.
-        await repository.CloseSeasonAsync(season.SeasonId, nowUnix);
-        await rankCache.ExpireAsync(season.SeasonId, BatchSettingConstants.BossRushSeason.ClosedSeasonTtl);
+        // 완주하지 못했으면 **시즌을 닫지 않는다** — 정산 중(2) 상태로 남겨 다음 발화가 ①에서 이어받게 한다.
+        // 여기서 닫아 버리면 미확정자가 final_rank=0으로 영구히 남고 순위 보상도 받지 못한다.
+        if (!completed)
+        {
+            if (stoppingToken.IsCancellationRequested)
+            {
+                _logger.ZLogInformation(
+                    $"보스러시 시즌 정산 중단(종료 요청): seasonId {season.SeasonId:@SeasonId} 확정 {settled:@Settled}건 — 다음 기동에서 이어서 정산합니다.");
+            }
+            else
+            {
+                // 남은 대상이 있는데 한 건도 진전되지 않았다 — 코드·데이터 결함이라 재시도만으로 풀리지 않는다.
+                _logger.ZLogError(
+                    $"보스러시 시즌 정산 진전 없음: seasonId {season.SeasonId:@SeasonId} 확정 {settled:@Settled}건 · 실패 {failed:@Failed}건 — 원인 확인이 필요합니다(다음 발화에서 재시도).");
+            }
 
-        // ④ 다음 시즌 개시 + 시즌 메타 캐시 갱신(정산의 마지막 단계, 기획서 6.4).
+            return new BatchCycleResult(settled, 0, failed);
+        }
+
+        // ③ 다음 시즌 개시 + 시즌 메타 캐시 갱신(기획서 6.4).
+        //    **시즌 종료(④)보다 앞에 둔다** — 이 사이에서 죽어도 지금 시즌이 정산 중(2)으로 남아 다음 발화가
+        //    ①에서 이어받는다. 순서를 뒤집으면 "종료됐는데 다음 시즌이 없는" 상태가 만들어지고, 그때는
+        //    진행 중 시즌도 정산 중 시즌도 없어 아무도 복구하지 못한다. 개시는 start_at 유니크로 멱등하다.
         var next = await repository.StartNextSeasonAsync(
             season.EndAt, season.EndAt + DateTimeUtil.DaysToSeconds(rule.SeasonPeriodDays));
         await rankCache.SetCurrentSeasonAsync(next);
+
+        // ④ 시즌 종료(정산 중 → 종료) + 리더보드 TTL. 여기까지 와야 이 시즌의 정산이 끝난 것이다.
+        await repository.CloseSeasonAsync(season.SeasonId, nowUnix);
+        await rankCache.ExpireAsync(season.SeasonId, BatchSettingConstants.BossRushSeason.ClosedSeasonTtl);
 
         _logger.ZLogInformation($"보스러시 시즌 정산 완료: seasonId {season.SeasonId:@SeasonId} 순위 확정 {settled:@Settled}건 · 보상 발급 {rewarded:@Rewarded}건 → 다음 시즌 {next.SeasonId:@NextSeasonId}");
 
@@ -139,25 +183,34 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
     /// 순위 미확정 기록을 정렬 순서로 읽어 순위를 확정하고, 매칭되는 보상 구간이 있으면(1~3위) 골드
     /// 보상 메일을 같은 트랜잭션에서 발급한다. 이미 확정된 행 수를 시작 순위로 이어 재진입에서도
     /// 순위가 어긋나지 않게 한다.
+    /// <para><b>Completed</b>는 대상이 남지 않을 때까지 끝냈는지를 알린다. 종료 요청으로 중단됐거나,
+    /// 남은 대상이 있는데 <b>한 건도 진전되지 않으면</b>(모두 예외) false다 — 후자를 그냥 두면 같은 대상을
+    /// 쉬지 않고 다시 조회하는 무한 루프가 된다. 호출자는 false일 때 시즌을 닫지 않는다.</para>
     /// </summary>
-    private async Task<(int Settled, int Rewarded, int Failed)> SettleAsync(
+    private async Task<(int Settled, int Rewarded, int Failed, bool Completed)> SettleAsync(
         IBossRushRepository repository, BossRushSeason season, MailTemplateDef? template,
         long nowUnix, CancellationToken stoppingToken)
     {
         var settled = 0;
         var rewarded = 0;
         var failed = 0;
+        var completed = false;
 
         while (!stoppingToken.IsCancellationRequested)
         {
             var targets = await repository.GetUnsettledRecordsAsync(season.SeasonId, _batchSize);
             if (targets.Count == 0)
             {
+                completed = true;
                 break;
             }
 
             // 이미 확정된 건수가 곧 이 페이지의 시작 순위 - 1이다(정렬 순서가 같으므로).
             var rank = await repository.CountSettledAsync(season.SeasonId) + 1;
+
+            // 이 페이지에서 대상 집합이 실제로 줄어든 건수. 0이면 다음 조회가 같은 대상을 그대로 돌려주므로
+            // 루프를 끊는다(대기 없이 도는 재조회를 막는다).
+            var progressed = 0;
 
             foreach (var target in targets)
             {
@@ -191,18 +244,28 @@ public sealed class BossRushSeasonBatchScheduler : PeriodicBatchScheduler
                                 target.UserId, settleResult.RewardMailId, mail, MailSource.BossRushRank);
                         }
                     }
+
+                    // 예외 없이 끝난 건은 순위 미확정 집합에서 빠진다 — 다음 조회가 다시 돌려주지 않는다.
+                    progressed++;
+
+                    // **성공했을 때만** 다음 번호로 넘어간다. 실패한 자리에서 번호를 흘려보내면 뒤 사람들의
+                    // 순위가 한 칸씩 밀리고, 실패분을 재시도할 때 이미 쓰인 번호와 중복된다.
+                    rank++;
                 }
                 catch (Exception ex)
                 {
                     failed++;
                     _logger.ZLogError(ex, $"보스러시 순위 확정 실패(seasonId {season.SeasonId:@SeasonId} userId {target.UserId:@UserId} rank {rank:@Rank}) — 다음 주기에 재시도합니다.");
                 }
+            }
 
-                rank++;
+            if (progressed == 0)
+            {
+                break;
             }
         }
 
-        return (settled, rewarded, failed);
+        return (settled, rewarded, failed, completed);
     }
 
 }

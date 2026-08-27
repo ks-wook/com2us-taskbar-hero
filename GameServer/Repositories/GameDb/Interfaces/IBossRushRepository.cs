@@ -52,6 +52,9 @@ public interface IBossRushRepository
     // ── 시즌 정산 배치(6.4) ──
 
     /// <summary>정산 대상 시즌을 조건부 갱신으로 선점한다(status 1 → 2). 선점하지 못하면 null.</summary>
+    /// <summary>정산 중(status=2)으로 남은 시즌. 있으면 직전 정산이 완주하지 못한 것이다.</summary>
+    Task<BossRushSeason?> GetSettlingSeasonAsync();
+
     Task<BossRushSeason?> ClaimSeasonForSettlementAsync(long nowUnix);
 
     /// <summary>순위가 아직 확정되지 않은 기록을 정렬 순서로 상한까지 읽는다(정산 대상).</summary>

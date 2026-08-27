@@ -37,7 +37,7 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
         // 기록·보상은 이미 MySQL에 확정되어 있다 — 캐시 반영 실패는 순위 표시만 미룬다.
         => SafeAsync(async () =>
         {
-            await Board(seasonId).AddAsync(userId, Encode(bestClearMs, recordedAt, seasonStartAt));
+            await Board(seasonId).AddAsync(Member(userId), Encode(bestClearMs, recordedAt, seasonStartAt));
             return true;
         }, false, "리더보드 갱신");
 
@@ -45,7 +45,7 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
     public Task<int?> GetRankAsync(int seasonId, long userId)
         => SafeAsync(async () =>
         {
-            var rank = await Board(seasonId).RankAsync(userId);
+            var rank = await Board(seasonId).RankAsync(Member(userId));
             return rank.HasValue ? (int)(rank.Value + 1) : (int?)null;
         }, null, "내 순위 조회");
 
@@ -54,13 +54,14 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
         => SafeAsync(async () =>
         {
             var board = Board(seasonId);
-            var rank = await board.RankAsync(userId);
+            var member = Member(userId);
+            var rank = await board.RankAsync(member);
             if (!rank.HasValue)
             {
                 return null;
             }
 
-            var score = await board.ScoreAsync(userId);
+            var score = await board.ScoreAsync(member);
             if (!score.HasValue)
             {
                 return null;
@@ -86,7 +87,8 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
             for (var i = 0; i < entries.Length; i++)
             {
                 var (clearMs, recordedAt) = Decode(entries[i].Score, seasonStartAt);
-                result.Add(new BossRushCachedRank(offset + i + 1, entries[i].Value, clearMs, recordedAt));
+                result.Add(new BossRushCachedRank(
+                    offset + i + 1, UserIdOf(entries[i].Value), clearMs, recordedAt));
             }
 
             return (IReadOnlyList<BossRushCachedRank>?)result;
@@ -174,7 +176,19 @@ public sealed class BossRushRankCache : MemoryDbBase, IBossRushRankCache
         }), "현재 시즌 캐시 갱신");
 
     /// <summary>시즌 리더보드 구조체(member = userId).</summary>
-    private RedisSortedSet<long> Board(int seasonId)
+    /// <summary>
+    /// 리더보드 멤버 문자열. user_id를 <see cref="Constants.BossRush.RankMemberDigits"/>자리로 0을 채워 만든다 —
+    /// 동점일 때 Redis가 멤버를 사전순으로 비교하므로, 자릿수를 맞춰야 그 순서가 user_id 오름차순이 되어
+    /// MySQL의 동점 기준과 일치한다.
+    /// </summary>
+    private static string Member(long userId)
+        => userId.ToString(new string('0', Constants.BossRush.RankMemberDigits));
+
+    /// <summary>리더보드 멤버 문자열을 user_id로 되돌린다(선행 0은 그대로 파싱된다).</summary>
+    private static long UserIdOf(string member)
+        => long.TryParse(member, out var userId) ? userId : 0;
+
+    private RedisSortedSet<string> Board(int seasonId)
         => new(Connection, $"rank:bossrush:{seasonId}", null);
 
     /// <summary>닉네임 캐시 구조체(field = userId 문자열).</summary>

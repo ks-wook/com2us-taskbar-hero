@@ -336,6 +336,14 @@ public static class Constants
         public const long ScoreScale = 10_000_000L;
 
         /// <summary>
+        /// 리더보드 멤버(user_id) 문자열의 고정 자릿수. <b>동점자 순서를 MySQL과 일치시키기 위한 값</b>이다 —
+        /// Redis는 점수가 같으면 멤버를 <b>사전순</b>으로 비교하는데, 자릿수가 다르면 "10" &lt; "9"가 되어
+        /// user_id 오름차순(MySQL의 동점 기준)과 어긋난다. 0으로 채워 자릿수를 맞추면 사전순 = 숫자순이 된다.
+        /// <c>user_id</c>가 BIGINT이므로 최대 자릿수(19)에 여유 1을 더한 20으로 둔다.
+        /// </summary>
+        public const int RankMemberDigits = 20;
+
+        /// <summary>
         /// 랭킹 캐시 워밍업(관리 API)이 <c>boss_rush_record</c>를 읽는 페이지 크기. 한 번에 다 읽지 않고
         /// 쪼개는 이유는 시즌 등재 인원이 늘어도 메모리 사용량이 이 크기에 묶이기 때문이다.
         /// </summary>
