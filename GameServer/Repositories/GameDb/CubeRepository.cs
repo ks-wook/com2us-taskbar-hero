@@ -170,7 +170,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
 
             // 6) 큐브 경험치 반영.
             var (newLevel, newExp) = _cubeLevel.Calculate(cubeLevel, cubeExp, decision.CubeExpGain);
-            await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
+            await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp, cubeLevel, cubeExp);
 
             // 7) 가방 변경분(5.0): 입력 전량이 사라지고 결과 아이템 1개가 slot 칸에 생긴다.
             var delta = new InventoryDeltaDto();
@@ -256,15 +256,22 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
             foreach (var (itemId, count) in items)
             {
                 var row = byId[itemId];
+
+                // 읽은 수량 그대로일 때만 지우거나 깎는다. 조건이 없으면 같은 아이템을 동시에 분해할 때
+                // 양쪽이 같은 수량을 읽고 각자 계산한 값을 덮어써, 한 번 분해분만 빠진 채 보상은 두 번 나간다.
+                int changed;
                 if (count >= row.Quantity)
                 {
-                    await db.Query("player_item").Where("player_item_id", itemId).DeleteAsync(transaction);
+                    changed = await db.Query("player_item")
+                        .Where("player_item_id", itemId).Where("quantity", row.Quantity)
+                        .DeleteAsync(transaction);
                     delta.removed.Add(itemId);
                 }
                 else
                 {
                     long remaining = row.Quantity - count;
-                    await db.Query("player_item").Where("player_item_id", itemId)
+                    changed = await db.Query("player_item")
+                        .Where("player_item_id", itemId).Where("quantity", row.Quantity)
                         .UpdateAsync(new { quantity = remaining }, transaction);
                     delta.upserted.Add(new InventoryItemDto
                     {
@@ -275,6 +282,11 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
                         enhanceLevel = 0,
                     });
                 }
+
+                if (changed == 0)
+                {
+                    throw new ConcurrencyConflictException("아이템 수량");
+                }
             }
 
             // 4) 골드 적립(원자 가산). 적립 후 잔액을 응답에 담는다.
@@ -283,7 +295,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
 
             // 5) 큐브 경험치 반영.
             var (newLevel, newExp) = _cubeLevel.Calculate(cubeLevel, cubeExp, reward.TotalCubeExp);
-            await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
+            await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp, cubeLevel, cubeExp);
 
             return TxResult<DismantleOutcome>.Commit(new DismantleOutcome(DismantleStatus.Ok, reward.TotalGold, reward.TotalCubeExp)
             {
@@ -370,7 +382,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
 
             // 6) 큐브 경험치 반영.
             var (newLevel, newExp) = _cubeLevel.Calculate(cubeLevel, cubeExp, cubeExpGain);
-            await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
+            await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp, cubeLevel, cubeExp);
 
             return TxResult<CraftOutcome>.Commit(new CraftOutcome(CraftStatus.Ok, newLevel, newExp) { Delta = delta, GoldBalance = goldBalance });
         });
@@ -380,18 +392,31 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
     /// <summary>player_cube 상태(레벨·경험치)와 존재 여부를 읽는다. 행이 없으면 (1, 0, false).</summary>
     private static async Task<(int level, long exp, bool has)> LoadCubeAsync(QueryFactory db, DbTransaction tx, long userId)
     {
-        var row = await db.Query("player_cube").Select("cube_level", "cube_exp")
-            .Where("user_id", userId).FirstOrDefaultAsync<CubeStateRow>(tx);
+        // **잠금 조회** — 레벨·경험치가 계산의 입력이라 최신값이어야 한다(잠금 없는 조회는 트랜잭션이
+        // 처음 읽은 시점의 스냅샷을 계속 본다).
+        var row = (await db.SelectAsync<CubeStateRow>(
+            "SELECT cube_level, cube_exp FROM player_cube WHERE user_id = @userId FOR UPDATE",
+            new { userId }, tx)).FirstOrDefault();
         return row is null ? (1, 0L, false) : (row.CubeLevel, row.CubeExp, true);
     }
 
-    /// <summary>큐브 상태를 갱신한다(행이 없으면 INSERT).</summary>
-    private static async Task UpsertCubeAsync(QueryFactory db, DbTransaction tx, long userId, bool has, int level, long exp)
+    /// <summary>
+    /// 큐브 상태를 갱신한다(행이 없으면 INSERT). <paramref name="prevLevel"/>·<paramref name="prevExp"/>는
+    /// 이 트랜잭션이 계산의 출발점으로 읽은 값이며, <b>그 값이 그대로일 때만</b> 쓴다 — 조건이 없으면 같은 계정의
+    /// 합성·분해·제작이 겹칠 때 양쪽이 같은 값을 읽고 각자 계산한 결과를 덮어써 한쪽 경험치가 사라진다.
+    /// </summary>
+    private static async Task UpsertCubeAsync(
+        QueryFactory db, DbTransaction tx, long userId, bool has, int level, long exp, int prevLevel, long prevExp)
     {
         if (has)
         {
-            await db.Query("player_cube").Where("user_id", userId)
+            var changed = await db.Query("player_cube")
+                .Where("user_id", userId).Where("cube_level", prevLevel).Where("cube_exp", prevExp)
                 .UpdateAsync(new { cube_level = level, cube_exp = exp }, tx);
+            if (changed == 0)
+            {
+                throw new ConcurrencyConflictException("큐브 상태");
+            }
         }
         else
         {
@@ -419,15 +444,21 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
             }
 
             long take = Math.Min(need, row.Quantity);
+
+            // 읽은 수량 그대로일 때만 지우거나 깎는다(분해와 같은 이유).
+            int changed;
             if (take >= row.Quantity)
             {
-                await db.Query("player_item").Where("player_item_id", row.PlayerItemId).DeleteAsync(tx);
+                changed = await db.Query("player_item")
+                    .Where("player_item_id", row.PlayerItemId).Where("quantity", row.Quantity)
+                    .DeleteAsync(tx);
                 delta.removed.Add(row.PlayerItemId);
             }
             else
             {
                 long remaining = row.Quantity - take;
-                await db.Query("player_item").Where("player_item_id", row.PlayerItemId)
+                changed = await db.Query("player_item")
+                    .Where("player_item_id", row.PlayerItemId).Where("quantity", row.Quantity)
                     .UpdateAsync(new { quantity = remaining }, tx);
                 delta.upserted.Add(new InventoryItemDto
                 {
@@ -437,6 +468,11 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
                     quantity = remaining,
                     enhanceLevel = 0,
                 });
+            }
+
+            if (changed == 0)
+            {
+                throw new ConcurrencyConflictException("아이템 수량");
             }
 
             need -= take;
@@ -457,10 +493,17 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
         // 재료(스택 가능): 기존 스택의 여유부터 채운다(새 칸 불필요).
         if (itemType == Constants.ItemType.Material && stackMax > 1)
         {
-            var stacks = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
-                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).Where("item_code", itemCode)
-                .Where("quantity", "<", stackMax)
-                .GetAsync<ItemIdQtySlotRow>(tx);
+            // **잠금 조회** — 합칠 스택의 수량이 계산의 입력이라 최신값이어야 한다. 잠금 없는 조회는
+            // 트랜잭션이 처음 읽은 시점의 스냅샷을 계속 보므로, 그 사이 다른 요청이 같은 스택을 채웠어도
+            // 옛 수량이 보여 아래 조건부 갱신이 매번 어긋난다.
+            var stacks = await db.SelectAsync<ItemIdQtySlotRow>(
+                """
+                SELECT player_item_id, quantity, slot FROM player_item
+                 WHERE user_id = @userId AND row_type = @rowType AND item_code = @itemCode
+                   AND quantity < @stackMax
+                 ORDER BY player_item_id FOR UPDATE
+                """,
+                new { userId, rowType = Constants.PlayerItemRow.Item, itemCode, stackMax }, tx);
 
             foreach (var stack in stacks)
             {
@@ -472,8 +515,15 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
                 long room = stackMax - stack.Quantity;
                 long add = Math.Min(room, remaining);
                 long merged = stack.Quantity + add;
-                await db.Query("player_item").Where("player_item_id", stack.PlayerItemId)
+                // 읽은 수량 그대로일 때만 합친다. 조건이 없으면 같은 스택에 두 요청이 동시에 합칠 때
+                // 한쪽 수량이 사라진다.
+                var mergedRows = await db.Query("player_item")
+                    .Where("player_item_id", stack.PlayerItemId).Where("quantity", stack.Quantity)
                     .UpdateAsync(new { quantity = merged }, tx);
+                if (mergedRows == 0)
+                {
+                    throw new ConcurrencyConflictException("아이템 스택");
+                }
                 delta.upserted.Add(new InventoryItemDto
                 {
                     itemId = stack.PlayerItemId,

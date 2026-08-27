@@ -405,11 +405,17 @@ public sealed class MailRepository : GameDbBase, IMailRepository
         // 스택형(재료·소모품): 기존 스택의 여유부터 채운다(새 칸 불필요).
         if (stackMax > 1 && enhanceLevel == 0)
         {
-            var stacks = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
-                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).Where("item_code", itemCode)
-                .Where("enhance_level", 0)
-                .Where("quantity", "<", stackMax)
-                .GetAsync<ItemIdQtySlotRow>(tx);
+            // **잠금 조회** — 합칠 스택의 수량이 계산의 입력이라 최신값이어야 한다. 잠금 없는 조회는
+            // 트랜잭션이 처음 읽은 시점의 스냅샷을 계속 보므로, 그 사이 다른 요청이 같은 스택을 채웠어도
+            // 옛 수량이 보여 아래 조건부 갱신이 매번 어긋난다.
+            var stacks = await db.SelectAsync<ItemIdQtySlotRow>(
+                """
+                SELECT player_item_id, quantity, slot FROM player_item
+                 WHERE user_id = @userId AND row_type = @rowType AND item_code = @itemCode
+                   AND enhance_level = 0 AND quantity < @stackMax
+                 ORDER BY player_item_id FOR UPDATE
+                """,
+                new { userId, rowType = Constants.PlayerItemRow.Item, itemCode, stackMax }, tx);
 
             foreach (var stack in stacks)
             {
@@ -421,8 +427,15 @@ public sealed class MailRepository : GameDbBase, IMailRepository
                 long room = stackMax - stack.Quantity;
                 long add = Math.Min(room, remaining);
                 long merged = stack.Quantity + add;
-                await db.Query("player_item").Where("player_item_id", stack.PlayerItemId)
+                // 읽은 수량 그대로일 때만 합친다. 조건이 없으면 같은 스택에 두 요청이 동시에 합칠 때
+                // 한쪽 수량이 사라진다.
+                var mergedRows = await db.Query("player_item")
+                    .Where("player_item_id", stack.PlayerItemId).Where("quantity", stack.Quantity)
                     .UpdateAsync(new { quantity = merged }, tx);
+                if (mergedRows == 0)
+                {
+                    throw new ConcurrencyConflictException("아이템 스택");
+                }
                 delta.upserted.Add(new InventoryItemDto
                 {
                     itemId = stack.PlayerItemId,

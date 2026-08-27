@@ -78,8 +78,31 @@ public static class Constants
     /// <summary>MySQL 에러 번호.</summary>
     public static class MySqlError
     {
-        /// <summary>1062 중복 키 — 유니크 제약 경합(동시 생성·시즌 개시)을 구분하는 데 쓴다.</summary>
+        /// <summary>1062 중복 키 — 유니크 제약 경합(동시 생성·시즌 개시·가방 칸 선점)을 구분하는 데 쓴다.</summary>
         public const int DuplicateEntry = 1062;
+
+        /// <summary>
+        /// 1213 교착 — 두 트랜잭션이 서로가 쥔 행을 기다려 InnoDB가 한쪽을 되돌린 경우.
+        /// 되돌려진 쪽은 다시 실행하면 되므로 <see cref="Db.MaxTransactionAttempts"/> 재시도 대상이다.
+        /// </summary>
+        public const int Deadlock = 1213;
+
+        /// <summary>1205 잠금 대기 시간 초과 — 교착과 같은 성격(경합)이라 같은 재시도 대상이다.</summary>
+        public const int LockWaitTimeout = 1205;
+    }
+
+    /// <summary>세이브 DB 트랜잭션 운영 값.</summary>
+    public static class Db
+    {
+        /// <summary>
+        /// 경합으로 되돌아간 트랜잭션을 <b>처음 실행을 포함해</b> 최대 몇 번까지 시도할지.
+        /// <para>같은 트랜잭션 안에서 다시 읽어 봐야 소용이 없어서 트랜잭션째 다시 실행한다 — InnoDB 기본
+        /// 격리 수준(REPEATABLE READ)에서 잠금 없는 조회는 트랜잭션이 처음 읽은 시점의 스냅샷을 계속 보므로,
+        /// 그 사이 다른 요청이 커밋한 결과가 보이지 않는다. 새 트랜잭션이라야 스냅샷도 새로 잡힌다.</para>
+        /// <para>3인 이유는 경합이 같은 계정의 요청끼리만 일어나 동시 요청 수가 애초에 작기 때문이다.
+        /// 여기서도 실패하면 재시도로 풀 문제가 아니므로 예외를 그대로 올린다.</para>
+        /// </summary>
+        public const int MaxTransactionAttempts = 3;
     }
 
     // ────────────────────────────────────────────────────────────────
@@ -157,6 +180,17 @@ public static class Constants
 
         /// <summary>"미편성"(보유하지만 파티에 없어 전투에 참가하지 않음) 값. 1~3은 파티 자리다.</summary>
         public const int SlotUnassigned = 0;
+    }
+
+    /// <summary>플레이어 계정(<c>game_player</c>) 기준값.</summary>
+    public static class Player
+    {
+        /// <summary>
+        /// 닉네임 최대 길이. 클라이언트 입력 UI가 이 길이까지만 보내므로 더 긴 값은 조작이거나 클라 버그다.
+        /// <c>game_player.nickname</c>은 VARCHAR(50)이라 이 검사가 DB 길이 오류보다 앞에서 걸러 준다.
+        /// 계정 서버의 회원가입 닉네임 검증(<c>AccountServer</c> <c>Constants.Auth.MaxNicknameLength</c>)과 같은 값이어야 한다.
+        /// </summary>
+        public const int NicknameMaxLength = 12;
     }
 
     /// <summary>캐릭터 생성 기준값.</summary>

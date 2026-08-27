@@ -19,6 +19,16 @@ public readonly record struct TxResult<T>(bool ShouldCommit, T Value)
 }
 
 /// <summary>
+/// 다른 요청과 부딪혀 이 트랜잭션을 되돌려야 한다는 신호. <b>사용자 잘못이 아니라 타이밍</b>이므로
+/// <see cref="GameDbBase.TransactionAsync{T}"/>가 트랜잭션째 다시 실행한다.
+/// <para>읽은 값이 그대로일 때만 쓰도록 조건을 건 갱신이 0행을 돌려주면(= 그 사이 다른 요청이 먼저 바꿨다)
+/// 이 예외를 던진다. 값으로 돌려주지 않고 예외를 쓰는 이유는, 이 상황이 <b>호출측이 판단할 결과가 아니라
+/// 이 트랜잭션을 버리고 다시 하라는 지시</b>이기 때문이다 — 검증 실패(잔액 부족·중복 획득)와 성격이 다르다.</para>
+/// </summary>
+public sealed class ConcurrencyConflictException(string what)
+    : Exception($"같은 계정의 다른 요청이 먼저 {what}을(를) 바꿨습니다. 트랜잭션을 다시 실행합니다.");
+
+/// <summary>
 /// MySQL 세이브 DB(GameDb) 계층의 공통 기반 — <b>커넥션 개시와 트랜잭션 커밋/롤백 규약</b>을 한곳에 모은다.
 /// <para>연결 문자열은 <see cref="GameDbFactory"/>가 계속 보유하고(싱글턴 1개) 이 클래스는 그것을 주입받아 쓴다.
 /// 상속으로 물려주는 것은 연결이 아니라 <b>규약</b>이다 — Redis 계층의
@@ -48,6 +58,22 @@ public abstract class GameDbBase
     /// </summary>
     protected async Task<T> TransactionAsync<T>(Func<QueryFactory, MySqlTransaction, Task<TxResult<T>>> body)
     {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await RunOnceAsync(body);
+            }
+            catch (Exception ex) when (IsConflict(ex) && attempt < Constants.Db.MaxTransactionAttempts)
+            {
+                // 경합이라 다시 하면 풀린다. 트랜잭션이 이미 되돌아갔으므로 남은 변경도 없다.
+            }
+        }
+    }
+
+    /// <summary>트랜잭션 1회 실행 — <paramref name="body"/>가 돌려준 결말대로 커밋 또는 롤백한다.</summary>
+    private async Task<T> RunOnceAsync<T>(Func<QueryFactory, MySqlTransaction, Task<TxResult<T>>> body)
+    {
         await using var connection = _dbFactory.CreateConnection();
         await connection.OpenAsync();
         await using var transaction = await connection.BeginTransactionAsync();
@@ -73,6 +99,16 @@ public abstract class GameDbBase
             throw;
         }
     }
+
+    /// <summary>
+    /// 다시 실행하면 풀릴 실패인지 가린다 — 경합 신호(<see cref="ConcurrencyConflictException"/>)와
+    /// 같은 성격의 MySQL 오류(가방 칸 같은 유니크 선점 실패·교착·잠금 대기 초과)가 대상이다.
+    /// 그 외 오류는 다시 해도 같으므로 그대로 올린다.
+    /// </summary>
+    private static bool IsConflict(Exception ex)
+        => ex is ConcurrencyConflictException
+           || (ex is MySqlException my && my.Number is Constants.MySqlError.DuplicateEntry
+                   or Constants.MySqlError.Deadlock or Constants.MySqlError.LockWaitTimeout);
 
     /// <summary>
     /// 돌려줄 값이 없는 트랜잭션(계정 생성처럼 성공 아니면 예외인 경로). 정상 완료면 커밋, 예외면 롤백 후 전파한다.

@@ -162,11 +162,14 @@ public sealed class StageRepository : GameDbBase, IStageRepository
 
             // 4) 경험치 지급(파티 편성 캐릭터 동일) + 레벨 재계산.
             //    미편성(slot=0) 캐릭터는 전투에 나가지 않았으므로 경험치를 받지 않는다(세이브 데이터 기획서 5.5).
-            var charRows = await db.Query("player_character")
-                .Select("character_id", "level", "exp", "class_code")
-                .Where("user_id", userId).Where("slot", "!=", Constants.Party.SlotUnassigned)
-                .OrderBy("slot")
-                .GetAsync<CharProgressRow>(transaction);
+            //    **잠금 조회**로 읽는다 — 레벨·경험치가 계산의 입력이라 최신값이어야 하고, 잠금 없는 조회는
+            //    트랜잭션이 처음 읽은 시점의 스냅샷을 계속 보기 때문이다. slot 순으로 잠가 순서를 고정한다.
+            var charRows = await db.SelectAsync<CharProgressRow>(
+                """
+                SELECT character_id, level, exp, class_code FROM player_character
+                 WHERE user_id = @userId AND slot <> @unassigned ORDER BY slot FOR UPDATE
+                """,
+                new { userId, unassigned = Constants.Party.SlotUnassigned }, transaction);
 
             var characters = new List<CharacterProgressDto>();
             var levelUps = new List<CharacterLevelUp>();
@@ -175,9 +178,21 @@ public sealed class StageRepository : GameDbBase, IStageRepository
                 int characterId = c.CharacterId;
 
                 var (newLevel, newExp, leveledUp) = _levelUp.Calculate(c.Level, c.Exp, exp);
-                await db.Query("player_character")
-                    .Where("user_id", userId).Where("character_id", characterId)
-                    .UpdateAsync(new { level = newLevel, exp = newExp }, transaction);
+
+                // 읽은 레벨·경험치가 그대로일 때만 쓴다. 이 조건이 없으면 같은 계정의 클리어 둘이 겹칠 때
+                // 양쪽이 같은 값을 읽고 각자 계산한 값을 덮어써 한쪽 경험치가 사라진다.
+                // 지급액이 0이면 바뀔 값이 없으므로 갱신 자체를 건너뛴다(경합으로 오인하지 않게).
+                if (newLevel != c.Level || newExp != c.Exp)
+                {
+                    var applied = await db.Query("player_character")
+                        .Where("user_id", userId).Where("character_id", characterId)
+                        .Where("level", c.Level).Where("exp", c.Exp)
+                        .UpdateAsync(new { level = newLevel, exp = newExp }, transaction);
+                    if (applied == 0)
+                    {
+                        throw new ConcurrencyConflictException("캐릭터 경험치");
+                    }
+                }
 
                 characters.Add(new CharacterProgressDto
                 {
@@ -220,8 +235,12 @@ public sealed class StageRepository : GameDbBase, IStageRepository
                 }
                 // seq == TotalStages(전부 클리어)면 현재 스테이지 유지.
 
-                await db.Query("game_player")
+                // 관측한 max_stage_cleared 그대로일 때만 전진한다. 이 조건이 없으면 같은 프런티어 스테이지의
+                // 클리어 둘이 겹칠 때 양쪽이 모두 "내가 프런티어다"라고 판단해 한 스테이지로 두 번 전진하고,
+                // 보상과 전리품도 두 번 나간다.
+                var advanced = await db.Query("game_player")
                     .Where("user_id", userId)
+                    .Where("max_stage_cleared", maxCleared)
                     .UpdateAsync(new
                     {
                         act = newAct,
@@ -230,6 +249,10 @@ public sealed class StageRepository : GameDbBase, IStageRepository
                         max_stage_cleared = newMax,
                         updated_at = nowUnix,
                     }, transaction);
+                if (advanced == 0)
+                {
+                    throw new ConcurrencyConflictException("스테이지 진행도");
+                }
             }
             else
             {
@@ -268,19 +291,30 @@ public sealed class StageRepository : GameDbBase, IStageRepository
         // 재료(스택 가능): 여유 있는 기존 스택에 합친다(새 칸 불필요).
         if (dropped.StackMax > 1)
         {
-            var stackRow = await db.Query("player_item")
-                .Select("player_item_id", "quantity", "slot")
-                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).Where("item_code", dropped.ItemCode)
-                .Where("quantity", "<", dropped.StackMax)
-                .FirstOrDefaultAsync<ItemIdQtySlotRow>(transaction);
+            // **잠금 조회** — 합칠 스택의 수량이 계산의 입력이라 최신값이어야 한다.
+            var stackRow = (await db.SelectAsync<ItemIdQtySlotRow>(
+                """
+                SELECT player_item_id, quantity, slot FROM player_item
+                 WHERE user_id = @userId AND row_type = @rowType AND item_code = @itemCode
+                   AND quantity < @stackMax
+                 ORDER BY player_item_id LIMIT 1 FOR UPDATE
+                """,
+                new { userId, rowType = Constants.PlayerItemRow.Item, itemCode = dropped.ItemCode, stackMax = dropped.StackMax },
+                transaction)).FirstOrDefault();
 
             if (stackRow is not null)
             {
                 long stackRowId = stackRow.PlayerItemId;
                 long merged = stackRow.Quantity + dropped.Quantity;
-                await db.Query("player_item")
-                    .Where("player_item_id", stackRowId)
+
+                // 읽은 수량 그대로일 때만 합친다(같은 스택에 두 요청이 동시에 합치면 한쪽이 사라진다).
+                var mergedRows = await db.Query("player_item")
+                    .Where("player_item_id", stackRowId).Where("quantity", stackRow.Quantity)
                     .UpdateAsync(new { quantity = merged }, transaction);
+                if (mergedRows == 0)
+                {
+                    throw new ConcurrencyConflictException("아이템 스택");
+                }
                 delta.upserted.Add(new InventoryItemDto
                 {
                     itemId = stackRowId,

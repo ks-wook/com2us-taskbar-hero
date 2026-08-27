@@ -22,10 +22,20 @@ internal static class InventorySlotAllocator
     /// <summary>
     /// 현재 점유 중인 가방 칸(slot) 집합을 읽는다. 재화 행과 장착 중인 장비는 <c>slot</c>이 NULL이라 자동으로 빠진다.
     /// </summary>
+    /// <remarks>
+    /// <b>잠금 조회로 읽는다.</b> 잠금 없는 조회는 트랜잭션이 처음 읽은 시점의 스냅샷을 계속 보므로, 그 사이
+    /// 다른 요청이 칸을 채웠어도 빈 칸으로 보인다 — 그 상태로 배정하면 <c>(user_id, slot)</c> 유니크에 걸려
+    /// 적재가 실패한다. 잠금 조회는 최신 커밋값을 읽고 그 구간을 잠그므로, 겹친 요청이 순서대로 다음 칸을 받는다.
+    /// <para>잠그는 범위는 <b>그 계정의 가방 칸</b>뿐이다. 계정 전체를 잠그는 것과 달리 재화·세이브·파티처럼
+    /// 가방과 무관한 경로는 영향을 받지 않는다.</para>
+    /// </remarks>
     public static async Task<HashSet<int>> LoadUsedSlotsAsync(QueryFactory db, DbTransaction tx, long userId)
     {
-        var slots = await db.Query("player_item").Select("slot")
-            .Where("user_id", userId).WhereNotNull("slot").GetAsync<int>(tx);
+        var slots = await db.SelectAsync<int>(
+            """
+            SELECT slot FROM player_item WHERE user_id = @userId AND slot IS NOT NULL ORDER BY slot FOR UPDATE
+            """,
+            new { userId }, tx);
         return slots.ToHashSet();
     }
 

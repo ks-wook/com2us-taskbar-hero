@@ -83,9 +83,16 @@ public sealed class GrowthRepository : GameDbBase, IGrowthRepository
             int newLevel = curLevel + 1;
             if (levels.ContainsKey(skillCode))
             {
-                await db.Query("player_skill")
+                // 읽은 레벨 그대로일 때만 올린다 — 조건이 없으면 동시 요청 둘이 같은 레벨을 읽고 같은 값을 써,
+                // 스킬 포인트는 두 번 쓰이는데 레벨은 한 번만 오른다.
+                var raised = await db.Query("player_skill")
                     .Where("user_id", userId).Where("character_id", characterId).Where("skill_code", skillCode)
+                    .Where("level", curLevel)
                     .UpdateAsync(new { level = newLevel }, transaction);
+                if (raised == 0)
+                {
+                    throw new ConcurrencyConflictException("스킬 레벨");
+                }
             }
             else
             {
@@ -257,9 +264,14 @@ public sealed class GrowthRepository : GameDbBase, IGrowthRepository
             }
             else
             {
-                await db.Query("player_rune")
-                    .Where("user_id", userId).Where("rune_code", runeCode)
+                // 읽은 레벨 그대로일 때만 올린다(스킬 레벨과 같은 이유 — 골드만 두 번 빠지는 것을 막는다).
+                var raised = await db.Query("player_rune")
+                    .Where("user_id", userId).Where("rune_code", runeCode).Where("level", curLevel)
                     .UpdateAsync(new { level = newLevel }, transaction);
+                if (raised == 0)
+                {
+                    throw new ConcurrencyConflictException("룬 레벨");
+                }
             }
 
             return TxResult<RuneUpgradeOutcome>.Commit(new RuneUpgradeOutcome(RuneUpgradeStatus.Ok, newLevel, cost, newGold));

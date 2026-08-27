@@ -445,11 +445,14 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
         Func<int, int, (EnhancePlanStatus status, long cost, int currencyCode)> plan)
         => await TransactionAsync<EnhanceOutcome>(async (db, transaction) =>
         {
-            // 1) 대상 아이템 존재 확인(계정 소유).
-            var itemRow = await db.Query("player_item")
-                .Select("row_type", "slot", "item_code", "quantity", "enhance_level")
-                .Where("player_item_id", itemId).Where("user_id", userId)
-                .FirstOrDefaultAsync<ItemRowTypeSlotRow>(transaction);
+            // 1) 대상 아이템 존재 확인(계정 소유) — **잠금 조회**로 읽는다(강화 단계가 계산의 입력이라
+            //    최신값이어야 한다. 이유는 가방 확장과 같다).
+            var itemRow = (await db.SelectAsync<ItemRowTypeSlotRow>(
+                """
+                SELECT row_type, slot, item_code, quantity, enhance_level
+                  FROM player_item WHERE player_item_id = @itemId AND user_id = @userId FOR UPDATE
+                """,
+                new { itemId, userId }, transaction)).FirstOrDefault();
             if (itemRow is null)
             {
                 return TxResult<EnhanceOutcome>.Rollback(EnhanceOutcome.Fail(EnhanceStatus.ItemNotFound));
@@ -487,10 +490,16 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
 
             long newBalance = debited.Value;
 
-            // 5) 강화 단계 +1.
+            // 5) 강화 단계 +1. 읽은 단계 그대로일 때만 쓴다 — 조건이 없으면 같은 장비를 동시에 강화할 때
+            //    양쪽이 같은 단계를 읽고 같은 값을 써, 비용은 두 번 나가는데 단계는 한 번만 오른다.
             int newLevel = itemRow.EnhanceLevel + 1;
-            await db.Query("player_item").Where("player_item_id", itemId)
+            var enhanced = await db.Query("player_item")
+                .Where("player_item_id", itemId).Where("enhance_level", itemRow.EnhanceLevel)
                 .UpdateAsync(new { enhance_level = newLevel }, transaction);
+            if (enhanced == 0)
+            {
+                throw new ConcurrencyConflictException("강화 단계");
+            }
 
             // 6) 장착 중이면 장착 행의 강화 단계 스냅샷도 함께 갱신(코어 로드 equipped가 이 값을 내려준다).
             int equippedUpdated = await db.Query("player_item_equipped").Where("player_item_id", itemId)
@@ -519,11 +528,13 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
     public async Task<ExpandOutcome> ApplyExpandAsync(long userId, Func<int, (bool ok, long cost)> planOne, long nowUnix)
         => await TransactionAsync<ExpandOutcome>(async (db, transaction) =>
         {
-            // 1) 현재 용량 확인.
-            var capacityVal = await db.Query("game_player")
-                .Select("inventory_capacity")
-                .Where("user_id", userId)
-                .FirstOrDefaultAsync<int?>(transaction);
+            // 1) 현재 용량 확인 — **잠금 조회**로 읽는다.
+            //    잠금 없는 조회는 트랜잭션이 처음 읽은 시점의 스냅샷을 보므로, 그 사이 다른 확장이 커밋해도
+            //    옛 용량이 그대로 보인다. 그 값으로 계산하면 아래 조건부 갱신이 매번 어긋나 헛돌게 된다.
+            //    잠금 조회는 최신 커밋값을 읽고 그 행을 잠그므로, 겹친 요청이 순서대로 한 칸씩 늘린다.
+            var capacityVal = (await db.SelectAsync<int?>(
+                "SELECT inventory_capacity FROM game_player WHERE user_id = @userId FOR UPDATE",
+                new { userId }, transaction)).FirstOrDefault();
             if (capacityVal is null)
             {
                 return TxResult<ExpandOutcome>.Rollback(ExpandOutcome.Fail(ExpandStatus.NoPlayer));
@@ -548,9 +559,16 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
 
             long newGold = debited.Value;
 
+            // 읽은 용량 그대로일 때만 늘린다 — 조건이 없으면 확장 둘이 겹칠 때 골드는 두 번 빠지는데
+            // 용량은 한 칸만 는다(실제로 재현됐다).
             int newCapacity = capacity + 1;
-            await db.Query("game_player").Where("user_id", userId)
+            var expanded = await db.Query("game_player")
+                .Where("user_id", userId).Where("inventory_capacity", capacity)
                 .UpdateAsync(new { inventory_capacity = newCapacity, updated_at = nowUnix }, transaction);
+            if (expanded == 0)
+            {
+                throw new ConcurrencyConflictException("가방 용량");
+            }
 
             return TxResult<ExpandOutcome>.Commit(new ExpandOutcome(ExpandStatus.Ok, newCapacity, cost, newGold));
         });

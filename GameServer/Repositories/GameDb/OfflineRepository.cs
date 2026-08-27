@@ -121,20 +121,33 @@ public sealed class OfflineRepository : GameDbBase, IOfflineRepository
 
             // 5) 경험치 지급(파티 편성 캐릭터 동일) + 레벨 재계산.
             //    미편성(slot=0) 캐릭터는 방치 전투에 참가하지 않았으므로 경험치를 받지 않는다(세이브 데이터 기획서 5.5).
-            var charRows = await db.Query("player_character")
-                .Select("character_id", "level", "exp", "class_code")
-                .Where("user_id", userId).Where("slot", "!=", Constants.Party.SlotUnassigned)
-                .OrderBy("slot")
-                .GetAsync<CharProgressRow>(transaction);
+            //    **잠금 조회**로 읽는다(스테이지 클리어와 같은 이유).
+            var charRows = await db.SelectAsync<CharProgressRow>(
+                """
+                SELECT character_id, level, exp, class_code FROM player_character
+                 WHERE user_id = @userId AND slot <> @unassigned ORDER BY slot FOR UPDATE
+                """,
+                new { userId, unassigned = Constants.Party.SlotUnassigned }, transaction);
 
             var characters = new List<OfflineCharacterState>();
             var levelUps = new List<CharacterLevelUp>();
             foreach (var c in charRows)
             {
                 var (newLevel, newExp, leveledUp) = _levelUp.Calculate(c.Level, c.Exp, exp);
-                await db.Query("player_character")
-                    .Where("user_id", userId).Where("character_id", c.CharacterId)
-                    .UpdateAsync(new { level = newLevel, exp = newExp }, transaction);
+
+                // 읽은 레벨·경험치가 그대로일 때만 쓴다(스테이지 클리어와 같은 이유).
+                // 지급액이 0이면 바뀔 값이 없으므로 갱신 자체를 건너뛴다.
+                if (newLevel != c.Level || newExp != c.Exp)
+                {
+                    var applied = await db.Query("player_character")
+                        .Where("user_id", userId).Where("character_id", c.CharacterId)
+                        .Where("level", c.Level).Where("exp", c.Exp)
+                        .UpdateAsync(new { level = newLevel, exp = newExp }, transaction);
+                    if (applied == 0)
+                    {
+                        throw new ConcurrencyConflictException("캐릭터 경험치");
+                    }
+                }
 
                 characters.Add(new OfflineCharacterState
                 {

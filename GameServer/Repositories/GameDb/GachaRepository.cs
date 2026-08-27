@@ -127,18 +127,25 @@ public sealed class GachaRepository : GameDbBase, IGachaRepository
             }
 
             var existing = new HashSet<int>();
+
+            // 추첨이 counters를 바꾸므로, 갱신 조건에 쓸 '읽은 값'을 따로 남겨 둔다.
+            var observedCounts = new Dictionary<int, int>();
             if (pityGrades.Count > 0)
             {
-                var rows = await db.Query("player_gacha_counter")
-                    .Select("grade", "pity_count")
-                    .Where("user_id", userId).Where("gacha_code", banner.GachaCode)
-                    .GetAsync<GachaCounterRow>(transaction);
+                // **잠금 조회** — 카운터가 계산의 입력이라 최신값이어야 한다.
+                var rows = await db.SelectAsync<GachaCounterRow>(
+                    """
+                    SELECT grade, pity_count FROM player_gacha_counter
+                     WHERE user_id = @userId AND gacha_code = @gachaCode ORDER BY grade FOR UPDATE
+                    """,
+                    new { userId, gachaCode = banner.GachaCode }, transaction);
                 foreach (var row in rows)
                 {
                     existing.Add(row.Grade);
                     if (counters.ContainsKey(row.Grade))
                     {
                         counters[row.Grade] = row.PityCount;
+                        observedCounts[row.Grade] = row.PityCount;
                     }
                 }
             }
@@ -177,9 +184,16 @@ public sealed class GachaRepository : GameDbBase, IGachaRepository
             {
                 if (existing.Contains(grade))
                 {
-                    await db.Query("player_gacha_counter")
+                    // 읽은 카운터 값 그대로일 때만 쓴다. 조건이 없으면 같은 계정의 뽑기 둘이 겹칠 때 한쪽의
+                    // 카운터 진행이 사라져 천장이 늦게 온다.
+                    var changed = await db.Query("player_gacha_counter")
                         .Where("user_id", userId).Where("gacha_code", banner.GachaCode).Where("grade", grade)
+                        .Where("pity_count", observedCounts.GetValueOrDefault(grade))
                         .UpdateAsync(new { pity_count = count, updated_at = nowUnix }, transaction);
+                    if (changed == 0)
+                    {
+                        throw new ConcurrencyConflictException("천장 카운터");
+                    }
                 }
                 else
                 {
@@ -310,12 +324,17 @@ public sealed class GachaRepository : GameDbBase, IGachaRepository
 
         if (stackMax > 1)
         {
-            var stacks = await db.Query("player_item").Select("player_item_id", "quantity", "slot")
-                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Item).Where("item_code", itemCode)
-                .Where("enhance_level", 0)
-                .Where("quantity", "<", stackMax)
-                .OrderBy("player_item_id")
-                .GetAsync<ItemIdQtySlotRow>(tx);
+            // **잠금 조회** — 합칠 스택의 수량이 계산의 입력이라 최신값이어야 한다. 잠금 없는 조회는
+            // 트랜잭션이 처음 읽은 시점의 스냅샷을 계속 보므로, 그 사이 다른 요청이 같은 스택을 채웠어도
+            // 옛 수량이 보여 아래 조건부 갱신이 매번 어긋난다.
+            var stacks = await db.SelectAsync<ItemIdQtySlotRow>(
+                """
+                SELECT player_item_id, quantity, slot FROM player_item
+                 WHERE user_id = @userId AND row_type = @rowType AND item_code = @itemCode
+                   AND enhance_level = 0 AND quantity < @stackMax
+                 ORDER BY player_item_id FOR UPDATE
+                """,
+                new { userId, rowType = Constants.PlayerItemRow.Item, itemCode, stackMax }, tx);
 
             foreach (var stack in stacks)
             {
@@ -327,8 +346,15 @@ public sealed class GachaRepository : GameDbBase, IGachaRepository
                 long room = stackMax - stack.Quantity;
                 long add = Math.Min(room, remaining);
                 long merged = stack.Quantity + add;
-                await db.Query("player_item").Where("player_item_id", stack.PlayerItemId)
+                // 읽은 수량 그대로일 때만 합친다. 조건이 없으면 같은 스택에 두 요청이 동시에 합칠 때
+                // 한쪽 수량이 사라진다.
+                var mergedRows = await db.Query("player_item")
+                    .Where("player_item_id", stack.PlayerItemId).Where("quantity", stack.Quantity)
                     .UpdateAsync(new { quantity = merged }, tx);
+                if (mergedRows == 0)
+                {
+                    throw new ConcurrencyConflictException("아이템 스택");
+                }
                 delta.upserted.Add(new InventoryItemDto
                 {
                     itemId = stack.PlayerItemId,
