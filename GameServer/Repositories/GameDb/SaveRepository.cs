@@ -216,14 +216,16 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
     /// <remarks>
     /// 한 트랜잭션으로 묶는 작업(캐릭터·큐브·출석 진행도가 없는 반쪽 세이브가 남지 않게 한다):
     /// <para>1) game_player INSERT — 닉네임·시작 좌표(1-1-1)·최고 클리어 0·초기 인벤 용량·활동/생성/갱신 시각</para>
-    /// <para>2) player_character INSERT — 첫 캐릭터(식별자 1)를 선택 직업·성별로, 파티 1번 자리에 레벨 1·경험치 0으로 생성</para>
-    /// <para>3) player_item + player_item_equipped INSERT — 직업 기본 무기를 지급해 무기 슬롯에 장착한 상태로 만든다
+    /// <para>2) player_item(재화 행) INSERT — 골드 잔액 0으로 미리 생성. 지급 경로가 재화 행을 만들지 않아도
+    ///     되게 해, 동시 지급이 재화 행을 둘로 쪼개는 경합을 없앤다</para>
+    /// <para>3) player_character INSERT — 첫 캐릭터(식별자 1)를 선택 직업·성별로, 파티 1번 자리에 레벨 1·경험치 0으로 생성</para>
+    /// <para>4) player_item + player_item_equipped INSERT — 직업 기본 무기를 지급해 무기 슬롯에 장착한 상태로 만든다
     ///     (startingEquipment가 있을 때만). 장착 중인 장비는 가방 칸을 쓰지 않으므로 slot은 NULL이다</para>
-    /// <para>4) player_skill INSERT — 직업 기본 액티브 스킬을 레벨 1·장착 상태로 습득시킨다(startingSkillCode가 있을 때만)</para>
-    /// <para>5) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
-    /// <para>6) player_attendance INSERT — 출석 진행도를 0(누적 0·마지막 획득 일자 0)으로 초기화.
+    /// <para>5) player_skill INSERT — 직업 기본 액티브 스킬을 레벨 1·장착 상태로 습득시킨다(startingSkillCode가 있을 때만)</para>
+    /// <para>6) player_cube INSERT — 큐브를 레벨 1·경험치 0으로 초기화</para>
+    /// <para>7) player_attendance INSERT — 출석 진행도를 0(누적 0·마지막 획득 일자 0)으로 초기화.
     ///     출석 수령은 이 행의 조건부 갱신으로 처리하므로 계정 생성 시 함께 만들어 둔다(attendance 기획서 §4)</para>
-    /// <para>7) player_mail(+player_mail_reward) INSERT — 신규 가입 지원금 메일 발급(welcomeMail이 있을 때만).
+    /// <para>8) player_mail(+player_mail_reward) INSERT — 신규 가입 지원금 메일 발급(welcomeMail이 있을 때만).
     ///     game_player가 계정당 1행이라 이 트랜잭션은 계정 생애에 한 번만 성공하므로, 지급 여부 플래그 없이
     ///     중복 지급이 원천 차단된다(세이브 데이터 기획서 5.3)</para>
     /// </remarks>
@@ -244,6 +246,21 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
                 last_active_at = nowUnix,
                 created_at = nowUnix,
                 updated_at = nowUnix,
+            }, transaction);
+
+            // 골드 재화 행을 잔액 0으로 미리 만들어 둔다. 지급 경로가 "행이 없으면 만든다"를 판단하지 않게 하려는
+            // 것이다 — 그 판단이 남아 있으면 잔액 0인 계정에 지급 두 건이 동시에 들어올 때 양쪽이 모두 '행 없음'을
+            // 보고 각자 INSERT해 재화 행이 둘로 갈라진다. 계정 생성은 계정 생애에 한 번뿐이라 여기서는 겹치지 않는다.
+            // 시작 잔액이 0인 것은 신규 지원금을 아래 8)의 가입 축하 메일로 주기 때문이다.
+            await db.Query("player_item").InsertAsync(new
+            {
+                user_id = userId,
+                row_type = Constants.PlayerItemRow.Currency,
+                item_code = Constants.Currency.GoldItemCode,
+                quantity = 0,
+                slot = (int?)null,
+                enhance_level = 0,
+                acquired_at = nowUnix,
             }, transaction);
 
             await db.Query("player_character").InsertAsync(new
@@ -301,43 +318,32 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
     /// </summary>
     /// <remarks>
     /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 골드만 차감되고 캐릭터가 안 생기는 상태를 막는다):
-    /// <para>1) player_item(재화 행) SELECT — 골드 잔액 확인(행이 없으면 잔액 0, 비용 미달 → InsufficientCurrency)</para>
-    /// <para>2) player_item UPDATE — 비용이 0보다 클 때만 골드 차감</para>
-    /// <para>3) player_character INSERT — 지정 식별자·파티 자리(slot, 빈 자리 없으면 0=미편성)로 캐릭터(직업·성별)를
+    /// <para>1) player_item UPDATE — 잔액이 비용 이상일 때만 깎는 원자 갱신(0행이면 잔액 부족 →
+    ///     InsufficientCurrency). 비용이 0이면 갱신하지 않는다</para>
+    /// <para>2) player_character INSERT — 지정 식별자·파티 자리(slot, 빈 자리 없으면 0=미편성)로 캐릭터(직업·성별)를
     ///     레벨 1·경험치 0으로 생성. 유니크 제약(식별자 PK·계정 내 직업 중복) 위반(MySQL 1062)은
     ///     동시 생성 경합으로 보고 롤백 → DuplicateConflict</para>
-    /// <para>4) player_item + player_item_equipped INSERT — 직업 기본 무기를 지급해 무기 슬롯에 장착한 상태로 만든다
+    /// <para>3) player_item + player_item_equipped INSERT — 직업 기본 무기를 지급해 무기 슬롯에 장착한 상태로 만든다
     ///     (startingEquipment가 있을 때만). 장착 중이라 가방 칸(slot)은 NULL이므로 용량이 가득 차도 실패하지 않는다</para>
-    /// <para>5) player_skill INSERT — 직업 기본 액티브 스킬을 레벨 1·장착 상태로 습득시킨다(startingSkillCode가 있을 때만)</para>
+    /// <para>4) player_skill INSERT — 직업 기본 액티브 스킬을 레벨 1·장착 상태로 습득시킨다(startingSkillCode가 있을 때만)</para>
     /// </remarks>
     public async Task<AddCharacterOutcome> AddCharacterAsync(
         long userId, int characterId, int classCode, int slot, int gender, long goldCost,
         StartingEquipment? startingEquipment, int? startingSkillCode, long nowUnix)
         => await TransactionAsync<AddCharacterOutcome>(async (db, transaction) =>
         {
-            // 1) 골드 잔액 확인(비용 > 0일 때). 재화 행(row_type=2, item_code=1)이 없으면 잔액 0.
-            var goldRow = await db.Query("player_item")
-                .Select("player_item_id", "quantity")
-                .Where("user_id", userId)
-                .Where("row_type", Constants.PlayerItemRow.Currency)
-                .Where("item_code", Constants.Currency.GoldItemCode)
-                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
-
-            long gold = goldRow?.Quantity ?? 0;
-            if (gold < goldCost)
+            // 1) 골드 차감(잔액이 비용 이상일 때만 깎는 원자 갱신). 재화 행이 없는 계정은 잔액 0으로 취급돼
+            //      같은 경로로 거부된다. 비용 0(첫 캐릭터)이면 갱신 없이 현재 잔액만 돌려받는다.
+            long? debited = await TryDebitCurrencyAsync(
+                db, transaction, userId, Constants.Currency.GoldItemCode, goldCost);
+            if (debited is null)
             {
                 return TxResult<AddCharacterOutcome>.Rollback(AddCharacterOutcome.Fail(AddCharacterStatus.InsufficientCurrency));
             }
 
-            // 2) 골드 차감(비용 > 0일 때만 UPDATE).
-            long newBalance = gold - goldCost;
-            if (goldCost > 0 && goldRow is not null)
-            {
-                await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
-                    .UpdateAsync(new { quantity = newBalance }, transaction);
-            }
+            long newBalance = debited.Value;
 
-            // 3) 캐릭터 삽입. 슬롯/직업 유니크 경합(동시 생성)은 여기서 잡아 롤백.
+            // 2) 캐릭터 삽입. 슬롯/직업 유니크 경합(동시 생성)은 여기서 잡아 롤백.
             try
             {
                 await db.Query("player_character").InsertAsync(new
@@ -356,7 +362,7 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
                 return TxResult<AddCharacterOutcome>.Rollback(AddCharacterOutcome.Fail(AddCharacterStatus.DuplicateConflict));
             }
 
-            // 4) 기본 무기 지급 + 장착(정의가 있을 때만).
+            // 3) 기본 무기 지급 + 장착(정의가 있을 때만).
             long startingWeaponItemId = 0;
             if (startingEquipment is not null)
             {
@@ -364,7 +370,7 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
                     db, transaction, userId, characterId, startingEquipment, nowUnix);
             }
 
-            // 5) 기본 액티브 스킬 습득 + 장착(정의가 있을 때만).
+            // 4) 기본 액티브 스킬 습득 + 장착(정의가 있을 때만).
             if (startingSkillCode is not null)
             {
                 await GrantEquippedStartingSkillAsync(db, transaction, userId, characterId, startingSkillCode.Value);
@@ -513,4 +519,62 @@ public sealed class SaveRepository : GameDbBase, ISaveRepository
             .ThenBy(r => r.CharacterId)
             .Select(ToCharacterDto)
             .ToList();
+
+    /// <summary>
+    /// 재화 행(<c>player_item</c>, <c>row_type=2</c>)의 <c>player_item_id</c>를 찾는다(없으면 null).
+    /// 잔액이 아니라 <b>행 번호</b>만 읽으므로 이 조회는 낡지 않는다 — 재화 행은 세이브를 만들 때 함께 만들어지고
+    /// 이후 지워지지 않아 번호가 고정이다(<c>SaveRepository.CreatePlayerWithFirstCharacterAsync</c>).
+    /// </summary>
+    private static async Task<long?> FindCurrencyRowIdAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode)
+        => await db.Query("player_item").Select("player_item_id")
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", currencyCode)
+            .FirstOrDefaultAsync<long?>(tx);
+
+    /// <summary>갱신 직후 잔액을 기본키로 읽는다. 자기 트랜잭션이 그 행에 X락을 쥔 상태라 방금 확정한 값이 보인다.</summary>
+    private static async Task<long> ReadCurrencyBalanceAsync(QueryFactory db, DbTransaction tx, long rowId)
+        => await db.Query("player_item").Select("quantity")
+            .Where("player_item_id", rowId)
+            .FirstOrDefaultAsync<long?>(tx) ?? 0;
+
+    /// <summary>
+    /// 재화를 <paramref name="amount"/>만큼 차감한다. 잔액이 부족하면 <b>아무것도 바꾸지 않고</b> null을 돌려주고,
+    /// 성공하면 차감 후 잔액을 돌려준다.
+    /// <para><b>읽어서 계산한 값을 쓰지 않는다.</b> 잠금 없는 <c>SELECT</c>는 스냅샷 읽기라 동시에 도는 다른
+    /// 트랜잭션의 변경을 보지 못한다 — 같은 계정의 요청 둘이 겹치면 양쪽이 같은 잔액을 읽고 각자 계산한 값을
+    /// 덮어써 한쪽 차감이 사라진다. <c>quantity = quantity - @amount</c>로 DB가 직접 계산하게 하면 그 갱신은
+    /// 최신 커밋값을 읽고 그 행을 잠그므로 겹칠 틈이 없고, 잔액 검사도 같은 문장의 <c>WHERE</c>가 겸한다.</para>
+    /// <para><b>갱신은 기본키로 건다.</b> <c>WHERE user_id = ? AND row_type = 2 AND item_code = ?</c>로 바로 갱신하면
+    /// 이 조건에 맞는 인덱스가 없어 그 계정의 아이템 행까지 훑으며 잠그고, 잠그는 순서가 엇갈리면 교착이 난다.</para>
+    /// <para>상대값 갱신은 SqlKata 빌더로 표현되지 않아(증감폭을 <c>int</c>로만 받는다) 파라미터를 바인딩한
+    /// 문장을 쓴다. 문자열을 조립하지는 않는다.</para>
+    /// </summary>
+    private static async Task<long?> TryDebitCurrencyAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode, long amount)
+    {
+        var rowId = await FindCurrencyRowIdAsync(db, tx, userId, currencyCode);
+
+        // 비용 0(무료 경로)은 갱신할 것이 없다. 응답에 담을 현재 잔액만 돌려준다.
+        if (amount <= 0)
+        {
+            return rowId is null ? 0 : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+        }
+
+        if (rowId is null)
+        {
+            return null;
+        }
+
+        var affected = await db.StatementAsync(
+            """
+            UPDATE player_item SET quantity = quantity - @amount
+             WHERE player_item_id = @rowId AND quantity >= @amount
+            """,
+            new { rowId, amount }, tx);
+
+        // 0행 = 잔액 부족. 조건이 갱신 문장 안에 있으므로 부족하면 아무것도 바뀌지 않는다.
+        return affected == 0 ? null : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+    }
 }

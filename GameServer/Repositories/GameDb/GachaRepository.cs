@@ -107,23 +107,16 @@ public sealed class GachaRepository : GameDbBase, IGachaRepository
         long nowUnix)
         => await TransactionAsync<GachaPullOutcome>(async (db, transaction) =>
         {
-            // 1) 비용 재화 조회·검증(차감 전이라 실패해도 상태 변화가 없다).
-            var currencyRow = await db.Query("player_item")
-                .Select("player_item_id", "quantity")
-                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Currency)
-                .Where("item_code", banner.CostCurrencyCode)
-                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
-
-            long held = currencyRow?.Quantity ?? 0;
-            if (currencyRow is null || held < cost)
+            // 1~2) 비용 차감. 조회·검증·차감이 한 문장이라 잔액을 읽은 뒤 차감하기 전에 다른 요청이
+            //      끼어드는 구간이 없다(부족하면 아무것도 바뀌지 않는다).
+            long? debited = await TryDebitCurrencyAsync(
+                db, transaction, userId, banner.CostCurrencyCode, cost);
+            if (debited is null)
             {
                 return TxResult<GachaPullOutcome>.Rollback(GachaPullOutcome.Fail(GachaPullStatus.InsufficientCurrency));
             }
 
-            // 2) 비용 차감.
-            long balance = held - cost;
-            await db.Query("player_item").Where("player_item_id", currencyRow.PlayerItemId)
-                .UpdateAsync(new { quantity = balance }, transaction);
+            long balance = debited.Value;
 
             // 3) 천장 카운터 조회(행이 있는 등급만 값을 채우고 나머지는 0).
             var pityGrades = banner.PityGrades;
@@ -380,5 +373,63 @@ public sealed class GachaRepository : GameDbBase, IGachaRepository
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// 재화 행(<c>player_item</c>, <c>row_type=2</c>)의 <c>player_item_id</c>를 찾는다(없으면 null).
+    /// 잔액이 아니라 <b>행 번호</b>만 읽으므로 이 조회는 낡지 않는다 — 재화 행은 세이브를 만들 때 함께 만들어지고
+    /// 이후 지워지지 않아 번호가 고정이다(<c>SaveRepository.CreatePlayerWithFirstCharacterAsync</c>).
+    /// </summary>
+    private static async Task<long?> FindCurrencyRowIdAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode)
+        => await db.Query("player_item").Select("player_item_id")
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", currencyCode)
+            .FirstOrDefaultAsync<long?>(tx);
+
+    /// <summary>갱신 직후 잔액을 기본키로 읽는다. 자기 트랜잭션이 그 행에 X락을 쥔 상태라 방금 확정한 값이 보인다.</summary>
+    private static async Task<long> ReadCurrencyBalanceAsync(QueryFactory db, DbTransaction tx, long rowId)
+        => await db.Query("player_item").Select("quantity")
+            .Where("player_item_id", rowId)
+            .FirstOrDefaultAsync<long?>(tx) ?? 0;
+
+    /// <summary>
+    /// 재화를 <paramref name="amount"/>만큼 차감한다. 잔액이 부족하면 <b>아무것도 바꾸지 않고</b> null을 돌려주고,
+    /// 성공하면 차감 후 잔액을 돌려준다.
+    /// <para><b>읽어서 계산한 값을 쓰지 않는다.</b> 잠금 없는 <c>SELECT</c>는 스냅샷 읽기라 동시에 도는 다른
+    /// 트랜잭션의 변경을 보지 못한다 — 같은 계정의 요청 둘이 겹치면 양쪽이 같은 잔액을 읽고 각자 계산한 값을
+    /// 덮어써 한쪽 차감이 사라진다. <c>quantity = quantity - @amount</c>로 DB가 직접 계산하게 하면 그 갱신은
+    /// 최신 커밋값을 읽고 그 행을 잠그므로 겹칠 틈이 없고, 잔액 검사도 같은 문장의 <c>WHERE</c>가 겸한다.</para>
+    /// <para><b>갱신은 기본키로 건다.</b> <c>WHERE user_id = ? AND row_type = 2 AND item_code = ?</c>로 바로 갱신하면
+    /// 이 조건에 맞는 인덱스가 없어 그 계정의 아이템 행까지 훑으며 잠그고, 잠그는 순서가 엇갈리면 교착이 난다.</para>
+    /// <para>상대값 갱신은 SqlKata 빌더로 표현되지 않아(증감폭을 <c>int</c>로만 받는다) 파라미터를 바인딩한
+    /// 문장을 쓴다. 문자열을 조립하지는 않는다.</para>
+    /// </summary>
+    private static async Task<long?> TryDebitCurrencyAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode, long amount)
+    {
+        var rowId = await FindCurrencyRowIdAsync(db, tx, userId, currencyCode);
+
+        // 비용 0(무료 경로)은 갱신할 것이 없다. 응답에 담을 현재 잔액만 돌려준다.
+        if (amount <= 0)
+        {
+            return rowId is null ? 0 : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+        }
+
+        if (rowId is null)
+        {
+            return null;
+        }
+
+        var affected = await db.StatementAsync(
+            """
+            UPDATE player_item SET quantity = quantity - @amount
+             WHERE player_item_id = @rowId AND quantity >= @amount
+            """,
+            new { rowId, amount }, tx);
+
+        // 0행 = 잔액 부족. 조건이 갱신 문장 안에 있으므로 부족하면 아무것도 바뀌지 않는다.
+        return affected == 0 ? null : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
     }
 }

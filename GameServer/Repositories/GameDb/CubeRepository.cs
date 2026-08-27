@@ -203,7 +203,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
     /// <para>4) 요청 항목별 검증 — 소유(아이템 행)·미장착·요청 수량 ≤ 보유 수량</para>
     /// <para>5) computeReward 델리게이트 — 마스터 등급 기준 골드·큐브 경험치 합계 산출(DB 접근 없음)</para>
     /// <para>6) player_item UPDATE/DELETE — 수량 차감, 전량 분해면 행 삭제</para>
-    /// <para>7) player_item(재화 행) upsert — 분해 보상 골드 적립</para>
+    /// <para>7) player_item(재화 행) INSERT ... ON DUPLICATE KEY UPDATE — 분해 보상 골드 적립(원자 가산)</para>
     /// <para>8) player_cube upsert — 분해로 얻은 큐브 경험치 반영 및 레벨 재계산</para>
     /// </remarks>
     public async Task<DismantleOutcome> ApplyDismantleAsync(
@@ -277,8 +277,9 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
                 }
             }
 
-            // 4) 골드 적립(적립 후 잔액을 응답에 담는다).
-            long goldBalance = await CreditGoldAsync(db, transaction, userId, reward.TotalGold, nowUnix);
+            // 4) 골드 적립(원자 가산). 적립 후 잔액을 응답에 담는다.
+            long goldBalance = await CreditCurrencyAsync(
+                db, transaction, userId, Constants.Currency.GoldItemCode, reward.TotalGold);
 
             // 5) 큐브 경험치 반영.
             var (newLevel, newExp) = _cubeLevel.Calculate(cubeLevel, cubeExp, reward.TotalCubeExp);
@@ -303,12 +304,11 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
     /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 골드·재료만 사라지는 상태를 막는다):
     /// <para>1) player_cube SELECT — 큐브 레벨·경험치 로드</para>
     /// <para>2) 큐브 레벨 요구치 확인(부족 → CubeLevelInsufficient)</para>
-    /// <para>3) player_item(재화 행) SELECT — 비용 골드 잔액 확인(부족 → InsufficientCurrency)</para>
+    /// <para>3) player_item(재화 행) UPDATE — 잔액이 비용 이상일 때만 깎는 원자 갱신(0행이면 부족 → InsufficientCurrency)</para>
     /// <para>4) player_item SELECT — 레시피 재료별 총 보유 수량 확인(부족 → RecipeNotMet)</para>
-    /// <para>5) player_item UPDATE — 비용 골드 차감</para>
-    /// <para>6) player_item UPDATE/DELETE — 재료를 여러 행에 걸쳐 필요 수량만큼 차감</para>
-    /// <para>7) player_item UPDATE/INSERT — 결과 아이템 적재(재료면 스택 병합 후 잔량 새 행, 장비면 개당 1행. 칸 부족 → InventoryFull)</para>
-    /// <para>8) player_cube upsert — 제작으로 얻은 큐브 경험치 반영 및 레벨 재계산</para>
+    /// <para>5) player_item UPDATE/DELETE — 재료를 여러 행에 걸쳐 필요 수량만큼 차감</para>
+    /// <para>6) player_item UPDATE/INSERT — 결과 아이템 적재(재료면 스택 병합 후 잔량 새 행, 장비면 개당 1행. 칸 부족 → InventoryFull)</para>
+    /// <para>7) player_cube upsert — 제작으로 얻은 큐브 경험치 반영 및 레벨 재계산</para>
     /// </remarks>
     public async Task<CraftOutcome> ApplyCraftAsync(
         long userId, RecipeDef recipe, int resultItemType, int resultStackMax, long cubeExpGain,
@@ -323,18 +323,16 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
                 return TxResult<CraftOutcome>.Rollback(CraftOutcome.Fail(CraftStatus.CubeLevelInsufficient));
             }
 
-            // 2) 비용 골드.
-            var goldRow = await db.Query("player_item")
-                .Select("player_item_id", "quantity")
-                .Where("user_id", userId)
-                .Where("row_type", Constants.PlayerItemRow.Currency)
-                .Where("item_code", Constants.Currency.GoldItemCode)
-                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
-            long gold = goldRow?.Quantity ?? 0;
-            if (gold < recipe.CostGold)
+            // 2) 비용 골드 차감(잔액이 비용 이상일 때만 깎는 원자 갱신). 재료가 모자라면 트랜잭션째 롤백되므로
+            //    확인과 차감을 나눌 이유가 없다 — 나누면 그 사이가 곧 경합 구간이 된다.
+            long? debited = await TryDebitCurrencyAsync(
+                db, transaction, userId, Constants.Currency.GoldItemCode, recipe.CostGold);
+            if (debited is null)
             {
                 return TxResult<CraftOutcome>.Rollback(CraftOutcome.Fail(CraftStatus.InsufficientCurrency));
             }
+
+            long goldBalance = debited.Value;
 
             // 3) 재료 보유 확인(재료 코드별 총 보유 수량 ≥ 요구).
             foreach (var ing in recipe.Ingredients)
@@ -352,23 +350,14 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
                 }
             }
 
-            // 4) 골드 차감.
-            long goldBalance = gold;
-            if (recipe.CostGold > 0 && goldRow is not null)
-            {
-                goldBalance = gold - recipe.CostGold;
-                await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
-                    .UpdateAsync(new { quantity = goldBalance }, transaction);
-            }
-
-            // 5) 재료 차감. 차감 결과는 가방 변경분(5.0)에 누적된다.
+            // 4) 재료 차감. 차감 결과는 가방 변경분(5.0)에 누적된다.
             var delta = new InventoryDeltaDto();
             foreach (var ing in recipe.Ingredients)
             {
                 await ConsumeMaterialAsync(db, transaction, userId, ing.MaterialCode, ing.Quantity, delta);
             }
 
-            // 6) 결과 아이템 지급(생성·병합 결과도 같은 변경분에 누적).
+            // 5) 결과 아이템 지급(생성·병합 결과도 같은 변경분에 누적).
             int capacity = await InventorySlotAllocator.LoadCapacityAsync(db, transaction, userId);
             var used = await InventorySlotAllocator.LoadUsedSlotsAsync(db, transaction, userId);
             bool stored = await StoreResultAsync(
@@ -379,7 +368,7 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
                 return TxResult<CraftOutcome>.Rollback(CraftOutcome.Fail(CraftStatus.InventoryFull));
             }
 
-            // 7) 큐브 경험치 반영.
+            // 6) 큐브 경험치 반영.
             var (newLevel, newExp) = _cubeLevel.Calculate(cubeLevel, cubeExp, cubeExpGain);
             await UpsertCubeAsync(db, transaction, userId, hasCube, newLevel, newExp);
 
@@ -408,41 +397,6 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
         {
             await db.Query("player_cube").InsertAsync(new { user_id = userId, cube_level = level, cube_exp = exp }, tx);
         }
-    }
-
-    /// <summary>골드(재화 행)를 upsert로 적립한다.</summary>
-    private static async Task<long> CreditGoldAsync(QueryFactory db, DbTransaction tx, long userId, long amount, long nowUnix)
-    {
-        var goldRow = await db.Query("player_item").Select("player_item_id", "quantity")
-            .Where("user_id", userId)
-            .Where("row_type", Constants.PlayerItemRow.Currency)
-            .Where("item_code", Constants.Currency.GoldItemCode)
-            .FirstOrDefaultAsync<ItemIdQtyRow>(tx);
-
-        if (amount <= 0)
-        {
-            return goldRow?.Quantity ?? 0; // 적립할 것이 없어도 응답에 담을 현재 잔액은 돌려준다.
-        }
-
-        if (goldRow is null)
-        {
-            await db.Query("player_item").InsertAsync(new
-            {
-                user_id = userId,
-                row_type = Constants.PlayerItemRow.Currency,
-                item_code = Constants.Currency.GoldItemCode,
-                quantity = amount,
-                slot = (int?)null,
-                enhance_level = 0,
-                acquired_at = nowUnix,
-            }, tx);
-            return amount;
-        }
-
-        long newBalance = goldRow.Quantity + amount;
-        await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
-            .UpdateAsync(new { quantity = newBalance }, tx);
-        return newBalance;
     }
 
     /// <summary>
@@ -565,5 +519,100 @@ public sealed class CubeRepository : GameDbBase, ICubeRepository
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// 재화 행(<c>player_item</c>, <c>row_type=2</c>)의 <c>player_item_id</c>를 찾는다(없으면 null).
+    /// 잔액이 아니라 <b>행 번호</b>만 읽으므로 이 조회는 낡지 않는다 — 재화 행은 세이브를 만들 때 함께 만들어지고
+    /// 이후 지워지지 않아 번호가 고정이다(<c>SaveRepository.CreatePlayerWithFirstCharacterAsync</c>).
+    /// </summary>
+    private static async Task<long?> FindCurrencyRowIdAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode)
+        => await db.Query("player_item").Select("player_item_id")
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", currencyCode)
+            .FirstOrDefaultAsync<long?>(tx);
+
+    /// <summary>갱신 직후 잔액을 기본키로 읽는다. 자기 트랜잭션이 그 행에 X락을 쥔 상태라 방금 확정한 값이 보인다.</summary>
+    private static async Task<long> ReadCurrencyBalanceAsync(QueryFactory db, DbTransaction tx, long rowId)
+        => await db.Query("player_item").Select("quantity")
+            .Where("player_item_id", rowId)
+            .FirstOrDefaultAsync<long?>(tx) ?? 0;
+
+    /// <summary>
+    /// 재화를 <paramref name="amount"/>만큼 차감한다. 잔액이 부족하면 <b>아무것도 바꾸지 않고</b> null을 돌려주고,
+    /// 성공하면 차감 후 잔액을 돌려준다.
+    /// <para><b>읽어서 계산한 값을 쓰지 않는다.</b> 잠금 없는 <c>SELECT</c>는 스냅샷 읽기라 동시에 도는 다른
+    /// 트랜잭션의 변경을 보지 못한다 — 같은 계정의 요청 둘이 겹치면 양쪽이 같은 잔액을 읽고 각자 계산한 값을
+    /// 덮어써 한쪽 차감이 사라진다. <c>quantity = quantity - @amount</c>로 DB가 직접 계산하게 하면 그 갱신은
+    /// 최신 커밋값을 읽고 그 행을 잠그므로 겹칠 틈이 없고, 잔액 검사도 같은 문장의 <c>WHERE</c>가 겸한다.</para>
+    /// <para><b>갱신은 기본키로 건다.</b> <c>WHERE user_id = ? AND row_type = 2 AND item_code = ?</c>로 바로 갱신하면
+    /// 이 조건에 맞는 인덱스가 없어 그 계정의 아이템 행까지 훑으며 잠그고, 잠그는 순서가 엇갈리면 교착이 난다.</para>
+    /// <para>상대값 갱신은 SqlKata 빌더로 표현되지 않아(증감폭을 <c>int</c>로만 받는다) 파라미터를 바인딩한
+    /// 문장을 쓴다. 문자열을 조립하지는 않는다.</para>
+    /// </summary>
+    private static async Task<long?> TryDebitCurrencyAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode, long amount)
+    {
+        var rowId = await FindCurrencyRowIdAsync(db, tx, userId, currencyCode);
+
+        // 비용 0(무료 경로)은 갱신할 것이 없다. 응답에 담을 현재 잔액만 돌려준다.
+        if (amount <= 0)
+        {
+            return rowId is null ? 0 : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+        }
+
+        if (rowId is null)
+        {
+            return null;
+        }
+
+        var affected = await db.StatementAsync(
+            """
+            UPDATE player_item SET quantity = quantity - @amount
+             WHERE player_item_id = @rowId AND quantity >= @amount
+            """,
+            new { rowId, amount }, tx);
+
+        // 0행 = 잔액 부족. 조건이 갱신 문장 안에 있으므로 부족하면 아무것도 바뀌지 않는다.
+        return affected == 0 ? null : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+    }
+
+    /// <summary>
+    /// 재화를 <paramref name="amount"/>만큼 적립하고 적립 후 잔액을 돌려준다.
+    /// <para><b>읽어서 계산한 값을 쓰지 않는다.</b> <c>quantity = quantity + @amount</c>로 DB가 직접 계산하게 해,
+    /// 같은 계정에 지급 둘이 동시에 들어와도 한쪽 적립이 다른 쪽에 덮이지 않게 한다. 갱신은 그 계정의 아이템 행까지
+    /// 훑어 잠그지 않도록 <b>기본키</b>로 건다.</para>
+    /// <para><b>재화 행이 없으면 만들지 않고 예외로 알린다.</b> 재화 행은 세이브를 만들 때 잔액 0으로 함께 생성하고
+    /// 어디서도 지우지 않으므로, 여기서 없다는 것은 그 규칙이 깨졌다는 뜻이다. 이때 새로 만들면 잔액 0인 계정에
+    /// 지급 둘이 동시에 들어올 때 양쪽이 모두 "행 없음"을 보고 INSERT해 재화 행이 둘로 갈라지고, 그 뒤로는 조회가
+    /// 한 행만 읽어 나머지 잔액이 보이지 않게 된다.</para>
+    /// </summary>
+    private static async Task<long> CreditCurrencyAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode, long amount)
+    {
+        var rowId = await FindCurrencyRowIdAsync(db, tx, userId, currencyCode);
+
+        // 지급액 0(보상이 아이템뿐인 경로)은 갱신할 것이 없다.
+        if (amount <= 0)
+        {
+            return rowId is null ? 0 : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+        }
+
+        if (rowId is null)
+        {
+            throw new InvalidOperationException(
+                $"재화 행이 없어 적립하지 못했습니다(userId {userId}, currencyCode {currencyCode}). " +
+                "세이브 생성 시 만들어져 있어야 하는 행입니다.");
+        }
+
+        await db.StatementAsync(
+            """
+            UPDATE player_item SET quantity = quantity + @amount WHERE player_item_id = @rowId
+            """,
+            new { rowId, amount }, tx);
+
+        return await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
     }
 }

@@ -1,4 +1,5 @@
-﻿using GameServer.Models;
+﻿using System.Data.Common;
+using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using SqlKata.Execution;
 
@@ -199,9 +200,9 @@ public sealed class GrowthRepository : GameDbBase, IGrowthRepository
     /// <para>1) player_rune SELECT — 대상 룬 현재 레벨(계정 공용, 행이 없으면 0) 확인 후 최대 레벨 도달 검사</para>
     /// <para>2) player_rune SELECT — 선행 룬(prereqCode≠0일 때) 해금 여부 확인(레벨 &lt; 1 → PrereqNotMet)</para>
     /// <para>3) costOf 델리게이트 — 현재 레벨 기준 골드 비용 산출(서버 권위, DB 접근 없음)</para>
-    /// <para>4) player_item(재화 행) SELECT — 골드 잔액 확인(부족 → InsufficientCurrency)</para>
-    /// <para>5) player_item UPDATE — 비용 골드 차감</para>
-    /// <para>6) player_rune UPDATE 또는 INSERT — 기존 행이면 레벨 +1, 첫 해금이면 레벨 1로 새 행 생성</para>
+    /// <para>4) player_item(재화 행) UPDATE — 잔액이 비용 이상일 때만 깎는 원자 갱신. 0행이면 잔액 부족
+    ///     (→ InsufficientCurrency)이며 아무것도 바뀌지 않는다</para>
+    /// <para>5) player_rune UPDATE 또는 INSERT — 기존 행이면 레벨 +1, 첫 해금이면 레벨 1로 새 행 생성</para>
     /// </remarks>
     public async Task<RuneUpgradeOutcome> ApplyRuneUpgradeAsync(
         long userId, int runeCode, int prereqCode, int maxLevel, Func<int, long> costOf)
@@ -232,29 +233,18 @@ public sealed class GrowthRepository : GameDbBase, IGrowthRepository
                 }
             }
 
-            // 4) 골드 비용 산출(서버 권위) + 잔액 확인.
+            // 4) 골드 비용 산출(서버 권위) + 차감. 잔액 확인이 차감 문장의 조건이라 확인과 차감 사이가 벌어지지 않는다.
             long cost = costOf(curLevel);
-            var goldRow = await db.Query("player_item")
-                .Select("player_item_id", "quantity")
-                .Where("user_id", userId)
-                .Where("row_type", Constants.PlayerItemRow.Currency)
-                .Where("item_code", Constants.Currency.GoldItemCode)
-                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
-
-            long gold = goldRow?.Quantity ?? 0;
-            if (gold < cost)
+            long? debited = await TryDebitCurrencyAsync(
+                db, transaction, userId, Constants.Currency.GoldItemCode, cost);
+            if (debited is null)
             {
                 return TxResult<RuneUpgradeOutcome>.Rollback(RuneUpgradeOutcome.Fail(RuneUpgradeStatus.InsufficientCurrency));
             }
 
-            // 5) 골드 차감(재화 행 UPDATE) + 룬 레벨 +1(없으면 INSERT).
-            long newGold = gold - cost;
-            if (goldRow is not null)
-            {
-                await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
-                    .UpdateAsync(new { quantity = newGold }, transaction);
-            }
+            long newGold = debited.Value;
 
+            // 5) 룬 레벨 +1(없으면 INSERT).
             int newLevel = curLevel + 1;
             if (curLevel == 0)
             {
@@ -274,4 +264,62 @@ public sealed class GrowthRepository : GameDbBase, IGrowthRepository
 
             return TxResult<RuneUpgradeOutcome>.Commit(new RuneUpgradeOutcome(RuneUpgradeStatus.Ok, newLevel, cost, newGold));
         });
+
+    /// <summary>
+    /// 재화 행(<c>player_item</c>, <c>row_type=2</c>)의 <c>player_item_id</c>를 찾는다(없으면 null).
+    /// 잔액이 아니라 <b>행 번호</b>만 읽으므로 이 조회는 낡지 않는다 — 재화 행은 세이브를 만들 때 함께 만들어지고
+    /// 이후 지워지지 않아 번호가 고정이다(<c>SaveRepository.CreatePlayerWithFirstCharacterAsync</c>).
+    /// </summary>
+    private static async Task<long?> FindCurrencyRowIdAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode)
+        => await db.Query("player_item").Select("player_item_id")
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", currencyCode)
+            .FirstOrDefaultAsync<long?>(tx);
+
+    /// <summary>갱신 직후 잔액을 기본키로 읽는다. 자기 트랜잭션이 그 행에 X락을 쥔 상태라 방금 확정한 값이 보인다.</summary>
+    private static async Task<long> ReadCurrencyBalanceAsync(QueryFactory db, DbTransaction tx, long rowId)
+        => await db.Query("player_item").Select("quantity")
+            .Where("player_item_id", rowId)
+            .FirstOrDefaultAsync<long?>(tx) ?? 0;
+
+    /// <summary>
+    /// 재화를 <paramref name="amount"/>만큼 차감한다. 잔액이 부족하면 <b>아무것도 바꾸지 않고</b> null을 돌려주고,
+    /// 성공하면 차감 후 잔액을 돌려준다.
+    /// <para><b>읽어서 계산한 값을 쓰지 않는다.</b> 잠금 없는 <c>SELECT</c>는 스냅샷 읽기라 동시에 도는 다른
+    /// 트랜잭션의 변경을 보지 못한다 — 같은 계정의 요청 둘이 겹치면 양쪽이 같은 잔액을 읽고 각자 계산한 값을
+    /// 덮어써 한쪽 차감이 사라진다. <c>quantity = quantity - @amount</c>로 DB가 직접 계산하게 하면 그 갱신은
+    /// 최신 커밋값을 읽고 그 행을 잠그므로 겹칠 틈이 없고, 잔액 검사도 같은 문장의 <c>WHERE</c>가 겸한다.</para>
+    /// <para><b>갱신은 기본키로 건다.</b> <c>WHERE user_id = ? AND row_type = 2 AND item_code = ?</c>로 바로 갱신하면
+    /// 이 조건에 맞는 인덱스가 없어 그 계정의 아이템 행까지 훑으며 잠그고, 잠그는 순서가 엇갈리면 교착이 난다.</para>
+    /// <para>상대값 갱신은 SqlKata 빌더로 표현되지 않아(증감폭을 <c>int</c>로만 받는다) 파라미터를 바인딩한
+    /// 문장을 쓴다. 문자열을 조립하지는 않는다.</para>
+    /// </summary>
+    private static async Task<long?> TryDebitCurrencyAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode, long amount)
+    {
+        var rowId = await FindCurrencyRowIdAsync(db, tx, userId, currencyCode);
+
+        // 비용 0(무료 경로)은 갱신할 것이 없다. 응답에 담을 현재 잔액만 돌려준다.
+        if (amount <= 0)
+        {
+            return rowId is null ? 0 : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+        }
+
+        if (rowId is null)
+        {
+            return null;
+        }
+
+        var affected = await db.StatementAsync(
+            """
+            UPDATE player_item SET quantity = quantity - @amount
+             WHERE player_item_id = @rowId AND quantity >= @amount
+            """,
+            new { rowId, amount }, tx);
+
+        // 0행 = 잔액 부족. 조건이 갱신 문장 안에 있으므로 부족하면 아무것도 바뀌지 않는다.
+        return affected == 0 ? null : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+    }
 }

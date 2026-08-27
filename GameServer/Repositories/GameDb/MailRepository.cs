@@ -130,7 +130,7 @@ public sealed class MailRepository : GameDbBase, IMailRepository
     /// <para>2) claimed·expires_at 검증 — 이미 수령이면 MailAlreadyClaimed, 만료면 MailExpired</para>
     /// <para>3) player_mail 조건부 갱신(claimed=0일 때만 1로) — 동시 요청 직렬화, 0행이면 경합 패배(MailAlreadyClaimed)</para>
     /// <para>4) player_mail_reward SELECT — 첨부 원장 로드(클라이언트 입력 없음, 서버 권위)</para>
-    /// <para>5) player_item — 골드 적립(재화 행 upsert) + 아이템/재료 적재(스택 병합·빈 칸, 부족 시 InventoryFull 롤백)</para>
+    /// <para>5) player_item — 골드 적립(재화 행 원자 가산) + 아이템/재료 적재(스택 병합·빈 칸, 부족 시 InventoryFull 롤백)</para>
     /// </remarks>
     public async Task<MailClaimOutcome> ApplyClaimAsync(
         long userId, long mailId, long nowUnix)
@@ -387,42 +387,9 @@ public sealed class MailRepository : GameDbBase, IMailRepository
             }
         }
 
-        long balance = await CreditGoldAsync(db, tx, userId, gold, nowUnix);
+        long balance = await CreditCurrencyAsync(
+            db, tx, userId, Constants.Currency.GoldItemCode, gold);
         return (true, gold, itemGroups, balance, delta);
-    }
-
-    /// <summary>골드(재화 행)를 upsert로 적립하고 적립 후 잔액을 반환한다(0 지급이면 현재 잔액만 조회).</summary>
-    private static async Task<long> CreditGoldAsync(QueryFactory db, DbTransaction tx, long userId, long amount, long nowUnix)
-    {
-        var goldRow = await db.Query("player_item").Select("player_item_id", "quantity")
-            .Where("user_id", userId)
-            .Where("row_type", Constants.PlayerItemRow.Currency)
-            .Where("item_code", Constants.Currency.GoldItemCode)
-            .FirstOrDefaultAsync<ItemIdQtyRow>(tx);
-
-        if (amount <= 0)
-        {
-            return goldRow?.Quantity ?? 0;
-        }
-
-        if (goldRow is null)
-        {
-            await db.Query("player_item").InsertAsync(new
-            {
-                user_id = userId,
-                row_type = Constants.PlayerItemRow.Currency,
-                item_code = Constants.Currency.GoldItemCode,
-                quantity = amount,
-                slot = (int?)null,
-                enhance_level = 0,
-                acquired_at = nowUnix,
-            }, tx);
-            return amount;
-        }
-
-        await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
-            .UpdateAsync(new { quantity = goldRow.Quantity + amount }, tx);
-        return goldRow.Quantity + amount;
     }
 
     /// <summary>
@@ -501,5 +468,61 @@ public sealed class MailRepository : GameDbBase, IMailRepository
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// 재화 행(<c>player_item</c>, <c>row_type=2</c>)의 <c>player_item_id</c>를 찾는다(없으면 null).
+    /// 잔액이 아니라 <b>행 번호</b>만 읽으므로 이 조회는 낡지 않는다 — 재화 행은 세이브를 만들 때 함께 만들어지고
+    /// 이후 지워지지 않아 번호가 고정이다(<c>SaveRepository.CreatePlayerWithFirstCharacterAsync</c>).
+    /// </summary>
+    private static async Task<long?> FindCurrencyRowIdAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode)
+        => await db.Query("player_item").Select("player_item_id")
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", currencyCode)
+            .FirstOrDefaultAsync<long?>(tx);
+
+    /// <summary>갱신 직후 잔액을 기본키로 읽는다. 자기 트랜잭션이 그 행에 X락을 쥔 상태라 방금 확정한 값이 보인다.</summary>
+    private static async Task<long> ReadCurrencyBalanceAsync(QueryFactory db, DbTransaction tx, long rowId)
+        => await db.Query("player_item").Select("quantity")
+            .Where("player_item_id", rowId)
+            .FirstOrDefaultAsync<long?>(tx) ?? 0;
+
+    /// <summary>
+    /// 재화를 <paramref name="amount"/>만큼 적립하고 적립 후 잔액을 돌려준다.
+    /// <para><b>읽어서 계산한 값을 쓰지 않는다.</b> <c>quantity = quantity + @amount</c>로 DB가 직접 계산하게 해,
+    /// 같은 계정에 지급 둘이 동시에 들어와도 한쪽 적립이 다른 쪽에 덮이지 않게 한다. 갱신은 그 계정의 아이템 행까지
+    /// 훑어 잠그지 않도록 <b>기본키</b>로 건다.</para>
+    /// <para><b>재화 행이 없으면 만들지 않고 예외로 알린다.</b> 재화 행은 세이브를 만들 때 잔액 0으로 함께 생성하고
+    /// 어디서도 지우지 않으므로, 여기서 없다는 것은 그 규칙이 깨졌다는 뜻이다. 이때 새로 만들면 잔액 0인 계정에
+    /// 지급 둘이 동시에 들어올 때 양쪽이 모두 "행 없음"을 보고 INSERT해 재화 행이 둘로 갈라지고, 그 뒤로는 조회가
+    /// 한 행만 읽어 나머지 잔액이 보이지 않게 된다.</para>
+    /// </summary>
+    private static async Task<long> CreditCurrencyAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode, long amount)
+    {
+        var rowId = await FindCurrencyRowIdAsync(db, tx, userId, currencyCode);
+
+        // 지급액 0(보상이 아이템뿐인 경로)은 갱신할 것이 없다.
+        if (amount <= 0)
+        {
+            return rowId is null ? 0 : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+        }
+
+        if (rowId is null)
+        {
+            throw new InvalidOperationException(
+                $"재화 행이 없어 적립하지 못했습니다(userId {userId}, currencyCode {currencyCode}). " +
+                "세이브 생성 시 만들어져 있어야 하는 행입니다.");
+        }
+
+        await db.StatementAsync(
+            """
+            UPDATE player_item SET quantity = quantity + @amount WHERE player_item_id = @rowId
+            """,
+            new { rowId, amount }, tx);
+
+        return await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
     }
 }

@@ -1,4 +1,5 @@
-﻿using GameServer.MasterData;
+﻿using System.Data.Common;
+using GameServer.MasterData;
 using GameServer.Models;
 using GameServer.Repositories.GameDb.Interfaces;
 using SqlKata.Execution;
@@ -103,13 +104,14 @@ public sealed class StageRepository : GameDbBase, IStageRepository
     /// <para>1) game_player SELECT — 현재 진입 좌표·max_stage_cleared·inventory_capacity 확보 후 요청 좌표와 일치 검증(불일치 → NotEntered)</para>
     /// <para>2) player_buff SELECT — 활성(<c>expires_at &gt; now</c>) 획득량 버프 배율을 읽어 골드·경험치 지급액 확정(내림).
     ///    <b>지급과 같은 트랜잭션에서 판정</b>해 배율 판정과 지급이 갈라지지 않게 한다(소모품/버프 기획서 6.2)</para>
-    /// <para>3) player_item(재화 행) upsert — 클리어 보상 골드 적립, 갱신 후 잔액 산출</para>
+    /// <para>3) player_item(재화 행) 원자 가산 — 클리어 보상 골드 적립, 갱신 후 잔액 산출</para>
     /// <para>4) player_character SELECT + 캐릭터별 UPDATE — <b>파티에 편성된(slot≠0)</b> 캐릭터에만 동일 경험치 지급 후 levelUp 델리게이트로 레벨 재계산</para>
     /// <para>5) player_item 전리품 적재 — 스택 가능하면 기존 스택 병합, 아니면 빈 칸에 INSERT
     ///    (용량 초과면 롤백하지 않고 전리품만 폐기 → LootStored=false, 골드·경험치·진행도는 그대로 반영)</para>
     /// <para>6) game_player 진행도 UPDATE — 프런티어 클리어면 max_stage_cleared 갱신 + 다음 스테이지로 전진, 재파밍이면 updated_at만 갱신</para>
     /// ⚠️ 원자성은 보장하지만 game_player 행에 잠금(FOR UPDATE 등)을 걸지 않으므로, 동일 userId의 동시 요청은
-    ///    1)의 검증을 함께 통과할 수 있다(중복 전리품 지급·골드/경험치 lost update·슬롯 유니크 충돌). 백로그 과제.
+    ///    1)의 검증을 함께 통과할 수 있다(중복 전리품 지급·경험치 lost update·슬롯 유니크 충돌). 백로그 과제.
+    ///    <b>골드는 여기서 빠진다</b> — 3)이 <c>quantity = quantity + N</c> 원자 가산이라 읽은 값을 덮어쓰지 않는다.
     /// </remarks>
     public async Task<ClearOutcome> ApplyClearAsync(
         long userId,
@@ -154,8 +156,9 @@ public sealed class StageRepository : GameDbBase, IStageRepository
             long gold = ApplyMultiplier(baseGold, goldMultiplier);
             long exp = ApplyMultiplier(baseExp, expMultiplier);
 
-            // 3) 골드 지급(재화 행 upsert).
-            long goldBalance = await UpsertGoldAsync(db, transaction, userId, gold, nowUnix);
+            // 3) 골드 지급(재화 행 원자 가산).
+            long goldBalance = await CreditCurrencyAsync(
+                db, transaction, userId, Constants.Currency.GoldItemCode, gold);
 
             // 4) 경험치 지급(파티 편성 캐릭터 동일) + 레벨 재계산.
             //    미편성(slot=0) 캐릭터는 전투에 나가지 않았으므로 경험치를 받지 않는다(세이브 데이터 기획서 5.5).
@@ -256,40 +259,6 @@ public sealed class StageRepository : GameDbBase, IStageRepository
     private static long ApplyMultiplier(long baseAmount, decimal multiplier)
         => multiplier == 1.0m ? baseAmount : (long)decimal.Floor(baseAmount * multiplier);
 
-    /// <summary>재화(골드) 행을 upsert하고 갱신 후 잔액을 반환한다.</summary>
-    private static async Task<long> UpsertGoldAsync(
-        QueryFactory db, System.Data.Common.DbTransaction transaction, long userId, long gold, long nowUnix)
-    {
-        var goldRow = await db.Query("player_item")
-            .Select("player_item_id", "quantity")
-            .Where("user_id", userId)
-            .Where("row_type", Constants.PlayerItemRow.Currency)
-            .Where("item_code", Constants.Currency.GoldItemCode)
-            .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
-
-        if (goldRow is null)
-        {
-            await db.Query("player_item").InsertAsync(new
-            {
-                user_id = userId,
-                row_type = Constants.PlayerItemRow.Currency,
-                item_code = Constants.Currency.GoldItemCode,
-                quantity = gold,
-                slot = (int?)null,
-                enhance_level = 0,
-                acquired_at = nowUnix,
-            }, transaction);
-            return gold;
-        }
-
-        long goldRowId = goldRow.PlayerItemId;
-        long newBalance = goldRow.Quantity + gold;
-        await db.Query("player_item")
-            .Where("player_item_id", goldRowId)
-            .UpdateAsync(new { quantity = newBalance }, transaction);
-        return newBalance;
-    }
-
     /// <summary>전리품 1개를 인벤토리에 적재한다. 재료는 기존 스택에 합치고, 새 칸이 필요하면 용량을 확인한다.
     /// 용량 초과로 적재 실패하면 false.</summary>
     private static async Task<bool> StoreDroppedItemAsync(
@@ -350,5 +319,61 @@ public sealed class StageRepository : GameDbBase, IStageRepository
             enhanceLevel = 0,
         });
         return true;
+    }
+
+    /// <summary>
+    /// 재화 행(<c>player_item</c>, <c>row_type=2</c>)의 <c>player_item_id</c>를 찾는다(없으면 null).
+    /// 잔액이 아니라 <b>행 번호</b>만 읽으므로 이 조회는 낡지 않는다 — 재화 행은 세이브를 만들 때 함께 만들어지고
+    /// 이후 지워지지 않아 번호가 고정이다(<c>SaveRepository.CreatePlayerWithFirstCharacterAsync</c>).
+    /// </summary>
+    private static async Task<long?> FindCurrencyRowIdAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode)
+        => await db.Query("player_item").Select("player_item_id")
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", currencyCode)
+            .FirstOrDefaultAsync<long?>(tx);
+
+    /// <summary>갱신 직후 잔액을 기본키로 읽는다. 자기 트랜잭션이 그 행에 X락을 쥔 상태라 방금 확정한 값이 보인다.</summary>
+    private static async Task<long> ReadCurrencyBalanceAsync(QueryFactory db, DbTransaction tx, long rowId)
+        => await db.Query("player_item").Select("quantity")
+            .Where("player_item_id", rowId)
+            .FirstOrDefaultAsync<long?>(tx) ?? 0;
+
+    /// <summary>
+    /// 재화를 <paramref name="amount"/>만큼 적립하고 적립 후 잔액을 돌려준다.
+    /// <para><b>읽어서 계산한 값을 쓰지 않는다.</b> <c>quantity = quantity + @amount</c>로 DB가 직접 계산하게 해,
+    /// 같은 계정에 지급 둘이 동시에 들어와도 한쪽 적립이 다른 쪽에 덮이지 않게 한다. 갱신은 그 계정의 아이템 행까지
+    /// 훑어 잠그지 않도록 <b>기본키</b>로 건다.</para>
+    /// <para><b>재화 행이 없으면 만들지 않고 예외로 알린다.</b> 재화 행은 세이브를 만들 때 잔액 0으로 함께 생성하고
+    /// 어디서도 지우지 않으므로, 여기서 없다는 것은 그 규칙이 깨졌다는 뜻이다. 이때 새로 만들면 잔액 0인 계정에
+    /// 지급 둘이 동시에 들어올 때 양쪽이 모두 "행 없음"을 보고 INSERT해 재화 행이 둘로 갈라지고, 그 뒤로는 조회가
+    /// 한 행만 읽어 나머지 잔액이 보이지 않게 된다.</para>
+    /// </summary>
+    private static async Task<long> CreditCurrencyAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode, long amount)
+    {
+        var rowId = await FindCurrencyRowIdAsync(db, tx, userId, currencyCode);
+
+        // 지급액 0(보상이 아이템뿐인 경로)은 갱신할 것이 없다.
+        if (amount <= 0)
+        {
+            return rowId is null ? 0 : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+        }
+
+        if (rowId is null)
+        {
+            throw new InvalidOperationException(
+                $"재화 행이 없어 적립하지 못했습니다(userId {userId}, currencyCode {currencyCode}). " +
+                "세이브 생성 시 만들어져 있어야 하는 행입니다.");
+        }
+
+        await db.StatementAsync(
+            """
+            UPDATE player_item SET quantity = quantity + @amount WHERE player_item_id = @rowId
+            """,
+            new { rowId, amount }, tx);
+
+        return await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
     }
 }

@@ -581,9 +581,9 @@ pullType 검증(1|2 외 → InvalidRequest(1006))         # 횟수는 요청이 
      마스터 미로드면 MasterDataNotLoaded(10001)
      if not 노출 조건(gacha, now): → GachaNotAvailable(12003)   # 6.1, 비용 차감 전
   2) cost = (pullType==1 ? gacha.cost_single : gacha.cost_multi)
-     재화 행(player_item, row_type=2, item_code=gacha.cost_currency_code) 잠금 조회
-     if 잔액 < cost: → InsufficientCurrency(4005)
-  3) 골드 차감: 재화 행 quantity -= cost
+     재화 행(player_item, row_type=2, item_code=gacha.cost_currency_code)의 행 번호 조회
+  3) 골드 차감: quantity = quantity - cost  (조건: 그 행 번호 AND quantity >= cost)
+     갱신된 행이 0이면 잔액 부족 → InsufficientCurrency(4005)   # 확인과 차감이 한 문장이라 그 사이가 벌어지지 않는다
   4) counters = player_gacha_counter[user_id, gachaCode] 잠금 조회(lazy 생성)
   5) n = (pullType==1 ? 1 : gacha.multi_count)
      for seq in 1..n: results += draw(...)  (6.2) + 카운터 갱신 (6.3)
@@ -625,7 +625,7 @@ COMMIT
 
 ### 6.8 동시성 · 캐시 · 로깅
 
-- **Redis 락을 두지 않는다(확정).** 경합 대상이 그 계정의 재화 행·카운터 행뿐이라 MySQL 행 잠금이 곧 직렬화다. 락을 얹으면 정합성은 그대로인데 TTL 만료·해제 실패·Redis 장애라는 실패 경계만 늘어난다(거래소가 구매·취소에 락을 두지 않는 것과 같은 판단 — [거래소 기획서](trade-기획서.md) 7.4).
+- **Redis 락을 두지 않는다(확정).** 경합 대상이 그 계정의 재화 행·카운터 행뿐이라 MySQL 행 잠금이 곧 직렬화다. 재화 차감은 잔액을 읽어 계산한 값을 쓰지 않고 `quantity = quantity - cost`로 DB가 직접 계산하게 하며, 잔액 확인도 같은 문장의 조건으로 둔다 — 확인과 차감을 나누면 그 사이가 곧 경합 구간이 되어 같은 계정의 뽑기 둘이 겹칠 때 한쪽 차감이 덮인다. 갱신은 재화 행의 **기본키**로 걸어 그 한 행만 잠근다([세이브 데이터 기획서](save-data-기획서.md) 4장 `player_item`). 락을 얹으면 정합성은 그대로인데 TTL 만료·해제 실패·Redis 장애라는 실패 경계만 늘어난다(거래소가 구매·취소에 락을 두지 않는 것과 같은 판단 — [거래소 기획서](trade-기획서.md) 7.4).
 - **가방 조회 캐시는 없다.** 지급 결과는 커밋으로 끝이고, 클라이언트는 응답의 `inventoryDelta`로 자기 표시를 갱신한다. 서버가 커밋 후에 따로 갱신할 캐시가 없다([인벤토리 기획서](inventory-item-cube-기획서.md) 6.5).
 - **마스터 조회는 인메모리다.** `gacha_master` 계열은 기동 시 `MasterDbProvider`가 적재하므로 추첨 중 DB 조회가 없다. 참고 구현이 가챠 마스터를 Redis에 캐싱하는 단계는 본 프로젝트에 해당하지 않는다.
 - **로깅**([로깅 규칙](../공통/로깅-규칙.md)):

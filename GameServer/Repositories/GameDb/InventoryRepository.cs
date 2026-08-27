@@ -434,7 +434,7 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
     /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 재화만 빠지고 단계가 안 오르는 상태를 막는다):
     /// <para>1) player_item SELECT — 대상의 계정 소유 확인 및 row_type·item_code·현재 enhance_level 확보</para>
     /// <para>2) plan 델리게이트 — 마스터 검증(장비 여부·다음 단계 존재)과 비용·소모 재화 산출(DB 접근 없음)</para>
-    /// <para>3) player_item(재화 행) SELECT — 비용 재화 잔액 확인(부족 → InsufficientCurrency)</para>
+    /// <para>3) player_item(재화 행) UPDATE — 잔액이 비용 이상일 때만 깎는 원자 갱신(0행이면 부족 → InsufficientCurrency)</para>
     /// <para>4) player_item UPDATE — 비용 재화 차감</para>
     /// <para>5) player_item UPDATE — 대상의 enhance_level += 1</para>
     /// <para>6) player_item_equipped UPDATE — 장착 중이면 장착 행의 enhance_level도 같은 값으로 갱신
@@ -470,31 +470,22 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
                     : EnhanceStatus.NotEquippable));
             }
 
-            // 3) 비용 재화 잔액 확인.
-            var currencyRow = await db.Query("player_item")
-                .Select("player_item_id", "quantity")
-                .Where("user_id", userId).Where("row_type", Constants.PlayerItemRow.Currency).Where("item_code", currencyCode)
-                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
-
-            long balance = currencyRow is null ? 0 : currencyRow.Quantity;
-            if (balance < cost)
+            // 3~4) 비용 차감(잔액이 충분할 때만 깎는 원자 갱신). 확인과 차감이 한 문장이라 그 사이에
+            //      다른 요청이 같은 재화를 가져갈 틈이 없다.
+            long? debited = await TryDebitCurrencyAsync(db, transaction, userId, currencyCode, cost);
+            if (debited is null)
             {
                 // 거부지만 시도한 값(아이템·단계·비용)은 채워 돌려준다 — 이벤트 로그가 그대로 쓴다(5.5).
+                var held = await LoadCurrencyBalanceAsync(db, transaction, userId, currencyCode);
                 return TxResult<EnhanceOutcome>.Rollback(new EnhanceOutcome(
-                    EnhanceStatus.InsufficientCurrency, 0, cost, currencyCode, balance, false)
+                    EnhanceStatus.InsufficientCurrency, 0, cost, currencyCode, held, false)
                 {
                     ItemCode = itemRow.ItemCode,
                     FromLevel = itemRow.EnhanceLevel,
                 });
             }
 
-            // 4) 비용 차감(재화 행 UPDATE).
-            long newBalance = balance - cost;
-            if (currencyRow is not null && cost > 0)
-            {
-                await db.Query("player_item").Where("player_item_id", currencyRow.PlayerItemId)
-                    .UpdateAsync(new { quantity = newBalance }, transaction);
-            }
+            long newBalance = debited.Value;
 
             // 5) 강화 단계 +1.
             int newLevel = itemRow.EnhanceLevel + 1;
@@ -521,7 +512,7 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
     /// 한 트랜잭션으로 묶는 작업(하나라도 실패하면 전부 롤백 — 골드만 차감되고 용량이 안 늘어나는 상태를 막는다):
     /// <para>1) game_player SELECT — 현재 inventory_capacity 확인(계정 세이브 없으면 NoPlayer)</para>
     /// <para>2) planOne 델리게이트 — 현재 용량 기준 확장 가능 여부·비용 산출(마스터, DB 접근 없음. 상한 도달 → CapacityMax)</para>
-    /// <para>3) player_item(재화 행) SELECT — 골드 잔액 확인(부족 → InsufficientCurrency)</para>
+    /// <para>3) player_item(재화 행) UPDATE — 잔액이 비용 이상일 때만 깎는 원자 갱신(0행이면 부족 → InsufficientCurrency)</para>
     /// <para>4) player_item UPDATE — 확장 비용 골드 차감</para>
     /// <para>5) game_player UPDATE — inventory_capacity +1 및 updated_at 갱신</para>
     /// </remarks>
@@ -547,27 +538,15 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
                 return TxResult<ExpandOutcome>.Rollback(ExpandOutcome.Fail(ExpandStatus.CapacityMax));
             }
 
-            // 3) 골드 잔액 확인.
-            var goldRow = await db.Query("player_item")
-                .Select("player_item_id", "quantity")
-                .Where("user_id", userId)
-                .Where("row_type", Constants.PlayerItemRow.Currency)
-                .Where("item_code", Constants.Currency.GoldItemCode)
-                .FirstOrDefaultAsync<ItemIdQtyRow>(transaction);
-
-            long gold = goldRow is null ? 0 : goldRow.Quantity;
-            if (gold < cost)
+            // 3~4) 골드 차감(원자 갱신) + 용량 +1.
+            long? debited = await TryDebitCurrencyAsync(
+                db, transaction, userId, Constants.Currency.GoldItemCode, cost);
+            if (debited is null)
             {
                 return TxResult<ExpandOutcome>.Rollback(ExpandOutcome.Fail(ExpandStatus.InsufficientCurrency));
             }
 
-            // 4) 골드 차감(재화 행 UPDATE) + 용량 +1.
-            long newGold = gold - cost;
-            if (goldRow is not null)
-            {
-                await db.Query("player_item").Where("player_item_id", goldRow.PlayerItemId)
-                    .UpdateAsync(new { quantity = newGold }, transaction);
-            }
+            long newGold = debited.Value;
 
             int newCapacity = capacity + 1;
             await db.Query("game_player").Where("user_id", userId)
@@ -597,5 +576,72 @@ public sealed class InventoryRepository : GameDbBase, IInventoryRepository
             quantity = row?.Quantity ?? 1,
             enhanceLevel = row?.EnhanceLevel ?? 0,
         };
+    }
+
+    /// <summary>
+    /// 재화 행(<c>player_item</c>, <c>row_type=2</c>)의 <c>player_item_id</c>를 찾는다(없으면 null).
+    /// 잔액이 아니라 <b>행 번호</b>만 읽으므로 이 조회는 낡지 않는다 — 재화 행은 세이브를 만들 때 함께 만들어지고
+    /// 이후 지워지지 않아 번호가 고정이다(<c>SaveRepository.CreatePlayerWithFirstCharacterAsync</c>).
+    /// </summary>
+    private static async Task<long?> FindCurrencyRowIdAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode)
+        => await db.Query("player_item").Select("player_item_id")
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", currencyCode)
+            .FirstOrDefaultAsync<long?>(tx);
+
+    /// <summary>갱신 직후 잔액을 기본키로 읽는다. 자기 트랜잭션이 그 행에 X락을 쥔 상태라 방금 확정한 값이 보인다.</summary>
+    private static async Task<long> ReadCurrencyBalanceAsync(QueryFactory db, DbTransaction tx, long rowId)
+        => await db.Query("player_item").Select("quantity")
+            .Where("player_item_id", rowId)
+            .FirstOrDefaultAsync<long?>(tx) ?? 0;
+
+    /// <summary>계정의 재화 잔액을 읽는다(행이 없으면 0). 갱신 전 안내용 조회이며, 실제 차감은 갱신 문장이 확정한다.</summary>
+    private static async Task<long> LoadCurrencyBalanceAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode)
+        => await db.Query("player_item").Select("quantity")
+            .Where("user_id", userId)
+            .Where("row_type", Constants.PlayerItemRow.Currency)
+            .Where("item_code", currencyCode)
+            .FirstOrDefaultAsync<long?>(tx) ?? 0;
+
+    /// <summary>
+    /// 재화를 <paramref name="amount"/>만큼 차감한다. 잔액이 부족하면 <b>아무것도 바꾸지 않고</b> null을 돌려주고,
+    /// 성공하면 차감 후 잔액을 돌려준다.
+    /// <para><b>읽어서 계산한 값을 쓰지 않는다.</b> 잠금 없는 <c>SELECT</c>는 스냅샷 읽기라 동시에 도는 다른
+    /// 트랜잭션의 변경을 보지 못한다 — 같은 계정의 요청 둘이 겹치면 양쪽이 같은 잔액을 읽고 각자 계산한 값을
+    /// 덮어써 한쪽 차감이 사라진다. <c>quantity = quantity - @amount</c>로 DB가 직접 계산하게 하면 그 갱신은
+    /// 최신 커밋값을 읽고 그 행을 잠그므로 겹칠 틈이 없고, 잔액 검사도 같은 문장의 <c>WHERE</c>가 겸한다.</para>
+    /// <para><b>갱신은 기본키로 건다.</b> <c>WHERE user_id = ? AND row_type = 2 AND item_code = ?</c>로 바로 갱신하면
+    /// 이 조건에 맞는 인덱스가 없어 그 계정의 아이템 행까지 훑으며 잠그고, 잠그는 순서가 엇갈리면 교착이 난다.</para>
+    /// <para>상대값 갱신은 SqlKata 빌더로 표현되지 않아(증감폭을 <c>int</c>로만 받는다) 파라미터를 바인딩한
+    /// 문장을 쓴다. 문자열을 조립하지는 않는다.</para>
+    /// </summary>
+    private static async Task<long?> TryDebitCurrencyAsync(
+        QueryFactory db, DbTransaction tx, long userId, int currencyCode, long amount)
+    {
+        var rowId = await FindCurrencyRowIdAsync(db, tx, userId, currencyCode);
+
+        // 비용 0(무료 경로)은 갱신할 것이 없다. 응답에 담을 현재 잔액만 돌려준다.
+        if (amount <= 0)
+        {
+            return rowId is null ? 0 : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
+        }
+
+        if (rowId is null)
+        {
+            return null;
+        }
+
+        var affected = await db.StatementAsync(
+            """
+            UPDATE player_item SET quantity = quantity - @amount
+             WHERE player_item_id = @rowId AND quantity >= @amount
+            """,
+            new { rowId, amount }, tx);
+
+        // 0행 = 잔액 부족. 조건이 갱신 문장 안에 있으므로 부족하면 아무것도 바뀌지 않는다.
+        return affected == 0 ? null : await ReadCurrencyBalanceAsync(db, tx, rowId.Value);
     }
 }
