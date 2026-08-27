@@ -1,4 +1,4 @@
-# 보스러시 / 랭킹 기획서
+﻿# 보스러시 / 랭킹 기획서
 
 > 상위 문서: [서버 시스템 전체 개요](../서버-시스템-전체-개요.md) · 관련 도메인 4.12
 >
@@ -589,7 +589,9 @@ COMMIT
 `BossRushSeasonBatchScheduler`(`PeriodicBatchScheduler` 상속, BatchServer 프로세스. 발화 시각은 진행 중 시즌의 `end_at`이고, 진행 중 시즌이 없을 때의 재확인 간격만 `appsettings`의 `BossRushSeasonBatch:IntervalSeconds` 기본 **600초**).
 
 ```
-1) 대상 선점: UPDATE boss_rush_season SET status = 2 WHERE status = 1 AND end_at <= now
+0) 이어받기: SELECT ... WHERE status = 2 → 있으면 그 시즌부터(직전 정산이 완주하지 못했다는 뜻)
+   단, 한 건도 확정하지 못한 이어받기가 5회 연속되면 자동 복구를 멈추고 Error로 알린다
+1) 대상 선점(0)이 없을 때): UPDATE boss_rush_season SET status = 2 WHERE status = 1 AND end_at <= now
    → 0행이면 정산할 시즌 없음(종료)
 2) 순위 부여·보상 발급(페이지 단위 반복, 각 페이지가 1트랜잭션):
    SELECT ... FROM boss_rush_record WHERE season_id = ? AND final_rank = 0
@@ -600,15 +602,19 @@ COMMIT
            mailId = 메일 발급(템플릿 501, 파라미터: 시즌 번호·순위, 첨부 = 골드 group.reward_gold 1건)
        UPDATE boss_rush_record SET final_rank = 순위, rank_reward_mail_id = mailId(없으면 0)
              WHERE season_id = ? AND user_id = ? AND final_rank = 0      # 멱등
-3) 종료 처리: UPDATE boss_rush_season SET status = 3, settled_at = now WHERE season_id = ?
-   EXPIRE rank:bossrush:{seasonId} 7일
-4) 다음 시즌 개시: INSERT boss_rush_season(start_at = 이전 end_at, end_at = start_at + season_period_days,
+3) 다음 시즌 개시: INSERT boss_rush_season(start_at = 이전 end_at, end_at = start_at + season_period_days,
                     status = 1)   # 이미 있으면 스킵(유니크 (start_at))
    HSET bossrush:season:current {seasonId, startAt, endAt, status}   # 시즌 메타 캐시 갱신(4.3)
    새 시즌 ZSET은 첫 기록이 등재될 때 자연히 생긴다(사전 생성 불필요)
+4) 종료 처리: UPDATE boss_rush_season SET status = 3, settled_at = now WHERE season_id = ?
+   EXPIRE rank:bossrush:{seasonId} 7일
 ```
 
+- **2)가 완주하지 못하면 3)·4)로 가지 않는다** — 시즌을 `status=2`로 남겨 다음 발화가 0)에서 이어받는다.
+  3)을 4)보다 앞에 두는 것도 같은 이유다: 그 사이에서 죽어도 `status=2`인 시즌이 남아 복구 진입점이 된다
+  (순서를 뒤집으면 "종료됐는데 다음 시즌이 없는" 상태가 되고 복구 진입점이 사라진다).
 - **멱등성**: `final_rank = 0` 조건이 재진입 시 이미 처리한 행을 건너뛴다. 배치가 중간에 죽어도 다음 주기가 남은 행만 이어서 처리한다.
+- **이어받기 재시도는 5회까지**(`BatchSettingConstants.BossRushSeason.MaxRecoveryAttempts`). 재기동·DB 순단이 원인이면 첫 시도에서 끝나고, 5회를 채워도 **한 건도 확정하지 못하는 원인은 코드·데이터 결함이라 계속 돌려도 낫지 않는다** — 무한 재시도는 정산 쿼리로 DB를 계속 두드려 장애를 키운다. 상한에 닿으면 시즌을 `status=2`로 남긴 채 자동 복구를 멈추고 Error 로그로 사람을 부른다(원인을 고친 뒤 배치를 다시 띄우면 이어서 정산한다). 확정이 한 건이라도 있으면 진전이 있는 것이라 횟수를 0으로 되돌린다.
 - **`status=2`(정산중) 구간에는 새 런을 받지 않는다**(`BossRushSeasonClosed(13007)`) — 순위 확정 후 더 좋은 기록이 등재되는 경합을 막는다. `enter`는 이 판정을 캐시가 아니라 `boss_rush_season`에서 직접 읽는다(4.3).
 - **시즌 메타 캐시 갱신은 정산의 마지막 단계**(4단계)다. 갱신 전 짧은 구간에는 랭킹 조회가 옛 시즌을 보여줄 수 있으나, 그 시즌 ZSET·기록은 그대로 유효하므로 응답 자체는 정합하다.
 - **순위 보상 메일은 시즌당 3건**이다(1~3위만, 4.1). 4위 이하는 `final_rank`만 확정되고 `rank_reward_mail_id = 0`으로 남는다.

@@ -172,6 +172,12 @@ public sealed class BossRushService : IBossRushService
                     // 정산 중 진입 시도. 반복되면 정산 창이 길다는 뜻이다(그만큼 콘텐츠가 닫혀 있었다).
                     EmitEnter(userId, 0, 0, ErrorCode.BossRushSeasonClosed);
                     return new SaveResult(ErrorCode.BossRushSeasonClosed, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case BossRushEnterStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"보스러시 입장: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new BossRushEnterResultData
@@ -247,6 +253,12 @@ public sealed class BossRushService : IBossRushService
                         isNewRecord: false, bestClearMs: 0, rankAtReport: 0,
                         errorCode: ErrorCode.BossRushRunAlreadyFinished);
                     return new SaveResult(ErrorCode.BossRushRunAlreadyFinished, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case BossRushClearStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"보스러시 클리어 보고: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             // 커밋 이후에만 랭킹 캐시를 갱신한다 — Redis에는 롤백이 없다(§6.2).

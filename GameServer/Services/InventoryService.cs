@@ -114,6 +114,12 @@ public sealed class InventoryService : IInventoryService
                 case EquipStatus.InventoryFull:
                     // 스왑된 장비를 되돌릴 칸이 없는 예외 상황(반납할 칸 자체가 없던 경우).
                     return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case EquipStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"장비 장착: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new EquipResultData
@@ -156,6 +162,12 @@ public sealed class InventoryService : IInventoryService
                     return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
                 case UnequipStatus.InventoryFull:
                     return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case UnequipStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"장비 해제: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new UnequipResultData
@@ -189,6 +201,12 @@ public sealed class InventoryService : IInventoryService
                     return new SaveResult(ErrorCode.ItemNotFound, string.Empty, null);
                 case MoveStatus.InvalidSlot:
                     return new SaveResult(ErrorCode.InvalidInventorySlot, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case MoveStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"가방 슬롯 이동: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new MoveResultData
@@ -241,6 +259,12 @@ public sealed class InventoryService : IInventoryService
                     // 반복돼도 기획이 아니라 클라이언트를 고쳐야 한다(4.1의 선별 기준).
                     EmitEnhance(userId, itemId, outcome, ErrorCode.InsufficientCurrency);
                     return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case EnhanceStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"장비 강화: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new EnhanceResultData
@@ -323,6 +347,12 @@ public sealed class InventoryService : IInventoryService
                     return new SaveResult(ErrorCode.InventoryCapacityMax, string.Empty, null);
                 case ExpandStatus.InsufficientCurrency:
                     return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case ExpandStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"가방 확장: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new ExpandResultData

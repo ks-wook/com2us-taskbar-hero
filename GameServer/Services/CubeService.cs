@@ -65,6 +65,12 @@ public sealed class CubeService : ICubeService
                     return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
                 case CombineStatus.RecipeNotMet:
                     return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case CombineStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"큐브 합성: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new CubeCombineResultData
@@ -146,6 +152,12 @@ public sealed class CubeService : ICubeService
                     return new SaveResult(ErrorCode.ItemEquipped, string.Empty, null);
                 case DismantleStatus.InsufficientQuantity:
                     return new SaveResult(ErrorCode.InsufficientQuantity, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case DismantleStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"큐브 분해: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new CubeDismantleResultData
@@ -228,6 +240,12 @@ public sealed class CubeService : ICubeService
                     return new SaveResult(ErrorCode.CubeRecipeNotMet, string.Empty, null);
                 case CraftStatus.InventoryFull:
                     return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case CraftStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"큐브 제작: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new CubeCraftResultData

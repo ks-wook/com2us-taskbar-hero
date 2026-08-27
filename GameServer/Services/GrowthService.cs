@@ -88,6 +88,12 @@ public sealed class GrowthService : IGrowthService
                     return new SaveResult(ErrorCode.SkillMaxLevel, string.Empty, null);
                 case SkillLevelUpStatus.InsufficientPoint:
                     return new SaveResult(ErrorCode.InsufficientSkillPoint, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case SkillLevelUpStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"스킬 레벨업: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new SkillLevelUpResultData
@@ -213,6 +219,12 @@ public sealed class GrowthService : IGrowthService
                     return new SaveResult(ErrorCode.SkillNotLearned, string.Empty, null);
                 case SkillEquipStatus.LimitExceeded:
                     return new SaveResult(ErrorCode.ActiveSkillLimitExceeded, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case SkillEquipStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"스킬 장착: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new SkillEquipResultData
@@ -263,6 +275,12 @@ public sealed class GrowthService : IGrowthService
                     return new SaveResult(ErrorCode.RuneMaxLevel, string.Empty, null);
                 case RuneUpgradeStatus.InsufficientCurrency:
                     return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case RuneUpgradeStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"룬 강화: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new RuneUpgradeResultData

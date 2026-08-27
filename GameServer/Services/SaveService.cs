@@ -244,6 +244,12 @@ public sealed class SaveService : ISaveService
                 case AddCharacterStatus.DuplicateConflict:
                     // 식별자/직업 유니크 경합(동시 생성).
                     return new SaveResult(ErrorCode.InvalidCharacterId, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case AddCharacterStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"캐릭터 생성: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             _logger.ZLogInformation($"캐릭터 생성 성공: userId {userId:@UserId}, characterId {newCharacterId:@CharacterId}, classCode {classCode:@ClassCode}, slot {newSlot:@Slot}, gender {gender:@Gender}, cost {outcome.Cost:@Cost}, startingWeapon {startingWeapon?.ItemCode ?? 0:@StartingWeapon}, startingSkill {startingSkillCode ?? 0:@StartingSkill}");

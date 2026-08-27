@@ -121,6 +121,12 @@ public sealed class TradeService : ITradeService
                     return new SaveResult(ErrorCode.TradePriceOutOfRange, string.Empty, null);
                 case TradeRegisterStatus.ListingLimitExceeded:
                     return new SaveResult(ErrorCode.TradeListingLimitExceeded, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case TradeRegisterStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"거래소 등록: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var listing = outcome.Listing!;
@@ -219,6 +225,12 @@ public sealed class TradeService : ITradeService
                         outcome.Listing!, TradeCloseOutcome.Buy, now, buyerUid: userId, mailId: null,
                         settled: false, errorCode: ErrorCode.InsufficientCurrency);
                     return new SaveResult(ErrorCode.InsufficientCurrency, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case TradeCloseStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"거래소 구매: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var bought = outcome.Listing!;
@@ -311,6 +323,12 @@ public sealed class TradeService : ITradeService
                         outcome.Listing!, TradeCloseOutcome.Cancel, DateTimeUtil.NowUnixSeconds(),
                         buyerUid: null, mailId: null, settled: false, errorCode: ErrorCode.InventoryFull);
                     return new SaveResult(ErrorCode.InventoryFull, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case TradeCloseStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"거래소 취소: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var listing = outcome.Listing!;

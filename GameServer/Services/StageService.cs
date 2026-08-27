@@ -146,6 +146,12 @@ public sealed class StageService : IStageService
                     return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
                 case ClearStatus.NotEntered:
                     return new SaveResult(ErrorCode.StageNotEntered, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case ClearStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"스테이지 클리어: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             // 전리품은 실제로 적재된 경우에만 보상 목록에 담는다. 인벤토리가 가득 차 폐기됐으면

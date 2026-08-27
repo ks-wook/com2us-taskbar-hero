@@ -146,6 +146,12 @@ public sealed class AttendanceService : IAttendanceService
                 case AttendanceClaimStatus.RewardNotFound:
                     _logger.ZLogError($"출석 일차 보상 미정의: day {outcome.Day:@Day} — attendance_master 확인 필요");
                     return new SaveResult(ErrorCode.MasterDataNotLoaded, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case AttendanceClaimStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"출석 보상 수령: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             // 트랜잭션에서 확정된 일차의 보상을 응답에 그대로 싣는다(위에서 발급된 메일 첨부와 동일).

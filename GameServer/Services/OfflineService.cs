@@ -77,6 +77,12 @@ public sealed class OfflineService : IOfflineService
                     return new SaveResult(ErrorCode.SaveNotFound, string.Empty, null);
                 case OfflineClaimStatus.AlreadyClaimed:
                     return new SaveResult(ErrorCode.OfflineRewardAlreadyClaimed, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case OfflineClaimStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"오프라인 보상 수령: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new OfflineRewardResult

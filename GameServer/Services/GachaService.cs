@@ -131,6 +131,12 @@ public sealed class GachaService : IGachaService
                     // 플레이어 실수가 아니라 마스터 데이터 결함이므로 Error로 남긴다(기획서 §6.8).
                     _logger.ZLogError($"가챠 후보 풀 없음(전체 롤백): {gachaCode:@GachaCode} pullType {pullType:@PullType}");
                     return new SaveResult(ErrorCode.GachaPoolEmpty, string.Empty, null);
+                // 처리하지 않은 상태가 성공 경로로 흘러가지 않게 닫는다.
+                case GachaPullStatus.Ok:
+                    break;
+                default:
+                    _logger.ZLogError($"가챠 뽑기: 처리하지 않은 상태 {outcome.Status:@Status}, userId {userId:@UserId}");
+                    return new SaveResult(ErrorCode.ServerError, string.Empty, null);
             }
 
             var data = new GachaPullResultData
